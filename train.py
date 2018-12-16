@@ -25,7 +25,7 @@ data = par["data"]
 lr = par["lr"]
 n_basis = par["n_basis"]
 period = par["period"]
-epoch = par["epoch"]
+n_epoch = par["epoch"]
 cutoff_soft = par["cutoff_soft"]
 log_dir = par["log_dir"]
 gamma = par["gamma"]
@@ -54,7 +54,7 @@ scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=period, gamma=gamma)
 criterion = torch.nn.MSELoss()
 mae = torch.nn.L1Loss()
 
-for epoch in range(5000):
+for epoch in range(n_epoch):
     # train 
     train_u_mae = 0.0
     train_force_mae = 0.0
