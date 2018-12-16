@@ -9,7 +9,6 @@ from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
 from schnet import *
-import matplotlib.pyplot as plt
 import argparse
 
 #----------------Load parameter file----------------
