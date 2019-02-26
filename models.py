@@ -9,8 +9,8 @@ import torch.nn.functional as F
 from torch.autograd.gradcheck import zero_gradients
 from torch.autograd import grad
 
-from layers import * 
-from module import *
+from projects.NeuralForceField.layers import * 
+from projects.NeuralForceField.module import *
 
 class Net(nn.Module):
 

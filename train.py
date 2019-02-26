@@ -1,5 +1,5 @@
-from models import *
-from scatter import *
+from projects.NeuralForceField.models import *
+from projects.NeuralForceField.scatter import *
 
 import matplotlib.pyplot as plt
 

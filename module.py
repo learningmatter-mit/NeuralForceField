@@ -8,8 +8,8 @@ import torch.nn.functional as F
 from torch.autograd.gradcheck import zero_gradients
 from torch.autograd import grad
 
-from layers import * 
-from scatter import * 
+from projects.NeuralForceField.layers import * 
+from projects.NeuralForceField.scatter import * 
 
 class GraphDis(torch.nn.Module):
 
