@@ -13,7 +13,47 @@ import json
 import datetime
 
 class Model():
+
+    """Summary
+    
+    Attributes:
+        criterion (MSEloss): Description
+        data (graph): Description
+        device (TYPE): Description
+        dir_loc (TYPE): Description
+        energy_mae (float): Description
+        f_predict (list): Description
+        f_true (list): Description
+        force_mae (float): Description
+        graph_batching (Boolean): If True, use graph batch input
+        job_name (str): name of the job or experimeent
+        mae (TYPE): Description
+        model (TYPE): Description
+        model_path (TYPE): Description
+        N_batch (int): Description
+        N_test (int): Description
+        N_train (int): Description
+        optimizer (TYPE): Description
+        par (dict): a dictionary file for hyperparameters
+        root (str): the root path for the saving training results 
+        scheduler (TYPE): Description
+        train_f_log (list): Description
+        train_u_log (list): Description
+        u_predict (list): Description
+        u_true (list): Description
+    """
+
     def __init__(self,par, graph_data, device, job_name, graph_batching=False, root="./"):
+        """Summary
+        
+        Args:
+            par (TYPE): Description
+            graph_data (TYPE): Description
+            device (TYPE): Description
+            job_name (TYPE): Description
+            graph_batching (bool, optional): Description
+            root (str, optional): Description
+        """
         self.device = device
         self.par = par 
         self.data = graph_data
@@ -24,7 +64,6 @@ class Model():
         self.initialize_model()
         self.initialize_optim()
         self.graph_batching = graph_batching
-        # open 
         
     def initialize_model(self):
 
@@ -73,7 +112,14 @@ class Model():
         self.N_test = self.N_batch - self.N_train - 1 # ignore the last batch 
         
     def parse_batch(self, index):
+        """Summary
         
+        Args:
+            index (int): index of the batch in GraphDataset
+        
+        Returns:
+            TYPE: Description
+        """
         a = self.data.batches[index].data["a"].to(self.device)
 
         r = self.data.batches[index].data["r"][:, [0]].to(self.device)
@@ -89,7 +135,11 @@ class Model():
         return xyz, a, r, f, u, N
     
     def train(self, N_epoch):
+        """Summary
         
+        Args:
+            N_epoch (TYPE): Description
+        """
         self.train_u_log = []
         self.train_f_log = []
         
@@ -138,6 +188,8 @@ class Model():
         self.save_train_log()
             
     def validate(self):
+        """Summary
+        """
         self.f_predict = []
         self.f_true = []
         self.u_predict = []

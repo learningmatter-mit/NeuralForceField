@@ -13,23 +13,21 @@ from layers import *
 from module import *
 
 class Net(nn.Module):
-    """ 
-    Module to compute energy 
 
-    Args:
-        n_atom_basis (int): number of atom features
-        n_filters (int): filter dimensions
-        n_gaussians (int): number of guassian basis
-        device (int): which gpu to use
-        
+    """SchNet implementation with continous filter. It is designed for two types computations: 1) xyz inputs 2) graph inputs 
+    
+    Attributes:
+        atomEmbed (torch.nn.Embedding): Convert atomic number into a embedding vector of size n_atom_basis
+        atomwise1 (Dense): dense layer 1 to compute energy
+        atomwise2 (Dense): dense layer 2 to compute energy
+        convolutions (torch.nn.ModuleList): include all the convolutions
+        graph_dis (Graphdis): graph distance module to convert xyz inputs into distance matrix 
     """
-
+    
     def __init__(self, n_atom_basis, n_filters, n_gaussians, cutoff_soft, device, T, trainable_gauss, box_len=None, avg_flag=False):
         super(Net, self).__init__()
         
         self.graph_dis = GraphDis(Fr=1, Fe=1, cutoff=cutoff_soft, box_len = box_len, device=device)
-
-
         self.convolutions = nn.ModuleList([InteractionBlock(n_atom_basis=n_atom_basis,
                                              n_filters=n_filters, n_gaussians=n_gaussians, 
                                              cutoff_soft =cutoff_soft, trainable_gauss=trainable_gauss) for i in range(T)])
@@ -37,7 +35,6 @@ class Net(nn.Module):
         self.atomEmbed = nn.Embedding(100, n_atom_basis, padding_idx=0)
         self.atomwise1 = Dense(in_features= n_atom_basis, out_features= int(n_atom_basis/2), activation=shifted_softplus)
         self.atomwise2 = Dense(in_features= int(n_atom_basis/2), out_features=1)
-        
         
     def forward(self, r, xyz, a=None, N=None):
         
@@ -47,7 +44,6 @@ class Net(nn.Module):
             r, e ,A = self.graph_dis(r= r, xyz=xyz)
             r = self.atomEmbed(r.type(torch.long)).squeeze()
             
-
             for i, conv in enumerate(self.convolutions):
                 
                 dr = conv(r=r, e=e, A=A)
@@ -55,7 +51,6 @@ class Net(nn.Module):
 
             r = self.atomwise1(r)
             r = self.atomwise2(r)
-
             r = r.sum(1)#.squeeze()
             
             return r 

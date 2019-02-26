@@ -16,12 +16,12 @@ class GraphDis(torch.nn.Module):
     """Compute distance matrix on the fly 
     
     Attributes:
-        box_len (TYPE): Length of the box
-        cutoff (TYPE): cufoff 
-        device (TYPE): which gpu to use
-        F (TYPE): Fr + Fe
-        Fe (TYPE): edge feature length
-        Fr (TYPE): node geature length
+        box_len (numpy.array): Length of the box, dim = (3, )
+        cutoff (float): cufoff 
+        device (int or str): GPU id or "cpu"
+        F (int): Fr + Fe
+        Fe (int): edge feature length
+        Fr (int): node geature length
     """
     
     def __init__(self, Fr, Fe, device, cutoff, box_len=None):
@@ -38,10 +38,14 @@ class GraphDis(torch.nn.Module):
             self.box_len = None
     
     def get_bond_vector_matrix(self, frame):
-        '''
-        input:  xyz torch.Tensor (B, N, 3)
-        return:   edge feature matrix torch.Tensor (B, N, N, 3 or 1)
-        '''
+        """A function to compute the distance matrix 
+        
+        Args:
+            frame (torch.FloatTensor): coordinates of (B, N, 3)
+        
+        Returns:
+            torch.FloatTensor: distance matrix of dim (B, N, N, 1)
+        """
         device = self.device
         cutoff = self.cutoff
         
@@ -94,16 +98,20 @@ class GraphDis(torch.nn.Module):
 
 
 class InteractionBlock(nn.Module):
-    """ 
-    Interaction Block with a distance filter based on Gaussian smearing 
 
-    Args:
-        n_atom_basis (int): number of atom features
-        n_filters (int): filter dimensions
-        n_gaussians (int): number of guassian basis
-        
+    """The convolution layer with filter. To be merged with GraphConv class.
+    
+    Attributes:
+        AtomFilter (TYPE): Description
+        avg_flag (Boolean): if True, perform a mean pooling 
+        Dense1 (Dense()): dense layer 1 to obtain the updated atomic embedding 
+        Dense2 (Dense()): dense layer 2 to obtain the updated atomic embedding
+        DistanceFilter1 (Dense()): dense layer 1 for filtering gaussian expanded distances 
+        DistanceFilter2 (Dense()): dense layer 1 for filtering gaussian expanded distances 
+        smearing (GaussianSmearing()): gaussian basis expansion for distance matrix of dimension B, N, N, 1
+        smearing_graph (GaussianSmearing()): gaussian basis expansion for distance list of dimension N, N_nbh, 1
     """
-
+    
     def __init__(self, n_atom_basis, n_filters, n_gaussians, cutoff_soft, trainable_gauss, avg_flag=False):
         super(InteractionBlock, self).__init__()
 
