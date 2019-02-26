@@ -130,14 +130,15 @@ def gaussian_smearing(distances, offset, widths, centered=False):
     if centered == False:
         # Compute width of Gaussians (using an overlap of 1 STDDEV)
         # widths = offset[1] - offset[0]
-        coeff = -0.5 / torch.pow(widths, 2)
         # Use advanced indexing to compute the individual components
-        diff = distances[:, :, :, None] - offset[None, None, None, :]
+        # diff = distances[:, :, :, None] - offset[None, None, None, :]
+        diff = distances - offset
     else:
         # If Gaussians are centered, use offsets to compute widths
         coeff = -0.5 / torch.pow(offset, 2)
         # If centered Gaussians are requested, don't substract anything
-        diff = distances[:, :, :, None]
+        #diff = distances[:, :, :, None]
+        diff = distances
     # Compute and return Gaussians
     gauss = torch.exp(coeff * torch.pow(diff, 2))
     return gauss
@@ -257,8 +258,7 @@ class InteractionBlock(nn.Module):
         y = self.Dense1(y)
         y = self.Dense2(y)
         
-        #y = y.sum(2) # sum pooling 
-        
+        #y = y.sum(2) # sum pooling       
         return y
 
 class Net(nn.Module):
@@ -277,12 +277,6 @@ class Net(nn.Module):
         super(Net, self).__init__()
         
         self.graph_dis = GraphDis(Fr=1, Fe=1, cutoff=10.0, device=device)
-        #self.interaction1 = InteractionBlock(n_atom_basis=n_atom_basis, n_filters=n_filters, n_gaussians=n_gaussians)
-        #self.interaction2 = InteractionBlock(n_atom_basis=n_atom_basis, n_filters=n_filters, n_gaussians=n_gaussians)
-        #self.interaction3 = InteractionBlock(n_atom_basis=n_atom_basis, n_filters=n_filters, n_gaussians=n_gaussians)
-        #self.interaction4 = InteractionBlock(n_atom_basis=n_atom_basis, n_filters=n_filters, n_gaussians=n_gaussians)
-        #self.interaction5 = InteractionBlock(n_atom_basis=n_atom_basis, n_filters=n_filters, n_gaussians=n_gaussians)
-        #self.interaction6 = InteractionBlock(n_atom_basis=n_atom_basis, n_filters=n_filters, n_gaussians=n_gaussians)
 
         self.convolutions = nn.ModuleList([InteractionBlock(n_atom_basis=n_atom_basis,
                                              n_filters=n_filters, n_gaussians=n_gaussians, 
@@ -297,14 +291,6 @@ class Net(nn.Module):
         
         r, e ,A = self.graph_dis(r= r, xyz=xyz)
         r = self.atomEmbed(r)
-        
-        #r = r + self.interaction1(r=r, e=e, A=A)
-        #r = r + self.interaction2(r=r, e=e, A=A)
-        #r = r + self.interaction3(r=r, e=e, A=A)
-        #r = r + self.interaction4(r=r, e=e, A=A)
-        #r = r + self.interaction5(r=r, e=e, A=A)
-        #r = r + self.interaction6(r=r, e=e, A=A)
-        #r = r + self.interaction3(r=r, e=e, A=A)
 
         for i, conv in enumerate(self.convolutions):
             r = r + conv(r=r, e=e, A=A)
