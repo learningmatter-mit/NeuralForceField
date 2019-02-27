@@ -203,9 +203,9 @@ class Model():
         self.u_predict = []
         self.u_true = []
 
-        for i in range(self.N_batch - self.N_train-1):
+        for i in range(self.N_test):
             # parse_data
-            xyz, a, r, f, u, N = self.parse_batch(i)
+            xyz, a, r, f, u, N = self.parse_batch(self.N_train + i)
             xyz.requires_grad = True
 
             if self.graph_batching:
@@ -289,5 +289,3 @@ class Model():
             converge = False 
 
         return converge
-
-
