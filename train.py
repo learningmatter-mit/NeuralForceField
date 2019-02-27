@@ -161,7 +161,7 @@ class Model():
                 # comput loss
                 loss_force = self.criterion(f_pred, f)
                 loss_u = self.criterion(U, u.unsqueeze(1))
-                loss = loss_force + 0.1*loss_u
+                loss = loss_force + self.par["rho"] * loss_u
 
                 # update parameters
                 self.optimizer.zero_grad()
