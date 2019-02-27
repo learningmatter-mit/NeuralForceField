@@ -99,8 +99,7 @@ class Model():
         # obtain a time stamp 
         currentDT = datetime.datetime.now()
         date = str(currentDT).split()[0].split("-")[1:] 
-        hour = str(currentDT).split()[1].split(":")[:2]
-        self.dir_loc = self.root + self.job_name + "_" + "".join(date+hour)
+        self.dir_loc = self.root + self.job_name + "_" + "".join(date)
         
         if not os.path.exists(self.dir_loc):
             os.makedirs(self.dir_loc)
