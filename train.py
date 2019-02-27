@@ -181,8 +181,17 @@ class Model():
             
             # scheduler
             self.scheduler.step(train_force)
+
+            # print loss
             print("epoch %d  U train: %.3f  force train %.3f" % (epoch, train_u, train_force))
-            
+
+            # check convergence 
+            if self.check_convergence():
+                print("training converged")
+                break
+            else:
+                pass
+
         self.save_model()
         self.save_train_log()
             
@@ -254,3 +263,31 @@ class Model():
     def load_train_log(self):
         log = np.loadtxt(self.dir_loc + "/log.csv", delimiter=",")
         return log
+
+    def check_convergence(self):
+        """function to check convergences, currently only check for the convergences of the forces 
+        
+        Args:
+            epoch (int): 
+        
+        Returns:
+            Boolean: True if training converged
+        """
+        eps = self.par["eps"] # convergence tolerence 
+        patience = 5
+
+        # compute improvement by running averages 
+        if len(self.train_f_log) > patience * 2:
+            dif = (np.array(self.train_f_log[-patience * 2: -patience :]) - np.array(self.train_f_log[-patience:])).mean()
+            improvement = dif / np.array(self.train_f_log[-patience:]).mean()
+
+            if improvement < eps:
+                converge = True
+            else: 
+                converge = False
+        else:
+            converge = False 
+
+        return converge
+
+
