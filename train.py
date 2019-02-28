@@ -144,10 +144,17 @@ class Model():
         
         
         for epoch in range(N_epoch):
+
+            # check if max epoches are reached 
+            if len(self.train_f_log) >= self.par["max_epoch"]:
+                print("max epoches reached")
+                break 
+                
             train_u_mae = 0.0
             train_force_mae = 0.0
             
             for i in range(self.N_train):
+
                 xyz, a, r, f, u, N = self.parse_batch(i)
                 xyz.requires_grad = True
                 
@@ -204,6 +211,7 @@ class Model():
         self.u_true = []
 
         for i in range(self.N_test):
+
             # parse_data
             xyz, a, r, f, u, N = self.parse_batch(self.N_train + i)
             xyz.requires_grad = True
@@ -274,7 +282,7 @@ class Model():
             Boolean: True if training converged
         """
         eps = self.par["eps"] # convergence tolerence 
-        patience = 5
+        patience = 5 # make patience tunable
 
         # compute improvement by running averages 
         if len(self.train_f_log) > patience * 2:
