@@ -28,8 +28,8 @@ def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_fl
     for index in range(len(energy_data)):
 
         xyz = np.array(xyz_data[index])
-        force = np.array(force_data[index] * force_conversion) 
-        energy = np.array(energy_data[index] * energy_conversion) 
+        force = np.array(force_data[index]) * np.float(force_conversion) 
+        energy = np.array(energy_data[index]) * np.float(energy_conversion) 
         node = xyz[:, 0].reshape(-1, 1)
         graph = Graph(N=node.shape[0], dynamic_adj_mat=dynamic_adj_mat)
         node_force = np.hstack((node, force)) # node concatenate with force 
@@ -38,7 +38,8 @@ def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_fl
         graph.UpdateConnectivity(cutoff=cutoff)
         graph.SetEdgeLabels()
         graph.LabelEdgesWithDistances()
-        graph.SetGraphLabel(torch.Tensor(energy))
+        graph.SetGraphLabel(torch.Tensor([energy]))
+        #print(torch.Tensor([energy]).squeeze().shape)
         graph_data.AddGraph(graph)
 
     graph_data.CreateBatches(batch_size=batch_size)

@@ -149,7 +149,7 @@ class Model():
             if len(self.train_f_log) >= self.par["max_epoch"]:
                 print("max epoches reached")
                 break 
-                
+
             train_u_mae = 0.0
             train_force_mae = 0.0
             
@@ -167,7 +167,7 @@ class Model():
 
                 # comput loss
                 loss_force = self.criterion(f_pred, f)
-                loss_u = self.criterion(U, u.unsqueeze(1))
+                loss_u = self.criterion(U, u)
                 loss = loss_force + self.par["rho"] * loss_u
 
                 # update parameters
@@ -176,7 +176,7 @@ class Model():
                 self.optimizer.step()
 
                 # compute MAE
-                train_u_mae += self.mae(U, u.unsqueeze(1)) # compute MAE
+                train_u_mae += self.mae(U, u) # compute MAE
                 train_force_mae += self.mae(f_pred, f)
 
             # averaging MAE
