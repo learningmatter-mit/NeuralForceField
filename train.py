@@ -92,6 +92,9 @@ class Model():
         
     def initialize_log(self):
         
+        self.train_u_log = []
+        self.train_f_log = []
+
         # create directoires if not exists 
         if not os.path.exists(self.root):
             os.makedirs(self.root)
@@ -139,9 +142,6 @@ class Model():
         Args:
             N_epoch (TYPE): Description
         """
-        self.train_u_log = []
-        self.train_f_log = []
-        
         
         for epoch in range(N_epoch):
 
@@ -187,7 +187,10 @@ class Model():
             self.train_f_log.append(train_force.item())
             
             # scheduler
-            self.scheduler.step(train_force)
+            if self.par["scheduler"] == True:
+                self.scheduler.step(train_force)
+            else:
+                pass
 
             # print loss
             print("epoch %d  U train: %.3f  force train %.3f" % (epoch, train_u, train_force))

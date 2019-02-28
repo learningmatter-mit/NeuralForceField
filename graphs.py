@@ -39,7 +39,6 @@ def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_fl
         graph.SetEdgeLabels()
         graph.LabelEdgesWithDistances()
         graph.SetGraphLabel(torch.Tensor([energy]))
-        #print(torch.Tensor([energy]).squeeze().shape)
         graph_data.AddGraph(graph)
 
     graph_data.CreateBatches(batch_size=batch_size)
