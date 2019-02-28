@@ -285,7 +285,7 @@ class Model():
             Boolean: True if training converged
         """
         eps = self.par["eps"] # convergence tolerence 
-        patience = 5 # make patience tunable
+        patience = 50 # make patience tunable
 
         # compute improvement by running averages 
         if len(self.train_f_log) > patience * 2:
