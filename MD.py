@@ -23,8 +23,8 @@ def mol_state(r, xyz):
 
 def printenergy(atoms):
     """Function to print the potential, kinetic and total energy"""
-    epot = atoms.get_potential_energy() / len(a)
-    ekin = atoms.get_kinetic_energy() / len(a)
+    epot = atoms.get_potential_energy() / len(atoms)
+    ekin = atoms.get_kinetic_energy() / len(atoms)
     print('Energy per atom: Epot = %.3feV  Ekin = %.3feV (T=%3.0fK)  '
           'Etot = %.3feV' % (epot, ekin, ekin / (1.5 * units.kB), epot + ekin))
 
