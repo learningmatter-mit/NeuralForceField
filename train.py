@@ -349,13 +349,19 @@ class Model():
         dyn = VelocityVerlet(structure, 0.1 * units.fs)
         # Now run the dynamics
         traj = []
+        thermo = []
         
         n_epoch = int(steps/save_frequency)
 
         for i in range(n_epoch):
             dyn.run(save_frequency)
             traj.append(structure.get_positions())
-            printenergy(structure)
+            epot, ekin, Temp = get_energy(structure)
+            thermo.append([epot, ekin, ekin+epot, Temp])
+
+        # save thermo data 
+        thermo = np.array(thermo)
+        np.savetxt(self.dir_loc + "/thermo.dat", thermo, delimiter=",")
 
         # write movies 
         traj = np.array(traj)
