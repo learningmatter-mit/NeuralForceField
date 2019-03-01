@@ -1,5 +1,6 @@
 from projects.NeuralForceField.models import *
 from projects.NeuralForceField.scatter import *
+from projects.NeuralForceField.MD import * 
 
 import matplotlib.pyplot as plt
 
@@ -11,6 +12,7 @@ import torch.optim as optim
 import os
 import json
 import datetime
+import time
 
 class Model():
 
@@ -67,8 +69,8 @@ class Model():
         
     def initialize_model(self):
 
-        with open(self.dir_loc+"/par.json", "w") as write_file:
-            json.dump(self.par, write_file , indent=4)
+        with open(self.dir_loc + "/par.json", "w") as write_file:
+            json.dump(self.par, write_file, indent=4)
         
         self.model = Net(n_atom_basis = self.par["n_atom_basis"],
                             n_filters = self.par["n_filters"],
@@ -142,7 +144,9 @@ class Model():
         Args:
             N_epoch (TYPE): Description
         """
-        
+
+        self.start_time = time.time()
+
         for epoch in range(N_epoch):
 
             # check if max epoches are reached 
@@ -196,11 +200,13 @@ class Model():
             print("epoch %d  U train: %.3f  force train %.3f" % (epoch, train_u, train_force))
 
             # check convergence 
-            if self.check_convergence():
-                print("training converged")
-                break
-            else:
-                pass
+            #if self.check_convergence():
+            #    print("training converged")
+            #    break
+            #else:
+            #    pass
+
+        self.time_elapsed = time.time() - self.start_time
 
         self.save_model()
         self.save_train_log()
@@ -300,3 +306,62 @@ class Model():
             converge = False 
 
         return converge
+
+    def save_summary(self):
+        # the final test loss, number of epochs trained
+
+        self.validate() 
+
+        train_state = dict()
+        train_state["epoch_trained"] = len(self.train_f_log)
+        train_state["test_force_mae"] = self.force_mae.item()
+        train_state["test_energy_mae"] = self.energy_mae.item()
+        train_state["time_per_epoch"] = self.time_elapsed / len(self.train_f_log)
+
+        # dump json 
+        with open(self.dir_loc+"/results.json", "w") as write_file:
+            json.dump(train_state, write_file , indent=4)
+
+        # dump test and predict energy and forces 
+        val_energy = np.array([self.u_true, self.u_predict]).transpose()
+        val_force = np.array([self.f_true, self.f_predict]).transpose()
+
+        np.savetxt(self.dir_loc + "/val_energy.csv", val_energy, delimiter=",")
+        np.savetxt(self.dir_loc + "/val_force.csv", val_force, delimiter=",")
+
+
+    def NVE(self, T=450.0, dt=0.01, steps=1000, save_frequency=20):
+
+        # save NVE energy fluctuations, Kinetic energies and movies 
+        # choose a starting conformation 
+        xyz, a, r, f, u, N = self.parse_batch(0)
+
+        xyz = xyz.reshape(-1, N[0], 3)
+        xyz = xyz[0].detach().cpu().numpy()
+        r = r.reshape(-1, N[0])
+        r = r[0].detach().cpu().numpy()
+
+        structure = mol_state(r=r,xyz=xyz)
+        structure.set_calculator(NeuralMD(model=self.model, device=self.device))
+        # Set the momenta corresponding to T= 0.0 K
+        MaxwellBoltzmannDistribution(structure, 0.0 * units.kB)
+        # We want to run MD with constant energy using the VelocityVerlet algorithm.
+        dyn = VelocityVerlet(structure, 0.1 * units.fs)
+        # Now run the dynamics
+        traj = []
+        
+        n_epoch = int(steps/save_frequency)
+
+        for i in range(n_epoch):
+            dyn.run(save_frequency)
+            traj.append(structure.get_positions())
+            printenergy(structure)
+
+        # write movies 
+        traj = np.array(traj)
+        traj = traj- traj.mean(1).reshape(-1,1,3)
+        Z = np.array([r] * len(traj)).reshape(len(traj), r.shape[0], 1)
+        traj_write = np.dstack(( Z, traj))
+        write_traj(filename=self.dir_loc+"/traj.xyz", frames=traj_write)
+
+

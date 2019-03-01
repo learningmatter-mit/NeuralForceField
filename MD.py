@@ -72,12 +72,12 @@ class NeuralMD(Calculator):
         node = atoms.get_atomic_numbers().reshape(1, -1, 1)
         xyz = atoms.get_positions().reshape(-1, n_atom, 3)
 
-        node = Variable(torch.LongTensor(node).expand(2, n_atom, 1)).cuda(self.device)
-        xyz = Variable(torch.Tensor(xyz).expand(2, n_atom, 3)).cuda(self.device)
+        node = Variable(torch.LongTensor(node).reshape(1, n_atom)).cuda(self.device)
+        xyz = Variable(torch.Tensor(xyz).reshape(1, n_atom, 3)).cuda(self.device)
         xyz.requires_grad = True
 
         # predict energy and force
-        U = self.model(r=node, xyz=xyz)
+        U = self.model(r=node.expand(2, n_atom), xyz=xyz.expand(2, n_atom, 3))
         f_pred = -compute_grad(inputs=xyz, output=U)
         
         # change energy and force to numpy array 
