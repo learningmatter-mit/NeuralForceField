@@ -161,10 +161,18 @@ class Model():
 
                 xyz, a, r, f, u, N = self.parse_batch(i)
                 xyz.requires_grad = True
+
+                # check if the input has graphs of various sizes 
+                if len(set(N)) == 1:
+                    graph_size_is_same = True
+                else:
+                    graph_size_is_same = False
                 
+                # Compute energies 
                 if self.graph_batching:
                     U = self.model(r=r, xyz=xyz, a=a, N=N)
                 else:
+                    assert graph_size_is_same # make sure all the graphs needs to have the same size
                     U = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3))
                     
                 f_pred = -compute_grad(inputs=xyz, output=U)
