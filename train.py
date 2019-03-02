@@ -115,7 +115,7 @@ class Model():
         self.N_train = int(self.par["train_percentage"] * self.N_batch)
         self.N_test = self.N_batch - self.N_train - 1 # ignore the last batch 
         
-    def parse_batch(self, index):
+    def parse_batch(self, index, data=None):
         """Summary
         
         Args:
@@ -124,17 +124,20 @@ class Model():
         Returns:
             TYPE: Description
         """
-        a = self.data.batches[index].data["a"].to(self.device)
+        if data == None:
+            data = self.data
 
-        r = self.data.batches[index].data["r"][:, [0]].to(self.device)
+        a = data.batches[index].data["a"].to(self.device)
 
-        f = self.data.batches[index].data["r"][:, 1:4].to(self.device) #* (627.509 / 0.529177) # convert to kcal/mol A
+        r = data.batches[index].data["r"][:, [0]].to(self.device)
 
-        u = self.data.batches[index].data["y"].to(self.device) #* 627.509 # kcal/mol 
+        f = data.batches[index].data["r"][:, 1:4].to(self.device) #* (627.509 / 0.529177) # convert to kcal/mol A
+
+        u = data.batches[index].data["y"].to(self.device) #* 627.509 # kcal/mol 
         
-        N = self.data.batches[index].data["N"]
+        N = data.batches[index].data["N"]
         
-        xyz = self.data.batches[index].data["xyz"].to(self.device)
+        xyz = data.batches[index].data["xyz"].to(self.device)
         
         return xyz, a, r, f, u, N
     
@@ -219,7 +222,7 @@ class Model():
         self.save_model()
         self.save_train_log()
             
-    def validate(self):
+    def validate(self, data=None):
         """Summary
         """
         self.f_predict = []
@@ -227,10 +230,19 @@ class Model():
         self.u_predict = []
         self.u_true = []
 
-        for i in range(self.N_test):
+        # decide data 
+        if data == None:
+            data = self.data#.batches[self.N_train: self.N_train + self.N_test - 1]
+            start_index = self.N_train - 1
+            N_test = self.N_test
+        else:
+            start_index = 0 
+            N_test = len(data.batches)
+
+        for i in range(N_test):
 
             # parse_data
-            xyz, a, r, f, u, N = self.parse_batch(self.N_train + i)
+            xyz, a, r, f, u, N = self.parse_batch(start_index + i, data=data)
             xyz.requires_grad = True
 
             if self.graph_batching:
@@ -352,7 +364,7 @@ class Model():
         structure = mol_state(r=r,xyz=xyz)
         structure.set_calculator(NeuralMD(model=self.model, device=self.device))
         # Set the momenta corresponding to T= 0.0 K
-        MaxwellBoltzmannDistribution(structure, 0.0 * units.kB)
+        MaxwellBoltzmannDistribution(structure, T * units.kB)
         # We want to run MD with constant energy using the VelocityVerlet algorithm.
         dyn = VelocityVerlet(structure, 0.1 * units.fs)
         # Now run the dynamics
@@ -373,9 +385,7 @@ class Model():
 
         # write movies 
         traj = np.array(traj)
-        traj = traj- traj.mean(1).reshape(-1,1,3)
+        traj = traj - traj.mean(1).reshape(-1,1,3)
         Z = np.array([r] * len(traj)).reshape(len(traj), r.shape[0], 1)
         traj_write = np.dstack(( Z, traj))
         write_traj(filename=self.dir_loc+"/traj.xyz", frames=traj_write)
-
-
