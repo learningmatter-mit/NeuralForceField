@@ -155,9 +155,6 @@ class InteractionBlock(nn.Module):
                 # mean pooling
                 y = y * A.sum(2).reciprocal().expand_as(y) 
                 y = y.sum(2)
-
-            y = self.Dense1(y)
-            y = self.Dense2(y)
             
         else:
             e = self.smearing_graph(e)
@@ -174,8 +171,9 @@ class InteractionBlock(nn.Module):
             # Atomwise sum 
             y = scatter_add(src=y, index=a[:, 0], dim=0)
             
-            # feed into Neural networks 
-            y = self.Dense1(y)
-            y = self.Dense2(y)
+        # feed into Neural networks 
+        y = self.Dense1(y)
+        y = self.Dense2(y)
 
         return y
+        
