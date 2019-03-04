@@ -7,6 +7,7 @@ from torch.nn import Parameter
 import torch.nn.functional as F
 from torch.autograd.gradcheck import zero_gradients
 from torch.autograd import grad
+from torch.nn import RReLU
 
 from projects.NeuralForceField.layers import * 
 from projects.NeuralForceField.scatter import * 
@@ -201,7 +202,7 @@ class graph_attention(nn.Module):
 
         # attention is directional, the attention i->j is different from j -> i
         hij = torch.cat((hi, hj), dim=3)
-        hij = self.LeakyRelu(self.a(hij))
+        hij = self.a(hij) #self.LeakyRelu(self.a(hij))
         
         # construct attention vector using softmax 
         alpha = (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1))
@@ -209,7 +210,9 @@ class graph_attention(nn.Module):
         alpha = alpha/SUM.unsqueeze(2).expand_as(hij)
     
         # update node embeedings with attention vecotor 
-        h_prime = self.W(h)#h.matmul(self.W)
-        h_prime = (h_prime[:, None,  :, :].expand(B, N_atom, N_atom, n_atom_basis) * alpha).sum(2)
+        #h_prime = self.W(h)#h.matmul(self.W)
+        #h_prime = (h_prime[:, None,  :, :].expand(B, N_atom, N_atom, n_atom_basis) * alpha).sum(2)
+
+        h_prime = (h[:, None,  :, :].expand(B, N_atom, N_atom, n_atom_basis) * alpha).sum(2)
         
         return h_prime
