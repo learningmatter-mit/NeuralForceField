@@ -53,7 +53,7 @@ def query_single_mol(smiles, sampling_method):
     dump_path = '/home/wwj/data/lipoly/'+smiles+ "_" + sampling_method + '.pkl'
 
     if len(completed) != 0:
-        print(str(len(completed)) + " geoms dumped for " + simles)
+        print(str(len(completed)) + " geoms dumped for " + smiles)
         with open(dump_path, 'wb') as handle:
             pickle.dump(completed, handle)
     else:

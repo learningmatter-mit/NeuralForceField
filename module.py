@@ -177,3 +177,39 @@ class InteractionBlock(nn.Module):
 
         return y
         
+class graph_attention(nn.Module):
+    def __init__(self, n_atom_basis):
+        super(graph_attention, self).__init__()
+        
+        self.n_atom_basis = n_atom_basis
+        self.W = nn.Linear(n_atom_basis, n_atom_basis)#Parameter(torch.Tensor(n_atom_basis, n_atom_basis))
+        self.a = nn.Linear(2 * n_atom_basis, 1)#Parameter(torch.rand(2 * n_atom_basis, 1))
+        self.LeakyRelu = RReLU()
+        
+    def forward(self, h, A):
+        #print(A.shape)
+        
+        n_atom_basis = self.n_atom_basis
+        B = h.shape[0]
+        N_atom = h.shape[1]
+        
+        hi = h[:, :, None, :].expand(B, N_atom, N_atom, n_atom_basis)
+        hj = h[:, None, : ,:].expand(B, N_atom, N_atom, n_atom_basis)
+
+        hi = self.W(hi) #hi.matmul(self.W)
+        hj = self.W(hj) #hj.matmul(self.W)
+
+        # attention is directional, the attention i->j is different from j -> i
+        hij = torch.cat((hi, hj), dim=3)
+        hij = self.LeakyRelu(self.a(hij))
+        
+        # construct attention vector using softmax 
+        alpha = (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1))
+        SUM = torch.sum( (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1)), dim=2)
+        alpha = alpha/SUM.unsqueeze(2).expand_as(hij)
+    
+        # update node embeedings with attention vecotor 
+        h_prime = self.W(h)#h.matmul(self.W)
+        h_prime = (h_prime[:, None,  :, :].expand(B, N_atom, N_atom, n_atom_basis) * alpha).sum(2)
+        
+        return h_prime

@@ -18,8 +18,8 @@ class graph_attention(nn.Module):
         super(graph_attention, self).__init__()
         
         self.n_atom_basis = n_atom_basis
-        self.W = Parameter(torch.Tensor(n_atom_basis, n_atom_basis))
-        self.a = Parameter(torch.rand(2 * n_atom_basis, 1))
+        self.W = nn.Linear(n_atom_basis, n_atom_basis)#Parameter(torch.Tensor(n_atom_basis, n_atom_basis))
+        self.a = nn.Linear(2 * n_atom_basis, 1)#Parameter(torch.rand(2 * n_atom_basis, 1))
         self.LeakyRelu = RReLU()
         
     def forward(self, h, A):
@@ -32,20 +32,20 @@ class graph_attention(nn.Module):
         hi = h[:, :, None, :].expand(B, N_atom, N_atom, n_atom_basis)
         hj = h[:, None, : ,:].expand(B, N_atom, N_atom, n_atom_basis)
 
-        hi = hi.matmul(self.W)
-        hj = hj.matmul(self.W)
+        hi = self.W(hi) #hi.matmul(self.W)
+        hj = self.W(hj) #hj.matmul(self.W)
 
         # attention is directional, the attention i->j is different from j -> i
         hij = torch.cat((hi, hj), dim=3)
-        hij = self.LeakyRelu(hij.matmul(self.a))
+        hij = self.LeakyRelu(self.a(hij))
         
         # construct attention vector using softmax 
-        alpha = (torch.exp(hij)* A[:, :, :, None].expand(B, N_atom, N_atom, 1))
-        SUM = torch.sum( (torch.exp(hij)* A[:, :, :, None].expand(B, N_atom, N_atom, 1)), dim=2)
+        alpha = (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1))
+        SUM = torch.sum( (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1)), dim=2)
         alpha = alpha/SUM.unsqueeze(2).expand_as(hij)
     
         # update node embeedings with attention vecotor 
-        h_prime = h.matmul(self.W)
+        h_prime = self.W(h)#h.matmul(self.W)
         h_prime = (h_prime[:, None,  :, :].expand(B, N_atom, N_atom, n_atom_basis) * alpha).sum(2)
         
         return h_prime
@@ -86,7 +86,9 @@ class Net_att(nn.Module):
             for i, conv in enumerate(self.convolutions):
                 
                 dr = conv(r=r, e=e, A=A)
-                r = r + dr + self.attentions[i](r, A)
+                #dr = self.attentions[i](dr, A)
+                r = r + dr 
+                r = self.attentions[i](r, A)
                 # apply attention layer 
                 #r = self.attentions[i](r, A)
 
@@ -136,7 +138,7 @@ import json
 import datetime
 import time
 
-class Model():
+class Model_att():
 
     """Summary
     
