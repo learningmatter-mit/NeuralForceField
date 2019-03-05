@@ -86,9 +86,9 @@ class Model():
         if self.par["scheduler"]:
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 
                                                                   'min', 
-                                                                  min_lr=1e-8, 
-                                                                  verbose=True, factor = 0.25, patience= 25,
-                                                                  threshold= 1e-4)
+                                                                  min_lr=1.5e-7, 
+                                                                  verbose=True, factor = 0.5, patience= 50,
+                                                                  threshold= 5e-5)
         self.criterion = torch.nn.MSELoss()
         self.mae = torch.nn.L1Loss()
         
