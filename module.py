@@ -80,7 +80,10 @@ class GraphDis(torch.nn.Module):
         # d = A.sum(2).squeeze(2) - 1
         return(dis_mat, A.squeeze(3)) 
 
-    def forward(self, r, xyz=None):
+    def forward(self, r, xyz):
+
+        assert len(xyz.shape) == 3
+        assert xyz.shape[2] == 3
 
         F = self.F  # F = Fr + Fe
         Fr = self.Fr # number of node feature
@@ -130,6 +133,9 @@ class InteractionBlock(nn.Module):
         
     def forward(self, r, e, A=None, a=None):       
         if a is None: # non-batch case ...
+
+            assert len(r.shape) == 3
+            assert len(e.shape) == 4
             
             if A is None:
                 raise ValueError('need to input A')
@@ -158,6 +164,8 @@ class InteractionBlock(nn.Module):
                 y = y.sum(2)
             
         else:
+            assert len(r.shape) == 2
+            assert len(e.shape) == 2
             e = self.smearing_graph(e)
             W = self.DistanceFilter1(e)
             W = self.DistanceFilter2(e)

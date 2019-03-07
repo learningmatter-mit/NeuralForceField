@@ -37,12 +37,14 @@ class Net(nn.Module):
         self.atomwise2 = Dense(in_features= int(n_atom_basis/2), out_features=1)
         
     def forward(self, r, xyz, a=None, N=None):
-        
+
         # tensor inputs
         if a is None:
-            
+            assert len(r.shape) == 2
+            assert len(xyz.shape) == 3
+
             r, e ,A = self.graph_dis(r= r, xyz=xyz)
-            r = self.atomEmbed(r.type(torch.long)).squeeze()
+            r = self.atomEmbed(r.type(torch.long))#.squeeze()
             
             for i, conv in enumerate(self.convolutions):
                 
@@ -57,6 +59,10 @@ class Net(nn.Module):
         
         # graph batch inputs
         else:
+            assert len(r.shape) == 1
+            assert len(xyz.shape) == 2
+            assert r.shape[0] == xyz.shape[0]
+            assert len(a.shape) == 2
             
             if N == None:
                 raise ValueError("need to input N for graph partitioning within the batch")
