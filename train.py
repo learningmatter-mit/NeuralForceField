@@ -210,14 +210,14 @@ class Model():
             # print loss
             print("epoch %d  U train: %.3f  force train %.3f" % (epoch, train_u, train_force))
 
+            self.time_elapsed = time.time() - self.start_time
+
             # check convergence 
             #if self.check_convergence():
             #    print("training converged")
             #    break
             #else:
             #    pass
-
-        self.time_elapsed = time.time() - self.start_time
 
         self.save_model()
         self.save_train_log()
