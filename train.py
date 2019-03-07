@@ -69,6 +69,36 @@ class Model():
         
     def initialize_model(self):
 
+        # check if all the parameters are specified and valid 
+        if len(self.par) != 14:
+            raise ValueError("parameters are not complete")
+
+        if type(self.par["git_commit"]) != str:
+            raise ValueError("Invalid repo version provided")
+        if type(self.par["n_filters"]) != int:
+            raise ValueError("Invalid filter dimension, it should be an integer")
+        if type(self.par["n_gaussians"]) != int:
+            raise ValueError("Invalid number of gaussian basis, it should be an integer")
+        if type(self.par["optim"]) != float:
+            raise ValueError("the learning rate is not an float")
+        if type(self.par["train_percentage"]) != float and self.par["optim"] >= 1.0:
+            raise ValueError("the training data percentage is invalid")
+        if type(self.par["T"]) != int:
+            raise ValueError("number of convolutions have to an integer")
+        if type(self.par["batch_size"]) != int:
+            raise ValueError("invalid batch size")
+        if type(self.par["cutoff"]) != float:
+            raise ValueError("Invalid cutoff radius")
+        if type(self.par["max_epoch"]) != int:
+            raise ValueError("max epoch should be an integer")
+        if type(self.par["trainable_gauss"]) != bool:
+            raise ValueError("should be boolean value")
+        if type(self.par["rho"]) != float:
+            raise ValueError("Rho should be float")
+        if type(self.par["eps"]) != float and self.par["eps"] > 1.0:
+            raise ValueError("Invalid convergence criterion")
+
+
         with open(self.dir_loc + "/par.json", "w") as write_file:
             json.dump(self.par, write_file, indent=4)
         
