@@ -72,7 +72,6 @@ class Model():
         # check if all the parameters are specified and valid 
         if len(self.par) != 14:
             raise ValueError("parameters are not complete")
-
         if type(self.par["git_commit"]) != str:
             raise ValueError("Invalid repo version provided")
         if type(self.par["n_filters"]) != int:
@@ -97,7 +96,6 @@ class Model():
             raise ValueError("Rho should be float")
         if type(self.par["eps"]) != float and self.par["eps"] > 1.0:
             raise ValueError("Invalid convergence criterion")
-
 
         with open(self.dir_loc + "/par.json", "w") as write_file:
             json.dump(self.par, write_file, indent=4)
@@ -243,11 +241,11 @@ class Model():
             self.time_elapsed = time.time() - self.start_time
 
             # check convergence 
-            #if self.check_convergence():
-            #    print("training converged")
-            #    break
-            #else:
-            #    pass
+            if self.check_convergence():
+                print("training converged")
+                break
+            else:
+                pass
 
         self.save_model()
         self.save_train_log()
@@ -343,15 +341,19 @@ class Model():
         eps = self.par["eps"] # convergence tolerence 
         patience = 50 # make patience tunable
 
-        # compute improvement by running averages 
+        # compute improvement by running averages of the sume of energy and force mae 
         if len(self.train_f_log) > patience * 2:
-            dif = (np.array(self.train_f_log[-patience * 2: -patience :]) - np.array(self.train_f_log[-patience:])).mean()
-            improvement = dif / np.array(self.train_f_log[-patience:]).mean()
+            loss_prev = np.array(self.train_f_log[-patience * 2: -patience:]) + np.array(self.train_u_log[-patience * 2: -patience:])
+            loss_current = np.array(self.train_f_log[-patience:]) + np.array(self.train_u_log[-patience:])
 
-            if improvement < eps:
+            dif = (loss_prev - loss_current).mean()
+            improvement = dif / loss_prev.mean()
+
+            if improvement < eps and improvement>= 0.0:
                 converge = True
             else: 
                 converge = False
+            #print(improvement)
         else:
             converge = False 
 
