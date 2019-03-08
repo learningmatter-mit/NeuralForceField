@@ -22,7 +22,7 @@ geoms = Geom.objects.filter(
 values = geoms.annotate(
        energy=Coalesce(Cast(KeyTextTransform(
            'totalenergy', 'calcs__props'), FloatField()), 0)).order_by('stoichiometry', 'species', 'id').values_list(
-           'xyz', 'calcs__jacobian__forces', 'energy','id', 'stoichiometry__formula', 'species__smiles').order_by("?")[:50000]
+           'xyz', 'calcs__jacobian__forces', 'energy','id', 'stoichiometry__formula', 'species__smiles')[:50000]
 
 completed = []
 oldformula = None

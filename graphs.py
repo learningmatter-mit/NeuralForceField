@@ -3,8 +3,7 @@ import numpy as np
 import torch 
 from projects.graphbuilder.graphbuilder import Graph, GraphDataset
 
-
-def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_flag, subtract_mean_flag):
+def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_flag, subtract_mean_flag, smiles_data=None):
 
     # shuffle data 
     xyz_data, force_data, energy_data = shuffle(xyz_data, force_data, energy_data)
@@ -29,9 +28,10 @@ def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_fl
 
         xyz = np.array(xyz_data[index])
         force = np.array(force_data[index]) * np.float(force_conversion) 
-        energy = np.array(energy_data[index]) * np.float(energy_conversion) 
+        energy = np.array(energy_data[index]) * np.float(energy_conversion)
+        species = smiles_data[index]
         node = xyz[:, 0].reshape(-1, 1)
-        graph = Graph(N=node.shape[0], dynamic_adj_mat=dynamic_adj_mat)
+        graph = Graph(N=node.shape[0], dynamic_adj_mat=dynamic_adj_mat, name=species)
         node_force = np.hstack((node, force)) # node concatenate with force 
         graph.SetNodeLabels(r=torch.Tensor(node_force))
         graph.SetXYZ(xyz=torch.Tensor(xyz[:, 1:4]))
