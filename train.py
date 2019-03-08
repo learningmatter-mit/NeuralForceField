@@ -388,6 +388,8 @@ class Model():
 
         # save NVE energy fluctuations, Kinetic energies and movies 
         # choose a starting conformation 
+
+        ev_to_kcal = 23.06035
         xyz, a, r, f, u, N = self.parse_batch(0)
 
         xyz = xyz.reshape(-1, N[0], 3)
@@ -412,8 +414,9 @@ class Model():
             dyn.run(save_frequency)
             traj.append(structure.get_positions()) # append atomic positions 
             force_traj.append(dyn.atoms.get_forces()) # append atomic forces 
+            print("step", i * save_frequency)
             epot, ekin, Temp = get_energy(structure)
-            thermo.append([epot, ekin, ekin+epot, Temp])
+            thermo.append([epot * ev_to_kcal, ekin * ev_to_kcal, ekin+epot, Temp])
 
         # save thermo data 
         thermo = np.array(thermo)
@@ -427,7 +430,7 @@ class Model():
         write_traj(filename=self.dir_loc+"/traj.xyz", frames=traj_write)
 
         # write forces into xyz 
-        force_traj = np.array(force_traj)
+        force_traj = np.array(force_traj) * ev_to_kcal
         Z = np.array([r] * len(force_traj)).reshape(len(force_traj), r.shape[0], 1)
         force_write = np.dstack(( Z, force_traj))
         write_traj(filename=self.dir_loc+"/force.xyz", frames=force_write)

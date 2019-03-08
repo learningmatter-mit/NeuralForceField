@@ -11,6 +11,7 @@ from ase import units
 from ase import Atoms
 
 mass_dict = {6: 12.01, 8: 15.999, 1: 1.008, 3: 6.941}
+ev_to_kcal = 23.06035
 
 
 def mol_state(r, xyz):
@@ -22,12 +23,12 @@ def mol_state(r, xyz):
     return structure
 
 def get_energy(atoms):
-    """Function to print the potential, kinetic and total energy"""
+    """Function to print the potential, kinetic and total energy""" 
     epot = atoms.get_potential_energy() #/ len(atoms)
     ekin = atoms.get_kinetic_energy() #/ len(atoms)
     Temperature = ekin / (1.5 * units.kB * len(atoms))
-    print('Energy per atom: Epot = %.3feV  Ekin = %.3feV (T=%3.0fK)  '
-          'Etot = %.3feV' % (epot, ekin, Temperature, epot + ekin))
+    print('Energy per atom: Epot = %.3fkcal/mol  Ekin = %.3fkcal/mol (T=%3.0fK)  '
+          'Etot = %.3fkcal/mol' % (epot * ev_to_kcal, ekin * ev_to_kcal, Temperature, (epot + ekin) * ev_to_kcal))
     return epot, ekin, Temperature
 
 def write_traj(filename, frames):
@@ -83,8 +84,8 @@ class NeuralMD(Calculator):
         f_pred = -compute_grad(inputs=xyz, output=U)
         
         # change energy and force to numpy array 
-        energy = U[0].detach().cpu().numpy() * 0.043
-        forces = f_pred[0].detach().cpu().numpy() * 0.043
+        energy = U[0].detach().cpu().numpy() * (1/ev_to_kcal)
+        forces = f_pred[0].detach().cpu().numpy() * (1/ev_to_kcal)
         
         self.results = {
             'energy': energy.reshape(-1),
