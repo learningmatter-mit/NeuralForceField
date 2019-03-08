@@ -70,8 +70,10 @@ class Model():
     def initialize_model(self):
 
         # check if all the parameters are specified and valid 
-        if len(self.par) != 14:
+        if len(self.par) != 15:
             raise ValueError("parameters are not complete")
+        if self.par["model_type"] not in ["schnet", "attention", "fingerprint"]:
+            raise ValueError("Unavailable models")
         if type(self.par["git_commit"]) != str:
             raise ValueError("Invalid repo version provided")
         if type(self.par["n_filters"]) != int:
@@ -382,7 +384,7 @@ class Model():
         np.savetxt(self.dir_loc + "/val_force.csv", val_force, delimiter=",")
 
 
-    def NVE(self, T=450.0, dt=0.01, steps=1000, save_frequency=20):
+    def NVE(self, T=450.0, dt=0.1, steps=1000, save_frequency=20):
 
         # save NVE energy fluctuations, Kinetic energies and movies 
         # choose a starting conformation 
@@ -398,7 +400,7 @@ class Model():
         # Set the momenta corresponding to T= 0.0 K
         MaxwellBoltzmannDistribution(structure, T * units.kB)
         # We want to run MD with constant energy using the VelocityVerlet algorithm.
-        dyn = VelocityVerlet(structure, 0.1 * units.fs)
+        dyn = VelocityVerlet(structure, dt * units.fs)
         # Now run the dynamics
         traj = []
         thermo = []

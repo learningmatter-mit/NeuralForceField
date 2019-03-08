@@ -133,7 +133,6 @@ class InteractionBlock(nn.Module):
         
     def forward(self, r, e, A=None, a=None):       
         if a is None: # non-batch case ...
-
             assert len(r.shape) == 3
             assert len(e.shape) == 4
             
@@ -212,7 +211,7 @@ class graph_attention(nn.Module):
         hij = torch.cat((hi, hj), dim=3)
         hij = self.a(hij) #self.LeakyRelu(self.a(hij))
         
-        # construct attention vector using softmax 
+        # construct attention vector using softmax
         alpha = (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1))
         SUM = torch.sum( (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1)), dim=2)
         alpha = alpha/SUM.unsqueeze(2).expand_as(hij)
