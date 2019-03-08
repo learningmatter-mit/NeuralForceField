@@ -23,11 +23,12 @@ def mol_state(r, xyz):
 
 def get_energy(atoms):
     """Function to print the potential, kinetic and total energy"""
-    epot = atoms.get_potential_energy() / len(atoms)
-    ekin = atoms.get_kinetic_energy() / len(atoms)
+    epot = atoms.get_potential_energy() #/ len(atoms)
+    ekin = atoms.get_kinetic_energy() #/ len(atoms)
+    Temperature = ekin / (1.5 * units.kB * len(atoms))
     print('Energy per atom: Epot = %.3feV  Ekin = %.3feV (T=%3.0fK)  '
-          'Etot = %.3feV' % (epot, ekin, ekin / (1.5 * units.kB), epot + ekin))
-    return epot, ekin, ekin / (1.5 * units.kB)
+          'Etot = %.3feV' % (epot, ekin, Temperature, epot + ekin))
+    return epot, ekin, Temperature
 
 def write_traj(filename, frames):
     '''

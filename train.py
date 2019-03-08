@@ -403,13 +403,15 @@ class Model():
         dyn = VelocityVerlet(structure, dt * units.fs)
         # Now run the dynamics
         traj = []
+        force_traj = []
         thermo = []
         
         n_epoch = int(steps/save_frequency)
 
         for i in range(n_epoch):
             dyn.run(save_frequency)
-            traj.append(structure.get_positions())
+            traj.append(structure.get_positions()) # append atomic positions 
+            force_traj.append(dyn.atoms.get_forces()) # append atomic forces 
             epot, ekin, Temp = get_energy(structure)
             thermo.append([epot, ekin, ekin+epot, Temp])
 
@@ -423,3 +425,9 @@ class Model():
         Z = np.array([r] * len(traj)).reshape(len(traj), r.shape[0], 1)
         traj_write = np.dstack(( Z, traj))
         write_traj(filename=self.dir_loc+"/traj.xyz", frames=traj_write)
+
+        # write forces into xyz 
+        force_traj = np.array(force_traj)
+        Z = np.array([r] * len(force_traj)).reshape(len(force_traj), r.shape[0], 1)
+        force_write = np.dstack(( Z, force_traj))
+        write_traj(filename=self.dir_loc+"/force.xyz", frames=force_write)
