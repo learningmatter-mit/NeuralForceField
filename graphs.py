@@ -45,3 +45,26 @@ def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_fl
 
     return graph_data
 
+def parse_species_geom(n_batch, graph_data):
+    
+    species_dict = {}
+
+    name_list = []
+    r_list = []
+    xyz_list = []
+
+    for i in range(n_batch):
+        batch = graph_data.batches[i]
+
+        xyz_list += list( torch.split(batch.data["xyz"], batch.data["N"]) )
+        r_list += list(torch.split(batch.data["r"], batch.data["N"]))
+        name_list += batch.data["name"]
+
+    for index, geom in enumerate(xyz_list):
+        if name_list[index] not in species_dict:
+            species_dict[name_list[index]] = [index]
+        else:
+            species_dict[name_list[index]].append(index)
+    
+    return species_dict, r_list, xyz_list
+

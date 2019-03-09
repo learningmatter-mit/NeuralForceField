@@ -1,6 +1,9 @@
 from torch.autograd import Variable
 from projects.NeuralForceField.scatter import compute_grad
+from projects.NeuralForceField.graphs import *
 import torch
+import numpy as np
+import os 
 
 import ase
 from ase.calculators.calculator import Calculator, all_changes
@@ -91,3 +94,69 @@ class NeuralMD(Calculator):
             'energy': energy.reshape(-1),
             'forces': forces.reshape((len(atoms), 3))
         }
+
+def sample(model, T=450.0, dt=0.1, steps=1000, save_frequency=20):
+
+    species_dict, r_list, xyz_list = parse_species_geom(3, model.data)
+
+    for species in species_dict:
+        index = np.random.choice(species_dict[species])
+
+        xyz = xyz_list[index]
+        r = r_list[index][:,0]
+
+        NVE(species=species, xyz=xyz, r=r, device= model.device, dir_loc=model.dir_loc, model=model.model, 
+                                                    T=T, dt=dt, steps=steps, save_frequency=save_frequency)
+
+def NVE(species, xyz, r, model, device, dir_loc, T=450.0, dt=0.1, steps=1000, save_frequency=20):
+
+    # save NVE energy fluctuations, Kinetic energies and movies 
+    if not os.path.exists(dir_loc+ "/" + species):
+        os.makedirs(dir_loc + "/" + species)
+
+    ev_to_kcal = 23.06035
+    #xyz, a, r, f, u, N = self.parse_batch(0)
+
+    N_atom = len(xyz)
+    xyz = xyz.reshape(-1, N_atom, 3)
+    xyz = xyz[0].detach().cpu().numpy()
+    r = r.reshape(-1, N_atom)
+    r = r[0].detach().cpu().numpy()
+
+    structure = mol_state(r=r,xyz=xyz)
+    structure.set_calculator(NeuralMD(model=model, device=device))
+    # Set the momenta corresponding to T= 0.0 K
+    MaxwellBoltzmannDistribution(structure, T * units.kB)
+    # We want to run MD with constant energy using the VelocityVerlet algorithm.
+    dyn = VelocityVerlet(structure, dt * units.fs)
+    # Now run the dynamics
+    traj = []
+    force_traj = []
+    thermo = []
+    
+    n_epoch = int(steps/save_frequency)
+
+    for i in range(n_epoch):
+        dyn.run(save_frequency)
+        traj.append(structure.get_positions()) # append atomic positions 
+        force_traj.append(dyn.atoms.get_forces()) # append atomic forces 
+        print("step", i * save_frequency)
+        epot, ekin, Temp = get_energy(structure)
+        thermo.append([epot * ev_to_kcal, ekin * ev_to_kcal, ekin+epot, Temp])
+
+    # save thermo data 
+    thermo = np.array(thermo)
+    np.savetxt(dir_loc + "/" + species + "/thermo.dat", thermo, delimiter=",")
+
+    # write movies 
+    traj = np.array(traj)
+    traj = traj - traj.mean(1).reshape(-1,1,3)
+    Z = np.array([r] * len(traj)).reshape(len(traj), r.shape[0], 1)
+    traj_write = np.dstack(( Z, traj))
+    write_traj(filename=dir_loc + "/" + species + "/traj.xyz", frames=traj_write)
+
+    # write forces into xyz 
+    force_traj = np.array(force_traj) * ev_to_kcal
+    Z = np.array([r] * len(force_traj)).reshape(len(force_traj), r.shape[0], 1)
+    force_write = np.dstack(( Z, force_traj))
+    write_traj(filename=dir_loc + "/" + species + "/force.xyz", frames=force_write)

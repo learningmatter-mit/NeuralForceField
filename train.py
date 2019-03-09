@@ -1,6 +1,7 @@
 from projects.NeuralForceField.models import *
 from projects.NeuralForceField.scatter import *
 from projects.NeuralForceField.MD import * 
+from projects.NeuralForceField.graphs import * 
 
 import matplotlib.pyplot as plt
 
@@ -166,6 +167,8 @@ class Model():
         u = data.batches[index].data["y"].to(self.device) #* 627.509 # kcal/mol 
         
         N = data.batches[index].data["N"]
+
+        species = data.batches[index].data["name"]
         
         xyz = data.batches[index].data["xyz"].to(self.device)
         

@@ -44,8 +44,7 @@ class Net(nn.Module):
             assert len(xyz.shape) == 3
 
             r, e ,A = self.graph_dis(r= r, xyz=xyz)
-            r = self.atomEmbed(r.type(torch.long))#.squeeze()
-            
+            r = self.atomEmbed(r.type(torch.long))#.squeeze()        
             for i, conv in enumerate(self.convolutions):
                 
                 dr = conv(r=r, e=e, A=A)
@@ -59,7 +58,7 @@ class Net(nn.Module):
         
         # graph batch inputs
         else:
-            assert len(r.shape) == 1
+            assert len(r.shape) == 2 #1
             assert len(xyz.shape) == 2
             assert r.shape[0] == xyz.shape[0]
             assert len(a.shape) == 2
