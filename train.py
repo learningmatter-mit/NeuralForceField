@@ -71,8 +71,8 @@ class Model():
     def initialize_model(self):
 
         # check if all the parameters are specified and valid 
-        if len(self.par) != 15:
-            raise ValueError("parameters are not complete")
+        #if len(self.par) != 15:
+        #    raise ValueError("parameters are not complete")
         if self.par["model_type"] not in ["schnet", "attention", "fingerprint"]:
             raise ValueError("Unavailable models")
         if type(self.par["git_commit"]) != str:
@@ -162,13 +162,11 @@ class Model():
 
         r = data.batches[index].data["r"][:, [0]].to(self.device)
 
-        f = data.batches[index].data["r"][:, 1:4].to(self.device) #* (627.509 / 0.529177) # convert to kcal/mol A
+        f = data.batches[index].data["r"][:, 1:4].to(self.device) 
 
-        u = data.batches[index].data["y"].to(self.device) #* 627.509 # kcal/mol 
+        u = data.batches[index].data["y"].to(self.device)
         
         N = data.batches[index].data["N"]
-
-        species = data.batches[index].data["name"]
         
         xyz = data.batches[index].data["xyz"].to(self.device)
         
@@ -206,10 +204,10 @@ class Model():
                 
                 # Compute energies 
                 if self.graph_batching:
-                    U = self.model(r=r, xyz=xyz, a=a, N=N)
+                    U = self.model(r=r, xyz=xyz, a=a, N=N) + self.data.label_mean
                 else:
                     assert graph_size_is_same # make sure all the graphs needs to have the same size
-                    U = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3))
+                    U = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3)) + self.data.label_mean
                     
                 f_pred = -compute_grad(inputs=xyz, output=U)
 
@@ -279,9 +277,9 @@ class Model():
             xyz.requires_grad = True
 
             if self.graph_batching:
-                u_pred = self.model(r=r, xyz=xyz, a=a, N=N)
+                u_pred = self.model(r=r, xyz=xyz, a=a, N=N) + self.data.label_mean 
             else:
-                u_pred = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3))
+                u_pred = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3)) + self.data.label_mean
                 
             f_pred = -compute_grad(inputs=xyz, output=u_pred).reshape(-1)
 
@@ -306,11 +304,11 @@ class Model():
         ax2 = f.add_subplot(122)
         ax2.set_title("energies validation")
 
-        ax.scatter(self.f_true , self.f_predict, label="force MAE: " + str(self.force_mae) + " kcal/mol A")
+        ax.scatter(self.f_true , self.f_predict, label="force MAE: " + str(self.force_mae) + " kcal/mol A" , alpha=0.3, s=6)
         ax.set_xlabel("test")
         ax.set_ylabel("prediction")
         ax.legend()
-        ax2.scatter(self.u_true, self.u_predict, label="energy MAE: " + str(self.energy_mae) + " kcal/mol")
+        ax2.scatter(self.u_true, self.u_predict, label="energy MAE: " + str(self.energy_mae) + " kcal/mol",  alpha=0.3, s=6)
         ax2.set_xlabel("test")
         ax2.set_ylabel("prediction")
         ax2.legend()

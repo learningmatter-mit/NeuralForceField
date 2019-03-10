@@ -3,13 +3,14 @@ import numpy as np
 import torch 
 from projects.graphbuilder.graphbuilder import Graph, GraphDataset
 
-def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_flag, subtract_mean_flag, smiles_data=None):
+def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_flag, smiles_data=None):
 
     # shuffle data 
     xyz_data, force_data, energy_data = shuffle(xyz_data, force_data, energy_data)
+    energy_mean = np.array(energy_data).mean()
 
-    if subtract_mean_flag == True:
-        energy_data = np.array(energy_data) - np.array(energy_data).mean()
+    #if subtract_mean_flag == True:
+    #    energy_data = np.array(energy_data) - energy_mean
 
     Fr = 4 # let node features be 
     Fe = 1
@@ -29,9 +30,14 @@ def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_fl
         xyz = np.array(xyz_data[index])
         force = np.array(force_data[index]) * np.float(force_conversion) 
         energy = np.array(energy_data[index]) * np.float(energy_conversion)
-        species = smiles_data[index]
-        node = xyz[:, 0].reshape(-1, 1)
-        graph = Graph(N=node.shape[0], dynamic_adj_mat=dynamic_adj_mat, name=species)
+        if smiles_data is not None:
+            species = smiles_data[index]
+            node = xyz[:, 0].reshape(-1, 1)
+            graph = Graph(N=node.shape[0], dynamic_adj_mat=dynamic_adj_mat, name=species)
+        else:
+            node = xyz[:, 0].reshape(-1, 1)
+            graph = Graph(N=node.shape[0], dynamic_adj_mat=dynamic_adj_mat)
+
         node_force = np.hstack((node, force)) # node concatenate with force 
         graph.SetNodeLabels(r=torch.Tensor(node_force))
         graph.SetXYZ(xyz=torch.Tensor(xyz[:, 1:4]))
@@ -42,6 +48,7 @@ def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_fl
         graph_data.AddGraph(graph)
 
     graph_data.CreateBatches(batch_size=batch_size)
+    graph_data.set_label_mean(energy_mean * energy_conversion)
 
     return graph_data
 
