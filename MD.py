@@ -31,8 +31,8 @@ def get_energy(atoms):
     ekin = atoms.get_kinetic_energy() #/ len(atoms)
     Temperature = ekin / (1.5 * units.kB * len(atoms))
     print('Energy per atom: Epot = %.3fkcal/mol  Ekin = %.3fkcal/mol (T=%3.0fK)  '
-          'Etot = %.3fkcal/mol' % (epot * ev_to_kcal, ekin * ev_to_kcal, Temperature, (epot + ekin) * ev_to_kcal))
-    return epot, ekin, Temperature
+          'Etot = %.3fkcal/mol' % (epot, ekin * ev_to_kcal, Temperature, (epot + ekin) * ev_to_kcal))
+    return epot* ev_to_kcal, ekin* ev_to_kcal, Temperature
 
 def write_traj(filename, frames):
     '''
