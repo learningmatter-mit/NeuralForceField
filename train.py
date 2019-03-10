@@ -46,7 +46,7 @@ class Model():
         u_true (list): Description
     """
 
-    def __init__(self,par, graph_data, device, job_name, graph_batching=False, root="./"):
+    def __init__(self,par, graph_data, device, job_name, graph_batching=False, root="./", reload=False):
         """Summary
         
         Args:
@@ -58,14 +58,24 @@ class Model():
             root (str, optional): Description
         """
         self.device = device
-        self.par = par 
-        self.data = graph_data
         self.job_name = job_name
         self.root = root 
-        self.initialize_log()
+        self.reload = reload
+
+        if reload == False:
+            self.par = par 
+        else:
+            with open(self.root+'par.json') as f:
+                self.par = json.load(f)
+
+        self.data = graph_data
         self.initialize_data()
         self.initialize_model()
         self.initialize_optim()
+        if reload is False:
+            self.initialize_log()
+        else:
+            self.load_model(self.root+'model.pt')
         self.graph_batching = graph_batching
         
     def initialize_model(self):
@@ -73,10 +83,10 @@ class Model():
         # check if all the parameters are specified and valid 
         #if len(self.par) != 15:
         #    raise ValueError("parameters are not complete")
-        if self.par["model_type"] not in ["schnet", "attention", "fingerprint"]:
-            raise ValueError("Unavailable models")
-        if type(self.par["git_commit"]) != str:
-            raise ValueError("Invalid repo version provided")
+        #if self.par["model_type"] not in ["schnet", "attention", "fingerprint"]:
+        #    raise ValueError("Unavailable models")
+        #if type(self.par["git_commit"]) != str:
+        #    raise ValueError("Invalid repo version provided")
         if type(self.par["n_filters"]) != int:
             raise ValueError("Invalid filter dimension, it should be an integer")
         if type(self.par["n_gaussians"]) != int:
@@ -100,8 +110,9 @@ class Model():
         if type(self.par["eps"]) != float and self.par["eps"] > 1.0:
             raise ValueError("Invalid convergence criterion")
 
-        with open(self.dir_loc + "/par.json", "w") as write_file:
-            json.dump(self.par, write_file, indent=4)
+        if self.reload == False:
+            with open(self.dir_loc + "/par.json", "w") as write_file:
+                json.dump(self.par, write_file, indent=4)
         
         self.model = Net(n_atom_basis = self.par["n_atom_basis"],
                             n_filters = self.par["n_filters"],
@@ -317,11 +328,11 @@ class Model():
         self.model_path = self.dir_loc + "/model.pt"
         torch.save(self.model.state_dict(), self.model_path)
 
-    def load_model(self):
-        if self.model_path is not None:
-            self.model.load_state_dict(torch.load(self.model_path))
-        else:
-            print("no model saved for this training session, please save your model first")
+    def load_model(self, path):
+        #if self.model_path is not None:
+        self.model.load_state_dict(torch.load(path))
+        #else:
+        #    print("no model saved for this training session, please save your model first")
     
     def save_train_log(self):
         # save the training log for energies and force 
