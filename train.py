@@ -4,6 +4,7 @@ from projects.NeuralForceField.MD import *
 from projects.NeuralForceField.graphs import * 
 
 import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 
 import pickle
 import numpy as np
@@ -46,7 +47,7 @@ class Model():
         u_true (list): Description
     """
 
-    def __init__(self,par, graph_data, device, job_name, graph_batching=False, root="./", reload=False):
+    def __init__(self,par, graph_data, device, job_name, graph_batching=False, root="./", reload=False, shift=False):
         """Summary
         
         Args:
@@ -69,12 +70,13 @@ class Model():
                 self.par = json.load(f)
 
         self.data = graph_data
+        if shift == False:
+            graph_data.label_mean = 0.0 
+
         self.initialize_data()
         self.initialize_model()
         self.initialize_optim()
-        if reload is False:
-            self.initialize_log()
-        else:
+        if reload is True:
             self.load_model(self.root+'model.pt')
         self.graph_batching = graph_batching
         
@@ -111,6 +113,23 @@ class Model():
             raise ValueError("Invalid convergence criterion")
 
         if self.reload == False:
+
+            self.train_u_log = []
+            self.train_f_log = []
+
+            # create directoires if not exists 
+            if not os.path.exists(self.root):
+                os.makedirs(self.root)
+                
+            # obtain a time stamp 
+            currentDT = datetime.datetime.now()
+
+            date = str(currentDT).split()[0].split("-")[1:]
+            self.dir_loc = self.root + self.job_name + "_" + "".join(date)
+            
+            if not os.path.exists(self.dir_loc):
+                os.makedirs(self.dir_loc)
+
             with open(self.dir_loc + "/par.json", "w") as write_file:
                 json.dump(self.par, write_file, indent=4)
         
@@ -133,24 +152,7 @@ class Model():
                                                                   threshold= 5e-5)
         self.criterion = torch.nn.MSELoss()
         self.mae = torch.nn.L1Loss()
-        
-    def initialize_log(self):
-        
-        self.train_u_log = []
-        self.train_f_log = []
-
-        # create directoires if not exists 
-        if not os.path.exists(self.root):
-            os.makedirs(self.root)
-            
-        # obtain a time stamp 
-        currentDT = datetime.datetime.now()
-        date = str(currentDT).split()[0].split("-")[1:] 
-        self.dir_loc = self.root + self.job_name + "_" + "".join(date)
-        
-        if not os.path.exists(self.dir_loc):
-            os.makedirs(self.dir_loc)
-        
+         
     def initialize_data(self):
         
         self.N_batch = len(self.data.batches)
@@ -323,6 +325,13 @@ class Model():
         ax2.set_xlabel("test")
         ax2.set_ylabel("prediction")
         ax2.legend()
+
+        plt.savefig("validation.jpg")
+
+        print("force_MAE", self.force_mae, "kcal/mol")
+        print("energy_MAE", self.energy_mae, "kcal/mol")
+
+
        
     def save_model(self):
         self.model_path = self.dir_loc + "/model.pt"
@@ -403,10 +412,10 @@ class Model():
 
         ev_to_kcal = 23.06035
         xyz, a, r, f, u, N = self.parse_batch(0)
+        xyz = torch.split(xyz ,N)[2]
+        r = torch.split(r,N)[2].squeeze().squeeze()
 
-        xyz = xyz.reshape(-1, N[0], 3)
         xyz = xyz[0].detach().cpu().numpy()
-        r = r.reshape(-1, N[0])
         r = r[0].detach().cpu().numpy()
 
         structure = mol_state(r=r,xyz=xyz)
