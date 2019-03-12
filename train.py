@@ -283,9 +283,9 @@ class Model():
             start_index = 0 
             N_test = len(data.batches)
 
-        species_trained = set(data.batches[1].data["name"])
+        species_trained = sorted( set(data.batches[1].data["name"]) ) 
 
-        print("&".join(species_trained))
+        #print("&".join(species_trained))
 
         for i in range(N_test):
 
@@ -330,12 +330,11 @@ class Model():
         ax2.set_ylabel("prediction")
         ax2.legend()
 
+        f.suptitle(",".join(species_trained)+"validations", fontsize=14)
         plt.savefig("&".join(species_trained) + "validation.jpg")
 
         print("force_MAE", self.force_mae, "kcal/mol")
         print("energy_MAE", self.energy_mae, "kcal/mol")
-
-
        
     def save_model(self):
         self.model_path = self.dir_loc + "/model.pt"
