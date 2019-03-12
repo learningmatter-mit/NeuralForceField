@@ -44,7 +44,7 @@ def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_fl
         graph.SetGraphLabel(torch.Tensor([energy]))
         graph_data.AddGraph(graph)
 
-    graph_data.CreateBatches(batch_size=batch_size)
+    graph_data.CreateBatches(batch_size=batch_size, verbose=False)
     graph_data.set_label_mean(energy_mean * energy_conversion)
 
     return graph_data
