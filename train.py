@@ -283,6 +283,10 @@ class Model():
             start_index = 0 
             N_test = len(data.batches)
 
+        species_trained = set(data.batches[1].data["name"])
+
+        print("&".join(species_trained))
+
         for i in range(N_test):
 
             # parse_data
@@ -326,7 +330,7 @@ class Model():
         ax2.set_ylabel("prediction")
         ax2.legend()
 
-        plt.savefig("validation.jpg")
+        plt.savefig("&".join(species_trained) + "validation.jpg")
 
         print("force_MAE", self.force_mae, "kcal/mol")
         print("energy_MAE", self.energy_mae, "kcal/mol")
