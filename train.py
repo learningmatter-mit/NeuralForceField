@@ -47,7 +47,8 @@ class Model():
         u_true (list): Description
     """
 
-    def __init__(self,par, graph_data, device, job_name, graph_batching=False, root="./", reload=False, shift=False):
+    def __init__(self,par, device, job_name, graph_batching=False,
+                 graph_data=None,  root="./", train_flag=False, shift=False):
         """Summary
         
         Args:
@@ -58,24 +59,23 @@ class Model():
             graph_batching (bool, optional): Description
             root (str, optional): Description
         """
+        if graph_data == None and train_flag == True:
+            raise ValueError("No graph data provided for training")
+        if graph_data is not None and train_flag == False:
+            raise ValueError("You import a graph dataset but dont want to train on the data, are you sure?")
         self.device = device
         self.job_name = job_name
         self.root = root 
-        self.reload = reload
+        self.train_flag = train_flag
+        self.par = par # needs to input parameters 
 
-        if reload == False:
-            self.par = par 
-        else:
-            with open(self.root+'par.json') as f:
-                self.par = json.load(f)
-
-        self.data = graph_data
-
-        self.initialize_data()
+        if graph_data is not None:
+            self.data = graph_data
+            self.initialize_data()
         self.initialize_model()
         self.initialize_optim()
-        if reload is True:
-            self.load_model(self.root+'model.pt')
+        if train_flag is False:
+            print("need to load a pre-trained model")
         self.graph_batching = graph_batching
         
     def initialize_model(self):
@@ -110,7 +110,9 @@ class Model():
         if type(self.par["eps"]) != float and self.par["eps"] > 1.0:
             raise ValueError("Invalid convergence criterion")
 
-        if self.reload == False:
+        if self.train_flag == True:
+
+            print("setting up directoires for saving training files")
 
             self.train_u_log = []
             self.train_f_log = []
@@ -187,7 +189,7 @@ class Model():
         """Summary
         
         Args:
-            N_epoch (TYPE): Description
+            N_epoch (int): number of epoches to be trained 
         """
 
         self.start_time = time.time()
@@ -341,11 +343,9 @@ class Model():
         else:
             torch.save(self.model.state_dict(), save_path)
 
-    def load_model(self, path):
-        #if self.model_path is not None:
-        self.model.load_state_dict(torch.load(path))
-        #else:
-        #    print("no model saved for this training session, please save your model first")
+    def load_model(self, load_path):
+        print("loading models from" + load_path)
+        self.model.load_state_dict(torch.load(load_path))
     
     def save_train_log(self):
         # save the training log for energies and force 
