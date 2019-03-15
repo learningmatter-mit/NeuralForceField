@@ -108,8 +108,21 @@ def sample(model, T=450.0, dt=0.1, steps=1000, save_frequency=20):
         NVE(species=species, xyz=xyz, r=r, device= model.device, dir_loc=model.dir_loc, model=model.model, 
                                                     T=T, dt=dt, steps=steps, save_frequency=save_frequency)
 
-def NVE(species, xyz, r, model, device, dir_loc, T=450.0, dt=0.1, steps=1000, save_frequency=20):
-
+def NVE(species, xyz, r, model, device, dir_loc="./log", T=450.0, dt=0.1, steps=1000, save_frequency=20):
+    """function to run 
+    
+    Args:
+        species (str): smiles for the species 
+        xyz (np.array): np.array that has shape (-1, N_atom, 3)
+        r (np.array): 1d np.array that consists of integers 
+        model (): a Model class with pre_loaded model 
+        device (int): Description
+        dir_loc (str, optional): Description
+        T (float, optional): Description
+        dt (float, optional): Description
+        steps (int, optional): Description
+        save_frequency (int, optional): Description
+    """
     # save NVE energy fluctuations, Kinetic energies and movies 
     if not os.path.exists(dir_loc+ "/" + species):
         os.makedirs(dir_loc + "/" + species)
@@ -118,13 +131,17 @@ def NVE(species, xyz, r, model, device, dir_loc, T=450.0, dt=0.1, steps=1000, sa
     #xyz, a, r, f, u, N = self.parse_batch(0)
 
     N_atom = len(xyz)
-    xyz = xyz.reshape(-1, N_atom, 3)
-    xyz = xyz[0].detach().cpu().numpy()
-    r = r.reshape(-1, N_atom)
-    r = r[0].detach().cpu().numpy()
+    xyz = xyz.reshape(N_atom, 3)
+
+    #xyz = xyz#[0]#.detach().cpu().numpy()
+    try:
+        r = r.astype(int)
+    except:
+        raise ValueError("Z is not an array of integers")
 
     structure = mol_state(r=r,xyz=xyz)
     structure.set_calculator(NeuralMD(model=model, device=device))
+
     # Set the momenta corresponding to T= 0.0 K
     MaxwellBoltzmannDistribution(structure, T * units.kB)
     # We want to run MD with constant energy using the VelocityVerlet algorithm.
@@ -160,3 +177,5 @@ def NVE(species, xyz, r, model, device, dir_loc, T=450.0, dt=0.1, steps=1000, sa
     Z = np.array([r] * len(force_traj)).reshape(len(force_traj), r.shape[0], 1)
     force_write = np.dstack(( Z, force_traj))
     write_traj(filename=dir_loc + "/" + species + "/force.xyz", frames=force_write)
+
+    return traj
