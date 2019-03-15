@@ -18,7 +18,7 @@ import time
 
 class Model():
 
-    """Summary
+    """A wrapper for training, validation, save and load models 
     
     Attributes:
         criterion (MSEloss): Description
@@ -40,7 +40,7 @@ class Model():
         optimizer (TYPE): Description
         par (dict): a dictionary file for hyperparameters
         root (str): the root path for the saving training results 
-        scheduler (TYPE): Description
+        scheduler (Boolean): Description
         train_f_log (list): Description
         train_u_log (list): Description
         u_predict (list): Description
@@ -334,9 +334,12 @@ class Model():
         print("force_MAE", self.force_mae, "kcal/mol A")
         print("energy_MAE", self.energy_mae, "kcal/mol")
        
-    def save_model(self):
-        self.model_path = self.dir_loc + "/model.pt"
-        torch.save(self.model.state_dict(), self.model_path)
+    def save_model(self, save_path=None):
+        if save_path is None:
+            self.model_path = self.dir_loc + "/model.pt"
+            torch.save(self.model.state_dict(), self.model_path)
+        else:
+            torch.save(self.model.state_dict(), save_path)
 
     def load_model(self, path):
         #if self.model_path is not None:
