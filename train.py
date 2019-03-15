@@ -70,8 +70,6 @@ class Model():
                 self.par = json.load(f)
 
         self.data = graph_data
-        if shift == False:
-            graph_data.label_mean = 0.0 
 
         self.initialize_data()
         self.initialize_model()
@@ -217,10 +215,10 @@ class Model():
                 
                 # Compute energies 
                 if self.graph_batching:
-                    U = self.model(r=r, xyz=xyz, a=a, N=N) + self.data.label_mean
+                    U = self.model(r=r, xyz=xyz, a=a, N=N) 
                 else:
                     assert graph_size_is_same # make sure all the graphs needs to have the same size
-                    U = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3)) + self.data.label_mean
+                    U = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3)) 
                     
                 f_pred = -compute_grad(inputs=xyz, output=U)
 
@@ -239,11 +237,11 @@ class Model():
                 train_force_mae += self.mae(f_pred, f)
 
             # averaging MAE
-            train_u = train_u_mae.data[0]/self.N_train
-            train_force = train_force_mae.data[0]/self.N_train
-            
-            self.train_u_log.append(train_u.item())
-            self.train_f_log.append(train_force.item())
+            train_u = train_u_mae.item()/self.N_train
+            train_force = train_force_mae.item()/self.N_train
+
+            self.train_u_log.append(train_u)
+            self.train_f_log.append(train_force)
             
             # scheduler
             if self.par["scheduler"] == True:
@@ -294,9 +292,9 @@ class Model():
             xyz.requires_grad = True
 
             if self.graph_batching:
-                u_pred = self.model(r=r, xyz=xyz, a=a, N=N) + self.data.label_mean 
+                u_pred = self.model(r=r, xyz=xyz, a=a, N=N) 
             else:
-                u_pred = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3)) + self.data.label_mean
+                u_pred = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3))
                 
             f_pred = -compute_grad(inputs=xyz, output=u_pred).reshape(-1)
 
@@ -333,7 +331,7 @@ class Model():
         f.suptitle(",".join(species_trained)+"validations", fontsize=14)
         plt.savefig("&".join(species_trained) + "validation.jpg")
 
-        print("force_MAE", self.force_mae, "kcal/mol")
+        print("force_MAE", self.force_mae, "kcal/mol A")
         print("energy_MAE", self.energy_mae, "kcal/mol")
        
     def save_model(self):
