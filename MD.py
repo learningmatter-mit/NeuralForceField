@@ -163,19 +163,19 @@ def NVE(species, xyz, r, model, device, dir_loc="./log", T=450.0, dt=0.1, steps=
 
     # save thermo data 
     thermo = np.array(thermo)
-    np.savetxt(dir_loc + "/" + species + "/thermo.dat", thermo, delimiter=",")
+    np.savetxt(dir_loc + "/" + species + "_thermo.dat", thermo, delimiter=",")
 
     # write movies 
-    traj = np.array(traj)
-    traj = traj - traj.mean(1).reshape(-1,1,3)
-    Z = np.array([r] * len(traj)).reshape(len(traj), r.shape[0], 1)
-    traj_write = np.dstack(( Z, traj))
-    write_traj(filename=dir_loc + "/" + species + "/traj.xyz", frames=traj_write)
+    #traj = np.array(traj)
+    #traj = traj - traj.mean(1).reshape(-1,1,3)
+    #Z = np.array([r] * len(traj)).reshape(len(traj), r.shape[0], 1)
+    #traj_write = np.dstack(( Z, traj))
+    #write_traj(filename=dir_loc + "/" + species + "/traj.xyz", frames=traj_write)
 
     # write forces into xyz 
-    force_traj = np.array(force_traj) * ev_to_kcal
-    Z = np.array([r] * len(force_traj)).reshape(len(force_traj), r.shape[0], 1)
-    force_write = np.dstack(( Z, force_traj))
-    write_traj(filename=dir_loc + "/" + species + "/force.xyz", frames=force_write)
+    #force_traj = np.array(force_traj) * ev_to_kcal
+    #Z = np.array([r] * len(force_traj)).reshape(len(force_traj), r.shape[0], 1)
+    #force_write = np.dstack(( Z, force_traj))
+    #write_traj(filename=dir_loc + "/" + species + "/force.xyz", frames=force_write)
 
     return traj
