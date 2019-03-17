@@ -26,8 +26,8 @@ class Model():
         device (TYPE): Description
         dir_loc (TYPE): Description
         energy_mae (float): Description
-        f_predict (list): Description
-        f_true (list): Description
+        predictedforces (list): Description
+        targetforces (list): Description
         force_mae (float): Description
         graph_batching (Boolean): If True, use graph batch input
         job_name (str): name of the job or experimeent
@@ -43,11 +43,11 @@ class Model():
         scheduler (Boolean): Description
         train_f_log (list): Description
         train_u_log (list): Description
-        u_predict (list): Description
-        u_true (list): Description
+        predictedenergies (list): Description
+        targetenergies (list): Description
     """
 
-    def __init__(self,par, device, job_name, graph_batching=False,
+    def __init__(self,par, device, job_name, graph_batching=True,
                  graph_data=None,  root="./", train_flag=False, shift=False):
         """Summary
         
@@ -269,10 +269,10 @@ class Model():
     def validate(self, data=None):
         """Summary
         """
-        self.f_predict = []
-        self.f_true = []
-        self.u_predict = []
-        self.u_true = []
+        self.predictedforces = []
+        self.targetforces = []
+        self.predictedenergies = []
+        self.targetenergies = []
 
         # decide data 
         if data == None:
@@ -300,20 +300,20 @@ class Model():
                 
             f_pred = -compute_grad(inputs=xyz, output=u_pred).reshape(-1)
 
-            self.f_predict.append(f_pred.detach().cpu().numpy())
-            self.f_true.append(f.reshape(-1).detach().cpu().numpy())
+            self.predictedforces.append(f_pred.detach().cpu().numpy())
+            self.targetforces.append(f.reshape(-1).detach().cpu().numpy())
             
-            self.u_predict.append(u_pred.detach().cpu().numpy())
-            self.u_true.append(u.reshape(-1).detach().cpu().numpy())
+            self.predictedenergies.append(u_pred.detach().cpu().numpy())
+            self.targetenergies.append(u.reshape(-1).detach().cpu().numpy())
 
-        self.f_true = np.concatenate( self.f_true, axis=0 ).reshape(-1)
-        self.f_predict = np.concatenate( self.f_predict, axis=0 ).reshape(-1)
-        self.u_true = np.concatenate( self.u_true, axis=0 ).reshape(-1)
-        self.u_predict = np.concatenate( self.u_predict, axis=0 ).reshape(-1)
+        self.targetforces = np.concatenate( self.targetforces, axis=0 ).reshape(-1)
+        self.predictedforces = np.concatenate( self.predictedforces, axis=0 ).reshape(-1)
+        self.targetenergies = np.concatenate( self.targetenergies, axis=0 ).reshape(-1)
+        self.predictedenergies = np.concatenate( self.predictedenergies, axis=0 ).reshape(-1)
         
         # compute force & energy MAE
-        self.force_mae = np.abs(self.f_predict - self.f_true).mean()
-        self.energy_mae = np.abs(self.u_predict - self.u_true).mean()
+        self.force_mae = np.abs(self.predictedforces - self.targetforces).mean()
+        self.energy_mae = np.abs(self.predictedenergies - self.targetenergies).mean()
         
         f = plt.figure(figsize=(13,6))
         ax = f.add_subplot(121)
@@ -321,11 +321,11 @@ class Model():
         ax2 = f.add_subplot(122)
         ax2.set_title("energies validation")
 
-        ax.scatter(self.f_true , self.f_predict, label="force MAE: " + str(self.force_mae) + " kcal/mol A" , alpha=0.3, s=6)
+        ax.scatter(self.targetforces , self.predictedforces, label="force MAE: " + str(self.force_mae) + " kcal/mol A" , alpha=0.3, s=6)
         ax.set_xlabel("test")
         ax.set_ylabel("prediction")
         ax.legend()
-        ax2.scatter(self.u_true, self.u_predict, label="energy MAE: " + str(self.energy_mae) + " kcal/mol",  alpha=0.3, s=6)
+        ax2.scatter(self.targetenergies, self.predictedenergies, label="energy MAE: " + str(self.energy_mae) + " kcal/mol",  alpha=0.3, s=6)
         ax2.set_xlabel("test")
         ax2.set_ylabel("prediction")
         ax2.legend()
@@ -402,8 +402,8 @@ class Model():
             json.dump(train_state, write_file , indent=4)
 
         # dump test and predict energy and forces 
-        val_energy = np.array([self.u_true, self.u_predict]).transpose()
-        val_force = np.array([self.f_true, self.f_predict]).transpose()
+        val_energy = np.array([self.targetenergies, self.predictedenergies]).transpose()
+        val_force = np.array([self.targetforces, self.predictedforces]).transpose()
 
         np.savetxt(self.dir_loc + "/val_energy.csv", val_energy, delimiter=",")
         np.savetxt(self.dir_loc + "/val_force.csv", val_force, delimiter=",")
