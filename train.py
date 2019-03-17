@@ -72,8 +72,9 @@ class Model():
         if graph_data is not None:
             self.data = graph_data
             self.initialize_data()
+            self.initialize_optim()
+            
         self.initialize_model()
-        self.initialize_optim()
         if train_flag is False:
             print("need to load a pre-trained model")
         self.graph_batching = graph_batching
