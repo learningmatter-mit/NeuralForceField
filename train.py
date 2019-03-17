@@ -25,10 +25,10 @@ class Model():
         data (graph): Description
         device (TYPE): Description
         dir_loc (TYPE): Description
-        energy_mae (float): Description
+        energiesmae (float): Description
         predictedforces (list): Description
         targetforces (list): Description
-        force_mae (float): Description
+        forcesmae (float): Description
         graph_batching (Boolean): If True, use graph batch input
         job_name (str): name of the job or experimeent
         mae (TYPE): Description
@@ -201,8 +201,8 @@ class Model():
                 print("max epoches reached")
                 break 
 
-            train_u_mae = 0.0
-            train_force_mae = 0.0
+            train_energiesmae = 0.0
+            train_forcesmae = 0.0
             
             for i in range(self.N_train):
 
@@ -235,12 +235,12 @@ class Model():
                 self.optimizer.step()
 
                 # compute MAE
-                train_u_mae += self.mae(U, u) # compute MAE
-                train_force_mae += self.mae(f_pred, f)
+                train_energiesmae += self.mae(U, u) # compute MAE
+                train_forcesmae += self.mae(f_pred, f)
 
             # averaging MAE
-            train_u = train_u_mae.item()/self.N_train
-            train_force = train_force_mae.item()/self.N_train
+            train_u = train_energiesmae.item()/self.N_train
+            train_force = train_forcesmae.item()/self.N_train
 
             self.train_u_log.append(train_u)
             self.train_f_log.append(train_force)
@@ -312,8 +312,8 @@ class Model():
         self.predictedenergies = np.concatenate( self.predictedenergies, axis=0 ).reshape(-1)
         
         # compute force & energy MAE
-        self.force_mae = np.abs(self.predictedforces - self.targetforces).mean()
-        self.energy_mae = np.abs(self.predictedenergies - self.targetenergies).mean()
+        self.forcesmae = np.abs(self.predictedforces - self.targetforces).mean()
+        self.energiesmae = np.abs(self.predictedenergies - self.targetenergies).mean()
         
         f = plt.figure(figsize=(13,6))
         ax = f.add_subplot(121)
@@ -321,11 +321,11 @@ class Model():
         ax2 = f.add_subplot(122)
         ax2.set_title("energies validation")
 
-        ax.scatter(self.targetforces , self.predictedforces, label="force MAE: " + str(self.force_mae) + " kcal/mol A" , alpha=0.3, s=6)
+        ax.scatter(self.targetforces , self.predictedforces, label="force MAE: " + str(self.forcesmae) + " kcal/mol A" , alpha=0.3, s=6)
         ax.set_xlabel("test")
         ax.set_ylabel("prediction")
         ax.legend()
-        ax2.scatter(self.targetenergies, self.predictedenergies, label="energy MAE: " + str(self.energy_mae) + " kcal/mol",  alpha=0.3, s=6)
+        ax2.scatter(self.targetenergies, self.predictedenergies, label="energy MAE: " + str(self.energiesmae) + " kcal/mol",  alpha=0.3, s=6)
         ax2.set_xlabel("test")
         ax2.set_ylabel("prediction")
         ax2.legend()
@@ -333,8 +333,8 @@ class Model():
         f.suptitle(",".join(species_trained)+"validations", fontsize=14)
         plt.savefig("&".join(species_trained) + "validation.jpg")
 
-        print("force_MAE", self.force_mae, "kcal/mol A")
-        print("energy_MAE", self.energy_mae, "kcal/mol")
+        print("forcesmae", self.forcesmae, "kcal/mol A")
+        print("energiesmae", self.energiesmae, "kcal/mol")
        
     def save_model(self, save_path=None):
         if save_path is None:
@@ -393,8 +393,8 @@ class Model():
 
         train_state = dict()
         train_state["epoch_trained"] = len(self.train_f_log)
-        train_state["test_force_mae"] = self.force_mae.item()
-        train_state["test_energy_mae"] = self.energy_mae.item()
+        train_state["test_forcesmae"] = self.forcesmae.item()
+        train_state["test_energiesmae"] = self.energiesmae.item()
         train_state["time_per_epoch"] = self.time_elapsed / len(self.train_f_log)
 
         # dump json 
