@@ -285,7 +285,7 @@ class Model():
             start_index = 0 
             N_test = len(data.batches)
 
-        species_trained = sorted( set(data.batches[1].data["name"]) ) 
+        species_trained = sorted( set(data.batches[0].data["name"]) ) 
 
         #print("&".join(species_trained))
 
