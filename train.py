@@ -332,8 +332,10 @@ class Model():
         ax2.set_ylabel("prediction")
         ax2.legend()
 
+        now = datetime.datetime.now()
+
         f.suptitle(",".join(species_trained)+"validations", fontsize=14)
-        plt.savefig("&".join(species_trained) + "validation.jpg")
+        plt.savefig("&".join(species_trained) + "-" + str(now.month)+"-"+str(now.day)+"-"+str(now.hour)+"-"+str(now.minute) + "validation.jpg")
 
         print("forcesmae", self.forcesmae, "kcal/mol A")
         print("energiesmae", self.energiesmae, "kcal/mol")
