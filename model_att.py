@@ -10,8 +10,8 @@ from torch.nn import RReLU
 from torch.autograd.gradcheck import zero_gradients
 from torch.autograd import grad
 
-from projects.NeuralForceField.layers import * 
-from projects.NeuralForceField.module import *
+from .layers import * 
+from .module import *
 
 class Net_att(nn.Module):
 
@@ -85,9 +85,9 @@ class Net_att(nn.Module):
             
             return torch.stack(E_batch, dim=0)#torch.Tensor(E_batch)
 
-from projects.NeuralForceField.models import *
-from projects.NeuralForceField.scatter import *
-from projects.NeuralForceField.MD import * 
+from .models import *
+from .scatter import *
+from .MD import * 
 
 import matplotlib.pyplot as plt
 

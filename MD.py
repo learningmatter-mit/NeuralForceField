@@ -1,6 +1,6 @@
 from torch.autograd import Variable
-from projects.NeuralForceField.scatter import compute_grad
-from projects.NeuralForceField.graphs import *
+from .scatter import compute_grad
+from .graphs import *
 import torch
 import numpy as np
 import os 
@@ -31,8 +31,8 @@ def get_energy(atoms):
     ekin = atoms.get_kinetic_energy() #/ len(atoms)
     Temperature = ekin / (1.5 * units.kB * len(atoms))
     print('Energy per atom: Epot = %.3fkcal/mol  Ekin = %.3fkcal/mol (T=%3.0fK)  '
-          'Etot = %.3fkcal/mol' % (epot, ekin * ev_to_kcal, Temperature, (epot + ekin) * ev_to_kcal))
-    return epot* ev_to_kcal, ekin* ev_to_kcal, Temperature
+          'Etot = %.3fkcal/mol' % (epot * ev_to_kcal, ekin * ev_to_kcal, Temperature, (epot + ekin) * ev_to_kcal))
+    return epot * ev_to_kcal, ekin* ev_to_kcal, Temperature
 
 def write_traj(filename, frames):
     '''
@@ -95,18 +95,6 @@ class NeuralMD(Calculator):
             'forces': forces.reshape((len(atoms), 3))
         }
 
-def sample(model, T=450.0, dt=0.1, steps=1000, save_frequency=20):
-
-    species_dict, r_list, xyz_list = parse_species_geom(3, model.data)
-
-    for species in species_dict:
-        index = np.random.choice(species_dict[species])
-
-        xyz = xyz_list[index]
-        r = r_list[index][:,0]
-
-        NVE(species=species, xyz=xyz, r=r, device= model.device, dir_loc=model.dir_loc, model=model.model, 
-                                                    T=T, dt=dt, steps=steps, save_frequency=save_frequency)
 
 def NVE(species, xyz, r, model, device, dir_loc="./log", T=450.0, dt=0.1, steps=1000, save_frequency=20):
     """function to run 

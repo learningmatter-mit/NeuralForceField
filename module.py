@@ -9,8 +9,8 @@ from torch.autograd.gradcheck import zero_gradients
 from torch.autograd import grad
 from torch.nn import RReLU
 
-from projects.NeuralForceField.layers import * 
-from projects.NeuralForceField.scatter import * 
+from .layers import * 
+from .scatter import * 
 
 class GraphDis(torch.nn.Module):
 

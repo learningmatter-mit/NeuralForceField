@@ -1,7 +1,7 @@
-from projects.NeuralForceField.models import *
-from projects.NeuralForceField.scatter import *
-from projects.NeuralForceField.MD import * 
-from projects.NeuralForceField.graphs import * 
+from .models import *
+from .scatter import *
+from .MD import * 
+from .graphs import * 
 
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
