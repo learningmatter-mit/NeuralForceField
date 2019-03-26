@@ -31,7 +31,7 @@ def get_energy(atoms):
     ekin = atoms.get_kinetic_energy() #/ len(atoms)
     Temperature = ekin / (1.5 * units.kB * len(atoms))
     print('Energy per atom: Epot = %.3fkcal/mol  Ekin = %.3fkcal/mol (T=%3.0fK)  '
-          'Etot = %.3fkcal/mol' % (epot * ev_to_kcal, ekin * ev_to_kcal, Temperature, (epot + ekin) * ev_to_kcal))
+         'Etot = %.3fkcal/mol' % (epot * ev_to_kcal, ekin * ev_to_kcal, Temperature, (epot + ekin) * ev_to_kcal))
     return epot * ev_to_kcal, ekin* ev_to_kcal, Temperature
 
 def write_traj(filename, frames):
@@ -61,43 +61,55 @@ def write_traj(filename, frames):
 class NeuralMD(Calculator):
     implemented_properties = ['energy', 'forces']
 
-    def __init__(self, model, device, **kwargs):
+    def __init__(self, model, device, N_atom, **kwargs):
         Calculator.__init__(self, **kwargs)
         self.model = model
         self.device = device
+        self.N_atom = N_atom
 
     def calculate(self, atoms=None, properties=['energy'],
                   system_changes=all_changes):
         
         Calculator.calculate(self, atoms, properties, system_changes)
-        
-        # number of atoms 
-        n_atom = atoms.get_atomic_numbers().shape[0]
-        
-        # run model 
-        node = atoms.get_atomic_numbers().reshape(1, -1, 1)
-        xyz = atoms.get_positions().reshape(-1, n_atom, 3)
 
-        node = Variable(torch.LongTensor(node).reshape(1, n_atom)).cuda(self.device)
-        xyz = Variable(torch.Tensor(xyz).reshape(1, n_atom, 3)).cuda(self.device)
+        # number of atoms 
+        #n_atom = atoms.get_atomic_numbers().shape[0]
+        N_atom = self.N_atom
+        # run model 
+        node = atoms.get_atomic_numbers()#.reshape(1, -1, 1)
+        xyz = atoms.get_positions()#.reshape(-1, N_atom, 3)
+
+        # rebtach based on the number of atoms 
+        node = Variable(torch.LongTensor(node).reshape(-1, N_atom)).cuda(self.device)
+        xyz = Variable(torch.Tensor(xyz).reshape(-1, N_atom, 3)).cuda(self.device)
         xyz.requires_grad = True
 
         # predict energy and force
-        U = self.model(r=node.expand(2, n_atom), xyz=xyz.expand(2, n_atom, 3))
+        U = self.model(r=node, xyz=xyz)
         f_pred = -compute_grad(inputs=xyz, output=U)
+
+        # change energy and forces back 
+        U = U.reshape(-1)
+        f_pred = f_pred.reshape(-1, 3)
         
         # change energy and force to numpy array 
-        energy = U[0].detach().cpu().numpy() * (1/ev_to_kcal)
-        forces = f_pred[0].detach().cpu().numpy() * (1/ev_to_kcal)
+        energy = U.detach().cpu().numpy() * (1/ev_to_kcal)
+        forces = f_pred.detach().cpu().numpy() * (1/ev_to_kcal)
+
+        #print(energy.shape)
+        #print(forces.shape)
         
         self.results = {
             'energy': energy.reshape(-1),
-            'forces': forces.reshape((len(atoms), 3))
+            'forces': forces#.reshape((len(atoms), 3))
         }
 
 
-def NVE(species, xyz, r, model, device, dir_loc="./log", T=450.0, dt=0.1, steps=1000, save_frequency=20):
-    """function to run 
+def NVE(species, xyz, r, model, device, 
+            dir_loc="./log", T=450.0, dt=0.1,
+             steps=1000, save_frequency=20,
+             parallel=False):
+    """function to run NVE
     
     Args:
         species (str): smiles for the species 
@@ -116,19 +128,20 @@ def NVE(species, xyz, r, model, device, dir_loc="./log", T=450.0, dt=0.1, steps=
         os.makedirs(dir_loc + "/" + species)
 
     ev_to_kcal = 23.06035
-    #xyz, a, r, f, u, N = self.parse_batch(0)
 
-    N_atom = len(xyz)
-    xyz = xyz.reshape(N_atom, 3)
+    N_atom = xyz.shape[1]
+    N_batch = xyz.shape[0]
 
-    #xyz = xyz#[0]#.detach().cpu().numpy()
+    xyz = xyz.reshape(N_atom * N_batch, 3)
+    r = r.reshape(-1)
+
     try:
         r = r.astype(int)
     except:
         raise ValueError("Z is not an array of integers")
 
     structure = mol_state(r=r,xyz=xyz)
-    structure.set_calculator(NeuralMD(model=model, device=device))
+    structure.set_calculator(NeuralMD(model=model, device=device, N_atom=N_atom))
 
     # Set the momenta corresponding to T= 0.0 K
     MaxwellBoltzmannDistribution(structure, T * units.kB)
@@ -146,19 +159,23 @@ def NVE(species, xyz, r, model, device, dir_loc="./log", T=450.0, dt=0.1, steps=
         traj.append(structure.get_positions()) # append atomic positions 
         force_traj.append(dyn.atoms.get_forces()) # append atomic forces 
         print("step", i * save_frequency)
-        epot, ekin, Temp = get_energy(structure)
-        thermo.append([epot * ev_to_kcal, ekin * ev_to_kcal, ekin+epot, Temp])
+        if parallel is False:
+            epot, ekin, Temp = get_energy(structure)
+            thermo.append([epot * ev_to_kcal, ekin * ev_to_kcal, ekin+epot, Temp])
+        else:
+            print("Parallelized sampling")
+
+    traj = np.array(traj).reshape(-1, N_atom, 3)
 
     # save thermo data 
     thermo = np.array(thermo)
     np.savetxt(dir_loc + "/" + species + "_thermo.dat", thermo, delimiter=",")
 
     # write movies 
-    #traj = np.array(traj)
-    #traj = traj - traj.mean(1).reshape(-1,1,3)
-    #Z = np.array([r] * len(traj)).reshape(len(traj), r.shape[0], 1)
-    #traj_write = np.dstack(( Z, traj))
-    #write_traj(filename=dir_loc + "/" + species + "/traj.xyz", frames=traj_write)
+    traj = np.array(traj)
+    traj = traj - traj.mean(1).reshape(-1,1,3)
+    Z = np.array([r] * n_epoch).reshape(-1, N_atom, 1)
+    traj_write = np.dstack(( Z, traj))
 
     # write forces into xyz 
     #force_traj = np.array(force_traj) * ev_to_kcal
@@ -166,4 +183,4 @@ def NVE(species, xyz, r, model, device, dir_loc="./log", T=450.0, dt=0.1, steps=
     #force_write = np.dstack(( Z, force_traj))
     #write_traj(filename=dir_loc + "/" + species + "/force.xyz", frames=force_write)
 
-    return traj
+    return traj_write
