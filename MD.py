@@ -107,8 +107,7 @@ class NeuralMD(Calculator):
 
 def NVE(species, xyz, r, model, device, 
             dir_loc="./log", T=450.0, dt=0.1,
-             steps=1000, save_frequency=20,
-             parallel=False):
+             steps=1000, save_frequency=20):
     """function to run NVE
     
     Args:
@@ -123,16 +122,20 @@ def NVE(species, xyz, r, model, device,
         steps (int, optional): Description
         save_frequency (int, optional): Description
     """
-    # save NVE energy fluctuations, Kinetic energies and movies 
+    # save NVE energy fluctuations, Kinetic energies and movies
+
+    assert len(xyz.shape) == 3
+    assert len(r.shape) == 2
+
     if not os.path.exists(dir_loc+ "/" + species):
         os.makedirs(dir_loc + "/" + species)
 
     ev_to_kcal = 23.06035
 
     N_atom = xyz.shape[1]
-    N_batch = xyz.shape[0]
+    batch_size= xyz.shape[0]
 
-    xyz = xyz.reshape(N_atom * N_batch, 3)
+    xyz = xyz.reshape(N_atom * batch_size, 3)
     r = r.reshape(-1)
 
     try:
@@ -159,11 +162,11 @@ def NVE(species, xyz, r, model, device,
         traj.append(structure.get_positions()) # append atomic positions 
         force_traj.append(dyn.atoms.get_forces()) # append atomic forces 
         print("step", i * save_frequency)
-        if parallel is False:
+        if batch_size == 1:
             epot, ekin, Temp = get_energy(structure)
             thermo.append([epot * ev_to_kcal, ekin * ev_to_kcal, ekin+epot, Temp])
         else:
-            print("Parallelized sampling")
+            print("Parallelized sampling, no thermo outputs")
 
     traj = np.array(traj).reshape(-1, N_atom, 3)
 
