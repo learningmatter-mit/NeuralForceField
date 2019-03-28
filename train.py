@@ -275,6 +275,9 @@ class Model():
         self.predictedenergies = []
         self.targetenergies = []
 
+        if not os.path.exists(self.job_name):
+            os.makedirs(self.job_name)
+
         # decide data 
         if data == None:
             data = self.data#.batches[self.N_train: self.N_train + self.N_test - 1]
@@ -334,7 +337,8 @@ class Model():
         now = datetime.datetime.now()
 
         f.suptitle(",".join(species_trained)+"validations", fontsize=14)
-        plt.savefig("&".join(species_trained) + "-" + str(now.month)+"-"+str(now.day)+"-"+str(now.hour)+"-"+str(now.minute) + "validation.jpg")
+        plt.savefig(str(self.job_name)+"/" +"&".join(species_trained) + "-" + str(now.month)+"-"+
+                    str(now.day)+"-"+str(now.hour)+"-"+str(now.minute) + "validation.jpg")
 
         print("forcesmae", self.forcesmae, "kcal/mol A")
         print("energiesmae", self.energiesmae, "kcal/mol")
@@ -351,6 +355,8 @@ class Model():
         self.model.load_state_dict(torch.load(load_path))
     
     def save_train_log(self):
+        if not os.path.exists(self.root):
+            os.makedirs(self.root)
         # save the training log for energies and force 
         log = np.array([self.train_u_log, self.train_f_log]).transpose()
         np.savetxt(self.dir_loc + "/log.csv", log, delimiter=",")
