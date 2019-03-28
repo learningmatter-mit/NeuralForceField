@@ -259,11 +259,10 @@ class Model():
             self.time_elapsed = time.time() - self.start_time
 
             # check convergence 
-            if self.check_convergence():
+            current_lr = self.optimizer.param_groups[0]["lr"]
+            if current_lr <= 1.5e-7:
                 print("training converged")
                 break
-            else:
-                pass
 
         self.save_model()
         self.save_train_log()
