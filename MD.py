@@ -13,7 +13,7 @@ from ase.md.verlet import VelocityVerlet
 from ase import units
 from ase import Atoms
 
-mass_dict = {6: 12.01, 8: 15.999, 1: 1.008, 3: 6.941}
+mass_dict = {6: 12.01, 8: 15.999, 1: 1.008, 3: 6.941, 7: 14.0067}
 ev_to_kcal = 23.06035
 
 
