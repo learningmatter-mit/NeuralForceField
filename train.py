@@ -1,7 +1,7 @@
-from projects.NeuralForceField.models import *
-from projects.NeuralForceField.scatter import *
-from projects.NeuralForceField.MD import * 
-from projects.NeuralForceField.graphs import * 
+from .models import *
+from .scatter import *
+from .MD import * 
+from .graphs import * 
 
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
@@ -259,11 +259,10 @@ class Model():
             self.time_elapsed = time.time() - self.start_time
 
             # check convergence 
-            if self.check_convergence():
+            current_lr = self.optimizer.param_groups[0]["lr"]
+            if current_lr <= 1.5e-7:
                 print("training converged")
                 break
-            else:
-                pass
 
         self.save_model()
         self.save_train_log()
@@ -275,6 +274,9 @@ class Model():
         self.targetforces = []
         self.predictedenergies = []
         self.targetenergies = []
+
+        if not os.path.exists(self.job_name):
+            os.makedirs(self.job_name)
 
         # decide data 
         if data == None:
@@ -335,7 +337,8 @@ class Model():
         now = datetime.datetime.now()
 
         f.suptitle(",".join(species_trained)+"validations", fontsize=14)
-        plt.savefig("&".join(species_trained) + "-" + str(now.month)+"-"+str(now.day)+"-"+str(now.hour)+"-"+str(now.minute) + "validation.jpg")
+        plt.savefig(str(self.job_name)+"/" +"&".join(species_trained) + "-" + str(now.month)+"-"+
+                    str(now.day)+"-"+str(now.hour)+"-"+str(now.minute) + "validation.jpg")
 
         print("forcesmae", self.forcesmae, "kcal/mol A")
         print("energiesmae", self.energiesmae, "kcal/mol")
@@ -352,6 +355,8 @@ class Model():
         self.model.load_state_dict(torch.load(load_path))
     
     def save_train_log(self):
+        if not os.path.exists(self.root):
+            os.makedirs(self.root)
         # save the training log for energies and force 
         log = np.array([self.train_u_log, self.train_f_log]).transpose()
         np.savetxt(self.dir_loc + "/log.csv", log, delimiter=",")
