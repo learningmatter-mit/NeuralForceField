@@ -100,6 +100,18 @@ class GraphDis(torch.nn.Module):
         
         return(r, e, A)
 
+class BondEnergyModule(nn.Module):
+    
+    def __init__(self):
+        super(BondEnergyModule, self).__init__()
+        
+    def forward(self, xyz, bonda, bondlen, bondpar):
+        
+        e = (xyz[bonda[:,0]] - xyz[bonda[:,1]]).pow(2).sum(1).sqrt()[:, None]
+        ebond = bondpar * (e - bondlen)**2
+        ebond = 0.5 * scatter_add(src=ebond, index=bonda[:, 0], dim=0)
+        
+        return ebond
 
 class InteractionBlock(nn.Module):
 
