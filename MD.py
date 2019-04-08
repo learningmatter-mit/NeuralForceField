@@ -79,6 +79,9 @@ class NeuralMD(Calculator):
         node = atoms.get_atomic_numbers()#.reshape(1, -1, 1)
         xyz = atoms.get_positions()#.reshape(-1, N_atom, 3)
 
+        # to compute the kinetic energies to this...
+        # (0.5 * (vel * 1e-10 * 0.09823 * 1e15).pow(2).sum(1) * (mass * 1.66054e-27) * 6.242e+18).sum()
+
         # rebtach based on the number of atoms 
         node = Variable(torch.LongTensor(node).reshape(-1, N_atom)).cuda(self.device)
         xyz = Variable(torch.Tensor(xyz).reshape(-1, N_atom, 3)).cuda(self.device)
