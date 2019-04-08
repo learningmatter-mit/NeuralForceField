@@ -102,14 +102,19 @@ class GraphDis(torch.nn.Module):
 
 class BondEnergyModule(nn.Module):
     
-    def __init__(self):
+    def __init__(self, batch=True):
         super(BondEnergyModule, self).__init__()
+        self.batch = batch
         
     def forward(self, xyz, bonda, bondlen, bondpar):
         
-        e = (xyz[bonda[:,0]] - xyz[bonda[:,1]]).pow(2).sum(1).sqrt()[:, None]
-        ebond = bondpar * (e - bondlen)**2
-        ebond = 0.5 * scatter_add(src=ebond, index=bonda[:, 0], dim=0)
+        if self.batch:
+            e = (xyz[bonda[:,0]] - xyz[bonda[:,1]]).pow(2).sum(1).sqrt()[:, None]
+            ebond = bondpar * (e - bondlen)**2
+            ebond = 0.5 * scatter_add(src=ebond, index=bonda[:, 0], dim=0)
+        else:
+            e = (xyz[:, bonda[:,0]] - xyz[:, bonda[:,1]]).pow(2).sum(2).sqrt()
+            ebond = bondpar * (e - bondlen)**2
         
         return ebond
 
