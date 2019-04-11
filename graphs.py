@@ -3,10 +3,10 @@ import numpy as np
 import torch 
 from projects.graphbuilder.graphbuilder import Graph, GraphDataset
 
-def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_flag, smiles_data):
+def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_flag, smiles_data, bondadj=None):
 
     # shuffle data 
-    xyz_data, force_data, energy_data = shuffle(xyz_data, force_data, energy_data)
+    xyz_data, force_data, energy_data, smiles_data = shuffle(xyz_data, force_data, energy_data, smiles_data)
     energy_mean = np.array(energy_data).mean()
 
     #if subtract_mean_flag == True:
