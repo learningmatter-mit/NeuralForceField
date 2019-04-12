@@ -16,7 +16,7 @@ import json
 import datetime
 import time
 
-class Model():
+class ModelPrior():
 
     """A wrapper for training, validation, save and load models 
     
@@ -135,13 +135,14 @@ class Model():
             with open(self.dir_loc + "/par.json", "w") as write_file:
                 json.dump(self.par, write_file, indent=4)
         
-        self.model = Net(n_atom_basis = self.par["n_atom_basis"],
+
+        self.model = BondNet(n_atom_basis = self.par["n_atom_basis"],
                             n_filters = self.par["n_filters"],
                             n_gaussians= self.par["n_gaussians"], 
                             cutoff_soft= self.par["cutoff"], 
                             trainable_gauss = self.par["trainable_gauss"],
                             T = self.par["T"],
-                            device= self.device).to(self.device)
+                            device= self.device).to(self.device)        
     
     def initialize_optim(self):
         self.optimizer = optim.Adam(list(self.model.parameters()), lr=self.par["optim"])
@@ -150,8 +151,8 @@ class Model():
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 
                                                                   'min', 
                                                                   min_lr=1.5e-7, 
-                                                                  verbose=True, factor = 0.5, patience= 50,
-                                                                  threshold= 5e-5)
+                                                                  verbose=True, factor = 0.5, patience= 3,
+                                                                  threshold=5e-5)
         self.criterion = torch.nn.MSELoss()
         self.mae = torch.nn.L1Loss()
          
@@ -177,15 +178,20 @@ class Model():
 
         r = data.batches[index].data["r"][:, [0]].to(self.device)
 
-        f = data.batches[index].data["r"][:, 1:4].to(self.device) 
+        f = data.batches[index].data["r"][:, 1:4].to(self.device)
 
         u = data.batches[index].data["y"].to(self.device)
         
         N = data.batches[index].data["N"]
         
         xyz = data.batches[index].data["xyz"].to(self.device)
-        
-        return xyz, a, r, f, u, N
+
+        try: # try to get bond adjacency matrix 
+            bonda = data.batches[index].data["bond_a"].to(self.device)
+            bondlen = data.batches[index].data["bondlen"].to(self.device)
+            return xyz, a, bonda, bondlen, r, f, u, N
+        except:
+            return xyz, a, r, f, u, N
     
     def train(self, N_epoch):
         """Summary
@@ -208,7 +214,12 @@ class Model():
             
             for i in range(self.N_train):
 
-                xyz, a, r, f, u, N = self.parse_batch(i)
+                try:
+                    xyz, a, bonda, bondlen, r, f, u, N = self.parse_batch(i)
+                except:
+                    xyz, a, r, f, u, N = self.parse_batch(i)
+                    bonda = None
+                    bondlen = None
                 xyz.requires_grad = True
 
                 # check if the input has graphs of various sizes 
@@ -216,13 +227,13 @@ class Model():
                     graph_size_is_same = True
                 else:
                     graph_size_is_same = False
-                
+
                 # Compute energies 
                 if self.graph_batching:
-                    U = self.model(r=r, xyz=xyz, a=a, N=N) 
+                    U = self.model(r=r, bonda=bonda, bondlen=bondlen, xyz=xyz, a=a, N=N) 
                 else:
                     assert graph_size_is_same # make sure all the graphs needs to have the same size
-                    U = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3)) 
+                    U = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3), bonda=bonda, bondlen=bondlen)
                     
                 f_pred = -compute_grad(inputs=xyz, output=U)
 
@@ -241,6 +252,7 @@ class Model():
                 train_forcesmae += self.mae(f_pred, f)
 
             # averaging MAE
+
             train_u = train_energiesmae.item()/self.N_train
             train_force = train_forcesmae.item()/self.N_train
 
@@ -287,20 +299,25 @@ class Model():
             start_index = 0 
             N_test = len(data.batches)
 
-        species_trained = sorted( set(data.batches[0].data["name"]) ) 
+        species_trained = sorted(set(data.batches[0].data["name"]) ) 
 
         #print("&".join(species_trained))
 
         for i in range(N_test):
 
             # parse_data
-            xyz, a, r, f, u, N = self.parse_batch(start_index + i, data=data)
+            try:
+                xyz, a, bonda, bondlen, r, f, u, N = self.parse_batch(i)
+            except:
+                xyz, a, r, f, u, N = self.parse_batch(i)
+            bonda = None
+            bondlen = None
             xyz.requires_grad = True
 
             if self.graph_batching:
-                u_pred = self.model(r=r, xyz=xyz, a=a, N=N) 
+                u_pred = self.model(r=r, xyz=xyz, a=a, N=N, bonda=bonda, bondlen=bondlen) 
             else:
-                u_pred = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3))
+                u_pred = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3), bonda=bonda, bondlen=bondlen)
                 
             f_pred = -compute_grad(inputs=xyz, output=u_pred).reshape(-1)
 
