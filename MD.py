@@ -61,11 +61,14 @@ def write_traj(filename, frames):
 class NeuralMD(Calculator):
     implemented_properties = ['energy', 'forces']
 
-    def __init__(self, model, device, N_atom, **kwargs):
+    def __init__(self, model, device, N_atom, bondAdj=None, bondlen=None, **kwargs):
         Calculator.__init__(self, **kwargs)
         self.model = model
         self.device = device
         self.N_atom = N_atom
+        # declare adjcency matrix 
+        self.bondAdj = bondAdj
+        self.bondlen = bondlen
 
     def calculate(self, atoms=None, properties=['energy'],
                   system_changes=all_changes):
@@ -78,6 +81,9 @@ class NeuralMD(Calculator):
         # run model 
         node = atoms.get_atomic_numbers()#.reshape(1, -1, 1)
         xyz = atoms.get_positions()#.reshape(-1, N_atom, 3)
+        vel = atoms.get_velocities()
+        bondAdj = self.bondAdj
+        bondlen = self.bondlen
 
         # to compute the kinetic energies to this...
         # (0.5 * (vel * 1e-10 * 0.09823 * 1e15).pow(2).sum(1) * (mass * 1.66054e-27) * 6.242e+18).sum()
@@ -88,8 +94,12 @@ class NeuralMD(Calculator):
         xyz.requires_grad = True
 
         # predict energy and force
-        U = self.model(r=node, xyz=xyz)
-        f_pred = -compute_grad(inputs=xyz, output=U)
+        if bondlen is not None and bondAdj is not None:
+            U = self.model(r=node, xyz=xyz, bonda=bondAdj, bondlen=bondlen)
+            f_pred = -compute_grad(inputs=xyz, output=U)
+        else:
+            U = self.model(r=node, xyz=xyz)
+            f_pred = -compute_grad(inputs=xyz, output=U)
 
         # change energy and forces back 
         U = U.reshape(-1)
@@ -98,19 +108,16 @@ class NeuralMD(Calculator):
         # change energy and force to numpy array 
         energy = U.detach().cpu().numpy() * (1/ev_to_kcal)
         forces = f_pred.detach().cpu().numpy() * (1/ev_to_kcal)
-
-        #print(energy.shape)
-        #print(forces.shape)
         
         self.results = {
             'energy': energy.reshape(-1),
-            'forces': forces#.reshape((len(atoms), 3))
+            'forces': forces
         }
 
 
 def NVE(species, xyz, r, model, device, 
             dir_loc="./log", T=450.0, dt=0.1,
-             steps=1000, save_frequency=20):
+             steps=1000, save_frequency=20, bondAdj=None, bondlen=None):
     """function to run NVE
     
     Args:
@@ -147,7 +154,11 @@ def NVE(species, xyz, r, model, device,
         raise ValueError("Z is not an array of integers")
 
     structure = mol_state(r=r,xyz=xyz)
-    structure.set_calculator(NeuralMD(model=model, device=device, N_atom=N_atom))
+
+    if bondAdj is not None and bondlen is not None:
+        structure.set_calculator(NeuralMD(model=model, device=device, N_atom=N_atom, bondAdj=bondAdj, bondlen=bondlen))
+    else:
+        structure.set_calculator(NeuralMD(model=model, device=device, N_atom=N_atom))
 
     # Set the momenta corresponding to T= 0.0 K
     MaxwellBoltzmannDistribution(structure, T * units.kB)
@@ -161,7 +172,7 @@ def NVE(species, xyz, r, model, device,
     n_epoch = int(steps/save_frequency)
 
     for i in range(n_epoch):
-        dyn.run(save_frequency)
+        dyn.run(1)#dyn.run(save_frequency)
         traj.append(structure.get_positions()) # append atomic positions 
         force_traj.append(dyn.atoms.get_forces()) # append atomic forces 
         print("step", i * save_frequency)
@@ -182,11 +193,5 @@ def NVE(species, xyz, r, model, device,
     traj = traj - traj.mean(1).reshape(-1,1,3)
     Z = np.array([r] * n_epoch).reshape(-1, N_atom, 1)
     traj_write = np.dstack(( Z, traj))
-
-    # write forces into xyz 
-    #force_traj = np.array(force_traj) * ev_to_kcal
-    #Z = np.array([r] * len(force_traj)).reshape(len(force_traj), r.shape[0], 1)
-    #force_write = np.dstack(( Z, force_traj))
-    #write_traj(filename=dir_loc + "/" + species + "/force.xyz", frames=force_write)
 
     return traj_write

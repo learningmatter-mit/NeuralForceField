@@ -113,7 +113,7 @@ class BondNet(nn.Module):
         self.bondenergy_graph = BondEnergyModule(batch=True)
         self.bondenergy_sample = BondEnergyModule(batch=False)
         
-    def forward(self, r, xyz, bonda, a=None, N=None):
+    def forward(self, r, xyz, bonda=None, bondlen=None, a=None, N=None):
         """Summary
         
         Args:
@@ -130,13 +130,12 @@ class BondNet(nn.Module):
             ValueError: Description
         """
         # tensor inputs
+
+        bondpar = 50.0
+
         if a is None:
             assert len(r.shape) == 2
             assert len(xyz.shape) == 3
-
-            # compute bond energy 
-            ebond = self.bondenergy_sample(xyz=xyz, bonda=bonda, bondlen=1.3, bondpar=1.0)
-            ebond = ebond.sum(1) 
 
             r, e ,A = self.graph_dis(r=r, xyz=xyz)
             r = self.atomEmbed(r.type(torch.long))#.squeeze()        
@@ -148,8 +147,16 @@ class BondNet(nn.Module):
             r = self.atomwise1(r)
             r = self.atomwise2(r)
             r = r.sum(1)#.squeeze()
+
+
+            # compute bond energy 
+            if bonda is not None and bondlen is not None:
+                ebond = self.bondenergy_sample(xyz=xyz, bonda=bonda, bondlen=bondlen, bondpar=bondpar)
+                ebond = ebond.sum(1)
             
-            return r 
+                return r + ebond
+            else:
+                return r 
         
         # graph batch inputs
         else:
@@ -157,10 +164,6 @@ class BondNet(nn.Module):
             assert len(xyz.shape) == 2
             assert r.shape[0] == xyz.shape[0]
             assert len(a.shape) == 2
-
-            # bond energy computed as a physics prior 
-            ebond = self.bondenergy_graph(xyz=xyz, bonda=bonda, bondlen=1.3, bondpar=1.0)
-            ebond_batch = list(torch.split(ebond, N))
 
             if N == None:
                 raise ValueError("need to input N for graph partitioning within the batch")
@@ -178,7 +181,14 @@ class BondNet(nn.Module):
 
             E_batch = list(torch.split(r, N))
 
-            for b in range(len(N)): 
-                E_batch[b] = torch.sum(E_batch[b] + ebond_batch[b], dim=0)
-            
+                        # bond energy computed as a physics prior 
+            if bonda is not None and bondlen is not None:
+                ebond = self.bondenergy_graph(xyz=xyz, bonda=bonda, bondlen=bondlen, bondpar=bondpar)
+                ebond_batch = list(torch.split(ebond, N))
+                for b in range(len(N)): 
+                    E_batch[b] = torch.sum(E_batch[b] + ebond_batch[b], dim=0)
+            else:
+                for b in range(len(N)): 
+                    E_batch[b] = torch.sum(E_batch[b], dim=0)
+                
             return torch.stack(E_batch, dim=0)#torch.Tensor(E_batch)
