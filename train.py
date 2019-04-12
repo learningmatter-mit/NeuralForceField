@@ -135,14 +135,16 @@ class ModelPrior():
             with open(self.dir_loc + "/par.json", "w") as write_file:
                 json.dump(self.par, write_file, indent=4)
         
+        bondpar = self.par.get("bondpar", 50.0)
 
         self.model = BondNet(n_atom_basis = self.par["n_atom_basis"],
                             n_filters = self.par["n_filters"],
                             n_gaussians= self.par["n_gaussians"], 
                             cutoff_soft= self.par["cutoff"], 
                             trainable_gauss = self.par["trainable_gauss"],
-                            T = self.par["T"],
-                            device= self.device).to(self.device)        
+                            T=self.par["T"],
+                            device=self.device,
+                            bondpar=bondpar).to(self.device)        
     
     def initialize_optim(self):
         self.optimizer = optim.Adam(list(self.model.parameters()), lr=self.par["optim"])
@@ -299,7 +301,9 @@ class ModelPrior():
             start_index = 0 
             N_test = len(data.batches)
 
-        species_trained = sorted(set(data.batches[0].data["name"]) ) 
+        list_species = set(data.batches[0].data["name"])
+        list_species = [item for item in list_species if item is not None]
+        species_trained = sorted(list_species) 
 
         #print("&".join(species_trained))
 
@@ -307,11 +311,12 @@ class ModelPrior():
 
             # parse_data
             try:
-                xyz, a, bonda, bondlen, r, f, u, N = self.parse_batch(i)
+                xyz, a, bonda, bondlen, r, f, u, N = self.parse_batch(start_index + i, data=data)
             except:
-                xyz, a, r, f, u, N = self.parse_batch(i)
-            bonda = None
-            bondlen = None
+                xyz, a, r, f, u, N = self.parse_batch(start_index + i, data=data)
+                bonda = None
+                bondlen = None
+
             xyz.requires_grad = True
 
             if self.graph_batching:
