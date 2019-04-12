@@ -97,7 +97,8 @@ class BondNet(nn.Module):
         graph_dis (Graphdis): graph distance module to convert xyz inputs into distance matrix 
     """
     
-    def __init__(self, n_atom_basis, n_filters, n_gaussians, cutoff_soft, device, T, trainable_gauss, box_len=None, avg_flag=False):
+    def __init__(self, n_atom_basis, n_filters, n_gaussians, cutoff_soft, device, 
+                    T, trainable_gauss, box_len=None, avg_flag=False, bondpar=50.0):
         super(BondNet, self).__init__()
         
         self.graph_dis = GraphDis(Fr=1, Fe=1, cutoff=cutoff_soft, box_len = box_len, device=device)
@@ -112,6 +113,7 @@ class BondNet(nn.Module):
         # declare the bond energy module for two cases 
         self.bondenergy_graph = BondEnergyModule(batch=True)
         self.bondenergy_sample = BondEnergyModule(batch=False)
+        self.bondpar = bondpar
         
     def forward(self, r, xyz, bonda=None, bondlen=None, a=None, N=None):
         """Summary
@@ -131,7 +133,7 @@ class BondNet(nn.Module):
         """
         # tensor inputs
 
-        bondpar = 50.0
+        bondpar = self.bondpar
 
         if a is None:
             assert len(r.shape) == 2
