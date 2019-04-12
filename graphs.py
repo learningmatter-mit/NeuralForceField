@@ -1,9 +1,9 @@
 from sklearn.utils import shuffle
 import numpy as np 
 import torch 
-from projects.graphbuilder.graphbuilder import Graph, GraphDataset
+from projects.graphbuilder.graphbuilder import * 
 
-def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_flag, smiles_data, bondadj=None):
+def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_flag, smiles_data, adjdict=None):
 
     # shuffle data 
     xyz_data, force_data, energy_data, smiles_data = shuffle(xyz_data, force_data, energy_data, smiles_data)
@@ -43,6 +43,10 @@ def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_fl
         graph.LabelEdgesWithDistances()
         graph.SetGraphLabel(torch.Tensor([energy]))
         graph_data.AddGraph(graph)
+
+        if adjdict is not None:
+            graph.SetBondAdj(torch.LongTensor(adjdict[species]))
+            graph.SetBondLen(torch.LongTensor(adjdict[species]))
 
     graph_data.CreateBatches(batch_size=batch_size, verbose=False)
     graph_data.set_label_mean(energy_mean * energy_conversion)
