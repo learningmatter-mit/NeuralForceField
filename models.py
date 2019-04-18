@@ -154,9 +154,8 @@ class BondNet(nn.Module):
             # compute bond energy 
             if bonda is not None and bondlen is not None:
                 ebond = self.bondenergy_sample(xyz=xyz, bonda=bonda, bondlen=bondlen, bondpar=bondpar)
-                ebond = ebond.sum(1)
-            
-                return r + ebond
+                ebond = ebond.sum(1)#.squeeze()
+                return ebond + r.squeeze() 
             else:
                 return r 
         
