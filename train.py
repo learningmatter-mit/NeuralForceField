@@ -153,7 +153,7 @@ class ModelPrior():
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 
                                                                   'min', 
                                                                   min_lr=1.5e-7, 
-                                                                  verbose=True, factor = 0.5, patience= 3,
+                                                                  verbose=True, factor = 0.5, patience= 20,
                                                                   threshold=5e-5)
         self.criterion = torch.nn.MSELoss()
         self.mae = torch.nn.L1Loss()
