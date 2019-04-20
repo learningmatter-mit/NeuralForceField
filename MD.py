@@ -104,6 +104,8 @@ class NeuralMD(Calculator):
         # change energy and forces back 
         U = U.reshape(-1)
         f_pred = f_pred.reshape(-1, 3)
+
+        print(U.shape)
         
         # change energy and force to numpy array 
         energy = U.detach().cpu().numpy() * (1/ev_to_kcal)
@@ -172,7 +174,7 @@ def NVE(species, xyz, r, model, device,
     n_epoch = int(steps/save_frequency)
 
     for i in range(n_epoch):
-        dyn.run(1)#dyn.run(save_frequency)
+        dyn.run(save_frequency)
         traj.append(structure.get_positions()) # append atomic positions 
         force_traj.append(dyn.atoms.get_forces()) # append atomic forces 
         print("step", i * save_frequency)
