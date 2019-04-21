@@ -104,8 +104,6 @@ class NeuralMD(Calculator):
         # change energy and forces back 
         U = U.reshape(-1)
         f_pred = f_pred.reshape(-1, 3)
-
-        print(U.shape)
         
         # change energy and force to numpy array 
         energy = U.detach().cpu().numpy() * (1/ev_to_kcal)
