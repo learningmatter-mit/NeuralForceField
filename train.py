@@ -135,14 +135,16 @@ class ModelPrior():
             with open(self.dir_loc + "/par.json", "w") as write_file:
                 json.dump(self.par, write_file, indent=4)
         
+        bondpar = self.par.get("bondpar", 50.0)
 
         self.model = BondNet(n_atom_basis = self.par["n_atom_basis"],
                             n_filters = self.par["n_filters"],
                             n_gaussians= self.par["n_gaussians"], 
                             cutoff_soft= self.par["cutoff"], 
                             trainable_gauss = self.par["trainable_gauss"],
-                            T = self.par["T"],
-                            device= self.device).to(self.device)        
+                            T=self.par["T"],
+                            device=self.device,
+                            bondpar=bondpar).to(self.device)        
     
     def initialize_optim(self):
         self.optimizer = optim.Adam(list(self.model.parameters()), lr=self.par["optim"])
@@ -151,7 +153,7 @@ class ModelPrior():
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 
                                                                   'min', 
                                                                   min_lr=1.5e-7, 
-                                                                  verbose=True, factor = 0.5, patience= 3,
+                                                                  verbose=True, factor = 0.5, patience= 20,
                                                                   threshold=5e-5)
         self.criterion = torch.nn.MSELoss()
         self.mae = torch.nn.L1Loss()
@@ -299,7 +301,9 @@ class ModelPrior():
             start_index = 0 
             N_test = len(data.batches)
 
-        species_trained = sorted(set(data.batches[0].data["name"]) ) 
+        list_species = set(data.batches[0].data["name"])
+        list_species = [item for item in list_species if item is not None]
+        species_trained = sorted(list_species) 
 
         #print("&".join(species_trained))
 
@@ -307,11 +311,12 @@ class ModelPrior():
 
             # parse_data
             try:
-                xyz, a, bonda, bondlen, r, f, u, N = self.parse_batch(i)
+                xyz, a, bonda, bondlen, r, f, u, N = self.parse_batch(start_index + i, data=data)
             except:
-                xyz, a, r, f, u, N = self.parse_batch(i)
-            bonda = None
-            bondlen = None
+                xyz, a, r, f, u, N = self.parse_batch(start_index + i, data=data)
+                bonda = None
+                bondlen = None
+
             xyz.requires_grad = True
 
             if self.graph_batching:
@@ -353,7 +358,7 @@ class ModelPrior():
 
         now = datetime.datetime.now()
 
-        f.suptitle(",".join(species_trained)+"validations", fontsize=14)
+        f.suptitle(",".join(species_trained[:10])+"validations", fontsize=14)
         plt.savefig(str(self.job_name)+"/" +"&".join(species_trained) + "-" + str(now.month)+"-"+
                     str(now.day)+"-"+str(now.hour)+"-"+str(now.minute) + "validation.jpg")
 
@@ -433,55 +438,3 @@ class ModelPrior():
 
         np.savetxt(self.dir_loc + "/val_energy.csv", val_energy, delimiter=",")
         np.savetxt(self.dir_loc + "/val_force.csv", val_force, delimiter=",")
-
-
-    def NVE(self, T=450.0, dt=0.1, steps=1000, save_frequency=20):
-
-        # save NVE energy fluctuations, Kinetic energies and movies 
-        # choose a starting conformation 
-
-        ev_to_kcal = 23.06035
-        xyz, a, r, f, u, N = self.parse_batch(0)
-        xyz = torch.split(xyz ,N)[2]
-        r = torch.split(r,N)[2].squeeze().squeeze()
-
-        xyz = xyz[0].detach().cpu().numpy()
-        r = r[0].detach().cpu().numpy()
-
-        structure = mol_state(r=r,xyz=xyz)
-        structure.set_calculator(NeuralMD(model=self.model, device=self.device))
-        # Set the momenta corresponding to T= 0.0 K
-        MaxwellBoltzmannDistribution(structure, T * units.kB)
-        # We want to run MD with constant energy using the VelocityVerlet algorithm.
-        dyn = VelocityVerlet(structure, dt * units.fs)
-        # Now run the dynamics
-        traj = []
-        force_traj = []
-        thermo = []
-        
-        n_epoch = int(steps/save_frequency)
-
-        for i in range(n_epoch):
-            dyn.run(save_frequency)
-            traj.append(structure.get_positions()) # append atomic positions 
-            force_traj.append(dyn.atoms.get_forces()) # append atomic forces 
-            print("step", i * save_frequency)
-            epot, ekin, Temp = get_energy(structure)
-            thermo.append([epot * ev_to_kcal, ekin * ev_to_kcal, ekin+epot, Temp])
-
-        # save thermo data 
-        thermo = np.array(thermo)
-        np.savetxt(self.dir_loc + "/thermo.dat", thermo, delimiter=",")
-
-        # write movies 
-        traj = np.array(traj)
-        traj = traj - traj.mean(1).reshape(-1,1,3)
-        Z = np.array([r] * len(traj)).reshape(len(traj), r.shape[0], 1)
-        traj_write = np.dstack(( Z, traj))
-        write_traj(filename=self.dir_loc+"/traj.xyz", frames=traj_write)
-
-        # write forces into xyz 
-        force_traj = np.array(force_traj) * ev_to_kcal
-        Z = np.array([r] * len(force_traj)).reshape(len(force_traj), r.shape[0], 1)
-        force_write = np.dstack(( Z, force_traj))
-        write_traj(filename=self.dir_loc+"/force.xyz", frames=force_write)

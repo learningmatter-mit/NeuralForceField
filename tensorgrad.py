@@ -58,7 +58,7 @@ def compute_hess(inputs, output, device):
     
     return hess
 
-def Neural_hess(xyz, r, model, device):
+def Neural_hess(xyz, r, model, device, bonda=None, bondlen=None):
     
     assert len(xyz.shape) == 3
     assert len(r.shape) == 2
@@ -70,7 +70,7 @@ def Neural_hess(xyz, r, model, device):
     xyz_reshape.requires_grad = True
     
     xyz_input = xyz_reshape.reshape(-1, N_atom, 3)
-    U = model(r=r, xyz=xyz_input)
+    U = model(r=r, xyz=xyz_input, bondlen=bondlen, bonda=bonda)
 
     hess = compute_hess(inputs=xyz_reshape, output=U, device=device)
     

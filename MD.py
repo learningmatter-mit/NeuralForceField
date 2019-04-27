@@ -13,7 +13,7 @@ from ase.md.verlet import VelocityVerlet
 from ase import units
 from ase import Atoms
 
-mass_dict = {6: 12.01, 8: 15.999, 1: 1.008, 3: 6.941, 7: 14.0067}
+mass_dict = {6: 12.01, 8: 15.999, 1: 1.008, 3: 6.941, 7: 14.0067, 9:18.998403}
 ev_to_kcal = 23.06035
 
 
@@ -172,7 +172,7 @@ def NVE(species, xyz, r, model, device,
     n_epoch = int(steps/save_frequency)
 
     for i in range(n_epoch):
-        dyn.run(1)#dyn.run(save_frequency)
+        dyn.run(save_frequency)
         traj.append(structure.get_positions()) # append atomic positions 
         force_traj.append(dyn.atoms.get_forces()) # append atomic forces 
         print("step", i * save_frequency)
