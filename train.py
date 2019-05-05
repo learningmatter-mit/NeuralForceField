@@ -278,7 +278,7 @@ class ModelPrior():
                 print("training converged")
                 break
 
-        self.save_model()
+        #self.save_model()
         self.save_train_log()
             
     def validate(self, data=None):
@@ -301,11 +301,12 @@ class ModelPrior():
             start_index = 0 
             N_test = len(data.batches)
 
-        list_species = set(data.batches[0].data["name"])
-        list_species = [item for item in list_species if item is not None]
-        species_trained = sorted(list_species) 
-
-        #print("&".join(species_trained))
+        try:
+            list_species = set(data.batches[0].data["name"])
+            list_species = [item for item in list_species if item is not None]
+            species_trained = sorted(list_species)
+        except:
+            species_trained = ["nospecies"]
 
         for i in range(N_test):
 
