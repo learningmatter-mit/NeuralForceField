@@ -9,7 +9,10 @@ be sure to install the packages in the following way.
 
 pytorch: ```conda install pytorch torchvision cudatoolkit=10.0 -c pytorch```
 (Be sure to know your CUDA version and python version and install accordinly)
+
 sk-learn: ```conda install scikit-learn```
+
+ASE: ```pip install ase```
 
 if you want a install with database stuff, follow [Wil's tutorial](https://github.mit.edu/MLMat/mpnnet/blob/master/docs/README.md)
 
