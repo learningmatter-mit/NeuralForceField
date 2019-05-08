@@ -28,7 +28,7 @@ cd projects
 
 clone graphbuilder (wujie branch)
 
-```git clone --single-branch --branch wujie host:git@github.mit.edu:MLMat/graphbuilder.git```
+```git clone --single-branch --branch wwj host:git@github.mit.edu:MLMat/graphbuilder.git```
 
 clone NeuralForceField Code (master branch)
 ```git clone git@github.mit.edu:MLMat/NeuralForceField.git```
