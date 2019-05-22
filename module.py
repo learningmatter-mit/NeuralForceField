@@ -114,6 +114,8 @@ class BondEnergyModule(nn.Module):
             ebond = 0.5 * scatter_add(src=ebond, index=bonda[:, 0], dim=0)
         else:
             e = (xyz[:, bonda[:,0]] - xyz[:, bonda[:,1]]).pow(2).sum(2).sqrt()
+            print(e.shape)
+            print(bondlen.shape)
             ebond = 0.5 * bondpar * (e - bondlen) ** 2
         
         return ebond
@@ -156,7 +158,19 @@ class InteractionBlock(nn.Module):
             if A is None:
                 raise ValueError('need to input A')
             
-            e = self.smearing(e.reshape(-1, r.shape[1], r.shape[1]))
+            #--------------------BUGGY--------------------
+            #e = self.smearing(e.reshape(-1, r.shape[1], r.shape[1]))
+            #--------------------BUGGY--------------------
+
+            #-----------------TEMP FIX--------------------
+            offsets = self.smearing_graph.offsets
+            widths = self.smearing_graph.width
+            coeff = -0.5 / torch.pow(widths, 2)
+            e = e.reshape(-1, r.shape[1], r.shape[1])
+            e = e[:, :, :, None] - offsets[None, None, None, :]
+            e = torch.exp(coeff * torch.pow(e, 2))
+            #-----------------TEMP FIX--------------------
+
             W = self.DistanceFilter1(e)
             W = self.DistanceFilter2(e)
 

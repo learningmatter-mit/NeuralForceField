@@ -12,15 +12,16 @@ from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
 from ase import units
 from ase import Atoms
+from ase.units import Bohr,Rydberg,kJ,kB,fs,Hartree,mol,kcal
 
 mass_dict = {6: 12.01, 8: 15.999, 1: 1.008, 3: 6.941, 7: 14.0067, 9:18.998403}
-ev_to_kcal = 23.06035
+ev_to_kcal = 23.06052#23.06035
 
 
 def mol_state(r, xyz):
     mass = [mass_dict[item] for item in r]
     atom = "C" * r.shape[0] # intialize Atom()
-    structure = Atoms(atom, positions=xyz, cell=[100.0, 100.0, 100.0], pbc=True)
+    structure = Atoms(atom, positions=xyz, cell=[20.0, 20.0, 20.0], pbc=True)
     structure.set_atomic_numbers(r)
     structure.set_masses(mass)    
     return structure
@@ -30,9 +31,21 @@ def get_energy(atoms):
     epot = atoms.get_potential_energy() #/ len(atoms)
     ekin = atoms.get_kinetic_energy() #/ len(atoms)
     Temperature = ekin / (1.5 * units.kB * len(atoms))
-    print('Energy per atom: Epot = %.3fkcal/mol  Ekin = %.3fkcal/mol (T=%3.0fK)  '
-         'Etot = %.3fkcal/mol' % (epot * ev_to_kcal, ekin * ev_to_kcal, Temperature, (epot + ekin) * ev_to_kcal))
-    return epot * ev_to_kcal, ekin* ev_to_kcal, Temperature
+
+    # compute kinetic energy by hand 
+    # vel = torch.Tensor(atoms.get_velocities())
+    # mass = atoms.get_masses()
+    # mass = torch.Tensor(mass)
+    # ekin = (0.5 * (vel * 1e-10 * fs * 1e15).pow(2).sum(1) * (mass * 1.66053904e-27) * 6.241509e+18).sum()
+    # ekin = ekin.item() #* ev_to_kcal
+
+    #ekin = ekin.detach().numpy()
+
+    print('Energy per atom: Epot = %.2fkcal/mol  Ekin = %.2fkcal/mol (T=%3.0fK)  '
+         'Etot = %.2fkcal/mol' % (epot * ev_to_kcal, ekin * ev_to_kcal, Temperature, (epot + ekin) * ev_to_kcal))
+    # print('Energy per atom: Epot = %.5feV  Ekin = %.5feV (T=%3.0fK)  '
+    #      'Etot = %.5feV' % (epot, ekin, Temperature, (epot + ekin)))
+    return epot * ev_to_kcal, ekin * ev_to_kcal, Temperature
 
 def write_traj(filename, frames):
     '''
@@ -81,14 +94,22 @@ class NeuralMD(Calculator):
         # run model 
         node = atoms.get_atomic_numbers()#.reshape(1, -1, 1)
         xyz = atoms.get_positions()#.reshape(-1, N_atom, 3)
-        vel = atoms.get_velocities()
         bondAdj = self.bondAdj
         bondlen = self.bondlen
 
         # to compute the kinetic energies to this...
-        # (0.5 * (vel * 1e-10 * 0.09823 * 1e15).pow(2).sum(1) * (mass * 1.66054e-27) * 6.242e+18).sum()
+        #mass = atoms.get_masses()
+        # vel = atoms.get_velocities()
+        # vel = torch.Tensor(vel)
+        # mass = torch.Tensor(mass)
 
-        # rebtach based on the number of atoms 
+        # print(atoms.get_kinetic_energy())
+        # print(atoms.get_kinetic_energy().dtype)
+        # print( (0.5 * (vel * 1e-10 * fs * 1e15).pow(2).sum(1) * (mass * 1.66053904e-27) * 6.241509e+18).sum())
+        # print( (0.5 * (vel * 1e-10 * fs * 1e15).pow(2).sum(1) * (mass * 1.66053904e-27) * 6.241509e+18).sum().type())
+
+        # rebtach based on the number of atoms
+
         node = Variable(torch.LongTensor(node).reshape(-1, N_atom)).cuda(self.device)
         xyz = Variable(torch.Tensor(xyz).reshape(-1, N_atom, 3)).cuda(self.device)
         xyz.requires_grad = True
@@ -117,7 +138,7 @@ class NeuralMD(Calculator):
 
 def NVE(species, xyz, r, model, device, 
             dir_loc="./log", T=450.0, dt=0.1,
-             steps=1000, save_frequency=20, bondAdj=None, bondlen=None):
+             steps=1000, save_frequency=20, bondAdj=None, bondlen=None, return_pe=False):
     """function to run NVE
     
     Args:
@@ -178,7 +199,7 @@ def NVE(species, xyz, r, model, device,
         print("step", i * save_frequency)
         if batch_size == 1:
             epot, ekin, Temp = get_energy(structure)
-            thermo.append([epot * ev_to_kcal, ekin * ev_to_kcal, ekin+epot, Temp])
+            thermo.append([epot, ekin, ekin+epot, Temp])
         else:
             print("Parallelized sampling, no thermo outputs")
 
@@ -194,4 +215,7 @@ def NVE(species, xyz, r, model, device,
     Z = np.array([r] * n_epoch).reshape(-1, N_atom, 1)
     traj_write = np.dstack(( Z, traj))
 
-    return traj_write
+    if return_pe:
+        return traj_write, np.stack(thermo[:, 0])
+    else:
+        return traj_write
