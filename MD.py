@@ -21,7 +21,7 @@ ev_to_kcal = 23.06052#23.06035
 def mol_state(r, xyz):
     mass = [mass_dict[item] for item in r]
     atom = "C" * r.shape[0] # intialize Atom()
-    structure = Atoms(atom, positions=xyz, cell=[100.0, 100.0, 100.0], pbc=True)
+    structure = Atoms(atom, positions=xyz, cell=[20.0, 20.0, 20.0], pbc=True)
     structure.set_atomic_numbers(r)
     structure.set_masses(mass)    
     return structure
@@ -32,19 +32,20 @@ def get_energy(atoms):
     ekin = atoms.get_kinetic_energy() #/ len(atoms)
     Temperature = ekin / (1.5 * units.kB * len(atoms))
 
-    vel = torch.Tensor(atoms.get_velocities())
-    mass = atoms.get_masses()
-    mass = torch.Tensor(mass)
+    # compute kinetic energy by hand 
+    # vel = torch.Tensor(atoms.get_velocities())
+    # mass = atoms.get_masses()
+    # mass = torch.Tensor(mass)
+    # ekin = (0.5 * (vel * 1e-10 * fs * 1e15).pow(2).sum(1) * (mass * 1.66053904e-27) * 6.241509e+18).sum()
+    # ekin = ekin.item() #* ev_to_kcal
 
-    ekin = (0.5 * (vel * 1e-10 * fs * 1e15).pow(2).sum(1) * (mass * 1.66053904e-27) * 6.241509e+18).sum()
-    ekin = ekin.item() #* ev_to_kcal
     #ekin = ekin.detach().numpy()
 
     print('Energy per atom: Epot = %.2fkcal/mol  Ekin = %.2fkcal/mol (T=%3.0fK)  '
          'Etot = %.2fkcal/mol' % (epot * ev_to_kcal, ekin * ev_to_kcal, Temperature, (epot + ekin) * ev_to_kcal))
     # print('Energy per atom: Epot = %.5feV  Ekin = %.5feV (T=%3.0fK)  '
     #      'Etot = %.5feV' % (epot, ekin, Temperature, (epot + ekin)))
-    return epot * ev_to_kcal, ekin* ev_to_kcal, Temperature
+    return epot * ev_to_kcal, ekin * ev_to_kcal, Temperature
 
 def write_traj(filename, frames):
     '''
@@ -93,21 +94,22 @@ class NeuralMD(Calculator):
         # run model 
         node = atoms.get_atomic_numbers()#.reshape(1, -1, 1)
         xyz = atoms.get_positions()#.reshape(-1, N_atom, 3)
-        vel = atoms.get_velocities()
-        mass = atoms.get_masses()
         bondAdj = self.bondAdj
         bondlen = self.bondlen
 
         # to compute the kinetic energies to this...
-        vel = torch.Tensor(vel)
-        mass = torch.Tensor(mass)
+        #mass = atoms.get_masses()
+        # vel = atoms.get_velocities()
+        # vel = torch.Tensor(vel)
+        # mass = torch.Tensor(mass)
 
         # print(atoms.get_kinetic_energy())
         # print(atoms.get_kinetic_energy().dtype)
         # print( (0.5 * (vel * 1e-10 * fs * 1e15).pow(2).sum(1) * (mass * 1.66053904e-27) * 6.241509e+18).sum())
         # print( (0.5 * (vel * 1e-10 * fs * 1e15).pow(2).sum(1) * (mass * 1.66053904e-27) * 6.241509e+18).sum().type())
 
-        # rebtach based on the number of atoms 
+        # rebtach based on the number of atoms
+
         node = Variable(torch.LongTensor(node).reshape(-1, N_atom)).cuda(self.device)
         xyz = Variable(torch.Tensor(xyz).reshape(-1, N_atom, 3)).cuda(self.device)
         xyz.requires_grad = True
