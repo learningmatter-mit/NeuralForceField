@@ -289,8 +289,8 @@ class ModelPrior():
         self.predictedenergies = []
         self.targetenergies = []
 
-        if not os.path.exists(self.job_name):
-            os.makedirs(self.job_name)
+        if not os.path.exists(self.root + self.job_name):
+            os.makedirs(self.root + self.job_name)
 
         # decide data 
         if data == None:
@@ -360,7 +360,7 @@ class ModelPrior():
         now = datetime.datetime.now()
 
         f.suptitle(",".join(species_trained[:10])+"validations", fontsize=14)
-        plt.savefig(str(self.job_name)+"/" +"&".join(species_trained) + "-" + str(now.month)+"-"+
+        plt.savefig(self.root + str(self.job_name)+"/" +"&".join(species_trained) + "-" + str(now.month)+"-"+
                     str(now.day)+"-"+str(now.hour)+"-"+str(now.minute) + "validation.jpg")
 
         print("forcesmae", self.forcesmae, "kcal/mol A")
