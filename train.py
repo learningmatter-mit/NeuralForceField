@@ -360,7 +360,7 @@ class ModelPrior():
         now = datetime.datetime.now()
 
         f.suptitle(",".join(species_trained[:3])+"validations", fontsize=14)
-        plt.savefig(self.root + str(self.job_name)+"/" +"&".join(species_trained) + "-" + str(now.month)+"-"+
+        plt.savefig(self.root + str(self.job_name)+"/" +"&".join(species_trained[:3]) + "-" + str(now.month)+"-"+
                     str(now.day)+"-"+str(now.hour)+"-"+str(now.minute) + "validation.jpg")
 
         print("forcesmae", self.forcesmae, "kcal/mol A")
