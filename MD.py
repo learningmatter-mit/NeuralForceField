@@ -14,7 +14,7 @@ from ase import units
 from ase import Atoms
 from ase.units import Bohr,Rydberg,kJ,kB,fs,Hartree,mol,kcal
 
-mass_dict = {6: 12.01, 8: 15.999, 1: 1.008, 3: 6.941, 7: 14.0067, 9:18.998403}
+mass_dict = {6: 12.01, 8: 15.999, 1: 1.008, 3: 6.941, 7: 14.0067, 9:18.998403, 16: 32.06}
 ev_to_kcal = 23.06052#23.06035
 
 
