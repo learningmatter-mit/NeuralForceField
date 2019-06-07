@@ -136,6 +136,7 @@ class ModelPrior():
                 json.dump(self.par, write_file, indent=4)
         
         bondpar = self.par.get("bondpar", 50.0)
+        box_vec = self.par.get("box_vec", None)
 
         self.model = BondNet(n_atom_basis = self.par["n_atom_basis"],
                             n_filters = self.par["n_filters"],
@@ -144,7 +145,8 @@ class ModelPrior():
                             trainable_gauss = self.par["trainable_gauss"],
                             T=self.par["T"],
                             device=self.device,
-                            bondpar=bondpar).to(self.device)        
+                            bondpar=bondpar,
+                            box_len=box_vec).to(self.device)        
     
     def initialize_optim(self):
         self.optimizer = optim.Adam(list(self.model.parameters()), lr=self.par["optim"])
@@ -289,8 +291,8 @@ class ModelPrior():
         self.predictedenergies = []
         self.targetenergies = []
 
-        if not os.path.exists(self.job_name):
-            os.makedirs(self.job_name)
+        if not os.path.exists(self.root + self.job_name):
+            os.makedirs(self.root + self.job_name)
 
         # decide data 
         if data == None:
@@ -359,8 +361,8 @@ class ModelPrior():
 
         now = datetime.datetime.now()
 
-        f.suptitle(",".join(species_trained[:10])+"validations", fontsize=14)
-        plt.savefig(str(self.job_name)+"/" +"&".join(species_trained) + "-" + str(now.month)+"-"+
+        f.suptitle(",".join(species_trained[:3])+"validations", fontsize=14)
+        plt.savefig(self.root + str(self.job_name)+"/" +"&".join(species_trained[:3]) + "-" + str(now.month)+"-"+
                     str(now.day)+"-"+str(now.hour)+"-"+str(now.minute) + "validation.jpg")
 
         print("forcesmae", self.forcesmae, "kcal/mol A")

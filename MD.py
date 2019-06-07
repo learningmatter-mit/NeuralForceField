@@ -14,7 +14,7 @@ from ase import units
 from ase import Atoms
 from ase.units import Bohr,Rydberg,kJ,kB,fs,Hartree,mol,kcal
 
-mass_dict = {6: 12.01, 8: 15.999, 1: 1.008, 3: 6.941, 7: 14.0067, 9:18.998403}
+mass_dict = {6: 12.01, 8: 15.999, 1: 1.008, 3: 6.941, 7: 14.0067, 9:18.998403, 16: 32.06}
 ev_to_kcal = 23.06052#23.06035
 
 
@@ -64,7 +64,10 @@ def write_traj(filename, frames):
         file.write('Atoms. Timestep: '+ str(i)+'\n')
         for atom in frame:
             if atom.shape[0] == 4:
-                file.write(str(int(atom[0])) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
+                try:
+                    file.write(str(int(atom[0])) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
+                except:
+                    file.write(str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
             elif atom.shape[0] == 3:
                 file.write("1" + " " + str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + "\n")
             else:

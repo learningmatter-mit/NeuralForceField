@@ -140,7 +140,9 @@ class BondNet(nn.Module):
             assert len(xyz.shape) == 3
 
             r, e ,A = self.graph_dis(r=r, xyz=xyz)
-            r = self.atomEmbed(r.type(torch.long))#.squeeze()        
+
+            r = self.atomEmbed(r.type(torch.long))#.squeeze()
+
             for i, conv in enumerate(self.convolutions):
                 
                 dr = conv(r=r, e=e, A=A)
@@ -182,7 +184,7 @@ class BondNet(nn.Module):
 
             E_batch = list(torch.split(r, N))
 
-                        # bond energy computed as a physics prior 
+            # bond energy computed as a physics prior 
             if bonda is not None and bondlen is not None:
                 ebond = self.bondenergy_graph(xyz=xyz, bonda=bonda, bondlen=bondlen, bondpar=bondpar)
                 ebond_batch = list(torch.split(ebond, N))
