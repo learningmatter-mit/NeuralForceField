@@ -136,6 +136,7 @@ class ModelPrior():
                 json.dump(self.par, write_file, indent=4)
         
         bondpar = self.par.get("bondpar", 50.0)
+        box_vec = self.par.get("box_vec", None)
 
         self.model = BondNet(n_atom_basis = self.par["n_atom_basis"],
                             n_filters = self.par["n_filters"],
@@ -144,7 +145,8 @@ class ModelPrior():
                             trainable_gauss = self.par["trainable_gauss"],
                             T=self.par["T"],
                             device=self.device,
-                            bondpar=bondpar).to(self.device)        
+                            bondpar=bondpar,
+                            box_len=box_vec).to(self.device)        
     
     def initialize_optim(self):
         self.optimizer = optim.Adam(list(self.model.parameters()), lr=self.par["optim"])
