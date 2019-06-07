@@ -9,9 +9,6 @@ def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_fl
     xyz_data, force_data, energy_data, smiles_data = shuffle(xyz_data, force_data, energy_data, smiles_data)
     energy_mean = np.array(energy_data).mean()
 
-    #if subtract_mean_flag == True:
-    #    energy_data = np.array(energy_data) - energy_mean
-
     Fr = 4 # let node features be 
     Fe = 1
     dynamic_adj_mat = True
@@ -35,18 +32,29 @@ def load_graph_data(xyz_data, force_data, energy_data, batch_size, cutoff, au_fl
         node = xyz[:, 0].reshape(-1, 1)
         graph = Graph(N=node.shape[0], dynamic_adj_mat=dynamic_adj_mat, name=species)
 
-        node_force = np.hstack((node, force)) # node concatenate with force 
-        graph.SetNodeLabels(r=torch.Tensor(node_force))
-        graph.SetXYZ(xyz=torch.Tensor(xyz[:, 1:4]))
-        graph.UpdateConnectivity(cutoff=cutoff)
-        graph.SetEdgeLabels()
-        graph.LabelEdgesWithDistances()
-        graph.SetGraphLabel(torch.Tensor([energy]))
-        graph_data.AddGraph(graph)
+        if node[-1][0] != 3.0: # This is ugly and temporary 
+            node_force = np.hstack((node, force)) # node concatenate with force 
+            graph.SetNodeLabels(r=torch.Tensor(node_force))
+            graph.SetXYZ(xyz=torch.Tensor(xyz[:, 1:4]))
+            graph.UpdateConnectivity(cutoff=cutoff)
+            graph.SetEdgeLabels()
+            graph.LabelEdgesWithDistances()
+            graph.SetGraphLabel(torch.Tensor([energy]))
 
-        if adjdict is not None:
-            graph.SetBondAdj(torch.LongTensor(adjdict[species]))
-            graph.SetBondLen(torch.LongTensor(adjdict[species]))
+            if adjdict is not None:
+                try:
+                    graph.SetBondAdj(torch.LongTensor(adjdict[species][0]))
+                    graph.SetBondLen(torch.LongTensor(adjdict[species][0]))
+                except:
+                    try:
+                        graph.SetBondAdj(torch.LongTensor(adjdict[species][1]))
+                        graph.SetBondLen(torch.LongTensor(adjdict[species][1]))
+                    except:
+                        graph.SetBondAdj(torch.LongTensor(adjdict[species][2]))
+                        graph.SetBondLen(torch.LongTensor(adjdict[species][2])) 
+
+            graph_data.AddGraph(graph)              
+
 
     graph_data.CreateBatches(batch_size=batch_size, verbose=False)
     graph_data.set_label_mean(energy_mean * energy_conversion)
