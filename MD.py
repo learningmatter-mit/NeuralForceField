@@ -15,7 +15,7 @@ from ase import Atoms
 from ase.units import Bohr,Rydberg,kJ,kB,fs,Hartree,mol,kcal
 
 mass_dict = {6: 12.01, 8: 15.999, 1: 1.008, 3: 6.941, 7: 14.0067, 9:18.998403, 16: 32.06}
-ev_to_kcal = 23.06052#23.06035
+ev_to_kcal = 23.06052
 
 
 def mol_state(r, xyz):
@@ -184,6 +184,9 @@ def NVE(species, xyz, r, model, device,
     else:
         structure.set_calculator(NeuralMD(model=model, device=device, N_atom=N_atom))
 
+    # Here set PBC box dimension 
+
+
     # Set the momenta corresponding to T= 0.0 K
     MaxwellBoltzmannDistribution(structure, T * units.kB)
     # We want to run MD with constant energy using the VelocityVerlet algorithm.
@@ -222,3 +225,50 @@ def NVE(species, xyz, r, model, device,
         return traj_write, np.stack(thermo[:, 0])
     else:
         return traj_write
+
+
+class NVT_MD(MolecularDynamics):
+    def __init__(self, atoms, timestep, temperature, ttime, trajectory=None, logfile=None, loginterval=1):
+        MolecularDynamics.__init__(self, atoms, timestep, trajectory, logfile, loginterval)
+        
+        # Initialize simulation parameters 
+        self.dt = dt #0.25 * units.fs
+        self.Natom = atoms.get_number_of_atoms()
+        self.T = T
+        self.targeEkin = 0.5 * (3.0 * Natom + 1) * T
+        self.ttime = 5.0 * units.fs
+        self.tfact = 2.0 / (3.0 * Natom * T * ttime ** 2)
+        self.zeta = 0.0
+    
+    def step(self, f):
+        
+        # get current acceleration and velocity: 
+        accel = self.atoms.get_forces() / self.atoms.get_masses().reshape(-1, 1)
+        vel = self.atoms.get_velocities()
+
+        # make full step in position 
+        x = self.atoms.get_positions() + vel * self.dt + (accel - self.zeta * vel) * (0.5 * self.dt ** 2)
+        self.atoms.set_positions(x)
+
+        #record current velocities 
+        KE_0 = self.atoms.get_kinetic_energy()
+
+        # make half a step in velocity 
+        vel_half = vel + 0.5 * self.dt * (accel - self.zeta * vel)
+        self.atoms.set_velocities(vel_half)
+
+        # make a full step in accelerations
+        f = self.atoms.get_forces()
+        accel = f / self.atoms.get_masses().reshape(-1, 1)
+
+        # make a half step in self.zeta 
+        self.zeta = self.zeta + self.dt * tfact * (KE_0 -  targeEkin)
+
+        # make another halfstep in self.zeta 
+        self.zeta = self.zeta + self.dt * tfact * (self.atoms.get_kinetic_energy() - targeEkin)
+
+        # make another half step in velocity
+        vel = (self.atoms.get_velocities() + 0.5 * self.dt * accel )/(1 + 0.5 * self.dt * self.zeta)
+        self.atoms.set_velocities(vel)
+        
+        return f
