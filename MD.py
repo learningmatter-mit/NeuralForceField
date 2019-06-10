@@ -13,6 +13,8 @@ from ase.md.verlet import VelocityVerlet
 from ase import units
 from ase import Atoms
 from ase.units import Bohr,Rydberg,kJ,kB,fs,Hartree,mol,kcal
+from ase.md.md import MolecularDynamics
+
 
 mass_dict = {6: 12.01, 8: 15.999, 1: 1.008, 3: 6.941, 7: 14.0067, 9:18.998403, 16: 32.06}
 ev_to_kcal = 23.06052
@@ -232,12 +234,14 @@ class NVT_MD(MolecularDynamics):
         MolecularDynamics.__init__(self, atoms, timestep, trajectory, logfile, loginterval)
         
         # Initialize simulation parameters 
-        self.dt = dt #0.25 * units.fs
+
+        # Q is chosen to be 6 N kT 
+        self.dt = timestep 
         self.Natom = atoms.get_number_of_atoms()
-        self.T = T
-        self.targeEkin = 0.5 * (3.0 * Natom + 1) * T
-        self.ttime = 5.0 * units.fs
-        self.tfact = 2.0 / (3.0 * Natom * T * ttime ** 2)
+        self.T = temperature
+        self.targeEkin = 0.5 * (3.0 * self.Natom + 1) * self.T
+        self.ttime = 5.0 #* units.fs
+        self.tfact = 2.0 / (3.0 * self.Natom * self.T * self.ttime ** 2)
         self.zeta = 0.0
     
     def step(self, f):
@@ -262,10 +266,10 @@ class NVT_MD(MolecularDynamics):
         accel = f / self.atoms.get_masses().reshape(-1, 1)
 
         # make a half step in self.zeta 
-        self.zeta = self.zeta + self.dt * tfact * (KE_0 -  targeEkin)
+        self.zeta = self.zeta + self.dt * self.tfact * (KE_0 -  self.targeEkin)
 
         # make another halfstep in self.zeta 
-        self.zeta = self.zeta + self.dt * tfact * (self.atoms.get_kinetic_energy() - targeEkin)
+        self.zeta = self.zeta + self.dt * self.tfact * (self.atoms.get_kinetic_energy() - self.targeEkin)
 
         # make another half step in velocity
         vel = (self.atoms.get_velocities() + 0.5 * self.dt * accel )/(1 + 0.5 * self.dt * self.zeta)
