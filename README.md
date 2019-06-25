@@ -14,6 +14,8 @@ sk-learn: ```conda install scikit-learn```
 
 ASE: ```pip install ase```
 
+networkx: ```pip install networkx```
+
 if you want a install with database stuff, follow [Wil's tutorial](https://github.mit.edu/MLMat/mpnnet/blob/master/docs/README.md)
 
 
@@ -36,7 +38,7 @@ clone graphbuilder (wujie branch)
 clone NeuralForceField Code (master branch)
 ```git clone git@github.mit.edu:MLMat/NeuralForceField.git```
 
-You will find two directories `NeuralForceField` and graphbuilder, and be sure to add them in your PYTHONPATH
+You will find two directories `NeuralForceField` and `graphbuilde`, and be sure to add them in your PYTHONPATH
 
 ##  Tutorial
 
