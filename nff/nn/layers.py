@@ -27,6 +27,7 @@ def shifted_softplus(x):
     """
     return F.softplus(x) - np.log(2.0)
 
+
 def gaussian_smearing(distances, offset, widths, centered=False, graph=False):
     """
     Perform gaussian smearing on interatomic distances.
@@ -106,6 +107,7 @@ class GaussianSmearing(nn.Module):
 
         """
         return gaussian_smearing(distances, self.offsets, self.width, centered=self.centered, graph=self.graph)
+
 
 class Dense(nn.Linear):
     """ Applies a dense layer with activation: :math:`y = activation(Wx + b)`

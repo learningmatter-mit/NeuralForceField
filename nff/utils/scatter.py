@@ -1,9 +1,9 @@
-
 from itertools import repeat
 from torch.autograd import grad
 
+
 def compute_grad(inputs, output):
-    """compute gradient of the scalar output with respect to inputs 
+    """Compute gradient of the scalar output with respect to inputs.
     
     Args:
         inputs (torch.Tensor): torch tensor, requires_grad=True
@@ -12,12 +12,14 @@ def compute_grad(inputs, output):
     Returns:
         torch.Tensor: gradients with respect to each input component 
     """
+
     assert inputs.requires_grad
     
     gradspred, = grad(output, inputs, grad_outputs=output.data.new(output.shape).fill_(1),
                    create_graph=True, retain_graph=True)
     
     return gradspred
+
 
 def gen(src, index, dim=-1, out=None, dim_size=None, fill_value=0):
     dim = range(src.dim())[dim]  # Get real dim value.
@@ -36,6 +38,7 @@ def gen(src, index, dim=-1, out=None, dim_size=None, fill_value=0):
         out = src.new_full(out_size, fill_value)
 
     return src, out, index, dim
+
 
 def scatter_add(src, index, dim=-1, out=None, dim_size=None, fill_value=0):
     src, out, index, dim = gen(src, index, dim, out, dim_size, fill_value)

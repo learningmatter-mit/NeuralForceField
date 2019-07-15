@@ -1,4 +1,9 @@
 import os
+import numpy as np
+import json
+import argparse
+import time, subprocess
+
 import django
 
 # setup the django settings file.  Change this to use the settings file that connects you to your desired database
@@ -24,8 +29,4 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Avg, Case, Count, F, Max, Min, Prefetch, Q, Sum, When, Exists, OuterRef, Subquery
 
-import numpy as np
-import json
-import argparse
-import time, subprocess
 from neuralnet.utils import *

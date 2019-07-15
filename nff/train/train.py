@@ -1,24 +1,23 @@
-from .models import *
-from .scatter import *
-from .MD import * 
-from .graphs import * 
-
-import matplotlib.pyplot as plt
-plt.switch_backend('agg')
-
+import os
+import json
+import datetime
+import time
 import pickle
 import numpy as np
 
 import torch.optim as optim
 
-import os
-import json
-import datetime
-import time
+import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 
-class ModelPrior():
+from nff.nn.models import *
+from nff.utils.scatter import *
+from nff.md import * 
+from nff.data.graphs import * 
 
-    """A wrapper for training, validation, save and load models 
+
+class TrainWrapper:
+    """A wrapper for training, validation, save and load models.
     
     Attributes:
         criterion (MSEloss): Description
@@ -68,6 +67,7 @@ class ModelPrior():
         self.root = root 
         self.train_flag = train_flag
         self.par = par # needs to input parameters 
+        self.check_parameters()
 
         if graph_data is not None:
             self.data = graph_data
@@ -80,41 +80,24 @@ class ModelPrior():
             print("need to load a pre-trained model")
         self.graph_batching = graph_batching
         
-    def initialize_model(self):
+    def check_parameters(self):
+        assert type(self.par["n_filters"]) == int, "Invalid filter dimension, it should be an integer"
+        assert type(self.par["n_gaussians"]) == int, "Invalid number of gaussian basis, it should be an integer"
+        assert type(self.par["optim"]) == float, "the learning rate is not an float"
+        assert type(self.par["train_percentage"]) == float and self.par["optim"] < 1.0, "the training data percentage is invalid"
+        assert type(self.par["T"]) == int, "number of convolutions have to an integer"
+        assert type(self.par["batch_size"]) == int, "invalid batch size"
+        assert type(self.par["cutoff"]) == float, "Invalid cutoff radius"
+        assert type(self.par["max_epoch"]) == int, "max epoch should be an integer"
+        assert type(self.par["trainable_gauss"]) == bool, "should be boolean value"
+        assert type(self.par["rho"]) == float, "Rho should be float"
+        assert type(self.par["eps"]) == float and self.par["eps"] <= 1.0, "Invalid convergence criterion"
 
-        # check if all the parameters are specified and valid 
-        #if len(self.par) != 15:
-        #    raise ValueError("parameters are not complete")
-        #if self.par["model_type"] not in ["schnet", "attention", "fingerprint"]:
-        #    raise ValueError("Unavailable models")
-        #if type(self.par["git_commit"]) != str:
-        #    raise ValueError("Invalid repo version provided")
-        if type(self.par["n_filters"]) != int:
-            raise ValueError("Invalid filter dimension, it should be an integer")
-        if type(self.par["n_gaussians"]) != int:
-            raise ValueError("Invalid number of gaussian basis, it should be an integer")
-        if type(self.par["optim"]) != float:
-            raise ValueError("the learning rate is not an float")
-        if type(self.par["train_percentage"]) != float and self.par["optim"] >= 1.0:
-            raise ValueError("the training data percentage is invalid")
-        if type(self.par["T"]) != int:
-            raise ValueError("number of convolutions have to an integer")
-        if type(self.par["batch_size"]) != int:
-            raise ValueError("invalid batch size")
-        if type(self.par["cutoff"]) != float:
-            raise ValueError("Invalid cutoff radius")
-        if type(self.par["max_epoch"]) != int:
-            raise ValueError("max epoch should be an integer")
-        if type(self.par["trainable_gauss"]) != bool:
-            raise ValueError("should be boolean value")
-        if type(self.par["rho"]) != float:
-            raise ValueError("Rho should be float")
-        if type(self.par["eps"]) != float and self.par["eps"] > 1.0:
-            raise ValueError("Invalid convergence criterion")
+    def initialize_model(self):
 
         if self.train_flag == True:
 
-            print("setting up directoires for saving training files")
+            print("setting up directories for saving training files")
 
             self.train_u_log = []
             self.train_f_log = []
@@ -139,14 +122,14 @@ class ModelPrior():
         box_vec = self.par.get("box_vec", None)
 
         self.model = BondNet(n_atom_basis = self.par["n_atom_basis"],
-                            n_filters = self.par["n_filters"],
-                            n_gaussians= self.par["n_gaussians"], 
-                            cutoff_soft= self.par["cutoff"], 
-                            trainable_gauss = self.par["trainable_gauss"],
-                            T=self.par["T"],
-                            device=self.device,
-                            bondpar=bondpar,
-                            box_len=box_vec).to(self.device)        
+                             n_filters = self.par["n_filters"],
+                             n_gaussians= self.par["n_gaussians"], 
+                             cutoff_soft= self.par["cutoff"], 
+                             trainable_gauss = self.par["trainable_gauss"],
+                             T=self.par["T"],
+                             device=self.device,
+                             bondpar=bondpar,
+                             box_len=box_vec).to(self.device)        
     
     def initialize_optim(self):
         self.optimizer = optim.Adam(list(self.model.parameters()), lr=self.par["optim"])
@@ -191,9 +174,9 @@ class ModelPrior():
         xyz = data.batches[index].data["xyz"].to(self.device)
 
         try: # try to get bond adjacency matrix 
-            bonda = data.batches[index].data["bond_a"].to(self.device)
-            bondlen = data.batches[index].data["bondlen"].to(self.device)
-            return xyz, a, bonda, bondlen, r, f, u, N
+            bond_adj = data.batches[index].data["bond_a"].to(self.device)
+            bond_len = data.batches[index].data["bond_len"].to(self.device)
+            return xyz, a, bond_adj, bond_len, r, f, u, N
         except:
             return xyz, a, r, f, u, N
     
@@ -219,11 +202,11 @@ class ModelPrior():
             for i in range(self.N_train):
 
                 try:
-                    xyz, a, bonda, bondlen, r, f, u, N = self.parse_batch(i)
+                    xyz, a, bond_adj, bond_len, r, f, u, N = self.parse_batch(i)
                 except:
                     xyz, a, r, f, u, N = self.parse_batch(i)
-                    bonda = None
-                    bondlen = None
+                    bond_adj = None
+                    bond_len = None
                 xyz.requires_grad = True
 
                 # check if the input has graphs of various sizes 
@@ -234,10 +217,10 @@ class ModelPrior():
 
                 # Compute energies 
                 if self.graph_batching:
-                    U = self.model(r=r, bonda=bonda, bondlen=bondlen, xyz=xyz, a=a, N=N) 
+                    U = self.model(r=r, bond_adj=bond_adj, bond_len=bond_len, xyz=xyz, a=a, N=N) 
                 else:
                     assert graph_size_is_same # make sure all the graphs needs to have the same size
-                    U = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3), bonda=bonda, bondlen=bondlen)
+                    U = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3), bond_adj=bond_adj, bond_len=bond_len)
                     
                 f_pred = -compute_grad(inputs=xyz, output=U)
 
@@ -283,7 +266,7 @@ class ModelPrior():
         #self.save_model()
         self.save_train_log()
             
-    def validate(self, data=None):
+    def validate(self, data=None, savefig=True):
         """Summary
         """
         self.predictedforces = []
@@ -314,18 +297,18 @@ class ModelPrior():
 
             # parse_data
             try:
-                xyz, a, bonda, bondlen, r, f, u, N = self.parse_batch(start_index + i, data=data)
+                xyz, a, bond_adj, bond_len, r, f, u, N = self.parse_batch(start_index + i, data=data)
             except:
                 xyz, a, r, f, u, N = self.parse_batch(start_index + i, data=data)
-                bonda = None
-                bondlen = None
+                bond_adj = None
+                bond_len = None
 
             xyz.requires_grad = True
 
             if self.graph_batching:
-                u_pred = self.model(r=r, xyz=xyz, a=a, N=N, bonda=bonda, bondlen=bondlen) 
+                u_pred = self.model(r=r, xyz=xyz, a=a, N=N, bond_adj=bond_adj, bond_len=bond_len) 
             else:
-                u_pred = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3), bonda=bonda, bondlen=bondlen)
+                u_pred = self.model(r=r.reshape(-1, N[0]), xyz=xyz.reshape(-1, N[0], 3), bond_adj=bond_adj, bond_len=bond_len)
                 
             f_pred = -compute_grad(inputs=xyz, output=u_pred).reshape(-1)
 
@@ -344,33 +327,42 @@ class ModelPrior():
         self.forcesmae = np.abs(self.predictedforces - self.targetforces).mean()
         self.energiesmae = np.abs(self.predictedenergies - self.targetenergies).mean()
         
-        f = plt.figure(figsize=(13,6))
-        ax = f.add_subplot(121)
-        ax.set_title("force components validation")
-        ax2 = f.add_subplot(122)
-        ax2.set_title("energies validation")
-
-        ax.scatter(self.targetforces , self.predictedforces, label="force MAE: " + str(self.forcesmae) + " kcal/mol A" , alpha=0.3, s=6)
-        ax.set_xlabel("test")
-        ax.set_ylabel("prediction")
-        ax.legend()
-        ax2.scatter(self.targetenergies, self.predictedenergies, label="energy MAE: " + str(self.energiesmae) + " kcal/mol",  alpha=0.3, s=6)
-        ax2.set_xlabel("test")
-        ax2.set_ylabel("prediction")
-        ax2.legend()
-
-        now = datetime.datetime.now()
-
-        f.suptitle(",".join(species_trained[:3])+"validations", fontsize=14)
-        plt.savefig(self.root + str(self.job_name)+"/" +"&".join(species_trained[:3]) + "-" + str(now.month)+"-"+
-                    str(now.day)+"-"+str(now.hour)+"-"+str(now.minute) + "validation.jpg")
 
         print("forcesmae", self.forcesmae, "kcal/mol A")
         print("energiesmae", self.energiesmae, "kcal/mol")
        
+    def plot_results(self):
+        fig, ax = plt.subplots(1, 2, figsize=(13,6))
+
+        ax[0].set_title("Energies (validation)")
+        ax[1].set_title("Forces (validation)")
+    
+        ax[1].scatter(self.targetforces,
+                   self.predictedforces,
+                   label="force MAE: " + str(self.forcesmae) + " kcal/mol A",
+                   alpha=0.3,
+                   s=6)
+
+        ax[1].set_xlabel("test")
+        ax[1].set_ylabel("prediction")
+        ax[1].legend()
+
+        ax[0].scatter(self.targetenergies, self.predictedenergies, label="energy MAE: " + str(self.energiesmae) + " kcal/mol",  alpha=0.3, s=6)
+        ax[0].set_xlabel("test")
+        ax2.set_ylabel("prediction")
+        ax2.legend()
+    
+        now = datetime.datetime.now()
+        timestamp = now.strftime('%Y%m%d-%H%M')
+    
+        f.suptitle(",".join(species_trained[:3])+"validations", fontsize=14)
+
+        if savefig:
+            plt.savefig(self.root + str(self.job_name)+"/" +"&".join(species_trained[:3]) + timestamp + "validation.jpg")
+
     def save_model(self, save_path=None):
         if save_path is None:
-            self.model_path = self.dir_loc + "/model.pt"
+            self.model_path = os.path.join(self.dir_loc, "model.pt")
             torch.save(self.model.state_dict(), self.model_path)
         else:
             torch.save(self.model.state_dict(), save_path)
@@ -389,36 +381,6 @@ class ModelPrior():
     def load_train_log(self):
         log = np.loadtxt(self.dir_loc + "/log.csv", delimiter=",")
         return log
-
-    def check_convergence(self):
-        """function to check convergences, currently only check for the convergences of the forces 
-        
-        Args:
-            epoch (int): 
-        
-        Returns:
-            Boolean: True if training converged
-        """
-        eps = self.par["eps"] # convergence tolerence 
-        patience = 50 # make patience tunable
-
-        # compute improvement by running averages of the sume of energy and force mae 
-        if len(self.train_f_log) > patience * 2:
-            loss_prev = np.array(self.train_f_log[-patience * 2: -patience:]) + np.array(self.train_u_log[-patience * 2: -patience:])
-            loss_current = np.array(self.train_f_log[-patience:]) + np.array(self.train_u_log[-patience:])
-
-            dif = (loss_prev - loss_current).mean()
-            improvement = dif / loss_prev.mean()
-
-            if improvement < eps and improvement>= 0.0:
-                converge = True
-            else: 
-                converge = False
-            #print(improvement)
-        else:
-            converge = False 
-
-        return converge
 
     def save_summary(self):
         # the final test loss, number of epochs trained

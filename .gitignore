@@ -51,3 +51,4 @@ __pycache__
 
 # log directory 
 log/
+*/log/
