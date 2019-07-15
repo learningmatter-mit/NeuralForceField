@@ -4,8 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from nff.nn.layers import * 
-from nff.utils.scatter import * 
+from nff.nn.layers import Dense, GaussianSmearing
+from nff.utils.scatter import scatter_add
 
 class GraphDis(torch.nn.Module):
 

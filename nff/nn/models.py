@@ -4,9 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from nff.nn.layers import * 
+from nff.nn.layers import Dense, GaussianSmearing
 from nff.nn.module import GraphDis
-from nff.utils.scatter import * 
 
 class Net(nn.Module):
 
