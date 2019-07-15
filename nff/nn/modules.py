@@ -1,16 +1,11 @@
-from torch.nn import functional as F
-import torch
 import numpy as np
-from torch.autograd import Variable
-import torch.nn as nn
-from torch.nn import Parameter
-import torch.nn.functional as F
-from torch.autograd.gradcheck import zero_gradients
-from torch.autograd import grad
-from torch.nn import RReLU
 
-from .layers import * 
-from .scatter import * 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from nff.nn.layers import * 
+from nff.utils.scatter import * 
 
 class GraphDis(torch.nn.Module):
 
@@ -127,26 +122,49 @@ class InteractionBlock(nn.Module):
         avg_flag (Boolean): if True, perform a mean pooling 
         Dense1 (Dense()): dense layer 1 to obtain the updated atomic embedding 
         Dense2 (Dense()): dense layer 2 to obtain the updated atomic embedding
-        DistanceFilter1 (Dense()): dense layer 1 for filtering gaussian expanded distances 
-        DistanceFilter2 (Dense()): dense layer 1 for filtering gaussian expanded distances 
-        smearing (GaussianSmearing()): gaussian basis expansion for distance matrix of dimension B, N, N, 1
-        smearing_graph (GaussianSmearing()): gaussian basis expansion for distance list of dimension N, N_nbh, 1
+        DistanceFilter1 (Dense()): dense layer 1 for filtering gaussian
+            expanded distances 
+        DistanceFilter2 (Dense()): dense layer 1 for filtering gaussian
+            expanded distances 
+        smearing (GaussianSmearing()): gaussian basis expansion for distance 
+            matrix of dimension B, N, N, 1
+        smearing_graph (GaussianSmearing()): gaussian basis expansion for
+            distance list of dimension N, N_nbh, 1
     """
     
     def __init__(self, n_atom_basis, n_filters, n_gaussians, cutoff_soft, trainable_gauss, avg_flag=False):
         super(InteractionBlock, self).__init__()
 
         self.avg_flag = avg_flag
-        self.smearing = GaussianSmearing(start=0.0, stop=cutoff_soft,
-                                         n_gaussians=n_gaussians, trainable=trainable_gauss)
-        self.smearing_graph = GaussianSmearing(start=0.0, stop=cutoff_soft,
-                                         n_gaussians=n_gaussians, trainable=trainable_gauss, graph=True)
+        self.smearing = GaussianSmearing(start=0.0,
+                                         stop=cutoff_soft,
+                                         n_gaussians=n_gaussians,
+                                         trainable=trainable_gauss)
 
-        self.DistanceFilter1 = Dense(in_features= n_gaussians, out_features=n_gaussians, activation=shifted_softplus)
-        self.DistanceFilter2 = Dense(in_features= n_gaussians, out_features=n_filters)
-        self.AtomFilter = Dense(in_features=n_atom_basis, out_features=n_filters, bias=False)
-        self.Dense1 = Dense(in_features=n_filters, out_features= n_atom_basis, activation=shifted_softplus)
-        self.Dense2 = Dense(in_features=n_atom_basis, out_features= n_atom_basis, activation=None)
+        self.smearing_graph = GaussianSmearing(start=0.0,
+                                               stop=cutoff_soft,
+                                               n_gaussians=n_gaussians,
+                                               trainable=trainable_gauss,
+                                               graph=True)
+
+        self.DistanceFilter1 = Dense(in_features=n_gaussians,
+                                     out_features=n_gaussians,
+                                     activation=shifted_softplus)
+
+        self.DistanceFilter2 = Dense(in_features=n_gaussians,
+                                     out_features=n_filters)
+
+        self.AtomFilter = Dense(in_features=n_atom_basis,
+                                out_features=n_filters,
+                                bias=False)
+
+        self.Dense1 = Dense(in_features=n_filters,
+                            out_features= n_atom_basis,
+                            activation=shifted_softplus)
+
+        self.Dense2 = Dense(in_features=n_atom_basis,
+                            out_features= n_atom_basis,
+                            activation=None)
         
     def forward(self, r, e, A=None, a=None):       
         if a is None: # non-batch case ...
@@ -160,6 +178,7 @@ class InteractionBlock(nn.Module):
             #e = self.smearing(e.reshape(-1, r.shape[1], r.shape[1]))
             #--------------------BUGGY--------------------
 
+            # WUJIE
             #-----------------TEMP FIX--------------------
             offsets = self.smearing_graph.offsets
             widths = self.smearing_graph.width
@@ -214,18 +233,16 @@ class InteractionBlock(nn.Module):
 
         return y
         
-class graph_attention(nn.Module):
+class GraphAttention(nn.Module):
     def __init__(self, n_atom_basis):
-        super(graph_attention, self).__init__()
+        super(GraphAttention, self).__init__()
         
         self.n_atom_basis = n_atom_basis
-        self.W = nn.Linear(n_atom_basis, n_atom_basis)#Parameter(torch.Tensor(n_atom_basis, n_atom_basis))
-        self.a = nn.Linear(2 * n_atom_basis, 1)#Parameter(torch.rand(2 * n_atom_basis, 1))
-        self.LeakyRelu = RReLU()
+        self.W = nn.Linear(n_atom_basis, n_atom_basis)
+        self.a = nn.Linear(2 * n_atom_basis, 1)
+        self.LeakyRelu = nn.RReLU()
         
     def forward(self, h, A):
-        #print(A.shape)
-        
         n_atom_basis = self.n_atom_basis
         B = h.shape[0]
         N_atom = h.shape[1]
@@ -233,12 +250,12 @@ class graph_attention(nn.Module):
         hi = h[:, :, None, :].expand(B, N_atom, N_atom, n_atom_basis)
         hj = h[:, None, : ,:].expand(B, N_atom, N_atom, n_atom_basis)
 
-        hi = self.W(hi) #hi.matmul(self.W)
-        hj = self.W(hj) #hj.matmul(self.W)
+        hi = self.W(hi)
+        hj = self.W(hj)
 
         # attention is directional, the attention i->j is different from j -> i
         hij = torch.cat((hi, hj), dim=3)
-        hij = self.a(hij) #self.LeakyRelu(self.a(hij))
+        hij = self.a(hij)
         
         # construct attention vector using softmax
         alpha = (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1))
