@@ -3,7 +3,7 @@ import numpy as np
 
 from sklearn.utils import shuffle as skshuffle
 
-from graphbuilder import Graph, GraphDataset
+from graphbuilder.graphbuilder import Graph, GraphDataset
 
 
 HARTREE_TO_KCAL_MOL = 627.509
@@ -43,10 +43,10 @@ class Dataset:
                 They will be converted to kcal/mol.
         """
 
-        self.nxyz = array_type(nxyz)
-        self.energy = array_type(energy)
-        self.force = array_type(force)
-        self.smiles = array_type(smiles)
+        self.nxyz = self.array_type(nxyz)
+        self.energy = self.array_type(energy)
+        self.force = self.array_type(force)
+        self.smiles = self.array_type(smiles)
 
         if atomic_units:
             units_to_kcal_mol()
@@ -103,7 +103,7 @@ class Dataset:
         return graph_data
     
     def shuffle(self):
-        self.nxyz, self.forces, self.energies, self.smiles = skshuffle(
-            self.nxyz, self.forces, self.energies, self.smiles
+        self.nxyz, self.force, self.energy, self.smiles = skshuffle(
+            self.nxyz, self.force, self.energy, self.smiles
         )
-        return shuffled_dataset
+        return 
