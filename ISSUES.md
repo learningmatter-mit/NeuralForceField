@@ -3,3 +3,13 @@
     - Fr = 4
     - adj_dict
     - nforce
+- models:
+    - NetAttention
+- train:
+    - attention.py?
+- MD.py:
+    - helper functions?
+    - comments
+    - NVT_MD or NVT
+    - docstrings
+    
