@@ -1,0 +1,5 @@
+- scatter.py: gen function?
+- graph.py:
+    - Fr = 4
+    - adj_dict
+    - nforce
