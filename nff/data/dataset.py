@@ -5,10 +5,7 @@ from sklearn.utils import shuffle as skshuffle
 
 from graphbuilder.graphbuilder import Graph, GraphDataset
 
-
-HARTREE_TO_KCAL_MOL = 627.509
-BOHR_RADIUS = 0.529177
-
+import nff.utils.constants as const
 
 class Dataset:
     """Dataset to deal with NFF calculations. Can be expanded to retrieve calculations
@@ -54,8 +51,8 @@ class Dataset:
     def units_to_kcal_mol(self):
         """Converts forces and energies from atomic units to kcal/mol."""
     
-        self.force = self.force * HARTREE_TO_KCAL_MOL / BOHR_RADIUS
-        self.energy = self.energy * HARTREE_TO_KCAL_MOL 
+        self.force = self.force * const.HARTREE_TO_KCAL_MOL / const.BOHR_RADIUS
+        self.energy = self.energy * const.HARTREE_TO_KCAL_MOL 
     
     def to_graph_dataset(self, batch_size, cutoff, atomic_units=False, dynamic_adj_mat=True):
         """Loads the dataset under consideration.
