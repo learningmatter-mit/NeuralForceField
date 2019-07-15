@@ -1,17 +1,8 @@
 import os 
 import numpy as np
-import torch
-from torch.autograd import Variable
 
 import ase
-from ase.calculators.calculator import Calculator, all_changes
-from ase.lattice.cubic import FaceCenteredCubic
-from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
-from ase.md.verlet import VelocityVerlet
-from ase import units
-from ase import Atoms
-from ase.units import Bohr, Rydberg, kJ, kB, fs, Hartree, mol, kcal
-from ase.md.md import MolecularDynamics
+from ase import Atoms, units
 
 from nff.utils.scatter import compute_grad
 from nff.data.graphs import *
@@ -29,8 +20,8 @@ def xyz_to_atoms(atomic_number, xyz):
 
 def get_energy(atoms):
     """Function to print the potential, kinetic and total energy""" 
-    epot = atoms.get_potential_energy() #/ len(atoms)
-    ekin = atoms.get_kinetic_energy() #/ len(atoms)
+    epot = atoms.get_potential_energy() * const.EV_TO_KCAL_MOL#/ len(atoms)
+    ekin = atoms.get_kinetic_energy() * const.EV_TO_KCAL_MOL #/ len(atoms)
     Temperature = ekin / (1.5 * units.kB * len(atoms))
 
     # compute kinetic energy by hand 
@@ -43,10 +34,10 @@ def get_energy(atoms):
     #ekin = ekin.detach().numpy()
 
     print('Energy per atom: Epot = %.2fkcal/mol  Ekin = %.2fkcal/mol (T=%3.0fK)  '
-         'Etot = %.2fkcal/mol' % (epot * ev_to_kcal, ekin * ev_to_kcal, Temperature, (epot + ekin) * ev_to_kcal))
+         'Etot = %.2fkcal/mol' % (epot, ekin, Temperature, epot + ekin))
     # print('Energy per atom: Epot = %.5feV  Ekin = %.5feV (T=%3.0fK)  '
     #      'Etot = %.5feV' % (epot, ekin, Temperature, (epot + ekin)))
-    return epot * ev_to_kcal, ekin * ev_to_kcal, Temperature
+    return epot, ekin, Temperature
 
 
 def write_traj(filename, frames):
