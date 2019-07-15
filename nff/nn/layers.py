@@ -1,15 +1,12 @@
-from torch.nn import functional as F
-import torch
 import numpy as np
-from torch.autograd import Variable
-import torch.nn as nn
-from torch.nn import Parameter
-import torch.nn.functional as F
-from torch.autograd.gradcheck import zero_gradients
-
-from torch.nn.init import xavier_uniform_
 from functools import partial
-from torch.nn.init import constant_
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.nn import Parameter
+from torch.nn.init import xavier_uniform_, constant_
+
 zeros_initializer = partial(constant_, val=0.)
 
 
