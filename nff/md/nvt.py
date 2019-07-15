@@ -4,7 +4,7 @@ import numpy as np
 from ase.md.md import MolecularDynamics
 
 
-class NVT(MolecularDynamics):
+class NoseHoover(MolecularDynamics):
     def __init__(self,
                  atoms,
                  timestep,

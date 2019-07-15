@@ -9,6 +9,7 @@ from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
 
 import nff.utils.constants as const
+from nff.md.utils import xyz_to_atoms
 from nff.md.neuralmd import NeuralMD
 
 
@@ -57,27 +58,20 @@ def NVE(species,
     batch_size= xyz.shape[0]
 
     xyz = xyz.reshape(N_atom * batch_size, 3)
-    r = r.reshape(-1)
+    r = r.reshape(-1).astype(int)
 
-    try:
-        r = r.astype(int)
-    except:
-        raise ValueError("Z is not an array of integers")
-
-    structure = mol_state(r=r,xyz=xyz)
-
-    if bond_adj is not None and bond_len is not None:
-        structure.set_calculator(NeuralMD(model=model, device=device, N_atom=N_atom, bond_adj=bond_adj, bond_len=bond_len))
-    else:
-        structure.set_calculator(NeuralMD(model=model, device=device, N_atom=N_atom))
+    structure = xyz_to_atoms(atomic_number=r,xyz=xyz)
+    structure.set_calculator(NeuralMD(model=model, device=device, N_atom=N_atom, bond_adj=bond_adj, bond_len=bond_len))
 
     # Here set PBC box dimension 
 
 
     # Set the momenta corresponding to T= 0.0 K
     MaxwellBoltzmannDistribution(structure, T * units.kB)
+
     # We want to run MD with constant energy using the VelocityVerlet algorithm.
     dyn = VelocityVerlet(structure, dt * units.fs)
+
     # Now run the dynamics
     traj = []
     force_traj = []

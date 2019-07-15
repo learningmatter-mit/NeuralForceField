@@ -18,11 +18,11 @@ from nff.data.graphs import *
 import nff.utils.constants as const
 
 
-def mol_state(r, xyz):
+def xyz_to_atoms(atomic_number, xyz):
     mass = [const.ATOMIC_MASS[item] for item in r]
-    atom = "C" * r.shape[0] # intialize Atom()
+    atom = "C" * atomic_number.shape[0] # intialize Atom()
     structure = Atoms(atom, positions=xyz, cell=[20.0, 20.0, 20.0], pbc=True)
-    structure.set_atomic_numbers(r)
+    structure.set_atomic_numbers(atomic_number)
     structure.set_masses(mass)    
     return structure
 
