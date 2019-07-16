@@ -2,12 +2,13 @@ import torch
 import numpy as np 
 
 from sklearn.utils import shuffle as skshuffle
+from torch.utils.data import Dataset
 
 from graphbuilder.graphbuilder import Graph, GraphDataset
 
 import nff.utils.constants as const
 
-class Dataset:
+class Dataset(Dataset):
     """Dataset to deal with NFF calculations. Can be expanded to retrieve calculations
          from the cluster later.
 
@@ -40,6 +41,11 @@ class Dataset:
                 They will be converted to kcal/mol.
         """
 
+        assert all([
+            len(l) == len(nxyz)
+            for l in [energy, force, smiles]
+        ]), 'All lists should have the same length.'
+
         self.nxyz = self.array_type(nxyz)
         self.energy = self.array_type(energy)
         self.force = self.array_type(force)
@@ -48,56 +54,17 @@ class Dataset:
         if atomic_units:
             units_to_kcal_mol()
 
+    def __len__(self):
+        return len(sel.nxyz)
+
+    def __getitem__(self, idx):
+        return self.nxyz[idx], self.energy[idx], self.force[idx], self.smiles[idx]
+    
     def units_to_kcal_mol(self):
         """Converts forces and energies from atomic units to kcal/mol."""
     
         self.force = self.force * const.HARTREE_TO_KCAL_MOL / const.BOHR_RADIUS
         self.energy = self.energy * const.HARTREE_TO_KCAL_MOL 
-    
-    def to_graph_dataset(self, batch_size, cutoff, atomic_units=False, dynamic_adj_mat=True):
-        """Loads the dataset under consideration.
-    
-        Args:
-            dataset (dict of lists): dicionary containing the xyz, forces, energy, smiles
-            batch_size (int): size of the batch
-            atomic_units (bool): if True, convert the input units from atomic units to kcal/mol
-            dynamic_adj_mat (bool): if True, WUJIE
-    
-        Returns:
-        """
-    
-        self.shuffle()
-        energy_mean = self.energy.mean()
-    
-        graph_data = GraphDataset(dynamic_adj_mat=dynamic_adj_mat)
-    
-        for index in range(len(energy_data)):
-            nxyz = self.nxyz[index]
-            force = self.force[index]
-            energy = self.energy[index]
-            species = self.smiles[index]
-    
-            number = self.nxyz[:, 0].reshape(-1, 1)
-            graph = Graph(N=number.shape[0],
-                          dynamic_adj_mat=dynamic_adj_mat,
-                          name=species)
-    
-            nforce = np.hstack((number, self.force))
-            graph.SetNodeLabels(r=torch.Tensor(nforce))
-            graph.SetXYZ(xyz=torch.Tensor(self.nxyz[:, 1:4]))
-            graph.UpdateConnectivity(cutoff=cutoff)
-            graph.SetEdgeLabels()
-            graph.LabelEdgesWithDistances()
-            graph.SetGraphLabel(torch.Tensor([energy]))
-    
-            # WUJIE: adj_dict
-    
-            graph_data.AddGraph(graph)
-    
-        graph_data.CreateBatches(batch_size=batch_size, verbose=False)
-        graph_data.set_label_mean(energy_mean)
-    
-        return graph_data
     
     def shuffle(self):
         self.nxyz, self.force, self.energy, self.smiles = skshuffle(
