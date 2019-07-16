@@ -9,6 +9,7 @@ import sys
 import numpy as np
 import torch
 
+from nff.utils.scatter import compute_grad
 
 class Trainer:
     r"""Class to train a model.
@@ -133,6 +134,79 @@ class Trainer:
             self.checkpoint_path, "checkpoint-" + str(epoch) + ".pth.tar"
         )
         self.state_dict = torch.load(chkpt)
+
+    
+    def train(self, device, N_epoch):
+        """Summary
+        
+        Args:
+            N_epoch (int): number of epoches to be trained 
+        """
+
+        self.start_time = time.time()
+
+        for epoch in range(n_epochs):
+
+            train_energiesmae = 0.0
+            train_forcesmae = 0.0
+            
+            for batch in self.train_loader:
+
+                xyz, a, bond_adj, bond_len, r, f, u, N = batch
+                xyz.requires_grad = True
+
+                U = self.model(
+                    r=r,
+                    bond_adj=bond_adj,
+                    bond_len=bond_len,
+                    xyz=xyz,
+                    a=a,
+                    N=N
+                ) 
+
+                f_pred = -compute_grad(inputs=xyz, output=U)
+
+                # comput loss
+                loss_force = self.criterion(f_pred, f)
+                loss_u = self.criterion(U, u)
+                loss = loss_force + self.par["rho"] * loss_u
+
+                # update parameters
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+
+                # compute MAE
+                train_energiesmae += self.mae(U, u) # compute MAE
+                train_forcesmae += self.mae(f_pred, f)
+
+            # averaging MAE
+
+            train_u = train_energiesmae.item()/self.N_train
+            train_force = train_forcesmae.item()/self.N_train
+
+            self.train_u_log.append(train_u)
+            self.train_f_log.append(train_force)
+            
+            # scheduler
+            if self.par["scheduler"]:
+                self.scheduler.step(train_force)
+            else:
+                pass
+
+            # print loss
+            print("epoch %d  U train: %.3f  force train %.3f" % (epoch, train_u, train_force))
+
+            self.time_elapsed = time.time() - self.start_time
+
+            # check convergence 
+            current_lr = self.optimizer.param_groups[0]["lr"]
+            if current_lr <= 1.5e-7:
+                print("training converged")
+                break
+
+        #self.save_model()
+        self.save_train_log()
 
     def train(self, device, n_epochs=sys.maxsize):
         """Train the model for the given number of epochs on a specified device.

@@ -59,9 +59,11 @@ class Net(nn.Module):
     def forward(self, r, xyz, a=None, N=None):
 
         # tensor inputs
-        if a is None:
-            assert len(r.shape) == 2
-            assert len(xyz.shape) == 3
+        #if a is None:
+        # WUJIE: explain and refactor these functions
+        if len(set(N)) == 1:
+            r = r.reshape(-1, N[0])
+            xyz = xyz.reshape(-1, N[0], 3)
 
             r, e, A = self.graph_dis(r=r, xyz=xyz)
             r = self.atomEmbed(r.type(torch.long))
@@ -99,6 +101,7 @@ class Net(nn.Module):
 
             E_batch = list(torch.split(r, N))
 
+            # WUJIE
             for b in range(len(N)): 
                 E_batch[b] = torch.sum(E_batch[b], dim=0)
             

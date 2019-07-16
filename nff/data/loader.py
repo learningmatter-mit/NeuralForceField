@@ -65,19 +65,22 @@ class Loader:
             TYPE: Description
         """
 
-        a = data.batches[idx].data["a"].to(self.device)
-        r = data.batches[idx].data["r"][:, [0]].to(self.device)
-        f = data.batches[idx].data["r"][:, 1:4].to(self.device)
-        u = data.batches[idx].data["y"].to(self.device)
-        N = data.batches[idx].data["N"]
-        xyz = data.batches[index].data["xyz"].to(self.device)
+        a = self.graph_dataset.batches[idx].data['a'].to(self.device)
+        r = self.graph_dataset.batches[idx].data['r'][:, [0]].to(self.device)
+        f = self.graph_dataset.batches[idx].data['r'][:, 1:4].to(self.device)
+        u = self.graph_dataset.batches[idx].data['y'].to(self.device)
+        N = self.graph_dataset.batches[idx].data['N']
+        xyz = self.graph_dataset.batches[index].data['xyz'].to(self.device)
 
-        try: # try to get bond adjacency matrix 
-            bond_adj = data.batches[index].data["bond_a"].to(self.device)
-            bond_len = data.batches[index].data["bond_len"].to(self.device)
-            return xyz, a, bond_adj, bond_len, r, f, u, N
-        except:
-            return xyz, a, r, f, u, N
+        bond_adj = self.graph_dataset.batches[index].data.get('bond_a', None)
+        if bond_adj is not None:
+            bond_adj.to(self.device)
+
+        bond_len = self.graph_dataset.batches[index].data.get('bond_len', None)
+        if bond_len is not None:
+            bond_len.to(self.device)
+
+        return xyz, a, bond_adj, bond_len, r, f, u, N
 
     def __iter__(self):
         self.iter_n = 0
