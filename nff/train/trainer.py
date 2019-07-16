@@ -1,7 +1,6 @@
 """This file provides a trainer wrapper for the neural force field.
 
-Copyright: Kristof Schuett
-https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/train/trainer.py
+Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/train/trainer.py
 """
 
 import os
@@ -10,6 +9,9 @@ import numpy as np
 import torch
 
 from nff.utils.scatter import compute_grad
+
+
+MAX_EPOCHS = 100
 
 class Trainer:
     r"""Class to train a model.
@@ -24,7 +26,7 @@ class Trainer:
        optimizer (torch.optim.optimizer.Optimizer): training optimizer.
        train_loader (torch.utils.data.DataLoader): data loader for training set.
        validation_loader (torch.utils.data.DataLoader): data loader for validation set.
-       keep_n_checkpoints (int, optional): number of saved checkpoints.
+       checkpoints_to_keep (int, optional): number of saved checkpoints.
        checkpoint_interval (int, optional): intervals after which checkpoints is saved.
        hooks (list, optional): hooks to customize training process.
        loss_is_normalized (bool, optional): if True, the loss per data point will be
@@ -40,7 +42,7 @@ class Trainer:
         optimizer,
         train_loader,
         validation_loader,
-        keep_n_checkpoints=3,
+        checkpoints_to_keep=3,
         checkpoint_interval=10,
         validation_interval=1,
         hooks=[],
@@ -52,7 +54,7 @@ class Trainer:
         self.train_loader = train_loader
         self.validation_loader = validation_loader
         self.validation_interval = validation_interval
-        self.keep_n_checkpoints = keep_n_checkpoints
+        self.checkpoints_to_keep = checkpoints_to_keep
         self.hooks = hooks
         self.loss_is_normalized = loss_is_normalized
 
@@ -114,10 +116,10 @@ class Trainer:
         torch.save(self.state_dict, chkpt)
 
         chpts = [f for f in os.listdir(self.checkpoint_path) if f.endswith(".pth.tar")]
-        if len(chpts) > self.keep_n_checkpoints:
+        if len(chpts) > self.checkpoints_to_keep:
             chpt_epochs = [int(f.split(".")[0].split("-")[-1]) for f in chpts]
             sidx = np.argsort(chpt_epochs)
-            for i in sidx[: -self.keep_n_checkpoints]:
+            for i in sidx[: -self.checkpoints_to_keep]:
                 os.remove(os.path.join(self.checkpoint_path, chpts[i]))
 
     def restore_checkpoint(self, epoch=None):
@@ -136,79 +138,17 @@ class Trainer:
         self.state_dict = torch.load(chkpt)
 
     
-    def train(self, device, N_epoch):
+    def train(self, device, n_epochs):
         """Summary
         
         Args:
             N_epoch (int): number of epoches to be trained 
         """
 
-        self.start_time = time.time()
+        self._model.to(device)
 
-        for epoch in range(n_epochs):
 
-            train_energiesmae = 0.0
-            train_forcesmae = 0.0
-            
-            for batch in self.train_loader:
-
-                xyz, a, bond_adj, bond_len, r, f, u, N = batch
-                xyz.requires_grad = True
-
-                U = self.model(
-                    r=r,
-                    bond_adj=bond_adj,
-                    bond_len=bond_len,
-                    xyz=xyz,
-                    a=a,
-                    N=N
-                ) 
-
-                f_pred = -compute_grad(inputs=xyz, output=U)
-
-                # comput loss
-                loss_force = self.criterion(f_pred, f)
-                loss_u = self.criterion(U, u)
-                loss = loss_force + self.par["rho"] * loss_u
-
-                # update parameters
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
-
-                # compute MAE
-                train_energiesmae += self.mae(U, u) # compute MAE
-                train_forcesmae += self.mae(f_pred, f)
-
-            # averaging MAE
-
-            train_u = train_energiesmae.item()/self.N_train
-            train_force = train_forcesmae.item()/self.N_train
-
-            self.train_u_log.append(train_u)
-            self.train_f_log.append(train_force)
-            
-            # scheduler
-            if self.par["scheduler"]:
-                self.scheduler.step(train_force)
-            else:
-                pass
-
-            # print loss
-            print("epoch %d  U train: %.3f  force train %.3f" % (epoch, train_u, train_force))
-
-            self.time_elapsed = time.time() - self.start_time
-
-            # check convergence 
-            current_lr = self.optimizer.param_groups[0]["lr"]
-            if current_lr <= 1.5e-7:
-                print("training converged")
-                break
-
-        #self.save_model()
-        self.save_train_log()
-
-    def train(self, device, n_epochs=sys.maxsize):
+    def train(self, device, n_epochs=MAX_EPOCHS):
         """Train the model for the given number of epochs on a specified device.
 
         Args:
@@ -226,8 +166,10 @@ class Trainer:
 
         try:
             for _ in range(n_epochs):
-                # increase number of epochs by 1
                 self.epoch += 1
+
+                energies_mae = 0.0
+                forces_mae = 0.0
 
                 for h in self.hooks:
                     h.on_epoch_begin(self)
@@ -235,29 +177,42 @@ class Trainer:
                 if self._stop:
                     break
 
-                # perform training epoch
-                #                if progress:
-                #                    train_iter = tqdm(self.train_loader)
-                #                else:
-                train_iter = self.train_loader
+                for batch in self.train_loader:
+                    xyz, a, bond_adj, bond_len, r, f, u, N = batch
+                    xyz.requires_grad = True
 
-                for train_batch in train_iter:
                     self.optimizer.zero_grad()
 
                     for h in self.hooks:
-                        h.on_batch_begin(self, train_batch)
+                        h.on_batch_begin(self, batch)
 
-                    # move input to gpu, if needed
-                    train_batch = {k: v.to(device) for k, v in train_batch.items()}
+                    energy = self.model(
+                        r=r,
+                        bond_adj=bond_adj,
+                        bond_len=bond_len,
+                        xyz=xyz,
+                        a=a,
+                        N=N
+                    ) 
 
-                    result = self._model(train_batch)
-                    loss = self.loss_fn(train_batch, result)
+                    f_pred = -compute_grad(inputs=xyz, output=energy)
+
+                    # comput loss
+                    loss_force = self.criterion(f_pred, f)
+                    loss_u = self.criterion(energy, u)
+                    loss = loss_force + self.par["rho"] * loss_u
+
+                    # update parameters
+                    loss.backward()
+                    self.optimizer.step()
+
+                    loss = self.loss_fn(batch, result)
                     loss.backward()
                     self.optimizer.step()
                     self.step += 1
 
                     for h in self.hooks:
-                        h.on_batch_end(self, train_batch, result, loss)
+                        h.on_batch_end(self, batch, result, loss)
 
                     if self._stop:
                         break
@@ -267,44 +222,7 @@ class Trainer:
 
                 # validation
                 if self.epoch % self.validation_interval == 0 or self._stop:
-                    for h in self.hooks:
-                        h.on_validation_begin(self)
-
-                    val_loss = 0.0
-                    n_val = 0
-                    for val_batch in self.validation_loader:
-                        # append batch_size
-                        vsize = list(val_batch.values())[0].size(0)
-                        n_val += vsize
-
-                        for h in self.hooks:
-                            h.on_validation_batch_begin(self)
-
-                        # move input to gpu, if needed
-                        val_batch = {k: v.to(device) for k, v in val_batch.items()}
-
-                        val_result = self._model(val_batch)
-                        val_batch_loss = (
-                            self.loss_fn(val_batch, val_result).data.cpu().numpy()
-                        )
-                        if self.loss_is_normalized:
-                            val_loss += val_batch_loss * vsize
-                        else:
-                            val_loss += val_batch_loss
-
-                        for h in self.hooks:
-                            h.on_validation_batch_end(self, val_batch, val_result)
-
-                    # weighted average over batches
-                    if self.loss_is_normalized:
-                        val_loss /= n_val
-
-                    if self.best_loss > val_loss:
-                        self.best_loss = val_loss
-                        torch.save(self._model, self.best_model)
-
-                    for h in self.hooks:
-                        h.on_validation_end(self, val_loss)
+                    self.validate()
 
                 for h in self.hooks:
                     h.on_epoch_end(self)
@@ -324,3 +242,67 @@ class Trainer:
                 h.on_train_failed(self)
 
             raise e
+
+    def validate(self):
+       """Validate the current state of the model using the validation set
+       """
+
+        for h in self.hooks:
+            h.on_validation_begin(self)
+
+        val_loss = 0.0
+        n_val = 0
+        for val_batch in self.validation_loader:
+            xyz, a, bond_adj, bond_len, r, f, u, N = val_batch
+            xyz.requires_grad = True
+
+            # append batch_size
+            vsize = list(val_batch.values())[0].size(0)
+            n_val += vsize
+
+            for h in self.hooks:
+                h.on_validation_batch_begin(self)
+
+            # move input to gpu, if needed
+
+            energy_nff = self.model(
+                r=r,
+                bond_adj=bond_adj,
+                bond_len=bond_len,
+                xyz=xyz,
+                a=a,
+                N=N
+            ) 
+
+            force_nff = -compute_grad(inputs=xyz, output=energy)
+
+            predictions = {'energy': energy_nff, 'force': force_nff}
+            target = {'energy': u, 'force': f}
+
+            # comput loss
+            loss_force = self.criterion(f_pred, f)
+            loss_u = self.criterion(energy, u)
+            loss = loss_force + self.par["rho"] * loss_u
+
+            val_batch_loss = (
+                self.loss_fn(target, predictions).data.cpu().numpy()
+            )
+
+            if self.loss_is_normalized:
+                val_loss += val_batch_loss * vsize
+            else:
+                val_loss += val_batch_loss
+
+            for h in self.hooks:
+                h.on_validation_batch_end(self, val_batch, val_result)
+
+        # weighted average over batches
+        if self.loss_is_normalized:
+            val_loss /= n_val
+
+        if self.best_loss > val_loss:
+            self.best_loss = val_loss
+            torch.save(self._model, self.best_model)
+
+        for h in self.hooks:
+            h.on_validation_end(self, val_loss)

@@ -7,7 +7,7 @@ from graphbuilder.graphbuilder import Graph, GraphDataset
 
 import nff.utils.constants as const
 
-class Loader:
+class GraphLoader:
     """Dataloader to deal with NFF calculations. Can be expanded to retrieve calculations
          from the cluster later.
 
