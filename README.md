@@ -38,7 +38,7 @@ clone graphbuilder (wujie branch)
 clone NeuralForceField Code (master branch)
 ```git clone git@github.mit.edu:MLMat/NeuralForceField.git```
 
-You will find two directories `NeuralForceField` and `graphbuilde`, and be sure to add them in your PYTHONPATH
+You will find two directories `NeuralForceField` and `graphbuilder`, and be sure to add them in your PYTHONPATH
 
 ##  Tutorial
 
