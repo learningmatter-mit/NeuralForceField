@@ -137,17 +137,6 @@ class Trainer:
         )
         self.state_dict = torch.load(chkpt)
 
-    
-    def train(self, device, n_epochs):
-        """Summary
-        
-        Args:
-            N_epoch (int): number of epoches to be trained 
-        """
-
-        self._model.to(device)
-
-
     def train(self, device, n_epochs=MAX_EPOCHS):
         """Train the model for the given number of epochs on a specified device.
 
@@ -186,7 +175,7 @@ class Trainer:
                     for h in self.hooks:
                         h.on_batch_begin(self, batch)
 
-                    energy = self.model(
+                    energy_nff = self.model(
                         r=r,
                         bond_adj=bond_adj,
                         bond_len=bond_len,
@@ -195,24 +184,18 @@ class Trainer:
                         N=N
                     ) 
 
-                    f_pred = -compute_grad(inputs=xyz, output=energy)
+                    force_nff = -compute_grad(inputs=xyz, output=energy)
+                    
+                    predictions = (energy_nff, force_nff)
+                    ground_truth = (u, f)
 
-                    # comput loss
-                    loss_force = self.criterion(f_pred, f)
-                    loss_u = self.criterion(energy, u)
-                    loss = loss_force + self.par["rho"] * loss_u
-
-                    # update parameters
-                    loss.backward()
-                    self.optimizer.step()
-
-                    loss = self.loss_fn(batch, result)
+                    loss = self.loss_fn(ground_truth, predictions)
                     loss.backward()
                     self.optimizer.step()
                     self.step += 1
 
                     for h in self.hooks:
-                        h.on_batch_end(self, batch, result, loss)
+                        h.on_batch_end(self, batch, predictions, loss)
 
                     if self._stop:
                         break
@@ -276,16 +259,11 @@ class Trainer:
 
             force_nff = -compute_grad(inputs=xyz, output=energy)
 
-            predictions = {'energy': energy_nff, 'force': force_nff}
-            target = {'energy': u, 'force': f}
-
-            # comput loss
-            loss_force = self.criterion(f_pred, f)
-            loss_u = self.criterion(energy, u)
-            loss = loss_force + self.par["rho"] * loss_u
+            predictions = (energy_nff, force_nff)
+            ground_truth = (e, f)
 
             val_batch_loss = (
-                self.loss_fn(target, predictions).data.cpu().numpy()
+                self.loss_fn(ground_truth, predictions).data.cpu().numpy()
             )
 
             if self.loss_is_normalized:
@@ -294,7 +272,7 @@ class Trainer:
                 val_loss += val_batch_loss
 
             for h in self.hooks:
-                h.on_validation_batch_end(self, val_batch, val_result)
+                h.on_validation_batch_end(self, val_batch, predictions)
 
         # weighted average over batches
         if self.loss_is_normalized:

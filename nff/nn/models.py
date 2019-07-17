@@ -123,7 +123,7 @@ class Net(nn.Module):
         
         # graph batch inputs
         else:
-            assert len(r.shape) == 2 #1
+            assert len(r.shape) == 2
             assert len(xyz.shape) == 2
             assert r.shape[0] == xyz.shape[0]
             assert len(a.shape) == 2
@@ -158,4 +158,4 @@ class Net(nn.Module):
                 for b in range(len(N)): 
                     E_batch[b] = torch.sum(E_batch[b], dim=0)
                 
-            return torch.stack(E_batch, dim=0)#torch.Tensor(E_batch)
+            return torch.stack(E_batch, dim=0)

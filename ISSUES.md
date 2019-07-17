@@ -1,15 +1,1 @@
-- scatter.py: gen function?
-- graph.py:
-    - Fr = 4
-    - adj_dict
-    - nforce
-- models:
-    - NetAttention
-- train:
-    - attention.py?
-- MD.py:
-    - helper functions?
-    - comments
-    - NVT_MD or NVT
-    - docstrings
-    
+- graphbuilder: is it possible to rebatch/shuffle the batches? Is it worth it? 
