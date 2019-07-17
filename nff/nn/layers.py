@@ -7,22 +7,10 @@ import torch.nn.functional as F
 from torch.nn import Parameter
 from torch.nn.init import xavier_uniform_, constant_
 
+from nff.nn.activations import shifted_softplus
+
+
 zeros_initializer = partial(constant_, val=0.)
-
-
-def shifted_softplus(x):
-    """
-    Shifted softplus activation function of the form:
-    :math:`y = ln( e^{-x} + 1 ) - ln(2)`
-
-    Args:
-        x (torch.Tensor): Input tensor
-
-    Returns:
-        torch.Tensor: Shifted softplus applied to x
-
-    """
-    return F.softplus(x) - np.log(2.0)
 
 
 def gaussian_smearing(distances, offset, widths, centered=False, graph_batch_flag=False):
