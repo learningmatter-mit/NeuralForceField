@@ -31,22 +31,24 @@ def gaussian_smearing(distances, offset, widths, centered=False, graph_batch_fla
         # Compute width of Gaussians (using an overlap of 1 STDDEV)
         # widths = offset[1] - offset[0]
         coeff = -0.5 / torch.pow(widths, 2)
-        # Use advanced indexing to compute the individual components
 
-        if graph_batch_flag is not True:
+        # Use advanced indexing to compute the individual components
+        if not graph_batch_flag:
             diff = distances[:, :, :, None] - offset[None, None, None, :]
         else:
             diff = distances - offset
+
     else:
         # If Gaussians are centered, use offsets to compute widths
         coeff = -0.5 / torch.pow(offset, 2)
+
         # If centered Gaussians are requested, don't substract anything
-        if graph_batch_flag is not True:
+        if not graph_batch_flag:
             diff = distances[:, :, :, None]
         else:
             diff = distances
-    # Compute and return Gaussians
 
+    # Compute and return Gaussians
     gauss = torch.exp(coeff * torch.pow(diff, 2))
 
     return gauss
@@ -89,7 +91,14 @@ class GaussianSmearing(nn.Module):
             torch.Tensor: Tensor of convolved distances.
 
         """
-        return gaussian_smearing(distances, self.offsets, self.width, centered=self.centered, graph_batch_flag=graph_batch_flag)
+        result = gaussian_smearing(distances,
+                                   self.offsets,
+                                   self.width,
+                                   centered=self.centered,
+                                   graph_batch_flag=graph_batch_flag)
+
+        return result
+
 
 class Dense(nn.Linear):
     """ Applies a dense layer with activation: :math:`y = activation(Wx + b)`
