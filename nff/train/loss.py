@@ -4,10 +4,6 @@ import torch
 __all__ = ["build_mse_loss"]
 
 
-class LossFnError(Exception):
-    pass
-
-
 def build_mse_loss(rho=1):
     """
     Build the mean squared error loss function.
