@@ -17,26 +17,33 @@ class GraphDis(torch.nn.Module):
     """Compute distance matrix on the fly 
     
     Attributes:
-        box_len (numpy.array): Length of the box, dim = (3, )
-        cutoff (float): cufoff 
-        device (int or str): GPU id or "cpu"
-        F (int): Fr + Fe
-        Fe (int): edge feature length
         Fr (int): node geature length
+        Fe (int): edge feature length
+        F (int): Fr + Fe
+        cutoff (float): cutoff for convolution
+        box_size (numpy.array): Length of the box, dim = (3, )
     """
     
-    def __init__(self, Fr, Fe, device, cutoff, box_len=None):
+    def __init__(
+        self,
+        Fr,
+        Fe,
+        cutoff,
+        device,
+        box_size=None
+    ):
         super(GraphDis, self).__init__()
 
         self.Fr = Fr
         self.Fe = Fe # include distance
         self.F = Fr + Fe
-        self.device = device
         self.cutoff = cutoff
-        if box_len is not None:
-            self.box_len = torch.Tensor(box_len).to(self.device)
+        self.device = device
+
+        if box_size is not None:
+            self.box_size = torch.Tensor(box_size)
         else:
-            self.box_len = None
+            self.box_size = None
     
     def get_bond_vector_matrix(self, frame):
         """A function to compute the distance matrix 
@@ -47,24 +54,22 @@ class GraphDis(torch.nn.Module):
         Returns:
             torch.FloatTensor: distance matrix of dim (B, N, N, 1)
         """
-        device = self.device
-        cutoff = self.cutoff
         
         N_atom = frame.shape[1]
         frame = frame.view(-1, N_atom, 1, 3)
         dis_mat = frame.expand(-1, N_atom, N_atom, 3) \
                 - frame.expand(-1, N_atom, N_atom, 3).transpose(1,2)
         
-        if self.box_len is not None:
+        if self.box_size is not None:
 
             # build minimum image convention 
-            box_len = self.box_len
-            mask_pos = dis_mat.ge(0.5 * box_len).type(torch.FloatTensor).to(self.device)
-            mask_neg = dis_mat.lt(-0.5 * box_len).type(torch.FloatTensor).to(self.device)
+            box_size = self.box_size
+            mask_pos = dis_mat.ge(0.5 * box_size).type(torch.FloatTensor).to(self.device)
+            mask_neg = dis_mat.lt(-0.5 * box_size).type(torch.FloatTensor).to(self.device)
             
             # modify distance 
-            dis_add = mask_neg * box_len
-            dis_sub = mask_pos * box_len
+            dis_add = mask_neg * box_size
+            dis_sub = mask_pos * box_size
             dis_mat = dis_mat + dis_add - dis_sub
         
         # create cutoff mask
@@ -73,7 +78,7 @@ class GraphDis(torch.nn.Module):
         dis_sq = dis_mat.pow(2).sum(3)
 
         # mask is a byte tensor of dim (B, N, N)
-        mask = (dis_sq <= cutoff ** 2) & (dis_sq != 0)
+        mask = (dis_sq <= self.cutoff ** 2) & (dis_sq != 0)
 
         A = mask.unsqueeze(3).type(torch.FloatTensor).to(self.device) #         
 
@@ -131,16 +136,16 @@ class InteractionBlock(nn.Module):
     """The convolution layer with filter. To be merged with GraphConv class.
     
     Attributes:
-        atom_filter (TYPE): Description
-        avg_flag (Boolean): if True, perform a mean pooling 
-        dense_1 (Dense()): dense layer 1 to obtain the updated atomic embedding 
-        dense_2 (Dense()): dense layer 2 to obtain the updated atomic embedding
-        distance_filter_1 (Dense()): dense layer 1 for filtering gaussian
+        atom_filter (Dense): Description
+        dense_1 (Dense): dense layer 1 to obtain the updated atomic embedding 
+        dense_2 (Dense): dense layer 2 to obtain the updated atomic embedding
+        distance_filter_1 (Dense): dense layer 1 for filtering gaussian
             expanded distances 
-        distance_filter_2 (Dense()): dense layer 1 for filtering gaussian
+        distance_filter_2 (Dense): dense layer 1 for filtering gaussian
             expanded distances 
-        smearing (GaussianSmearing()): gaussian basis expansion for distance 
+        smearing (GaussianSmearing): gaussian basis expansion for distance 
             matrix of dimension B, N, N, 1
+        mean_pooling (bool): if True, performs a mean pooling 
     """
     
     def __init__(
@@ -148,16 +153,16 @@ class InteractionBlock(nn.Module):
         n_atom_basis,
         n_filters,
         n_gaussians,
-        cutoff_soft,
+        cutoff,
         trainable_gauss,
-        avg_flag=False
+        mean_pooling=False
     ):
 
         super(InteractionBlock, self).__init__()
 
-        self.avg_flag = avg_flag
+        self.mean_pooling = mean_pooling
         self.smearing = GaussianSmearing(start=0.0,
-                                         stop=cutoff_soft,
+                                         stop=cutoff,
                                          n_gaussians=n_gaussians,
                                          trainable=trainable_gauss)
 
@@ -202,13 +207,10 @@ class InteractionBlock(nn.Module):
             y = y * W * A
 
             # Aggregate 
-            if self.avg_flag == False:
-                 # sum pooling 
-                y = y.sum(2)
-            else:
-                # mean pooling
+            if self.mean_pooling:
                 y = y * A.sum(2).reciprocal().expand_as(y) 
-                y = y.sum(2)
+            
+            y = y.sum(2)
             
         else:
             assert len(r.shape) == 2

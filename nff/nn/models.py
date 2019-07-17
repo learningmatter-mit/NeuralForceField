@@ -21,8 +21,8 @@ class Net(nn.Module):
             embedding vector of size n_atom_basis
         atomwise1 (Dense): dense layer 1 to compute energy
         atomwise2 (Dense): dense layer 2 to compute energy
-        bondenergy_graph (BondEnergModule): Description
-        bondenergy_sample (BondEnergyModule): Description
+        bond_energy_graph (BondEnergyModule): Description
+        bond_energy_sample (BondEnergyModule): Description
         bond_par (float): Description
         convolutions (torch.nn.ModuleList): include all the convolutions
         graph_dis (Graphdis): graph distance module to convert xyz inputs
@@ -34,21 +34,31 @@ class Net(nn.Module):
         n_atom_basis,
         n_filters,
         n_gaussians,
-        cutoff_soft,
-        device, 
-        T,
+        n_convolutions,
+        cutoff,
+        bond_par=50.0,
         trainable_gauss=False,
-        box_len=None,
-        avg_flag=False,
-        bond_par=50.0):
+        box_size=None,
+    ):
+        """Constructs a SchNet model.
+
+        Args:
+            n_atom_basis (int): dimension of atomic embeddings.
+            n_filters (int): dimension of filters.
+            n_gaussians (int): dimension of the gaussian basis.
+            n_convolutions (int): number of convolutions.
+            cutoff (float): soft cutoff radius for convolution.
+            bond_par (float):
+            trainable_gauss (bool): if True, make the Gaussian parameter trainable.
+            box_size (numpy.array): size of the box, dim = (3, )
+        """
 
         super(Net, self).__init__()
         
         self.graph_dis = GraphDis(Fr=1,
                                   Fe=1,
                                   cutoff=cutoff_soft,
-                                  box_len=box_len,
-                                  device=device)
+                                  box_size=box_size)
 
         self.convolutions = nn.ModuleList([
             InteractionBlock(n_atom_basis=n_atom_basis,
@@ -56,10 +66,11 @@ class Net(nn.Module):
                              n_gaussians=n_gaussians, 
                              cutoff_soft=cutoff_soft,
                              trainable_gauss=trainable_gauss)
-            for i in range(T)
+            for i in range(n_convolutions)
         ])
 
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
+
         self.atomwise1 = Dense(in_features=n_atom_basis,
                                out_features=int(n_atom_basis / 2),
                                activation=shifted_softplus)
@@ -67,8 +78,8 @@ class Net(nn.Module):
         self.atomwise2 = Dense(in_features=int(n_atom_basis / 2), out_features=1)
 
         # declare the bond energy module for two cases 
-        self.bondenergy_graph = BondEnergyModule(batch=True)
-        self.bondenergy_sample = BondEnergyModule(batch=False)
+        self.bond_energy_graph = BondEnergyModule(batch=True)
+        self.bond_energy_sample = BondEnergyModule(batch=False)
         self.bond_par = bond_par
         
     def forward(self, r, xyz, a=None, N=None, bond_adj=None, bond_len=None):
@@ -89,13 +100,11 @@ class Net(nn.Module):
         """
         # tensor inputs
 
-        bond_par = self.bond_par
-
         if a is None:
             assert len(r.shape) == 2
             assert len(xyz.shape) == 3
 
-            r, e ,A = self.graph_dis(r=r, xyz=xyz)
+            r, e, A = self.graph_dis(r=r, xyz=xyz)
 
             r = self.atom_embed(r.type(torch.long))
 
@@ -112,10 +121,10 @@ class Net(nn.Module):
             if bond_adj is not None and bond_len is not None:
                 assert bond_len.shape[1] == 1
 
-                ebond = self.bondenergy_sample(xyz=xyz,
+                ebond = self.bond_energy_sample(xyz=xyz,
                                                bond_adj=bond_adj,
                                                bond_len=bond_len,
-                                               bond_par=bond_par)
+                                               bond_par=self.bond_par)
 
                 ebond = ebond.sum(1)
                 return ebond + r.squeeze() 
@@ -129,8 +138,8 @@ class Net(nn.Module):
             assert r.shape[0] == xyz.shape[0]
             assert len(a.shape) == 2
 
-            if N == None:
-                raise ValueError("need to input N for graph partitioning within the batch")
+            if N is None:
+                raise ValueError("needs to input N for graph partitioning within the batch")
                 
             r = self.atom_embed(r.type(torch.long)).squeeze()
 
@@ -147,14 +156,15 @@ class Net(nn.Module):
 
             # bond energy computed as a physics prior 
             if bond_adj is not None and bond_len is not None:
-                ebond = self.bondenergy_graph(xyz=xyz,
-                                              bond_adj=bond_adj,
-                                              bond_len=bond_len,
-                                              bond_par=bond_par)
+                ebond = self.bond_energy_graph(xyz=xyz,
+                                               bond_adj=bond_adj,
+                                               bond_len=bond_len,
+                                               bond_par=bond_par)
 
                 ebond_batch = list(torch.split(ebond, N))
                 for b in range(len(N)): 
                     E_batch[b] = torch.sum(E_batch[b] + ebond_batch[b], dim=0)
+
             else:
                 for b in range(len(N)): 
                     E_batch[b] = torch.sum(E_batch[b], dim=0)
