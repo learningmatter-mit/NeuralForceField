@@ -6,6 +6,7 @@ import torch.nn.functional as F
 
 from nff.nn.layers import Dense, GaussianSmearing
 from nff.nn.module import GraphDis
+from nff.nn.activations import shifted_softplus
 
 class Net(nn.Module):
 
