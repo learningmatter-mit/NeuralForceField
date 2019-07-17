@@ -9,12 +9,12 @@ def compute_jacobian(inputs, output, device):
     """
         Compute Jacobians 
     Args:
-        inputs (torch.Tensor): N_in, 
-        output (torch.Tensor): N_in, N_out,
+        inputs (torch.Tensor): size (N_in, )
+        output (torch.Tensor): size (N_in, N_out, )
         device (torch.Tensor): integer
     
     Returns:
-        torch.Tensor: N_in, N_in, N_out
+        torch.Tensor: size (N_in, N_in, N_out)
     """
     assert inputs.requires_grad
 
@@ -37,16 +37,19 @@ def compute_jacobian(inputs, output, device):
 def compute_grad(inputs, output):
     '''
     Args:
-        inputs (torch.Tensor): N_in
-        output (torch.Tensor): the last dimension has to be 1
+        inputs (torch.Tensor): size (N_in, )
+        output (torch.Tensor): size (..., -1)
     
     Returns:
-        torch.Tensor: N_in
+        torch.Tensor: size (N_in, )
     '''
     assert inputs.requires_grad
     
-    gradspred, = grad(output, inputs, grad_outputs=output.data.new(output.shape).fill_(1),
-                   create_graph=True, retain_graph=True)
+    gradspred, = grad(output,
+                      inputs,
+                      grad_outputs=output.data.new(output.shape).fill_(1),
+                      create_graph=True,
+                      retain_graph=True)
     
     return gradspred
 
@@ -55,9 +58,9 @@ def compute_hess(inputs, output, device):
     Compute Hessians for arbitary model
     
     Args:
-        inputs (torch.Tensor): N_in
-        output (torch.Tensor): N_out
-        device (torch.Tensor): integer
+        inputs (torch.Tensor): size (N_in, )
+        output (torch.Tensor): size (N_out, )
+        device (torch.Tensor): int
     
     Returns:
         torch.Tensor: N_in, N_in, N_out
@@ -67,7 +70,7 @@ def compute_hess(inputs, output, device):
     
     return hess
 
-def Neural_hess(xyz, r, model, device, bonda=None, bondlen=None):
+def neural_hess(xyz, r, model, device, bond_adj=None, bond_len=None):
     """Compute Hessians for Net() model
 
     Args:
@@ -75,8 +78,8 @@ def Neural_hess(xyz, r, model, device, bonda=None, bondlen=None):
         r (torch.Tensor): atomic number Tensor
         model (callable): Net()
         device (integer): integer
-        bonda (None, optional): long tensor of dim (N_bond, 2)
-        bondlen (None, optional): float tensor (N_bond, 1)
+        bond_adj (None, optional): long tensor of dim (N_bond, 2)
+        bond_len (None, optional): float tensor (N_bond, 1)
     
     Returns:
         torch.Tensor: 3N_atom, 3N_atom, 1
@@ -91,7 +94,7 @@ def Neural_hess(xyz, r, model, device, bonda=None, bondlen=None):
     xyz_reshape.requires_grad = True
     
     xyz_input = xyz_reshape.reshape(-1, N_atom, 3)
-    U = model(r=r, xyz=xyz_input, bondlen=bondlen, bonda=bonda)
+    U = model(r=r, xyz=xyz_input, bond_len=bond_len, bond_adj=bond_adj)
 
     hess = compute_hess(inputs=xyz_reshape, output=U, device=device)
     
