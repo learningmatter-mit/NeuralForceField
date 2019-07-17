@@ -10,7 +10,7 @@ from ase.md.verlet import VelocityVerlet
 
 import nff.utils.constants as const
 from nff.md.utils import xyz_to_atoms
-from nff.md.neuralmd import NeuralMD
+from nff.io.ase import NeuralFF
 
 
 DEFAULT_TEMPERATURE = 450
@@ -61,7 +61,7 @@ def NVE(species,
     r = r.reshape(-1).astype(int)
 
     structure = xyz_to_atoms(atomic_number=r,xyz=xyz)
-    structure.set_calculator(NeuralMD(model=model, device=device, N_atom=N_atom, bond_adj=bond_adj, bond_len=bond_len))
+    structure.set_calculator(NeuralFF(model=model, device=device, N_atom=N_atom, bond_adj=bond_adj, bond_len=bond_len))
 
     # Here set PBC box dimension 
 

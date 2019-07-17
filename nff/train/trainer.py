@@ -227,8 +227,8 @@ class Trainer:
             raise e
 
     def validate(self):
-       """Validate the current state of the model using the validation set
-       """
+        """Validate the current state of the model using the validation set
+        """
 
         for h in self.hooks:
             h.on_validation_begin(self)

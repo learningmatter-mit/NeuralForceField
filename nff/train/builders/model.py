@@ -1,6 +1,6 @@
 import numpy as np
 
-from nff.train.builder import Builder
+from nff.train.builders import Builder
 from nff.nn.models import Net
 
 class ModelBuilder(Builder):
