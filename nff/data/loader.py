@@ -1,8 +1,8 @@
-import torch 
 import numpy as np 
 
 from sklearn.utils import shuffle as skshuffle
 
+import torch 
 from graphbuilder.graphbuilder import Graph, GraphDataset
 
 import nff.utils.constants as const
@@ -12,11 +12,15 @@ class GraphLoader:
          from the cluster later.
 
     Attributes:
-        nxyz (array): (N, 4) array with atomic number and xyz coordinates
-            for each of the N atoms
-        energy (array): (N, ) array with energies
-        force (array): (N, 3) array with forces
-        smiles (array): (N, ) array with SMILES strings
+        dataset (Dataset): dataset containing the information from htvs.
+        batch_size (int)
+        cutoff (float): if the distance between atoms is larger than
+            cutoff, they are considered disconnected.
+        device (int or 'cpu')
+        shuffle (bool): if True, shuffle the dataset before creating the batches.
+        dynamic_adj_mat (bool): if True, the Graphs are created with
+            dynamic adjacency matrices.
+        graph_dataset (GraphDataset): dataset from graphbuilder.
     """
 
 
@@ -29,16 +33,18 @@ class GraphLoader:
         shuffle=True,
         dynamic_adj_mat=True
     ):
-        """Constructor for Dataset class.
+        """Constructor for GraphLoader class. Creates and interfaces a
+            GraphDataset class from graphbuilder
 
         Args:
-            nxyz (array): (N, 4) array with atomic number and xyz coordinates
-                for each of the N atoms
-            energy (array): (N, ) array with energies
-            force (array): (N, 3) array with forces
-            smiles (array): (N, ) array with SMILES strings
-            atomic_units (bool): if True, input values are given in atomic units.
-                They will be converted to kcal/mol.
+            dataset (Dataset): dataset containing the information from htvs.
+            batch_size (int)
+            cutoff (float): if the distance between atoms is larger than
+                cutoff, they are considered disconnected.
+            device (int or 'cpu')
+            shuffle (bool): if True, shuffle the dataset before creating the batches.
+            dynamic_adj_mat (bool): if True, the Graphs are created with
+                dynamic adjacency matrices.
         """
 
         self.dataset = dataset
@@ -62,7 +68,14 @@ class GraphLoader:
             index (int): index of the batch in GraphDataset
         
         Returns:
-            TYPE: Description
+            xyz (torch.Tensor)
+            a (torch.Tensor)
+            bond_adj (torch.Tensor or None)
+            bond_len (torch.Tensor or None)
+            r (torch.Tensor) 
+            f (torch.Tensor)
+            u (torch.Tensor)
+            N (torch.Tensor)
         """
 
         a = self.graph_dataset.batches[idx].data['a'].to(self.device)
