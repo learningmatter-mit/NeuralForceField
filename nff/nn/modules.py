@@ -233,10 +233,6 @@ class GraphAttention(nn.Module):
         alpha = (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1))
         SUM = torch.sum( (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1)), dim=2)
         alpha = alpha/SUM.unsqueeze(2).expand_as(hij)
-    
-        # update node embeedings with attention vecotor 
-        #h_prime = self.W(h)#h.matmul(self.W)
-        #h_prime = (h_prime[:, None,  :, :].expand(B, N_atom, N_atom, n_atom_basis) * alpha).sum(2)
 
         h_prime = (h[:, None,  :, :].expand(B, N_atom, N_atom, n_atom_basis) * alpha).sum(2)
         
