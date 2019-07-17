@@ -7,19 +7,18 @@ from torch.autograd.gradcheck import zero_gradients
 
 def compute_jacobian(inputs, output, device):
     """
+        Compute Jacobians 
     Args:
-        inputs (torch.Tensor): some variable inputs of dimension (..., N).
-            Requires grad.
-        output (torch.Tensor): has the same dimension as inputs
-
+        inputs (torch.Tensor): N_in, 
+        output (torch.Tensor): N_in, N_out,
+        device (torch.Tensor): integer
+    
     Returns:
-        jacobian
+        torch.Tensor: N_in, N_in, N_out
     """
-
     assert inputs.requires_grad
 
     num_classes = output.size()[1] 
-    
     jacobian = torch.zeros(num_classes, *inputs.size())
     grad_output = torch.zeros(*output.size())
     if inputs.is_cuda:
@@ -35,44 +34,53 @@ def compute_jacobian(inputs, output, device):
 
     return torch.transpose(jacobian, dim0=0, dim1=1)
 
-
-def compute_gradient(inputs, output):
+def compute_grad(inputs, output):
     '''
     Args:
-        inputs (torch.Tensor): some variable inputs of dimension (..., N).
-            Requires gradients.
-        output (torch.Tensor): has the same dimension as inputs
-
+        inputs (torch.Tensor): N_in
+        output (torch.Tensor): the last dimension has to be 1
+    
     Returns:
-        grads_pred: gradients of every input with respect to output.
-            Has the same dimension as the input.
+        torch.Tensor: N_in
     '''
     assert inputs.requires_grad
     
-    grads_pred, = grad(output, inputs,
-                       grad_outputs=output.data.new(output.shape).fill_(1),
-                       create_graph=True, retain_graph=True)
+    gradspred, = grad(output, inputs, grad_outputs=output.data.new(output.shape).fill_(1),
+                   create_graph=True, retain_graph=True)
     
-    return grads_pred
+    return gradspred
 
-
-def compute_hessian(inputs, output, device):
+def compute_hess(inputs, output, device):
     '''
+    Compute Hessians for arbitary model
+    
     Args:
-        inputs (torch.Tensor): some variable inputs of dimension ( , N) that requires grad
-        output (torch.Tensor): scalar output
-
+        inputs (torch.Tensor): N_in
+        output (torch.Tensor): N_out
+        device (torch.Tensor): integer
+    
     Returns:
-        hess (torch.Tensor): Hessian of the output with respect to inputs. Has dimension (..., N, N).
+        torch.Tensor: N_in, N_in, N_out
     '''
     gradient = compute_grad(inputs, output)
     hess = compute_jacobian(inputs, gradient, device=device)
     
     return hess
 
+def Neural_hess(xyz, r, model, device, bonda=None, bondlen=None):
+    """Compute Hessians for Net() model
 
-def neural_hessian(xyz, r, model, device, bond_adj=None, bond_len=None):
+    Args:
+        xyz (torch.Tensor): xyz coorindates of dim (N_batch, N_atom, 3)
+        r (torch.Tensor): atomic number Tensor
+        model (callable): Net()
+        device (integer): integer
+        bonda (None, optional): long tensor of dim (N_bond, 2)
+        bondlen (None, optional): float tensor (N_bond, 1)
     
+    Returns:
+        torch.Tensor: 3N_atom, 3N_atom, 1
+    """
     assert len(xyz.shape) == 3
     assert len(r.shape) == 2
     assert xyz.shape[0] == r.shape[0]
@@ -83,7 +91,7 @@ def neural_hessian(xyz, r, model, device, bond_adj=None, bond_len=None):
     xyz_reshape.requires_grad = True
     
     xyz_input = xyz_reshape.reshape(-1, N_atom, 3)
-    U = model(r=r, xyz=xyz_input, bond_len=bond_len, bond_adj=bond_adj)
+    U = model(r=r, xyz=xyz_input, bondlen=bondlen, bonda=bonda)
 
     hess = compute_hess(inputs=xyz_reshape, output=U, device=device)
     

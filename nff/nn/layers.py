@@ -25,28 +25,15 @@ def shifted_softplus(x):
     return F.softplus(x) - np.log(2.0)
 
 
-def gaussian_smearing(distances, offset, widths, centered=False, graph=False):
-    """
-    Perform gaussian smearing on interatomic distances.
+def gaussian_smearing(distances, offset, widths, centered=False, graph_batch_flag=False):
 
-    Args:
-        distances (torch.Tensor): Variable holding the interatomic distances (B x N_at x N_nbh)
-        offset (torch.Tensor): torch tensor of offsets
-        centered (bool): If this flag is chosen, Gaussians are centered at the origin and the
-                  offsets are used to provide their widths (used e.g. for angular functions).
-                  Default is False.
-
-    Returns:
-        torch.Tensor: smeared distances (B x N_at x N_nbh x N_gauss)
-
-    """
     if centered == False:
         # Compute width of Gaussians (using an overlap of 1 STDDEV)
         # widths = offset[1] - offset[0]
         coeff = -0.5 / torch.pow(widths, 2)
         # Use advanced indexing to compute the individual components
 
-        if graph is not True:
+        if graph_batch_flag is not True:
             diff = distances[:, :, :, None] - offset[None, None, None, :]
         else:
             diff = distances - offset
@@ -54,7 +41,7 @@ def gaussian_smearing(distances, offset, widths, centered=False, graph=False):
         # If Gaussians are centered, use offsets to compute widths
         coeff = -0.5 / torch.pow(offset, 2)
         # If centered Gaussians are requested, don't substract anything
-        if graph is not True:
+        if graph_batch_flag is not True:
             diff = distances[:, :, :, None]
         else:
             diff = distances
@@ -81,7 +68,7 @@ class GaussianSmearing(nn.Module):
               is False.
     """
 
-    def __init__(self, start, stop, n_gaussians, centered=False, trainable=False, graph=False):
+    def __init__(self, start, stop, n_gaussians, centered=False, trainable=False):
         super(GaussianSmearing, self).__init__()
         offset = torch.linspace(start, stop, n_gaussians)
         widths = torch.FloatTensor((offset[1] - offset[0]) * torch.ones_like(offset))
@@ -92,9 +79,8 @@ class GaussianSmearing(nn.Module):
             self.register_buffer('width', widths)
             self.register_buffer('offsets', offset)
         self.centered = centered
-        self.graph =graph
 
-    def forward(self, distances):
+    def forward(self, distances, graph_batch_flag):
         """
         Args:
             distances (torch.Tensor): Tensor of interatomic distances.
@@ -103,8 +89,7 @@ class GaussianSmearing(nn.Module):
             torch.Tensor: Tensor of convolved distances.
 
         """
-        return gaussian_smearing(distances, self.offsets, self.width, centered=self.centered, graph=self.graph)
-
+        return gaussian_smearing(distances, self.offsets, self.width, centered=self.centered, graph_batch_flag=graph_batch_flag)
 
 class Dense(nn.Linear):
     """ Applies a dense layer with activation: :math:`y = activation(Wx + b)`

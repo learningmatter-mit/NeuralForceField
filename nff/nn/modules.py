@@ -65,14 +65,12 @@ class GraphDis(torch.nn.Module):
         dis_sq = dis_mat.pow(2).sum(3)                  # compute squared distance of dim (B, N, N)
         mask = (dis_sq <= cutoff ** 2) & (dis_sq != 0)                 # byte tensor of dim (B, N, N)
         A = mask.unsqueeze(3).type(torch.FloatTensor).to(self.device) #         
-        
         # 1) PBC 2) # gradient of zero distance 
         dis_sq = dis_sq.unsqueeze(3)
-        dis_sq = (dis_sq * A) + 1e-8# to make sure the distance is not zero, otherwise there will be inf gradient 
+        dis_sq = (dis_sq * A) + 1e-15# to make sure the distance is not zero, otherwise there will be inf gradient 
         dis_mat = dis_sq.sqrt()
         
         # compute degree of nodes 
-        # d = A.sum(2).squeeze(2) - 1
         return(dis_mat, A.squeeze(3)) 
 
     def forward(self, r, xyz):
@@ -91,7 +89,6 @@ class GraphDis(torch.nn.Module):
         e, A = self.get_bond_vector_matrix(frame=xyz)# .type(torch).to(device=device.index)
         e = e.type(torch.FloatTensor).to(self.device)
         A = A.type(torch.FloatTensor).to(self.device)
-        #d = d.type(torch.LongTensor).to(self.device)
         
         return(r, e, A)
 
@@ -128,8 +125,6 @@ class InteractionBlock(nn.Module):
             expanded distances 
         smearing (GaussianSmearing()): gaussian basis expansion for distance 
             matrix of dimension B, N, N, 1
-        smearing_graph (GaussianSmearing()): gaussian basis expansion for
-            distance list of dimension N, N_nbh, 1
     """
     
     def __init__(self, n_atom_basis, n_filters, n_gaussians, cutoff_soft, trainable_gauss, avg_flag=False):
@@ -140,12 +135,6 @@ class InteractionBlock(nn.Module):
                                          stop=cutoff_soft,
                                          n_gaussians=n_gaussians,
                                          trainable=trainable_gauss)
-
-        self.smearing_graph = GaussianSmearing(start=0.0,
-                                               stop=cutoff_soft,
-                                               n_gaussians=n_gaussians,
-                                               trainable=trainable_gauss,
-                                               graph=True)
 
         self.DistanceFilter1 = Dense(in_features=n_gaussians,
                                      out_features=n_gaussians,
@@ -171,26 +160,9 @@ class InteractionBlock(nn.Module):
             assert len(r.shape) == 3
             assert len(e.shape) == 4
             
-            if A is None:
-                raise ValueError('need to input A')
-            
-            #--------------------BUGGY--------------------
-            #e = self.smearing(e.reshape(-1, r.shape[1], r.shape[1]))
-            #--------------------BUGGY--------------------
-
-            # WUJIE
-            #-----------------TEMP FIX--------------------
-            offsets = self.smearing_graph.offsets
-            widths = self.smearing_graph.width
-            coeff = -0.5 / torch.pow(widths, 2)
-            e = e.reshape(-1, r.shape[1], r.shape[1])
-            e = e[:, :, :, None] - offsets[None, None, None, :]
-            e = torch.exp(coeff * torch.pow(e, 2))
-            #-----------------TEMP FIX--------------------
-
+            e = self.smearing(e.reshape(-1, r.shape[1], r.shape[1]), graph_batch_flag=False)
             W = self.DistanceFilter1(e)
             W = self.DistanceFilter2(e)
-
             r = self.AtomFilter(r)
             
            # adjacency matrix used as a mask
@@ -213,7 +185,7 @@ class InteractionBlock(nn.Module):
         else:
             assert len(r.shape) == 2
             assert len(e.shape) == 2
-            e = self.smearing_graph(e)
+            e = self.smearing(e, graph_batch_flag=False)
             W = self.DistanceFilter1(e)
             W = self.DistanceFilter2(e)
             W = W.squeeze()
@@ -261,10 +233,6 @@ class GraphAttention(nn.Module):
         alpha = (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1))
         SUM = torch.sum( (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1)), dim=2)
         alpha = alpha/SUM.unsqueeze(2).expand_as(hij)
-    
-        # update node embeedings with attention vecotor 
-        #h_prime = self.W(h)#h.matmul(self.W)
-        #h_prime = (h_prime[:, None,  :, :].expand(B, N_atom, N_atom, n_atom_basis) * alpha).sum(2)
 
         h_prime = (h[:, None,  :, :].expand(B, N_atom, N_atom, n_atom_basis) * alpha).sum(2)
         
