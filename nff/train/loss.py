@@ -19,6 +19,15 @@ def build_mse_loss(rho=1):
     loss_coef = [1, rho]
 
     def loss_fn(ground_truth, predictions):
+        """MSE loss function.
+        Args:
+            ground_truth (iterable)
+            predictions (iterable)
+
+        Returns:
+            loss (torch.Tensor)
+        """
+
         loss = 0.0
         for targ, pred, coef  in zip(ground_truth, predictions, loss_coef):
             diff = (targ - pred) ** 2
