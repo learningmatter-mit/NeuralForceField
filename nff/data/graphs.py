@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-from graphbuilder.graphbuilder import Graph, GraphDataset
+from nff.data import Graph, GraphDataset
 
 
 def species_geom_from_batches(graph_data, n_batches):

@@ -4,8 +4,7 @@ import numpy as np
 from sklearn.utils import shuffle as skshuffle
 from torch.utils.data import Dataset as TorchDataset
 
-from graphbuilder.graphbuilder import Graph, GraphDataset
-
+from nff.data import Graph, GraphDataset
 import nff.utils.constants as const
 
 class Dataset(TorchDataset):

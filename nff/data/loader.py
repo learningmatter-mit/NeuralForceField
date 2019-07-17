@@ -1,10 +1,9 @@
 import numpy as np 
 
 from sklearn.utils import shuffle as skshuffle
-
 import torch 
-from graphbuilder.graphbuilder import Graph, GraphDataset
 
+from nff.data import Graph, GraphDataset
 import nff.utils.constants as const
 
 class GraphLoader:
