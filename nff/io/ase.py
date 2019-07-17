@@ -9,17 +9,28 @@ from nff.utils.scatter import compute_grad
 import nff.utils.constants as const
 
 
-class NeuralMD(Calculator):
+class NeuralFF(Calculator):
+    """ASE calculator using a pretrained NeuralFF model"""
+
     implemented_properties = ['energy', 'forces']
 
-    def __init__(self, model, device, N_atom, bondAdj=None, bondlen=None, **kwargs):
+    def __init__(self, model, device, num_atoms, bond_adj=None, bond_len=None, **kwargs):
+        """Creates a NeuralFF calculator.
+
+        Args:
+            model (one of nff.nn.models)
+            device (str)
+            num_atoms (int)
+            bond_adj (? or None)
+            bond_len (? or None)
+        """
+
         Calculator.__init__(self, **kwargs)
         self.model = model
         self.device = device
-        self.N_atom = N_atom
-        # declare adjcency matrix 
-        self.bondAdj = bondAdj
-        self.bondlen = bondlen
+        self.num_atoms = num_atoms
+        self.bond_adj = bond_adj
+        self.bond_len = bond_len
 
     def calculate(self, atoms=None, properties=['energy'],
                   system_changes=all_changes):
@@ -28,12 +39,12 @@ class NeuralMD(Calculator):
 
         # number of atoms 
         #n_atom = atoms.get_atomic_numbers().shape[0]
-        N_atom = self.N_atom
+        num_atoms = self.num_atoms
         # run model 
-        node = atoms.get_atomic_numbers()#.reshape(1, -1, 1)
-        xyz = atoms.get_positions()#.reshape(-1, N_atom, 3)
-        bondAdj = self.bondAdj
-        bondlen = self.bondlen
+        atomic_numbers = atoms.get_atomic_numbers()#.reshape(1, -1, 1)
+        xyz = atoms.get_positions()#.reshape(-1, num_atoms, 3)
+        bond_adj = self.bond_adj
+        bond_len = self.bond_len
 
         # to compute the kinetic energies to this...
         #mass = atoms.get_masses()
@@ -48,25 +59,25 @@ class NeuralMD(Calculator):
 
         # rebtach based on the number of atoms
 
-        node = Variable(torch.LongTensor(node).reshape(-1, N_atom)).cuda(self.device)
-        xyz = Variable(torch.Tensor(xyz).reshape(-1, N_atom, 3)).cuda(self.device)
+        atomic_numbers = Variable(torch.LongTensor(atomic_numbers).reshape(-1, num_atoms)).to(self.device)
+        xyz = Variable(torch.Tensor(xyz).reshape(-1, num_atoms, 3)).to(self.device)
         xyz.requires_grad = True
 
         # predict energy and force
-        if bondlen is not None and bondAdj is not None:
-            U = self.model(r=node, xyz=xyz, bonda=bondAdj, bondlen=bondlen)
-            f_pred = -compute_grad(inputs=xyz, output=U)
+        if bond_len is not None and bond_adj is not None:
+            energy = self.model(r=atomic_numbers, xyz=xyz, bond_adj=bond_adj, bond_len=bond_len)
+            forces = -compute_grad(inputs=xyz, output=energy)
         else:
-            U = self.model(r=node, xyz=xyz)
-            f_pred = -compute_grad(inputs=xyz, output=U)
+            energy = self.model(r=atomic_numbers, xyz=xyz)
+            forces = -compute_grad(inputs=xyz, output=energy)
 
         # change energy and forces back 
-        U = U.reshape(-1)
-        f_pred = f_pred.reshape(-1, 3)
+        energy = energy.reshape(-1)
+        forces = forces.reshape(-1, 3)
         
         # change energy and force to numpy array 
-        energy = U.detach().cpu().numpy() * (1 / const.EV_TO_KCAL)
-        forces = f_pred.detach().cpu().numpy() * (1 / const.EV_TO_KCAL)
+        energy = energy.detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+        forces = forces.detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
         
         self.results = {
             'energy': energy.reshape(-1),
