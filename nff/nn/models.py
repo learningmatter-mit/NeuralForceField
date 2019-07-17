@@ -9,24 +9,39 @@ from nff.nn.module import GraphDis
 
 class Net(nn.Module):
 
-    """SchNet implementation with continous filter. It is designed for two types computations: 1) xyz inputs 2) graph inputs
-        If provide bond list (bond_adj) and bond length tensor (bond_len) with a specified bond parameter, a harmonic bond energy 
+    """SchNet implementation with continous filter.
+        It is designed for two types computations: 1) xyz inputs 2) graph inputs
+        If provide bond list (bond_adj) and bond length tensor (bond_len)
+        with a specified bond parameter, a harmonic bond energy 
         priors will be added  
     
     Attributes:
-        atom_embed (torch.nn.Embedding): Convert atomic number into a embedding vector of size n_atom_basis
+        atom_embed (torch.nn.Embedding): Convert atomic number into an
+            embedding vector of size n_atom_basis
         atomwise1 (Dense): dense layer 1 to compute energy
         atomwise2 (Dense): dense layer 2 to compute energy
         bondenergy_graph (BondEnergModule): Description
         bondenergy_sample (BondEnergyModule): Description
         bond_par (float): Description
         convolutions (torch.nn.ModuleList): include all the convolutions
-        graph_dis (Graphdis): graph distance module to convert xyz inputs into distance matrix 
+        graph_dis (Graphdis): graph distance module to convert xyz inputs
+            into distance matrix 
     """
     
-    def __init__(self, n_atom_basis, n_filters, n_gaussians, cutoff_soft, device, 
-                    T, trainable_gauss=False, box_len=None, avg_flag=False, bond_par=50.0):
-        super(BondNet, self).__init__()
+    def __init__(
+        self,
+        n_atom_basis,
+        n_filters,
+        n_gaussians,
+        cutoff_soft,
+        device, 
+        T,
+        trainable_gauss=False,
+        box_len=None,
+        avg_flag=False,
+        bond_par=50.0):
+
+        super(Net, self).__init__()
         
         self.graph_dis = GraphDis(Fr=1,
                                   Fe=1,
@@ -44,8 +59,11 @@ class Net(nn.Module):
         ])
 
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
-        self.atomwise1 = Dense(in_features= n_atom_basis, out_features= int(n_atom_basis/2), activation=shifted_softplus)
-        self.atomwise2 = Dense(in_features= int(n_atom_basis/2), out_features=1)
+        self.atomwise1 = Dense(in_features=n_atom_basis,
+                               out_features=int(n_atom_basis / 2),
+                               activation=shifted_softplus)
+
+        self.atomwise2 = Dense(in_features=int(n_atom_basis / 2), out_features=1)
 
         # declare the bond energy module for two cases 
         self.bondenergy_graph = BondEnergyModule(batch=True)
@@ -128,7 +146,11 @@ class Net(nn.Module):
 
             # bond energy computed as a physics prior 
             if bond_adj is not None and bond_len is not None:
-                ebond = self.bondenergy_graph(xyz=xyz, bond_adj=bond_adj, bond_len=bond_len, bond_par=bond_par)
+                ebond = self.bondenergy_graph(xyz=xyz,
+                                              bond_adj=bond_adj,
+                                              bond_len=bond_len,
+                                              bond_par=bond_par)
+
                 ebond_batch = list(torch.split(ebond, N))
                 for b in range(len(N)): 
                     E_batch[b] = torch.sum(E_batch[b] + ebond_batch[b], dim=0)
