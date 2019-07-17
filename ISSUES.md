@@ -1,1 +1,0 @@
-- graphbuilder: is it possible to rebatch/shuffle the batches? Is it worth it? 
