@@ -2,13 +2,13 @@ import torch
 import numpy as np 
 
 from sklearn.utils import shuffle as skshuffle
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset as TorchDataset
 
 from graphbuilder.graphbuilder import Graph, GraphDataset
 
 import nff.utils.constants as const
 
-class Dataset(Dataset):
+class Dataset(TorchDataset):
     """Dataset to deal with NFF calculations. Can be expanded to retrieve calculations
          from the cluster later.
 
@@ -42,8 +42,8 @@ class Dataset(Dataset):
         """
 
         assert all([
-            len(l) == len(nxyz)
-            for l in [energy, force, smiles]
+            len(_) == len(nxyz)
+            for _ in [energy, force, smiles]
         ]), 'All lists should have the same length.'
 
         self.nxyz = self.array_type(nxyz)
