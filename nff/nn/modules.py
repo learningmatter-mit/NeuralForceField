@@ -102,10 +102,10 @@ class GraphDis(torch.nn.Module):
         Fe = self.Fe # number of edge featue
         B = r.shape[0] # batch size
         N = r.shape[1] # number of nodes 
-        device = self.device
 
-        # Compute the bond_vector_matrix, which has shape (B, N, N, 3), and append it to the edge matrix
+        # shape (B, N, N, 3)
         e, A = self.get_bond_vector_matrix(frame=xyz)
+        # append it to the edge matrix
         e = e.type(torch.FloatTensor).to(self.device)
         A = A.type(torch.FloatTensor).to(self.device)
         

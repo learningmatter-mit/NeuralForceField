@@ -7,8 +7,6 @@ import torch.nn.functional as F
 from torch.nn import Parameter
 from torch.nn.init import xavier_uniform_, constant_
 
-from nff.nn.activations import shifted_softplus
-
 
 zeros_initializer = partial(constant_, val=0.)
 
