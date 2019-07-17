@@ -6,8 +6,11 @@ import torch.nn.functional as F
 
 from nff.nn.layers import Dense, GaussianSmearing
 from nff.utils.scatter import scatter_add
+from nff.nn.activations import shifted_softplus
+
 
 EPSILON = 1e-15
+
 
 class GraphDis(torch.nn.Module):
 
@@ -49,7 +52,8 @@ class GraphDis(torch.nn.Module):
         
         N_atom = frame.shape[1]
         frame = frame.view(-1, N_atom, 1, 3)
-        dis_mat = frame.expand(-1, N_atom, N_atom, 3) - frame.expand(-1, N_atom, N_atom, 3).transpose(1,2)
+        dis_mat = frame.expand(-1, N_atom, N_atom, 3) \
+                - frame.expand(-1, N_atom, N_atom, 3).transpose(1,2)
         
         if self.box_len is not None:
 
@@ -64,8 +68,13 @@ class GraphDis(torch.nn.Module):
             dis_mat = dis_mat + dis_add - dis_sub
         
         # create cutoff mask
-        dis_sq = dis_mat.pow(2).sum(3)                  # compute squared distance of dim (B, N, N)
-        mask = (dis_sq <= cutoff ** 2) & (dis_sq != 0)                 # byte tensor of dim (B, N, N)
+
+        # compute squared distance of dim (B, N, N)
+        dis_sq = dis_mat.pow(2).sum(3)
+
+        # mask is a byte tensor of dim (B, N, N)
+        mask = (dis_sq <= cutoff ** 2) & (dis_sq != 0)
+
         A = mask.unsqueeze(3).type(torch.FloatTensor).to(self.device) #         
 
         # 1) PBC 2) # gradient of zero distance 
@@ -91,11 +100,12 @@ class GraphDis(torch.nn.Module):
         device = self.device
 
         # Compute the bond_vector_matrix, which has shape (B, N, N, 3), and append it to the edge matrix
-        e, A = self.get_bond_vector_matrix(frame=xyz)# .type(torch).to(device=device.index)
+        e, A = self.get_bond_vector_matrix(frame=xyz)
         e = e.type(torch.FloatTensor).to(self.device)
         A = A.type(torch.FloatTensor).to(self.device)
         
-        return(r, e, A)
+        return (r, e, A)
+
 
 class BondEnergyModule(nn.Module):
     
@@ -103,36 +113,46 @@ class BondEnergyModule(nn.Module):
         super(BondEnergyModule, self).__init__()
         self.batch = batch
         
-    def forward(self, xyz, bonda, bondlen, bondpar):
+    def forward(self, xyz, bond_adj, bond_len, bond_par):
         
         if self.batch:
-            e = (xyz[bonda[:,0]] - xyz[bonda[:,1]]).pow(2).sum(1).sqrt()[:, None]
-            ebond = bondpar * (e - bondlen)**2
-            ebond = 0.5 * scatter_add(src=ebond, index=bonda[:, 0], dim=0)
+            e = (xyz[bond_adj[:,0]] - xyz[bond_adj[:,1]]).pow(2).sum(1).sqrt()[:, None]
+            ebond = bond_par * (e - bond_len)**2
+            ebond = 0.5 * scatter_add(src=ebond, index=bond_adj[:, 0], dim=0)
         else:
-            e = (xyz[:, bonda[:,0]] - xyz[:, bonda[:,1]]).pow(2).sum(2).sqrt()
-            ebond = 0.5 * bondpar * (e - bondlen) ** 2
+            e = (xyz[:, bond_adj[:,0]] - xyz[:, bond_adj[:,1]]).pow(2).sum(2).sqrt()
+            ebond = 0.5 * bond_par * (e - bond_len) ** 2
         
         return ebond
+
 
 class InteractionBlock(nn.Module):
 
     """The convolution layer with filter. To be merged with GraphConv class.
     
     Attributes:
-        AtomFilter (TYPE): Description
+        atom_filter (TYPE): Description
         avg_flag (Boolean): if True, perform a mean pooling 
-        Dense1 (Dense()): dense layer 1 to obtain the updated atomic embedding 
-        Dense2 (Dense()): dense layer 2 to obtain the updated atomic embedding
-        DistanceFilter1 (Dense()): dense layer 1 for filtering gaussian
+        dense_1 (Dense()): dense layer 1 to obtain the updated atomic embedding 
+        dense_2 (Dense()): dense layer 2 to obtain the updated atomic embedding
+        distance_filter_1 (Dense()): dense layer 1 for filtering gaussian
             expanded distances 
-        DistanceFilter2 (Dense()): dense layer 1 for filtering gaussian
+        distance_filter_2 (Dense()): dense layer 1 for filtering gaussian
             expanded distances 
         smearing (GaussianSmearing()): gaussian basis expansion for distance 
             matrix of dimension B, N, N, 1
     """
     
-    def __init__(self, n_atom_basis, n_filters, n_gaussians, cutoff_soft, trainable_gauss, avg_flag=False):
+    def __init__(
+        self,
+        n_atom_basis,
+        n_filters,
+        n_gaussians,
+        cutoff_soft,
+        trainable_gauss,
+        avg_flag=False
+    ):
+
         super(InteractionBlock, self).__init__()
 
         self.avg_flag = avg_flag
@@ -141,34 +161,37 @@ class InteractionBlock(nn.Module):
                                          n_gaussians=n_gaussians,
                                          trainable=trainable_gauss)
 
-        self.DistanceFilter1 = Dense(in_features=n_gaussians,
-                                     out_features=n_gaussians,
-                                     activation=shifted_softplus)
+        self.distance_filter_1 = Dense(in_features=n_gaussians,
+                                       out_features=n_gaussians,
+                                       activation=shifted_softplus)
 
-        self.DistanceFilter2 = Dense(in_features=n_gaussians,
-                                     out_features=n_filters)
+        self.distance_filter_2 = Dense(in_features=n_gaussians,
+                                       out_features=n_filters)
 
-        self.AtomFilter = Dense(in_features=n_atom_basis,
-                                out_features=n_filters,
-                                bias=False)
+        self.atom_filter = Dense(in_features=n_atom_basis,
+                                 out_features=n_filters,
+                                 bias=False)
 
-        self.Dense1 = Dense(in_features=n_filters,
-                            out_features= n_atom_basis,
-                            activation=shifted_softplus)
+        self.dense_1 = Dense(in_features=n_filters,
+                             out_features= n_atom_basis,
+                             activation=shifted_softplus)
 
-        self.Dense2 = Dense(in_features=n_atom_basis,
-                            out_features= n_atom_basis,
-                            activation=None)
+        self.dense_2 = Dense(in_features=n_atom_basis,
+                             out_features= n_atom_basis,
+                             activation=None)
         
     def forward(self, r, e, A=None, a=None):       
         if a is None: # non-batch case ...
             assert len(r.shape) == 3
             assert len(e.shape) == 4
             
-            e = self.smearing(e.reshape(-1, r.shape[1], r.shape[1]), graph_batch_flag=False)
-            W = self.DistanceFilter1(e)
-            W = self.DistanceFilter2(e)
-            r = self.AtomFilter(r)
+            e = self.smearing(
+                e.reshape(-1, r.shape[1], r.shape[1]),
+                graph_batch_flag=False
+            )
+            W = self.distance_filter_1(e)
+            W = self.distance_filter_2(e)
+            r = self.atom_filter(r)
             
            # adjacency matrix used as a mask
             A = A.unsqueeze(3).expand(-1, -1, -1, r.shape[2])
@@ -191,11 +214,11 @@ class InteractionBlock(nn.Module):
             assert len(r.shape) == 2
             assert len(e.shape) == 2
             e = self.smearing(e, graph_batch_flag=False)
-            W = self.DistanceFilter1(e)
-            W = self.DistanceFilter2(e)
+            W = self.distance_filter_1(e)
+            W = self.distance_filter_2(e)
             W = W.squeeze()
 
-            r = self.AtomFilter(r)
+            r = self.atom_filter(r)
             # Filter 
             y = r[a[:, 1]].squeeze()
 
@@ -205,11 +228,12 @@ class InteractionBlock(nn.Module):
             y = scatter_add(src=y, index=a[:, 0], dim=0)
             
         # feed into Neural networks 
-        y = self.Dense1(y)
-        y = self.Dense2(y)
+        y = self.dense_1(y)
+        y = self.dense_2(y)
 
         return y
         
+
 class GraphAttention(nn.Module):
     def __init__(self, n_atom_basis):
         super(GraphAttention, self).__init__()
@@ -236,9 +260,14 @@ class GraphAttention(nn.Module):
         
         # construct attention vector using softmax
         alpha = (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1))
-        SUM = torch.sum((torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1)), dim=2)
-        alpha = alpha/SUM.unsqueeze(2).expand_as(hij)
+        alpha_sum = torch.sum(
+            torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1),
+            dim=2
+        )
+        alpha = alpha/alpha_sum.unsqueeze(2).expand_as(hij)
 
-        h_prime = (h[:, None,  :, :].expand(B, N_atom, N_atom, n_atom_basis) * alpha).sum(2)
+        h_prime = (
+            h[:, None,  :, :].expand(B, N_atom, N_atom, n_atom_basis) * alpha
+        ).sum(2)
         
         return h_prime
