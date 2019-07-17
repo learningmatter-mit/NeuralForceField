@@ -1,3 +1,3 @@
-from dataset import *
-from graphs import *
-from loader import *
+from .dataset import *
+from .graphs import *
+from .loader import *
