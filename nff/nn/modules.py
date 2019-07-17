@@ -7,6 +7,8 @@ import torch.nn.functional as F
 from nff.nn.layers import Dense, GaussianSmearing
 from nff.utils.scatter import scatter_add
 
+EPSILON = 1e-15
+
 class GraphDis(torch.nn.Module):
 
     """Compute distance matrix on the fly 
@@ -53,8 +55,8 @@ class GraphDis(torch.nn.Module):
 
             # build minimum image convention 
             box_len = self.box_len
-            mask_pos = dis_mat.ge(0.5*box_len).type(torch.FloatTensor).to(self.device)
-            mask_neg = dis_mat.lt(-0.5*box_len).type(torch.FloatTensor).to(self.device)
+            mask_pos = dis_mat.ge(0.5 * box_len).type(torch.FloatTensor).to(self.device)
+            mask_neg = dis_mat.lt(-0.5 * box_len).type(torch.FloatTensor).to(self.device)
             
             # modify distance 
             dis_add = mask_neg * box_len
@@ -65,9 +67,12 @@ class GraphDis(torch.nn.Module):
         dis_sq = dis_mat.pow(2).sum(3)                  # compute squared distance of dim (B, N, N)
         mask = (dis_sq <= cutoff ** 2) & (dis_sq != 0)                 # byte tensor of dim (B, N, N)
         A = mask.unsqueeze(3).type(torch.FloatTensor).to(self.device) #         
+
         # 1) PBC 2) # gradient of zero distance 
         dis_sq = dis_sq.unsqueeze(3)
-        dis_sq = (dis_sq * A) + 1e-15# to make sure the distance is not zero, otherwise there will be inf gradient 
+
+        # to make sure the distance is not zero, otherwise there will be inf gradient 
+        dis_sq = (dis_sq * A) + EPSILON
         dis_mat = dis_sq.sqrt()
         
         # compute degree of nodes 
@@ -231,7 +236,7 @@ class GraphAttention(nn.Module):
         
         # construct attention vector using softmax
         alpha = (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1))
-        SUM = torch.sum( (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1)), dim=2)
+        SUM = torch.sum((torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1)), dim=2)
         alpha = alpha/SUM.unsqueeze(2).expand_as(hij)
 
         h_prime = (h[:, None,  :, :].expand(B, N_atom, N_atom, n_atom_basis) * alpha).sum(2)
