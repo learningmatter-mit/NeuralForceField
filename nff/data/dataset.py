@@ -51,19 +51,23 @@ class Dataset(TorchDataset):
         self.smiles = self.array_type(smiles)
 
         if atomic_units:
-            units_to_kcal_mol()
+            self.units_to_kcal_mol()
 
     def __len__(self):
-        return len(sel.nxyz)
+        return len(self.nxyz)
 
     def __getitem__(self, idx):
         return self.nxyz[idx], self.energy[idx], self.force[idx], self.smiles[idx]
     
-    def units_to_kcal_mol(self):
+    def to_kcal_mol(self):
         """Converts forces and energies from atomic units to kcal/mol."""
     
         self.force = self.force * const.HARTREE_TO_KCAL_MOL / const.BOHR_RADIUS
         self.energy = self.energy * const.HARTREE_TO_KCAL_MOL 
+
+    def to_atomic_units(self):
+        self.force = self.force / const.HARTREE_TO_KCAL_MOL * const.BOHR_RADIUS
+        self.energy = self.energy / const.HARTREE_TO_KCAL_MOL
     
     def shuffle(self):
         self.nxyz, self.force, self.energy, self.smiles = skshuffle(

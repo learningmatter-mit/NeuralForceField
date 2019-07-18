@@ -82,13 +82,13 @@ class GraphLoader:
         f = self.graph_dataset.batches[idx].data['r'][:, 1:4].to(self.device)
         u = self.graph_dataset.batches[idx].data['y'].to(self.device)
         N = self.graph_dataset.batches[idx].data['N']
-        xyz = self.graph_dataset.batches[index].data['xyz'].to(self.device)
+        xyz = self.graph_dataset.batches[idx].data['xyz'].to(self.device)
 
-        bond_adj = self.graph_dataset.batches[index].data.get('bond_a', None)
+        bond_adj = self.graph_dataset.batches[idx].data.get('bond_a', None)
         if bond_adj is not None:
             bond_adj.to(self.device)
 
-        bond_len = self.graph_dataset.batches[index].data.get('bond_len', None)
+        bond_len = self.graph_dataset.batches[idx].data.get('bond_len', None)
         if bond_len is not None:
             bond_len.to(self.device)
 
@@ -118,9 +118,9 @@ class GraphLoader:
         self.shuffle()
         energy_mean = np.mean(self.dataset.energy)
     
-        graph_data = GraphDataset(dynamic_adj_mat=dynamic_adj_mat)
+        graph_data = GraphDataset(dynamic_adj_mat=self.dynamic_adj_mat)
     
-        for index in range(len(energy_data)):
+        for index in range(len(self.dataset)):
             nxyz = self.dataset.nxyz[index]
             force = self.dataset.force[index]
             energy = self.dataset.energy[index]
@@ -149,3 +149,7 @@ class GraphLoader:
 
     def shuffle(self):
         self.dataset.shuffle()
+
+    def shuffle_and_rebatch(self):
+        self.shuffle()
+        self._init_graph_dataset()
