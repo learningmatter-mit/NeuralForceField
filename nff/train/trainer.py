@@ -74,6 +74,13 @@ class Trainer:
             self.best_loss = float("inf")
             self.store_checkpoint()
 
+    def to(self, device):
+        """Changes the device"""
+        self._model.to(device)
+        self.optimizer.load_state_dict(self.optimizer.state_dict())
+        self.train_loader.to(device)
+        self.validation_loader.to(device)
+
     def _check_is_parallel(self):
         return True if isinstance(self._model, torch.nn.DataParallel) else False
 
@@ -147,7 +154,8 @@ class Trainer:
         Note: Depending on the `hooks`, training can stop earlier than `n_epochs`.
 
         """
-        self._model.to(device)
+        self.to(device)
+
         self._stop = False
 
         for h in self.hooks:
@@ -156,9 +164,6 @@ class Trainer:
         try:
             for _ in range(n_epochs):
                 self.epoch += 1
-
-                energies_mae = 0.0
-                forces_mae = 0.0
 
                 for h in self.hooks:
                     h.on_epoch_begin(self)
@@ -169,13 +174,17 @@ class Trainer:
                 for batch in self.train_loader:
                     xyz, a, bond_adj, bond_len, r, f, u, N = batch
                     xyz.requires_grad = True
+                    ground_truth = {
+                        'energy': u,
+                        'force': f
+                    }
 
                     self.optimizer.zero_grad()
 
                     for h in self.hooks:
-                        h.on_batch_begin(self, batch)
+                        h.on_batch_begin(self, ground_truth)
 
-                    energy_nff = self.model(
+                    energy_nff = self._model(
                         r=r,
                         bond_adj=bond_adj,
                         bond_len=bond_len,
@@ -184,18 +193,20 @@ class Trainer:
                         N=N
                     ) 
 
-                    force_nff = -compute_grad(inputs=xyz, output=energy)
+                    force_nff = -compute_grad(inputs=xyz, output=energy_nff)
                     
-                    predictions = (energy_nff, force_nff)
-                    ground_truth = (u, f)
+                    results = {
+                        'energy': energy_nff,
+                        'force': force_nff
+                    }
 
-                    loss = self.loss_fn(ground_truth, predictions)
+                    loss = self.loss_fn(ground_truth, results)
                     loss.backward()
                     self.optimizer.step()
                     self.step += 1
 
                     for h in self.hooks:
-                        h.on_batch_end(self, batch, predictions, loss)
+                        h.on_batch_end(self, ground_truth, results, loss)
 
                     if self._stop:
                         break
@@ -239,8 +250,13 @@ class Trainer:
             xyz, a, bond_adj, bond_len, r, f, u, N = val_batch
             xyz.requires_grad = True
 
+            ground_truth = {
+                'energy': u,
+                'force': f
+            }
+
             # append batch_size
-            vsize = list(val_batch.values())[0].size(0)
+            vsize = xyz.size(0)
             n_val += vsize
 
             for h in self.hooks:
@@ -248,7 +264,7 @@ class Trainer:
 
             # move input to gpu, if needed
 
-            energy_nff = self.model(
+            energy_nff = self._model(
                 r=r,
                 bond_adj=bond_adj,
                 bond_len=bond_len,
@@ -257,13 +273,15 @@ class Trainer:
                 N=N
             ) 
 
-            force_nff = -compute_grad(inputs=xyz, output=energy)
+            force_nff = -compute_grad(inputs=xyz, output=energy_nff)
 
-            predictions = (energy_nff, force_nff)
-            ground_truth = (e, f)
+            results = {
+                'energy': energy_nff,
+                'force': force_nff
+            }
 
             val_batch_loss = (
-                self.loss_fn(ground_truth, predictions).data.cpu().numpy()
+                self.loss_fn(ground_truth, results).data.cpu().numpy()
             )
 
             if self.loss_is_normalized:
@@ -272,7 +290,7 @@ class Trainer:
                 val_loss += val_batch_loss
 
             for h in self.hooks:
-                h.on_validation_batch_end(self, val_batch, predictions)
+                h.on_validation_batch_end(self, ground_truth, results)
 
         # weighted average over batches
         if self.loss_is_normalized:

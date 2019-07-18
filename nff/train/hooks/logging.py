@@ -102,7 +102,7 @@ class CSVHook(LoggingHook):
         every_n_epochs=1,
     ):
         log_path = os.path.join(log_path, "log.csv")
-        super(CSVHook, self).__init__(
+        super().__init__(
             log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate
         )
         self._offset = 0
@@ -215,7 +215,7 @@ class TensorboardHook(LoggingHook):
     ):
         from tensorboardX import SummaryWriter
 
-        super(TensorboardHook, self).__init__(
+        super().__init__(
             log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate
         )
         self.writer = SummaryWriter(self.log_path)

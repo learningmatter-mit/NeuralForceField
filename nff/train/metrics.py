@@ -31,20 +31,20 @@ class Metric:
         self.loss = 0.0
         self.n_entries = 0.0
 
-    def add_batch(self, truth, prediction):
+    def add_batch(self, batch, results):
         """ Add a batch to calculate the metric on """
-        self.loss += self.loss_fn(truth, prediction)
-        self.n_entries += np.prod(truth.shape)
+        y = batch[self.target]
+        yp = results[self.target]
+
+        self.loss += self.loss_fn(y, yp)
+        self.n_entries += np.prod(y.shape)
 
     def aggregate(self):
         """Aggregate metric over all previously added batches."""
         return self.loss / self.n_entries
 
-    def loss_fn(self, truth, prediction):
+    def loss_fn(self, y, yp):
         """Calculates loss function for y and yp"""
-        raise NotImplementedError
-
-    def aggregate(self):
         raise NotImplementedError
 
 
@@ -65,13 +65,13 @@ class MeanSquaredError(Metric):
         name=None,
     ):
         name = "MSE_" + target if name is None else name
-        super(MeanSquaredError, self).__init__(
+        super().__init__(
             target=target,
             name=name,
         )
 
-    def loss_fn(self, truth, prediction):
-        diff = truth - prediction
+    def loss_fn(self, y, yp):
+        diff = y - yp
         return torch.sum(diff.view(-1) ** 2).detach().cpu().data.numpy()
 
 
@@ -92,7 +92,7 @@ class RootMeanSquaredError(MeanSquaredError):
         name=None,
     ):
         name = "RMSE_" + target if name is None else name
-        super(RootMeanSquaredError, self).__init__(
+        super().__init__(
             target, name
         )
 
@@ -118,12 +118,12 @@ class MeanAbsoluteError(Metric):
         name=None,
     ):
         name = "MAE_" + target if name is None else name
-        super(MeanAbsoluteError, self).__init__(
+        super().__init__(
             target=target,
             name=name,
         )
 
-    def loss_fn(self, truth, prediction):
-        diff = truth - prediction
+    def loss_fn(self, y, yp):
+        diff = y - yp
         return torch.sum(torch.abs(diff).view(-1), 0).detach().cpu().data.numpy()
 
