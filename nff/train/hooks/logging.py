@@ -300,6 +300,7 @@ class PrintingHook(LoggingHook):
         self,
         log_path,
         metrics,
+        log_epoch=True,
         log_train_loss=True,
         log_validation_loss=True,
         log_learning_rate=True,
@@ -312,11 +313,13 @@ class PrintingHook(LoggingHook):
             log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate
         )
         self.every_n_epochs = every_n_epochs
+        self.log_epoch = log_epoch
 
         self._separator = separator
         self.time_strf = time_strf
         self._headers = {
             'time': 'Time',
+            'epoch': 'Epoch',
             'lr': 'Learning rate',
             'train_loss': 'Train loss',
             'val_loss': 'Validation loss'
@@ -325,11 +328,16 @@ class PrintingHook(LoggingHook):
 
     def on_train_begin(self, trainer):
 
-        log = ''
-        log += self.str_format.format(
+        log = self.str_format.format(
             len(time.strftime(self.time_strf)),
             self._headers['time']
         )
+
+        if self.log_epoch:
+            log += self._separator
+            log += self.str_format.format(
+                len(self._headers['epoch']), self._headers['epoch']
+            )
 
         if self.log_learning_rate:
             log += self._separator
@@ -364,6 +372,13 @@ class PrintingHook(LoggingHook):
         if trainer.epoch % self.every_n_epochs == 0:
 
             log = time.strftime(self.time_strf)
+
+            if self.log_epoch:
+                log += self._separator
+                log += self.str_format.format(
+                    len(self._headers['epoch']),
+                    '%d' % trainer.epoch
+                )
 
             if self.log_learning_rate:
                 log += self._separator
