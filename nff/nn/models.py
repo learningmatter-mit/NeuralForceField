@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from nff.nn.layers import Dense, GaussianSmearing
-from nff.nn.modules import GraphDis
+from nff.nn.modules import GraphDis, InteractionBlock, BondEnergyModule
 from nff.nn.activations import shifted_softplus
 
 class Net(nn.Module):
@@ -54,7 +54,7 @@ class Net(nn.Module):
             box_size (numpy.array): size of the box, dim = (3, )
         """
 
-        super(Net, self).__init__()
+        super().__init__()
         
         self.graph_dis = GraphDis(Fr=1,
                                   Fe=1,
@@ -66,7 +66,7 @@ class Net(nn.Module):
             InteractionBlock(n_atom_basis=n_atom_basis,
                              n_filters=n_filters,
                              n_gaussians=n_gaussians, 
-                             cutoff_soft=cutoff_soft,
+                             cutoff=cutoff,
                              trainable_gauss=trainable_gauss)
             for i in range(n_convolutions)
         ])

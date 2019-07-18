@@ -32,7 +32,7 @@ class GraphDis(torch.nn.Module):
         device,
         box_size=None
     ):
-        super(GraphDis, self).__init__()
+        super().__init__()
 
         self.Fr = Fr
         self.Fe = Fe # include distance
@@ -115,7 +115,7 @@ class GraphDis(torch.nn.Module):
 class BondEnergyModule(nn.Module):
     
     def __init__(self, batch=True):
-        super(BondEnergyModule, self).__init__()
+        super().__init__()
         self.batch = batch
         
     def forward(self, xyz, bond_adj, bond_len, bond_par):
@@ -158,7 +158,7 @@ class InteractionBlock(nn.Module):
         mean_pooling=False
     ):
 
-        super(InteractionBlock, self).__init__()
+        super().__init__()
 
         self.mean_pooling = mean_pooling
         self.smearing = GaussianSmearing(start=0.0,
@@ -192,7 +192,7 @@ class InteractionBlock(nn.Module):
             
             e = self.smearing(
                 e.reshape(-1, r.shape[1], r.shape[1]),
-                graph_batch_flag=False
+                is_batch=False
             )
             W = self.distance_filter_1(e)
             W = self.distance_filter_2(e)
@@ -215,7 +215,7 @@ class InteractionBlock(nn.Module):
         else:
             assert len(r.shape) == 2
             assert len(e.shape) == 2
-            e = self.smearing(e, graph_batch_flag=False)
+            e = self.smearing(e, is_batch=True)
             W = self.distance_filter_1(e)
             W = self.distance_filter_2(e)
             W = W.squeeze()
@@ -238,7 +238,7 @@ class InteractionBlock(nn.Module):
 
 class GraphAttention(nn.Module):
     def __init__(self, n_atom_basis):
-        super(GraphAttention, self).__init__()
+        super().__init__()
         
         self.n_atom_basis = n_atom_basis
         self.W = nn.Linear(n_atom_basis, n_atom_basis)

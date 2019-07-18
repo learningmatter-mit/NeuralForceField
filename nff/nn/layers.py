@@ -11,7 +11,7 @@ from torch.nn.init import xavier_uniform_, constant_
 zeros_initializer = partial(constant_, val=0.)
 
 
-def gaussian_smearing(distances, offset, widths, centered=False, graph_batch_flag=False):
+def gaussian_smearing(distances, offset, widths, centered=False, is_batch=False):
 
     if centered == False:
         # Compute width of Gaussians (using an overlap of 1 STDDEV)
@@ -19,7 +19,7 @@ def gaussian_smearing(distances, offset, widths, centered=False, graph_batch_fla
         coeff = -0.5 / torch.pow(widths, 2)
 
         # Use advanced indexing to compute the individual components
-        if not graph_batch_flag:
+        if not is_batch:
             diff = distances[:, :, :, None] - offset[None, None, None, :]
         else:
             diff = distances - offset
@@ -29,7 +29,7 @@ def gaussian_smearing(distances, offset, widths, centered=False, graph_batch_fla
         coeff = -0.5 / torch.pow(offset, 2)
 
         # If centered Gaussians are requested, don't substract anything
-        if not graph_batch_flag:
+        if not is_batch:
             diff = distances[:, :, :, None]
         else:
             diff = distances
@@ -57,7 +57,7 @@ class GaussianSmearing(nn.Module):
     """
 
     def __init__(self, start, stop, n_gaussians, centered=False, trainable=False):
-        super(GaussianSmearing, self).__init__()
+        super().__init__()
         offset = torch.linspace(start, stop, n_gaussians)
         widths = torch.FloatTensor((offset[1] - offset[0]) * torch.ones_like(offset))
         if trainable:
@@ -68,7 +68,7 @@ class GaussianSmearing(nn.Module):
             self.register_buffer('offsets', offset)
         self.centered = centered
 
-    def forward(self, distances, graph_batch_flag):
+    def forward(self, distances, is_batch):
         """
         Args:
             distances (torch.Tensor): Tensor of interatomic distances.
@@ -81,7 +81,7 @@ class GaussianSmearing(nn.Module):
                                    self.offsets,
                                    self.width,
                                    centered=self.centered,
-                                   graph_batch_flag=graph_batch_flag)
+                                   is_batch=is_batch)
 
         return result
 
@@ -104,7 +104,7 @@ class Dense(nn.Linear):
         self.bias_init = bias_init
         self.activation = activation
 
-        super(Dense, self).__init__(in_features, out_features, bias)
+        super().__init__(in_features, out_features, bias)
 
     def reset_parameters(self):
         """
@@ -122,7 +122,7 @@ class Dense(nn.Linear):
         Returns:
             torch.Tensor: Output of the dense layer.
         """
-        y = super(Dense, self).forward(inputs)
+        y = super().forward(inputs)
         if self.activation:
             y = self.activation(y)
 
