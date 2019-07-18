@@ -246,6 +246,7 @@ class Trainer:
 
         val_loss = 0.0
         n_val = 0
+
         for val_batch in self.validation_loader:
             xyz, a, bond_adj, bond_len, r, f, u, N = val_batch
             xyz.requires_grad = True
@@ -302,3 +303,72 @@ class Trainer:
 
         for h in self.hooks:
             h.on_validation_end(self, val_loss)
+
+    def evaluate(self, loader):
+        """Evaluate the current state of the model using a given dataloader
+        """
+
+        eval_loss = 0.0
+        n_eval = 0
+
+        all_results = {
+            'energy': [],
+            'force': []
+        }
+
+        all_targets = {
+            'energy': [],
+            'force': []
+        }
+
+        for eval_batch in loader:
+            xyz, a, bond_adj, bond_len, r, f, u, N = eval_batch
+            xyz.requires_grad = True
+
+            ground_truth = {
+                'energy': u,
+                'force': f
+            }
+
+            # append batch_size
+            vsize = xyz.size(0)
+            n_eval += vsize
+
+            energy_nff = self._model(
+                r=r,
+                bond_adj=bond_adj,
+                bond_len=bond_len,
+                xyz=xyz,
+                a=a,
+                N=N
+            ) 
+
+            force_nff = -compute_grad(inputs=xyz, output=energy_nff)
+
+            results = {
+                'energy': energy_nff,
+                'force': force_nff
+            }
+
+            eval_batch_loss = (
+                self.loss_fn(ground_truth, results).data.cpu().numpy()
+            )
+
+            if self.loss_is_normalized:
+                eval_loss += eval_batch_loss * vsize
+            else:
+                eval_loss += eval_batch_loss
+
+            for key in all_results.keys():
+                all_targets[key] += [ground_truth[key]]
+                all_results[key] += [results[key]]
+
+        # weighted average over batches
+        if self.loss_is_normalized:
+            eval_loss /= n_eval
+
+        for dict_ in [all_results, all_targets]:
+            for key, val in dict_.items():
+                dict_[key] = torch.cat(val, dim=0)
+
+        return all_results, all_targets
