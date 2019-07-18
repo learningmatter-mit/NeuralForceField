@@ -9,9 +9,6 @@ import numpy as np
 from nff.train.hooks import Hook
 
 
-__all__ = ["LoggingHook", "CSVHook", "TensorboardHook"]
-
-
 class LoggingHook(Hook):
     """Base class for logging hooks.
 
@@ -283,3 +280,129 @@ class TensorboardHook(LoggingHook):
 
     def on_train_failed(self, trainer):
         self.writer.close()
+
+
+class PrintingHook(LoggingHook):
+    """Hook for logging training process to the screen.
+
+    Args:
+        log_path (str): path to directory in which log files will be stored.
+        metrics (list): metrics to log; each metric has to be a subclass of spk.Metric.
+        log_train_loss (bool, optional): enable logging of training loss.
+        log_validation_loss (bool, optional): enable logging of validation loss.
+        log_learning_rate (bool, optional): enable logging of current learning rate.
+        every_n_epochs (int, optional): epochs after which logging takes place.
+        separator (str, optional): separator for columns to be printed
+
+    """
+
+    def __init__(
+        self,
+        log_path,
+        metrics,
+        log_train_loss=True,
+        log_validation_loss=True,
+        log_learning_rate=True,
+        every_n_epochs=1,
+        separator=' ',
+        time_strf=r'%Y-%m-%d %H:%M:%S',
+        str_format=r'{1:>{0}}'
+    ):
+        super().__init__(
+            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate
+        )
+        self.every_n_epochs = every_n_epochs
+
+        self._separator = separator
+        self.time_strf = time_strf
+        self._headers = {
+            'time': 'Time',
+            'lr': 'Learning rate',
+            'train_loss': 'Train loss',
+            'val_loss': 'Validation loss'
+        }
+        self.str_format = str_format
+
+    def on_train_begin(self, trainer):
+
+        log = ''
+        log += self.str_format.format(
+            len(time.strftime(self.time_strf)),
+            self._headers['time']
+        )
+
+        if self.log_learning_rate:
+            log += self._separator
+            log += self.str_format.format(
+                len(self._headers['lr']), self._headers['lr']
+            )
+
+        if self.log_train_loss:
+            log += self._separator
+            log += self.str_format.format(
+                len(self._headers['train_loss']), self._headers['train_loss']
+            )
+
+        if self.log_validation_loss:
+            log += self._separator
+            log += self.str_format.format(
+                len(self._headers['val_loss']), self._headers['val_loss']
+            )
+
+        if len(self.metrics) > 0:
+            log += self._separator
+
+        for i, metric in enumerate(self.metrics):
+            header = str(metric.name)
+            log += self.str_format.format(len(header), header)
+            if i < len(self.metrics) - 1:
+                log += self._separator
+
+        print(log)
+
+    def on_validation_end(self, trainer, val_loss):
+        if trainer.epoch % self.every_n_epochs == 0:
+
+            log = time.strftime(self.time_strf)
+
+            if self.log_learning_rate:
+                log += self._separator
+                log += self.str_format.format(
+                    len(self._headers['lr']),
+                    '%.3e' % trainer.optimizer.param_groups[0]['lr']
+                )
+
+            if self.log_train_loss:
+                log += self._separator
+                log += self.str_format.format(
+                    len(self._headers['train_loss']),
+                    '%.4f' % (self._train_loss / self._counter)
+                )
+
+            if self.log_validation_loss:
+                log += self._separator
+                log += self.str_format.format(
+                    len(self._headers['val_loss']),
+                    '%.4f' % val_loss
+                )
+
+            if len(self.metrics) > 0:
+                log += self._separator
+
+            for i, metric in enumerate(self.metrics):
+                m = metric.aggregate()
+                if hasattr(m, '__iter__'):
+                    log += self._separator.join([str(j) for j in m])
+                else:
+                    log += self.str_format.format(
+                        len(metric.name),
+                        '%.4f' % m
+                    )
+                if i < len(self.metrics) - 1:
+                    log += self._separator
+
+            print(log)
+
+    def on_train_failed(self, trainer):
+        print('the training has failed')
+
