@@ -57,6 +57,10 @@ class GraphLoader:
 
         self.graph_dataset = self._init_graph_dataset()
 
+    def to(self, device):
+        """Sends GraphLoader to the desired device"""
+        self.device = device
+
     def __len__(self):
         return len(self.graph_dataset.batches)
 
