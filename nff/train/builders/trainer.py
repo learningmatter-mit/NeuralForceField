@@ -27,16 +27,24 @@ def get_trainer(args, model, train_loader, val_loader, metrics, loss_fn=None):
     )
     hooks.append(schedule)
 
-    if args.logger == "csv":
+    printer = nff.train.PrintingHook(
+        os.path.join(args.model_path, 'log'),
+        metrics,
+        separator=' | '
+    )
+    hooks.append(printer)
+
+    if args.logger == 'csv':
         logger = nff.train.CSVHook(
-            os.path.join(args.modelpath, "log"),
+            os.path.join(args.model_path, 'log'),
             metrics,
             every_n_epochs=args.log_every_n_epochs,
         )
         hooks.append(logger)
-    elif args.logger == "tensorboard":
+
+    elif args.logger == 'tensorboard':
         logger = nff.train.TensorboardHook(
-            os.path.join(args.modelpath, "log"),
+            os.path.join(args.model_path, 'log'),
             metrics,
             every_n_epochs=args.log_every_n_epochs,
         )
