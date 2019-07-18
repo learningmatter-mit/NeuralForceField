@@ -2,6 +2,7 @@ import torch
 import numpy as np 
 
 from sklearn.utils import shuffle as skshuffle
+from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset as TorchDataset
 
 from nff.data import Graph, GraphDataset
@@ -18,7 +19,6 @@ class Dataset(TorchDataset):
         force (array): (N, 3) array with forces
         smiles (array): (N, ) array with SMILES strings
     """
-
 
     array_type = np.array
 
@@ -74,3 +74,45 @@ class Dataset(TorchDataset):
             self.nxyz, self.force, self.energy, self.smiles
         )
         return 
+
+
+def split_train_test(dataset, test_size=0.2):
+    """Splits the current dataset in two, one for training and
+        another for testing.
+    """
+
+    (
+        nxyz_train, nxyz_test,
+        energy_train, energy_test,
+        force_train, force_test,
+        smiles_train, smiles_test
+    ) = train_test_split(
+        dataset.nxyz,
+        dataset.energy,
+        dataset.force,
+        dataset.smiles,
+        test_size=test_size
+    )
+
+    train = Dataset(
+        nxyz_train,
+        energy_train,
+        force_train,
+        smiles_train
+    )
+
+    test = Dataset(
+        nxyz_test,
+        energy_test,
+        force_test,
+        smiles_test
+    )
+
+    return train, test
+
+
+def split_train_test_validation(dataset, test_size=0.2, val_size=0.2):
+    train, test = split_train_test(dataset, test_size=test_size)
+    train, validation = split_train_test(train, val_size=val_size)
+
+    return train, test, validation
