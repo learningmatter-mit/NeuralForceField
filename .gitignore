@@ -49,6 +49,6 @@ __pycache__
 *.txt
 *.mpg
 
-# log directory 
+# directory 
 log/
-*/log/
+debug/

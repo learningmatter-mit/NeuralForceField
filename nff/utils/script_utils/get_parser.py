@@ -10,7 +10,9 @@ def get_main_parser():
     ## command-specific
     cmd_parser = argparse.ArgumentParser(add_help=False)
     cmd_parser.add_argument(
-        "--cuda", help="Set flag to use GPU(s)", action="store_true"
+        "--device",
+        default='cuda',
+        help="Device to use",
     )
     cmd_parser.add_argument(
         "--parallel",
@@ -30,7 +32,8 @@ def get_main_parser():
 def add_subparsers(cmd_parser, defaults={}):
     ## training
     train_parser = argparse.ArgumentParser(add_help=False, parents=[cmd_parser])
-    train_parser.add_argument("modelpath", help="Destination for models and logs")
+    train_parser.add_argument("data_path", help="Dataset to use")
+    train_parser.add_argument("model_path", help="Destination for models and logs")
     train_parser.add_argument(
         "--seed", type=int, default=None, help="Set random seed for torch and numpy."
     )
@@ -40,7 +43,7 @@ def add_subparsers(cmd_parser, defaults={}):
 
     train_parser.add_argument(
         "--split",
-        help="Split into [train] [validation] and use remaining for testing",
+        help="Split into [validation] [test] and use remaining for training",
         type=int,
         nargs=2,
         default=[None, None],
@@ -97,7 +100,8 @@ def add_subparsers(cmd_parser, defaults={}):
 
     ## evaluation
     eval_parser = argparse.ArgumentParser(add_help=False, parents=[cmd_parser])
-    eval_parser.add_argument("modelpath", help="Path of stored model")
+    eval_parser.add_argument("data_path", help="Dataset to use")
+    eval_parser.add_argument("model_path", help="Path of stored model")
     eval_parser.add_argument(
         "--split",
         help="Evaluate trained model on given split",
@@ -112,8 +116,8 @@ def add_subparsers(cmd_parser, defaults={}):
         "--aggregation_mode",
         type=str,
         default="sum"
-        if "aggragation_mode" not in defaults.keys()
-        else defaults["aggragation_mode"],
+        if "aggregation_mode" not in defaults.keys()
+        else defaults["aggregation_mode"],
         choices=["sum", "avg"],
         help=" (default: %(default)s)",
     )
@@ -121,16 +125,22 @@ def add_subparsers(cmd_parser, defaults={}):
     #######  SchNet  #######
     schnet_parser = argparse.ArgumentParser(add_help=False, parents=[model_parser])
     schnet_parser.add_argument(
-        "--features",
+        "--n_atom_basis",
         type=int,
         help="Size of atom-wise representation",
-        default=256 if "features" not in defaults.keys() else defaults["features"],
+        default=256,
     )
     schnet_parser.add_argument(
         "--n_filters", type=int, help="Size of atom-wise representation", default=25
     )
     schnet_parser.add_argument(
-        "--interactions", type=int, help="Number of interaction blocks", default=6
+        "--n_gaussians",
+        type=int,
+        default=25,
+        help="Number of Gaussians to expand distances (default: %(default)s)",
+    )
+    schnet_parser.add_argument(
+        "--n_convolutions", type=int, help="Number of interaction blocks", default=6
     )
     schnet_parser.add_argument(
         "--cutoff",
@@ -138,19 +148,18 @@ def add_subparsers(cmd_parser, defaults={}):
         default=5.0,
         help="Cutoff radius of local environment (default: %(default)s)",
     )
+    schnet_parser.add_argument(
+        "--trainable_gauss",
+        action='store_true',
+        help="If set, sets gaussians as learnable parameters (default: False)",
+    )
+    schnet_parser.add_argument(
+        "--rho",
+        type=float,
+        default=1.0,
+        help="Parameter multiplying the loss of forces (default: %(default)s)",
+    )
 
-    schnet_parser.add_argument(
-        "--cutoff_function",
-        help="Functional form of the cutoff",
-        choices=["hard", "cosine", "mollifier"],
-        default="hard",
-    )
-    schnet_parser.add_argument(
-        "--num_gaussians",
-        type=int,
-        default=25,
-        help="Number of Gaussians to expand distances (default: %(default)s)",
-    )
 
     ## setup subparser structure
     cmd_subparsers = cmd_parser.add_subparsers(
@@ -161,9 +170,10 @@ def add_subparsers(cmd_parser, defaults={}):
     subparser_eval = cmd_subparsers.add_parser("eval", help="Eval help")
 
     subparser_export = cmd_subparsers.add_parser("export", help="Export help")
-    subparser_export.add_argument("modelpath", help="Path of stored model")
+    subparser_export.add_argument("data_path", help="Dataset to use")
+    subparser_export.add_argument("model_path", help="Path of stored model")
     subparser_export.add_argument(
-        "destpath", help="Destination path for exported model"
+        "dest_path", help="Destination path for exported model"
     )
 
     train_subparsers = subparser_train.add_subparsers(
