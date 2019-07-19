@@ -59,9 +59,10 @@ class GraphDis(nn.Module):
         dis_mat = frame.expand(-1, N_atom, N_atom, 3) \
                 - frame.expand(-1, N_atom, N_atom, 3).transpose(1,2)
         
-        box_size = self.box_size.to(device)
 
         if self.box_size is not None:
+
+            box_size = self.box_size.to(device)
 
             # build minimum image convention 
             box_size = self.box_size

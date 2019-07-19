@@ -20,6 +20,7 @@ class NeuralFF(Calculator):
         model,
         bond_adj=None,
         bond_len=None,
+        device='cuda',
         **kwargs
     ):
         """Creates a NeuralFF calculator.
@@ -35,20 +36,18 @@ class NeuralFF(Calculator):
         self.model = model
         self.bond_adj = bond_adj
         self.bond_len = bond_len
+        self.device = device
+
+    def to(self, device):
+        self.device = device
 
     def calculate(
         self,
         atoms=None,
         properties=['energy'],
         system_changes=all_changes,
-        device=None
     ):
         
-        if device is not None:
-            device = model.device
-        else:
-            model.to(device)
-
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # number of atoms 
@@ -73,9 +72,10 @@ class NeuralFF(Calculator):
 
         # rebtach based on the number of atoms
 
-        atomic_numbers = torch.LongTensor(atomic_numbers, device=device).reshape(-1, num_atoms)
+        atomic_numbers = torch.LongTensor(atomic_numbers).to(self.device).reshape(-1, num_atoms)
 
-        xyz = torch.Tensor(xyz, device=device).reshape(-1, num_atoms, 3)
+        xyz = torch.Tensor(xyz).to(self.device).reshape(-1, num_atoms, 3)
+        self.model.to(self.device)
 
         xyz.requires_grad = True
 
@@ -110,10 +110,10 @@ class NeuralFF(Calculator):
     def from_file(
         cls,
         model_path,
-        device,
         bond_adj=None,
         bond_len=None,
+        device='cuda',
         **kwargs
     ):
         model = load_model(model_path)
-        return cls(model, device, bond_adj, bond_len, **kwargs)
+        return cls(model, bond_adj, bond_len, device, **kwargs)

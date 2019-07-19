@@ -125,7 +125,7 @@ def split_train_test(dataset, test_size=0.2):
 
 
 def split_train_validation_test(dataset, val_size=0.2, test_size=0.2):
-    train, validation = split_train_test(dataset, test_size=test_size)
+    train, validation = split_train_test(dataset, test_size=val_size)
     train, test = split_train_test(train, test_size=test_size)
 
     return train, validation, test
