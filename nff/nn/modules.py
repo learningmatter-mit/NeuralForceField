@@ -29,7 +29,6 @@ class GraphDis(nn.Module):
         Fr,
         Fe,
         cutoff,
-        device,
         box_size=None
     ):
         super().__init__()
@@ -38,10 +37,9 @@ class GraphDis(nn.Module):
         self.Fe = Fe # include distance
         self.F = Fr + Fe
         self.cutoff = cutoff
-        self.device = device
 
         if box_size is not None:
-            self.box_size = torch.Tensor(box_size, device=device)
+            self.box_size = torch.Tensor(box_size)
         else:
             self.box_size = None
     
@@ -54,18 +52,21 @@ class GraphDis(nn.Module):
         Returns:
             torch.FloatTensor: distance matrix of dim (B, N, N, 1)
         """
-        
+        device = frame.device
+
         N_atom = frame.shape[1]
         frame = frame.view(-1, N_atom, 1, 3)
         dis_mat = frame.expand(-1, N_atom, N_atom, 3) \
                 - frame.expand(-1, N_atom, N_atom, 3).transpose(1,2)
         
+        box_size = self.box_size.to(device)
+
         if self.box_size is not None:
 
             # build minimum image convention 
             box_size = self.box_size
-            mask_pos = dis_mat.ge(0.5 * box_size).type(torch.FloatTensor).to(self.device)
-            mask_neg = dis_mat.lt(-0.5 * box_size).type(torch.FloatTensor).to(self.device)
+            mask_pos = torch.FloatTensor(dis_mat.ge(0.5 * box_size), device=device)
+            mask_neg = torch.FloatTensor(dis_mat.lt(-0.5 * box_size), device=device)
             
             # modify distance 
             dis_add = mask_neg * box_size
@@ -80,7 +81,7 @@ class GraphDis(nn.Module):
         # mask is a byte tensor of dim (B, N, N)
         mask = (dis_sq <= self.cutoff ** 2) & (dis_sq != 0)
 
-        A = mask.unsqueeze(3).type(torch.FloatTensor).to(self.device) #         
+        A = torch.FloatTensor(mask.unsqueeze(3), device=device)
 
         # 1) PBC 2) # gradient of zero distance 
         dis_sq = dis_sq.unsqueeze(3)
@@ -106,8 +107,8 @@ class GraphDis(nn.Module):
         # shape (B, N, N, 3)
         e, A = self.get_bond_vector_matrix(frame=xyz)
         # append it to the edge matrix
-        e = e.type(torch.FloatTensor).to(self.device)
-        A = A.type(torch.FloatTensor).to(self.device)
+        e = torch.FloatTensor(e, device=device)
+        A = torch.FloatTensor(A, device=device)
         
         return (r, e, A)
 
