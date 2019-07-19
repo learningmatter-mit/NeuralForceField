@@ -75,6 +75,19 @@ class Dataset(TorchDataset):
         )
         return 
 
+    def save(self, path):
+        torch.save(self, path)
+
+    @classmethod
+    def from_file(cls, path):
+        obj = torch.load(path)
+        if isinstance(obj, cls):
+            return obj
+        else:
+            raise TypeError(
+                '{} is not an instance from {}'.format(path, type(cls))
+            )
+
 
 def split_train_test(dataset, test_size=0.2):
     """Splits the current dataset in two, one for training and
