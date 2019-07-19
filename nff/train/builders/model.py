@@ -58,7 +58,6 @@ def get_model(params):
         n_gaussians=params['n_gaussians'], 
         n_convolutions=params['n_convolutions'],
         cutoff=params['cutoff'], 
-        device=params['device'],
         bond_par=params.get('bond_par', 50.0),
         trainable_gauss=params.get('trainable_gauss', False),
         box_size=params.get('box_size', None)

@@ -91,6 +91,9 @@ class Trainer:
         else:
             self._model.load_state_dict(state_dict)
 
+    def get_best_model(self):
+        return torch.load(self.best_model)
+
     @property
     def state_dict(self):
         state_dict = {

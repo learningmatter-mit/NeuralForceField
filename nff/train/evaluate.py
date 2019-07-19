@@ -5,9 +5,12 @@ import torch
 from nff.utils.scatter import compute_grad
 
 
-def evaluate(model, loader, loss_fn, loss_is_normalized=True):
+def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
     """Evaluate the current state of the model using a given dataloader
     """
+
+    model.to(device)
+    loader.to(device)
 
     eval_loss = 0.0
     n_eval = 0
