@@ -44,7 +44,11 @@ class NeuralFF(Calculator):
         device=None
     ):
         
-        if device is not None
+        if device is not None:
+            device = model.device
+        else:
+            model.to(device)
+
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # number of atoms 
