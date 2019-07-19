@@ -18,7 +18,6 @@ class NeuralFF(Calculator):
     def __init__(
         self,
         model,
-        device,
         bond_adj=None,
         bond_len=None,
         **kwargs
@@ -34,7 +33,6 @@ class NeuralFF(Calculator):
 
         Calculator.__init__(self, **kwargs)
         self.model = model
-        self.device = device
         self.bond_adj = bond_adj
         self.bond_len = bond_len
 
@@ -42,14 +40,16 @@ class NeuralFF(Calculator):
         self,
         atoms=None,
         properties=['energy'],
-        system_changes=all_changes
+        system_changes=all_changes,
+        device=None
     ):
         
+        if device is not None
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # number of atoms 
-        #n_atom = atoms.get_atomic_numbers().shape[0]
         num_atoms = atoms.get_atomic_numbers().shape[0]
+
         # run model 
         atomic_numbers = atoms.get_atomic_numbers()#.reshape(1, -1, 1)
         xyz = atoms.get_positions()#.reshape(-1, num_atoms, 3)
@@ -69,30 +69,22 @@ class NeuralFF(Calculator):
 
         # rebtach based on the number of atoms
 
-        atomic_numbers = Variable(
-            torch.LongTensor(atomic_numbers).reshape(-1, num_atoms)
-        ).to(self.device)
+        atomic_numbers = torch.LongTensor(atomic_numbers, device=device).reshape(-1, num_atoms)
 
-        xyz = Variable(
-            torch.Tensor(xyz).reshape(-1, num_atoms, 3)
-        ).to(self.device)
+        xyz = torch.Tensor(xyz, device=device).reshape(-1, num_atoms, 3)
 
         xyz.requires_grad = True
 
-        # predict energy and force
-        if bond_len is not None and bond_adj is not None:
-            energy = self.model(
-                r=atomic_numbers,
-                xyz=xyz,
-                bond_adj=bond_adj,
-                bond_len=bond_len
-            )
+        energy = self.model(
+            r=atomic_numbers,
+            xyz=xyz,
+            bond_adj=bond_adj,
+            bond_len=bond_len
+        )
 
-            forces = -compute_grad(inputs=xyz, output=energy)
+        forces = -compute_grad(inputs=xyz, output=energy)
 
-        else:
-            energy = self.model(r=atomic_numbers, xyz=xyz)
-            forces = -compute_grad(inputs=xyz, output=energy)
+        kin_energy = self.get_kinetic_energy()
 
         # change energy and forces back 
         energy = energy.reshape(-1)
@@ -106,6 +98,8 @@ class NeuralFF(Calculator):
             'energy': energy.reshape(-1),
             'forces': forces
         }
+
+    def get_kinetic_energy(self, ):
 
     @classmethod
     def from_file(
