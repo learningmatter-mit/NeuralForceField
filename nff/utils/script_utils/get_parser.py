@@ -88,6 +88,7 @@ def add_subparsers(cmd_parser, defaults={}):
     )
     train_parser.add_argument(
         "--n_epochs",
+        type=int,
         help="Maximum number of training epochs (default: %(default)s)",
         default=1000,
     )

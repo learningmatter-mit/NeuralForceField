@@ -15,6 +15,10 @@ def setup_run(args):
     argparse_dict = vars(args)
     jsonpath = os.path.join(args.model_path, "args.json")
 
+    # absolute paths
+    argparse_dict['data_path'] = os.path.abspath(argparse_dict['data_path'])
+    argparse_dict['model_path'] = os.path.abspath(argparse_dict['model_path'])
+
     if args.mode == "train":
         if args.overwrite and os.path.exists(args.model_path):
             logging.info("existing model will be overwritten...")
