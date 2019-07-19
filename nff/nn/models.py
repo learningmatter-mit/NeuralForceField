@@ -36,7 +36,6 @@ class Net(nn.Module):
         n_gaussians,
         n_convolutions,
         cutoff,
-        device='cpu',
         bond_par=50.0,
         trainable_gauss=False,
         box_size=None,
@@ -59,7 +58,6 @@ class Net(nn.Module):
         self.graph_dis = GraphDis(Fr=1,
                                   Fe=1,
                                   cutoff=cutoff,
-                                  device=device,
                                   box_size=box_size)
 
         self.convolutions = nn.ModuleList([
@@ -83,9 +81,7 @@ class Net(nn.Module):
         self.bond_energy_graph = BondEnergyModule(batch=True)
         self.bond_energy_sample = BondEnergyModule(batch=False)
         self.bond_par = bond_par
-        self.device = device
 
-        self.to(device)
         
     def forward(self, r, xyz, a=None, N=None, bond_adj=None, bond_len=None):
         """Summary
