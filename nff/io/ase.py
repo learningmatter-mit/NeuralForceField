@@ -7,6 +7,7 @@ from ase.calculators.calculator import Calculator, all_changes
 
 from nff.utils.scatter import compute_grad
 import nff.utils.constants as const
+from nff.train.builders import load_model
 
 
 class NeuralFF(Calculator):
@@ -14,13 +15,19 @@ class NeuralFF(Calculator):
 
     implemented_properties = ['energy', 'forces']
 
-    def __init__(self, model, device, num_atoms, bond_adj=None, bond_len=None, **kwargs):
+    def __init__(
+        self,
+        model,
+        device,
+        bond_adj=None,
+        bond_len=None,
+        **kwargs
+    ):
         """Creates a NeuralFF calculator.
 
         Args:
             model (one of nff.nn.models)
             device (str)
-            num_atoms (int)
             bond_adj (? or None)
             bond_len (? or None)
         """
@@ -28,18 +35,21 @@ class NeuralFF(Calculator):
         Calculator.__init__(self, **kwargs)
         self.model = model
         self.device = device
-        self.num_atoms = num_atoms
         self.bond_adj = bond_adj
         self.bond_len = bond_len
 
-    def calculate(self, atoms=None, properties=['energy'],
-                  system_changes=all_changes):
+    def calculate(
+        self,
+        atoms=None,
+        properties=['energy'],
+        system_changes=all_changes
+    ):
         
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # number of atoms 
         #n_atom = atoms.get_atomic_numbers().shape[0]
-        num_atoms = self.num_atoms
+        num_atoms = atoms.get_atomic_numbers().shape[0]
         # run model 
         atomic_numbers = atoms.get_atomic_numbers()#.reshape(1, -1, 1)
         xyz = atoms.get_positions()#.reshape(-1, num_atoms, 3)
@@ -59,14 +69,27 @@ class NeuralFF(Calculator):
 
         # rebtach based on the number of atoms
 
-        atomic_numbers = Variable(torch.LongTensor(atomic_numbers).reshape(-1, num_atoms)).to(self.device)
-        xyz = Variable(torch.Tensor(xyz).reshape(-1, num_atoms, 3)).to(self.device)
+        atomic_numbers = Variable(
+            torch.LongTensor(atomic_numbers).reshape(-1, num_atoms)
+        ).to(self.device)
+
+        xyz = Variable(
+            torch.Tensor(xyz).reshape(-1, num_atoms, 3)
+        ).to(self.device)
+
         xyz.requires_grad = True
 
         # predict energy and force
         if bond_len is not None and bond_adj is not None:
-            energy = self.model(r=atomic_numbers, xyz=xyz, bond_adj=bond_adj, bond_len=bond_len)
+            energy = self.model(
+                r=atomic_numbers,
+                xyz=xyz,
+                bond_adj=bond_adj,
+                bond_len=bond_len
+            )
+
             forces = -compute_grad(inputs=xyz, output=energy)
+
         else:
             energy = self.model(r=atomic_numbers, xyz=xyz)
             forces = -compute_grad(inputs=xyz, output=energy)
@@ -83,3 +106,15 @@ class NeuralFF(Calculator):
             'energy': energy.reshape(-1),
             'forces': forces
         }
+
+    @classmethod
+    def from_file(
+        cls,
+        model_path,
+        device,
+        bond_adj=None,
+        bond_len=None,
+        **kwargs
+    ):
+        model = load_model(model_path)
+        return cls(model, device, bond_adj, bond_len, **kwargs)
