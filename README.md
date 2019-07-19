@@ -1,48 +1,66 @@
-# Neural Network code to perform energy, force, Hessian computations based on graph convolution 
+# Neural Force Field
 
-## Getting Started 
-First you need to set up your environment with the necessary python intall. This code is developed to be compatible with [graphbuilder](https://github.mit.edu/MLMat/graphbuilder) by William Harris. However the code is still under development, so please be sure to clone wujie branch to be compatible 
+The Neural Force Field (NFF) code is an API based on SchNet [1-4]. It provides an interface to train and evaluate neural networks for force fields.
 
-be sure to install the packages in the following way. 
+## Installation from source
 
-### install required packages(It is advised that you create an new environment to intall alls the packages)
+This software requires the following packages:
 
-pytorch: ```conda install pytorch torchvision cudatoolkit=10.0 -c pytorch```
-(Be sure to know your CUDA version and python version and install accordinly)
+- [PyTorch](http://pytorch.org)
+- [scikit-learn](http://scikit-learn.org/stable/)
+- [ase](https://wiki.fysik.dtu.dk/ase/)
+- [networkx](https://networkx.github.io/)
 
-sk-learn: ```conda install scikit-learn```
-
-ASE: ```pip install ase```
-
-networkx: ```pip install networkx```
-
-if you want a install with database stuff, follow [Wil's tutorial](https://github.mit.edu/MLMat/mpnnet/blob/master/docs/README.md)
-
-
-### clone Repos
-
-set up directories. (You don't have to do this, just change the import paths when you run test in the notebook)
+We highly recommend to create a `conda` environment to run the code. To do that, use the following commands:
 
 ```bash
-cd ~/
-make Repo
-cd Repo
-mkdir projects
-cd projects
+conda upgrade conda
+conda create -n nff python=3.7 scikit-learn pytorch=1.0.0 cudatoolkit=10.0 ase -c pytorch -c conda-forge
 ```
 
-clone graphbuilder (wujie branch)
+You need to activate the `nff` environment to install the NFF package:
 
-```git clone --single-branch --branch wwj host:git@github.mit.edu:MLMat/graphbuilder.git```
+```bash
+conda activate nff
+```
 
-clone NeuralForceField Code (master branch)
-```git clone git@github.mit.edu:MLMat/NeuralForceField.git```
+Finally, install the `nff` package by running:
 
-You will find two directories `NeuralForceField` and `graphbuilder`, and be sure to add them in your PYTHONPATH
+```bash
+pip install .
+```
 
-##  Tutorial
+## Usage
 
-You will find a tutorial.ipynb in the notebooks folder 
+### Command line
+The simplest way to use the `nff` package is to use the premade scripts (in the `scripts`) folder. As an example, to train a SchNet model with the default parameters using the example dataset (ethanol geometries) from the command line, run the command
+
+```bash
+nff_train.py train schnet examples/dataset.pth.tar examples/train_model --device 0
+```
+
+This will use 60% of the dataset for training, 20% for validation and 20% for testing. The training will happen on the device `cuda:0`. Results of training, checkpoints and hyperparameters will be saved on the path `examples/train_model`.
+
+### Usage with Jupyter Notebooks and other scripts
+
+A series of tutorials illustrating how `nff` can be used in conjunction with Jupyter Notebooks or other scripts is provided in the `example/` folder. It also covers how to integrate a pre-trained model with an ASE calculator.
 
 
+## References
 
+* [1] K.T. Schütt. F. Arbabzadah. S. Chmiela, K.-R. Müller, A. Tkatchenko.  
+*Quantum-chemical insights from deep tensor neural networks.*
+Nature Communications **8**. 13890 (2017)   
+[10.1038/ncomms13890](http://dx.doi.org/10.1038/ncomms13890)
+
+* [2] K.T. Schütt. P.-J. Kindermans, H. E. Sauceda, S. Chmiela, A. Tkatchenko, K.-R. Müller.  
+*SchNet: A continuous-filter convolutional neural network for modeling quantum interactions.*
+Advances in Neural Information Processing Systems 30, pp. 992-1002 (2017) [link](http://papers.nips.cc/paper/6700-schnet-a-continuous-filter-convolutional-neural-network-for-modeling-quantum-interactions)
+
+* [3] K.T. Schütt. P.-J. Kindermans, H. E. Sauceda, S. Chmiela, A. Tkatchenko, K.-R. Müller.  
+*SchNet - a deep learning architecture for molecules and materials.* 
+The Journal of Chemical Physics 148(24), 241722 (2018) [10.1063/1.5019779](https://doi.org/10.1063/1.5019779)
+
+* [4] K.T. Schütt, P. Kessel, M. Gastegger, K. Nicoli, A. Tkatchenko, K.-R. Müller.
+*SchNetPack: A Deep Learning Toolbox For Atomistic Systems.*
+J. Chem. Theory Comput. **15**(1), 448-455 (2019). [10.1021/acs.jctc.8b00908](https://doi.org/10.1021/acs.jctc.8b00908)

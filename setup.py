@@ -14,12 +14,12 @@ setup(
     version="1.0.0",
     author="Wujie Wang, Daniel Schwalbe-Koda",
     email="{wwj,dskoda}@mit.edu",
-    url="https://github.com/atomistic-machine-learning/schnetpack",
+    url="https://github.mit.edu/MLMat/NeuralForceField",
     packages=find_packages("."),
     scripts=[
         "scripts/nff_train.py",
     ],
-    python_requires=">=3.6",
+    python_requires=">=3.5",
     install_requires=[
         "torch>=0.4.1",
         "numpy",
