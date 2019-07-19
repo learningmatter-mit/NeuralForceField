@@ -103,7 +103,8 @@ class NeuralFF(Calculator):
             'forces': forces
         }
 
-    def get_kinetic_energy(self, ):
+    def get_kinetic_energy(self):
+        pass
 
     @classmethod
     def from_file(
