@@ -98,8 +98,16 @@ class Dense(nn.Linear):
         bias_init (callable): function that takes bias tensor and initializes (default: zeros initializer)
     """
 
-    def __init__(self, in_features, out_features, bias=True, activation=None,
-                 weight_init=xavier_uniform_, bias_init=zeros_initializer):
+    def __init__(
+        self,
+        in_features,
+        out_features,
+        bias=True,
+        activation=None,
+        weight_init=xavier_uniform_,
+        bias_init=zeros_initializer
+    ):
+
         self.weight_init = weight_init
         self.bias_init = bias_init
         self.activation = activation

@@ -12,7 +12,7 @@ from nff.nn.activations import shifted_softplus
 EPSILON = 1e-15
 
 
-class GraphDis(torch.nn.Module):
+class GraphDis(nn.Module):
 
     """Compute distance matrix on the fly 
     
@@ -41,7 +41,7 @@ class GraphDis(torch.nn.Module):
         self.device = device
 
         if box_size is not None:
-            self.box_size = torch.Tensor(box_size)
+            self.box_size = torch.Tensor(box_size, device=device)
         else:
             self.box_size = None
     
