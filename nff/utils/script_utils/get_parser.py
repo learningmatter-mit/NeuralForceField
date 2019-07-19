@@ -46,7 +46,7 @@ def add_subparsers(cmd_parser, defaults={}):
         help="Split into [validation] [test] and use remaining for training",
         type=int,
         nargs=2,
-        default=[None, None],
+        default=[0.2, 0.2],
     )
     train_parser.add_argument(
         "--lr",
@@ -102,13 +102,13 @@ def add_subparsers(cmd_parser, defaults={}):
     eval_parser = argparse.ArgumentParser(add_help=False, parents=[cmd_parser])
     eval_parser.add_argument("data_path", help="Dataset to use")
     eval_parser.add_argument("model_path", help="Path of stored model")
-    eval_parser.add_argument(
-        "--split",
-        help="Evaluate trained model on given split",
-        choices=["train", "validation", "test"],
-        default=["test"],
-        nargs="+",
-    )
+#    eval_parser.add_argument(
+#        "--split",
+#        help="Evaluate trained model on given split",
+#        choices=["train", "validation", "test"],
+#        default=["test"],
+#        nargs="+",
+#    )
 
     # model-specific parsers
     model_parser = argparse.ArgumentParser(add_help=False)

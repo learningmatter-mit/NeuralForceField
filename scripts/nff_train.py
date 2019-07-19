@@ -36,10 +36,10 @@ if __name__ == "__main__":
 
     model = get_model(vars(args))
 
-    # splits the dataset in test, val, train sets
-    train_loader, val_loader, test_loader = get_loaders(args, logging=logging)
-
     if args.mode == "train":
+
+        # splits the dataset in test, val, train sets
+        train_loader, val_loader, test_loader = get_loaders(args, logging=logging)
 
         # run training
         logging.info("training...")
@@ -51,12 +51,13 @@ if __name__ == "__main__":
         # load model
         model = torch.load(os.path.join(args.model_path, "best_model"))
         loss_fn = build_mse_loss(args.rho)
+        test_loader = get_loaders(args, logging=logging)
 
         # run evaluation
         logging.info("evaluating...")
-        _, _, test_loss = evaluate(model, loader, loss_fn)
-        logging.info("... done!")
+        _, _, test_loss = evaluate(model, test_loader, loss_fn)
         logging.info('loss = %.4f' % test_loss)
+        logging.info("... done!")
 
     else:
         raise NotImplementedError("Unknown mode:", args.mode)
