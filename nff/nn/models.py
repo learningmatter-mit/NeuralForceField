@@ -109,7 +109,7 @@ class Net(nn.Module):
             assert len(r.shape) == 2
             assert len(xyz.shape) == 3
 
-            r, e, A = self.graph_dis(r=r, xyz=xyz)
+            e, A = self.graph_dis(xyz=xyz)
 
             r = self.atom_embed(r.type(torch.long))
 

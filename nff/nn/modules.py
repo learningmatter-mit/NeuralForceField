@@ -65,8 +65,8 @@ class GraphDis(nn.Module):
 
             # build minimum image convention 
             box_size = self.box_size
-            mask_pos = torch.FloatTensor(dis_mat.ge(0.5 * box_size), device=device)
-            mask_neg = torch.FloatTensor(dis_mat.lt(-0.5 * box_size), device=device)
+            mask_pos = dis_mat.ge(0.5 * box_size).float()
+            mask_neg = dis_mat.lt(-0.5 * box_size).float()
             
             # modify distance 
             dis_add = mask_neg * box_size
@@ -81,7 +81,7 @@ class GraphDis(nn.Module):
         # mask is a byte tensor of dim (B, N, N)
         mask = (dis_sq <= self.cutoff ** 2) & (dis_sq != 0)
 
-        A = torch.FloatTensor(mask.unsqueeze(3), device=device)
+        A = mask.unsqueeze(3).float()
 
         # 1) PBC 2) # gradient of zero distance 
         dis_sq = dis_sq.unsqueeze(3)
@@ -93,24 +93,14 @@ class GraphDis(nn.Module):
         # compute degree of nodes 
         return(dis_mat, A.squeeze(3)) 
 
-    def forward(self, r, xyz):
-
-        assert len(xyz.shape) == 3
-        assert xyz.shape[2] == 3
-
-        F = self.F  # F = Fr + Fe
-        Fr = self.Fr # number of node feature
-        Fe = self.Fe # number of edge featue
-        B = r.shape[0] # batch size
-        N = r.shape[1] # number of nodes 
-
+    def forward(self, xyz):
         # shape (B, N, N, 3)
         e, A = self.get_bond_vector_matrix(frame=xyz)
-        # append it to the edge matrix
-        e = torch.FloatTensor(e, device=device)
-        A = torch.FloatTensor(A, device=device)
+
+        e = e.float()
+        A = A.float()
         
-        return (r, e, A)
+        return e, A
 
 
 class BondEnergyModule(nn.Module):
