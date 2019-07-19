@@ -1,3 +1,3 @@
-from .get_parser import *
+from .parsers import *
 from .loaders import *
 from .setup import *
