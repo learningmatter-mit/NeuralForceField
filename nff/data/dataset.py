@@ -45,7 +45,7 @@ class Dataset(TorchDataset):
         ]), 'All lists should have the same length.'
 
         self.nxyz = self._to_array(nxyz)
-        self.energy = self._to_array(energy)
+        self.energy = energy
         self.force = self._to_array(force)
         self.smiles = smiles
 
@@ -76,7 +76,7 @@ class Dataset(TorchDataset):
             x * const.HARTREE_TO_KCAL_MOL / const.BOHR_RADIUS
             for x in self.force
         ]
-        self.energy = self.energy * const.HARTREE_TO_KCAL_MOL
+        self.energy = [x * const.HARTREE_TO_KCAL_MOL for x in self.energy]
 
         self.units = 'kcal/mol'
 
@@ -85,7 +85,7 @@ class Dataset(TorchDataset):
             x / const.HARTREE_TO_KCAL_MOL * const.BOHR_RADIUS
             for x in self.force
         ]
-        self.energy = self.energy / const.HARTREE_TO_KCAL_MOL
+        self.energy = [x / const.HARTREE_TO_KCAL_MOL for x in self.energy]
         self.units = 'atomic'
 
     def shuffle(self):

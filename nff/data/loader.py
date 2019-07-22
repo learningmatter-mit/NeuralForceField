@@ -143,10 +143,7 @@ class GraphLoader:
             graph.SetEdgeLabels()
             graph.LabelEdgesWithDistances()
 
-            if isinstance(energy, np.ndarray):
-                graph.SetGraphLabel(torch.Tensor(energy))
-            else:
-                graph.SetGraphLabel(torch.Tensor([energy]))
+            graph.SetGraphLabel(torch.Tensor([energy]))
 
             graph_data.AddGraph(graph)
     
