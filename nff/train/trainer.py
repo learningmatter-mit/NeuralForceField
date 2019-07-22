@@ -4,7 +4,6 @@ Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/s
 """
 
 import os
-import sys
 import numpy as np
 import torch
 
@@ -14,21 +13,25 @@ from nff.train.evaluate import evaluate
 
 MAX_EPOCHS = 100
 
+
 class Trainer:
     r"""Class to train a model.
 
-    This contains an internal training loop which takes care of validation and can be
-    extended with custom functionality using hooks.
+    This contains an internal training loop which takes care of validation
+        and can be extended with custom functionality using hooks.
 
     Args:
        model_path (str): path to the model directory.
        model (torch.Module): model to be trained.
        loss_fn (callable): training loss function.
        optimizer (torch.optim.optimizer.Optimizer): training optimizer.
-       train_loader (torch.utils.data.DataLoader): data loader for training set.
-       validation_loader (torch.utils.data.DataLoader): data loader for validation set.
+       train_loader (torch.utils.data.DataLoader): data loader for 
+         training set.
+       validation_loader (torch.utils.data.DataLoader): data loader for 
+         validation set.
        checkpoints_to_keep (int, optional): number of saved checkpoints.
-       checkpoint_interval (int, optional): intervals after which checkpoints is saved.
+       checkpoint_interval (int, optional): intervals after which checkpoints 
+         is saved.
        hooks (list, optional): hooks to customize training process.
        loss_is_normalized (bool, optional): if True, the loss per data point will be
            reported. Otherwise, the accumulated loss is reported.
