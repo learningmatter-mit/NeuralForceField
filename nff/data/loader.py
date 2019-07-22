@@ -142,8 +142,12 @@ class GraphLoader:
             graph.UpdateConnectivity(cutoff=self.cutoff)
             graph.SetEdgeLabels()
             graph.LabelEdgesWithDistances()
-            graph.SetGraphLabel(torch.Tensor([energy]))
-    
+
+            if isinstance(energy, np.ndarray):
+                graph.SetGraphLabel(torch.Tensor(energy))
+            else:
+                graph.SetGraphLabel(torch.Tensor([energy]))
+
             graph_data.AddGraph(graph)
     
         graph_data.CreateBatches(batch_size=self.batch_size, verbose=False)

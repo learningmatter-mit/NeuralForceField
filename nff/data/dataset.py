@@ -62,7 +62,7 @@ class Dataset(TorchDataset):
 
     def _to_array(self, x):
         """Converts input `x` to array"""
-        array = torch.Tensor
+        array = np.array
         
         if type(x[0]) == float:
             return array(x)

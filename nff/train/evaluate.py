@@ -45,7 +45,7 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
             xyz=xyz,
             a=a,
             N=N
-        ) 
+        )
 
         force_nff = -compute_grad(inputs=xyz, output=energy_nff)
 
@@ -64,8 +64,8 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
             eval_loss += eval_batch_loss
 
         for key in all_results.keys():
-            all_targets[key] += [ground_truth[key]]
-            all_results[key] += [results[key]]
+            all_targets[key] += [ground_truth[key].cpu().reshape(-1).data.numpy()]
+            all_results[key] += [results[key].cpu().reshape(-1).data.numpy()]
 
     # weighted average over batches
     if loss_is_normalized:
@@ -73,6 +73,6 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
 
     for dict_ in [all_results, all_targets]:
         for key, val in dict_.items():
-            dict_[key] = torch.cat(val, dim=0)
+            dict_[key] = np.concatenate(val, axis=0)
 
     return all_results, all_targets, eval_loss
