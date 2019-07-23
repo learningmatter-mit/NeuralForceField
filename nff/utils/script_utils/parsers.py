@@ -44,7 +44,7 @@ def add_subparsers(cmd_parser, defaults={}):
     train_parser.add_argument(
         "--split",
         help="Split into [validation] [test] and use remaining for training",
-        type=int,
+        type=float,
         nargs=2,
         default=[0.2, 0.2],
     )
