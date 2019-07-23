@@ -34,6 +34,7 @@ def compute_jacobian(inputs, output, device):
 
     return torch.transpose(jacobian, dim0=0, dim1=1)
 
+
 def compute_grad(inputs, output):
     '''
     Args:
@@ -52,6 +53,7 @@ def compute_grad(inputs, output):
                       retain_graph=True)
     
     return gradspred
+
 
 def compute_hess(inputs, output, device):
     '''

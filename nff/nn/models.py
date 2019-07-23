@@ -66,7 +66,7 @@ class Net(nn.Module):
                              n_gaussians=n_gaussians, 
                              cutoff=cutoff,
                              trainable_gauss=trainable_gauss)
-            for i in range(n_convolutions)
+            for _ in range(n_convolutions)
         ])
 
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
@@ -142,9 +142,9 @@ class Net(nn.Module):
             if N is None:
                 raise ValueError("needs to input N for graph partitioning within the batch")
                 
-            r = self.atom_embed(r.type(torch.long)).squeeze()
+            r = self.atom_embed(r.long()).squeeze()
 
-            e = (xyz[a[:,0]] - xyz[a[:,1]]).pow(2).sum(1).sqrt()[:, None]
+            e = (xyz[a[:, 0]] - xyz[a[:, 1]]).pow(2).sum(1).sqrt()[:, None]
 
             for i, conv in enumerate(self.convolutions):
                 dr = conv(r=r, e=e, a=a)
@@ -163,6 +163,7 @@ class Net(nn.Module):
                                                bond_par=bond_par)
 
                 ebond_batch = list(torch.split(ebond, N))
+
                 for b in range(len(N)): 
                     E_batch[b] = torch.sum(E_batch[b] + ebond_batch[b], dim=0)
 
