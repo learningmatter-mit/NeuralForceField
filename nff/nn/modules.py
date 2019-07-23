@@ -2,7 +2,6 @@ import numpy as np
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from nff.nn.layers import Dense, GaussianSmearing
 from nff.utils.scatter import scatter_add
@@ -17,7 +16,7 @@ class GraphDis(nn.Module):
     """Compute distance matrix on the fly 
     
     Attributes:
-        Fr (int): node geature length
+        Fr (int): node feature length
         Fe (int): edge feature length
         F (int): Fr + Fe
         cutoff (float): cutoff for convolution
@@ -34,7 +33,7 @@ class GraphDis(nn.Module):
         super().__init__()
 
         self.Fr = Fr
-        self.Fe = Fe # include distance
+        self.Fe = Fe  # include distance
         self.F = Fr + Fe
         self.cutoff = cutoff
 
@@ -54,26 +53,25 @@ class GraphDis(nn.Module):
         """
         device = frame.device
 
-        N_atom = frame.shape[1]
-        frame = frame.view(-1, N_atom, 1, 3)
-        dis_mat = frame.expand(-1, N_atom, N_atom, 3) \
-                - frame.expand(-1, N_atom, N_atom, 3).transpose(1,2)
-        
+        n_atoms = frame.shape[1]
+        frame = frame.view(-1, n_atoms, 1, 3)
+        dis_mat = frame.expand(-1, n_atoms, n_atoms, 3) \
+            - frame.expand(-1, n_atoms, n_atoms, 3).transpose(1, 2)
 
         if self.box_size is not None:
 
             box_size = self.box_size.to(device)
 
-            # build minimum image convention 
+            # build minimum image convention
             box_size = self.box_size
             mask_pos = dis_mat.ge(0.5 * box_size).float()
             mask_neg = dis_mat.lt(-0.5 * box_size).float()
-            
-            # modify distance 
+
+            # modify distance
             dis_add = mask_neg * box_size
             dis_sub = mask_pos * box_size
             dis_mat = dis_mat + dis_add - dis_sub
-        
+
         # create cutoff mask
 
         # compute squared distance of dim (B, N, N)
@@ -84,15 +82,15 @@ class GraphDis(nn.Module):
 
         A = mask.unsqueeze(3).float()
 
-        # 1) PBC 2) # gradient of zero distance 
+        # 1) PBC 2) # gradient of zero distance
         dis_sq = dis_sq.unsqueeze(3)
 
-        # to make sure the distance is not zero, otherwise there will be inf gradient 
+        # to make sure the distance is not zero
+        # otherwise there will be inf gradient
         dis_sq = (dis_sq * A) + EPSILON
         dis_mat = dis_sq.sqrt()
-        
-        # compute degree of nodes 
-        return(dis_mat, A.squeeze(3)) 
+
+        return dis_mat, A.squeeze(3)
 
     def forward(self, xyz):
         # shape (B, N, N, 3)
@@ -100,7 +98,7 @@ class GraphDis(nn.Module):
 
         e = e.float()
         A = A.float()
-        
+
         return e, A
 
 
@@ -113,9 +111,13 @@ class BondEnergyModule(nn.Module):
     def forward(self, xyz, bond_adj, bond_len, bond_par):
         
         if self.batch:
-            e = (xyz[bond_adj[:,0]] - xyz[bond_adj[:,1]]).pow(2).sum(1).sqrt()[:, None]
+            e = (
+                xyz[bond_adj[:, 0]] - xyz[bond_adj[:, 1]]
+            ).pow(2).sum(1).sqrt()[:, None]
+
             ebond = bond_par * (e - bond_len)**2
             ebond = 0.5 * scatter_add(src=ebond, index=bond_adj[:, 0], dim=0)
+
         else:
             e = (xyz[:, bond_adj[:,0]] - xyz[:, bond_adj[:,1]]).pow(2).sum(2).sqrt()
             ebond = 0.5 * bond_par * (e - bond_len) ** 2
@@ -132,9 +134,9 @@ class InteractionBlock(nn.Module):
         dense_1 (Dense): dense layer 1 to obtain the updated atomic embedding 
         dense_2 (Dense): dense layer 2 to obtain the updated atomic embedding
         distance_filter_1 (Dense): dense layer 1 for filtering gaussian
-            expanded distances 
+            expanded distances
         distance_filter_2 (Dense): dense layer 1 for filtering gaussian
-            expanded distances 
+            expanded distances
         smearing (GaussianSmearing): gaussian basis expansion for distance 
             matrix of dimension B, N, N, 1
         mean_pooling (bool): if True, performs a mean pooling 
@@ -174,11 +176,11 @@ class InteractionBlock(nn.Module):
                              activation=shifted_softplus)
 
         self.dense_2 = Dense(in_features=n_atom_basis,
-                             out_features= n_atom_basis,
+                             out_features=n_atom_basis,
                              activation=None)
         
     def forward(self, r, e, A=None, a=None):       
-        if a is None: # non-batch case ...
+        if a is None:  # non-batch case ...
             assert len(r.shape) == 3
             assert len(e.shape) == 4
             
@@ -186,7 +188,7 @@ class InteractionBlock(nn.Module):
                 e.reshape(-1, r.shape[1], r.shape[1]),
                 is_batch=False
             )
-            W = self.distance_filter_1(e)
+            e = self.distance_filter_1(e)
             W = self.distance_filter_2(e)
             r = self.atom_filter(r)
             
@@ -208,7 +210,7 @@ class InteractionBlock(nn.Module):
             assert len(r.shape) == 2
             assert len(e.shape) == 2
             e = self.smearing(e, is_batch=True)
-            W = self.distance_filter_1(e)
+            e = self.distance_filter_1(e)
             W = self.distance_filter_2(e)
             W = W.squeeze()
 
@@ -216,7 +218,7 @@ class InteractionBlock(nn.Module):
             # Filter 
             y = r[a[:, 1]].squeeze()
 
-            y= y * W
+            y = y * W
 
             # Atomwise sum 
             y = scatter_add(src=y, index=a[:, 0], dim=0)
