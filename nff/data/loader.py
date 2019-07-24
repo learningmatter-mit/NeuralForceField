@@ -79,6 +79,7 @@ class GraphLoader:
             f (torch.Tensor)
             u (torch.Tensor)
             N (torch.Tensor)
+            pbc (torch.Tensor)
         """
 
         a = self.graph_dataset.batches[idx].data['a'].to(self.device)
@@ -87,6 +88,7 @@ class GraphLoader:
         u = self.graph_dataset.batches[idx].data['y'].to(self.device)
         N = self.graph_dataset.batches[idx].data['N']
         xyz = self.graph_dataset.batches[idx].data['xyz'].to(self.device)
+        pbc = self.graph_dataset.batches[idx].data['pbc'].to(self.device)
 
         bond_adj = self.graph_dataset.batches[idx].data.get('bond_a', None)
         if bond_adj is not None:
@@ -96,7 +98,7 @@ class GraphLoader:
         if bond_len is not None:
             bond_len.to(self.device)
 
-        return xyz, a, bond_adj, bond_len, r, f, u, N
+        return xyz, a, bond_adj, bond_len, r, f, u, N, pbc
 
     def __iter__(self):
         self.iter_n = 0
@@ -129,11 +131,13 @@ class GraphLoader:
             force = self.dataset.force[index]
             energy = self.dataset.energy[index]
             species = self.dataset.smiles[index]
+            pbc = self.dataset.pbc[index]
     
             number = nxyz[:, 0].reshape(-1, 1)
 
             graph = Graph(N=number.shape[0],
                           dynamic_adj_mat=self.dynamic_adj_mat,
+                          pbc=pbc,
                           name=species)
     
             nforce = np.hstack((number, force))
@@ -157,4 +161,4 @@ class GraphLoader:
 
     def shuffle_and_rebatch(self):
         self.shuffle()
-        self._init_graph_dataset()
+        self.graph_dataset = self._init_graph_dataset()
