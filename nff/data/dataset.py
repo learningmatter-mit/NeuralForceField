@@ -27,7 +27,7 @@ class Dataset(TorchDataset):
                  force,
                  smiles,
                  pbc=None,
-                 atomic_units=False):
+                 units='atomic'):
         """Constructor for Dataset class.
 
         Args:
@@ -55,16 +55,36 @@ class Dataset(TorchDataset):
         self.smiles = smiles
         self.pbc = pbc
 
-        self.units = 'atomic' if atomic_units else 'kcal/mol'
-
-        if atomic_units:
-            self.to_kcal_mol()
+        self.units = units
+        self.to_units('kcal/mol')
 
     def __len__(self):
         return len(self.nxyz)
 
     def __getitem__(self, idx):
         return self.nxyz[idx], self.energy[idx], self.force[idx], self.smiles[idx], self.pbc[idx]
+
+    def __add__(self, other):
+        if other.units != self.units:
+            print('changing units')
+            other.to_units(self.units)
+        
+        nxyz = np.concatenate((self.nxyz, other.nxyz), axis=0)
+        energy = np.concatenate((self.energy, other.energy), axis=0)
+
+        # force, smiles and pbc are lists
+        force = self.force + other.force
+        smiles = self.smiles + other.smiles
+        pbc = self.pbc + other.pbc
+        
+        return Dataset(
+            nxyz,
+            energy,
+            force,
+            smiles,
+            pbc,
+            units=self.units
+        )
 
     def _to_array(self, x):
         """Converts input `x` to array"""
@@ -75,7 +95,17 @@ class Dataset(TorchDataset):
         else:
             return [array(_) for _ in x]
 
-    def to_kcal_mol(self):
+    def to_units(self, target_unit):
+        if target_unit == 'kcal/mol' and self.units == 'atomic':
+            self.to_kcal_mol()
+
+        elif target_unit == 'atomic' and self.units == 'kcal/mol':
+            self.to_atomic_units()
+
+        else:
+            pass
+
+    def to_kcal_mol(self): 
         """Converts forces and energies from atomic units to kcal/mol."""
 
         self.force = [
