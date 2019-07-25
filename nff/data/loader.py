@@ -6,7 +6,6 @@ import torch
 from nff.data import Graph, GraphDataset
 import nff.utils.constants as const
 
-import ipdb 
 
 class GraphLoader:
     """Dataloader to deal with NFF calculations. Can be expanded to retrieve calculations
@@ -149,7 +148,6 @@ class GraphLoader:
             graph_data.AddGraph(graph)
     
         graph_data.CreateBatches(batch_size=self.batch_size, show_output=False)
-        #graph_data.set_label_mean(energy_mean)
     
         return graph_data
 
