@@ -6,6 +6,8 @@ import torch
 from nff.data import Graph, GraphDataset
 import nff.utils.constants as const
 
+import ipdb 
+
 class GraphLoader:
     """Dataloader to deal with NFF calculations. Can be expanded to retrieve calculations
          from the cluster later.
@@ -81,7 +83,7 @@ class GraphLoader:
             N (torch.Tensor)
         """
 
-        a = self.graph_dataset.batches[idx].data['a'].to(self.device)
+        neighbor_list = self.graph_dataset.batches[idx].data['neighbor_list'][:,1:].to(self.device)
         r = self.graph_dataset.batches[idx].data['r'][:, [0]].to(self.device)
         f = self.graph_dataset.batches[idx].data['r'][:, 1:4].to(self.device)
         u = self.graph_dataset.batches[idx].data['y'].to(self.device)
@@ -96,7 +98,7 @@ class GraphLoader:
         if bond_len is not None:
             bond_len.to(self.device)
 
-        return xyz, a, bond_adj, bond_len, r, f, u, N
+        return xyz, neighbor_list, bond_adj, bond_len, r, f, u, N
 
     def __iter__(self):
         self.iter_n = 0
@@ -120,35 +122,34 @@ class GraphLoader:
         """
     
         self.shuffle()
-        energy_mean = np.mean(self.dataset.energy)
+        #energy_mean = np.mean(self.dataset.energy)
     
-        graph_data = GraphDataset(dynamic_adj_mat=self.dynamic_adj_mat)
+        graph_data = GraphDataset(dynamic=self.dynamic_adj_mat)
     
         for index in range(len(self.dataset)):
             nxyz = self.dataset.nxyz[index]
             force = self.dataset.force[index]
             energy = self.dataset.energy[index]
-            species = self.dataset.smiles[index]
+            smiles = self.dataset.smiles[index]
     
             number = nxyz[:, 0].reshape(-1, 1)
 
             graph = Graph(N=number.shape[0],
-                          dynamic_adj_mat=self.dynamic_adj_mat,
-                          name=species)
-    
+                          dynamic=self.dynamic_adj_mat,
+                          graphname=smiles)
+            
             nforce = np.hstack((number, force))
             graph.SetNodeLabels(r=torch.Tensor(nforce))
             graph.SetXYZ(xyz=torch.Tensor(nxyz[:, 1:4]))
             graph.UpdateConnectivity(cutoff=self.cutoff)
-            graph.SetEdgeLabels()
-            graph.LabelEdgesWithDistances()
 
+            graph.LabelEdgesWithDistances()
             graph.SetGraphLabel(torch.Tensor([energy]))
 
             graph_data.AddGraph(graph)
     
-        graph_data.CreateBatches(batch_size=self.batch_size, verbose=False)
-        graph_data.set_label_mean(energy_mean)
+        graph_data.CreateBatches(batch_size=self.batch_size, show_output=False)
+        #graph_data.set_label_mean(energy_mean)
     
         return graph_data
 
