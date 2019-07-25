@@ -10,7 +10,6 @@ import torch
 from nff.utils.scatter import compute_grad
 from nff.train.evaluate import evaluate
 
-
 MAX_EPOCHS = 100
 
 
