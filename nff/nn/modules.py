@@ -119,9 +119,12 @@ class BondEnergyModule(nn.Module):
             ebond = 0.5 * scatter_add(src=ebond, index=bond_adj[:, 0], dim=0)
 
         else:
-            e = (xyz[:, bond_adj[:,0]] - xyz[:, bond_adj[:,1]]).pow(2).sum(2).sqrt()
+            e = (
+                xyz[:, bond_adj[:, 0]] - xyz[:, bond_adj[:, 1]]
+            ).pow(2).sum(2).sqrt()
+
             ebond = 0.5 * bond_par * (e - bond_len) ** 2
-        
+ 
         return ebond
 
 
@@ -141,7 +144,7 @@ class InteractionBlock(nn.Module):
             matrix of dimension B, N, N, 1
         mean_pooling (bool): if True, performs a mean pooling 
     """
-    
+
     def __init__(
         self,
         n_atom_basis,
@@ -172,18 +175,25 @@ class InteractionBlock(nn.Module):
                                  bias=False)
 
         self.dense_1 = Dense(in_features=n_filters,
-                             out_features= n_atom_basis,
+                             out_features=n_atom_basis,
                              activation=shifted_softplus)
 
         self.dense_2 = Dense(in_features=n_atom_basis,
                              out_features=n_atom_basis,
                              activation=None)
-        
-    def forward(self, r, e, A=None, a=None):       
+ 
+    def forward(self, r, e, A=None, a=None, pbc=None):
+        """
+        Args:
+            r: feature tensor
+            e: edge tensor
+            pbc: periodic map
+        """
+
         if a is None:  # non-batch case ...
             assert len(r.shape) == 3
             assert len(e.shape) == 4
-            
+
             e = self.smearing(
                 e.reshape(-1, r.shape[1], r.shape[1]),
                 is_batch=False
@@ -192,9 +202,9 @@ class InteractionBlock(nn.Module):
             W = self.distance_filter_2(e)
             r = self.atom_filter(r)
             
-           # adjacency matrix used as a mask
+            # adjacency matrix used as a mask
             A = A.unsqueeze(3).expand(-1, -1, -1, r.shape[2])
-            W = W #* A
+            # W = W #* A
             y = r[:, None, :, :].expand(-1, r.shape[1], -1, -1)
             
             # filtering 
@@ -221,8 +231,15 @@ class InteractionBlock(nn.Module):
             y = y * W
 
             # Atomwise sum 
-            y = scatter_add(src=y, index=a[:, 0], dim=0)
-            
+            if pbc is None:
+                y = scatter_add(src=y, index=a[:, 0], dim=0)
+            else:
+                y = scatter_add(
+                    src=y,
+                    index=pbc[a[:, 0]],
+                    dim=0
+                )[pbc]
+               
         # feed into Neural networks 
         y = self.dense_1(y)
         y = self.dense_2(y)
@@ -245,7 +262,7 @@ class GraphAttention(nn.Module):
         N_atom = h.shape[1]
         
         hi = h[:, :, None, :].expand(B, N_atom, N_atom, n_atom_basis)
-        hj = h[:, None, : ,:].expand(B, N_atom, N_atom, n_atom_basis)
+        hj = h[:, None, :, :].expand(B, N_atom, N_atom, n_atom_basis)
 
         hi = self.W(hi)
         hj = self.W(hj)
@@ -263,7 +280,7 @@ class GraphAttention(nn.Module):
         alpha = alpha/alpha_sum.unsqueeze(2).expand_as(hij)
 
         h_prime = (
-            h[:, None,  :, :].expand(B, N_atom, N_atom, n_atom_basis) * alpha
+            h[:, None, :, :].expand(B, N_atom, N_atom, n_atom_basis) * alpha
         ).sum(2)
         
         return h_prime

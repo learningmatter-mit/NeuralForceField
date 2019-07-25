@@ -80,6 +80,7 @@ class GraphLoader:
             f (torch.Tensor)
             u (torch.Tensor)
             N (torch.Tensor)
+            pbc (torch.Tensor)
         """
 
         neighbor_list = self.graph_dataset.batches[idx].data['neighbor_list'][:,1:].to(self.device)
@@ -88,6 +89,7 @@ class GraphLoader:
         u = self.graph_dataset.batches[idx].data['y'].to(self.device)
         N = self.graph_dataset.batches[idx].data['N']
         xyz = self.graph_dataset.batches[idx].data['xyz'].to(self.device)
+        pbc = self.graph_dataset.batches[idx].data['pbc'].to(self.device)
 
         bond_adj = self.graph_dataset.batches[idx].data.get('bond_a', None)
         if bond_adj is not None:
@@ -130,13 +132,15 @@ class GraphLoader:
             force = self.dataset.force[index]
             energy = self.dataset.energy[index]
             smiles = self.dataset.smiles[index]
+            pbc = self.dataset.pbc[index]
     
             number = nxyz[:, 0].reshape(-1, 1)
 
             graph = Graph(N=number.shape[0],
                           dynamic=self.dynamic_adj_mat,
+                          pbc=pbc,
                           graphname=smiles)
-            
+    
             nforce = np.hstack((number, force))
             graph.SetNodeLabels(r=torch.Tensor(nforce))
             graph.SetXYZ(xyz=torch.Tensor(nxyz[:, 1:4]))
@@ -156,4 +160,4 @@ class GraphLoader:
 
     def shuffle_and_rebatch(self):
         self.shuffle()
-        self._init_graph_dataset()
+        self.graph_dataset = self._init_graph_dataset()

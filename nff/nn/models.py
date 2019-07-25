@@ -83,7 +83,17 @@ class Net(nn.Module):
         self.bond_par = bond_par
 
         
-    def forward(self, r, xyz, a=None, N=None, bond_adj=None, bond_len=None):
+    def forward(
+        self,
+        r,
+        xyz,
+        a=None,
+        N=None,
+        bond_adj=None,
+        bond_len=None,
+        pbc=None
+    ):
+
         """Summary
         
         Args:
@@ -92,6 +102,7 @@ class Net(nn.Module):
             bond_adj (TYPE): Description
             a (None, optional): Description
             N (None, optional): Description
+            pbc (torch.Tensor)
         
         Returns:
             TYPE: Description
@@ -123,9 +134,9 @@ class Net(nn.Module):
                 assert bond_len.shape[1] == 1
 
                 ebond = self.bond_energy_sample(xyz=xyz,
-                                               bond_adj=bond_adj,
-                                               bond_len=bond_len,
-                                               bond_par=self.bond_par)
+                                                bond_adj=bond_adj,
+                                                bond_len=bond_len,
+                                                bond_par=self.bond_par)
 
                 ebond = ebond.sum(1)
                 return ebond + r.squeeze() 
@@ -139,17 +150,39 @@ class Net(nn.Module):
             assert r.shape[0] == xyz.shape[0]
             assert len(a.shape) == 2
 
+            if pbc is None:
+                pbc = torch.LongTensor(range(r.shape[0]))
+            else:
+                assert pbc.shape[0] == r.shape[0]
+
             if N is None:
                 raise ValueError("needs to input N for graph partitioning within the batch")
                 
-            r = self.atom_embed(r.long()).squeeze()
+            r = self.atom_embed(r.long()).squeeze()[pbc]
 
             e = (xyz[a[:, 0]] - xyz[a[:, 1]]).pow(2).sum(1).sqrt()[:, None]
 
             for i, conv in enumerate(self.convolutions):
-                dr = conv(r=r, e=e, a=a)
+                dr = conv(r=r, e=e, a=a, pbc=pbc)
                 r = r + dr
+                r = r[pbc]
 
+            # selecting only the atoms inside the unit cell
+            atoms_in_cell = [
+                set(x.cpu().data.numpy())
+                for x in torch.split(pbc, N)
+            ]
+
+            N = [len(n) for n in atoms_in_cell]
+
+            atoms_in_cell = torch.cat([
+                torch.LongTensor(list(x))
+                for x in atoms_in_cell
+            ])
+
+            r = r[atoms_in_cell]
+
+            # computing the energy
             r = self.atomwise1(r)
             r = self.atomwise2(r)
 
@@ -160,7 +193,7 @@ class Net(nn.Module):
                 ebond = self.bond_energy_graph(xyz=xyz,
                                                bond_adj=bond_adj,
                                                bond_len=bond_len,
-                                               bond_par=bond_par)
+                                               bond_par=self.bond_par)
 
                 ebond_batch = list(torch.split(ebond, N))
 

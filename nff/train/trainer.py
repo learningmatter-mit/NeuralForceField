@@ -178,7 +178,8 @@ class Trainer:
                     break
 
                 for batch in self.train_loader:
-                    xyz, a, bond_adj, bond_len, r, f, u, N = batch
+                    xyz, a, bond_adj, bond_len, r, f, u, N, pbc = batch
+                    xyz.requires_grad = True
                     ground_truth = {
                         'energy': u,
                         'force': f
@@ -195,7 +196,8 @@ class Trainer:
                         bond_len=bond_len,
                         xyz=xyz,
                         a=a,
-                        N=N
+                        N=N,
+                        pbc=pbc
                     ) 
 
                     force_nff = -compute_grad(inputs=xyz, output=energy_nff)
@@ -253,7 +255,8 @@ class Trainer:
         n_val = 0
 
         for val_batch in self.validation_loader:
-            xyz, a, bond_adj, bond_len, r, f, u, N = val_batch
+            xyz, a, bond_adj, bond_len, r, f, u, N, pbc = val_batch
+            xyz.requires_grad = True
 
             ground_truth = {
                 'energy': u,
@@ -275,7 +278,8 @@ class Trainer:
                 bond_len=bond_len,
                 xyz=xyz,
                 a=a,
-                N=N
+                N=N,
+                pbc=pbc
             ) 
 
             force_nff = -compute_grad(inputs=xyz, output=energy_nff)
