@@ -1,4 +1,4 @@
 [submodule "nff/data/graphbuilder"]
 	path = nff/data/graphbuilder
 	url = git@github.mit.edu:MLMat/graphbuilder.git
-	branch = wwj
+	branch = simple
