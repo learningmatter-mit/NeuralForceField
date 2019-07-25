@@ -15,7 +15,7 @@ We highly recommend to create a `conda` environment to run the code. To do that,
 
 ```bash
 conda upgrade conda
-conda create -n nff python=3.7 scikit-learn pytorch=1.0.0 cudatoolkit=10.0 ase -c pytorch -c conda-forge
+conda create -n nff python=3.7 scikit-learn pytorch=1.0.0 cudatoolkit=10.0 ase pandas -c pytorch -c conda-forge
 ```
 
 You need to activate the `nff` environment to install the NFF package:

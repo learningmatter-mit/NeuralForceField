@@ -26,7 +26,7 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
     }
 
     for eval_batch in loader:
-        xyz, a, bond_adj, bond_len, r, f, u, N = eval_batch
+        xyz, a, bond_adj, bond_len, r, f, u, N, pbc = eval_batch
         xyz.requires_grad = True
 
         ground_truth = {
@@ -44,7 +44,8 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
             bond_len=bond_len,
             xyz=xyz,
             a=a,
-            N=N
+            N=N,
+            pbc=pbc
         )
 
         force_nff = -compute_grad(inputs=xyz, output=energy_nff)

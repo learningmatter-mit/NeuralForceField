@@ -26,7 +26,8 @@ class Dataset(TorchDataset):
                  energy,
                  force,
                  smiles,
-                 atomic_units=False):
+                 pbc=None,
+                 units='atomic'):
         """Constructor for Dataset class.
 
         Args:
@@ -35,30 +36,55 @@ class Dataset(TorchDataset):
             energy (array): (N, ) array with energies
             force (array): (N, 3) array with forces
             smiles (array): (N, ) array with SMILES strings
+            pbc (array): array with indices for periodic boundary conditions
             atomic_units (bool): if True, input values are given in atomic units.
                 They will be converted to kcal/mol.
         """
 
+        if pbc is None:
+            pbc = [None] * len(nxyz)
+
         assert all([
             len(_) == len(nxyz)
-            for _ in [energy, force, smiles]
+            for _ in [energy, force, smiles, pbc]
         ]), 'All lists should have the same length.'
 
         self.nxyz = self._to_array(nxyz)
         self.energy = energy
         self.force = self._to_array(force)
         self.smiles = smiles
+        self.pbc = pbc
 
-        self.units = 'atomic' if atomic_units else 'kcal/mol'
-
-        if atomic_units:
-            self.to_kcal_mol()
+        self.units = units
+        self.to_units('kcal/mol')
 
     def __len__(self):
         return len(self.nxyz)
 
     def __getitem__(self, idx):
-        return self.nxyz[idx], self.energy[idx], self.force[idx], self.smiles[idx]
+        return self.nxyz[idx], self.energy[idx], self.force[idx], self.smiles[idx], self.pbc[idx]
+
+    def __add__(self, other):
+        if other.units != self.units:
+            print('changing units')
+            other.to_units(self.units)
+        
+        nxyz = np.concatenate((self.nxyz, other.nxyz), axis=0)
+        energy = np.concatenate((self.energy, other.energy), axis=0)
+
+        # force, smiles and pbc are lists
+        force = self.force + other.force
+        smiles = self.smiles + other.smiles
+        pbc = self.pbc + other.pbc
+        
+        return Dataset(
+            nxyz,
+            energy,
+            force,
+            smiles,
+            pbc,
+            units=self.units
+        )
 
     def _to_array(self, x):
         """Converts input `x` to array"""
@@ -69,7 +95,17 @@ class Dataset(TorchDataset):
         else:
             return [array(_) for _ in x]
 
-    def to_kcal_mol(self):
+    def to_units(self, target_unit):
+        if target_unit == 'kcal/mol' and self.units == 'atomic':
+            self.to_kcal_mol()
+
+        elif target_unit == 'atomic' and self.units == 'kcal/mol':
+            self.to_atomic_units()
+
+        else:
+            pass
+
+    def to_kcal_mol(self): 
         """Converts forces and energies from atomic units to kcal/mol."""
 
         self.force = [
@@ -89,8 +125,8 @@ class Dataset(TorchDataset):
         self.units = 'atomic'
 
     def shuffle(self):
-        self.nxyz, self.force, self.energy, self.smiles = skshuffle(
-            self.nxyz, self.force, self.energy, self.smiles
+        self.nxyz, self.force, self.energy, self.smiles, self.pbc = skshuffle(
+            self.nxyz, self.force, self.energy, self.smiles, self.pbc
         )
         return 
 
@@ -117,12 +153,14 @@ def split_train_test(dataset, test_size=0.2):
         nxyz_train, nxyz_test,
         energy_train, energy_test,
         force_train, force_test,
-        smiles_train, smiles_test
+        smiles_train, smiles_test,
+        pbc_train, pbc_test
     ) = train_test_split(
         dataset.nxyz,
         dataset.energy,
         dataset.force,
         dataset.smiles,
+        dataset.pbc,
         test_size=test_size
     )
 
@@ -130,14 +168,16 @@ def split_train_test(dataset, test_size=0.2):
         nxyz_train,
         energy_train,
         force_train,
-        smiles_train
+        smiles_train,
+        pbc_train
     )
 
     test = Dataset(
         nxyz_test,
         energy_test,
         force_test,
-        smiles_test
+        smiles_test,
+        pbc_test
     )
 
     return train, test
