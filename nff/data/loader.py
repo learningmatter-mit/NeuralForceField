@@ -56,7 +56,7 @@ class GraphLoader:
         if shuffle:
             self.dataset.shuffle()
 
-        self.graph_dataset = self._init_graph_dataset()
+        self.graph_dataset = self._init_graph_dataset(shuffle)
 
     def to(self, device):
         """Sends GraphLoader to the desired device"""
@@ -113,7 +113,7 @@ class GraphLoader:
         else:
             raise StopIteration
     
-    def _init_graph_dataset(self):
+    def _init_graph_dataset(self, shuffle=True):
         """Uses graphbuilder to batch the dataset and create the dataloader.
     
         Args:
@@ -122,7 +122,8 @@ class GraphLoader:
             graph_data (GraphDataset) 
         """
     
-        self.shuffle()
+        if shuffle:
+            self.shuffle()
         #energy_mean = np.mean(self.dataset.energy)
     
         graph_data = GraphDataset(dynamic=self.dynamic_adj_mat)
