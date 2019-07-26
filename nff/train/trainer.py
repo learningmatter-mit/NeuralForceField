@@ -310,12 +310,13 @@ class Trainer:
         for h in self.hooks:
             h.on_validation_end(self, val_loss)
 
-    def evaluate(self):
+    def evaluate(self, device):
         """Evaluate the current state of the model using the validation loader
         """
         return evaluate(
             self._model,
             self.validation_loader,
             self.loss_fn,
+            device,
             self.loss_is_normalized
         )
