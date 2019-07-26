@@ -157,30 +157,23 @@ class Net(nn.Module):
 
             if N is None:
                 raise ValueError("needs to input N for graph partitioning within the batch")
-                
+
+            # ensuring image atoms have the same vectors of their corresponding
+            # atom inside the unit cell
             r = self.atom_embed(r.long()).squeeze()[pbc]
 
+            # calculating the distances
             e = (xyz[a[:, 0]] - xyz[a[:, 1]]).pow(2).sum(1).sqrt()[:, None]
 
             for i, conv in enumerate(self.convolutions):
-                dr = conv(r=r, e=e, a=a, pbc=pbc)
+                dr = conv(r=r, e=e, a=a)
                 r = r + dr
+
+                # update function with periodic boundary conditions
                 r = r[pbc]
 
-            # selecting only the atoms inside the unit cell
-            atoms_in_cell = [
-                set(x.cpu().data.numpy())
-                for x in torch.split(pbc, N)
-            ]
-
-            N = [len(n) for n in atoms_in_cell]
-
-            atoms_in_cell = torch.cat([
-                torch.LongTensor(list(x))
-                for x in atoms_in_cell
-            ])
-
-            r = r[atoms_in_cell]
+            # remove image atoms outside the unit cell
+            r, N = self.get_atoms_inside_cell(r, N, pbc)
 
             # computing the energy
             r = self.atomwise1(r)
@@ -205,3 +198,21 @@ class Net(nn.Module):
                     E_batch[b] = torch.sum(E_batch[b], dim=0)
                 
             return torch.stack(E_batch, dim=0)
+    
+    def get_atoms_inside_cell(self, r, N, pbc):
+        # selecting only the atoms inside the unit cell
+        atoms_in_cell = [
+            set(x.cpu().data.numpy())
+            for x in torch.split(pbc, N)
+        ]
+
+        N = [len(n) for n in atoms_in_cell]
+
+        atoms_in_cell = torch.cat([
+            torch.LongTensor(list(x))
+            for x in atoms_in_cell
+        ])
+
+        r = r[atoms_in_cell]
+
+        return r, N

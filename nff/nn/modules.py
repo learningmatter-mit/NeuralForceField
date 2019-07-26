@@ -182,12 +182,11 @@ class InteractionBlock(nn.Module):
                              out_features=n_atom_basis,
                              activation=None)
  
-    def forward(self, r, e, A=None, a=None, pbc=None):
+    def forward(self, r, e, A=None, a=None):
         """
         Args:
             r: feature tensor
             e: edge tensor
-            pbc: periodic map
         """
 
         if a is None:  # non-batch case ...
@@ -220,7 +219,7 @@ class InteractionBlock(nn.Module):
             assert len(r.shape) == 2
             assert len(e.shape) == 2
             e = self.smearing(e, is_batch=True)
-            e = self.distance_filter_1(e)
+            # e = self.distance_filter_1(e)
             W = self.distance_filter_2(e)
             W = W.squeeze()
 
@@ -231,14 +230,7 @@ class InteractionBlock(nn.Module):
             y = y * W
 
             # Atomwise sum 
-            if pbc is None:
-                y = scatter_add(src=y, index=a[:, 0], dim=0)
-            else:
-                y = scatter_add(
-                    src=y,
-                    index=pbc[a[:, 0]],
-                    dim=0
-                )[pbc]
+            y = scatter_add(src=y, index=a[:, 0], dim=0)
                
         # feed into Neural networks 
         y = self.dense_1(y)
