@@ -165,19 +165,21 @@ def split_train_test(dataset, test_size=0.2):
     )
 
     train = Dataset(
-        nxyz_train,
-        energy_train,
-        force_train,
-        smiles_train,
-        pbc_train
+        nxyz=nxyz_train,
+        energy=energy_train,
+        force=force_train,
+        smiles=smiles_train,
+        pbc=pbc_train,
+        units=dataset.units
     )
 
     test = Dataset(
-        nxyz_test,
-        energy_test,
-        force_test,
-        smiles_test,
-        pbc_test
+        nxyz=nxyz_test,
+        energy=energy_test,
+        force=force_test,
+        smiles=smiles_test,
+        pbc=pbc_test,
+        units=dataset.units
     )
 
     return train, test
