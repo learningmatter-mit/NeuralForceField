@@ -9,16 +9,15 @@ def build_mse_loss(rho=1):
     Build the mean squared error loss function.
 
     Args:
-        rho (float): parameter multiplying the second argument
-            factor
+        rho (float): trade-off between energy and force loss
 
     Returns:
         mean squared error loss function
 
     """
     loss_coef = {
-        'energy': 1,
-        'force': rho
+        'energy': rho,
+        'force': 1
     }
 
     def loss_fn(ground_truth, results):
