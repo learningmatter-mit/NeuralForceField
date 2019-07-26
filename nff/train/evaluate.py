@@ -27,7 +27,6 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
 
     for eval_batch in loader:
         xyz, a, bond_adj, bond_len, r, f, u, N, pbc = eval_batch
-        xyz.requires_grad = True
 
         ground_truth = {
             'energy': u,

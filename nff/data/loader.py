@@ -99,7 +99,7 @@ class GraphLoader:
         if bond_len is not None:
             bond_len.to(self.device)
 
-        return xyz, neighbor_list, bond_adj, bond_len, r, f, u, N
+        return xyz, neighbor_list, bond_adj, bond_len, r, f, u, N, pbc
 
     def __iter__(self):
         self.iter_n = 0

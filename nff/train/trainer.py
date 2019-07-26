@@ -179,7 +179,6 @@ class Trainer:
 
                 for batch in self.train_loader:
                     xyz, a, bond_adj, bond_len, r, f, u, N, pbc = batch
-                    xyz.requires_grad = True
                     ground_truth = {
                         'energy': u,
                         'force': f
@@ -256,7 +255,6 @@ class Trainer:
 
         for val_batch in self.validation_loader:
             xyz, a, bond_adj, bond_len, r, f, u, N, pbc = val_batch
-            xyz.requires_grad = True
 
             ground_truth = {
                 'energy': u,
