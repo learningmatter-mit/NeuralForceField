@@ -116,7 +116,7 @@ class BondEnergyModule(nn.Module):
             ).pow(2).sum(1).sqrt()[:, None]
 
             ebond = bond_par * (e - bond_len)**2
-            ebond = 0.5 * scatter_add(src=ebond, index=bond_adj[:, 0], dim=0)
+            ebond = 0.5 * scatter_add(src=ebond, index=bond_adj[:, 0], dim=0, dim_size=xyz.shape[0])
 
         else:
             e = (
