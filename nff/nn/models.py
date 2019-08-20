@@ -118,6 +118,10 @@ class Net(nn.Module):
             a = A.nonzero()
             a = (a[:, 0] * N_atom)[:, None] + a[:, 1:3]
 
+        else:
+            # calculating the distances
+            e = (xyz[a[:, 0]] - xyz[a[:, 1]]).pow(2).sum(1).sqrt()[:, None]
+
         assert len(r.shape) == 2
         assert len(xyz.shape) == 2
         assert r.shape[0] == xyz.shape[0]
@@ -131,9 +135,6 @@ class Net(nn.Module):
         # ensuring image atoms have the same vectors of their corresponding
         # atom inside the unit cell
         r = self.atom_embed(r.long()).squeeze()[pbc]
-
-        # calculating the distances
-        e = (xyz[a[:, 0]] - xyz[a[:, 1]]).pow(2).sum(1).sqrt()[:, None]
 
         for i, conv in enumerate(self.convolutions):
             dr = conv(r=r, e=e, a=a)
