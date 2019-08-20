@@ -54,3 +54,4 @@ log/
 debug/
 sandbox/
 backup
+dist/
