@@ -116,6 +116,8 @@ class Net(nn.Module):
             e, A = self.graph_dis(xyz=xyz.reshape(-1, N_atom, 3))
             # compute neigbhor list 
             a = A.nonzero()
+            # reshape distance list 
+            e = e.reshape(-1, 1)
             a = (a[:, 0] * N_atom)[:, None] + a[:, 1:3]
 
         else:
