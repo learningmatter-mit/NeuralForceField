@@ -199,9 +199,6 @@ class InteractionBlock(nn.Module):
                     dim=0, 
                     dim_size=r.shape[0])
 
-        # import ipdb
-        # ipdb.set_trace()
-
         y += scatter_add(src=r[a[:, 1]].squeeze() * W, 
                     index=a[:, 0], 
                     dim=0, 
