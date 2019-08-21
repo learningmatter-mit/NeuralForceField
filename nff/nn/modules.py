@@ -93,7 +93,6 @@ class GraphDis(nn.Module):
         return dis_mat, A.squeeze(3)
 
     def forward(self, xyz):
-        # shape (B, N, N, 3)
         e, A = self.get_bond_vector_matrix(frame=xyz)
 
         e = e.float()
@@ -195,12 +194,16 @@ class InteractionBlock(nn.Module):
 
         r = self.atom_filter(r)
         # Filter 
-        y = r[a[:, 1]].squeeze()
 
-        y = y * W
+        y = scatter_add(src=r[a[:, 0]].squeeze() * W, 
+                    index=a[:, 0], 
+                    dim=0, 
+                    dim_size=r.shape[0])
 
-        # Atomwise sum 
-        y = scatter_add(src=y, index=a[:, 0], dim=0, dim_size=r.shape[0])
+        y += scatter_add(src=r[a[:, 1]].squeeze() * W, 
+                    index=a[:, 1], 
+                    dim=0, 
+                    dim_size=r.shape[0])
                
         # feed into Neural networks 
         y = self.dense_1(y)
