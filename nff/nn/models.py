@@ -117,7 +117,7 @@ class Net(nn.Module):
             e, A = self.graph_dis(xyz=xyz.reshape(-1, N_atom, 3))
 
             #  use only upper triangular to generative undirected adjacency matrix 
-            A = A * torch.ones(9, 9).triu()[None, :, :].to(A.device)
+            A = A * torch.ones(N_atom, N_atom).triu()[None, :, :].to(A.device)
             e = e * A.unsqueeze(-1)
 
             # compute neighbor list 
