@@ -6,6 +6,7 @@ import torch
 from nff.data import Graph, GraphDataset
 import nff.utils.constants as const
 
+import ipdb 
 
 class GraphLoader:
     """Dataloader to deal with NFF calculations. Can be expanded to retrieve calculations
@@ -146,6 +147,14 @@ class GraphLoader:
             graph.SetNodeLabels(r=torch.Tensor(nforce))
             graph.SetXYZ(xyz=torch.Tensor(nxyz[:, 1:4]))
             graph.UpdateConnectivity(cutoff=self.cutoff)
+
+            # get undirected graph neighbor list, reduce the length of neighbor list by half 
+            A = torch.zeros(graph.N, graph.N)
+            A[graph.neighbor_list[:, 1], graph.neighbor_list[:, 2]] = 1 
+            neighborlist = A.triu().nonzero()
+            edge_index = torch.LongTensor([i for i in range(neighborlist.shape[0])])
+            graph.num_edges = neighborlist.shape[0]
+            graph.neighbor_list = torch.cat((torch.LongTensor(edge_index)[:, None], neighborlist), dim=1) 
 
             graph.LabelEdgesWithDistances()
             graph.SetGraphLabel(torch.Tensor([energy]))
