@@ -309,7 +309,7 @@ class PrintingHook(LoggingHook):
         time_strf=r'%Y-%m-%d %H:%M:%S',
         str_format=r'{1:>{0}}'
     ):
-        self.log_path = os.path.join(log_path, "log_human_read.csv")
+        log_path = os.path.join(log_path, "log_human_read.csv")
         super().__init__(
             log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate
         )
@@ -334,6 +334,10 @@ class PrintingHook(LoggingHook):
             f.write(log + os.linesep)
 
     def on_train_begin(self, trainer):
+
+        log_dir = os.path.dirname(self.log_path)
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
 
         log = self.str_format.format(
             len(time.strftime(self.time_strf)),
