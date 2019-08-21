@@ -100,7 +100,7 @@ class Net(nn.Module):
             xyz (torch.Tensor): Description
             bond_adj (torch.LongTensor): Description
             a (None, optional): Description
-            N (list: Description
+            N (list): Description
             pbc (torch.Tensor)
         
         Returns:
@@ -110,19 +110,26 @@ class Net(nn.Module):
             ValueError: Description
         """
 
+        # a is None means non-batched case
         if a is None:
-            assert len(set(N)) == 1 # all the graphs should correspond to the same molecules
+            assert len(set(N)) == 1 # all the graphs should correspond to the same molecule
             N_atom = N[0]
             e, A = self.graph_dis(xyz=xyz.reshape(-1, N_atom, 3))
+
             #  use only upper triangular to generative undirected adjacency matrix 
             A = A * torch.ones(9, 9).triu()[None, :, :].to(A.device)
             e = e * A.unsqueeze(-1)
-            # compute neigbhor list 
+
+            # compute neighbor list 
             a = A.nonzero()
+
             # reshape distance list 
             e = e[a[:,0], a[:, 1], a[:,2], :].reshape(-1, 1)
-            # reindex neighor list 
+
+            # reindex neighbor list 
             a = (a[:, 0] * N_atom)[:, None] + a[:, 1:3]
+
+        # batched case
         else:
             # calculating the distances
             e = (xyz[a[:, 0]] - xyz[a[:, 1]]).pow(2).sum(1).sqrt()[:, None]
@@ -142,11 +149,10 @@ class Net(nn.Module):
         # atom inside the unit cell
         r = self.atom_embed(r.long()).squeeze()[pbc]
 
+        # update function includes periodic boundary conditions
         for i, conv in enumerate(self.convolutions):
             dr = conv(r=r, e=e, a=a)
             r = r + dr
-
-            # update function with periodic boundary conditions
             r = r[pbc]
 
         # remove image atoms outside the unit cell

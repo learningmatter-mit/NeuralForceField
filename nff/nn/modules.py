@@ -188,12 +188,11 @@ class InteractionBlock(nn.Module):
             e: edge tensor
         """
         e = self.smearing(e, is_batch=True)
-        # e = self.distance_filter_1(e)
+        e = self.distance_filter_1(e)
         W = self.distance_filter_2(e)
         W = W.squeeze()
 
         r = self.atom_filter(r)
-        # Filter 
 
         y = scatter_add(src=r[a[:, 0]].squeeze() * W, 
                     index=a[:, 0], 
@@ -205,7 +204,7 @@ class InteractionBlock(nn.Module):
                     dim=0, 
                     dim_size=r.shape[0])
                
-        # feed into Neural networks 
+        # last layers
         y = self.dense_1(y)
         y = self.dense_2(y)
 
