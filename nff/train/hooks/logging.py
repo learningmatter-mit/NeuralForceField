@@ -312,9 +312,11 @@ class PrintingHook(LoggingHook):
         time_strf=r'%Y-%m-%d %H:%M:%S',
         str_format=r'{1:>{0}}'
     ):
+        log_path = os.path.join(log_path, "log_human_read.csv")
         super().__init__(
             log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate
         )
+
         self.every_n_epochs = every_n_epochs
         self.log_epoch = log_epoch
 
@@ -331,7 +333,16 @@ class PrintingHook(LoggingHook):
         self.str_format = str_format
         self.log_memory = log_memory
 
+    def print(self, log):
+        print(log)
+        with open(self.log_path, "a+") as f:
+            f.write(log + os.linesep)
+
     def on_train_begin(self, trainer):
+
+        log_dir = os.path.dirname(self.log_path)
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
 
         log = self.str_format.format(
             len(time.strftime(self.time_strf)),
@@ -375,7 +386,7 @@ class PrintingHook(LoggingHook):
                 len(self._headers['memory']), self._headers['memory']
             )
 
-        print(log)
+        self.print(log)
 
     def on_validation_end(self, trainer, val_loss):
         if trainer.epoch % self.every_n_epochs == 0:
@@ -433,8 +444,8 @@ class PrintingHook(LoggingHook):
                     '%d' % memory
                 )
 
-            print(log)
+            self.print(log)
 
     def on_train_failed(self, trainer):
-        print('the training has failed')
+        self.print('the training has failed')
 
