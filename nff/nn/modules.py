@@ -195,12 +195,15 @@ class InteractionBlock(nn.Module):
         r = self.atom_filter(r)
 
         y = scatter_add(src=r[a[:, 0]].squeeze() * W, 
-                    index=a[:, 0], 
+                    index=a[:, 1], 
                     dim=0, 
                     dim_size=r.shape[0])
 
+        # import ipdb
+        # ipdb.set_trace()
+
         y += scatter_add(src=r[a[:, 1]].squeeze() * W, 
-                    index=a[:, 1], 
+                    index=a[:, 0], 
                     dim=0, 
                     dim_size=r.shape[0])
                
