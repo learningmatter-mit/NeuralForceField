@@ -326,6 +326,11 @@ class PrintingHook(LoggingHook):
         }
         self.str_format = str_format
 
+    def print(self, log):
+        print(log)
+        with open(self.log_path, "a+") as f:
+            f.write(log + os.linesep)
+
     def on_train_begin(self, trainer):
 
         log = self.str_format.format(
@@ -366,7 +371,7 @@ class PrintingHook(LoggingHook):
             if i < len(self.metrics) - 1:
                 log += self._separator
 
-        print(log)
+        self.print(log)
 
     def on_validation_end(self, trainer, val_loss):
         if trainer.epoch % self.every_n_epochs == 0:
@@ -416,8 +421,8 @@ class PrintingHook(LoggingHook):
                 if i < len(self.metrics) - 1:
                     log += self._separator
 
-            print(log)
+            self.print(log)
 
     def on_train_failed(self, trainer):
-        print('the training has failed')
+        self.print('the training has failed')
 
