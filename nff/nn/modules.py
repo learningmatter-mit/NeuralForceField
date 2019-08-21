@@ -219,7 +219,7 @@ class InteractionBlock(nn.Module):
             assert len(r.shape) == 2
             assert len(e.shape) == 2
             e = self.smearing(e, is_batch=True)
-            # e = self.distance_filter_1(e)
+            e = self.distance_filter_1(e)
             W = self.distance_filter_2(e)
             W = W.squeeze()
 
