@@ -224,11 +224,15 @@ class Trainer:
                 if self.epoch % self.validation_interval == 0 or self._stop:
                     self.validate()
 
+                print("Memory on GPU {} : {:.2f} Mb".format(device.index, 
+                            torch.cuda.max_memory_allocated(device) * 1e-6)) 
+
                 for h in self.hooks:
                     h.on_epoch_end(self)
 
                 if self._stop:
                     break
+
             #
             # Training Ends
             #
