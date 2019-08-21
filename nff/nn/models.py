@@ -114,12 +114,15 @@ class Net(nn.Module):
             assert len(set(N)) == 1 # all the graphs should correspond to the same molecules
             N_atom = N[0]
             e, A = self.graph_dis(xyz=xyz.reshape(-1, N_atom, 3))
+            #  use only upper triangular to generative undirected adjacency matrix 
+            A = A * torch.ones(9, 9).triu()[None, :, :].to(A.device)
+            e = e * A.unsqueeze(-1)
             # compute neigbhor list 
             a = A.nonzero()
             # reshape distance list 
-            e = e.reshape(-1, 1)
+            e = e[a[:,0], a[:, 1], a[:,2], :].reshape(-1, 1)
+            # reindex neighor list 
             a = (a[:, 0] * N_atom)[:, None] + a[:, 1:3]
-
         else:
             # calculating the distances
             e = (xyz[a[:, 0]] - xyz[a[:, 1]]).pow(2).sum(1).sqrt()[:, None]
@@ -128,6 +131,7 @@ class Net(nn.Module):
         assert len(xyz.shape) == 2
         assert r.shape[0] == xyz.shape[0]
         assert len(a.shape) == 2
+        assert a.shape[0] == e.shape[0]
 
         if pbc is None:
             pbc = torch.LongTensor(range(r.shape[0]))
