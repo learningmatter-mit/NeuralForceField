@@ -309,9 +309,11 @@ class PrintingHook(LoggingHook):
         time_strf=r'%Y-%m-%d %H:%M:%S',
         str_format=r'{1:>{0}}'
     ):
+        self.log_path = os.path.join(log_path, "log_human_read.csv")
         super().__init__(
             log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate
         )
+
         self.every_n_epochs = every_n_epochs
         self.log_epoch = log_epoch
 
