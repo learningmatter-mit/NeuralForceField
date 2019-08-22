@@ -137,11 +137,14 @@ class GraphLoader:
     
             number = nxyz[:, 0].reshape(-1, 1)
 
-            graph = Graph(N=number.shape[0],
-                          dynamic=self.dynamic_adj_mat,
-                          pbc=pbc,
-                          graphname=smiles)
-    
+            graph = Graph(
+                N=number.shape[0],
+                dynamic=self.dynamic_adj_mat,
+                pbc=pbc,
+                directed=False,
+                graphname=smiles
+            )
+
             nforce = np.hstack((number, force))
             graph.SetNodeLabels(r=torch.Tensor(nforce))
             graph.SetXYZ(xyz=torch.Tensor(nxyz[:, 1:4]))

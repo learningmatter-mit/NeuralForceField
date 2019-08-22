@@ -55,7 +55,7 @@ if __name__ == "__main__":
 
         # run evaluation
         logging.info("evaluating...")
-        _, _, test_loss = evaluate(model, test_loader, loss_fn)
+        _, _, test_loss = evaluate(model, test_loader, loss_fn, args.device)
         logging.info('loss = %.4f' % test_loss)
         logging.info("... done!")
 

@@ -229,9 +229,8 @@ class Trainer:
 
                 if self._stop:
                     break
-            #
+
             # Training Ends
-            #
             # run hooks & store checkpoint
             for h in self.hooks:
                 h.on_train_ends(self)

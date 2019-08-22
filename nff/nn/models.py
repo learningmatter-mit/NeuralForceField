@@ -79,7 +79,6 @@ class Net(nn.Module):
 
         # declare the bond energy module for two cases 
         self.bond_energy_graph = BondEnergyModule(batch=True)
-        self.bond_energy_sample = BondEnergyModule(batch=False)
         self.bond_par = bond_par
 
         
@@ -87,8 +86,8 @@ class Net(nn.Module):
         self,
         r,
         xyz,
+        N,
         a=None,
-        N=None,
         bond_adj=None,
         bond_len=None,
         pbc=None
@@ -97,11 +96,11 @@ class Net(nn.Module):
         """Summary
         
         Args:
-            r (TYPE): Description
-            xyz (TYPE): Description
-            bond_adj (TYPE): Description
+            r (torch.Tensor): Description
+            xyz (torch.Tensor): Description
+            bond_adj (torch.LongTensor): Description
             a (None, optional): Description
-            N (None, optional): Description
+            N (list): Description
             pbc (torch.Tensor)
         
         Returns:
@@ -110,94 +109,78 @@ class Net(nn.Module):
         Raises:
             ValueError: Description
         """
-        # tensor inputs
 
+        # a is None means non-batched case
         if a is None:
-            assert len(r.shape) == 2
-            assert len(xyz.shape) == 3
+            assert len(set(N)) == 1 # all the graphs should correspond to the same molecule
+            N_atom = N[0]
+            e, A = self.graph_dis(xyz=xyz.reshape(-1, N_atom, 3))
 
-            e, A = self.graph_dis(xyz=xyz)
+            #  use only upper triangular to generative undirected adjacency matrix 
+            A = A * torch.ones(N_atom, N_atom).triu()[None, :, :].to(A.device)
+            e = e * A.unsqueeze(-1)
 
-            r = self.atom_embed(r.type(torch.long))
+            # compute neighbor list 
+            a = A.nonzero()
 
-            for i, conv in enumerate(self.convolutions):
-                
-                dr = conv(r=r, e=e, A=A)
-                r = r + dr 
+            # reshape distance list 
+            e = e[a[:,0], a[:, 1], a[:,2], :].reshape(-1, 1)
 
-            r = self.atomwise1(r)
-            r = self.atomwise2(r)
-            r = r.sum(1)
+            # reindex neighbor list 
+            a = (a[:, 0] * N_atom)[:, None] + a[:, 1:3]
 
-            # compute bond energy 
-            if bond_adj is not None and bond_len is not None:
-                assert bond_len.shape[1] == 1
-
-                ebond = self.bond_energy_sample(xyz=xyz,
-                                                bond_adj=bond_adj,
-                                                bond_len=bond_len,
-                                                bond_par=self.bond_par)
-
-                ebond = ebond.sum(1)
-                return ebond + r.squeeze() 
-            else:
-                return r 
-        
-        # graph batch inputs
+        # batched case
         else:
-            assert len(r.shape) == 2
-            assert len(xyz.shape) == 2
-            assert r.shape[0] == xyz.shape[0]
-            assert len(a.shape) == 2
-
-            if pbc is None:
-                pbc = torch.LongTensor(range(r.shape[0]))
-            else:
-                assert pbc.shape[0] == r.shape[0]
-
-            if N is None:
-                raise ValueError("needs to input N for graph partitioning within the batch")
-
-            # ensuring image atoms have the same vectors of their corresponding
-            # atom inside the unit cell
-            r = self.atom_embed(r.long()).squeeze()[pbc]
-
             # calculating the distances
             e = (xyz[a[:, 0]] - xyz[a[:, 1]]).pow(2).sum(1).sqrt()[:, None]
 
-            for i, conv in enumerate(self.convolutions):
-                dr = conv(r=r, e=e, a=a)
-                r = r + dr
+        assert len(r.shape) == 2
+        assert len(xyz.shape) == 2
+        assert r.shape[0] == xyz.shape[0]
+        assert len(a.shape) == 2
+        assert a.shape[0] == e.shape[0]
 
-                # update function with periodic boundary conditions
-                r = r[pbc]
+        if pbc is None:
+            pbc = torch.LongTensor(range(r.shape[0]))
+        else:
+            assert pbc.shape[0] == r.shape[0]
 
-            # remove image atoms outside the unit cell
-            r, N = self.get_atoms_inside_cell(r, N, pbc)
+        # ensuring image atoms have the same vectors of their corresponding
+        # atom inside the unit cell
+        r = self.atom_embed(r.long()).squeeze()[pbc]
 
-            # computing the energy
-            r = self.atomwise1(r)
-            r = self.atomwise2(r)
+        # update function includes periodic boundary conditions
+        for i, conv in enumerate(self.convolutions):
+            dr = conv(r=r, e=e, a=a)
+            r = r + dr
+            r = r[pbc]
 
-            E_batch = list(torch.split(r, N))
+        # remove image atoms outside the unit cell
+        r, N = self.get_atoms_inside_cell(r, N, pbc)
 
-            # bond energy computed as a physics prior 
-            if bond_adj is not None and bond_len is not None:
-                ebond = self.bond_energy_graph(xyz=xyz,
-                                               bond_adj=bond_adj,
-                                               bond_len=bond_len,
-                                               bond_par=self.bond_par)
+        # computing the energy
+        r = self.atomwise1(r)
+        r = self.atomwise2(r)
 
-                ebond_batch = list(torch.split(ebond, N))
+        E_batch = list(torch.split(r, N))
 
-                for b in range(len(N)): 
-                    E_batch[b] = torch.sum(E_batch[b] + ebond_batch[b], dim=0)
+        # bond energy computed as a physics prior 
+        if bond_adj is not None and bond_len is not None:
+            ebond = self.bond_energy_graph(xyz=xyz,
+                                           bond_adj=bond_adj,
+                                           bond_len=bond_len,
+                                           bond_par=self.bond_par)
 
-            else:
-                for b in range(len(N)): 
-                    E_batch[b] = torch.sum(E_batch[b], dim=0)
-                
-            return torch.stack(E_batch, dim=0)
+            ebond_batch = list(torch.split(ebond, N))
+
+            for b in range(len(N)): 
+                E_batch[b] = torch.sum(E_batch[b] + ebond_batch[b], dim=0)
+
+        else:
+            for b in range(len(N)): 
+                E_batch[b] = torch.sum(E_batch[b], dim=0)
+            
+        return torch.stack(E_batch, dim=0)
     
     def get_atoms_inside_cell(self, r, N, pbc):
         # selecting only the atoms inside the unit cell

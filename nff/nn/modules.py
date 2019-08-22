@@ -93,7 +93,6 @@ class GraphDis(nn.Module):
         return dis_mat, A.squeeze(3)
 
     def forward(self, xyz):
-        # shape (B, N, N, 3)
         e, A = self.get_bond_vector_matrix(frame=xyz)
 
         e = e.float()
@@ -182,57 +181,31 @@ class InteractionBlock(nn.Module):
                              out_features=n_atom_basis,
                              activation=None)
  
-    def forward(self, r, e, A=None, a=None):
+    def forward(self, r, e, a):
         """
         Args:
             r: feature tensor
             e: edge tensor
         """
 
-        if a is None:  # non-batch case ...
-            assert len(r.shape) == 3
-            assert len(e.shape) == 4
+        e = self.smearing(e, is_batch=True)
+        e = self.distance_filter_1(e)
+        W = self.distance_filter_2(e)
+        W = W.squeeze()
 
-            e = self.smearing(
-                e.reshape(-1, r.shape[1], r.shape[1]),
-                is_batch=False
-            )
-            e = self.distance_filter_1(e)
-            W = self.distance_filter_2(e)
-            r = self.atom_filter(r)
-            
-            # adjacency matrix used as a mask
-            A = A.unsqueeze(3).expand(-1, -1, -1, r.shape[2])
-            # W = W #* A
-            y = r[:, None, :, :].expand(-1, r.shape[1], -1, -1)
-            
-            # filtering 
-            y = y * W * A
+        r = self.atom_filter(r)
 
-            # Aggregate 
-            if self.mean_pooling:
-                y = y * A.sum(2).reciprocal().expand_as(y) 
-            
-            y = y.sum(2)
-            
-        else:
-            assert len(r.shape) == 2
-            assert len(e.shape) == 2
-            e = self.smearing(e, is_batch=True)
-            e = self.distance_filter_1(e)
-            W = self.distance_filter_2(e)
-            W = W.squeeze()
+        y = scatter_add(src=r[a[:, 0]].squeeze() * W, 
+                    index=a[:, 1], 
+                    dim=0, 
+                    dim_size=r.shape[0])
 
-            r = self.atom_filter(r)
-            # Filter 
-            y = r[a[:, 1]].squeeze()
-
-            y = y * W
-
-            # Atomwise sum 
-            y = scatter_add(src=y, index=a[:, 0], dim=0)
+        y += scatter_add(src=r[a[:, 1]].squeeze() * W, 
+                    index=a[:, 0], 
+                    dim=0, 
+                    dim_size=r.shape[0])
                
-        # feed into Neural networks 
+        # last layers
         y = self.dense_1(y)
         y = self.dense_2(y)
 

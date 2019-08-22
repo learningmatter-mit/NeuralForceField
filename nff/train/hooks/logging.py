@@ -6,6 +6,8 @@ Retrieved from https://github.com/atomistic-machine-learning/schnetpack/tree/dev
 import os
 import time
 import numpy as np
+import torch
+
 from nff.train.hooks import Hook
 
 
@@ -304,6 +306,7 @@ class PrintingHook(LoggingHook):
         log_train_loss=True,
         log_validation_loss=True,
         log_learning_rate=True,
+        log_memory=True,
         every_n_epochs=1,
         separator=' ',
         time_strf=r'%Y-%m-%d %H:%M:%S',
@@ -324,9 +327,11 @@ class PrintingHook(LoggingHook):
             'epoch': 'Epoch',
             'lr': 'Learning rate',
             'train_loss': 'Train loss',
-            'val_loss': 'Validation loss'
+            'val_loss': 'Validation loss',
+            'memory': 'GPU Memory (MB)'
         }
         self.str_format = str_format
+        self.log_memory = log_memory
 
     def print(self, log):
         print(log)
@@ -374,8 +379,12 @@ class PrintingHook(LoggingHook):
         for i, metric in enumerate(self.metrics):
             header = str(metric.name)
             log += self.str_format.format(len(header), header)
-            if i < len(self.metrics) - 1:
-                log += self._separator
+            log += self._separator
+
+        if self.log_memory:
+            log += self.str_format.format(
+                len(self._headers['memory']), self._headers['memory']
+            )
 
         self.print(log)
 
@@ -424,8 +433,16 @@ class PrintingHook(LoggingHook):
                         len(metric.name),
                         '%.4f' % m
                     )
-                if i < len(self.metrics) - 1:
-                    log += self._separator
+
+                log += self._separator
+
+            if self.log_memory:
+                device = next(trainer._model.parameters()).device
+                memory = torch.cuda.max_memory_allocated(device) * 1e-6
+                log += self.str_format.format(
+                    len(self._headers['memory']),
+                    '%d' % memory
+                )
 
             self.print(log)
 
