@@ -187,6 +187,7 @@ class InteractionBlock(nn.Module):
             r: feature tensor
             e: edge tensor
         """
+
         e = self.smearing(e, is_batch=True)
         e = self.distance_filter_1(e)
         W = self.distance_filter_2(e)
