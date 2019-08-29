@@ -38,7 +38,7 @@ def build_mse_loss(loss_coef):
             pred = results[key]
 
             # select only properties which are given
-            valid_idx = (targ != None)
+            valid_idx = torch.isnan(targ)
             targ = targ[valid_idx]
             pred = pred[valid_idx]
 
