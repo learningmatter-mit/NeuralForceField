@@ -165,36 +165,15 @@ def split_train_test(dataset, test_size=0.2):
         another for testing.
     """
 
-    (
-        nxyz_train, nxyz_test,
-        energy_train, energy_test,
-        force_train, force_test,
-        smiles_train, smiles_test,
-        pbc_train, pbc_test
-    ) = train_test_split(
-        dataset.nxyz,
-        dataset.energy,
-        dataset.force,
-        dataset.smiles,
-        dataset.pbc,
-        test_size=test_size
-    )
-
+    idx = list(range(len(dataset)))
+    idx_train, idx_test = train_test_split(idx)
+    
     train = Dataset(
-        nxyz=nxyz_train,
-        energy=energy_train,
-        force=force_train,
-        smiles=smiles_train,
-        pbc=pbc_train,
+        props={key: val[idx_train] for key, val in dataset.props.items()},
         units=dataset.units
     )
-
     test = Dataset(
-        nxyz=nxyz_test,
-        energy=energy_test,
-        force=force_test,
-        smiles=smiles_test,
-        pbc=pbc_test,
+        props={key: val[idx_test] for key, val in dataset.props.items()},
         units=dataset.units
     )
 
