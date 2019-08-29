@@ -98,26 +98,28 @@ class Dataset(TorchDataset):
     def to_kcal_mol(self): 
         """Converts forces and energies from atomic units to kcal/mol."""
 
-        self.force = [
-            x * const.HARTREE_TO_KCAL_MOL / const.BOHR_RADIUS
-            for x in self.force
-        ]
-        self.energy = [x * const.HARTREE_TO_KCAL_MOL for x in self.energy]
+        if 'force' in self.props.keys():
+            self.props['force'] = [
+                x * const.HARTREE_TO_KCAL_MOL / const.BOHR_RADIUS
+                for x in self.props['force']
+            ]
+        self.props['energy'] = [x * const.HARTREE_TO_KCAL_MOL for x in self.props['energy']]
 
         self.units = 'kcal/mol'
 
     def to_atomic_units(self):
-        self.force = [
+        self.props['force'] = [
             x / const.HARTREE_TO_KCAL_MOL * const.BOHR_RADIUS
-            for x in self.force
+            for x in self.props['force']
         ]
-        self.energy = [x / const.HARTREE_TO_KCAL_MOL for x in self.energy]
+        self.props['energy'] = [x / const.HARTREE_TO_KCAL_MOL for x in self.props['energy']]
         self.units = 'atomic'
 
     def shuffle(self):
         idx = list(range(len(self)))
         reindex = skshuffle(idx)
-        self.props = self[reindex]
+        self.props = {key: val[reindex] for key, val in self.props.items()}
+
         return 
 
     def save(self, path):
