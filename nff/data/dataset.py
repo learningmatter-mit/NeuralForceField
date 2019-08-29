@@ -33,13 +33,7 @@ class Dataset(TorchDataset):
             units (str): units of the system.
         """
 
-        self._check_dictionary(props)
-        n_atoms = len(props['nxyz'])
-
-        if 'pbc' not in props:
-            props['pbc'] = [None] * len(nxyz)
-
-        self.nxyz = self._to_array(nxyz)
+        self.props = self._check_dictionary(props)
         self.units = units
         self.to_units('kcal/mol')
 
@@ -51,8 +45,7 @@ class Dataset(TorchDataset):
 
     def __add__(self, other):
         if other.units != self.units:
-            print('changing units')
-            other.to_units(self.units)
+            other = other.copy().to_units(self.units)
         
         props = concatenate_dict(self.props, other.props)
 
@@ -69,8 +62,15 @@ class Dataset(TorchDataset):
         for key, val in props.items():
             if val is None:
                 props[key] = [None] * n_atoms
-            
-            assert len(val) == n_atoms, 'length of {} is not {}'.format(key, n_atoms)
+            else:    
+                assert len(val) == n_atoms, \
+                    'length of {} is not compatible with {} atoms'.format(key, n_atoms)
+
+        if 'pbc' not in props:
+            props['pbc'] = [None] * n_atoms
+
+        props['nxyz'] = self._to_array(props['nxyz'])
+        return props
 
     def _to_array(self, x):
         """Converts input `x` to array"""
@@ -80,6 +80,10 @@ class Dataset(TorchDataset):
             return array(x)
         else:
             return [array(_) for _ in x]
+
+    def copy(self):
+        """Copies the current dataset"""
+        return Dataset(self.props, self.units)
 
     def to_units(self, target_unit):
         if target_unit == 'kcal/mol' and self.units == 'atomic':

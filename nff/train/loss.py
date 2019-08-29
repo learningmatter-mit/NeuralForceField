@@ -37,6 +37,7 @@ def build_mse_loss(loss_coef):
             targ = ground_truth[key]
             pred = results[key]
 
+            # select only properties which are given
             valid_idx = (targ != None)
             targ = targ[valid_idx]
             pred = pred[valid_idx]
