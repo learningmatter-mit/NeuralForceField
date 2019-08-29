@@ -61,7 +61,7 @@ class Dataset(TorchDataset):
 
         for key, val in props.items():
             if val is None:
-                props[key] = [None] * n_atoms
+                props[key] = [np.nan] * n_atoms
             else:    
                 assert len(val) == n_atoms, \
                     'length of {} is not compatible with {} atoms'.format(key, n_atoms)
