@@ -10,10 +10,8 @@ def build_mse_loss(loss_coef):
 
     Args:
         loss_coef (dict): dictionary containing the weight coefficients
-            for each property being predicted. Example: `loss_coef = {
-                'energy': rho,
-                'force': 1
-            }`
+            for each property being predicted.
+            Example: `loss_coef = {'energy': rho, 'force': 1}`
 
     Returns:
         mean squared error loss function
@@ -24,8 +22,8 @@ def build_mse_loss(loss_coef):
         """Calculates the MSE between ground_truth and results.
 
         Args:
-            ground_truth (dict): e.g. {'energy': 2, 'force': [0, 0, 0]}
-            results (dict):  e.g. {'energy': 4, 'force': [1, 2, 2]}
+            ground_truth (dict): e.g. `{'energy': 2, 'force': [0, 0, 0]}`
+            results (dict):  e.g. `{'energy': 4, 'force': [1, 2, 2]}`
 
         Returns:
             loss (torch.Tensor)
@@ -39,9 +37,15 @@ def build_mse_loss(loss_coef):
             targ = ground_truth[key]
             pred = results[key]
 
-            diff = (targ - pred) ** 2
-            err_sq = coef * torch.mean(diff)
-            loss += err_sq
+            valid_idx = (targ != None)
+            targ = targ[valid_idx]
+            pred = pred[valid_idx]
+
+            if len(targ) != 0:
+                diff = (targ - pred) ** 2
+                err_sq = coef * torch.mean(diff)
+                loss += err_sq
+
         return loss
 
     return loss_fn
