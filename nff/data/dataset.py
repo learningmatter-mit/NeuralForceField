@@ -22,69 +22,55 @@ class Dataset(TorchDataset):
     """
 
     def __init__(self,
-                 nxyz,
-                 energy,
-                 force,
-                 smiles,
-                 pbc=None,
+                 props,
                  units='atomic'):
         """Constructor for Dataset class.
 
         Args:
-            nxyz (array): (N, 4) array with atomic number and xyz coordinates
-                for each of the N atoms
-            energy (array): (N, ) array with energies
-            force (array): (N, 3) array with forces
-            smiles (array): (N, ) array with SMILES strings
-            pbc (array): array with indices for periodic boundary conditions
-            atomic_units (bool): if True, input values are given in atomic units.
-                They will be converted to kcal/mol.
+            props (dictionary of lists): dictionary containing the
+                properties of the system. Each key has a list, and 
+                all lists have the same length.
+            units (str): units of the system.
         """
 
-        if pbc is None:
-            pbc = [None] * len(nxyz)
+        self._check_dictionary(props)
+        n_atoms = len(props['nxyz'])
 
-        assert all([
-            len(_) == len(nxyz)
-            for _ in [energy, force, smiles, pbc]
-        ]), 'All lists should have the same length.'
+        if 'pbc' not in props:
+            props['pbc'] = [None] * len(nxyz)
 
         self.nxyz = self._to_array(nxyz)
-        self.energy = energy
-        self.force = self._to_array(force)
-        self.smiles = smiles
-        self.pbc = pbc
-
         self.units = units
         self.to_units('kcal/mol')
 
     def __len__(self):
-        return len(self.nxyz)
+        return len(self.props['nxyz'])
 
     def __getitem__(self, idx):
-        return self.nxyz[idx], self.energy[idx], self.force[idx], self.smiles[idx], self.pbc[idx]
+        return {key: val[idx] for key, val in self.props.items()}
 
     def __add__(self, other):
         if other.units != self.units:
             print('changing units')
             other.to_units(self.units)
         
-        nxyz = np.concatenate((self.nxyz, other.nxyz), axis=0)
-        energy = np.concatenate((self.energy, other.energy), axis=0)
+        props = concatenate_dict(self.props, other.props)
 
-        # force, smiles and pbc are lists
-        force = self.force + other.force
-        smiles = self.smiles + other.smiles
-        pbc = self.pbc + other.pbc
-        
-        return Dataset(
-            nxyz,
-            energy,
-            force,
-            smiles,
-            pbc,
-            units=self.units
-        )
+        return Dataset(props, units=self.units)
+
+    def _check_dictionary(self, props):
+        """Check the dictionary or properties to see if it has the
+            specified format.
+        """
+
+        assert 'nxyz' in props.keys()
+        n_atoms = len(props['nxyz'])
+
+        for key, val in props.items():
+            if val is None:
+                props[key] = [None] * n_atoms
+            
+            assert len(val) == n_atoms, 'length of {} is not {}'.format(key, n_atoms)
 
     def _to_array(self, x):
         """Converts input `x` to array"""
@@ -125,9 +111,9 @@ class Dataset(TorchDataset):
         self.units = 'atomic'
 
     def shuffle(self):
-        self.nxyz, self.force, self.energy, self.smiles, self.pbc = skshuffle(
-            self.nxyz, self.force, self.energy, self.smiles, self.pbc
-        )
+        idx = list(range(len(self)))
+        reindex = skshuffle(idx)
+        self.props = self[reindex]
         return 
 
     def save(self, path):
@@ -142,6 +128,30 @@ class Dataset(TorchDataset):
             raise TypeError(
                 '{} is not an instance from {}'.format(path, type(cls))
             )
+
+
+def concatenate_dict(*dicts):
+    """Concatenates dictionaries as long as they have the same keys.
+        If one dictionary has one key that the others do not have,
+        the dictionaries lacking the key will have that key replaced by None. All dictionaries must have the key `nxyz`.
+
+    Args:
+        *dicts (any number of dictionaries)
+    """
+
+    assert all([type(d) == dict for d in dicts]), \
+        'all arguments have to be dictionaries'
+
+    keys = set(sum([list(d.keys()) for d in dicts], []))
+    
+    joint_dict = {}
+    for key in keys:
+        joint_dict[key] = [
+            d.get(key, [None] * len(d['nxyz']))
+            for d in dicts
+        ]
+
+    return joint_dict
 
 
 def split_train_test(dataset, test_size=0.2):
