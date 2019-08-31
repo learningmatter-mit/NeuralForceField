@@ -438,11 +438,19 @@ class PrintingHook(LoggingHook):
 
             if self.log_memory:
                 device = next(trainer._model.parameters()).device
-                memory = torch.cuda.max_memory_allocated(device) * 1e-6
-                log += self.str_format.format(
-                    len(self._headers['memory']),
-                    '%d' % memory
-                )
+                # If using cpu, no need to pring out memory 
+                if device != torch.device('cpu'): 
+                    memory = torch.cuda.max_memory_allocated(device) * 1e-6
+                    log += self.str_format.format(
+                        len(self._headers['memory']),
+                        '%d' % memory
+                    )
+                else:
+                    log += self.str_format.format(
+                        len(self._headers['memory']),
+                        'using cpu'
+                    )
+
 
             self.print(log)
 
