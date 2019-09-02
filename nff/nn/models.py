@@ -27,13 +27,12 @@ class Net(nn.Module):
         convolutions (torch.nn.ModuleList): include all the convolutions
         graph_dis (Graphdis): graph distance module to convert xyz inputs
             into distance matrix
-        prop_objects (dict): A dictionary of the form {name: prop_obj}, where prop_obj
-            is an instance of the Property object and name is its name.
+        prop_dics (dict): A dictionary of the form {name: prop_dic}, where name is the
+            property name and prop_dic is a dictionary for that property.
         module_dict (ModuleDict): a dictionary of modules. Each entry has the form
             {name: mod_list}, where name is the name of a property object and mod_list
             is a ModuleList of layers to predict that property.
 
-        self.module_dict = self.make_module_dict(n_atom_basis=n_atom_basis)
     """
     
     def __init__(
@@ -84,7 +83,7 @@ class Net(nn.Module):
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
 
         architecture = Architecture(output_vars=output_vars, specs=specs)
-        self.prop_objects = {obj.name: obj for obj in architecture.prop_objects}
+        self.prop_dics = architecture.prop_dics
         self.module_dict = self.make_module_dict(n_atom_basis=n_atom_basis)
 
         # declare the bond energy module for two cases 
@@ -100,15 +99,15 @@ class Net(nn.Module):
         module_dict = nn.ModuleDict({})
         old_out_features = n_atom_basis
 
-        for name, prop_object in self.prop_objects.items():
+        for name, prop_dic in self.prop_dics.items():
             module_list = nn.ModuleList([])
-            for i, layer in enumerate(prop_object.layers):
+            for layer in prop_dic.layers:
 
                 in_features = old_out_features
                 # out_features is given by layer if layer is an integer; otherwise layer is a function
                 # f(x) and out_features = f(old_out_features)
                 out_features = int(layer(in_features)) if (hasattr(layer, "__call__")) else layer
-                activation = ACTIVATION_DIC[prop_object.activation]
+                activation = ACTIVATION_DIC[prop_dic.activation]
 
                 module_list.append(Dense(in_features=in_features,
                                          out_features=out_features,
@@ -200,7 +199,7 @@ class Net(nn.Module):
 
         # a is None means non-batched case
         if a is None:
-            assert len(set(N)) == 1 # all the graphs should correspond to the same molecule
+            assert len(set(N)) == 1  # all the graphs should correspond to the same molecule
             N_atom = N[0]
             e, A = self.graph_dis(xyz=xyz.reshape(-1, N_atom, 3))
 
@@ -248,12 +247,12 @@ class Net(nn.Module):
 
         output_dic = {}
         for key, module_list in self.module_dict.items():
-            output = copy.copy(r)
+            output = r
             for module in module_list:
                 output = module(output)
 
             is_energy = "energy" in key
-            pool_type = self.prop_objects[key].pool
+            pool_type = self.prop_dics[key].pool
             batch_output = self.batch_and_pool(output, pool_type, xyz, N, bond_adj, bond_len, is_energy)
 
             output_dic[key] = batch_output
