@@ -67,7 +67,7 @@ class Dataset(TorchDataset):
                     'length of {} is not compatible with {} atoms'.format(key, n_atoms)
 
         if 'pbc' not in props:
-            props['pbc'] = [None] * n_atoms
+            props['pbc'] = list(range(n_atoms))
 
         props['nxyz'] = self._to_array(props['nxyz'])
         return props

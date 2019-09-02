@@ -165,3 +165,29 @@ class GraphLoader:
     def shuffle_and_rebatch(self):
         self.shuffle()
         self.graph_dataset = self._init_graph_dataset()
+
+def collate_dicts(dicts):
+    """Collates dictionaries within a single batch.
+
+    Args:
+        dicts (list of dict): each element of the dataset
+
+    Returns:
+        batch (dict)
+    """
+
+    batch = {
+        key: torch.stack([
+            torch.Tensor(data[key])
+            for data in dicts
+        ], dim=0)
+        for key in dicts[0].keys()
+    }
+
+    batch['num_atoms'] = torch.Tensor([
+        len(data['nxyz'])
+        for data in dicts
+    ])
+
+    return batch
+
