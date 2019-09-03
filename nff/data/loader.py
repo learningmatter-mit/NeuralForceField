@@ -7,6 +7,8 @@ from nff.data import Graph, GraphDataset
 import nff.utils.constants as const
 
 
+REINDEX_KEYS = ['nbr_list', 'pbc']
+
 class GraphLoader:
     """Dataloader to deal with NFF calculations. Can be expanded to retrieve calculations
          from the cluster later.
@@ -176,6 +178,13 @@ def collate_dicts(dicts):
         batch (dict)
     """
 
+    # new indices for the batch: the first one is zero and the last does not matter
+    cumulative_atoms = np.cumsum([0] + [d['num_atoms'] for d in dicts])[:-1]
+
+    for n, d in zip(cumulative_atoms, dicts):
+        for key in REINDEX_KEYS:
+            d[key] = d[key] + n
+
     batch = {
         key: torch.stack([
             torch.Tensor(data[key])
@@ -183,11 +192,6 @@ def collate_dicts(dicts):
         ], dim=0)
         for key in dicts[0].keys()
     }
-
-    batch['num_atoms'] = torch.Tensor([
-        len(data['nxyz'])
-        for data in dicts
-    ])
 
     return batch
 
