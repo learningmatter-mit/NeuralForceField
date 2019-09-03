@@ -33,15 +33,15 @@ class MessagePassingLayer(nn.Module):
         # possible options: 
         # (ri [] eij) -> rj,
         # where []: *, +, (,), ....
-        message = r[a[:, 0]] * e, r[a[:, 1]] * e 
+        message = r[a[:, 0]] * e, r[a[:, 1]] * e
         return message
 
     def aggregate(self, message, index, size):
-        message = scatter_add(src=message,
+        r = scatter_add(src=message,
                                 index=index,
                                 dim=0,
                                 dim_size=size)
-        return message
+        return r
 
     def update(self, r):
         return r
@@ -50,12 +50,12 @@ class MessagePassingLayer(nn.Module):
         # Base case
         graph_size = r.shape[0]
 
-        r1, r2 = self.message(r, e, a)
+        rij, rji = self.message(r, e, a)
 
         # i -> j propagate
-        r = self.aggregate(r1, a[:, 1], graph_size)
+        r = self.aggregate(rij, a[:, 1], graph_size)
         # j -> i propagate
-        r += self.aggregate(r2, a[:, 0], graph_size)
+        r += self.aggregate(rji, a[:, 0], graph_size)
 
         r = self.update(r)
 
@@ -202,8 +202,6 @@ class InteractionBlock(MessagePassingLayer): # Subcalss of MessagePassing
 class GraphAttention(MessagePassingLayer):
 
     """Weighted graph pooling layer based on self attention 
-
-        to do list: no self attention yet!!!
     
     Attributes:
         activation (TYPE): Description
@@ -217,7 +215,8 @@ class GraphAttention(MessagePassingLayer):
         
     def message(self, r, e, a):
         """weight_ij is the importance factor of node j to i
-        
+           weight_ji is the importance factor of node i to j
+
         Args:
             r (TYPE): Description
             e (TYPE): Description
@@ -232,17 +231,37 @@ class GraphAttention(MessagePassingLayer):
         # j -> i
         weight_ji = torch.exp(self.activation(torch.cat((r[a[:, 1]], r[a[:, 0]]), dim=1) * \
                              self.weight).sum(-1))
+
+        weight_ii = torch.exp(self.activation(torch.cat((r, r), dim=1) * \
+                             self.weight).sum(-1))
         
         normalization = scatter_add(weight_ij, a[:, 0], dim_size=r.shape[0]) \
-                        + scatter_add(weight_ji, a[:, 1], dim_size=r.shape[0])
+                        + scatter_add(weight_ji, a[:, 1], dim_size=r.shape[0]) + weight_ii
 
         a_ij = weight_ij/normalization[a[:, 0]] # the importance of node j’s features to node i
         a_ji = weight_ji/normalization[a[:, 1]] # the importance of node i’s features to node j
+        a_ii = weight_ii/normalization
         
-        message = r[a[:, 0]] * a_ij[:, None], r[a[:, 1]]  * a_ij[:, None]
+        message = r[a[:, 0]] * a_ij[:, None], \
+                  r[a[:, 1]] * a_ij[:, None], \
+                  r * a_ii[:, None]
         
         return message
 
+    def forward(self, r, e, a):
+        # Base case
+        graph_size = r.shape[0]
+
+        rij, rji, r = self.message(r, e, a)
+
+        # i -> j propagate
+        r += self.aggregate(rij, a[:, 1], graph_size)
+        # j -> i propagate
+        r += self.aggregate(rji, a[:, 0], graph_size)
+
+        r = self.update(r)
+
+        return r
 
 class GraphDis(nn.Module):
 
