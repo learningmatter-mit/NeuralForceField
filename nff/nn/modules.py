@@ -44,7 +44,6 @@ class MessagePassingLayer(nn.Module):
         return message 
 
     def update(self, r):
-
         return r
 
     def forward(self, r, e, a):
@@ -60,7 +59,36 @@ class MessagePassingLayer(nn.Module):
 
         r = self.update(r)
 
-        return r    
+        return r
+
+class EdgeUpdateLayer(nn.Module):
+    def __init__(self):
+        super(EdgeUpdateLayer, self).__init__()
+
+    def message(self, r, e, a):
+        '''
+            function to update edge function from node features
+
+        '''
+        assert r.shape[-1] == e.shape[-1]
+        message = r
+        return message
+
+    def aggregate(self, message, neighborlist):
+        aggregated_edge_feature = message[neighborlist[:,0]] + message[neighborlist[:,1]]
+
+        return aggregated_edge_feature
+
+    def update(self, e):
+
+        return e
+
+    def forward(self, r, e, a):
+        message = self.message(r, e, a)
+        # update edge from two connected nodes 
+        e = self.aggregate(message, a)
+        e = self.update(e)      
+        returne e 
 
 
 class InteractionBlock(MessagePassingLayer): # Subcalss of MessagePassing
