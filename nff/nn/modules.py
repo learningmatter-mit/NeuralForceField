@@ -10,6 +10,145 @@ from nff.nn.activations import shifted_softplus
 
 EPSILON = 1e-15
 
+# Questions 
+
+# How to handle multiple graph case (multiple neighborlists)?
+# What kind of abstraction should I give classical force field priors ?
+# Toward what extent should we implement modulelist (Each model needs a dictionary template )?
+# Energy predictor as a class?
+# Directed Graph or undirected? (subtle case when message if formed by concatnating)
+
+# Class MessagePassing 
+
+# Class Edge Aggregation 
+
+# Class Classical Priors 
+
+# Class Model consists of Message, Edge, Predictors 
+
+class MessagePassingLayer(nn.Module):
+    def __init__(self):
+        super(MessagePassingLayer, self).__init__()
+
+    def message(self, r, e, a):
+        # Basic message case 
+        assert r.shape[-1] == e.shape[-1]
+        message = r[a[:, 0]] * e, r[a[:, 1]] * e  # (ri [] eij) -> rj, []: *, +, (,)
+        return message 
+
+    def aggregate(self, message, index, size):
+        message = scatter_add(src=message, 
+                                index=index, 
+                                dim=0, 
+                                dim_size=size)
+        return message 
+
+    def update(self, r):
+
+        return r
+
+    def forward(self, r, e, a):
+        # Base case 
+        graph_size = r.shape[0]
+
+        r1,r2 = self.message(r, e, a)
+
+        # i -> j propagate 
+        r = self.aggregate(r1, a[:,1], graph_size)
+        # j -> i propagate 
+        r += self.aggregate(r2, a[:,0], graph_size)
+
+        r = self.update(r)
+
+        return r    
+
+
+class InteractionBlock(MessagePassingLayer): # Subcalss of MessagePassing
+
+    """The convolution layer with filter. To be merged with GraphConv class.
+    
+    Attributes:
+        atom_filter (Dense): Description
+        dense_1 (Dense): dense layer 1 to obtain the updated atomic embedding 
+        dense_2 (Dense): dense layer 2 to obtain the updated atomic embedding
+        distance_filter_1 (Dense): dense layer 1 for filtering gaussian
+            expanded distances
+        distance_filter_2 (Dense): dense layer 1 for filtering gaussian
+            expanded distances
+        smearing (GaussianSmearing): gaussian basis expansion for distance 
+            matrix of dimension B, N, N, 1
+        mean_pooling (bool): if True, performs a mean pooling 
+    """
+
+    def __init__(
+        self,
+        n_atom_basis,
+        n_filters,
+        n_gaussians,
+        cutoff,
+        trainable_gauss,
+        mean_pooling=False
+    ):
+        super(InteractionBlock, self).__init__()
+
+        self.mean_pooling = mean_pooling
+        self.smearing = GaussianSmearing(start=0.0,
+                                         stop=cutoff,
+                                         n_gaussians=n_gaussians,
+                                         trainable=trainable_gauss)
+
+        self.distance_filter_1 = Dense(in_features=n_gaussians,
+                                       out_features=n_gaussians,
+                                       activation=shifted_softplus)
+
+        self.distance_filter_2 = Dense(in_features=n_gaussians,
+                                       out_features=n_filters)
+
+        self.atom_filter = Dense(in_features=n_atom_basis,
+                                 out_features=n_filters,
+                                 bias=False)
+
+        self.dense_1 = Dense(in_features=n_filters,
+                             out_features=n_atom_basis,
+                             activation=shifted_softplus)
+
+        self.dense_2 = Dense(in_features=n_atom_basis,
+                             out_features=n_atom_basis,
+                             activation=None)
+
+    def message(self, r, e, a):
+        """The message function for SchNet convoltuions 
+
+        
+        Args:
+            r (TYPE): node inputs 
+            e (TYPE): edge inputs 
+            a (TYPE): neighbor list
+        
+        Returns:
+            TYPE: message should a pair of message and 
+        """
+        # update edge feature 
+        e = self.smearing(e, is_batch=True)
+        e = self.distance_filter_1(e)
+        e = self.distance_filter_2(e)
+        
+        # convection: update 
+        r = self.atom_filter(r) # test 
+
+        # check if the dimensions of r and e are the same 
+        assert r.shape[-1] == e.shape[-1]
+        # combine node and edge info
+        message = r[a[:, 0]] * e, r[a[:, 1]] * e  # (ri [] eij) -> rj, []: *, +, (,)
+        return message 
+
+    def update(self, r):
+
+        r = self.dense_1(r)
+        r = self.dense_2(r)
+
+        return r
+
 
 class GraphDis(nn.Module):
 
@@ -105,112 +244,18 @@ class BondEnergyModule(nn.Module):
     
     def __init__(self, batch=True):
         super().__init__()
-        self.batch = batch
         
     def forward(self, xyz, bond_adj, bond_len, bond_par):
-        
-        if self.batch:
-            e = (
-                xyz[bond_adj[:, 0]] - xyz[bond_adj[:, 1]]
-            ).pow(2).sum(1).sqrt()[:, None]
+        e = (
+            xyz[bond_adj[:, 0]] - xyz[bond_adj[:, 1]]
+        ).pow(2).sum(1).sqrt()[:, None]
 
-            ebond = bond_par * (e - bond_len)**2
-            ebond = 0.5 * scatter_add(src=ebond, index=bond_adj[:, 0], dim=0, dim_size=xyz.shape[0])
-
-        else:
-            e = (
-                xyz[:, bond_adj[:, 0]] - xyz[:, bond_adj[:, 1]]
-            ).pow(2).sum(2).sqrt()
-
-            ebond = 0.5 * bond_par * (e - bond_len) ** 2
+        ebond = bond_par * (e - bond_len)**2
+        energy = 0.5 * scatter_add(src=ebond, index=bond_adj[:, 0], dim=0, dim_size=xyz.shape[0])
+        energy += 0.5 * scatter_add(src=ebond, index=bond_adj[:, 1], dim=0, dim_size=xyz.shape[0])
  
         return ebond
 
-
-class InteractionBlock(nn.Module):
-
-    """The convolution layer with filter. To be merged with GraphConv class.
-    
-    Attributes:
-        atom_filter (Dense): Description
-        dense_1 (Dense): dense layer 1 to obtain the updated atomic embedding 
-        dense_2 (Dense): dense layer 2 to obtain the updated atomic embedding
-        distance_filter_1 (Dense): dense layer 1 for filtering gaussian
-            expanded distances
-        distance_filter_2 (Dense): dense layer 1 for filtering gaussian
-            expanded distances
-        smearing (GaussianSmearing): gaussian basis expansion for distance 
-            matrix of dimension B, N, N, 1
-        mean_pooling (bool): if True, performs a mean pooling 
-    """
-
-    def __init__(
-        self,
-        n_atom_basis,
-        n_filters,
-        n_gaussians,
-        cutoff,
-        trainable_gauss,
-        mean_pooling=False
-    ):
-
-        super().__init__()
-
-        self.mean_pooling = mean_pooling
-        self.smearing = GaussianSmearing(start=0.0,
-                                         stop=cutoff,
-                                         n_gaussians=n_gaussians,
-                                         trainable=trainable_gauss)
-
-        self.distance_filter_1 = Dense(in_features=n_gaussians,
-                                       out_features=n_gaussians,
-                                       activation=shifted_softplus)
-
-        self.distance_filter_2 = Dense(in_features=n_gaussians,
-                                       out_features=n_filters)
-
-        self.atom_filter = Dense(in_features=n_atom_basis,
-                                 out_features=n_filters,
-                                 bias=False)
-
-        self.dense_1 = Dense(in_features=n_filters,
-                             out_features=n_atom_basis,
-                             activation=shifted_softplus)
-
-        self.dense_2 = Dense(in_features=n_atom_basis,
-                             out_features=n_atom_basis,
-                             activation=None)
- 
-    def forward(self, r, e, a):
-        """
-        Args:
-            r: feature tensor
-            e: edge tensor
-        """
-
-        e = self.smearing(e, is_batch=True)
-        e = self.distance_filter_1(e)
-        W = self.distance_filter_2(e)
-        W = W.squeeze()
-
-        r = self.atom_filter(r)
-
-        y = scatter_add(src=r[a[:, 0]].squeeze() * W, 
-                    index=a[:, 1], 
-                    dim=0, 
-                    dim_size=r.shape[0])
-
-        y += scatter_add(src=r[a[:, 1]].squeeze() * W, 
-                    index=a[:, 0], 
-                    dim=0, 
-                    dim_size=r.shape[0])
-               
-        # last layers
-        y = self.dense_1(y)
-        y = self.dense_2(y)
-
-        return y
-        
 
 class GraphAttention(nn.Module):
     def __init__(self, n_atom_basis):
@@ -249,3 +294,7 @@ class GraphAttention(nn.Module):
         ).sum(2)
         
         return h_prime
+
+# Test 
+
+
