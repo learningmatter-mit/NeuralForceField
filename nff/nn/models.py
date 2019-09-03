@@ -39,6 +39,7 @@ class Net(nn.Module):
         bond_par=50.0,
         trainable_gauss=False,
         box_size=None,
+        edgeupdate=False
     ):
         """Constructs a SchNet model.
 
@@ -69,10 +70,11 @@ class Net(nn.Module):
             for _ in range(n_convolutions)
         ])
 
-        self.edgeupdate = nn.ModuleList([
-            SchNetEdgeUpdate(n_atom_basis=n_atom_basis)
-            for _ in range(n_convolutions)
-        ])
+        if edgeupdate:
+            self.edgeupdate = nn.ModuleList([
+                SchNetEdgeUpdate(n_atom_basis=n_atom_basis)
+                for _ in range(n_convolutions)
+            ])
 
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
 
@@ -85,6 +87,7 @@ class Net(nn.Module):
         # declare the bond energy module for two cases 
         self.bond_energy_graph = BondEnergyModule(batch=True)
         self.bond_par = bond_par
+        self.edgeupdate = edgeupdate
 
         
     def forward(
@@ -157,9 +160,13 @@ class Net(nn.Module):
         # update function includes periodic boundary conditions
         for i, conv in enumerate(self.convolutions):
             dr = conv(r=r, e=e, a=a)
-            de = self.edgeupdate[i](r=r, e=e, a=a)
+
+            # options for edge update
+            if self.edgeupdate:
+                de = self.edgeupdate[i](r=r, e=e, a=a)
+                e = e + de
+
             r = r + dr
-            e = e + de
             r = r[pbc]
 
         # remove image atoms outside the unit cell
