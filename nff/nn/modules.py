@@ -6,13 +6,14 @@ import torch.nn as nn
 from nff.nn.layers import Dense, GaussianSmearing
 from nff.utils.scatter import scatter_add
 from nff.nn.activations import shifted_softplus
+from torch.nn import Sequential, Linear, ReLU
 
 import unittest
 
 
 EPSILON = 1e-15
 
-# Questions 
+# Questions
 
 # How to handle multiple graph case (multiple neighborlists)?
 # What kind of abstraction should I give classical force field priors ?
@@ -20,48 +21,43 @@ EPSILON = 1e-15
 # Energy predictor as a class?
 # Directed Graph or undirected? (subtle case when message if formed by concatnating)
 
-# Class MessagePassing 
-
-# Class Edge Aggregation 
-
-# Class Classical Priors 
-
-# Class Model consists of Message, Edge, Predictors 
 
 class MessagePassingLayer(nn.Module):
     def __init__(self):
         super(MessagePassingLayer, self).__init__()
 
     def message(self, r, e, a):
-        # Basic message case 
+        # Basic message case
         assert r.shape[-1] == e.shape[-1]
-        message = r[a[:, 0]] * e, r[a[:, 1]] * e  # (ri [] eij) -> rj, []: *, +, (,)
-        return message 
+        message = r[a[:, 0]] * e, r[a[:, 1]] * \
+            e  # (ri [] eij) -> rj, []: *, +, (,)
+        return message
 
     def aggregate(self, message, index, size):
-        message = scatter_add(src=message, 
-                                index=index, 
-                                dim=0, 
+        message = scatter_add(src=message,
+                                index=index,
+                                dim=0,
                                 dim_size=size)
-        return message 
+        return message
 
     def update(self, r):
         return r
 
     def forward(self, r, e, a):
-        # Base case 
+        # Base case
         graph_size = r.shape[0]
 
-        r1,r2 = self.message(r, e, a)
+        r1, r2 = self.message(r, e, a)
 
-        # i -> j propagate 
-        r = self.aggregate(r1, a[:,1], graph_size)
-        # j -> i propagate 
-        r += self.aggregate(r2, a[:,0], graph_size)
+        # i -> j propagate
+        r = self.aggregate(r1, a[:, 1], graph_size)
+        # j -> i propagate
+        r += self.aggregate(r2, a[:, 0], graph_size)
 
         r = self.update(r)
 
         return r
+
 
 class EdgeUpdateLayer(nn.Module):
     def __init__(self):
@@ -71,12 +67,13 @@ class EdgeUpdateLayer(nn.Module):
         '''
             function to update edge function from node features
         '''
-        assert r.shape[-1] == e.shape[-1]
+        #assert r.shape[-1] == e.shape[-1]
         message = r
         return message
 
     def aggregate(self, message, neighborlist):
-        aggregated_edge_feature = message[neighborlist[:,0]] + message[neighborlist[:,1]]
+        aggregated_edge_feature = message[neighborlist[:, 0]
+            ] + message[neighborlist[:, 1]]
         return aggregated_edge_feature
 
     def update(self, e):
@@ -84,10 +81,33 @@ class EdgeUpdateLayer(nn.Module):
 
     def forward(self, r, e, a):
         message = self.message(r, e, a)
-        # update edge from two connected nodes 
+        # update edge from two connected nodes
         e = self.aggregate(message, a)
-        e = self.update(e)      
-        return e 
+        e = self.update(e)
+        return e
+
+
+class SchNetEdgeUpdate(EdgeUpdateLayer):
+    """
+        Arxiv.1806.03146
+    """
+    def __init__(self, n_atom_basis):
+        super(SchNetEdgeUpdate, self).__init__()
+
+        self.mlp = Sequential(
+                              Linear(2 * n_atom_basis, n_atom_basis), 
+                              ReLU(), # softplus in the original paper 
+                              Linear(n_atom_basis, n_atom_basis),
+                              ReLU(), # softplus in the original paper
+                              Linear(n_atom_basis, 1)
+                              )
+
+    def aggregate(self, message, neighborlist):
+        aggregated_edge_feature = torch.cat((message[neighborlist[:,0]], message[neighborlist[:,1]]), 1)
+        return aggregated_edge_feature
+
+    def update(self, e):
+        return self.mlp(e)
 
 
 class InteractionBlock(MessagePassingLayer): # Subcalss of MessagePassing
@@ -326,6 +346,15 @@ class GraphAttention(nn.Module):
 
 class TestModules(unittest.TestCase):
 
+    def testBaseEdgeUpdate(self):
+        # initialize basic graphs 
+        a = torch.LongTensor([[0, 1], [2,3], [1,3], [4,5], [3,4]])
+        e = torch.rand(5, 10)
+        r_in = torch.rand(6, 10)
+        model = MessagePassingLayer()
+        r_out = model(r_in, e, a)
+        self.assertEqual(r_in.shape, r_out.shape, "The node feature dimensions should be same for the base case")
+
     def testBaseMessagePassing(self):
 
         # initialize basic graphs 
@@ -335,15 +364,6 @@ class TestModules(unittest.TestCase):
         model = EdgeUpdateLayer()
         e_out = model(r, e_in, a)
         self.assertEqual(e_in.shape, e_out.shape, "The edge feature dimensions should be same for the base case")
-
-    def testBaseEdgeUpdate(self):
-        # initialize basic graphs 
-        a = torch.LongTensor([[0, 1], [2,3], [1,3], [4,5], [3,4]])
-        e = torch.rand(5, 10)
-        r_in = torch.rand(6, 10)
-        model = MessagePassingLayer()
-        r_out = model(r_in, e, a)
-        self.assertEqual(r_in.shape, r_out.shape, "The node feature dimensions should be same for the base case")
 
     def testSchNetMPNN(self):
         # contruct a graph 
@@ -369,9 +389,19 @@ class TestModules(unittest.TestCase):
         self.assertEqual(r_in.shape, r_out.shape, "The node feature dimensions should be same for the SchNet Convolution case")
 
     def testSchNetEdgeUpdate(self):
+        # contruct a graph 
+        a = torch.LongTensor([[0, 1], [2,3], [1,3], [4,5], [3,4]])
+        # SchNet params 
+        n_atom_basis = 10
+        num_nodes = 6
 
+        e_in = torch.rand(5, 1)
+        r = torch.rand(num_nodes, n_atom_basis)
 
+        model = SchNetEdgeUpdate(n_atom_basis=n_atom_basis)
+        e_out = model(r, e_in, a)
 
+        self.assertEqual(e_in.shape, e_out.shape, "The edge feature dimensions should be same for the SchNet Edge Update case")
 
 if __name__ == '__main__':
     unittest.main()
