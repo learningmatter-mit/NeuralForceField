@@ -7,6 +7,8 @@ from nff.nn.layers import Dense, GaussianSmearing
 from nff.utils.scatter import scatter_add
 from nff.nn.activations import shifted_softplus
 
+import unittest
+
 
 EPSILON = 1e-15
 
@@ -68,7 +70,6 @@ class EdgeUpdateLayer(nn.Module):
     def message(self, r, e, a):
         '''
             function to update edge function from node features
-
         '''
         assert r.shape[-1] == e.shape[-1]
         message = r
@@ -76,11 +77,9 @@ class EdgeUpdateLayer(nn.Module):
 
     def aggregate(self, message, neighborlist):
         aggregated_edge_feature = message[neighborlist[:,0]] + message[neighborlist[:,1]]
-
         return aggregated_edge_feature
 
     def update(self, e):
-
         return e
 
     def forward(self, r, e, a):
@@ -88,7 +87,7 @@ class EdgeUpdateLayer(nn.Module):
         # update edge from two connected nodes 
         e = self.aggregate(message, a)
         e = self.update(e)      
-        returne e 
+        return e 
 
 
 class InteractionBlock(MessagePassingLayer): # Subcalss of MessagePassing
@@ -324,5 +323,58 @@ class GraphAttention(nn.Module):
         return h_prime
 
 # Test 
+
+class TestModules(unittest.TestCase):
+
+    def testBaseMessagePassing(self):
+
+        # initialize basic graphs 
+        a = torch.LongTensor([[0, 1], [2,3], [1,3], [4,5], [3,4]])
+        e_in = torch.rand(5, 10)
+        r = torch.rand(6, 10)
+        model = EdgeUpdateLayer()
+        e_out = model(r, e_in, a)
+        self.assertEqual(e_in.shape, e_out.shape, "The edge feature dimensions should be same for the base case")
+
+    def testBaseEdgeUpdate(self):
+        # initialize basic graphs 
+        a = torch.LongTensor([[0, 1], [2,3], [1,3], [4,5], [3,4]])
+        e = torch.rand(5, 10)
+        r_in = torch.rand(6, 10)
+        model = MessagePassingLayer()
+        r_out = model(r_in, e, a)
+        self.assertEqual(r_in.shape, r_out.shape, "The node feature dimensions should be same for the base case")
+
+    def testSchNetMPNN(self):
+        # contruct a graph 
+        a = torch.LongTensor([[0, 1], [2,3], [1,3], [4,5], [3,4]])
+        # SchNet params 
+        n_atom_basis = 10
+        n_filters = 10
+        n_gaussians = 10
+        num_nodes = 6
+        cutoff = 0.5
+
+        e = torch.rand(5, n_atom_basis)
+        r_in = torch.rand(num_nodes, n_atom_basis)
+
+        model = InteractionBlock(n_atom_basis,
+                                n_filters,
+                                n_gaussians,
+                                cutoff=2.0,
+                                trainable_gauss=False,
+                                mean_pooling=False)
+
+        r_out = model(r_in, e, a)
+        self.assertEqual(r_in.shape, r_out.shape, "The node feature dimensions should be same for the SchNet Convolution case")
+
+    def testSchNetEdgeUpdate(self):
+
+
+
+
+if __name__ == '__main__':
+    unittest.main()
+
 
 
