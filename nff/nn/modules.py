@@ -29,8 +29,11 @@ class MessagePassingLayer(nn.Module):
     def message(self, r, e, a):
         # Basic message case
         assert r.shape[-1] == e.shape[-1]
-        message = r[a[:, 0]] * e, r[a[:, 1]] * \
-            e  # (ri [] eij) -> rj, []: *, +, (,)
+        # mixing node and edge feature, multiply by default
+        # possible options: 
+        # (ri [] eij) -> rj,
+        # where []: *, +, (,), ....
+        message = r[a[:, 0]] * e, r[a[:, 1]] * e 
         return message
 
     def aggregate(self, message, index, size):
@@ -302,45 +305,6 @@ class BondEnergyModule(nn.Module):
         energy += 0.5 * scatter_add(src=ebond, index=bond_adj[:, 1], dim=0, dim_size=xyz.shape[0])
  
         return ebond
-
-
-class GraphAttention(nn.Module):
-    def __init__(self, n_atom_basis):
-        super().__init__()
-        
-        self.n_atom_basis = n_atom_basis
-        self.W = nn.Linear(n_atom_basis, n_atom_basis)
-        self.a = nn.Linear(2 * n_atom_basis, 1)
-        self.LeakyRelu = nn.RReLU()
-        
-    def forward(self, h, A):
-        n_atom_basis = self.n_atom_basis
-        B = h.shape[0]
-        N_atom = h.shape[1]
-        
-        hi = h[:, :, None, :].expand(B, N_atom, N_atom, n_atom_basis)
-        hj = h[:, None, :, :].expand(B, N_atom, N_atom, n_atom_basis)
-
-        hi = self.W(hi)
-        hj = self.W(hj)
-
-        # attention is directional, the attention i->j is different from j -> i
-        hij = torch.cat((hi, hj), dim=3)
-        hij = self.a(hij)
-        
-        # construct attention vector using softmax
-        alpha = (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1))
-        alpha_sum = torch.sum(
-            torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1),
-            dim=2
-        )
-        alpha = alpha/alpha_sum.unsqueeze(2).expand_as(hij)
-
-        h_prime = (
-            h[:, None, :, :].expand(B, N_atom, N_atom, n_atom_basis) * alpha
-        ).sum(2)
-        
-        return h_prime
 
 # Test 
 
