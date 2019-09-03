@@ -6,7 +6,7 @@ import torch.nn as nn
 from nff.nn.layers import Dense, GaussianSmearing
 from nff.utils.scatter import scatter_add
 from nff.nn.activations import shifted_softplus
-from torch.nn import Sequential, Linear, ReLU
+from torch.nn import Sequential, Linear, ReLU, LeakyReLU
 
 import unittest
 
@@ -199,6 +199,50 @@ class InteractionBlock(MessagePassingLayer): # Subcalss of MessagePassing
 
         return r
 
+class GraphAttention(MessagePassingLayer):
+
+    """Weighted graph pooling layer based on self attention 
+
+        to do list: no self attention yet!!!
+    
+    Attributes:
+        activation (TYPE): Description
+        weight (TYPE): Description
+    """
+    
+    def __init__(self, n_atom_basis):
+        super(GraphAttention, self).__init__()
+        self.weight = torch.nn.Parameter(torch.rand(1, 2 * n_atom_basis))
+        self.activation = LeakyReLU()
+        
+    def message(self, r, e, a):
+        """weight_ij is the importance factor of node j to i
+        
+        Args:
+            r (TYPE): Description
+            e (TYPE): Description
+            a (TYPE): Description
+        
+        Returns:
+            TYPE: Description
+        """
+        # i -> j
+        weight_ij = torch.exp(self.activation(torch.cat((r[a[:, 0]], r[a[:, 1]]), dim=1) * \
+                             self.weight).sum(-1))
+        # j -> i
+        weight_ji = torch.exp(self.activation(torch.cat((r[a[:, 1]], r[a[:, 0]]), dim=1) * \
+                             self.weight).sum(-1))
+        
+        normalization = scatter_add(weight_ij, a[:, 0], dim_size=r.shape[0]) \
+                        + scatter_add(weight_ji, a[:, 1], dim_size=r.shape[0])
+
+        a_ij = weight_ij/normalization[a[:, 0]] # the importance of node j’s features to node i
+        a_ji = weight_ji/normalization[a[:, 1]] # the importance of node i’s features to node j
+        
+        message = r[a[:, 0]] * a_ij[:, None], r[a[:, 1]]  * a_ij[:, None]
+        
+        return message
+
 
 class GraphDis(nn.Module):
 
@@ -366,6 +410,19 @@ class TestModules(unittest.TestCase):
         e_out = model(r, e_in, a)
 
         self.assertEqual(e_in.shape, e_out.shape, "The edge feature dimensions should be same for the SchNet Edge Update case")
+
+    def testGAT(self):
+        n_atom_basis= 10
+
+        a = torch.LongTensor([[0, 1], [2,3], [1,3], [4,5], [3,4]])
+        e = torch.rand(5, n_atom_basis)
+        r_in = torch.rand(6, n_atom_basis)
+
+        attention = GraphAttention(n_atom_basis=n_atom_basis)
+
+        r_out = attention(r_in, e, a)
+
+        self.assertEqual(r_out.shape, r_in.shape)
 
 if __name__ == '__main__':
     unittest.main()
