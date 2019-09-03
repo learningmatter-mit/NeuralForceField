@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from nff.nn.layers import Dense, GaussianSmearing
-from nff.nn.modules import GraphDis, InteractionBlock, BondEnergyModule
+from nff.nn.modules import GraphDis, InteractionBlock, BondEnergyModule, SchNetEdgeUpdate
 from nff.nn.activations import shifted_softplus
 
 class Net(nn.Module):
@@ -66,6 +66,11 @@ class Net(nn.Module):
                              n_gaussians=n_gaussians, 
                              cutoff=cutoff,
                              trainable_gauss=trainable_gauss)
+            for _ in range(n_convolutions)
+        ])
+
+        self.edgeupdate = nn.ModuleList([
+            SchNetEdgeUpdate(n_atom_basis=n_atom_basis)
             for _ in range(n_convolutions)
         ])
 
@@ -152,7 +157,9 @@ class Net(nn.Module):
         # update function includes periodic boundary conditions
         for i, conv in enumerate(self.convolutions):
             dr = conv(r=r, e=e, a=a)
+            de = self.edgeupdate[i](r=r, e=e, a=a)
             r = r + dr
+            e = e + de
             r = r[pbc]
 
         # remove image atoms outside the unit cell
