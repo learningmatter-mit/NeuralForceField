@@ -98,6 +98,12 @@ def add_subparsers(cmd_parser, defaults={}):
         help="Maximum number of training epochs (default: %(default)s)",
         default=5000,
     )
+    train_parser.add_argument(
+        "--workers",
+        type=int,
+        help="Number of workers to use on dataloader (default: %(default)s)",
+        default=2,
+    )
 
     ## evaluation
     eval_parser = argparse.ArgumentParser(add_help=False, parents=[cmd_parser])
