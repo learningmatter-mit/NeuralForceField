@@ -160,13 +160,6 @@ def add_subparsers(cmd_parser, defaults={}):
         action='store_true',
         help="If set, sets gaussians as learnable parameters (default: False)",
     )
-    schnet_parser.add_argument(
-        "--rho",
-        type=float,
-        default=1.0,
-        help="Parameter multiplying the loss of forces (default: %(default)s)",
-    )
-
 
     ## setup subparser structure
     cmd_subparsers = cmd_parser.add_subparsers(

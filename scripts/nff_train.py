@@ -50,7 +50,7 @@ if __name__ == "__main__":
     elif args.mode == "eval":
         # load model
         model = torch.load(os.path.join(args.model_path, "best_model"))
-        loss_fn = build_mse_loss(args.rho)
+        loss_fn = build_mse_loss(args)
         test_loader = get_loaders(args, logging=logging)
 
         # run evaluation
