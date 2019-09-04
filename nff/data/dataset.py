@@ -14,11 +14,17 @@ class Dataset(TorchDataset):
          from the cluster later.
 
     Attributes:
-        nxyz (array): (N, 4) array with atomic number and xyz coordinates
-            for each of the N atoms
-        energy (array): (N, ) array with energies
-        force (array): (N, 3) array with forces
-        smiles (array): (N, ) array with SMILES strings
+        props (dict of lists): dictionary containing all properties of the systems.
+            Keys are the name of the property and values are the properties. Each value
+            is given by `props[key][idx]`. The only key which is mandatory is 'nxyz'.
+            Example:
+                props = {
+                    'nxyz': [np.array([[1, 0, 0, 0], [1, 1.1, 0, 0]]), np.array([[1, 0, 0, 0], [1, 1.3, 0, 0]])],
+                    'energy': [1, 2],
+                    'force': np.array([[0, 0, 0], [0.1, 0.2, 0.3]])
+                }
+        units (str): units of the energies, forces etc.
+
     """
 
     def __init__(self,
