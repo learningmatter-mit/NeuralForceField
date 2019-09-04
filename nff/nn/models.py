@@ -169,18 +169,8 @@ class Net(nn.Module):
 
         return r, N
         
-    def forward(
-        self,
-        r,
-        xyz,
-        N,
-        a=None,
-        bond_adj=None,
-        bond_len=None,
-        pbc=None
-    ):
-
-        """Summary
+    def forward(self, batch):
+        """Compute predictions using the built model.
         
         Args:
             r (torch.Tensor): Description
@@ -196,6 +186,14 @@ class Net(nn.Module):
         Raises:
             ValueError: Description
         """
+
+        r = batch['nxyz'][:, 0]
+        xyz = batch['nxyz'][:, 1:4]
+        N = batch['num_atoms']
+        a = batch.get('nbr_list', None)
+        pbc = batch.get('pbc', None)
+        bond_adj = batch.get('bond_adj', None)
+        bond_len = batch.get('bond_len', None)
 
         # a is None means non-batched case
         if a is None:

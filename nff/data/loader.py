@@ -183,7 +183,8 @@ def collate_dicts(dicts):
 
     for n, d in zip(cumulative_atoms, dicts):
         for key in REINDEX_KEYS:
-            d[key] = d[key] + n
+            if key in d:
+                d[key] = d[key] + n
 
     batch = {
         key: torch.stack([
