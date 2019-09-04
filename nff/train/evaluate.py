@@ -3,6 +3,7 @@ import numpy as np
 import torch
 
 from nff.utils.scatter import compute_grad
+from nff.data.dataset import concatenate_dict
 
 
 def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
@@ -10,69 +11,34 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
     """
 
     model.to(device)
-    loader.to(device)
 
     eval_loss = 0.0
     n_eval = 0
 
-    all_results = {
-        'energy': [],
-        'force': []
-    }
-
-    all_targets = {
-        'energy': [],
-        'force': []
-    }
-
-    for eval_batch in loader:
-        xyz, a, bond_adj, bond_len, r, f, u, N, pbc = eval_batch
-
-        ground_truth = {
-            'energy': u,
-            'force': f
-        }
-
+    all_results = []
+    all_batches = []
+    for batch in loader:
         # append batch_size
-        vsize = xyz.size(0)
+        vsize = batch['nxyz'].size(0)
         n_eval += vsize
 
-        energy_nff = model(
-            r=r,
-            bond_adj=bond_adj,
-            bond_len=bond_len,
-            xyz=xyz,
-            a=a,
-            N=N,
-            pbc=pbc
-        )
+        results = model(batch)
 
-        force_nff = -compute_grad(inputs=xyz, output=energy_nff)
-
-        results = {
-            'energy': energy_nff,
-            'force': force_nff
-        }
-
-        eval_batch_loss = (
-            loss_fn(ground_truth, results).data.cpu().numpy()
-        )
+        eval_batch_loss = loss_fn(batch, results).data.cpu().numpy()
 
         if loss_is_normalized:
             eval_loss += eval_batch_loss * vsize
         else:
             eval_loss += eval_batch_loss
 
-        for key in all_results.keys():
-            all_targets[key] += [ground_truth[key].cpu().reshape(-1).data.numpy()]
-            all_results[key] += [results[key].cpu().reshape(-1).data.numpy()]
+        all_results.append(results)
+        all_batches.append(batch)
 
     # weighted average over batches
     if loss_is_normalized:
         eval_loss /= n_eval
 
-    for dict_ in [all_results, all_targets]:
-        for key, val in dict_.items():
-            dict_[key] = np.concatenate(val, axis=0)
+    all_results = concatenate_dict(*all_results)
+    all_batches = concatenate_dict(*all_batches)
 
     return all_results, all_targets, eval_loss

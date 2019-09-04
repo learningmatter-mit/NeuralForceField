@@ -183,16 +183,16 @@ class Trainer:
                     for h in self.hooks:
                         h.on_batch_begin(self, batch)
 
-                    predictions = self._model(batch)
-                    predictions['force'] = -compute_grad(inputs=predictions['nxyz'][:, 1:4], output=predictions['energy'])
+                    results = self._model(batch)
+                    #results['force'] = -compute_grad(inputs=results['nxyz'][:, 1:4], output=results['energy'])
                     
-                    loss = self.loss_fn(batch, predictions)
+                    loss = self.loss_fn(batch, results)
                     loss.backward()
                     self.optimizer.step()
                     self.step += 1
 
                     for h in self.hooks:
-                        h.on_batch_end(self, batch, predictions, loss)
+                        h.on_batch_end(self, batch, results, loss)
 
                     if self._stop:
                         break
@@ -243,12 +243,10 @@ class Trainer:
 
             # move input to gpu, if needed
 
-            predictions = self._model(batch)
-            predictions['force'] = -compute_grad(inputs=predictions['nxyz'][:, 1:4], output=predictions['energy'])
+            results = self._model(batch)
+            #results['force'] = -compute_grad(inputs=results['nxyz'][:, 1:4], output=results['energy'])
 
-            val_batch_loss = (
-                self.loss_fn(val_batch, predictions).data.cpu().numpy()
-            )
+            val_batch_loss = self.loss_fn(val_batch, results).data.cpu().numpy()
 
             if self.loss_is_normalized:
                 val_loss += val_batch_loss * vsize
@@ -256,7 +254,7 @@ class Trainer:
                 val_loss += val_batch_loss
 
             for h in self.hooks:
-                h.on_validation_batch_end(self, batch, predictions)
+                h.on_validation_batch_end(self, batch, results)
 
         # weighted average over batches
         if self.loss_is_normalized:
