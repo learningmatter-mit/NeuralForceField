@@ -5,7 +5,7 @@ from sklearn.utils import shuffle as skshuffle
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset as TorchDataset
 
-from nff.data import GraphDataset
+from nff.data import GraphDataset, get_neighbor_list
 import nff.utils.constants as const
 
 
@@ -91,6 +91,18 @@ class Dataset(TorchDataset):
             return array(x)
         else:
             return [array(_) for _ in x]
+
+    def generate_neighbor_list(self, cutoff):
+        """Generates a neighbor list for each one of the atoms in the dataset.
+
+        Args:
+            cutoff (float): distance up to which atoms are considered bonded.
+        """
+        self.props['nbr_list'] = [
+            get_neighbor_list(nxyz[:, 1:4], cutoff)
+            for nxyz in self.props['nxyz']
+        ]
+        return
 
     def copy(self):
         """Copies the current dataset"""
