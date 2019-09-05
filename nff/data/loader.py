@@ -1,9 +1,7 @@
 import numpy as np 
+from collections.abc import Iterable
 
 import torch 
-
-from nff.data import Graph, GraphDataset
-import nff.utils.constants as const
 
 
 REINDEX_KEYS = ['nbr_list', 'pbc']
@@ -26,13 +24,20 @@ def collate_dicts(dicts):
             if key in d:
                 d[key] = d[key] + n
 
-    batch = {
-        key: torch.stack([
-            torch.Tensor(data[key])
-            for data in dicts
-        ], dim=0)
-        for key in dicts[0].keys()
-    }
+    batch = {}
+    for key, val in dicts[0].items():
+        if type(val) == str:
+            batch[key] = [data[key] for data in dicts]
+        elif len(val.shape) > 0:
+            batch[key] = torch.cat([
+                data[key]
+                for data in dicts
+            ], dim=0)
+        else:
+            batch[key] = torch.stack(
+                [data[key] for data in dicts],
+                dim=0
+            )
 
     return batch
 

@@ -1,11 +1,13 @@
 import torch 
 import numpy as np 
+from copy import deepcopy
+from collections.abc import Iterable
 
 from sklearn.utils import shuffle as skshuffle
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset as TorchDataset
 
-from nff.data import GraphDataset, get_neighbor_list
+from nff.data import get_neighbor_list
 import nff.utils.constants as const
 
 
@@ -39,7 +41,7 @@ class Dataset(TorchDataset):
             units (str): units of the system.
         """
 
-        self.props = self._check_dictionary(props)
+        self.props = self._check_dictionary(deepcopy(props))
         self.units = units
         self.to_units('kcal/mol')
 
@@ -63,7 +65,8 @@ class Dataset(TorchDataset):
         """
 
         assert 'nxyz' in props.keys()
-        n_atoms = len(props['nxyz'])
+        n_atoms = [len(x) for x in props['nxyz']]
+        n_geoms = len(props['nxyz'])
 
         if 'num_atoms' not in props.keys():
             props['num_atoms'] = n_atoms
@@ -72,25 +75,27 @@ class Dataset(TorchDataset):
 
         for key, val in props.items():
             if val is None:
-                props[key] = self._to_array([np.nan] * n_atoms)
+                props[key] = self._to_array([np.nan] * n_geoms)
             else:    
-                assert len(val) == n_atoms, \
-                    'length of {} is not compatible with {} atoms'.format(key, n_atoms)
+                assert len(val) == n_geoms, \
+                    'length of {} is not compatible with {} geometries'.format(key, n_geoms)
+                props[key] = self._to_array(val)
 
         if 'pbc' not in props:
-            props['pbc'] = list(range(n_atoms))
+            props['pbc'] = torch.LongTensor([list(range(x)) for x in n_atoms])
 
-        props['nxyz'] = self._to_array(props['nxyz'])
         return props
 
     def _to_array(self, x):
         """Converts input `x` to array"""
-        array = np.array
+        array = torch.Tensor
+        if isinstance(x[0], (array, str)):
+            return x
         
-        if type(x[0]) == float:
-            return array(x)
-        else:
+        if isinstance(x[0], Iterable):
             return [array(_) for _ in x]
+        else:
+            return array(x)
 
     def generate_neighbor_list(self, cutoff):
         """Generates a neighbor list for each one of the atoms in the dataset.
