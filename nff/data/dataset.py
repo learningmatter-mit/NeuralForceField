@@ -10,21 +10,40 @@ from torch.utils.data import Dataset as TorchDataset
 from nff.data import get_neighbor_list
 import nff.utils.constants as const
 
-
 class Dataset(TorchDataset):
     """Dataset to deal with NFF calculations. Can be expanded to retrieve calculations
          from the cluster later.
 
     Attributes:
-        props (dict of lists): dictionary containing all properties of the systems.
+        props (list of dicts): list of dictionaries containing all properties of the system.
             Keys are the name of the property and values are the properties. Each value
-            is given by `props[key][idx]`. The only mandatory key is 'nxyz'.
+            is given by `props[idx][key]`. The only mandatory key is 'nxyz'. If inputting
+            energies, forces or hessians of different electronic states, the quantities 
+            should be distinguished with a "_n" suffix, where n = 0, 1, 2, ...
+            Whatever name is given to the energy of state n, the corresponding force name
+            must be the exact same name, but with "energy" replaced by "force".
+
             Example:
-                props = {
-                    'nxyz': [np.array([[1, 0, 0, 0], [1, 1.1, 0, 0]]), np.array([[1, 0, 0, 0], [1, 1.3, 0, 0]])],
-                    'energy': [1, 2],
-                    'force': np.array([[0, 0, 0], [0.1, 0.2, 0.3]])
-                }
+
+                props = [{
+                    'nxyz': np.array([[1, 0, 0, 0], [1, 1.1, 0, 0]]),
+                    'energy_0': 1,
+                    'force_0': np.array([[0, 0, 0], [0.1, 0.2, 0.3]]),
+                    'energy_1': 1.5,
+                    'force_0': np.array([[0, 0, 1], [0.1, 0.5, 0.8]])
+                    'dipole_2': 3
+                    },
+                    {
+                    'nxyz': np.array([[1, 3, 0, 0], [1, 1.1, 5, 0]]),
+                    'energy_0': 1.2,
+                    'force_0': np.array([[0, 0, 0], [0.1, 0.2, 0.3]]),
+                    'energy_1': 'value': 1.5,
+                    'force_1': np.array([[0, 0, 1], [0.1, 0.5, 0.8]]),
+                    'dipole_2': None
+                    }
+                ]
+
+
         units (str): units of the energies, forces etc.
 
     """
@@ -41,7 +60,8 @@ class Dataset(TorchDataset):
             units (str): units of the system.
         """
 
-        self.props = self._check_dictionary(deepcopy(props))
+        self.props = self._thread(props)
+        self.props = self._check_dictionary(deepcopy(self.props))
         self.units = units
         self.to_units('kcal/mol')
 
@@ -59,6 +79,20 @@ class Dataset(TorchDataset):
 
         return Dataset(props, units=self.units)
 
+
+    def _thread(self, props):
+        threaded_props = {}
+
+        for i, prop in enumerate(props):
+            for key, val in prop.items():
+                if i == 0:
+                    threaded_props[key] = [val]
+                else:
+                    threaded_props[key].append(val)
+
+        return threaded_props
+
+
     def _check_dictionary(self, props):
         """Check the dictionary or properties to see if it has the
             specified format.
@@ -74,9 +108,19 @@ class Dataset(TorchDataset):
             assert props['num_atoms'] == n_atoms
 
         for key, val in props.items():
+
             if val is None:
                 props[key] = self._to_array([np.nan] * n_geoms)
-            else:    
+            elif None in val:
+
+                bad_indices = [i for i, val in enumerate(props[key]) if val == None]
+                good_index = [index for index in range(len(props[key])) if index not in bad_indices][0]
+                nan_list = (np.array(props[key][good_index])*float("NaN")).tolist()
+                for index in bad_indices:
+                    props[key][index] = nan_list
+                props.update({key: self._to_array(props[key])})
+
+            else:
                 assert len(val) == n_geoms, \
                     'length of {} is not compatible with {} geometries'.format(key, n_geoms)
                 props[key] = self._to_array(val)
@@ -126,21 +170,27 @@ class Dataset(TorchDataset):
     def to_kcal_mol(self): 
         """Converts forces and energies from atomic units to kcal/mol."""
 
-        if 'force' in self.props.keys():
-            self.props['force'] = [
-                x * const.HARTREE_TO_KCAL_MOL / const.BOHR_RADIUS
-                for x in self.props['force']
-            ]
-        self.props['energy'] = [x * const.HARTREE_TO_KCAL_MOL for x in self.props['energy']]
+        for key in self.props.keys():
+            if "energy" in key:  
+                self.props[key] = [x * const.HARTREE_TO_KCAL_MOL for x in self.props[key]]
+            elif "force" in key:
+                self.props[key] = [
+                    x * const.HARTREE_TO_KCAL_MOL / const.BOHR_RADIUS
+                    for x in self.props[key]
+                ]
 
         self.units = 'kcal/mol'
 
     def to_atomic_units(self):
-        self.props['force'] = [
-            x / const.HARTREE_TO_KCAL_MOL * const.BOHR_RADIUS
-            for x in self.props['force']
-        ]
-        self.props['energy'] = [x / const.HARTREE_TO_KCAL_MOL for x in self.props['energy']]
+        for key in self.props.keys():
+            if "energy" in key:
+                self.props[key] = [x / const.HARTREE_TO_KCAL_MOL for x in self.props[key]]
+            if "force" in key:
+                self.props[key] = [
+                    x / const.HARTREE_TO_KCAL_MOL * const.BOHR_RADIUS
+                    for x in self.props['force']
+                ]
+
         self.units = 'atomic'
 
     def shuffle(self):
