@@ -23,6 +23,10 @@ EPSILON = 1e-15
 
 
 class MessagePassingLayer(nn.Module):
+
+    """Convolution constructed as Message Passing       
+    """
+
     def __init__(self):
         super(MessagePassingLayer, self).__init__()
 
@@ -61,20 +65,36 @@ class MessagePassingLayer(nn.Module):
 
         return r
 
-
 class EdgeUpdateLayer(nn.Module):
     def __init__(self):
         super(EdgeUpdateLayer, self).__init__()
 
     def message(self, r, e, a):
-        '''
-            function to update edge function from node features
-        '''
+        """Summary
+        
+        Args:
+            r (TYPE): Description
+            e (TYPE): Description
+            a (TYPE): Description
+        
+        Returns:
+            TYPE: Description
+        """
         #assert r.shape[-1] == e.shape[-1]
         message = r
         return message
 
     def aggregate(self, message, neighborlist):
+        """aggregate function that aggregates information from
+            connected nodes 
+            
+        Args:
+            message (TYPE): Description
+            neighborlist (TYPE): Description
+        
+        Returns:
+            TYPE: Description
+        """
         aggregated_edge_feature = message[neighborlist[:, 0]
             ] + message[neighborlist[:, 1]]
         return aggregated_edge_feature
@@ -88,7 +108,6 @@ class EdgeUpdateLayer(nn.Module):
         e = self.aggregate(message, a)
         e = self.update(e)
         return e
-
 
 class SchNetEdgeUpdate(EdgeUpdateLayer):
     """
@@ -128,6 +147,17 @@ class InteractionBlock(MessagePassingLayer): # Subcalss of MessagePassing
         smearing (GaussianSmearing): gaussian basis expansion for distance 
             matrix of dimension B, N, N, 1
         mean_pooling (bool): if True, performs a mean pooling 
+
+        module_dict:
+        {   'module_name':,
+            'message_layers':{
+                            
+                            }, 
+            'update_layers':
+            '':
+
+
+        }
     """
 
     def __init__(
