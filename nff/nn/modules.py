@@ -7,7 +7,9 @@ from nff.nn.layers import Dense, GaussianSmearing
 from nff.utils.scatter import scatter_add
 from nff.nn.activations import shifted_softplus
 from torch.nn import Sequential, Linear, ReLU, LeakyReLU, ModuleDict 
-from nff.nn.graphconv import MessagePassingModule, EdgeUpdateModule, GeometricOperations, TopologyOperations
+from nff.nn.graphconv import MessagePassingModule, EdgeUpdateModule, \
+                            GeometricOperations, TopologyOperations
+from nff.utils.tools import construct_Sequential, construct_ModuleDict
 
 import unittest
 
@@ -165,10 +167,49 @@ class GraphAttention(MessagePassingModule):
 
         r = self.update(r)
 
-        import ipdb
-        ipdb.set_trace()
-
         return r
+
+class NodeMultiTaskReadOut(nn.Module):
+
+    """Stack Multi Task outputs
+
+        example multitaskdict:
+                {
+                "myenergy0":
+                            [
+                                ['linear', {'in_features': 10, 'out_features': 20}],
+                                ['linear', {'in_features': 20, 'out_features': 1}]
+                            ],
+
+                "myenergy1": 
+                            [
+                                ['linear', {'in_features': 10, 'out_features': 20}],
+                                ['linear', {'in_features': 20, 'out_features': 1}]
+                            ],
+                "Muliken charges": 
+                            [
+                                ['linear', {'in_features': 10, 'out_features': 20}],
+                                ['linear', {'in_features': 20, 'out_features': 10}]
+                            ]
+                }
+    """
+
+    def __init__(self, multitaskdict):
+        """Summary
+        
+        Args:
+            multitaskdict (TYPE): Description
+        """
+        super(NodeMultiTaskReadOut, self).__init__()
+        # construct moduledict 
+        self.readout = construct_ModuleDict(multitaskdict)
+
+    def forward(self, r):
+        predict_dict=dict()
+        for key in self.readout:
+            predict_dict[key] = self.readout[key](r)
+
+        return predict_dict 
 
 class GraphDis(GeometricOperations):
 
@@ -312,7 +353,7 @@ class TestModules(unittest.TestCase):
         e = torch.rand(5, n_atom_basis)
         r_in = torch.rand(num_nodes, n_atom_basis)
 
-        model = InteractionBlock(n_atom_basis,
+        model = SchNetConv(n_atom_basis,
                                 n_filters,
                                 n_gaussians,
                                 cutoff=2.0,
@@ -349,6 +390,37 @@ class TestModules(unittest.TestCase):
         r_out = attention(r_in, e, a)
 
         self.assertEqual(r_out.shape, r_in.shape)
+
+    def testmultitask(self):
+
+        n_atom = 10 
+        r = torch.rand(n_atom, 5)
+
+        multitaskdict = {
+                            "myenergy0":
+                                        [
+                                            ['linear', {'in_features': 5, 'out_features': 20}],
+                                            ['linear', {'in_features': 20, 'out_features': 1}]
+                                        ],
+
+                            "myenergy1": 
+                                        [
+                                            ['linear', {'in_features': 5, 'out_features': 20}],
+                                            ['linear', {'in_features': 20, 'out_features': 1}]
+                                        ],
+                            "Muliken charges": 
+                                        [
+                                            ['linear', {'in_features': 5, 'out_features': 20}],
+                                            ['linear', {'in_features': 20, 'out_features': 10}]
+                                        ]
+                            }
+
+        model = NodeMultiTaskReadOut(multitaskdict)
+        output = model(r)
+
+        import ipdb
+        ipdb.set_trace()
+
 
 if __name__ == '__main__':
     unittest.main()
