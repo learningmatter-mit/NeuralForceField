@@ -4,7 +4,7 @@
 import os
 import numpy as np
 import torch
-from nff.nn.models import Net
+from nff.nn.models import SchNet
 
 
 class ParameterError(Exception):
@@ -36,7 +36,7 @@ def get_model(params):
         params (dict): parameters used to construct the model
 
     Returns:
-        model (nff.nn.models.Net)
+        model (nff.nn.models.SchNet)
     """
 
     params_type = {
@@ -52,16 +52,7 @@ def get_model(params):
 
     check_parameters(params_type, params)
 
-    model = Net(
-        n_atom_basis=params['n_atom_basis'],
-        n_filters=params['n_filters'],
-        n_gaussians=params['n_gaussians'], 
-        n_convolutions=params['n_convolutions'],
-        cutoff=params['cutoff'], 
-        bond_par=params.get('bond_par', 50.0),
-        trainable_gauss=params.get('trainable_gauss', False),
-        box_size=params.get('box_size', None)
-    )
+    model = SchNet(params)
 
     return model
 
