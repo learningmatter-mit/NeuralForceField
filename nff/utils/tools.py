@@ -8,6 +8,9 @@ from argparse import Namespace
 import numpy as np
 import torch
 
+from torch.nn import ModuleDict, Sequential
+import collections
+
 
 __all__ = [
     "set_random_seed",
@@ -16,6 +19,42 @@ __all__ = [
     "read_from_json",
 ]
 
+layer_types = {
+                "linear": nn.Linear,
+                "tanh": nn.Tanh,
+                "ReLU": nn.ReLU,
+              }
+
+def construct_Sequential(layers):
+    """Construct a sequential model from list of params 
+    
+    Args:
+        layers (list): list to describe the stacked layer params 
+                        example: [
+                                    ['linear', {'in_features': 10, 'out_features': 20}],
+                                    ['linear', {'in_features': 20, 'out_features': 1}]
+                                 ] 
+    
+    Returns:
+        Sequential: Stacked Sequential Model 
+    """
+    return Sequential(collections.OrderedDict([ str(param[0]), 
+                                               layer_types[param[0]](**param[1])
+                                              ] for param in layers))
+
+def construct_ModuleDict(moduledict):
+    """construct moduledict from a dictionary of layers
+    
+    Args:
+        moduledict (dict): Description
+    
+    Returns:
+        ModuleDict: Description
+    """
+    models = ModuleDict()
+    for key in moduledict:
+        models[key] = construct_Sequential(moduledict[key])
+    return models
 
 def set_random_seed(seed):
     """
