@@ -9,6 +9,7 @@ import numpy as np
 import torch
 
 from torch.nn import ModuleDict, Sequential
+import torch.nn as nn
 import collections
 
 
@@ -38,9 +39,9 @@ def construct_Sequential(layers):
     Returns:
         Sequential: Stacked Sequential Model 
     """
-    return Sequential(collections.OrderedDict([ str(param[0]), 
+    return Sequential(collections.OrderedDict([ str(param[0])+str(i), 
                                                layer_types[param[0]](**param[1])
-                                              ] for param in layers))
+                                              ] for i, param in enumerate(layers)))
 
 def construct_ModuleDict(moduledict):
     """construct moduledict from a dictionary of layers
