@@ -5,64 +5,61 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from nff.nn.layers import Dense, GaussianSmearing
-from nff.nn.modules import GraphDis, InteractionBlock, BondEnergyModule, SchNetEdgeUpdate
+from nff.nn.modules import GraphDis, SchNetConv, BondEnergyModule, SchNetEdgeUpdate
 from nff.nn.activations import shifted_softplus
 
-class Net(nn.Module):
+
+class SchNet(nn.Module):
 
     """SchNet implementation with continous filter.
-        It is designed for two types computations: 1) xyz inputs 2) graph inputs
-        If provide bond list (bond_adj) and bond length tensor (bond_len)
-        with a specified bond parameter, a harmonic bond energy 
-        priors will be added  
     
     Attributes:
         atom_embed (torch.nn.Embedding): Convert atomic number into an
             embedding vector of size n_atom_basis
         atomwise1 (Dense): dense layer 1 to compute energy
         atomwise2 (Dense): dense layer 2 to compute energy
-        bond_energy_graph (BondEnergyModule): Description
-        bond_energy_sample (BondEnergyModule): Description
-        bond_par (float): Description
         convolutions (torch.nn.ModuleList): include all the convolutions
         graph_dis (Graphdis): graph distance module to convert xyz inputs
             into distance matrix 
     """
     
-    def __init__(
-        self,
-        n_atom_basis,
-        n_filters,
-        n_gaussians,
-        n_convolutions,
-        cutoff,
-        bond_par=50.0,
-        trainable_gauss=False,
-        box_size=None,
-        edgeupdate=False
-    ):
+    def __init__(self, modelparams):
         """Constructs a SchNet model.
-
+        
         Args:
+            modelparams (TYPE): Description
+            bond_par (float)
+        
+        Deleted Parameters:
             n_atom_basis (int): dimension of atomic embeddings.
             n_filters (int): dimension of filters.
             n_gaussians (int): dimension of the gaussian basis.
             n_convolutions (int): number of convolutions.
             cutoff (float): soft cutoff radius for convolution.
-            bond_par (float):
             trainable_gauss (bool): if True, make the Gaussian parameter trainable.
             box_size (numpy.array): size of the box, dim = (3, )
+            edgeupdate (bool, optional): Description
         """
 
         super().__init__()
-        
+
+        n_atom_basis = modelparams['n_atom_basis'],
+        n_filters = modelparams['n_filters'],
+        n_gaussians = modelparams['n_gaussians'], 
+        n_convolutions = modelparams['n_convolutions'],
+        cutoff = modelparams['cutoff'], 
+        trainable_gauss = modelparams.get('trainable_gauss', False),
+        box_size = modelparams.get('box_size', None)
+
         self.graph_dis = GraphDis(Fr=1,
                                   Fe=1,
                                   cutoff=cutoff,
                                   box_size=box_size)
 
+        self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
+
         self.convolutions = nn.ModuleList([
-            InteractionBlock(n_atom_basis=n_atom_basis,
+            SchNetConv(n_atom_basis=n_atom_basis,
                              n_filters=n_filters,
                              n_gaussians=n_gaussians, 
                              cutoff=cutoff,
@@ -70,26 +67,12 @@ class Net(nn.Module):
             for _ in range(n_convolutions)
         ])
 
-        if edgeupdate:
-            self.edgeupdate = nn.ModuleList([
-                SchNetEdgeUpdate(n_atom_basis=n_atom_basis)
-                for _ in range(n_convolutions)
-            ])
-
-        self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
-
         self.atomwise1 = Dense(in_features=n_atom_basis,
                                out_features=int(n_atom_basis / 2),
                                activation=shifted_softplus)
 
         self.atomwise2 = Dense(in_features=int(n_atom_basis / 2), out_features=1)
-
-        # declare the bond energy module for two cases 
-        self.bond_energy_graph = BondEnergyModule(batch=True)
-        self.bond_par = bond_par
-        self.edgeupdate = edgeupdate
-
-        
+       
     def forward(
         self,
         r,
@@ -160,12 +143,6 @@ class Net(nn.Module):
         # update function includes periodic boundary conditions
         for i, conv in enumerate(self.convolutions):
             dr = conv(r=r, e=e, a=a)
-
-            # options for edge update
-            if self.edgeupdate:
-                de = self.edgeupdate[i](r=r, e=e, a=a)
-                e = e + de
-
             r = r + dr
             r = r[pbc]
 
