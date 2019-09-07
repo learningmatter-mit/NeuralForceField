@@ -6,112 +6,19 @@ import torch.nn as nn
 from nff.nn.layers import Dense, GaussianSmearing
 from nff.utils.scatter import scatter_add
 from nff.nn.activations import shifted_softplus
-from torch.nn import Sequential, Linear, ReLU, LeakyReLU
+from torch.nn import Sequential, Linear, ReLU, LeakyReLU, ModuleDict 
+from nff.nn.graphconv import MessagePassingModule, EdgeUpdateModule, GeometricOperations, TopologyOperations
 
 import unittest
 
-
 EPSILON = 1e-15
 
-# Questions
-
-# How to handle multiple graph case (multiple neighborlists)?
-# What kind of abstraction should I give classical force field priors ?
-# Toward what extent should we implement modulelist (Each model needs a dictionary template )?
-# Energy predictor as a class?
-# Directed Graph or undirected? (subtle case when message if formed by concatnating)
-
-
-class MessagePassingLayer(nn.Module):
-
-    """Convolution constructed as Message Passing       
+class SchNetEdgeUpdate(EdgeUpdateModule):
     """
-
-    def __init__(self):
-        super(MessagePassingLayer, self).__init__()
-
-    def message(self, r, e, a):
-        # Basic message case
-        assert r.shape[-1] == e.shape[-1]
-        # mixing node and edge feature, multiply by default
-        # possible options: 
-        # (ri [] eij) -> rj,
-        # where []: *, +, (,), ....
-        message = r[a[:, 0]] * e, r[a[:, 1]] * e
-        return message
-
-    def aggregate(self, message, index, size):
-        r = scatter_add(src=message,
-                                index=index,
-                                dim=0,
-                                dim_size=size)
-        return r
-
-    def update(self, r):
-        return r
-
-    def forward(self, r, e, a):
-        # Base case
-        graph_size = r.shape[0]
-
-        rij, rji = self.message(r, e, a)
-
-        # i -> j propagate
-        r = self.aggregate(rij, a[:, 1], graph_size)
-        # j -> i propagate
-        r += self.aggregate(rji, a[:, 0], graph_size)
-
-        r = self.update(r)
-
-        return r
-
-class EdgeUpdateLayer(nn.Module):
-    def __init__(self):
-        super(EdgeUpdateLayer, self).__init__()
-
-    def message(self, r, e, a):
-        """Summary
-        
-        Args:
-            r (TYPE): Description
-            e (TYPE): Description
-            a (TYPE): Description
-        
-        Returns:
-            TYPE: Description
-        """
-        #assert r.shape[-1] == e.shape[-1]
-        message = r
-        return message
-
-    def aggregate(self, message, neighborlist):
-        """aggregate function that aggregates information from
-            connected nodes 
-            
-        Args:
-            message (TYPE): Description
-            neighborlist (TYPE): Description
-        
-        Returns:
-            TYPE: Description
-        """
-        aggregated_edge_feature = message[neighborlist[:, 0]
-            ] + message[neighborlist[:, 1]]
-        return aggregated_edge_feature
-
-    def update(self, e):
-        return e
-
-    def forward(self, r, e, a):
-        message = self.message(r, e, a)
-        # update edge from two connected nodes
-        e = self.aggregate(message, a)
-        e = self.update(e)
-        return e
-
-class SchNetEdgeUpdate(EdgeUpdateLayer):
-    """
-        Arxiv.1806.03146
+    Arxiv.1806.03146
+    
+    Attributes:
+        mlp (TYPE): Update function 
     """
     def __init__(self, n_atom_basis):
         super(SchNetEdgeUpdate, self).__init__()
@@ -132,73 +39,48 @@ class SchNetEdgeUpdate(EdgeUpdateLayer):
         return self.mlp(e)
 
 
-class InteractionBlock(MessagePassingLayer): # Subcalss of MessagePassing
+class SchNetConv(MessagePassingModule):
 
     """The convolution layer with filter. To be merged with GraphConv class.
     
     Attributes:
-        atom_filter (Dense): Description
-        dense_1 (Dense): dense layer 1 to obtain the updated atomic embedding 
-        dense_2 (Dense): dense layer 2 to obtain the updated atomic embedding
-        distance_filter_1 (Dense): dense layer 1 for filtering gaussian
-            expanded distances
-        distance_filter_2 (Dense): dense layer 1 for filtering gaussian
-            expanded distances
-        smearing (GaussianSmearing): gaussian basis expansion for distance 
-            matrix of dimension B, N, N, 1
-        mean_pooling (bool): if True, performs a mean pooling 
-
-        module_dict:
-        {   'module_name':,
-            'message_layers':{
-                            
-                            }, 
-            'update_layers':
-            '':
-
-
-        }
+        moduledict (TYPE): Description
     """
 
-    def __init__(
-        self,
-        n_atom_basis,
-        n_filters,
-        n_gaussians,
-        cutoff,
-        trainable_gauss,
-        mean_pooling=False
+    def __init__(self,
+                n_atom_basis,
+                n_filters,
+                n_gaussians,
+                cutoff,
+                trainable_gauss,
+                mean_pooling=False
     ):
-        super(InteractionBlock, self).__init__()
+        super(SchNetConv, self).__init__()
+        self.moduledict = ModuleDict({'message_edge_filter': Sequential(GaussianSmearing(start=0.0,
+                                                                             stop=cutoff,
+                                                                             n_gaussians=n_gaussians,
+                                                                             trainable=trainable_gauss),
+                                                          Dense(in_features=n_gaussians,
+                                                               out_features=n_gaussians,
+                                                               activation=shifted_softplus),
+                                                          Dense(in_features=n_gaussians,
+                                                               out_features=n_filters,
+                                                               activation=None)),
+                        'message_node_filter': Dense(in_features=n_atom_basis,
+                                                     out_features=n_filters,
+                                                     bias=False),
+                        'update_function': Sequential(Dense(in_features=n_filters,
+                                                             out_features=n_atom_basis,
+                                                             activation=shifted_softplus),
+                                                      Dense(in_features=n_atom_basis,
+                                                             out_features=n_atom_basis,
+                                                             activation=None))
+                        })
 
-        self.mean_pooling = mean_pooling
-        self.smearing = GaussianSmearing(start=0.0,
-                                         stop=cutoff,
-                                         n_gaussians=n_gaussians,
-                                         trainable=trainable_gauss)
-
-        self.distance_filter_1 = Dense(in_features=n_gaussians,
-                                       out_features=n_gaussians,
-                                       activation=shifted_softplus)
-
-        self.distance_filter_2 = Dense(in_features=n_gaussians,
-                                       out_features=n_filters)
-
-        self.atom_filter = Dense(in_features=n_atom_basis,
-                                 out_features=n_filters,
-                                 bias=False)
-
-        self.dense_1 = Dense(in_features=n_filters,
-                             out_features=n_atom_basis,
-                             activation=shifted_softplus)
-
-        self.dense_2 = Dense(in_features=n_atom_basis,
-                             out_features=n_atom_basis,
-                             activation=None)
 
     def message(self, r, e, a):
         """The message function for SchNet convoltuions 
-
+        
         
         Args:
             r (TYPE): node inputs 
@@ -209,13 +91,9 @@ class InteractionBlock(MessagePassingLayer): # Subcalss of MessagePassing
             TYPE: message should a pair of message and 
         """
         # update edge feature 
-        e = self.smearing(e, is_batch=True)
-        e = self.distance_filter_1(e)
-        e = self.distance_filter_2(e)
-        
+        e = self.moduledict['message_edge_filter'](e)
         # convection: update 
-        r = self.atom_filter(r) # test 
-
+        r = self.moduledict['message_node_filter'](r)
         # check if the dimensions of r and e are the same 
         assert r.shape[-1] == e.shape[-1]
         # combine node and edge info
@@ -223,13 +101,9 @@ class InteractionBlock(MessagePassingLayer): # Subcalss of MessagePassing
         return message 
 
     def update(self, r):
+        return self.moduledict['update_function'](r)
 
-        r = self.dense_1(r)
-        r = self.dense_2(r)
-
-        return r
-
-class GraphAttention(MessagePassingLayer):
+class GraphAttention(MessagePassingModule):
 
     """Weighted graph pooling layer based on self attention 
     
@@ -246,7 +120,7 @@ class GraphAttention(MessagePassingLayer):
     def message(self, r, e, a):
         """weight_ij is the importance factor of node j to i
            weight_ji is the importance factor of node i to j
-
+        
         Args:
             r (TYPE): Description
             e (TYPE): Description
@@ -291,18 +165,21 @@ class GraphAttention(MessagePassingLayer):
 
         r = self.update(r)
 
+        import ipdb
+        ipdb.set_trace()
+
         return r
 
-class GraphDis(nn.Module):
+class GraphDis(GeometricOperations):
 
     """Compute distance matrix on the fly 
     
     Attributes:
-        Fr (int): node feature length
-        Fe (int): edge feature length
-        F (int): Fr + Fe
-        cutoff (float): cutoff for convolution
         box_size (numpy.array): Length of the box, dim = (3, )
+        cutoff (float): cutoff for convolution
+        F (int): Fr + Fe
+        Fe (int): edge feature length
+        Fr (int): node feature length
     """
     
     def __init__(
@@ -312,7 +189,7 @@ class GraphDis(nn.Module):
         cutoff,
         box_size=None
     ):
-        super().__init__()
+        super(GraphDis, self).__init__()
 
         self.Fr = Fr
         self.Fe = Fe  # include distance
@@ -408,7 +285,7 @@ class TestModules(unittest.TestCase):
         a = torch.LongTensor([[0, 1], [2,3], [1,3], [4,5], [3,4]])
         e = torch.rand(5, 10)
         r_in = torch.rand(6, 10)
-        model = MessagePassingLayer()
+        model = MessagePassingModule()
         r_out = model(r_in, e, a)
         self.assertEqual(r_in.shape, r_out.shape, "The node feature dimensions should be same for the base case")
 
@@ -418,7 +295,7 @@ class TestModules(unittest.TestCase):
         a = torch.LongTensor([[0, 1], [2,3], [1,3], [4,5], [3,4]])
         e_in = torch.rand(5, 10)
         r = torch.rand(6, 10)
-        model = EdgeUpdateLayer()
+        model = EdgeUpdateModule()
         e_out = model(r, e_in, a)
         self.assertEqual(e_in.shape, e_out.shape, "The edge feature dimensions should be same for the base case")
 
