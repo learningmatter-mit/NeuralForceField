@@ -93,23 +93,6 @@ class EdgeUpdateModule(nn.Module):
         e = self.update(e)
         return e
 
-class MultiTaskCoupling(nn.Module):
-
-    """Stack Multi Task outputs
-    """
-
-    def __init__(self):
-        super(MultiTaskCoupling, self).__init__()
-
-class ReadOutModule(nn.Module):
-
-    """ReadOut atom-wise, edge-wise properties 
-    """
-
-    def __init__(self):
-        super(ReadOutModule, self).__init__()
-
-
 class GeometricOperations(nn.Module):
 
     """Compute geomtrical properties based on XYZ coordinates
