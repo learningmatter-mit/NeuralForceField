@@ -13,7 +13,7 @@ zeros_initializer = partial(constant_, val=0.)
 
 def gaussian_smearing(distances, offset, widths, centered=False):
 
-    if centered == False:
+    if not centered:
         # Compute width of Gaussians (using an overlap of 1 STDDEV)
         # widths = offset[1] - offset[0]
         coeff = -0.5 / torch.pow(widths, 2)

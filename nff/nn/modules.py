@@ -105,6 +105,7 @@ class SchNetConv(MessagePassingModule):
     def update(self, r):
         return self.moduledict['update_function'](r)
 
+
 class GraphAttention(MessagePassingModule):
 
     """Weighted graph pooling layer based on self attention 
@@ -169,6 +170,7 @@ class GraphAttention(MessagePassingModule):
 
         return r
 
+
 class NodeMultiTaskReadOut(nn.Module):
 
     """Stack Multi Task outputs
@@ -210,6 +212,7 @@ class NodeMultiTaskReadOut(nn.Module):
             predict_dict[key] = self.readout[key](r)
 
         return predict_dict 
+
 
 class GraphDis(GeometricOperations):
 
