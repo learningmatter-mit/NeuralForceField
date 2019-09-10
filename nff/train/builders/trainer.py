@@ -30,6 +30,7 @@ def get_trainer(args, model, train_loader, val_loader, metrics, loss_fn=None):
     printer = nff.train.PrintingHook(
         os.path.join(args.model_path, 'log'),
         metrics,
+        log_memory=(args.device != 'cpu'),
         separator=' | '
     )
     hooks.append(printer)
