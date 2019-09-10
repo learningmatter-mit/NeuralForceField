@@ -104,6 +104,12 @@ def add_subparsers(cmd_parser, defaults={}):
         help="Number of workers to use on dataloader (default: %(default)s)",
         default=2,
     )
+    train_parser.add_argument(
+        "--loss_coef",
+        type=str,
+        help="Coefficients of the loss function as a JSON string (default: %(default)s)",
+        default='{"energy": 1.0, "force": 1.0}',
+    )
 
     ## evaluation
     eval_parser = argparse.ArgumentParser(add_help=False, parents=[cmd_parser])
