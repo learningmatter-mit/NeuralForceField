@@ -25,24 +25,14 @@ class Dataset(TorchDataset):
 
             Example:
 
-                props = [{
-                    'nxyz': np.array([[1, 0, 0, 0], [1, 1.1, 0, 0]]),
-                    'energy_0': 1,
-                    'force_0': np.array([[0, 0, 0], [0.1, 0.2, 0.3]]),
-                    'energy_1': 1.5,
-                    'force_0': np.array([[0, 0, 1], [0.1, 0.5, 0.8]])
-                    'dipole_2': 3
-                    },
-                    {
-                    'nxyz': np.array([[1, 3, 0, 0], [1, 1.1, 5, 0]]),
-                    'energy_0': 1.2,
-                    'force_0': np.array([[0, 0, 0], [0.1, 0.2, 0.3]]),
-                    'energy_1': 'value': 1.5,
-                    'force_1': np.array([[0, 0, 1], [0.1, 0.5, 0.8]]),
-                    'dipole_2': None
-                    }
-                ]
-
+                props = {
+                    'nxyz': [np.array([[1, 0, 0, 0], [1, 1.1, 0, 0]]), np.array([[1, 3, 0, 0], [1, 1.1, 5, 0]])],
+                    'energy_0': [1, 1.2],
+                    'force_0': [np.array([[0, 0, 0], [0.1, 0.2, 0.3]]), np.array([[0, 0, 0], [0.1, 0.2, 0.3]])],
+                    'energy_1': [1.5, 1.5],
+                    'force_0': [np.array([[0, 0, 1], [0.1, 0.5, 0.8]]), np.array([[0, 0, 1], [0.1, 0.5, 0.8]])],
+                    'dipole_2': [3, None]
+                }
 
         units (str): units of the energies, forces etc.
 
@@ -60,8 +50,7 @@ class Dataset(TorchDataset):
             units (str): units of the system.
         """
 
-        self.props = self._thread(props)
-        self.props = self._check_dictionary(deepcopy(self.props))
+        self.props = self._check_dictionary(deepcopy(props))
         self.units = units
         self.to_units('kcal/mol')
 
@@ -78,20 +67,6 @@ class Dataset(TorchDataset):
         props = concatenate_dict(self.props, other.props)
 
         return Dataset(props, units=self.units)
-
-
-    def _thread(self, props):
-        threaded_props = {}
-
-        for i, prop in enumerate(props):
-            for key, val in prop.items():
-                if i == 0:
-                    threaded_props[key] = [val]
-                else:
-                    threaded_props[key].append(val)
-
-        return threaded_props
-
 
     def _check_dictionary(self, props):
         """Check the dictionary or properties to see if it has the
@@ -111,14 +86,14 @@ class Dataset(TorchDataset):
 
             if val is None:
                 props[key] = self._to_array([np.nan] * n_geoms)
-            elif None in val:
 
-                bad_indices = [i for i, val in enumerate(props[key]) if val == None]
-                good_index = [index for index in range(len(props[key])) if index not in bad_indices][0]
-                nan_list = (np.array(props[key][good_index])*float("NaN")).tolist()
+            elif any([x is None for x in val]):
+                bad_indices = [i for i, item in enumerate(val) if item is None]
+                good_index = [index for index in range(len(val)) if index not in bad_indices][0]
+                nan_list = (np.array(val[good_index]) * float('NaN')).tolist()
                 for index in bad_indices:
                     props[key][index] = nan_list
-                props.update({key: self._to_array(props[key])})
+                props.update({key: self._to_array(val)})
 
             else:
                 assert len(val) == n_geoms, \
@@ -126,7 +101,7 @@ class Dataset(TorchDataset):
                 props[key] = self._to_array(val)
 
         if 'pbc' not in props:
-            props['pbc'] = torch.LongTensor([list(range(x)) for x in n_atoms])
+            props['pbc'] = [torch.LongTensor(range(x)) for x in n_atoms]
 
         return props
 
