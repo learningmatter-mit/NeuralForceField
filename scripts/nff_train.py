@@ -31,7 +31,7 @@ if __name__ == "__main__":
     # define metrics
     metrics = [
         nff.train.metrics.MeanAbsoluteError('energy'),
-        nff.train.metrics.MeanAbsoluteError('force')
+        nff.train.metrics.MeanAbsoluteError('energy_grad')
     ]
 
     model = get_model(vars(args))
