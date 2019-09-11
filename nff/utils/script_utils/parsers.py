@@ -108,7 +108,7 @@ def add_subparsers(cmd_parser, defaults={}):
         "--loss_coef",
         type=str,
         help="Coefficients of the loss function as a JSON string (default: %(default)s)",
-        default='{"energy": 1.0, "force": 1.0}',
+        default='{"energy": 0.1, "energy_grad": 1.0}',
     )
 
     ## evaluation
