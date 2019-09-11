@@ -293,10 +293,22 @@ class GraphDis(GeometricOperations):
     def forward(self, xyz):
         e, A = self.get_bond_vector_matrix(frame=xyz)
 
-        e = e.float()
-        A = A.float()
+        n_atoms = frame.shape[1]
 
-        return e, A
+        #  use only upper triangular to generative undirected adjacency matrix 
+        A = A * torch.ones(n_atoms, n_atoms).triu()[None, :, :].to(A.device)
+        e = e * A.unsqueeze(-1)
+
+        # compute neighbor list 
+        a = A.nonzero()
+
+        # reshape distance list 
+        e = e[a[:,0], a[:, 1], a[:,2], :].reshape(-1, 1)
+
+        # reindex neighbor list 
+        a = (a[:, 0] * n_atoms)[:, None] + a[:, 1:3]
+
+        return e, a
 
 
 class BondEnergyModule(nn.Module):
