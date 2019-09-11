@@ -178,41 +178,21 @@ class Trainer:
                     break
 
                 for batch in self.train_loader:
-                    xyz, a, bond_adj, bond_len, r, f, u, N, pbc = batch
-                    ground_truth = {
-                        'energy': u,
-                        'force': f
-                    }
-
                     self.optimizer.zero_grad()
 
                     for h in self.hooks:
-                        h.on_batch_begin(self, ground_truth)
+                        h.on_batch_begin(self, batch)
 
-                    energy_nff = self._model(
-                        r=r,
-                        bond_adj=bond_adj,
-                        bond_len=bond_len,
-                        xyz=xyz,
-                        a=a,
-                        N=N,
-                        pbc=pbc
-                    ) 
-
-                    force_nff = -compute_grad(inputs=xyz, output=energy_nff)
+                    results = self._model(batch)
+                    #results['force'] = -compute_grad(inputs=results['nxyz'][:, 1:4], output=results['energy'])
                     
-                    results = {
-                        'energy': energy_nff,
-                        'force': force_nff
-                    }
-
-                    loss = self.loss_fn(ground_truth, results)
+                    loss = self.loss_fn(batch, results)
                     loss.backward()
                     self.optimizer.step()
                     self.step += 1
 
                     for h in self.hooks:
-                        h.on_batch_end(self, ground_truth, results, loss)
+                        h.on_batch_end(self, batch, results, loss)
 
                     if self._stop:
                         break
@@ -253,15 +233,9 @@ class Trainer:
         n_val = 0
 
         for val_batch in self.validation_loader:
-            xyz, a, bond_adj, bond_len, r, f, u, N, pbc = val_batch
-
-            ground_truth = {
-                'energy': u,
-                'force': f
-            }
 
             # append batch_size
-            vsize = xyz.size(0)
+            vsize = val_batch['nxyz'].size(0)
             n_val += vsize
 
             for h in self.hooks:
@@ -269,26 +243,10 @@ class Trainer:
 
             # move input to gpu, if needed
 
-            energy_nff = self._model(
-                r=r,
-                bond_adj=bond_adj,
-                bond_len=bond_len,
-                xyz=xyz,
-                a=a,
-                N=N,
-                pbc=pbc
-            ) 
+            results = self._model(batch)
+            #results['force'] = -compute_grad(inputs=results['nxyz'][:, 1:4], output=results['energy'])
 
-            force_nff = -compute_grad(inputs=xyz, output=energy_nff)
-
-            results = {
-                'energy': energy_nff,
-                'force': force_nff
-            }
-
-            val_batch_loss = (
-                self.loss_fn(ground_truth, results).data.cpu().numpy()
-            )
+            val_batch_loss = self.loss_fn(val_batch, results).data.cpu().numpy()
 
             if self.loss_is_normalized:
                 val_loss += val_batch_loss * vsize
@@ -296,7 +254,7 @@ class Trainer:
                 val_loss += val_batch_loss
 
             for h in self.hooks:
-                h.on_validation_batch_end(self, ground_truth, results)
+                h.on_validation_batch_end(self, batch, results)
 
         # weighted average over batches
         if self.loss_is_normalized:

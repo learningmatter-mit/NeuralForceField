@@ -18,4 +18,3 @@ def shifted_softplus(x):
     """
     return F.softplus(x) - np.log(2.0)
 
-
