@@ -81,8 +81,8 @@ class Trainer:
         """Changes the device"""
         self._model.to(device)
         self.optimizer.load_state_dict(self.optimizer.state_dict())
-        self.train_loader.to(device)
-        self.validation_loader.to(device)
+        # self.train_loader.to(device)
+        # self.validation_loader.to(device)
 
     def _check_is_parallel(self):
         return True if isinstance(self._model, torch.nn.DataParallel) else False
@@ -184,13 +184,14 @@ class Trainer:
                         h.on_batch_begin(self, batch)
 
                     results = self._model(batch)
-                    #results['force'] = -compute_grad(inputs=results['nxyz'][:, 1:4], output=results['energy'])
-                    
+
                     loss = self.loss_fn(batch, results)
                     loss.backward()
                     self.optimizer.step()
                     self.step += 1
 
+                    import ipdb 
+                    ipdb.set_trace()
                     for h in self.hooks:
                         h.on_batch_end(self, batch, results, loss)
 
@@ -242,9 +243,7 @@ class Trainer:
                 h.on_validation_batch_begin(self)
 
             # move input to gpu, if needed
-
-            results = self._model(batch)
-            #results['force'] = -compute_grad(inputs=results['nxyz'][:, 1:4], output=results['energy'])
+            results = self._model(val_batch)
 
             val_batch_loss = self.loss_fn(val_batch, results).data.cpu().numpy()
 
@@ -254,7 +253,7 @@ class Trainer:
                 val_loss += val_batch_loss
 
             for h in self.hooks:
-                h.on_validation_batch_end(self, batch, results)
+                h.on_validation_batch_end(self, val_batch, results)
 
         # weighted average over batches
         if self.loss_is_normalized:
