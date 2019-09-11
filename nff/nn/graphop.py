@@ -1,0 +1,69 @@
+
+import torch
+import torch.nn as nns
+import torch.nn.functional as F
+from nff.utils.scatter import compute_grad
+
+
+# Pooling function to get graph property
+def batch_and_sum(dict_input, N, predict_keys, xyz):
+    """Separate the outputs back into batches, pool the results, and use a physics
+    prior if possible.
+    
+    Args:
+        dict_input (TYPE): Description
+        N (int): number of batches
+        predict_keys (TYPE): Description
+        xyz (tensor): xyz of the molecule
+
+    Returns:
+        TYPE: Description
+    """
+
+    # remove this after @dskoda fix it 
+
+    results = dict()
+
+    for key, val in dict_input.items():
+        #split 
+        if key in predict_keys and "_grad" not in key:
+            batched_prop = list(torch.split(val, N))
+            for batch_idx in range(len(N)):
+                batched_prop[batch_idx] = torch.sum(batched_prop[batch_idx], dim=0)
+            results[key] = torch.stack(batched_prop)
+
+        if key + "_grad" in predict_keys: # indicates that this key requires a grad computation 
+            grad = -compute_grad(inputs=xyz, output=results[key])
+            results[key + "_grad"] = grad 
+
+    return results
+
+
+def get_atoms_inside_cell(r, N, pbc):
+    """Summary
+    
+    Args:
+        r (TYPE): Description
+        N (TYPE): Description
+        pbc (TYPE): Description
+    
+    Returns:
+        TYPE: Description
+    """
+    N = N.tolist()
+    # selecting only the atoms inside the unit cell
+    atoms_in_cell = [
+        set(x.cpu().data.numpy())
+        for x in torch.split(pbc, N)
+    ]
+
+    N = [len(n) for n in atoms_in_cell]
+
+    atoms_in_cell = torch.cat([
+        torch.LongTensor(list(x))
+        for x in atoms_in_cell
+    ])
+
+    r = r[atoms_in_cell]
+
+    return r, N
