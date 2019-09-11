@@ -4,26 +4,23 @@ import copy
 import torch.nn.functional as F
 
 from nff.nn.layers import Dense, GaussianSmearing
-from nff.nn.modules import GraphDis, InteractionBlock, BondEnergyModule
+from nff.nn.modules import GraphDis, SchNetConv, BondEnergyModule, SchNetEdgeUpdate
 from nff.nn.activations import shifted_softplus
 from .group import Architecture
 
 ACTIVATION_DIC = {"shifted_softplus": shifted_softplus}
 
-class Net(nn.Module):
+
+class SchNet(nn.Module):
 
     """SchNet implementation with continous filter.
-        It is designed for two types computations: 1) xyz inputs 2) graph inputs
-        If provide bond list (bond_adj) and bond length tensor (bond_len)
-        with a specified bond parameter, a harmonic bond energy 
-        priors will be added  
     
     Attributes:
         atom_embed (torch.nn.Embedding): Convert atomic number into an
             embedding vector of size n_atom_basis
-        bond_energy_graph (BondEnergyModule): Description
-        bond_energy_sample (BondEnergyModule): Description
-        bond_par (float): Description
+
+        atomwise1 (Dense): dense layer 1 to compute energy
+        atomwise2 (Dense): dense layer 2 to compute energy
         convolutions (torch.nn.ModuleList): include all the convolutions
         graph_dis (Graphdis): graph distance module to convert xyz inputs
             into distance matrix
@@ -35,53 +32,49 @@ class Net(nn.Module):
 
     """
     
-    def __init__(
-        self,
-        n_atom_basis,
-        n_filters,
-        n_gaussians,
-        n_convolutions,
-        cutoff,
-        output_vars,
-        specs,
-        bond_par=50.0,
-        trainable_gauss=False,
-        box_size=None,
-    ):
-        """Constructs a SchNet model.
 
+    def __init__(self, modelparams, output_vars, specs):
+
+        """Constructs a SchNet model.
+        
         Args:
-            n_atom_basis (int): dimension of atomic embeddings.
-            n_filters (int): dimension of filters.
-            n_gaussians (int): dimension of the gaussian basis.
-            n_convolutions (int): number of convolutions.
-            cutoff (float): soft cutoff radius for convolution.
-            bond_par (float):
-            trainable_gauss (bool): if True, make the Gaussian parameter trainable.
-            box_size (numpy.array): size of the box, dim = (3, )
+            modelparams (TYPE): Description
             output_vars (list): a list of the output variables that you want the network to predict
             specs (dict): each key in specs is the name of a different output variable. Its value is
                 a dictionary with specifications about the network (see Architecture for an example).
         """
 
         super().__init__()
-        
+
+        n_atom_basis = modelparams['n_atom_basis'],
+        n_filters = modelparams['n_filters'],
+        n_gaussians = modelparams['n_gaussians'], 
+        n_convolutions = modelparams['n_convolutions'],
+        cutoff = modelparams['cutoff'], 
+        trainable_gauss = modelparams.get('trainable_gauss', False),
+        box_size = modelparams.get('box_size', None)
+
         self.graph_dis = GraphDis(Fr=1,
                                   Fe=1,
                                   cutoff=cutoff,
                                   box_size=box_size)
 
+        self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
+
         self.convolutions = nn.ModuleList([
-            InteractionBlock(n_atom_basis=n_atom_basis,
+            SchNetConv(n_atom_basis=n_atom_basis,
                              n_filters=n_filters,
                              n_gaussians=n_gaussians, 
                              cutoff=cutoff,
                              trainable_gauss=trainable_gauss)
             for _ in range(n_convolutions)
         ])
+        
+        self.atomwise1 = Dense(in_features=n_atom_basis,
+                               out_features=int(n_atom_basis / 2),
+                               activation=shifted_softplus)
 
-        self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
-
+        self.atomwise2 = Dense(in_features=int(n_atom_basis / 2), out_features=1)
         architecture = Architecture(output_vars=output_vars, specs=specs)
         self.prop_dics = architecture.prop_dics
         self.module_dict = self.make_module_dict(n_atom_basis=n_atom_basis)
@@ -218,12 +211,6 @@ class Net(nn.Module):
         else:
             # calculating the distances
             e = (xyz[a[:, 0]] - xyz[a[:, 1]]).pow(2).sum(1).sqrt()[:, None]
-
-        assert len(r.shape) == 2
-        assert len(xyz.shape) == 2
-        assert r.shape[0] == xyz.shape[0]
-        assert len(a.shape) == 2
-        assert a.shape[0] == e.shape[0]
 
         if pbc is None:
             pbc = torch.LongTensor(range(r.shape[0]))
