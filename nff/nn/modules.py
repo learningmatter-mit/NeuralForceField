@@ -2,11 +2,11 @@ import numpy as np
 
 import torch
 import torch.nn as nn
+from torch.nn import Sequential, Linear, ReLU, LeakyReLU, ModuleDict 
 
 from nff.nn.layers import Dense, GaussianSmearing
 from nff.utils.scatter import scatter_add
 from nff.nn.activations import shifted_softplus
-from torch.nn import Sequential, Linear, ReLU, LeakyReLU, ModuleDict 
 from nff.nn.graphconv import MessagePassingModule, EdgeUpdateModule, \
                             GeometricOperations, TopologyOperations
 from nff.utils.tools import construct_Sequential, construct_ModuleDict
@@ -147,7 +147,7 @@ class GraphAttention(MessagePassingModule):
 
         a_ij = weight_ij/normalization[a[:, 0]] # the importance of node j’s features to node i
         a_ji = weight_ji/normalization[a[:, 1]] # the importance of node i’s features to node j
-        a_ii = weight_ii/normalization
+        a_ii = weight_ii/normalization # self-attention
         
         message = r[a[:, 0]] * a_ij[:, None], \
                   r[a[:, 1]] * a_ij[:, None], \
@@ -176,24 +176,24 @@ class NodeMultiTaskReadOut(nn.Module):
     """Stack Multi Task outputs
 
         example multitaskdict:
-                {
-                "myenergy0":
-                            [
-                                ['linear', {'in_features': 10, 'out_features': 20}],
-                                ['linear', {'in_features': 20, 'out_features': 1}]
-                            ],
+        multitaskdict = {
+                        "myenergy0":
+                                    [
+                                        {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                                        {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+                                    ],
 
-                "myenergy1": 
-                            [
-                                ['linear', {'in_features': 10, 'out_features': 20}],
-                                ['linear', {'in_features': 20, 'out_features': 1}]
-                            ],
-                "Muliken charges": 
-                            [
-                                ['linear', {'in_features': 10, 'out_features': 20}],
-                                ['linear', {'in_features': 20, 'out_features': 10}]
-                            ]
-                }
+                        "myenergy1":
+                                    [
+                                        {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                                        {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+                                    ],
+                        "Muliken charges": 
+                                    [
+                                        {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                                        {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+                                    ]
+                        }
     """
 
     def __init__(self, multitaskdict):
@@ -400,29 +400,26 @@ class TestModules(unittest.TestCase):
         r = torch.rand(n_atom, 5)
 
         multitaskdict = {
-                            "myenergy0":
-                                        [
-                                            ['linear', {'in_features': 5, 'out_features': 20}],
-                                            ['linear', {'in_features': 20, 'out_features': 1}]
-                                        ],
+                        "myenergy0":
+                                    [
+                                        {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                                        {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+                                    ],
 
-                            "myenergy1": 
-                                        [
-                                            ['linear', {'in_features': 5, 'out_features': 20}],
-                                            ['linear', {'in_features': 20, 'out_features': 1}]
-                                        ],
-                            "Muliken charges": 
-                                        [
-                                            ['linear', {'in_features': 5, 'out_features': 20}],
-                                            ['linear', {'in_features': 20, 'out_features': 10}]
-                                        ]
-                            }
+                        "myenergy1":
+                                    [
+                                        {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                                        {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+                                    ],
+                        "Muliken charges": 
+                                    [
+                                        {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                                        {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+                                    ]
+                        }
 
         model = NodeMultiTaskReadOut(multitaskdict)
         output = model(r)
-
-        import ipdb
-        ipdb.set_trace()
 
 
 if __name__ == '__main__':

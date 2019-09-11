@@ -4,8 +4,6 @@ import torch
 import torch.nn as nn
 
 from nff.utils.scatter import scatter_add
-
-from munch import Munch
 import unittest
 
 class MessagePassingModule(nn.Module):

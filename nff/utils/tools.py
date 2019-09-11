@@ -31,17 +31,17 @@ def construct_Sequential(layers):
     
     Args:
         layers (list): list to describe the stacked layer params 
-                        example: [
-                                    ['linear', {'in_features': 10, 'out_features': 20}],
-                                    ['linear', {'in_features': 20, 'out_features': 1}]
-                                 ] 
+                        example:    [
+                                        {'name': 'linear', 'param' : {'in_features': 10, 'out_features': 20}},
+                                        {'name': 'linear', 'param' : {'in_features': 10, 'out_features': 1}}
+                                    ]
     
     Returns:
         Sequential: Stacked Sequential Model 
     """
-    return Sequential(collections.OrderedDict([ str(param[0])+str(i), 
-                                               layer_types[param[0]](**param[1])
-                                              ] for i, param in enumerate(layers)))
+    return Sequential(collections.OrderedDict([ layer['name']+str(i), 
+                                               layer_types[layer['name']](**layer['param'])
+                                              ] for i, layer in enumerate(layers)))
 
 def construct_ModuleDict(moduledict):
     """construct moduledict from a dictionary of layers
