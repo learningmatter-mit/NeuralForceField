@@ -8,7 +8,7 @@ from nff.nn.layers import Dense, GaussianSmearing
 from nff.utils.scatter import scatter_add
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphconv import MessagePassingModule, EdgeUpdateModule, \
-                            GeometricOperations, TopologyOperations
+                             GeometricOperations, TopologyOperations
 from nff.utils.tools import construct_Sequential, construct_ModuleDict
 
 import unittest
@@ -63,20 +63,17 @@ class SchNetConv(MessagePassingModule):
                                                                              n_gaussians=n_gaussians,
                                                                              trainable=trainable_gauss),
                                                           Dense(in_features=n_gaussians,
-                                                               out_features=n_gaussians,
-                                                               activation=shifted_softplus),
+                                                               out_features=n_gaussians),
+                                                          shifted_softplus(),
                                                           Dense(in_features=n_gaussians,
-                                                               out_features=n_filters,
-                                                               activation=None)),
+                                                               out_features=n_filters)),
                         'message_node_filter': Dense(in_features=n_atom_basis,
-                                                     out_features=n_filters,
-                                                     bias=False),
+                                                     out_features=n_filters),
                         'update_function': Sequential(Dense(in_features=n_filters,
-                                                             out_features=n_atom_basis,
-                                                             activation=shifted_softplus),
+                                                             out_features=n_atom_basis),
+                                                      shifted_softplus(), 
                                                       Dense(in_features=n_atom_basis,
-                                                             out_features=n_atom_basis,
-                                                             activation=None))
+                                                             out_features=n_atom_basis))
                         })
 
 
@@ -96,8 +93,6 @@ class SchNetConv(MessagePassingModule):
         e = self.moduledict['message_edge_filter'](e)
         # convection: update 
         r = self.moduledict['message_node_filter'](r)
-        # check if the dimensions of r and e are the same 
-        assert r.shape[-1] == e.shape[-1]
         # combine node and edge info
         message = r[a[:, 0]] * e, r[a[:, 1]] * e  # (ri [] eij) -> rj, []: *, +, (,)
         return message 
@@ -402,14 +397,15 @@ class TestModules(unittest.TestCase):
         multitaskdict = {
                         "myenergy0":
                                     [
-                                        {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
-                                        {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+                                        {'name': 'Dense', 'param' : { 'in_features': 5, 'out_features': 20}},
+                                        {'name': 'shifted_softplus', 'param': {}},
+                                        {'name': 'Dense', 'param' : { 'in_features': 20, 'out_features': 1}}
                                     ],
 
                         "myenergy1":
                                     [
                                         {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
-                                        {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+                                        {'name': 'Dense', 'param' : { 'in_features': 20, 'out_features': 1}}
                                     ],
                         "Muliken charges": 
                                     [

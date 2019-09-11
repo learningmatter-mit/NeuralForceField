@@ -3,14 +3,16 @@ Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/s
 """
 import json
 import logging
+import collections
 from argparse import Namespace
 
 import numpy as np
 import torch
 
 from torch.nn import ModuleDict, Sequential
-import torch.nn as nn
-import collections
+from nff.nn.activations import shifted_softplus
+from nff.nn.layers import Dense
+
 
 
 __all__ = [
@@ -21,10 +23,13 @@ __all__ = [
 ]
 
 layer_types = {
-                "linear": nn.Linear,
-                "tanh": nn.Tanh,
-                "ReLU": nn.ReLU,
+                "linear": torch.nn.Linear,
+                "Tanh": torch.nn.Tanh,
+                "ReLU": torch.nn.ReLU,
+                "Dense": Dense,
+                "shifted_softplus": shifted_softplus
               }
+
 
 def construct_Sequential(layers):
     """Construct a sequential model from list of params 
