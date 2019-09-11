@@ -220,17 +220,26 @@ def split_train_test(dataset, test_size=0.2):
 
     idx = list(range(len(dataset)))
     idx_train, idx_test = train_test_split(idx)
-    
     train = Dataset(
-        props={key: val[idx_train] for key, val in dataset.props.items()},
+        props=slice_props_by_idx(idx_train, dataset.props),
         units=dataset.units
     )
     test = Dataset(
-        props={key: val[idx_test] for key, val in dataset.props.items()},
+        props=slice_props_by_idx(idx_test, dataset.props),
+        # This is buggy for me (python 3.5.6): {key: val[idx_test] for key, val in dataset.props.items()}
         units=dataset.units
     )
 
     return train, test
+
+def slice_props_by_idx(idx, dictionary):
+    props_dict = {}
+    for key, val in dictionary.items(): 
+        val_list = []
+        for i in idx:
+            val_list.append(val[i])
+        props_dict[key] = val_list
+    return props_dict
 
 
 def split_train_validation_test(dataset, val_size=0.2, test_size=0.2):
