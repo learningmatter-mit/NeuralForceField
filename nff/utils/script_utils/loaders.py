@@ -2,6 +2,7 @@ import torch
 import nff.data
 
 from torch.utils.data import DataLoader
+from nff.data.loader import collate_dicts
 
 
 def get_loaders(args, logging=None):
@@ -38,16 +39,19 @@ def get_loaders(args, logging=None):
             train,
             batch_size=args.batch_size,
             num_workers=args.workers,
+            collate_fn=collate_dicts
         )
         val_loader = DataLoader(
             val,
             batch_size=args.batch_size,
             num_workers=args.workers,
+            collate_fn=collate_dicts
         )
         test_loader = DataLoader(
             test,
             batch_size=args.batch_size,
             num_workers=args.workers,
+            collate_fn=collate_dicts
         )
     
         return train_loader, val_loader, test_loader
