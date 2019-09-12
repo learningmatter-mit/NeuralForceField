@@ -195,7 +195,7 @@ class NodeMultiTaskReadOut(nn.Module):
         """Summary
         
         Args:
-            multitaskdict (TYPE): Description
+            multitaskdict (dict): dictionary that contains model information
         """
         super(NodeMultiTaskReadOut, self).__init__()
         # construct moduledict 

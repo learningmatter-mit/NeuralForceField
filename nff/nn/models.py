@@ -81,18 +81,11 @@ class SchNet(nn.Module):
         """Summary
         
         Args:
-            r (torch.Tensor): Description
-            xyz (torch.Tensor): Description
-            bond_adj (torch.LongTensor): Description
-            a (None, optional): Description
-            N (list): Description
-            pbc (torch.Tensor)
+            batch (dict): dictionary of props
         
         Returns:
-            TYPE: Description
+            dict: dionary of results 
         
-        Raises:
-            ValueError: Description
         """
 
         # a is None means non-batched case

@@ -40,7 +40,7 @@ class Dataset(TorchDataset):
 
     def __init__(self,
                  props,
-                 units='atomic'):
+                 units='kcal/mol'):
         """Constructor for Dataset class.
 
         Args:
@@ -233,6 +233,15 @@ def split_train_test(dataset, test_size=0.2):
     return train, test
 
 def slice_props_by_idx(idx, dictionary):
+    """for a dicionary of lists, build a new dictionary given index
+    
+    Args:
+        idx (list): Description
+        dictionary (dict): Description
+    
+    Returns:
+        dict: sliced dictionary
+    """
     props_dict = {}
     for key, val in dictionary.items(): 
         val_list = []

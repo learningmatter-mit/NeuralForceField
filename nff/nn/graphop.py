@@ -7,17 +7,19 @@ from nff.utils.scatter import compute_grad
 
 # Pooling function to get graph property
 def batch_and_sum(dict_input, N, predict_keys, xyz):
-    """Separate the outputs back into batches, pool the results, and use a physics
-    prior if possible.
+    """Separate the outputs back into batches, pool the results, compute gradient of 
+    scalar properties if "_grad" is in the key name
+
+    TO DO: handle cases for atom-wise and edge-wise outputs  
     
     Args:
-        dict_input (TYPE): Description
-        N (int): number of batches
-        predict_keys (TYPE): Description
+        dict_input (dict): Description
+        N (list): number of batches
+        predict_keys (list): Description
         xyz (tensor): xyz of the molecule
-
+    
     Returns:
-        TYPE: Description
+        dict: batched and pooled results 
     """
 
     # remove this after @dskoda fix it 
@@ -43,9 +45,9 @@ def get_atoms_inside_cell(r, N, pbc):
     """Summary
     
     Args:
-        r (TYPE): Description
-        N (TYPE): Description
-        pbc (TYPE): Description
+        r (torch.float): atomic embeddings 
+        N (torch.long): Description
+        pbc (troch.long): atomic embeddings
     
     Returns:
         TYPE: Description
