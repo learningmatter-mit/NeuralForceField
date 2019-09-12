@@ -190,8 +190,6 @@ class Trainer:
                     self.optimizer.step()
                     self.step += 1
 
-                    import ipdb 
-                    ipdb.set_trace()
                     for h in self.hooks:
                         h.on_batch_end(self, batch, results, loss)
 
