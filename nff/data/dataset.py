@@ -148,7 +148,7 @@ class Dataset(TorchDataset):
         for key in self.props.keys():
             if "energy" in key:  
                 self.props[key] = [x * const.HARTREE_TO_KCAL_MOL for x in self.props[key]]
-            elif "force" in key:
+            elif "_grad" in key:
                 self.props[key] = [
                     x * const.HARTREE_TO_KCAL_MOL / const.BOHR_RADIUS
                     for x in self.props[key]
@@ -221,34 +221,15 @@ def split_train_test(dataset, test_size=0.2):
     idx = list(range(len(dataset)))
     idx_train, idx_test = train_test_split(idx)
     train = Dataset(
-        props=slice_props_by_idx(idx_train, dataset.props),
+        props={key: [val[i] for i in idx_train] for key, val in dataset.props.items()},
         units=dataset.units
     )
     test = Dataset(
-        props=slice_props_by_idx(idx_test, dataset.props),
-        # This is buggy for me (python 3.5.6): {key: val[idx_test] for key, val in dataset.props.items()}
+        props={key: [val[i] for i in idx_test] for key, val in dataset.props.items()},
         units=dataset.units
     )
 
     return train, test
-
-def slice_props_by_idx(idx, dictionary):
-    """for a dicionary of lists, build a new dictionary given index
-    
-    Args:
-        idx (list): Description
-        dictionary (dict): Description
-    
-    Returns:
-        dict: sliced dictionary
-    """
-    props_dict = {}
-    for key, val in dictionary.items(): 
-        val_list = []
-        for i in idx:
-            val_list.append(val[i])
-        props_dict[key] = val_list
-    return props_dict
 
 
 def split_train_validation_test(dataset, val_size=0.2, test_size=0.2):
