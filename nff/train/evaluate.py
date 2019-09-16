@@ -2,6 +2,7 @@ import numpy as np
 
 import torch
 
+from nff.utils.cuda import batch_to
 from nff.utils.scatter import compute_grad
 from nff.data.dataset import concatenate_dict
 
@@ -19,6 +20,8 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
 
     for batch in loader:
         # append batch_size
+
+        batch = batch_to(batch, device)
 
         vsize = batch['nxyz'].size(0)
         n_eval += vsize

@@ -7,6 +7,7 @@ import os
 import numpy as np
 import torch
 
+from nff.utils.cuda import batch_to
 from nff.utils.scatter import compute_grad
 from nff.train.evaluate import evaluate
 
@@ -150,12 +151,6 @@ class Trainer:
         )
         self.state_dict = torch.load(chkpt)
 
-    def batch_to(self, batch, device):
-        gpu_batch = dict()
-        for key, val in batch.items():
-            gpu_batch[key] = val.to(device) if (type(val) is torch.Tensor) else val
-        return gpu_batch
-
     def train(self, device, n_epochs=MAX_EPOCHS):
         """Train the model for the given number of epochs on a specified device.
 
@@ -185,7 +180,7 @@ class Trainer:
 
                 for batch in self.train_loader:
 
-                    batch = self.batch_to(batch, device)
+                    batch = batch_to(batch, device)
 
                     self.optimizer.zero_grad()
 
@@ -241,7 +236,7 @@ class Trainer:
 
         for val_batch in self.validation_loader:
             
-            val_batch = self.batch_to(val_batch, device)
+            val_batch = batch_to(val_batch, device)
 
             # append batch_size
             vsize = val_batch['nxyz'].size(0)
@@ -284,3 +279,4 @@ class Trainer:
             device,
             self.loss_is_normalized
         )
+
