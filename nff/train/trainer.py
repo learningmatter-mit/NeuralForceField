@@ -10,6 +10,7 @@ import torch
 from nff.utils.scatter import compute_grad
 from nff.train.evaluate import evaluate
 
+
 MAX_EPOCHS = 100
 
 
@@ -79,6 +80,7 @@ class Trainer:
 
     def to(self, device):
         """Changes the device"""
+        self._model.device = device
         self._model.to(device)
         self.optimizer.load_state_dict(self.optimizer.state_dict())
         # self.train_loader.to(device)
@@ -168,7 +170,7 @@ class Trainer:
             h.on_train_begin(self)
 
         try:
-            for _ in range(n_epochs):
+            for epoch_num in range(n_epochs):
                 self.epoch += 1
 
                 for h in self.hooks:
@@ -178,14 +180,14 @@ class Trainer:
                     break
 
                 for batch in self.train_loader:
+
                     self.optimizer.zero_grad()
 
                     for h in self.hooks:
                         h.on_batch_begin(self, batch)
 
                     results = self._model(batch)
-
-                    loss = self.loss_fn(batch, results)
+                    loss = self.loss_fn(batch, results, epoch_num)
                     loss.backward()
                     self.optimizer.step()
                     self.step += 1

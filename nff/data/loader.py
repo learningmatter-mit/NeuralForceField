@@ -3,7 +3,6 @@ from collections.abc import Iterable
 
 import torch 
 
-
 REINDEX_KEYS = ['nbr_list', 'pbc']
 
 def collate_dicts(dicts):
@@ -17,6 +16,7 @@ def collate_dicts(dicts):
     """
 
     # new indices for the batch: the first one is zero and the last does not matter
+
     cumulative_atoms = np.cumsum([0] + [d['num_atoms'] for d in dicts])[:-1]
 
     for n, d in zip(cumulative_atoms, dicts):

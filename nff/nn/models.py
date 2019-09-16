@@ -9,6 +9,9 @@ from nff.nn.activations import shifted_softplus
 #from .group import Architecture
 from nff.nn.graphop import batch_and_sum, get_atoms_inside_cell
 
+
+
+
 class SchNet(nn.Module):
 
     """SchNet implementation with continous filter.
@@ -57,6 +60,8 @@ class SchNet(nn.Module):
                                                                       'out_features': 1}}]
                         })
 
+        post_readout =  modelparams.get('post_readout', None)
+
         self.graph_dis = GraphDis(Fr=1,
                                   Fe=1,
                                   cutoff=cutoff,
@@ -74,9 +79,11 @@ class SchNet(nn.Module):
         ])
 
         # ReadOut
-        self.atomwisereadout = NodeMultiTaskReadOut(readoutdict)        
-           
-    def forward(self, batch):
+        self.atomwisereadout = NodeMultiTaskReadOut(multitaskdict=readoutdict, post_readout=post_readout)        
+        self.device = None
+
+
+    def forward(self, batch, other_results=False):
 
         """Summary
         
@@ -90,15 +97,19 @@ class SchNet(nn.Module):
 
         # a is None means non-batched case
 
-        r = batch['nxyz'][:, 0]
-        xyz = batch['nxyz'][:, 1:4]
-        N = batch['num_atoms']
-        N = N.to(torch.long)
+        # device = 1
+
+        r = batch['nxyz'][:, 0].to(self.device)
+        xyz = batch['nxyz'][:, 1:4].to(self.device)
+        N = batch['num_atoms'].to(self.device)
+        N = N.to(torch.long).to(self.device)
         a = batch.get('nbr_list', None)
         pbc = batch.get('pbc', None)
 
         if pbc is None:
             pbc = torch.LongTensor(range(r.shape[0]))
+
+        pbc = pbc.to(self.device)
 
         xyz.requires_grad = True
 
@@ -112,8 +123,10 @@ class SchNet(nn.Module):
             # calculating the distances
             e = (xyz[a[:, 0]] - xyz[a[:, 1]]).pow(2).sum(1).sqrt()[:, None]
 
+        a = a.to(self.device)
         # ensuring image atoms have the same vectors of their corresponding
         # atom inside the unit cell
+
         r = self.atom_embed(r.long()).squeeze()[pbc]
 
         # update function includes periodic boundary conditions
@@ -126,8 +139,22 @@ class SchNet(nn.Module):
         r, N = get_atoms_inside_cell(r, N, pbc)
 
         r = self.atomwisereadout(r)
+
         results = batch_and_sum(r, N, list(batch.keys()), xyz)
-            
-        return results 
+        
+        if not other_results:
+            return results 
+        else:
+            other_results = dict()
+            predict_keys = list(batch.keys())
+            for key, val in r.items():
+                #split 
+                if key not in predict_keys:
+                    batched_prop = list(torch.split(val, N))
+                    for batch_idx in range(len(N)):
+                        batched_prop[batch_idx] = torch.sum(batched_prop[batch_idx], dim=0)
+                    other_results[key] = torch.stack(batched_prop).cpu()
+            return results, other_results
+
 
 

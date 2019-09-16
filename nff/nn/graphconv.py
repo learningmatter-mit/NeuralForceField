@@ -35,6 +35,7 @@ class MessagePassingModule(nn.Module):
         return r
 
     def forward(self, r, e, a):
+
         graph_size = r.shape[0]
         rij, rji = self.message(r, e, a)
         # i -> j propagate

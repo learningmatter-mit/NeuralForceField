@@ -9,6 +9,10 @@ from torch.utils.data import Dataset as TorchDataset
 
 from nff.data import get_neighbor_list
 import nff.utils.constants as const
+import copy
+
+AU_TO_KCAL = {"energy": const.HARTREE_TO_KCAL_MOL, "distance": const.BOHR_RADIUS}
+KCAL_TO_AU = {"energy": 1.0/const.HARTREE_TO_KCAL_MOL, "distance": 1.0/const.BOHR_RADIUS}
 
 class Dataset(TorchDataset):
     """Dataset to deal with NFF calculations. Can be expanded to retrieve calculations
@@ -49,7 +53,7 @@ class Dataset(TorchDataset):
                 all lists have the same length.
             units (str): units of the system.
         """
-
+        
         self.props = self._check_dictionary(deepcopy(props))
         self.units = units
         self.to_units('kcal/mol')
@@ -61,6 +65,7 @@ class Dataset(TorchDataset):
         return {key: val[idx] for key, val in self.props.items()}
 
     def __add__(self, other):
+
         if other.units != self.units:
             other = other.copy().to_units(self.units)
         
@@ -145,26 +150,40 @@ class Dataset(TorchDataset):
     def to_kcal_mol(self): 
         """Converts forces and energies from atomic units to kcal/mol."""
 
-        for key in self.props.keys():
-            if "energy" in key:  
-                self.props[key] = [x * const.HARTREE_TO_KCAL_MOL for x in self.props[key]]
-            elif "force" in key:
-                self.props[key] = [
-                    x * const.HARTREE_TO_KCAL_MOL / const.BOHR_RADIUS
-                    for x in self.props[key]
-                ]
+        conversion_keys = AU_TO_KCAL.keys()
+
+        for prop_key in self.props.keys():
+
+            convert_main = True
+            convert_grad = True
+
+            for conversion_key in conversion_keys:
+
+                if conversion_key in prop_key and convert_main:
+                    self.props[prop_key] = [x*AU_TO_KCAL[conversion_key] for x in self.props[prop_key]]
+                    convert_main = False
+                if "grad" in prop_key and convert_grad:
+                    self.props[prop_key] = [x/AU_TO_KCAL["distance"] for x in self.props[prop_key]]
+                    convert_grad = False
 
         self.units = 'kcal/mol'
 
     def to_atomic_units(self):
-        for key in self.props.keys():
-            if "energy" in key:
-                self.props[key] = [x / const.HARTREE_TO_KCAL_MOL for x in self.props[key]]
-            if "force" in key:
-                self.props[key] = [
-                    x / const.HARTREE_TO_KCAL_MOL * const.BOHR_RADIUS
-                    for x in self.props['force']
-                ]
+
+        conversion_keys= KCAL_TO_AU.keys()
+
+        for prop_key in self.props.keys():
+
+            convert_main = True
+            convert_grad = True
+
+            for conversion_key in conversion_keys:
+                if conversion_key in prop_key and convert_main:
+                    self.props[prop_key] = [x*KCAL_TO_AU[conversion_key] for x in self.props[prop_key]]
+                    convert_main = False
+                if "grad" in prop_key and convert_grad:
+                    self.props[prop_key] = [x/KCAL_TO_AU["distance"] for x in self.props[prop_key]]
+                    convert_grad = False
 
         self.units = 'atomic'
 

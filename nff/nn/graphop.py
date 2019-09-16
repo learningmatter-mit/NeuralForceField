@@ -3,10 +3,11 @@ import torch
 import torch.nn as nns
 import torch.nn.functional as F
 from nff.utils.scatter import compute_grad
-
+from nff.nn.modules import BondEnergyModule, GraphDis
+from nff.data import get_neighbor_list
 
 # Pooling function to get graph property
-def batch_and_sum(dict_input, N, predict_keys, xyz):
+def batch_and_sum(dict_input, N, predict_keys, xyz, prior=False, bond_adj=None):
     """Separate the outputs back into batches, pool the results, compute gradient of 
     scalar properties if "_grad" is in the key name
 
@@ -30,13 +31,17 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
         #split 
         if key in predict_keys and "_grad" not in key:
             batched_prop = list(torch.split(val, N))
+
             for batch_idx in range(len(N)):
                 batched_prop[batch_idx] = torch.sum(batched_prop[batch_idx], dim=0)
-            results[key] = torch.stack(batched_prop)
 
-        if key + "_grad" in predict_keys: # indicates that this key requires a grad computation 
-            grad = -compute_grad(inputs=xyz, output=results[key])
-            results[key + "_grad"] = grad 
+            results[key] = torch.stack(batched_prop).cpu()
+
+        if key + "_grad" in predict_keys: # indicates that this key requires a grad computation
+
+            grad = compute_grad(inputs=xyz, output=results[key])
+            results[key + "_grad"] = grad.cpu()
+
 
     return results
 
