@@ -33,12 +33,12 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
             for batch_idx in range(len(N)):
                 batched_prop[batch_idx] = torch.sum(batched_prop[batch_idx], dim=0)
 
-            results[key] = torch.stack(batched_prop) #.cpu()
+            results[key] = torch.stack(batched_prop)
 
         if key + "_grad" in predict_keys: # indicates that this key requires a grad computation
 
             grad = compute_grad(inputs=xyz, output=results[key])
-            results[key + "_grad"] = grad #.cpu()
+            results[key + "_grad"] = grad
 
 
     return results
