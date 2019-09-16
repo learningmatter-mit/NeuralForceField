@@ -142,19 +142,7 @@ class SchNet(nn.Module):
 
         results = batch_and_sum(r, N, list(batch.keys()), xyz)
         
-        if not other_results:
-            return results 
-        else:
-            other_results = dict()
-            predict_keys = list(batch.keys())
-            for key, val in r.items():
-                #split 
-                if key not in predict_keys:
-                    batched_prop = list(torch.split(val, N))
-                    for batch_idx in range(len(N)):
-                        batched_prop[batch_idx] = torch.sum(batched_prop[batch_idx], dim=0)
-                    other_results[key] = torch.stack(batched_prop).cpu()
-            return results, other_results
+        return results 
 
 
 

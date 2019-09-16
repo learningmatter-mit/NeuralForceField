@@ -17,7 +17,7 @@ def build_mse_loss(loss_coef):
 
     """
 
-    def loss_fn(ground_truth, results, step=0):
+    def loss_fn(ground_truth, results):
         """Calculates the MSE between ground_truth and results.
 
         Args:

@@ -27,9 +27,9 @@ class SchNetEdgeUpdate(EdgeUpdateModule):
 
         self.mlp = Sequential(
                               Linear(2 * n_atom_basis, n_atom_basis), 
-                              shifted_softplus(), # ReLU(), # softplus in the original paper 
+                              ReLU(), # softplus in the original paper 
                               Linear(n_atom_basis, n_atom_basis),
-                              shifted_softplus(), # ReLU(), # softplus in the original paper
+                              ReLU(), # softplus in the original paper
                               Linear(n_atom_basis, 1)
                               )
 

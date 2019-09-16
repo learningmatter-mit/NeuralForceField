@@ -83,8 +83,6 @@ class Trainer:
         self._model.device = device
         self._model.to(device)
         self.optimizer.load_state_dict(self.optimizer.state_dict())
-        # self.train_loader.to(device)
-        # self.validation_loader.to(device)
 
     def _check_is_parallel(self):
         return True if isinstance(self._model, torch.nn.DataParallel) else False
@@ -152,6 +150,12 @@ class Trainer:
         )
         self.state_dict = torch.load(chkpt)
 
+    def batch_to(self, batch, device):
+        gpu_batch = dict()
+        for key, val in batch.items():
+            gpu_batch[key] = val.to(device) if (type(val) is torch.Tensor) else val
+        return gpu_batch
+
     def train(self, device, n_epochs=MAX_EPOCHS):
         """Train the model for the given number of epochs on a specified device.
 
@@ -170,7 +174,7 @@ class Trainer:
             h.on_train_begin(self)
 
         try:
-            for epoch_num in range(n_epochs):
+            for _ in range(n_epochs):
                 self.epoch += 1
 
                 for h in self.hooks:
@@ -181,13 +185,15 @@ class Trainer:
 
                 for batch in self.train_loader:
 
+                    batch = self.batch_to(batch, device)
+
                     self.optimizer.zero_grad()
 
                     for h in self.hooks:
                         h.on_batch_begin(self, batch)
 
                     results = self._model(batch)
-                    loss = self.loss_fn(batch, results, epoch_num)
+                    loss = self.loss_fn(batch, results)
                     loss.backward()
                     self.optimizer.step()
                     self.step += 1
@@ -203,7 +209,7 @@ class Trainer:
 
                 # validation
                 if self.epoch % self.validation_interval == 0 or self._stop:
-                    self.validate()
+                    self.validate(device)
 
                 for h in self.hooks:
                     h.on_epoch_end(self)
@@ -223,7 +229,7 @@ class Trainer:
 
             raise e
 
-    def validate(self):
+    def validate(self, device):
         """Validate the current state of the model using the validation set
         """
 
@@ -234,6 +240,8 @@ class Trainer:
         n_val = 0
 
         for val_batch in self.validation_loader:
+            
+            val_batch = self.batch_to(val_batch, device)
 
             # append batch_size
             vsize = val_batch['nxyz'].size(0)
