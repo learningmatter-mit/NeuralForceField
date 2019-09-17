@@ -6,11 +6,15 @@ import torch.nn.functional as F
 from nff.nn.layers import Dense, GaussianSmearing
 from nff.nn.modules import GraphDis, SchNetConv, BondEnergyModule, SchNetEdgeUpdate, NodeMultiTaskReadOut
 from nff.nn.activations import shifted_softplus
-#from .group import Architecture
 from nff.nn.graphop import batch_and_sum, get_atoms_inside_cell
 
-
-
+DEFAULT_READOUT = {
+    'energy': [
+        {'name': 'linear', 'param' : { 'in_features': n_atom_basis, 'out_features': int(n_atom_basis / 2)}},
+        {'name': 'shifted_softplus', 'param': {}},
+        {'name': 'linear', 'param' : { 'in_features': int(n_atom_basis / 2), 'out_features': 1}}
+    ]
+}
 
 class SchNet(nn.Module):
 
@@ -30,10 +34,8 @@ class SchNet(nn.Module):
         module_dict (ModuleDict): a dictionary of modules. Each entry has the form
             {name: mod_list}, where name is the name of a property object and mod_list
             is a ModuleList of layers to predict that property.
-
     """
     
-
     def __init__(self, modelparams):
         """Constructs a SchNet model.
         
@@ -50,16 +52,9 @@ class SchNet(nn.Module):
         cutoff = modelparams['cutoff']
         trainable_gauss = modelparams.get('trainable_gauss', False)
         box_size = modelparams.get('box_size', None)
-        # default predict var
-        readoutdict = modelparams.get('readoutdict', 
-                        {
-                            "energy": [{'name': 'linear', 'param' : { 'in_features': n_atom_basis, 
-                                                                      'out_features': int(n_atom_basis / 2)}},
-                                       {'name': 'shifted_softplus', 'param': {}},
-                                       {'name': 'linear', 'param' : { 'in_features': int(n_atom_basis / 2), 
-                                                                      'out_features': 1}}]
-                        })
 
+        # default predict var
+        readoutdict = modelparams.get('readoutdict', DEFAULT_READOUT)
         post_readout =  modelparams.get('post_readout', None)
 
         self.graph_dis = GraphDis(Fr=1,
@@ -82,7 +77,6 @@ class SchNet(nn.Module):
         self.atomwisereadout = NodeMultiTaskReadOut(multitaskdict=readoutdict, post_readout=post_readout)        
         self.device = None
 
-
     def forward(self, batch, other_results=False):
 
         """Summary
@@ -92,31 +86,24 @@ class SchNet(nn.Module):
         
         Returns:
             dict: dionary of results 
-        
         """
-
-        # a is None means non-batched case
-
-        # device = 1
-
-        r = batch['nxyz'][:, 0].to(self.device)
-        xyz = batch['nxyz'][:, 1:4].to(self.device)
-        N = batch['num_atoms'].to(self.device)
-        N = N.to(torch.long).to(self.device)
+        r = batch['nxyz'][:, 0]
+        xyz = batch['nxyz'][:, 1:4]
+        N = batch['num_atoms'].to(torch.long)
         a = batch.get('nbr_list', None)
         pbc = batch.get('pbc', None)
 
-        if pbc is None:
-            pbc = torch.LongTensor(range(r.shape[0]))
-
-        pbc = pbc.to(self.device)
-
         xyz.requires_grad = True
 
+        # a is None means non-batched case
         if a is None:
             assert len(set(N)) == 1 # all the graphs should correspond to the same molecule
             N_atom = N[0]
             e, a = self.graph_dis(xyz=xyz.reshape(-1, N_atom, 3))
+
+            if pbc is None:
+                pbc = torch.LongTensor(range(r.shape[0]))
+            pbc = pbc.to(self.device)
 
         # batched case
         else:
@@ -124,9 +111,9 @@ class SchNet(nn.Module):
             e = (xyz[a[:, 0]] - xyz[a[:, 1]]).pow(2).sum(1).sqrt()[:, None]
 
         a = a.to(self.device)
+
         # ensuring image atoms have the same vectors of their corresponding
         # atom inside the unit cell
-
         r = self.atom_embed(r.long()).squeeze()[pbc]
 
         # update function includes periodic boundary conditions
@@ -143,6 +130,4 @@ class SchNet(nn.Module):
         results = batch_and_sum(r, N, list(batch.keys()), xyz)
         
         return results 
-
-
 
