@@ -81,12 +81,11 @@ class Dataset(TorchDataset):
         n_geoms = len(props['nxyz'])
 
         if 'num_atoms' not in props.keys():
-            props['num_atoms'] = n_atoms
+            props['num_atoms'] = self._to_array(n_atoms).to(torch.long)
         else:
-            assert props['num_atoms'] == n_atoms
+            props['num_atoms'] = self._to_array(props['num_atoms']).to(torch.long)
 
         for key, val in props.items():
-
             if val is None:
                 props[key] = self._to_array([np.nan] * n_geoms)
 
