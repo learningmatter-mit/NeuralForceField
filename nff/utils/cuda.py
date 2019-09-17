@@ -6,6 +6,6 @@ import torch
 def batch_to(batch, device):
     gpu_batch = dict()
     for key, val in batch.items():
-        gpu_batch[key] = val.to(device) if (type(val) is torch.Tensor) else val
+        gpu_batch[key] = val.to(device) if hasattr(val, 'to') else val
     return gpu_batch
 
