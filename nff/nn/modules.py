@@ -9,11 +9,12 @@ from nff.utils.scatter import scatter_add
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphconv import MessagePassingModule, EdgeUpdateModule, \
                              GeometricOperations, TopologyOperations
-from nff.utils.tools import construct_Sequential, construct_ModuleDict
+from nff.nn.utils import construct_sequential, construct_module_dict
 
 import unittest
 
 EPSILON = 1e-15
+
 
 class SchNetEdgeUpdate(EdgeUpdateModule):
     """
@@ -26,12 +27,12 @@ class SchNetEdgeUpdate(EdgeUpdateModule):
         super(SchNetEdgeUpdate, self).__init__()
 
         self.mlp = Sequential(
-                              Linear(2 * n_atom_basis, n_atom_basis), 
-                              ReLU(), # softplus in the original paper 
-                              Linear(n_atom_basis, n_atom_basis),
-                              ReLU(), # softplus in the original paper
-                              Linear(n_atom_basis, 1)
-                              )
+            Linear(2 * n_atom_basis, n_atom_basis), 
+            ReLU(), # softplus in the original paper 
+            Linear(n_atom_basis, n_atom_basis),
+            ReLU(), # softplus in the original paper
+            Linear(n_atom_basis, 1)
+        )
 
     def aggregate(self, message, neighborlist):
         aggregated_edge_feature = torch.cat((message[neighborlist[:,0]], message[neighborlist[:,1]]), 1)
@@ -173,23 +174,20 @@ class NodeMultiTaskReadOut(nn.Module):
         example multitaskdict:
 
         multitaskdict = {
-                        "myenergy0":
-                                    [
-                                        {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
-                                        {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
-                                    ],
+            'myenergy0': [
+                            {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                            {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+            ],
+            'myenergy1': [
+                            {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                            {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+            ],
+            'Muliken charges': [
+                            {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                            {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+            ]
+        }
 
-                        "myenergy1":
-                                    [
-                                        {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
-                                        {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
-                                    ],
-                        "Muliken charges": 
-                                    [
-                                        {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
-                                        {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
-                                    ]
-                        }
         example post_readout:
 
         def post_readout(predict_dict, readoutdict):
@@ -197,8 +195,6 @@ class NodeMultiTaskReadOut(nn.Module):
             sorted_ens = torch.sort(torch.stack([predict_dict[key] for key in sorted_keys]))[0] 
             sorted_dic = {key: val for key, val in zip(sorted_keys, sorted_ens) }
             return sorted_dic
-    
-
     """
 
     def __init__(self, multitaskdict, post_readout=None):
@@ -209,7 +205,7 @@ class NodeMultiTaskReadOut(nn.Module):
         """
         super(NodeMultiTaskReadOut, self).__init__()
         # construct moduledict 
-        self.readout = construct_ModuleDict(multitaskdict)
+        self.readout = construct_module_dict(multitaskdict)
         self.post_readout = post_readout
         self.multitaskdict = multitaskdict
 
