@@ -6,7 +6,8 @@ import torch
 REINDEX_KEYS = ['nbr_list', 'pbc']
 
 def collate_dicts(dicts):
-    """Collates dictionaries within a single batch.
+    """Collates dictionaries within a single batch. Automatically reindexes neighbor lists
+        and periodic boundary conditions to deal with the batch.
 
     Args:
         dicts (list of dict): each element of the dataset

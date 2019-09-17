@@ -6,6 +6,7 @@ import torch.nn as nn
 from nff.utils.scatter import scatter_add
 import unittest
 
+
 class MessagePassingModule(nn.Module):
 
     """Convolution constructed as MessagePassing.
@@ -45,8 +46,8 @@ class MessagePassingModule(nn.Module):
         r = self.update(r)
         return r
 
-class EdgeUpdateModule(nn.Module):
 
+class EdgeUpdateModule(nn.Module):
     """Update Edge State Based on information from connected nodes 
     """
 
@@ -92,6 +93,7 @@ class EdgeUpdateModule(nn.Module):
         e = self.update(e)
         return e
 
+
 class GeometricOperations(nn.Module):
 
     """Compute geomtrical properties based on XYZ coordinates
@@ -99,6 +101,7 @@ class GeometricOperations(nn.Module):
     
     def __init__(self):
         super(GeometricOperations, self).__init__()
+
 
 class TopologyOperations(nn.Module):
 

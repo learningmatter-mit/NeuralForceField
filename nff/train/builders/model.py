@@ -19,14 +19,10 @@ def check_parameters(params_type, params):
          params (dict)
      """
      for key, val in params.items():
-         try:
-             if not isinstance(val, params_type[key]):
+         if key in params_type and not isinstance(val, params_type[key]):
                  raise ParameterError(
                          '%s is not %s' % (str(key), params_type[key])
               )
- 
-         except KeyError:
-             pass
 
 
 def get_model(params):
