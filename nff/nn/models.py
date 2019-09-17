@@ -89,7 +89,7 @@ class SchNet(nn.Module):
         """
         r = batch['nxyz'][:, 0]
         xyz = batch['nxyz'][:, 1:4]
-        N = batch['num_atoms'].to(torch.long)
+        N = batch['num_atoms']
         a = batch.get('nbr_list', None)
         pbc = batch.get('pbc', None)
 
