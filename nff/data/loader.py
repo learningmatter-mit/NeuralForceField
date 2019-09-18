@@ -5,6 +5,12 @@ import torch
 
 REINDEX_KEYS = ['nbr_list', 'pbc']
 
+TYPE_KEYS = {
+    'nbr_list': torch.long,
+    'pbc': torch.long,
+    'num_atoms': torch.long
+}
+
 def collate_dicts(dicts):
     """Collates dictionaries within a single batch. Automatically reindexes neighbor lists
         and periodic boundary conditions to deal with the batch.
@@ -25,6 +31,7 @@ def collate_dicts(dicts):
             if key in d:
                 d[key] = d[key] + n
 
+    # batching the data
     batch = {}
     for key, val in dicts[0].items():
         if type(val) == str:
@@ -39,6 +46,10 @@ def collate_dicts(dicts):
                 [data[key] for data in dicts],
                 dim=0
             )
+
+    # adjusting the data types:
+    for key, dtype in TYPE_KEYS.items():
+        batch[key] = batch[key].to(dtype)
 
     return batch
 

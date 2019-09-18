@@ -81,9 +81,9 @@ class Dataset(TorchDataset):
         n_geoms = len(props['nxyz'])
 
         if 'num_atoms' not in props.keys():
-            props['num_atoms'] = self._to_array(n_atoms).to(torch.long)
+            props['num_atoms'] = self._to_array(n_atoms)
         else:
-            props['num_atoms'] = self._to_array(props['num_atoms']).to(torch.long)
+            props['num_atoms'] = self._to_array(props['num_atoms'])
 
         for key, val in props.items():
             if val is None:
@@ -142,25 +142,25 @@ class Dataset(TorchDataset):
             target_unit (str): unit to use as final one
         """
 
+        if target_unit not in ['kcal/mol', 'atomic']:
+            raise NotImplementedError(
+                'unit conversion for {} not implemented'.format(target_unit)
+            )
+
         if target_unit == 'kcal/mol' and self.units == 'atomic':
             self.props = const.convert_units(
                 self.props,
                 const.AU_TO_KCAL
             )
+            self.units = target_unit
 
         elif target_unit == 'atomic' and self.units == 'kcal/mol':
             self.props = const.convert_units(
                 self.props,
                 const.KCAL_TO_AU
             )
+            self.units = target_unit
 
-        else:
-
-            raise NotImplementedError(
-                'unit conversion for {} not implemented'.format(target_unit)
-            )
-
-        self.units = target_unit
         return
 
     def shuffle(self):
@@ -225,6 +225,7 @@ def split_train_test(dataset, test_size=0.2):
     )
 
     return train, test
+
 
 def slice_props_by_idx(idx, dictionary):
     """for a dicionary of lists, build a new dictionary given index
