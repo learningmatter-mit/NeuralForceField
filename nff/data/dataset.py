@@ -155,6 +155,7 @@ class Dataset(TorchDataset):
             )
 
         else:
+
             raise NotImplementedError(
                 'unit conversion for {} not implemented'.format(target_unit)
             )
@@ -215,17 +216,15 @@ def split_train_test(dataset, test_size=0.2):
     idx = list(range(len(dataset)))
     idx_train, idx_test = train_test_split(idx)
     train = Dataset(
-        props=slice_props_by_idx(idx_train, dataset.props),
+        props={key: [val[i] for i in idx_train] for key, val in dataset.props.items()},
         units=dataset.units
     )
     test = Dataset(
-        props=slice_props_by_idx(idx_test, dataset.props),
-        # This is buggy for me (python 3.5.6): {key: val[idx_test] for key, val in dataset.props.items()}
+        props={key: [val[i] for i in idx_test] for key, val in dataset.props.items()},
         units=dataset.units
     )
 
     return train, test
-
 
 def slice_props_by_idx(idx, dictionary):
     """for a dicionary of lists, build a new dictionary given index
