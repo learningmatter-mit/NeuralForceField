@@ -152,15 +152,16 @@ class Dataset(TorchDataset):
                 self.props,
                 const.AU_TO_KCAL
             )
-            self.units = target_unit
 
         elif target_unit == 'atomic' and self.units == 'kcal/mol':
             self.props = const.convert_units(
                 self.props,
                 const.KCAL_TO_AU
             )
-            self.units = target_unit
+        else:
+            return
 
+        self.units = target_unit
         return
 
     def shuffle(self):

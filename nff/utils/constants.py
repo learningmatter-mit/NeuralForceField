@@ -19,12 +19,12 @@ ATOMIC_MASS = {
 
 AU_TO_KCAL = {
     'energy': HARTREE_TO_KCAL_MOL,
-    'distance': BOHR_RADIUS
+    'energy_grad': HARTREE_TO_KCAL_MOL / BOHR_RADIUS,
 }
 
 KCAL_TO_AU = {
     'energy': 1.0 / HARTREE_TO_KCAL_MOL,
-    'distance': 1.0 / BOHR_RADIUS
+    'energy_grad': BOHR_RADIUS / HARTREE_TO_KCAL_MOL,
 }
 
 
@@ -42,15 +42,9 @@ def convert_units(props, conversion_dict):
     props = props.copy()
     for prop_key, prop_val in props.items():
         for conv_key, conv_const in conversion_dict.items():
-            if conv_key in prop_key:
+            if conv_key == prop_key:
                 props[prop_key] = [
                     x * conv_const
-                    for x in prop_val
-                ]
-
-            if 'grad' in prop_key:
-                props[prop_key] = [
-                    x / conversion_dict['distance']
                     for x in prop_val
                 ]
 
