@@ -20,11 +20,11 @@ def get_crystal_graph(crystal, cutoff):
     sites = crystal.sites.copy()
     pbc = list(range(len(sites)))
 
-    for site in crystal.sites;
-        for nbr in crystal.get_neighbors(site, cutoff):
-            if nbr.site not in sites:
-                sites.append(nbr.site)
-                pbc.append(nbr.index)
+    for site in crystal.sites:
+        for site, _, idx, _ in crystal.get_neighbors(site, cutoff, include_index=True, include_image=True):
+            if site not in sites:
+                sites.append(site)
+                pbc.append(idx)
 
     nxyz = torch.Tensor([[s.specie.number, *s.coords] for s in sites])
     pbc = torch.LongTensor(pbc)
