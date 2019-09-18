@@ -2,9 +2,9 @@ import numpy as np
 
 import torch
 
+from nff.utils.cuda import batch_to
 from nff.utils.scatter import compute_grad
 from nff.data.dataset import concatenate_dict
-
 
 def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
     """Evaluate the current state of the model using a given dataloader
@@ -17,12 +17,17 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
 
     all_results = []
     all_batches = []
+
     for batch in loader:
         # append batch_size
+
+        batch = batch_to(batch, device)
+
         vsize = batch['nxyz'].size(0)
         n_eval += vsize
 
         results = model(batch)
+        results["nxyz"] = batch["nxyz"]
 
         eval_batch_loss = loss_fn(batch, results).data.cpu().numpy()
 
@@ -41,4 +46,4 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
     all_results = concatenate_dict(*all_results)
     all_batches = concatenate_dict(*all_batches)
 
-    return all_results, all_targets, eval_loss
+    return all_results, all_batches, eval_loss

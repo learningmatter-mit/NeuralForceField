@@ -1,14 +1,13 @@
-
 import torch
 import torch.nn as nns
 import torch.nn.functional as F
 from nff.utils.scatter import compute_grad
 
 
-# Pooling function to get graph property
 def batch_and_sum(dict_input, N, predict_keys, xyz):
-    """Separate the outputs back into batches, pool the results, compute gradient of 
-    scalar properties if "_grad" is in the key name
+    """Pooling function to get graph property.
+        Separate the outputs back into batches, pool the results,
+        compute gradient of scalar properties if "_grad" is in the key name.
 
     TO DO: handle cases for atom-wise and edge-wise outputs  
     
@@ -30,23 +29,29 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
         #split 
         if key in predict_keys and "_grad" not in key:
             batched_prop = list(torch.split(val, N))
+
             for batch_idx in range(len(N)):
                 batched_prop[batch_idx] = torch.sum(batched_prop[batch_idx], dim=0)
+
             results[key] = torch.stack(batched_prop)
 
-        if key + "_grad" in predict_keys: # indicates that this key requires a grad computation 
-            grad = -compute_grad(inputs=xyz, output=results[key])
-            results[key + "_grad"] = grad 
+        if key + "_grad" in predict_keys: # indicates that this key requires a grad computation
+
+            grad = compute_grad(inputs=xyz, output=results[key])
+            results[key + "_grad"] = grad
+
 
     return results
 
 
 def get_atoms_inside_cell(r, N, pbc):
-    """Summary
+    """Removes atoms outside of the unit cell which are carried in `r`
+        to ensure correct periodic boundary conditions. Does that by discarding
+        all atoms beyond N which are not in the reindexing mapping `pbc`.
     
     Args:
         r (torch.float): atomic embeddings 
-        N (torch.long): Description
+        N (torch.long): number of atoms inside each graph
         pbc (troch.long): atomic embeddings
     
     Returns:

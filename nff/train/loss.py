@@ -1,6 +1,5 @@
 import torch
 
-
 __all__ = ["build_mse_loss"]
 
 
@@ -34,8 +33,9 @@ def build_mse_loss(loss_coef):
 
         loss = 0.0
         for key, coef in loss_coef.items():
+
             targ = ground_truth[key]
-            pred = results[key]
+            pred = results[key].view(targ.shape)
 
             # select only properties which are given
             valid_idx = 1 - torch.isnan(targ)
@@ -43,7 +43,7 @@ def build_mse_loss(loss_coef):
             pred = pred[valid_idx]
 
             if len(targ) != 0:
-                diff = (targ - pred) ** 2
+                diff = (targ - pred ) ** 2
                 err_sq = coef * torch.mean(diff)
                 loss += err_sq
 

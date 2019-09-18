@@ -9,6 +9,8 @@ from torch.utils.data import Dataset as TorchDataset
 
 from nff.data import get_neighbor_list
 import nff.utils.constants as const
+import copy
+
 
 class Dataset(TorchDataset):
     """Dataset to deal with NFF calculations. Can be expanded to retrieve calculations
@@ -49,7 +51,7 @@ class Dataset(TorchDataset):
                 all lists have the same length.
             units (str): units of the system.
         """
-
+        
         self.props = self._check_dictionary(deepcopy(props))
         self.units = units
         self.to_units('kcal/mol')
@@ -61,6 +63,7 @@ class Dataset(TorchDataset):
         return {key: val[idx] for key, val in self.props.items()}
 
     def __add__(self, other):
+
         if other.units != self.units:
             other = other.copy().to_units(self.units)
         
@@ -78,12 +81,11 @@ class Dataset(TorchDataset):
         n_geoms = len(props['nxyz'])
 
         if 'num_atoms' not in props.keys():
-            props['num_atoms'] = n_atoms
+            props['num_atoms'] = self._to_array(n_atoms).to(torch.long)
         else:
-            assert props['num_atoms'] == n_atoms
+            props['num_atoms'] = self._to_array(props['num_atoms']).to(torch.long)
 
         for key, val in props.items():
-
             if val is None:
                 props[key] = self._to_array([np.nan] * n_geoms)
 
@@ -133,40 +135,33 @@ class Dataset(TorchDataset):
         return Dataset(self.props, self.units)
 
     def to_units(self, target_unit):
+        """Converts the dataset to the desired unit. Modifies the dictionary of properties
+            in place.
+
+        Args:
+            target_unit (str): unit to use as final one
+        """
+
         if target_unit == 'kcal/mol' and self.units == 'atomic':
-            self.to_kcal_mol()
+            self.props = const.convert_units(
+                self.props,
+                const.AU_TO_KCAL
+            )
 
         elif target_unit == 'atomic' and self.units == 'kcal/mol':
-            self.to_atomic_units()
+            self.props = const.convert_units(
+                self.props,
+                const.KCAL_TO_AU
+            )
 
         else:
-            pass
 
-    def to_kcal_mol(self): 
-        """Converts forces and energies from atomic units to kcal/mol."""
+            raise NotImplementedError(
+                'unit conversion for {} not implemented'.format(target_unit)
+            )
 
-        for key in self.props.keys():
-            if "energy" in key:  
-                self.props[key] = [x * const.HARTREE_TO_KCAL_MOL for x in self.props[key]]
-            elif "_grad" in key:
-                self.props[key] = [
-                    x * const.HARTREE_TO_KCAL_MOL / const.BOHR_RADIUS
-                    for x in self.props[key]
-                ]
-
-        self.units = 'kcal/mol'
-
-    def to_atomic_units(self):
-        for key in self.props.keys():
-            if "energy" in key:
-                self.props[key] = [x / const.HARTREE_TO_KCAL_MOL for x in self.props[key]]
-            if "force" in key:
-                self.props[key] = [
-                    x / const.HARTREE_TO_KCAL_MOL * const.BOHR_RADIUS
-                    for x in self.props['force']
-                ]
-
-        self.units = 'atomic'
+        self.units = target_unit
+        return
 
     def shuffle(self):
         idx = list(range(len(self)))
@@ -230,6 +225,24 @@ def split_train_test(dataset, test_size=0.2):
     )
 
     return train, test
+
+def slice_props_by_idx(idx, dictionary):
+    """for a dicionary of lists, build a new dictionary given index
+    
+    Args:
+        idx (list): Description
+        dictionary (dict): Description
+    
+    Returns:
+        dict: sliced dictionary
+    """
+    props_dict = {}
+    for key, val in dictionary.items(): 
+        val_list = []
+        for i in idx:
+            val_list.append(val[i])
+        props_dict[key] = val_list
+    return props_dict
 
 
 def split_train_validation_test(dataset, val_size=0.2, test_size=0.2):

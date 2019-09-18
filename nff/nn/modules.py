@@ -9,11 +9,12 @@ from nff.utils.scatter import scatter_add
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphconv import MessagePassingModule, EdgeUpdateModule, \
                              GeometricOperations, TopologyOperations
-from nff.utils.tools import construct_Sequential, construct_ModuleDict
+from nff.nn.utils import construct_sequential, construct_module_dict
 
 import unittest
 
 EPSILON = 1e-15
+
 
 class SchNetEdgeUpdate(EdgeUpdateModule):
     """
@@ -26,12 +27,12 @@ class SchNetEdgeUpdate(EdgeUpdateModule):
         super(SchNetEdgeUpdate, self).__init__()
 
         self.mlp = Sequential(
-                              Linear(2 * n_atom_basis, n_atom_basis), 
-                              ReLU(), # softplus in the original paper 
-                              Linear(n_atom_basis, n_atom_basis),
-                              ReLU(), # softplus in the original paper
-                              Linear(n_atom_basis, 1)
-                              )
+            Linear(2 * n_atom_basis, n_atom_basis), 
+            ReLU(), # softplus in the original paper 
+            Linear(n_atom_basis, n_atom_basis),
+            ReLU(), # softplus in the original paper
+            Linear(n_atom_basis, 1)
+        )
 
     def aggregate(self, message, neighborlist):
         aggregated_edge_feature = torch.cat((message[neighborlist[:,0]], message[neighborlist[:,1]]), 1)
@@ -171,27 +172,32 @@ class NodeMultiTaskReadOut(nn.Module):
     """Stack Multi Task outputs
 
         example multitaskdict:
-        multitaskdict = {
-                        "myenergy0":
-                                    [
-                                        {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
-                                        {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
-                                    ],
 
-                        "myenergy1":
-                                    [
-                                        {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
-                                        {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
-                                    ],
-                        "Muliken charges": 
-                                    [
-                                        {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
-                                        {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
-                                    ]
-                        }
+        multitaskdict = {
+            'myenergy0': [
+                            {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                            {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+            ],
+            'myenergy1': [
+                            {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                            {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+            ],
+            'Muliken charges': [
+                            {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                            {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+            ]
+        }
+
+        example post_readout:
+
+        def post_readout(predict_dict, readoutdict):
+            sorted_keys = sorted(list(readoutdict.keys()))
+            sorted_ens = torch.sort(torch.stack([predict_dict[key] for key in sorted_keys]))[0] 
+            sorted_dic = {key: val for key, val in zip(sorted_keys, sorted_ens) }
+            return sorted_dic
     """
 
-    def __init__(self, multitaskdict):
+    def __init__(self, multitaskdict, post_readout=None):
         """Summary
         
         Args:
@@ -199,12 +205,16 @@ class NodeMultiTaskReadOut(nn.Module):
         """
         super(NodeMultiTaskReadOut, self).__init__()
         # construct moduledict 
-        self.readout = construct_ModuleDict(multitaskdict)
+        self.readout = construct_module_dict(multitaskdict)
+        self.post_readout = post_readout
+        self.multitaskdict = multitaskdict
 
     def forward(self, r):
         predict_dict=dict()
         for key in self.readout:
             predict_dict[key] = self.readout[key](r)
+        if self.post_readout is not None:
+            predict_dict = self.post_readout(predict_dict, self.multitaskdict)
 
         return predict_dict 
 
@@ -251,7 +261,7 @@ class GraphDis(GeometricOperations):
         """
         device = frame.device
 
-        n_atoms = frame.shape[1]
+        n_atoms = frame.shape[0]
         frame = frame.view(-1, n_atoms, 1, 3)
         dis_mat = frame.expand(-1, n_atoms, n_atoms, 3) \
             - frame.expand(-1, n_atoms, n_atoms, 3).transpose(1, 2)
@@ -291,9 +301,10 @@ class GraphDis(GeometricOperations):
         return dis_mat, A.squeeze(3)
 
     def forward(self, xyz):
-        e, A = self.get_bond_vector_matrix(frame=xyz)
+        frame = xyz
+        e, A = self.get_bond_vector_matrix(frame=frame)
 
-        n_atoms = frame.shape[1]
+        n_atoms = frame.shape[0]
 
         #  use only upper triangular to generative undirected adjacency matrix 
         A = A * torch.ones(n_atoms, n_atoms).triu()[None, :, :].to(A.device)
@@ -317,6 +328,8 @@ class BondEnergyModule(nn.Module):
         super().__init__()
         
     def forward(self, xyz, bond_adj, bond_len, bond_par):
+
+
         e = (
             xyz[bond_adj[:, 0]] - xyz[bond_adj[:, 1]]
         ).pow(2).sum(1).sqrt()[:, None]
@@ -325,7 +338,7 @@ class BondEnergyModule(nn.Module):
         energy = 0.5 * scatter_add(src=ebond, index=bond_adj[:, 0], dim=0, dim_size=xyz.shape[0])
         energy += 0.5 * scatter_add(src=ebond, index=bond_adj[:, 1], dim=0, dim_size=xyz.shape[0])
  
-        return ebond
+        return energy
 
 # Test 
 
