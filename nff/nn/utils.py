@@ -37,6 +37,7 @@ def construct_sequential(layers):
             for i, layer in enumerate(layers)
     ))
 
+
 def construct_module_dict(moduledict):
     """construct moduledict from a dictionary of layers
     
@@ -50,3 +51,25 @@ def construct_module_dict(moduledict):
     for key in moduledict:
         models[key] = construct_sequential(moduledict[key])
     return models
+
+
+def get_default_readout(n_atom_basis):
+    """Default setting for readout layers. Predicts only the energy of the system.
+
+    Args:
+        n_atom_basis (int): number of atomic basis. Necessary to match the dimensions of
+            the linear layer.
+
+    Returns:
+        DEFAULT_READOUT (dict)
+    """
+
+    DEFAULT_READOUT = {
+        'energy': [
+            {'name': 'linear', 'param' : { 'in_features': n_atom_basis, 'out_features': int(n_atom_basis / 2)}},
+            {'name': 'shifted_softplus', 'param': {}},
+            {'name': 'linear', 'param' : { 'in_features': int(n_atom_basis / 2), 'out_features': 1}}
+        ]
+    }
+
+    return DEFAULT_READOUT

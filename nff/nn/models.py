@@ -7,14 +7,8 @@ from nff.nn.layers import Dense, GaussianSmearing
 from nff.nn.modules import GraphDis, SchNetConv, BondEnergyModule, SchNetEdgeUpdate, NodeMultiTaskReadOut
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphop import batch_and_sum, get_atoms_inside_cell
+from nff.nn.utils import get_default_readout
 
-DEFAULT_READOUT = {
-    'energy': [
-        {'name': 'linear', 'param' : { 'in_features': n_atom_basis, 'out_features': int(n_atom_basis / 2)}},
-        {'name': 'shifted_softplus', 'param': {}},
-        {'name': 'linear', 'param' : { 'in_features': int(n_atom_basis / 2), 'out_features': 1}}
-    ]
-}
 
 class SchNet(nn.Module):
 
@@ -54,7 +48,7 @@ class SchNet(nn.Module):
         box_size = modelparams.get('box_size', None)
 
         # default predict var
-        readoutdict = modelparams.get('readoutdict', DEFAULT_READOUT)
+        readoutdict = modelparams.get('readoutdict', get_default_readout(n_atom_basis))
         post_readout =  modelparams.get('post_readout', None)
 
         self.graph_dis = GraphDis(Fr=1,
