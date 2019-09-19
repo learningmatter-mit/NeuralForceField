@@ -45,7 +45,8 @@ class Metric:
         """Aggregate metric over all previously added batches."""
         return self.loss / self.n_entries
 
-    def loss_fn(self, y, yp):
+    @staticmethod
+    def loss_fn(y, yp):
         """Calculates loss function for y and yp"""
         raise NotImplementedError
 
@@ -72,7 +73,8 @@ class MeanSquaredError(Metric):
             name=name,
         )
 
-    def loss_fn(self, y, yp):
+    @staticmethod
+    def loss_fn(y, yp):
         diff = y - yp.view(y.shape)
         return torch.sum(diff.view(-1) ** 2).detach().cpu().data.numpy()
 
@@ -125,7 +127,8 @@ class MeanAbsoluteError(Metric):
             name=name,
         )
 
-    def loss_fn(self, y, yp):
+    @staticmethod
+    def loss_fn(y, yp):
         # pdb.set_trace()
         diff = y - yp.view(y.shape)
         return torch.sum(torch.abs(diff).view(-1)).detach().cpu().data.numpy()
