@@ -56,27 +56,27 @@ class SchNetConv(MessagePassingModule):
                 n_gaussians,
                 cutoff,
                 trainable_gauss,
-                mean_pooling=False
     ):
         super(SchNetConv, self).__init__()
-        self.moduledict = ModuleDict({'message_edge_filter': Sequential(GaussianSmearing(start=0.0,
-                                                                             stop=cutoff,
-                                                                             n_gaussians=n_gaussians,
-                                                                             trainable=trainable_gauss),
-                                                          Dense(in_features=n_gaussians,
-                                                               out_features=n_gaussians),
-                                                          shifted_softplus(),
-                                                          Dense(in_features=n_gaussians,
-                                                               out_features=n_filters)),
-                        'message_node_filter': Dense(in_features=n_atom_basis,
-                                                     out_features=n_filters),
-                        'update_function': Sequential(Dense(in_features=n_filters,
-                                                             out_features=n_atom_basis),
-                                                      shifted_softplus(), 
-                                                      Dense(in_features=n_atom_basis,
-                                                             out_features=n_atom_basis))
-                        })
-
+        self.moduledict = ModuleDict({
+            'message_edge_filter': Sequential(
+                GaussianSmearing(
+                    start=0.0,
+                    stop=cutoff,
+                    n_gaussians=n_gaussians,
+                    trainable=trainable_gauss
+                ),
+                Dense(in_features=n_gaussians, out_features=n_gaussians),
+                shifted_softplus(),
+                Dense(in_features=n_gaussians, out_features=n_filters)
+            ),
+            'message_node_filter': Dense(in_features=n_atom_basis, out_features=n_filters),
+            'update_function': Sequential(
+                Dense(in_features=n_filters, out_features=n_atom_basis),
+                shifted_softplus(), 
+                Dense(in_features=n_atom_basis, out_features=n_atom_basis)
+            )
+        })
 
     def message(self, r, e, a):
         """The message function for SchNet convoltuions 
@@ -376,12 +376,13 @@ class TestModules(unittest.TestCase):
         e = torch.rand(5, n_atom_basis)
         r_in = torch.rand(num_nodes, n_atom_basis)
 
-        model = SchNetConv(n_atom_basis,
-                                n_filters,
-                                n_gaussians,
-                                cutoff=2.0,
-                                trainable_gauss=False,
-                                mean_pooling=False)
+        model = SchNetConv(
+            n_atom_basis,
+            n_filters,
+            n_gaussians,
+            cutoff=2.0,
+            trainable_gauss=False,
+        )
 
         r_out = model(r_in, e, a)
         self.assertEqual(r_in.shape, r_out.shape, "The node feature dimensions should be same for the SchNet Convolution case")

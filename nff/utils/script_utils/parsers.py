@@ -125,15 +125,6 @@ def add_subparsers(cmd_parser, defaults={}):
 
     # model-specific parsers
     model_parser = argparse.ArgumentParser(add_help=False)
-    model_parser.add_argument(
-        "--aggregation_mode",
-        type=str,
-        default="sum"
-        if "aggregation_mode" not in defaults.keys()
-        else defaults["aggregation_mode"],
-        choices=["sum", "avg"],
-        help=" (default: %(default)s)",
-    )
 
     #######  SchNet  #######
     schnet_parser = argparse.ArgumentParser(add_help=False, parents=[model_parser])

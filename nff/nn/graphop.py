@@ -21,8 +21,6 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
         dict: batched and pooled results 
     """
 
-    # remove this after @dskoda fix it 
-
     results = dict()
 
     for key, val in dict_input.items():
@@ -35,11 +33,10 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
 
             results[key] = torch.stack(batched_prop)
 
-        if key + "_grad" in predict_keys: # indicates that this key requires a grad computation
-
+        # indicates that this key requires a grad computation
+        if key + "_grad" in predict_keys:
             grad = compute_grad(inputs=xyz, output=results[key])
             results[key + "_grad"] = grad
-
 
     return results
 
