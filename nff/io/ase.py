@@ -3,11 +3,85 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 
+from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
 
 from nff.utils.scatter import compute_grad
 import nff.utils.constants as const
 from nff.train.builders import load_model
+
+
+DEFAULT_CUTOFF = 5.0
+
+
+class AtomsBatch(Atoms):
+    """Class to deal with the Neural Force Field and batch several
+        Atoms objects.
+    """
+
+    def __init__(
+        self,
+        nbr_list=None,
+        cutoff=DEFAULT_CUTOFF,
+        pbc=None
+    ):
+        super().__init__()
+        self.nbr_list = nbr_list
+        self.pbc = pbc
+
+    def get_batch(self):
+        """Uses the properties of Atoms to create a batch
+            to be sent to the model.
+
+        Returns:
+            batch (dict): batch with the keys 'nxyz',
+                'num_atoms', 'nbr_list' and 'pbc'
+        """
+        assert self.nbr_list is not None, \
+                'please generate a neighbor list before \
+                creating a batch'
+        assert self.pbc is not None, \
+                'please generate periodic boundary conditions \
+                before creating a batch'
+
+        nxyz = np.concatenate([
+            self.get_atomic_numbers().reshape(-1, 1),
+            self.get_positions().reshape(-1, 3)
+        ], axis=1)
+
+        batch = {
+            'nxyz': torch.Tensor(nxyz),
+            'num_atoms': torch.LongTensor([len(self)]),
+            'nbr_list': self.nbr_list,
+            'pbc': self.pbc
+        }
+        return batch
+
+    def get_nbr_list(self, cutoff=DEFAULT_CUTOFF):
+        """Gets the neighbor list for the given Atoms object
+            including periodic boundary conditions.
+        
+        Args:
+            cutoff (float): maximum cutoff for which atoms are
+                considered interacting.
+
+        Returns:
+            nbr_list (torch.Tensor)
+        """
+        raise NotImplementedError
+
+    def get_pbc(self):
+        """Gets the pbc list for the given Atoms object
+            including periodic boundary conditions.
+        
+        Args:
+            cutoff (float): maximum cutoff for which atoms are
+                considered interacting.
+
+        Returns:
+            pbc (torch.Tensor)
+        """
+        raise NotImplementedError
 
 
 class NeuralFF(Calculator):
@@ -117,3 +191,4 @@ class NeuralFF(Calculator):
     ):
         model = load_model(model_path)
         return cls(model, bond_adj, bond_len, device, **kwargs)
+
