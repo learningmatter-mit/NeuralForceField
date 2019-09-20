@@ -40,12 +40,12 @@ def convert_units(props, conversion_dict):
     """
 
     props = props.copy()
-    for prop_key, prop_val in props.items():
+    for prop_key in props.keys():
         for conv_key, conv_const in conversion_dict.items():
             if conv_key in prop_key:
                 props[prop_key] = [
                     x * conv_const
-                    for x in prop_val
+                    for x in props[prop_key]
                 ]
 
     return props
