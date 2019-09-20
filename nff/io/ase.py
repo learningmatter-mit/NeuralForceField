@@ -4,6 +4,7 @@ import torch
 from torch.autograd import Variable
 
 from ase import Atoms
+from ase.neighborlist import NeighborList
 from ase.calculators.calculator import Calculator, all_changes
 
 from nff.utils.scatter import compute_grad
@@ -21,13 +22,36 @@ class AtomsBatch(Atoms):
 
     def __init__(
         self,
+        *args,
         nbr_list=None,
+        pbc_index=None,
         cutoff=DEFAULT_CUTOFF,
-        pbc=None
+        **kwargs
     ):
-        super().__init__()
+        super().__init__(*args, **kwargs)
+        self.ase_nl = NeighborList(
+            [cutoff / 2] * len(self),
+            bothways=True,
+            self_interaction=False
+        )
         self.nbr_list = nbr_list
-        self.pbc = pbc
+        self.pbc_index = pbc_index
+        self.nxyz = self.get_nxyz()
+
+    def get_nxyz(self):
+        """Gets the atomic number and the positions of the atoms
+            inside the unit cell of the system.
+
+        Returns:
+            nxyz (np.array): atomic numbers + cartesian coordinates
+                of the atoms.
+        """
+        nxyz = np.concatenate([
+            self.get_atomic_numbers().reshape(-1, 1),
+            self.get_positions().reshape(-1, 3)
+        ], axis=1)
+
+        return nxyz
 
     def get_batch(self):
         """Uses the properties of Atoms to create a batch
@@ -37,51 +61,66 @@ class AtomsBatch(Atoms):
             batch (dict): batch with the keys 'nxyz',
                 'num_atoms', 'nbr_list' and 'pbc'
         """
-        assert self.nbr_list is not None, \
-                'please generate a neighbor list before \
-                creating a batch'
-        assert self.pbc is not None, \
-                'please generate periodic boundary conditions \
-                before creating a batch'
-
-        nxyz = np.concatenate([
-            self.get_atomic_numbers().reshape(-1, 1),
-            self.get_positions().reshape(-1, 3)
-        ], axis=1)
+        if self.nbr_list is None or self.pbc_index is None:
+            self.update_nbr_list()
 
         batch = {
             'nxyz': torch.Tensor(nxyz),
             'num_atoms': torch.LongTensor([len(self)]),
             'nbr_list': self.nbr_list,
-            'pbc': self.pbc
+            'pbc': self.pbc_index
         }
         return batch
 
-    def get_nbr_list(self, cutoff=DEFAULT_CUTOFF):
-        """Gets the neighbor list for the given Atoms object
-            including periodic boundary conditions.
+    def update_nbr_list(self):
+        """Update neighbor list and the periodic reindexing
+            for the given Atoms object.
         
         Args:
             cutoff (float): maximum cutoff for which atoms are
                 considered interacting.
 
         Returns:
-            nbr_list (torch.Tensor)
+            nbr_list (torch.LongTensor)
+            pbc_index (torch.LongTensor)
         """
-        raise NotImplementedError
 
-    def get_pbc(self):
-        """Gets the pbc list for the given Atoms object
-            including periodic boundary conditions.
+        self.ase_nl.update(self)
+        indices = np.concatenate(self.ase_nl.nl.neighbors, axis=0).reshape(-1, 1)
+        offsets = np.concatenate(self.ase_nl.nl.displacements, axis=0)
+        neighbors = np.concatenate([indices, offsets], axis=1) 
+        atoms_idx = np.unique(neighbors, axis=0)
+
+        pair_left = np.concatenate([
+            [atom] * len(nbrs)
+            for atom, nbrs in enumerate(self.ase_nl.nl.neighbors)      
+        ], axis=0)
+
+        pair_right = np.where(
+            np.bitwise_and.reduce(
+                neighbors[:, None] == atoms_idx[None, :],
+                axis=-1
+            )
+        )[1]
+
+        nbr_list = np.stack([pair_left, pair_right], axis=1)
+        pbc_index = atoms_idx[:, 0]
+        xyz = self.get_positions()[atoms_idx[:, 0]] + \
+                np.dot(atoms_idx[:, 1:], self.get_cell())
+        nxyz = np.concatenate([
+            self.get_atomic_numbers()[atoms_idx[:, 0]].reshape(-1, 1),
+            xyz
+        ], axis=1)
         
-        Args:
-            cutoff (float): maximum cutoff for which atoms are
-                considered interacting.
+        nbr_list = torch.LongTensor(nbr_list)
+        pbc_index = torch.LongTensor(pbc_index)
+        nxyz = torch.Tensor(nxyz)
 
-        Returns:
-            pbc (torch.Tensor)
-        """
-        raise NotImplementedError
+        self.nbr_list = nbr_list
+        self.pbc_index = pbc_index
+        self.nxyz = nxyz
+
+        return 
 
 
 class NeuralFF(Calculator):
