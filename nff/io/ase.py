@@ -4,7 +4,7 @@ import torch
 from torch.autograd import Variable
 
 from ase import Atoms
-from ase.neighborlist import NeighborList
+from ase.neighborlist import neighbor_list
 from ase.calculators.calculator import Calculator, all_changes
 
 from nff.utils.scatter import compute_grad
@@ -29,14 +29,10 @@ class AtomsBatch(Atoms):
         **kwargs
     ):
         super().__init__(*args, **kwargs)
-        self.ase_nl = NeighborList(
-            [cutoff / 2] * len(self),
-            bothways=True,
-            self_interaction=False
-        )
         self.nbr_list = nbr_list
         self.pbc_index = pbc_index
         self.nxyz = self.get_nxyz()
+        self.cutoff = cutoff
 
     def get_nxyz(self):
         """Gets the atomic number and the positions of the atoms
@@ -85,26 +81,7 @@ class AtomsBatch(Atoms):
             pbc_index (torch.LongTensor)
         """
 
-        self.ase_nl.update(self)
-        indices = np.concatenate(self.ase_nl.nl.neighbors, axis=0).reshape(-1, 1)
-        offsets = np.concatenate(self.ase_nl.nl.displacements, axis=0)
-        neighbors = np.concatenate([indices, offsets], axis=1) 
-        atoms_idx = np.unique(neighbors, axis=0)
-
-        pair_left = np.concatenate([
-            [atom] * len(nbrs)
-            for atom, nbrs in enumerate(self.ase_nl.nl.neighbors)      
-        ], axis=0)
-
-        pair_right = np.where(
-            np.bitwise_and.reduce(
-                neighbors[:, None] == atoms_idx[None, :],
-                axis=-1
-            )
-        )[1]
-
-        nbr_list = np.stack([pair_left, pair_right], axis=1)
-        pbc_index = atoms_idx[:, 0]
+        edge_from, edge_to, distances = neighbor_list('ijd', self, self.cutoff) 
         xyz = self.get_positions()[atoms_idx[:, 0]] + \
                 np.dot(atoms_idx[:, 1:], self.get_cell())
         nxyz = np.concatenate([
