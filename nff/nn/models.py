@@ -91,8 +91,6 @@ class SchNet(nn.Module):
 
         # calculating the distances
         e = (xyz[a[:, 0]] - xyz[a[:, 1]]).pow(2).sum(1).sqrt()[:, None]
-        
-        a = a.to(self.device)
 
         # ensuring image atoms have the same vectors of their corresponding
         # atom inside the unit cell
