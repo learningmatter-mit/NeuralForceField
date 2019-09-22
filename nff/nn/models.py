@@ -75,9 +75,11 @@ class SchNet(nn.Module):
         """
         r = batch['nxyz'][:, 0]
         xyz = batch['nxyz'][:, 1:4]
-        N = batch['num_atoms']
+        N = batch['num_atoms'].tolist()
         a = batch['nbr_list']
-        offsets = batch['offsets']
+
+        # offsets take care of periodic boundary conditions
+        offsets = batch.get('offsets', torch.zeros(a.shape[0], 3).to(a.device))
 
         xyz.requires_grad = True
 
