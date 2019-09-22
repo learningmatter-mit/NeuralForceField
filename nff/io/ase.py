@@ -135,6 +135,12 @@ class AtomsBatch(Atoms):
     def batch_properties():
         pass 
 
+    def get_kinetic_energy(self):
+        pass
+    
+    def get_virial(self):
+        pass
+
 
 class NeuralFF(Calculator):
     """ASE calculator using a pretrained NeuralFF model"""
@@ -187,12 +193,6 @@ class NeuralFF(Calculator):
             'energy': energy.reshape(-1),
             'forces': -grad.reshape(-1, 3)
         }
-
-    def get_kinetic_energy(self):
-        pass
-    
-    def get_virial(self):
-        pass
 
     @classmethod
     def from_file(
