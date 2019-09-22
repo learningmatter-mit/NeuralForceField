@@ -80,7 +80,7 @@ class AtomsBatch(Atoms):
         #     'pbc': self.pbc_index
         # }
 
-        self.props['nxyz'] = self.get_nxyz
+        self.props['nxyz'] = torch.Tensor(self.get_nxyz())
 
         return self.props
 
@@ -135,10 +135,10 @@ class AtomsBatch(Atoms):
     def batch_properties():
         pass 
 
-    def get_kinetic_energy(self):
+    def batch_kinetic_energy(self):
         pass
     
-    def get_virial(self):
+    def batch_virial(self):
         pass
 
 
