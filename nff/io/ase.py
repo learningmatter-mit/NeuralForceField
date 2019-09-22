@@ -7,9 +7,8 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 from ase.calculators.calculator import Calculator, all_changes
 
-from nff.utils.scatter import compute_grad
 import nff.utils.constants as const
-from nff.train.builders import load_model
+from nff.train import load_model, evaluate
 
 
 DEFAULT_CUTOFF = 5.0
@@ -61,7 +60,7 @@ class AtomsBatch(Atoms):
             self.update_nbr_list()
 
         batch = {
-            'nxyz': torch.Tensor(nxyz),
+            'nxyz': torch.Tensor(self.nxyz),
             'num_atoms': torch.LongTensor([len(self)]),
             'nbr_list': self.nbr_list,
             'offsets': self.offsets
@@ -105,8 +104,6 @@ class NeuralFF(Calculator):
     def __init__(
         self,
         model,
-        bond_adj=None,
-        bond_len=None,
         device='cuda',
         **kwargs
     ):
@@ -114,18 +111,11 @@ class NeuralFF(Calculator):
 
         Args:
             model (one of nff.nn.models)
-            device (str)
-            bond_adj (? or None)
-            bond_len (? or None)
+            device (str): device on which the calculations will be performed 
         """
 
         Calculator.__init__(self, **kwargs)
         self.model = model
-        self.bond_adj = bond_adj
-        self.bond_len = bond_len
-        self.device = device
-
-    def to(self, device):
         self.device = device
 
     def calculate(
@@ -134,17 +124,21 @@ class NeuralFF(Calculator):
         properties=['energy'],
         system_changes=all_changes,
     ):
+        """Calculates the desired properties for the given AtomsBatch.
+
+        Args:
+            atoms (AtomsBatch): custom Atoms subclass that contains implementation
+                of neighbor lists, batching and so on. Avoids the use of the Dataset
+                to calculate using the models created.
+            properties (list of str): 'energy', 'forces' or both
+            system_changes (default from ase)
+        """
         
         Calculator.calculate(self, atoms, properties, system_changes)
 
-        # number of atoms 
-        num_atoms = atoms.get_atomic_numbers().shape[0]
+        batch = atoms.get_batch()
 
-        # run model 
-        atomic_numbers = atoms.get_atomic_numbers()#.reshape(1, -1, 1)
-        xyz = atoms.get_positions()#.reshape(-1, num_atoms, 3)
-        bond_adj = self.bond_adj
-        bond_len = self.bond_len
+        raise NotImplementedError
 
         # to compute the kinetic energies to this...
         #mass = atoms.get_masses()
@@ -159,31 +153,10 @@ class NeuralFF(Calculator):
 
         # rebtach based on the number of atoms
 
-        atomic_numbers = torch.LongTensor(atomic_numbers).to(self.device).reshape(-1, num_atoms)
 
-        xyz = torch.Tensor(xyz).to(self.device).reshape(-1, num_atoms, 3)
-        self.model.to(self.device)
-
-        xyz.requires_grad = True
-
-        energy = self.model(
-            r=atomic_numbers,
-            xyz=xyz,
-            bond_adj=bond_adj,
-            bond_len=bond_len
-        )
-
-        forces = -compute_grad(inputs=xyz, output=energy)
-
-        kin_energy = self.get_kinetic_energy()
-
-        # change energy and forces back 
-        energy = energy.reshape(-1)
-        forces = forces.reshape(-1, 3)
-        
         # change energy and force to numpy array 
-        energy = energy.detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
-        forces = forces.detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+        #energy = energy.detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+        #forces = forces.detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
         
         self.results = {
             'energy': energy.reshape(-1),
