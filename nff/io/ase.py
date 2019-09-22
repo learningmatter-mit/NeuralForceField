@@ -72,13 +72,17 @@ class AtomsBatch(Atoms):
         if self.nbr_list is None or self.pbc_index is None:
             self.update_nbr_list()
 
-        batch = {
-            'nxyz': torch.Tensor(nxyz),
-            'num_atoms': torch.LongTensor([len(self)]),
-            'nbr_list': self.nbr_list,
-            'pbc': self.pbc_index
-        }
-        return batch
+        # wwj: what if my model has other inputs? 
+        # batch = {
+        #     'nxyz': torch.Tensor(self.nxyz),
+        #     'num_atoms': torch.LongTensor([len(self)]),
+        #     'nbr_list': self.nbr_list,
+        #     'pbc': self.pbc_index
+        # }
+
+        self.props['nxyz'] = self.get_nxyz
+
+        return self.props
 
     def update_nbr_list(self, cutoff):
         """Update neighbor list and the periodic reindexing
@@ -144,7 +148,7 @@ class NeuralFF(Calculator):
         device='cpu',
         **kwargs
     ):
-        """Creates a NeuralFF calculator.
+        """Creates a NeuralFF calculator.nff/io/ase.py
         
         Args:
             model (TYPE): Description
@@ -171,9 +175,7 @@ class NeuralFF(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # run model 
-        z = torch.Tensor(atoms.get_atomic_numbers()).to(self.device) 
-        xyz = torch.Tensor(atoms.get_positions()).to(self.device)#.reshape(-1, num_atoms, 3)
-        self.props['nxyz'] = torch.cat((z[:, None], xyz), dim=1)
+        batch = atoms.get_batch()
 
         prediction = self.model(self.props)
         
