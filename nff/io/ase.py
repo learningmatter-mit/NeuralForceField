@@ -1,7 +1,6 @@
 import os 
 import numpy as np
 import torch
-from torch.autograd import Variable
 
 from ase import Atoms
 from ase.neighborlist import NeighborList
@@ -23,19 +22,28 @@ class AtomsBatch(Atoms):
     def __init__(
         self,
         *args,
-        nbr_list=None,
-        pbc_index=None,
+        props={},
         cutoff=DEFAULT_CUTOFF,
         **kwargs
     ):
+        """
+        
+        Args:
+            *args: Description
+            nbr_list (None, optional): Description
+            pbc_index (None, optional): Description
+            cutoff (TYPE, optional): Description
+            **kwargs: Description
+        """
         super().__init__(*args, **kwargs)
         self.ase_nl = NeighborList(
             [cutoff / 2] * len(self),
             bothways=True,
             self_interaction=False
         )
-        self.nbr_list = nbr_list
-        self.pbc_index = pbc_index
+        self.nbr_list = props.get('nbr_list', None)
+        self.pbc_index = props.get('pbc', None)
+        self.props = props
         self.nxyz = self.get_nxyz()
 
     def get_nxyz(self):
@@ -72,7 +80,7 @@ class AtomsBatch(Atoms):
         }
         return batch
 
-    def update_nbr_list(self):
+    def update_nbr_list(self, cutoff):
         """Update neighbor list and the periodic reindexing
             for the given Atoms object.
         
@@ -120,7 +128,8 @@ class AtomsBatch(Atoms):
         self.pbc_index = pbc_index
         self.nxyz = nxyz
 
-        return 
+    def batch_properties():
+        pass 
 
 
 class NeuralFF(Calculator):
@@ -131,25 +140,22 @@ class NeuralFF(Calculator):
     def __init__(
         self,
         model,
-        bond_adj=None,
-        bond_len=None,
-        device='cuda',
+        props,
+        device='cpu',
         **kwargs
     ):
         """Creates a NeuralFF calculator.
-
+        
         Args:
+            model (TYPE): Description
+            device (str, optional): Description
             model (one of nff.nn.models)
-            device (str)
-            bond_adj (? or None)
-            bond_len (? or None)
         """
 
         Calculator.__init__(self, **kwargs)
         self.model = model
-        self.bond_adj = bond_adj
-        self.bond_len = bond_len
         self.device = device
+        self.props = props
 
     def to(self, device):
         self.device = device
@@ -158,76 +164,41 @@ class NeuralFF(Calculator):
         self,
         atoms=None,
         properties=['energy'],
+        device=0,
         system_changes=all_changes,
     ):
         
         Calculator.calculate(self, atoms, properties, system_changes)
 
-        # number of atoms 
-        num_atoms = atoms.get_atomic_numbers().shape[0]
-
         # run model 
-        atomic_numbers = atoms.get_atomic_numbers()#.reshape(1, -1, 1)
-        xyz = atoms.get_positions()#.reshape(-1, num_atoms, 3)
-        bond_adj = self.bond_adj
-        bond_len = self.bond_len
+        z = torch.Tensor(atoms.get_atomic_numbers()).to(self.device) 
+        xyz = torch.Tensor(atoms.get_positions()).to(self.device)#.reshape(-1, num_atoms, 3)
+        self.props['nxyz'] = torch.cat((z[:, None], xyz), dim=1)
 
-        # to compute the kinetic energies to this...
-        #mass = atoms.get_masses()
-        # vel = atoms.get_velocities()
-        # vel = torch.Tensor(vel)
-        # mass = torch.Tensor(mass)
-
-        # print(atoms.get_kinetic_energy())
-        # print(atoms.get_kinetic_energy().dtype)
-        # print( (0.5 * (vel * 1e-10 * fs * 1e15).pow(2).sum(1) * (mass * 1.66053904e-27) * 6.241509e+18).sum())
-        # print( (0.5 * (vel * 1e-10 * fs * 1e15).pow(2).sum(1) * (mass * 1.66053904e-27) * 6.241509e+18).sum().type())
-
-        # rebtach based on the number of atoms
-
-        atomic_numbers = torch.LongTensor(atomic_numbers).to(self.device).reshape(-1, num_atoms)
-
-        xyz = torch.Tensor(xyz).to(self.device).reshape(-1, num_atoms, 3)
-        self.model.to(self.device)
-
-        xyz.requires_grad = True
-
-        energy = self.model(
-            r=atomic_numbers,
-            xyz=xyz,
-            bond_adj=bond_adj,
-            bond_len=bond_len
-        )
-
-        forces = -compute_grad(inputs=xyz, output=energy)
-
-        kin_energy = self.get_kinetic_energy()
-
-        # change energy and forces back 
-        energy = energy.reshape(-1)
-        forces = forces.reshape(-1, 3)
+        prediction = self.model(self.props)
         
         # change energy and force to numpy array 
-        energy = energy.detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
-        forces = forces.detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+        energy = prediction['energy'].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+        grad = prediction['energy_grad'].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
         
         self.results = {
             'energy': energy.reshape(-1),
-            'forces': forces
+            'forces': -grad.reshape(-1, 3)
         }
 
     def get_kinetic_energy(self):
+        pass
+    
+    def get_virial(self):
         pass
 
     @classmethod
     def from_file(
         cls,
         model_path,
-        bond_adj=None,
-        bond_len=None,
         device='cuda',
         **kwargs
     ):
         model = load_model(model_path)
-        return cls(model, bond_adj, bond_len, device, **kwargs)
+        return cls(model, device, **kwargs)
 
