@@ -7,6 +7,7 @@ from ase import units
 from ase.md.md import MolecularDynamics
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
+from ase.io import Trajectory
 
 import nff.utils.constants as const
 from nff.md.utils import NeuralMDLogger, write_traj
@@ -27,7 +28,7 @@ class Dynamics:
     
     def __init__(self, 
                 atomsbatch,
-                models,
+                model,
                 mdparam=DEFAULTNVEPARAMS,
                 logparam=DEFAULTLOGPARAMS,
                 ):
@@ -68,6 +69,8 @@ class Dynamics:
     def run(self):
         
         self.integrator.run(self.mdparam['steps'])
+
+        self.traj.close()
         
     
     def save_as_xyz(self):
