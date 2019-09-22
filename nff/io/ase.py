@@ -24,13 +24,13 @@ class AtomsBatch(Atoms):
         self,
         *args,
         nbr_list=None,
-        pbc_index=None,
+        offsets=None,
         cutoff=DEFAULT_CUTOFF,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.nbr_list = nbr_list
-        self.pbc_index = pbc_index
+        self.offsets = offsets
         self.nxyz = self.get_nxyz()
         self.cutoff = cutoff
 
@@ -55,16 +55,16 @@ class AtomsBatch(Atoms):
 
         Returns:
             batch (dict): batch with the keys 'nxyz',
-                'num_atoms', 'nbr_list' and 'pbc'
+                'num_atoms', 'nbr_list' and 'offsets'
         """
-        if self.nbr_list is None or self.pbc_index is None:
+        if self.nbr_list is None or self.offsets is None:
             self.update_nbr_list()
 
         batch = {
             'nxyz': torch.Tensor(nxyz),
             'num_atoms': torch.LongTensor([len(self)]),
             'nbr_list': self.nbr_list,
-            'pbc': self.pbc_index
+            'offsets': self.offsets
         }
         return batch
 
@@ -78,26 +78,23 @@ class AtomsBatch(Atoms):
 
         Returns:
             nbr_list (torch.LongTensor)
-            pbc_index (torch.LongTensor)
+            offsets (torch.Tensor)
+            nxyz (torch.Tensor)
         """
 
-        edge_from, edge_to, distances = neighbor_list('ijd', self, self.cutoff) 
-        xyz = self.get_positions()[atoms_idx[:, 0]] + \
-                np.dot(atoms_idx[:, 1:], self.get_cell())
-        nxyz = np.concatenate([
-            self.get_atomic_numbers()[atoms_idx[:, 0]].reshape(-1, 1),
-            xyz
-        ], axis=1)
-        
-        nbr_list = torch.LongTensor(nbr_list)
-        pbc_index = torch.LongTensor(pbc_index)
+        edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
+        nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
+        offsets = torch.Tensor(offsets.dot(self.get_cell()))
+
+        xyz = self.get_positions()
+        nxyz = np.concatenate([self.get_atomic_numbers().reshape(-1, 1), xyz], axis=1)
         nxyz = torch.Tensor(nxyz)
 
         self.nbr_list = nbr_list
-        self.pbc_index = pbc_index
+        self.offsets = offsets
         self.nxyz = nxyz
 
-        return 
+        return nbr_list, offsets, nxyz
 
 
 class NeuralFF(Calculator):
