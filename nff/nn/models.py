@@ -89,21 +89,9 @@ class SchNet(nn.Module):
 
         xyz.requires_grad = True
 
-        # a is None means non-batched case
-        if a is None:
-            assert len(set(N)) == 1 # all the graphs should correspond to the same molecule
-            N_atom = N[0]
-            e, a = self.graph_dis(xyz=xyz.reshape(-1, N_atom, 3))
-
-            if pbc is None:
-                pbc = torch.LongTensor(range(r.shape[0]))
-            pbc = pbc.to(self.device)
-
-        # batched case
-        else:
-            # calculating the distances
-            e = (xyz[a[:, 0]] - xyz[a[:, 1]]).pow(2).sum(1).sqrt()[:, None]
-
+        # calculating the distances
+        e = (xyz[a[:, 0]] - xyz[a[:, 1]]).pow(2).sum(1).sqrt()[:, None]
+        
         a = a.to(self.device)
 
         # ensuring image atoms have the same vectors of their corresponding
