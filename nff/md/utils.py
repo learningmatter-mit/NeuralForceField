@@ -18,6 +18,8 @@ class NeuralMDLogger(MDLogger):
         super().__init__(*args, **kwargs)
         
         self.verbose = verbose
+        if verbose:
+            print(self.hdr)
         
     def __call__(self):
         epot = self.atoms.get_potential_energy()
@@ -39,14 +41,6 @@ class NeuralMDLogger(MDLogger):
 
         if self.verbose:
             print(self.fmt % dat)
-
-def xyz_to_atoms(atomic_number, xyz):
-    mass = [const.ATOMIC_MASS[item] for item in r]
-    atom = "C" * atomic_number.shape[0] # intialize Atom()
-    structure = Atoms(atom, positions=xyz, cell=[20.0, 20.0, 20.0], pbc=True)
-    structure.set_atomic_numbers(atomic_number)
-    structure.set_masses(mass)    
-    return structure
 
 
 def get_energy(atoms):
