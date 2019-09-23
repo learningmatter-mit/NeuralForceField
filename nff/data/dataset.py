@@ -30,11 +30,19 @@ class Dataset(TorchDataset):
                 props = {
                     'nxyz': [np.array([[1, 0, 0, 0], [1, 1.1, 0, 0]]), np.array([[1, 3, 0, 0], [1, 1.1, 5, 0]])],
                     'energy_0': [1, 1.2],
-                    'force_0': [np.array([[0, 0, 0], [0.1, 0.2, 0.3]]), np.array([[0, 0, 0], [0.1, 0.2, 0.3]])],
+                    'energy_0_grad': [np.array([[0, 0, 0], [0.1, 0.2, 0.3]]), np.array([[0, 0, 0], [0.1, 0.2, 0.3]])],
                     'energy_1': [1.5, 1.5],
-                    'force_0': [np.array([[0, 0, 1], [0.1, 0.5, 0.8]]), np.array([[0, 0, 1], [0.1, 0.5, 0.8]])],
+                    'energy_1_grad': [np.array([[0, 0, 1], [0.1, 0.5, 0.8]]), np.array([[0, 0, 1], [0.1, 0.5, 0.8]])],
                     'dipole_2': [3, None]
                 }
+
+            Periodic boundary conditions must be specified through the 'offset' key in props.
+                Once the neighborlist is created, distances between
+                atoms are computed by subtracting their xyz coordinates
+                and adding to the offset vector. This ensures images
+                of atoms outside of the unit cell have different
+                distances when compared to atoms inside of the unit cell.
+                This also bypasses the need for a reindexing.
 
         units (str): units of the energies, forces etc.
 
@@ -102,9 +110,6 @@ class Dataset(TorchDataset):
                     'length of {} is not compatible with {} geometries'.format(key, n_geoms)
                 props[key] = self._to_array(val)
 
-        if 'pbc' not in props:
-            props['pbc'] = [torch.LongTensor(range(x)) for x in n_atoms]
-
         return props
 
     def _to_array(self, x):
@@ -120,6 +125,7 @@ class Dataset(TorchDataset):
 
     def generate_neighbor_list(self, cutoff):
         """Generates a neighbor list for each one of the atoms in the dataset.
+            By default, does not consider periodic boundary conditions.
 
         Args:
             cutoff (float): distance up to which atoms are considered bonded.
@@ -128,6 +134,12 @@ class Dataset(TorchDataset):
             get_neighbor_list(nxyz[:, 1:4], cutoff)
             for nxyz in self.props['nxyz']
         ]
+
+        self.props['offsets'] = [
+            torch.zeros(nbr_list.shape[0], 3)
+            for nbr_list in self.props['nbr_list']
+        ]
+
         return
 
     def copy(self):

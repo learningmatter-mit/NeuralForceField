@@ -48,5 +48,11 @@ def test_AtomsBatch():
     assert nx.is_isomorphic(G1, G2)
 
 
+def test_get_batch():
+    ethanol = get_ethanol()
+    atoms_batch = AtomsBatch(ethanol, cutoff=5)
+    batch = atoms_batch.get_batch()
+
+    assert 'nxyz' in batch
 
 

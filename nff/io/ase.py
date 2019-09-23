@@ -1,15 +1,14 @@
 import os 
 import numpy as np
 import torch
-from torch.autograd import Variable
 
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 from ase.calculators.calculator import Calculator, all_changes
 
-from nff.utils.scatter import compute_grad
 import nff.utils.constants as const
-from nff.train.builders import load_model
+from nff.train import load_model, evaluate
+from nff.utils.cuda import batch_to
 
 
 DEFAULT_CUTOFF = 5.0
@@ -24,14 +23,23 @@ class AtomsBatch(Atoms):
         self,
         *args,
         nbr_list=None,
-        pbc_index=None,
+        offsets=None,
         cutoff=DEFAULT_CUTOFF,
         **kwargs
     ):
+        """
+        
+        Args:
+            *args: Description
+            nbr_list (None, optional): Description
+            pbc_index (None, optional): Description
+            cutoff (TYPE, optional): Description
+            **kwargs: Description
+        """
         super().__init__(*args, **kwargs)
+
         self.nbr_list = nbr_list
-        self.pbc_index = pbc_index
-        self.nxyz = self.get_nxyz()
+        self.offsets = offsets
         self.cutoff = cutoff
 
     def get_nxyz(self):
@@ -55,20 +63,20 @@ class AtomsBatch(Atoms):
 
         Returns:
             batch (dict): batch with the keys 'nxyz',
-                'num_atoms', 'nbr_list' and 'pbc'
+                'num_atoms', 'nbr_list' and 'offsets'
         """
-        if self.nbr_list is None or self.pbc_index is None:
-            self.update_nbr_list()
+        if self.nbr_list is None or self.offsets is None:
+            self.update_nbr_list(self.cutoff)
 
         batch = {
-            'nxyz': torch.Tensor(nxyz),
+            'nxyz': torch.Tensor(self.get_nxyz()),
             'num_atoms': torch.LongTensor([len(self)]),
             'nbr_list': self.nbr_list,
-            'pbc': self.pbc_index
+            'offsets': self.offsets
         }
         return batch
 
-    def update_nbr_list(self):
+    def update_nbr_list(self, cutoff):
         """Update neighbor list and the periodic reindexing
             for the given Atoms object.
         
@@ -78,26 +86,27 @@ class AtomsBatch(Atoms):
 
         Returns:
             nbr_list (torch.LongTensor)
-            pbc_index (torch.LongTensor)
+            offsets (torch.Tensor)
+            nxyz (torch.Tensor)
         """
 
-        edge_from, edge_to, distances = neighbor_list('ijd', self, self.cutoff) 
-        xyz = self.get_positions()[atoms_idx[:, 0]] + \
-                np.dot(atoms_idx[:, 1:], self.get_cell())
-        nxyz = np.concatenate([
-            self.get_atomic_numbers()[atoms_idx[:, 0]].reshape(-1, 1),
-            xyz
-        ], axis=1)
-        
-        nbr_list = torch.LongTensor(nbr_list)
-        pbc_index = torch.LongTensor(pbc_index)
-        nxyz = torch.Tensor(nxyz)
+        edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
+        nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
+        offsets = torch.Tensor(offsets.dot(self.get_cell()))
 
         self.nbr_list = nbr_list
-        self.pbc_index = pbc_index
-        self.nxyz = nxyz
+        self.offsets = offsets
 
-        return 
+        return nbr_list, offsets
+
+    def batch_properties():
+        pass 
+
+    def batch_kinetic_energy(self):
+        pass
+    
+    def batch_virial(self):
+        pass
 
 
 class NeuralFF(Calculator):
@@ -108,103 +117,72 @@ class NeuralFF(Calculator):
     def __init__(
         self,
         model,
-        bond_adj=None,
-        bond_len=None,
-        device='cuda',
+        device='cpu',
         **kwargs
     ):
-        """Creates a NeuralFF calculator.
-
+        """Creates a NeuralFF calculator.nff/io/ase.py
+        
         Args:
+            model (TYPE): Description
+            device (str, optional): Description
             model (one of nff.nn.models)
-            device (str)
-            bond_adj (? or None)
-            bond_len (? or None)
+            device (str): device on which the calculations will be performed 
         """
 
         Calculator.__init__(self, **kwargs)
         self.model = model
-        self.bond_adj = bond_adj
-        self.bond_len = bond_len
         self.device = device
+        self.to(device)
 
     def to(self, device):
         self.device = device
+        self.model.to(device)
 
     def calculate(
         self,
         atoms=None,
-        properties=['energy'],
+        properties=['energy', 'forces'],
         system_changes=all_changes,
     ):
+        """Calculates the desired properties for the given AtomsBatch.
+
+        Args:
+            atoms (AtomsBatch): custom Atoms subclass that contains implementation
+                of neighbor lists, batching and so on. Avoids the use of the Dataset
+                to calculate using the models created.
+            properties (list of str): 'energy', 'forces' or both
+            system_changes (default from ase)
+        """
         
         Calculator.calculate(self, atoms, properties, system_changes)
 
-        # number of atoms 
-        num_atoms = atoms.get_atomic_numbers().shape[0]
-
         # run model 
-        atomic_numbers = atoms.get_atomic_numbers()#.reshape(1, -1, 1)
-        xyz = atoms.get_positions()#.reshape(-1, num_atoms, 3)
-        bond_adj = self.bond_adj
-        bond_len = self.bond_len
+        atomsbatch = AtomsBatch(atoms)
+        batch = batch_to(atomsbatch.get_batch(), self.device)
+        
+        # add keys so that the readout function can calculate these properties
+        batch['energy'] = []
+        if 'forces' in properties:
+            batch['energy_grad'] = []
 
-        # to compute the kinetic energies to this...
-        #mass = atoms.get_masses()
-        # vel = atoms.get_velocities()
-        # vel = torch.Tensor(vel)
-        # mass = torch.Tensor(mass)
-
-        # print(atoms.get_kinetic_energy())
-        # print(atoms.get_kinetic_energy().dtype)
-        # print( (0.5 * (vel * 1e-10 * fs * 1e15).pow(2).sum(1) * (mass * 1.66053904e-27) * 6.241509e+18).sum())
-        # print( (0.5 * (vel * 1e-10 * fs * 1e15).pow(2).sum(1) * (mass * 1.66053904e-27) * 6.241509e+18).sum().type())
-
-        # rebtach based on the number of atoms
-
-        atomic_numbers = torch.LongTensor(atomic_numbers).to(self.device).reshape(-1, num_atoms)
-
-        xyz = torch.Tensor(xyz).to(self.device).reshape(-1, num_atoms, 3)
-        self.model.to(self.device)
-
-        xyz.requires_grad = True
-
-        energy = self.model(
-            r=atomic_numbers,
-            xyz=xyz,
-            bond_adj=bond_adj,
-            bond_len=bond_len
-        )
-
-        forces = -compute_grad(inputs=xyz, output=energy)
-
-        kin_energy = self.get_kinetic_energy()
-
-        # change energy and forces back 
-        energy = energy.reshape(-1)
-        forces = forces.reshape(-1, 3)
+        prediction = self.model(batch)
         
         # change energy and force to numpy array 
-        energy = energy.detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
-        forces = forces.detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+        energy = prediction['energy'].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+        energy_grad = prediction['energy_grad'].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
         
         self.results = {
             'energy': energy.reshape(-1),
-            'forces': forces
+            'forces': -energy_grad.reshape(-1, 3)
         }
-
-    def get_kinetic_energy(self):
-        pass
 
     @classmethod
     def from_file(
         cls,
         model_path,
-        bond_adj=None,
-        bond_len=None,
         device='cuda',
         **kwargs
     ):
         model = load_model(model_path)
-        return cls(model, bond_adj, bond_len, device, **kwargs)
+        return cls(model, device, **kwargs)
 

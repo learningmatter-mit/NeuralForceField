@@ -3,19 +3,44 @@ import numpy as np
 
 import ase
 from ase import Atoms, units
+from ase.md import MDLogger
 
 from nff.utils.scatter import compute_grad
 from nff.data.graphs import *
 import nff.utils.constants as const
 
 
-def xyz_to_atoms(atomic_number, xyz):
-    mass = [const.ATOMIC_MASS[item] for item in r]
-    atom = "C" * atomic_number.shape[0] # intialize Atom()
-    structure = Atoms(atom, positions=xyz, cell=[20.0, 20.0, 20.0], pbc=True)
-    structure.set_atomic_numbers(atomic_number)
-    structure.set_masses(mass)    
-    return structure
+class NeuralMDLogger(MDLogger):
+    def __init__(self,
+                *args,
+                 verbose=True,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        self.verbose = verbose
+        if verbose:
+            print(self.hdr)
+        
+    def __call__(self):
+        epot = self.atoms.get_potential_energy()
+        ekin = self.atoms.get_kinetic_energy()
+        temp = ekin / (1.5 * units.kB * self.natoms)
+        if self.peratom:
+            epot /= self.natoms
+            ekin /= self.natoms
+        if self.dyn is not None:
+            t = self.dyn.get_time() / (1000*units.fs)
+            dat = (t,)
+        else:
+            dat = ()
+        dat += (epot+ekin, epot, ekin, temp)
+        if self.stress:
+            dat += tuple(self.atoms.get_stress() / units.GPa)
+        self.logfile.write(self.fmt % dat)
+        self.logfile.flush()
+
+        if self.verbose:
+            print(self.fmt % dat)
 
 
 def get_energy(atoms):
