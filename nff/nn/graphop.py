@@ -54,7 +54,12 @@ def get_atoms_inside_cell(r, N, pbc):
     Returns:
         TYPE: Description
     """
-    N = N.tolist()
+    N = N.to(torch.long).tolist()
+
+    # make N a list if it is a int 
+    if type(N) == int:
+        N = [N]
+
     # selecting only the atoms inside the unit cell
     atoms_in_cell = [
         set(x.cpu().data.numpy())

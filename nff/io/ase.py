@@ -1,7 +1,6 @@
 import os 
 import numpy as np
 import torch
-from torch.autograd import Variable
 
 from ase import Atoms
 from ase.neighborlist import neighbor_list
@@ -27,7 +26,17 @@ class AtomsBatch(Atoms):
         cutoff=DEFAULT_CUTOFF,
         **kwargs
     ):
+        """
+        
+        Args:
+            *args: Description
+            nbr_list (None, optional): Description
+            pbc_index (None, optional): Description
+            cutoff (TYPE, optional): Description
+            **kwargs: Description
+        """
         super().__init__(*args, **kwargs)
+
         self.nbr_list = nbr_list
         self.offsets = offsets
         self.nxyz = self.get_nxyz()
@@ -67,7 +76,11 @@ class AtomsBatch(Atoms):
         }
         return batch
 
-    def update_nbr_list(self):
+        self.props['nxyz'] = torch.Tensor(self.get_nxyz())
+
+        return self.props
+
+    def update_nbr_list(self, cutoff):
         """Update neighbor list and the periodic reindexing
             for the given Atoms object.
         
@@ -95,6 +108,15 @@ class AtomsBatch(Atoms):
 
         return nbr_list, offsets, nxyz
 
+    def batch_properties():
+        pass 
+
+    def batch_kinetic_energy(self):
+        pass
+    
+    def batch_virial(self):
+        pass
+
 
 class NeuralFF(Calculator):
     """ASE calculator using a pretrained NeuralFF model"""
@@ -104,12 +126,15 @@ class NeuralFF(Calculator):
     def __init__(
         self,
         model,
-        device='cuda',
+        props,
+        device='cpu',
         **kwargs
     ):
-        """Creates a NeuralFF calculator.
-
+        """Creates a NeuralFF calculator.nff/io/ase.py
+        
         Args:
+            model (TYPE): Description
+            device (str, optional): Description
             model (one of nff.nn.models)
             device (str): device on which the calculations will be performed 
         """
@@ -117,11 +142,16 @@ class NeuralFF(Calculator):
         Calculator.__init__(self, **kwargs)
         self.model = model
         self.device = device
+        self.props = props
+
+    def to(self, device):
+        self.device = device
 
     def calculate(
         self,
         atoms=None,
         properties=['energy'],
+        device=0,
         system_changes=all_changes,
     ):
         """Calculates the desired properties for the given AtomsBatch.
@@ -136,45 +166,27 @@ class NeuralFF(Calculator):
         
         Calculator.calculate(self, atoms, properties, system_changes)
 
+        # run model 
         batch = atoms.get_batch()
 
-        raise NotImplementedError
-
-        # to compute the kinetic energies to this...
-        #mass = atoms.get_masses()
-        # vel = atoms.get_velocities()
-        # vel = torch.Tensor(vel)
-        # mass = torch.Tensor(mass)
-
-        # print(atoms.get_kinetic_energy())
-        # print(atoms.get_kinetic_energy().dtype)
-        # print( (0.5 * (vel * 1e-10 * fs * 1e15).pow(2).sum(1) * (mass * 1.66053904e-27) * 6.241509e+18).sum())
-        # print( (0.5 * (vel * 1e-10 * fs * 1e15).pow(2).sum(1) * (mass * 1.66053904e-27) * 6.241509e+18).sum().type())
-
-        # rebtach based on the number of atoms
-
-
+        prediction = self.model(self.props)
+        
         # change energy and force to numpy array 
-        #energy = energy.detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
-        #forces = forces.detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+        energy = prediction['energy'].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+        grad = prediction['energy_grad'].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
         
         self.results = {
             'energy': energy.reshape(-1),
-            'forces': forces
+            'forces': -grad.reshape(-1, 3)
         }
-
-    def get_kinetic_energy(self):
-        pass
 
     @classmethod
     def from_file(
         cls,
         model_path,
-        bond_adj=None,
-        bond_len=None,
         device='cuda',
         **kwargs
     ):
         model = load_model(model_path)
-        return cls(model, bond_adj, bond_len, device, **kwargs)
+        return cls(model, device, **kwargs)
 
