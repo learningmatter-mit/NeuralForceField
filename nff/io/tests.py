@@ -25,6 +25,7 @@ def get_ethanol():
 
     return ethanol
 
+
 def test_AtomsBatch():
     # Test for an ethanol molecule (no PBC)
     ethanol = get_ethanol()

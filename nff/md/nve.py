@@ -18,13 +18,11 @@ DEFAULTNVEPARAMS = {
     'time_step': 0.5, 
     'thermostat': VelocityVerlet,  # or Langevin or NPT or NVT or Thermodynamic Integration
     'nbr_list_update_freq': 50,
-    'steps': 100
-}
-
-DEFAULTLOGPARAMS = {
+    'steps': 100,
     'save_frequency': 20,
     'thermo_filename': './thermo.log', 
-    'traj_filename': './atom.traj'
+    'traj_filename': './atom.traj',
+    'skip': 50
 }
 
 
@@ -33,13 +31,12 @@ class Dynamics:
     def __init__(self, 
                 atomsbatch,
                 mdparam=DEFAULTNVEPARAMS,
-                logparam=DEFAULTLOGPARAMS,
                 ):
     
         # initialize the atoms batch system 
         self.atomsbatch = atomsbatch
         self.mdparam = mdparam
-        self.logparam = logparam
+        self.mdparam = mdparam
    
         # todo: structure optimization before starting
         
@@ -53,14 +50,14 @@ class Dynamics:
                                      self.mdparam['time_step'] * units.fs)
         
         # attach trajectory dump 
-        self.traj = Trajectory(self.logparam['traj_filename'], 'w', self.atomsbatch)
-        self.integrator.attach(self.traj.write, interval=logparam['save_frequency'])
+        self.traj = Trajectory(self.mdparam['traj_filename'], 'w', self.atomsbatch)
+        self.integrator.attach(self.traj.write, interval=mdparam['save_frequency'])
         
         # attach log file
         self.integrator.attach(NeuralMDLogger(self.integrator, 
                                         self.atomsbatch, 
-                                        self.logparam['thermo_filename'], 
-                                        mode="a"), interval=logparam['save_frequency'])
+                                        self.mdparam['thermo_filename'], 
+                                        mode='a'), interval=mdparam['save_frequency'])
     
     def run(self):
         
@@ -76,10 +73,13 @@ class Dynamics:
         TODO: subclass TrajectoryReader/TrajectoryReader to digest AtomsBatch instead of Atoms?
         TODO: other system variables in .xyz formats 
         '''
-        traj = Trajectory(self.logparam['traj_filename'], mode='r')
+        traj = Trajectory(self.mdparam['traj_filename'], mode='r')
         
         xyz = []
         
+        skip = self.mdparam['skip']
+        traj = traj[skip:] if len(traj) > skip else traj
+
         for snapshot in traj:
             frames = np.concatenate([
                 snapshot.get_atomic_numbers().reshape(-1, 1),

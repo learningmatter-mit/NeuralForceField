@@ -9,6 +9,7 @@ from ase.calculators.calculator import Calculator, all_changes
 import nff.utils.constants as const
 from nff.train import load_model, evaluate
 from nff.utils.cuda import batch_to
+from nff.data.sparse import sparsify_array
 
 
 DEFAULT_CUTOFF = 5.0
@@ -91,7 +92,7 @@ class AtomsBatch(Atoms):
 
         edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
         nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-        offsets = torch.Tensor(offsets.dot(self.get_cell()))
+        offsets = sparsify_array(offsets.dot(self.get_cell()))
 
         self.nbr_list = nbr_list
         self.offsets = offsets

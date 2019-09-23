@@ -8,6 +8,7 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset as TorchDataset
 
 from nff.data import get_neighbor_list
+from nff.data.sparse import sparsify_tensor
 import nff.utils.constants as const
 import copy
 
@@ -89,9 +90,9 @@ class Dataset(TorchDataset):
         n_geoms = len(props['nxyz'])
 
         if 'num_atoms' not in props.keys():
-            props['num_atoms'] = self._to_array(n_atoms)
+            props['num_atoms'] = torch.LongTensor(n_atoms)
         else:
-            props['num_atoms'] = self._to_array(props['num_atoms'])
+            props['num_atoms'] = torch.LongTensor(props['num_atoms'])
 
         for key, val in props.items():
             if val is None:
@@ -135,10 +136,7 @@ class Dataset(TorchDataset):
             for nxyz in self.props['nxyz']
         ]
 
-        self.props['offsets'] = [
-            torch.zeros(nbr_list.shape[0], 3)
-            for nbr_list in self.props['nbr_list']
-        ]
+        # self.props['offsets'] = [0] * len(self)
 
         return
 
