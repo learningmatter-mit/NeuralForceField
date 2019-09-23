@@ -96,7 +96,6 @@ class SchNet(nn.Module):
             r = r + dr
 
         r = self.atomwisereadout(r)
-        #import ipdb ; ipdb.set_trace()
         results = batch_and_sum(r, N, list(batch.keys()), xyz)
         
         return results 
