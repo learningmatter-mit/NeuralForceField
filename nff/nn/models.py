@@ -79,14 +79,12 @@ class SchNet(nn.Module):
         a = batch['nbr_list']
 
         # offsets take care of periodic boundary conditions
-        offsets = batch.get('offsets', torch.zeros(a.shape[0], 3).to(a.device))
+        offsets = batch.get('offsets', 0)
 
         xyz.requires_grad = True
 
         # calculating the distances
         e = (xyz[a[:, 0]] - xyz[a[:, 1]] + offsets).pow(2).sum(1).sqrt()[:, None]
-
-        a = a.to(self.device)
 
         # ensuring image atoms have the same vectors of their corresponding
         # atom inside the unit cell
