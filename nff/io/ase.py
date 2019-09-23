@@ -39,7 +39,6 @@ class AtomsBatch(Atoms):
 
         self.nbr_list = nbr_list
         self.offsets = offsets
-        self.nxyz = self.get_nxyz()
         self.cutoff = cutoff
 
     def get_nxyz(self):
@@ -69,16 +68,12 @@ class AtomsBatch(Atoms):
             self.update_nbr_list()
 
         batch = {
-            'nxyz': torch.Tensor(self.nxyz),
+            'nxyz': torch.Tensor(self.get_nxyz()),
             'num_atoms': torch.LongTensor([len(self)]),
             'nbr_list': self.nbr_list,
             'offsets': self.offsets
         }
         return batch
-
-        self.props['nxyz'] = torch.Tensor(self.get_nxyz())
-
-        return self.props
 
     def update_nbr_list(self, cutoff):
         """Update neighbor list and the periodic reindexing
@@ -98,15 +93,10 @@ class AtomsBatch(Atoms):
         nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         offsets = torch.Tensor(offsets.dot(self.get_cell()))
 
-        xyz = self.get_positions()
-        nxyz = np.concatenate([self.get_atomic_numbers().reshape(-1, 1), xyz], axis=1)
-        nxyz = torch.Tensor(nxyz)
-
         self.nbr_list = nbr_list
         self.offsets = offsets
-        self.nxyz = nxyz
 
-        return nbr_list, offsets, nxyz
+        return nbr_list, offsets
 
     def batch_properties():
         pass 
@@ -146,12 +136,12 @@ class NeuralFF(Calculator):
 
     def to(self, device):
         self.device = device
+        self.model.to(device)
 
     def calculate(
         self,
         atoms=None,
         properties=['energy'],
-        device=0,
         system_changes=all_changes,
     ):
         """Calculates the desired properties for the given AtomsBatch.
@@ -167,17 +157,16 @@ class NeuralFF(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # run model 
-        batch = atoms.get_batch()
-
-        prediction = self.model(self.props)
+        batch = batch_to(atoms.get_batch(), self.device)
+        prediction = self.model(batch)
         
         # change energy and force to numpy array 
         energy = prediction['energy'].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
-        grad = prediction['energy_grad'].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+        energy_grad = prediction['energy_grad'].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
         
         self.results = {
             'energy': energy.reshape(-1),
-            'forces': -grad.reshape(-1, 3)
+            'forces': -energy_grad.reshape(-1, 3)
         }
 
     @classmethod
