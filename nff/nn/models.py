@@ -75,7 +75,7 @@ class SchNet(nn.Module):
         """
         r = batch['nxyz'][:, 0]
         xyz = batch['nxyz'][:, 1:4]
-        N = batch['num_atoms'].tolist()
+        N = batch['num_atoms'].reshape(-1).tolist()
         a = batch['nbr_list']
 
         # offsets take care of periodic boundary conditions
@@ -96,7 +96,7 @@ class SchNet(nn.Module):
             r = r + dr
 
         r = self.atomwisereadout(r)
-
+        #import ipdb ; ipdb.set_trace()
         results = batch_and_sum(r, N, list(batch.keys()), xyz)
         
         return results 
