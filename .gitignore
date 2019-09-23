@@ -48,6 +48,7 @@ __pycache__
 *.pkl
 *.txt
 *.mpg
+*.traj
 
 # directory 
 log/
