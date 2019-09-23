@@ -16,8 +16,12 @@ class TestModules(unittest.TestCase):
 
     def testDynamics(self):
 
-        atoms = get_ethanol()
-
+        dataset = Dataset.from_file('../../examples/dataset.pth.tar')
+        props = dataset[0]
+        atoms = ase.AtomsBatch(positions=props['nxyz'][:, 1:], 
+                               numbers=props['nxyz'][:, 0], 
+                               props=props)
+        
         # initialize models 
         params = {
             'n_atom_basis': 64,
