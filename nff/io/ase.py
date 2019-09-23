@@ -8,6 +8,7 @@ from ase.calculators.calculator import Calculator, all_changes
 
 import nff.utils.constants as const
 from nff.train import load_model, evaluate
+from nff.utils.cuda import batch_to
 
 
 DEFAULT_CUTOFF = 5.0
@@ -65,7 +66,7 @@ class AtomsBatch(Atoms):
                 'num_atoms', 'nbr_list' and 'offsets'
         """
         if self.nbr_list is None or self.offsets is None:
-            self.update_nbr_list()
+            self.update_nbr_list(self.cutoff)
 
         batch = {
             'nxyz': torch.Tensor(self.get_nxyz()),
@@ -116,7 +117,6 @@ class NeuralFF(Calculator):
     def __init__(
         self,
         model,
-        props,
         device='cpu',
         **kwargs
     ):
@@ -132,7 +132,7 @@ class NeuralFF(Calculator):
         Calculator.__init__(self, **kwargs)
         self.model = model
         self.device = device
-        self.props = props
+        self.to(device)
 
     def to(self, device):
         self.device = device
@@ -141,7 +141,7 @@ class NeuralFF(Calculator):
     def calculate(
         self,
         atoms=None,
-        properties=['energy'],
+        properties=['energy', 'forces'],
         system_changes=all_changes,
     ):
         """Calculates the desired properties for the given AtomsBatch.
@@ -157,7 +157,14 @@ class NeuralFF(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # run model 
-        batch = batch_to(atoms.get_batch(), self.device)
+        atomsbatch = AtomsBatch(atoms)
+        batch = batch_to(atomsbatch.get_batch(), self.device)
+        
+        # add keys so that the readout function can calculate these properties
+        batch['energy'] = []
+        if 'forces' in properties:
+            batch['energy_grad'] = []
+
         prediction = self.model(batch)
         
         # change energy and force to numpy array 

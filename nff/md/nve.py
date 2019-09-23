@@ -50,7 +50,7 @@ class Dynamics:
         integrator = self.mdparam['thermostat']
         
         self.integrator = integrator(self.atomsbatch, 
-                                    self.mdparam['time_step'] * units.fs)
+                                     self.mdparam['time_step'] * units.fs)
         
         # attach trajectory dump 
         self.traj = Trajectory(self.logparam['traj_filename'], 'w', self.atomsbatch)

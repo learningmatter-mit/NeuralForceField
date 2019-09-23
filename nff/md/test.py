@@ -1,11 +1,12 @@
 import numpy as np
 import torch
 
-from nff.io import NeuralFF
+from nff.io import NeuralFF, AtomsBatch
+from nff.io.tests import get_ethanol
 from nff.data import Dataset
 import nff.utils.constants as const
 from nff.train import get_model
-from nff.io import ase 
+from nff.io import ase
 from nff.md.nve import *
 
 import unittest
@@ -15,12 +16,7 @@ class TestModules(unittest.TestCase):
 
     def testDynamics(self):
 
-        dataset = Dataset.from_file('../../examples/dataset.pth.tar')
-
-        props = dataset[0]
-        atoms = ase.AtomsBatch(positions=props['nxyz'][:, 1:], 
-                               numbers=props['nxyz'][:, 0], 
-                               props=props)
+        atoms = get_ethanol()
 
         # initialize models 
         params = {
@@ -34,10 +30,10 @@ class TestModules(unittest.TestCase):
 
         model = get_model(params)
 
-        nff_ase = NeuralFF(model=model, props=props)
+        nff_ase = NeuralFF(model=model, device='cuda:1')
         atoms.set_calculator(nff_ase)
 
-        nve = Dynamics(atoms, model, DEFAULTNVEPARAMS, DEFAULTLOGPARAMS)
+        nve = Dynamics(atoms, DEFAULTNVEPARAMS, DEFAULTLOGPARAMS)
         nve.run()
 
 if __name__ == '__main__':
