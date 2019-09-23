@@ -22,8 +22,7 @@ class AtomsBatch(Atoms):
     def __init__(
         self,
         *args,
-        nbr_list=None,
-        offsets=None,
+        props={},
         cutoff=DEFAULT_CUTOFF,
         **kwargs
     ):
@@ -38,8 +37,10 @@ class AtomsBatch(Atoms):
         """
         super().__init__(*args, **kwargs)
 
-        self.nbr_list = nbr_list
-        self.offsets = offsets
+        self.props = props
+        self.nbr_list = self.props.get('nbr_list', None)
+        self.offsets = self.props.get('offsets', None)
+        self.num_atoms = self.props.get('num_atoms', None)
         self.cutoff = cutoff
 
     def get_nxyz(self):
@@ -67,14 +68,12 @@ class AtomsBatch(Atoms):
         """
         if self.nbr_list is None or self.offsets is None:
             self.update_nbr_list(self.cutoff)
+            self.props['nbr_list'] = self.nbr_list
+            self.props['offsets'] = self.offsets
 
-        batch = {
-            'nxyz': torch.Tensor(self.get_nxyz()),
-            'num_atoms': torch.LongTensor([len(self)]),
-            'nbr_list': self.nbr_list,
-            'offsets': self.offsets
-        }
-        return batch
+        self.props['nxyz'] = torch.Tensor(self.get_nxyz())
+ 
+        return self.props
 
     def update_nbr_list(self, cutoff):
         """Update neighbor list and the periodic reindexing
@@ -102,10 +101,10 @@ class AtomsBatch(Atoms):
     def batch_properties():
         pass 
 
-    def batch_kinetic_energy(self):
+    def batch_kinetic_energy():
         pass
     
-    def batch_virial(self):
+    def batch_virial():
         pass
 
 
@@ -124,9 +123,9 @@ class NeuralFF(Calculator):
         
         Args:
             model (TYPE): Description
-            device (str, optional): Description
-            model (one of nff.nn.models)
             device (str): device on which the calculations will be performed 
+            **kwargs: Description
+            model (one of nff.nn.models)
         """
 
         Calculator.__init__(self, **kwargs)
@@ -145,7 +144,7 @@ class NeuralFF(Calculator):
         system_changes=all_changes,
     ):
         """Calculates the desired properties for the given AtomsBatch.
-
+        
         Args:
             atoms (AtomsBatch): custom Atoms subclass that contains implementation
                 of neighbor lists, batching and so on. Avoids the use of the Dataset
@@ -157,8 +156,8 @@ class NeuralFF(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # run model 
-        atomsbatch = AtomsBatch(atoms)
-        batch = batch_to(atomsbatch.get_batch(), self.device)
+        atomsbatch = AtomsBatch(atoms) 
+        batch = batch_to(atoms.get_batch(), self.device)#batch_to(atomsbatch.get_batch(), self.device)
         
         # add keys so that the readout function can calculate these properties
         batch['energy'] = []
