@@ -33,7 +33,7 @@ class TestModules(unittest.TestCase):
         nff_ase = NeuralFF(model=model, device='cuda:1')
         atoms.set_calculator(nff_ase)
 
-        nve = Dynamics(atoms, DEFAULTNVEPARAMS, DEFAULTLOGPARAMS)
+        nve = Dynamics(atoms, DEFAULTNVEPARAMS)
         nve.run()
 
 if __name__ == '__main__':
