@@ -3,11 +3,10 @@ from collections.abc import Iterable
 
 import torch 
 
-REINDEX_KEYS = ['nbr_list', 'pbc']
+REINDEX_KEYS = ['nbr_list']
 
 TYPE_KEYS = {
     'nbr_list': torch.long,
-    'pbc': torch.long,
     'num_atoms': torch.long
 }
 

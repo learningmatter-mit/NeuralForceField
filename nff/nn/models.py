@@ -21,8 +21,6 @@ class SchNet(nn.Module):
         atomwise1 (Dense): dense layer 1 to compute energy
         atomwise2 (Dense): dense layer 2 to compute energy
         convolutions (torch.nn.ModuleList): include all the convolutions
-        graph_dis (Graphdis): graph distance module to convert xyz inputs
-            into distance matrix
         prop_dics (dict): A dictionary of the form {name: prop_dic}, where name is the
             property name and prop_dic is a dictionary for that property.
         module_dict (ModuleDict): a dictionary of modules. Each entry has the form
@@ -45,16 +43,10 @@ class SchNet(nn.Module):
         n_convolutions = modelparams['n_convolutions']
         cutoff = modelparams['cutoff']
         trainable_gauss = modelparams.get('trainable_gauss', False)
-        box_size = modelparams.get('box_size', None)
 
         # default predict var
         readoutdict = modelparams.get('readoutdict', get_default_readout(n_atom_basis))
         post_readout =  modelparams.get('post_readout', None)
-
-        self.graph_dis = GraphDis(Fr=1,
-                                  Fe=1,
-                                  cutoff=cutoff,
-                                  box_size=box_size)
 
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
 
@@ -83,27 +75,27 @@ class SchNet(nn.Module):
         """
         r = batch['nxyz'][:, 0]
         xyz = batch['nxyz'][:, 1:4]
-        N = batch['num_atoms']
-        a = batch.get('nbr_list', None)
-        pbc = batch.get('pbc', None)
+        N = batch['num_atoms'].tolist()
+        a = batch['nbr_list']
+
+        # offsets take care of periodic boundary conditions
+        offsets = batch.get('offsets', torch.zeros(a.shape[0], 3).to(a.device))
 
         xyz.requires_grad = True
 
         # calculating the distances
-        e = (xyz[a[:, 0]] - xyz[a[:, 1]]).pow(2).sum(1).sqrt()[:, None]
+        e = (xyz[a[:, 0]] - xyz[a[:, 1]] + offsets).pow(2).sum(1).sqrt()[:, None]
+
+        a = a.to(self.device)
 
         # ensuring image atoms have the same vectors of their corresponding
         # atom inside the unit cell
-        r = self.atom_embed(r.long()).squeeze()[pbc]
+        r = self.atom_embed(r.long()).squeeze()
 
         # update function includes periodic boundary conditions
         for i, conv in enumerate(self.convolutions):
             dr = conv(r=r, e=e, a=a)
             r = r + dr
-            r = r[pbc]
-
-        # remove image atoms outside the unit cell
-        r, N = get_atoms_inside_cell(r, N, pbc)
 
         r = self.atomwisereadout(r)
 

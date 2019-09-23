@@ -3,12 +3,11 @@ import numpy as np
 import torch
 
 from ase import Atoms
-from ase.neighborlist import NeighborList
+from ase.neighborlist import neighbor_list
 from ase.calculators.calculator import Calculator, all_changes
 
-from nff.utils.scatter import compute_grad
 import nff.utils.constants as const
-from nff.train.builders import load_model
+from nff.train import load_model, evaluate
 
 
 DEFAULT_CUTOFF = 5.0
@@ -22,7 +21,8 @@ class AtomsBatch(Atoms):
     def __init__(
         self,
         *args,
-        props={},
+        nbr_list=None,
+        offsets=None,
         cutoff=DEFAULT_CUTOFF,
         **kwargs
     ):
@@ -36,15 +36,11 @@ class AtomsBatch(Atoms):
             **kwargs: Description
         """
         super().__init__(*args, **kwargs)
-        self.ase_nl = NeighborList(
-            [cutoff / 2] * len(self),
-            bothways=True,
-            self_interaction=False
-        )
-        self.nbr_list = props.get('nbr_list', None)
-        self.pbc_index = props.get('pbc', None)
-        self.props = props
+
+        self.nbr_list = nbr_list
+        self.offsets = offsets
         self.nxyz = self.get_nxyz()
+        self.cutoff = cutoff
 
     def get_nxyz(self):
         """Gets the atomic number and the positions of the atoms
@@ -67,18 +63,18 @@ class AtomsBatch(Atoms):
 
         Returns:
             batch (dict): batch with the keys 'nxyz',
-                'num_atoms', 'nbr_list' and 'pbc'
+                'num_atoms', 'nbr_list' and 'offsets'
         """
-        if self.nbr_list is None or self.pbc_index is None:
+        if self.nbr_list is None or self.offsets is None:
             self.update_nbr_list()
 
-        # wwj: what if my model has other inputs? 
-        # batch = {
-        #     'nxyz': torch.Tensor(self.nxyz),
-        #     'num_atoms': torch.LongTensor([len(self)]),
-        #     'nbr_list': self.nbr_list,
-        #     'pbc': self.pbc_index
-        # }
+        batch = {
+            'nxyz': torch.Tensor(self.nxyz),
+            'num_atoms': torch.LongTensor([len(self)]),
+            'nbr_list': self.nbr_list,
+            'offsets': self.offsets
+        }
+        return batch
 
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
 
@@ -94,43 +90,23 @@ class AtomsBatch(Atoms):
 
         Returns:
             nbr_list (torch.LongTensor)
-            pbc_index (torch.LongTensor)
+            offsets (torch.Tensor)
+            nxyz (torch.Tensor)
         """
 
-        self.ase_nl.update(self)
-        indices = np.concatenate(self.ase_nl.nl.neighbors, axis=0).reshape(-1, 1)
-        offsets = np.concatenate(self.ase_nl.nl.displacements, axis=0)
-        neighbors = np.concatenate([indices, offsets], axis=1) 
-        atoms_idx = np.unique(neighbors, axis=0)
+        edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
+        nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
+        offsets = torch.Tensor(offsets.dot(self.get_cell()))
 
-        pair_left = np.concatenate([
-            [atom] * len(nbrs)
-            for atom, nbrs in enumerate(self.ase_nl.nl.neighbors)      
-        ], axis=0)
-
-        pair_right = np.where(
-            np.bitwise_and.reduce(
-                neighbors[:, None] == atoms_idx[None, :],
-                axis=-1
-            )
-        )[1]
-
-        nbr_list = np.stack([pair_left, pair_right], axis=1)
-        pbc_index = atoms_idx[:, 0]
-        xyz = self.get_positions()[atoms_idx[:, 0]] + \
-                np.dot(atoms_idx[:, 1:], self.get_cell())
-        nxyz = np.concatenate([
-            self.get_atomic_numbers()[atoms_idx[:, 0]].reshape(-1, 1),
-            xyz
-        ], axis=1)
-        
-        nbr_list = torch.LongTensor(nbr_list)
-        pbc_index = torch.LongTensor(pbc_index)
+        xyz = self.get_positions()
+        nxyz = np.concatenate([self.get_atomic_numbers().reshape(-1, 1), xyz], axis=1)
         nxyz = torch.Tensor(nxyz)
 
         self.nbr_list = nbr_list
-        self.pbc_index = pbc_index
+        self.offsets = offsets
         self.nxyz = nxyz
+
+        return nbr_list, offsets, nxyz
 
     def batch_properties():
         pass 
@@ -160,6 +136,7 @@ class NeuralFF(Calculator):
             model (TYPE): Description
             device (str, optional): Description
             model (one of nff.nn.models)
+            device (str): device on which the calculations will be performed 
         """
 
         Calculator.__init__(self, **kwargs)
@@ -177,6 +154,15 @@ class NeuralFF(Calculator):
         device=0,
         system_changes=all_changes,
     ):
+        """Calculates the desired properties for the given AtomsBatch.
+
+        Args:
+            atoms (AtomsBatch): custom Atoms subclass that contains implementation
+                of neighbor lists, batching and so on. Avoids the use of the Dataset
+                to calculate using the models created.
+            properties (list of str): 'energy', 'forces' or both
+            system_changes (default from ase)
+        """
         
         Calculator.calculate(self, atoms, properties, system_changes)
 
