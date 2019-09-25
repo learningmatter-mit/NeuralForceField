@@ -99,6 +99,44 @@ class AtomsBatch(Atoms):
 
         return nbr_list, offsets
 
+    def get_list_atoms(self):
+
+        mol_split_idx = self.props['num_atoms'].tolist()
+
+        positions = torch.Tensor( self.get_positions()) 
+        Z = torch.LongTensor( self.get_atomic_numbers() )
+
+        positions = list(positions.split( mol_split_idx ))
+        Z = list(Z.split(mol_split_idx ))
+
+        Atoms_list = []
+
+        for i, molecule_xyz in enumerate(positions):  
+            Atoms_list.append( Atoms(Z[i].tolist() , 
+                               molecule_xyz.numpy(), 
+                               cell=self.cell,
+                               pbc=self.pbc))
+
+        return Atoms_list
+
+    def update_atoms_nbr_list(self, cutoff):
+
+        Atoms_list = self.get_list_atoms()
+
+        intra_nbr_list = []
+        for i, atoms in enumerate(Atoms_list):
+            edge_from, edge_to = neighbor_list('ij', a=atoms, cutoff=5.0)
+            nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
+            nbr_list = nbr_list[ nbr_list[:, 1] > nbr_list[:, 0] ]  
+            intra_nbr_list.append(self.props['num_atoms'][: i].sum() + nbr_list)
+            
+        intra_nbr_list = torch.cat(intra_nbr_list)
+        self.props['atoms_nbr_list'] = intra_nbr_list
+        return intra_nbr_list
+
+    def update_atomsbatch_nbr_list(self, cutoff, exclude_intra_nbr_list):
+        pass
+
     def batch_properties():
         pass 
 
@@ -157,7 +195,7 @@ class NeuralFF(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # run model 
-        atomsbatch = AtomsBatch(atoms) 
+        #atomsbatch = AtomsBatch(atoms) 
         batch = batch_to(atoms.get_batch(), self.device)#batch_to(atomsbatch.get_batch(), self.device)
         
         # add keys so that the readout function can calculate these properties
