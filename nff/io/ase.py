@@ -41,7 +41,7 @@ class AtomsBatch(Atoms):
         self.props = props
         self.nbr_list = self.props.get('nbr_list', None)
         self.offsets = self.props.get('offsets', None)
-        self.num_atoms = self.props.get('num_atoms', None)
+        self.num_atoms = self.props.get('num_atoms', len(self))
         self.cutoff = cutoff
 
     def get_nxyz(self):
@@ -73,6 +73,7 @@ class AtomsBatch(Atoms):
             self.props['offsets'] = self.offsets
 
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
+        self.props['num_atoms'] = torch.LongTensor([len(self)])
  
         return self.props
 
@@ -158,7 +159,7 @@ class NeuralFF(Calculator):
 
         # run model 
         atomsbatch = AtomsBatch(atoms) 
-        batch = batch_to(atoms.get_batch(), self.device)#batch_to(atomsbatch.get_batch(), self.device)
+        batch = batch_to(atomsbatch.get_batch(), self.device)
         
         # add keys so that the readout function can calculate these properties
         batch['energy'] = []

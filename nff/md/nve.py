@@ -17,9 +17,9 @@ DEFAULTNVEPARAMS = {
     'T_init': 300.0, 
     'time_step': 0.5, 
     'thermostat': VelocityVerlet,  # or Langevin or NPT or NVT or Thermodynamic Integration
-    'nbr_list_update_freq': 50,
     'steps': 100,
     'save_frequency': 20,
+    'nbr_list_update_freq': 50,
     'thermo_filename': './thermo.log', 
     'traj_filename': './atom.traj',
     'skip': 50
