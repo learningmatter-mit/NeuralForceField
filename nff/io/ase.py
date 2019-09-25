@@ -1,4 +1,4 @@
-import os 
+import os
 import numpy as np
 import torch
 
@@ -29,6 +29,98 @@ class AtomsBatch(Atoms):
     ):
         """
         
+        Args:
+            *args: Description
+            nbr_list (None, optional): Description
+            pbc_index (None, optional): Description
+            cutoff (TYPE, optional): Description
+            **kwargs: Description
+        """
+        super().__init__(*args, **kwargs)
+
+        self.props = props
+        self.nbr_list = self.props.get('nbr_list', None)
+        self.offsets = self.props.get('offsets', None)
+        self.num_atoms = self.props.get('num_atoms', len(self))
+        self.cutoff = cutoff
+
+    def get_nxyz(self):
+        """Gets the atomic number and the positions of the atoms
+            inside the unit cell of the system.
+        Returns:
+            nxyz (np.array): atomic numbers + cartesian coordinates
+                of the atoms.
+        """
+        nxyz = np.concatenate([
+            self.get_atomic_numbers().reshape(-1, 1),
+            self.get_positions().reshape(-1, 3)
+        ], axis=1)
+
+        return nxyz
+
+    def get_batch(self):
+        """Uses the properties of Atoms to create a batch
+            to be sent to the model.
+        Returns:
+            batch (dict): batch with the keys 'nxyz',
+                'num_atoms', 'nbr_list' and 'offsets'
+        """
+        if self.nbr_list is None or self.offsets is None:
+            self.update_nbr_list(self.cutoff)
+            self.props['nbr_list'] = self.nbr_list
+            self.props['offsets'] = self.offsets
+
+        self.props['nxyz'] = torch.Tensor(self.get_nxyz())
+        self.props['num_atoms'] = torch.LongTensor([len(self)])
+ 
+        return self.props
+
+    def update_nbr_list(self, cutoff):
+        """Update neighbor list and the periodic reindexing
+            for the given Atoms object.
+        
+        Args:
+            cutoff (float): maximum cutoff for which atoms are
+                considered interacting.
+        Returns:
+            nbr_list (torch.LongTensor)
+            offsets (torch.Tensor)
+            nxyz (torch.Tensor)
+        """
+
+        edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
+        nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
+        offsets = sparsify_array(offsets.dot(self.get_cell()))
+
+        self.nbr_list = nbr_list
+        self.offsets = offsets
+
+        return nbr_list, offsets
+
+    def batch_properties():
+        pass 
+
+    def batch_kinetic_energy():
+        pass
+    
+    def batch_virial():
+        pass
+
+
+class BulkPhaseMaterials(Atoms):
+    """Class to deal with the Neural Force Field and batch molecules together
+    in a box for handling boxphase. 
+    """
+
+    def __init__(
+        self,
+        *args,
+        props={},
+        cutoff=DEFAULT_CUTOFF,
+        **kwargs
+    ):
+        """
+
         Args:
             *args: Description
             nbr_list (None, optional): Description
@@ -72,14 +164,16 @@ class AtomsBatch(Atoms):
             self.props['nbr_list'] = self.nbr_list
             self.props['offsets'] = self.offsets
 
+        self.props['nbr_list'] = self.nbr_list
+        self.props['offsets'] = self.offsets
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
- 
+
         return self.props
 
-    def update_nbr_list(self, cutoff):
+    def update_atomsbatch_nbr_list(self, cutoff, exclude_atoms_nbr_list=True):
         """Update neighbor list and the periodic reindexing
             for the given Atoms object.
-        
+
         Args:
             cutoff (float): maximum cutoff for which atoms are
                 considered interacting.
@@ -90,10 +184,19 @@ class AtomsBatch(Atoms):
             nxyz (torch.Tensor)
         """
 
-        edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
+        edge_from, edge_to, offsets = neighbor_list('ijS', self, cutoff)
         nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-        offsets = sparsify_array(offsets.dot(self.get_cell()))
+        offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]]
+        nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
+        offsets = sparsify_array(offsets.numpy().dot(self.get_cell()))
 
+        if exclude_atoms_nbr_list:
+            assert 'atoms_nbr_list' in self.props
+            atoms_nbr_list = self.props["atoms_nbr_list"].tolist()
+            nbr_list = nbr_list.tolist()
+            nbr_list = torch.LongTensor(
+                [x for x in nbr_list if x not in atoms_nbr_list]
+            )
         self.nbr_list = nbr_list
         self.offsets = offsets
 
@@ -101,21 +204,21 @@ class AtomsBatch(Atoms):
 
     def get_list_atoms(self):
 
-        mol_split_idx = self.props['num_atoms'].tolist()
+        mol_split_idx = self.props['num_subgraphs'].tolist()
 
-        positions = torch.Tensor( self.get_positions()) 
-        Z = torch.LongTensor( self.get_atomic_numbers() )
+        positions = torch.Tensor(self.get_positions())
+        Z = torch.LongTensor(self.get_atomic_numbers())
 
-        positions = list(positions.split( mol_split_idx ))
-        Z = list(Z.split(mol_split_idx ))
+        positions = list(positions.split(mol_split_idx))
+        Z = list(Z.split(mol_split_idx))
 
         Atoms_list = []
 
-        for i, molecule_xyz in enumerate(positions):  
-            Atoms_list.append( Atoms(Z[i].tolist() , 
-                               molecule_xyz.numpy(), 
-                               cell=self.cell,
-                               pbc=self.pbc))
+        for i, molecule_xyz in enumerate(positions):
+            Atoms_list.append(Atoms(Z[i].tolist(),
+                                    molecule_xyz.numpy(),
+                                    cell=self.cell,
+                                    pbc=self.pbc))
 
         return Atoms_list
 
@@ -125,24 +228,22 @@ class AtomsBatch(Atoms):
 
         intra_nbr_list = []
         for i, atoms in enumerate(Atoms_list):
-            edge_from, edge_to = neighbor_list('ij', a=atoms, cutoff=5.0)
+            edge_from, edge_to = neighbor_list('ij', atoms, cutoff)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            nbr_list = nbr_list[ nbr_list[:, 1] > nbr_list[:, 0] ]  
-            intra_nbr_list.append(self.props['num_atoms'][: i].sum() + nbr_list)
-            
-        intra_nbr_list = torch.cat(intra_nbr_list)
-        self.props['atoms_nbr_list'] = intra_nbr_list
-        return intra_nbr_list
+            nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
+            intra_nbr_list.append(
+                self.props['num_subgraphs'][: i].sum() + nbr_list)
 
-    def update_atomsbatch_nbr_list(self, cutoff, exclude_intra_nbr_list):
-        pass
+        intra_nbr_list = torch.cat(intra_nbr_list)
+        self.atoms_nbr_list = intra_nbr_list
+        self.props['atoms_nbr_list'] = intra_nbr_list
 
     def batch_properties():
-        pass 
+        pass
 
     def batch_kinetic_energy():
         pass
-    
+
     def batch_virial():
         pass
 
@@ -159,7 +260,7 @@ class NeuralFF(Calculator):
         **kwargs
     ):
         """Creates a NeuralFF calculator.nff/io/ase.py
-        
+
         Args:
             model (TYPE): Description
             device (str): device on which the calculations will be performed 
@@ -183,7 +284,7 @@ class NeuralFF(Calculator):
         system_changes=all_changes,
     ):
         """Calculates the desired properties for the given AtomsBatch.
-        
+
         Args:
             atoms (AtomsBatch): custom Atoms subclass that contains implementation
                 of neighbor lists, batching and so on. Avoids the use of the Dataset
@@ -191,24 +292,27 @@ class NeuralFF(Calculator):
             properties (list of str): 'energy', 'forces' or both
             system_changes (default from ase)
         """
-        
+
         Calculator.calculate(self, atoms, properties, system_changes)
 
-        # run model 
-        #atomsbatch = AtomsBatch(atoms) 
-        batch = batch_to(atoms.get_batch(), self.device)#batch_to(atomsbatch.get_batch(), self.device)
-        
+        # run model
+        #atomsbatch = AtomsBatch(atoms)
+        # batch_to(atomsbatch.get_batch(), self.device)
+        batch = batch_to(atoms.get_batch(), self.device)
+
         # add keys so that the readout function can calculate these properties
         batch['energy'] = []
         if 'forces' in properties:
             batch['energy_grad'] = []
 
         prediction = self.model(batch)
-        
-        # change energy and force to numpy array 
-        energy = prediction['energy'].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
-        energy_grad = prediction['energy_grad'].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
-        
+
+        # change energy and force to numpy array
+        energy = prediction['energy'].detach().cpu(
+        ).numpy() * (1 / const.EV_TO_KCAL_MOL)
+        energy_grad = prediction['energy_grad'].detach(
+        ).cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+
         self.results = {
             'energy': energy.reshape(-1),
             'forces': -energy_grad.reshape(-1, 3)
@@ -223,4 +327,3 @@ class NeuralFF(Calculator):
     ):
         model = load_model(model_path)
         return cls(model, device, **kwargs)
-
