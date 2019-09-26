@@ -17,7 +17,7 @@
 *.iso
 *.jar
 *.rar
-*.tar
+#*.tar
 *.zip
 
 # Logs and databases #
@@ -48,6 +48,7 @@ __pycache__
 *.pkl
 *.txt
 *.mpg
+*.traj
 
 # directory 
 log/

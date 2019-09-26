@@ -98,6 +98,18 @@ def add_subparsers(cmd_parser, defaults={}):
         help="Maximum number of training epochs (default: %(default)s)",
         default=5000,
     )
+    train_parser.add_argument(
+        "--workers",
+        type=int,
+        help="Number of workers to use on dataloader (default: %(default)s)",
+        default=2,
+    )
+    train_parser.add_argument(
+        "--loss_coef",
+        type=str,
+        help="Coefficients of the loss function as a JSON string (default: %(default)s)",
+        default='{"energy": 0.1, "energy_grad": 1.0}',
+    )
 
     ## evaluation
     eval_parser = argparse.ArgumentParser(add_help=False, parents=[cmd_parser])
@@ -113,15 +125,6 @@ def add_subparsers(cmd_parser, defaults={}):
 
     # model-specific parsers
     model_parser = argparse.ArgumentParser(add_help=False)
-    model_parser.add_argument(
-        "--aggregation_mode",
-        type=str,
-        default="sum"
-        if "aggregation_mode" not in defaults.keys()
-        else defaults["aggregation_mode"],
-        choices=["sum", "avg"],
-        help=" (default: %(default)s)",
-    )
 
     #######  SchNet  #######
     schnet_parser = argparse.ArgumentParser(add_help=False, parents=[model_parser])
@@ -154,13 +157,6 @@ def add_subparsers(cmd_parser, defaults={}):
         action='store_true',
         help="If set, sets gaussians as learnable parameters (default: False)",
     )
-    schnet_parser.add_argument(
-        "--rho",
-        type=float,
-        default=1.0,
-        help="Parameter multiplying the loss of forces (default: %(default)s)",
-    )
-
 
     ## setup subparser structure
     cmd_subparsers = cmd_parser.add_subparsers(

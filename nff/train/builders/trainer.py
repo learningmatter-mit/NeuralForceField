@@ -1,8 +1,9 @@
 """Helper function to create a trainer for a given model.
 
-From https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/utils/script_utils/training.py
+Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/utils/script_utils/training.py
 """
 import os
+import json
 
 import nff
 import torch
@@ -30,6 +31,7 @@ def get_trainer(args, model, train_loader, val_loader, metrics, loss_fn=None):
     printer = nff.train.PrintingHook(
         os.path.join(args.model_path, 'log'),
         metrics,
+        log_memory=(args.device != 'cpu'),
         separator=' | '
     )
     hooks.append(printer)
@@ -51,7 +53,7 @@ def get_trainer(args, model, train_loader, val_loader, metrics, loss_fn=None):
         hooks.append(logger)
 
     if loss_fn is None:
-        loss_fn = nff.train.build_mse_loss(rho=args.rho)
+        loss_fn = nff.train.build_mse_loss(json.loads(args.loss_coef))
 
     trainer = nff.train.Trainer(
         args.model_path,

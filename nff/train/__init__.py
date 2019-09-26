@@ -1,4 +1,4 @@
-from .trainer import Trainer
+from .trainer import *
 from .evaluate import *
 from .loss import *
 from .metrics import *

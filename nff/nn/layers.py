@@ -11,28 +11,19 @@ from torch.nn.init import xavier_uniform_, constant_
 zeros_initializer = partial(constant_, val=0.)
 
 
-def gaussian_smearing(distances, offset, widths, centered=False, is_batch=False):
+def gaussian_smearing(distances, offset, widths, centered=False):
 
-    if centered == False:
+    if not centered:
         # Compute width of Gaussians (using an overlap of 1 STDDEV)
         # widths = offset[1] - offset[0]
         coeff = -0.5 / torch.pow(widths, 2)
-
-        # Use advanced indexing to compute the individual components
-        if not is_batch:
-            diff = distances[:, :, :, None] - offset[None, None, None, :]
-        else:
-            diff = distances - offset
+        diff = distances - offset
 
     else:
         # If Gaussians are centered, use offsets to compute widths
         coeff = -0.5 / torch.pow(offset, 2)
-
         # If centered Gaussians are requested, don't substract anything
-        if not is_batch:
-            diff = distances[:, :, :, None]
-        else:
-            diff = distances
+        diff = distances
 
     # Compute and return Gaussians
     gauss = torch.exp(coeff * torch.pow(diff, 2))
@@ -44,6 +35,10 @@ class GaussianSmearing(nn.Module):
     """
     Wrapper class of gaussian_smearing function. Places a predefined number of Gaussian functions within the
     specified limits.
+
+    sample struct dictionary:
+
+        struct = {'start': 0.0, 'stop':5.0, 'n_gaussians': 32, 'centered': False, 'trainable': False}
 
     Args:
         start (float): Center of first Gaussian.
@@ -68,7 +63,7 @@ class GaussianSmearing(nn.Module):
             self.register_buffer('offsets', offset)
         self.centered = centered
 
-    def forward(self, distances, is_batch):
+    def forward(self, distances):
         """
         Args:
             distances (torch.Tensor): Tensor of interatomic distances.
@@ -80,8 +75,7 @@ class GaussianSmearing(nn.Module):
         result = gaussian_smearing(distances,
                                    self.offsets,
                                    self.width,
-                                   centered=self.centered,
-                                   is_batch=is_batch)
+                                   centered=self.centered)
 
         return result
 
@@ -116,7 +110,7 @@ class Dense(nn.Linear):
 
     def reset_parameters(self):
         """
-        Reinitialize model parameters.
+            Reinitialize model parameters.
         """
         self.weight_init(self.weight)
         if self.bias is not None:

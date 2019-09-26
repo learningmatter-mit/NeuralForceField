@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 
-
 class Metric:
     r"""
     Base class for all metrics.
@@ -33,6 +32,9 @@ class Metric:
 
     def add_batch(self, batch, results):
         """ Add a batch to calculate the metric on """
+
+        # pdb.set_trace()
+
         y = batch[self.target]
         yp = results[self.target]
 
@@ -43,7 +45,8 @@ class Metric:
         """Aggregate metric over all previously added batches."""
         return self.loss / self.n_entries
 
-    def loss_fn(self, y, yp):
+    @staticmethod
+    def loss_fn(y, yp):
         """Calculates loss function for y and yp"""
         raise NotImplementedError
 
@@ -70,8 +73,9 @@ class MeanSquaredError(Metric):
             name=name,
         )
 
-    def loss_fn(self, y, yp):
-        diff = y - yp
+    @staticmethod
+    def loss_fn(y, yp):
+        diff = y - yp.view(y.shape)
         return torch.sum(diff.view(-1) ** 2).detach().cpu().data.numpy()
 
 
@@ -123,7 +127,9 @@ class MeanAbsoluteError(Metric):
             name=name,
         )
 
-    def loss_fn(self, y, yp):
-        diff = y - yp
-        return torch.sum(torch.abs(diff).view(-1), 0).detach().cpu().data.numpy()
+    @staticmethod
+    def loss_fn(y, yp):
+        # pdb.set_trace()
+        diff = y - yp.view(y.shape)
+        return torch.sum(torch.abs(diff).view(-1)).detach().cpu().data.numpy()
 

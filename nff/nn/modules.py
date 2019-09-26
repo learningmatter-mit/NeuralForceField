@@ -2,25 +2,233 @@ import numpy as np
 
 import torch
 import torch.nn as nn
+from torch.nn import Sequential, Linear, ReLU, LeakyReLU, ModuleDict 
 
 from nff.nn.layers import Dense, GaussianSmearing
 from nff.utils.scatter import scatter_add
 from nff.nn.activations import shifted_softplus
+from nff.nn.graphconv import MessagePassingModule, EdgeUpdateModule, \
+                             GeometricOperations, TopologyOperations
+from nff.nn.utils import construct_sequential, construct_module_dict
 
+import unittest
 
 EPSILON = 1e-15
 
 
-class GraphDis(nn.Module):
+class SchNetEdgeUpdate(EdgeUpdateModule):
+    """
+    Arxiv.1806.03146
+    
+    Attributes:
+        mlp (TYPE): Update function 
+    """
+    def __init__(self, n_atom_basis):
+        super(SchNetEdgeUpdate, self).__init__()
+
+        self.mlp = Sequential(
+            Linear(2 * n_atom_basis, n_atom_basis), 
+            ReLU(), # softplus in the original paper 
+            Linear(n_atom_basis, n_atom_basis),
+            ReLU(), # softplus in the original paper
+            Linear(n_atom_basis, 1)
+        )
+
+    def aggregate(self, message, neighborlist):
+        aggregated_edge_feature = torch.cat((message[neighborlist[:,0]], message[neighborlist[:,1]]), 1)
+        return aggregated_edge_feature
+
+    def update(self, e):
+        return self.mlp(e)
+
+
+class SchNetConv(MessagePassingModule):
+
+    """The convolution layer with filter. To be merged with GraphConv class.
+    
+    Attributes:
+        moduledict (TYPE): Description
+    """
+
+    def __init__(self,
+                n_atom_basis,
+                n_filters,
+                n_gaussians,
+                cutoff,
+                trainable_gauss,
+    ):
+        super(SchNetConv, self).__init__()
+        self.moduledict = ModuleDict({
+            'message_edge_filter': Sequential(
+                GaussianSmearing(
+                    start=0.0,
+                    stop=cutoff,
+                    n_gaussians=n_gaussians,
+                    trainable=trainable_gauss
+                ),
+                Dense(in_features=n_gaussians, out_features=n_gaussians),
+                shifted_softplus(),
+                Dense(in_features=n_gaussians, out_features=n_filters)
+            ),
+            'message_node_filter': Dense(in_features=n_atom_basis, out_features=n_filters),
+            'update_function': Sequential(
+                Dense(in_features=n_filters, out_features=n_atom_basis),
+                shifted_softplus(), 
+                Dense(in_features=n_atom_basis, out_features=n_atom_basis)
+            )
+        })
+
+    def message(self, r, e, a):
+        """The message function for SchNet convoltuions 
+        
+        
+        Args:
+            r (TYPE): node inputs 
+            e (TYPE): edge inputs 
+            a (TYPE): neighbor list
+        
+        Returns:
+            TYPE: message should a pair of message and 
+        """
+        # update edge feature 
+        e = self.moduledict['message_edge_filter'](e)
+        # convection: update 
+        r = self.moduledict['message_node_filter'](r)
+        # combine node and edge info
+        message = r[a[:, 0]] * e, r[a[:, 1]] * e  # (ri [] eij) -> rj, []: *, +, (,)
+        return message 
+
+    def update(self, r):
+        return self.moduledict['update_function'](r)
+
+
+class GraphAttention(MessagePassingModule):
+
+    """Weighted graph pooling layer based on self attention 
+    
+    Attributes:
+        activation (TYPE): Description
+        weight (TYPE): Description
+    """
+    
+    def __init__(self, n_atom_basis):
+        super(GraphAttention, self).__init__()
+        self.weight = torch.nn.Parameter(torch.rand(1, 2 * n_atom_basis))
+        self.activation = LeakyReLU()
+        
+    def message(self, r, e, a):
+        """weight_ij is the importance factor of node j to i
+           weight_ji is the importance factor of node i to j
+        
+        Args:
+            r (TYPE): Description
+            e (TYPE): Description
+            a (TYPE): Description
+        
+        Returns:
+            TYPE: Description
+        """
+        # i -> j
+        weight_ij = torch.exp(self.activation(torch.cat((r[a[:, 0]], r[a[:, 1]]), dim=1) * \
+                             self.weight).sum(-1))
+        # j -> i
+        weight_ji = torch.exp(self.activation(torch.cat((r[a[:, 1]], r[a[:, 0]]), dim=1) * \
+                             self.weight).sum(-1))
+
+        weight_ii = torch.exp(self.activation(torch.cat((r, r), dim=1) * \
+                             self.weight).sum(-1))
+        
+        normalization = scatter_add(weight_ij, a[:, 0], dim_size=r.shape[0]) \
+                        + scatter_add(weight_ji, a[:, 1], dim_size=r.shape[0]) + weight_ii
+
+        a_ij = weight_ij/normalization[a[:, 0]] # the importance of node j’s features to node i
+        a_ji = weight_ji/normalization[a[:, 1]] # the importance of node i’s features to node j
+        a_ii = weight_ii/normalization # self-attention
+        
+        message = r[a[:, 0]] * a_ij[:, None], \
+                  r[a[:, 1]] * a_ij[:, None], \
+                  r * a_ii[:, None]
+        
+        return message
+
+    def forward(self, r, e, a):
+        # Base case
+        graph_size = r.shape[0]
+
+        rij, rji, r = self.message(r, e, a)
+
+        # i -> j propagate
+        r += self.aggregate(rij, a[:, 1], graph_size)
+        # j -> i propagate
+        r += self.aggregate(rji, a[:, 0], graph_size)
+
+        r = self.update(r)
+
+        return r
+
+
+class NodeMultiTaskReadOut(nn.Module):
+
+    """Stack Multi Task outputs
+
+        example multitaskdict:
+
+        multitaskdict = {
+            'myenergy0': [
+                            {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                            {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+            ],
+            'myenergy1': [
+                            {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                            {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+            ],
+            'Muliken charges': [
+                            {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                            {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+            ]
+        }
+
+        example post_readout:
+
+        def post_readout(predict_dict, readoutdict):
+            sorted_keys = sorted(list(readoutdict.keys()))
+            sorted_ens = torch.sort(torch.stack([predict_dict[key] for key in sorted_keys]))[0] 
+            sorted_dic = {key: val for key, val in zip(sorted_keys, sorted_ens) }
+            return sorted_dic
+    """
+
+    def __init__(self, multitaskdict, post_readout=None):
+        """Summary
+        
+        Args:
+            multitaskdict (dict): dictionary that contains model information
+        """
+        super(NodeMultiTaskReadOut, self).__init__()
+        # construct moduledict 
+        self.readout = construct_module_dict(multitaskdict)
+        self.post_readout = post_readout
+        self.multitaskdict = multitaskdict
+
+    def forward(self, r):
+        predict_dict=dict()
+        for key in self.readout:
+            predict_dict[key] = self.readout[key](r)
+        if self.post_readout is not None:
+            predict_dict = self.post_readout(predict_dict, self.multitaskdict)
+
+        return predict_dict 
+
+
+class GraphDis(GeometricOperations):
 
     """Compute distance matrix on the fly 
     
     Attributes:
-        Fr (int): node feature length
-        Fe (int): edge feature length
-        F (int): Fr + Fe
-        cutoff (float): cutoff for convolution
         box_size (numpy.array): Length of the box, dim = (3, )
+        cutoff (float): cutoff for convolution
+        F (int): Fr + Fe
+        Fe (int): edge feature length
+        Fr (int): node feature length
     """
     
     def __init__(
@@ -30,7 +238,7 @@ class GraphDis(nn.Module):
         cutoff,
         box_size=None
     ):
-        super().__init__()
+        super(GraphDis, self).__init__()
 
         self.Fr = Fr
         self.Fe = Fe  # include distance
@@ -53,7 +261,7 @@ class GraphDis(nn.Module):
         """
         device = frame.device
 
-        n_atoms = frame.shape[1]
+        n_atoms = frame.shape[0]
         frame = frame.view(-1, n_atoms, 1, 3)
         dis_mat = frame.expand(-1, n_atoms, n_atoms, 3) \
             - frame.expand(-1, n_atoms, n_atoms, 3).transpose(1, 2)
@@ -93,159 +301,151 @@ class GraphDis(nn.Module):
         return dis_mat, A.squeeze(3)
 
     def forward(self, xyz):
-        e, A = self.get_bond_vector_matrix(frame=xyz)
+        frame = xyz
+        e, A = self.get_bond_vector_matrix(frame=frame)
 
-        e = e.float()
-        A = A.float()
+        n_atoms = frame.shape[0]
 
-        return e, A
+        #  use only upper triangular to generative undirected adjacency matrix 
+        A = A * torch.ones(n_atoms, n_atoms).triu()[None, :, :].to(A.device)
+        e = e * A.unsqueeze(-1)
+
+        # compute neighbor list 
+        a = A.nonzero()
+
+        # reshape distance list 
+        e = e[a[:,0], a[:, 1], a[:,2], :].reshape(-1, 1)
+
+        # reindex neighbor list 
+        a = (a[:, 0] * n_atoms)[:, None] + a[:, 1:3]
+
+        return e, a
 
 
 class BondEnergyModule(nn.Module):
     
     def __init__(self, batch=True):
         super().__init__()
-        self.batch = batch
         
     def forward(self, xyz, bond_adj, bond_len, bond_par):
-        
-        if self.batch:
-            e = (
-                xyz[bond_adj[:, 0]] - xyz[bond_adj[:, 1]]
-            ).pow(2).sum(1).sqrt()[:, None]
 
-            ebond = bond_par * (e - bond_len)**2
-            ebond = 0.5 * scatter_add(src=ebond, index=bond_adj[:, 0], dim=0, dim_size=xyz.shape[0])
 
-        else:
-            e = (
-                xyz[:, bond_adj[:, 0]] - xyz[:, bond_adj[:, 1]]
-            ).pow(2).sum(2).sqrt()
+        e = (
+            xyz[bond_adj[:, 0]] - xyz[bond_adj[:, 1]]
+        ).pow(2).sum(1).sqrt()[:, None]
 
-            ebond = 0.5 * bond_par * (e - bond_len) ** 2
+        ebond = bond_par * (e - bond_len)**2
+        energy = 0.5 * scatter_add(src=ebond, index=bond_adj[:, 0], dim=0, dim_size=xyz.shape[0])
+        energy += 0.5 * scatter_add(src=ebond, index=bond_adj[:, 1], dim=0, dim_size=xyz.shape[0])
  
-        return ebond
+        return energy
 
+# Test 
 
-class InteractionBlock(nn.Module):
+class TestModules(unittest.TestCase):
 
-    """The convolution layer with filter. To be merged with GraphConv class.
-    
-    Attributes:
-        atom_filter (Dense): Description
-        dense_1 (Dense): dense layer 1 to obtain the updated atomic embedding 
-        dense_2 (Dense): dense layer 2 to obtain the updated atomic embedding
-        distance_filter_1 (Dense): dense layer 1 for filtering gaussian
-            expanded distances
-        distance_filter_2 (Dense): dense layer 1 for filtering gaussian
-            expanded distances
-        smearing (GaussianSmearing): gaussian basis expansion for distance 
-            matrix of dimension B, N, N, 1
-        mean_pooling (bool): if True, performs a mean pooling 
-    """
+    def testBaseEdgeUpdate(self):
+        # initialize basic graphs 
+        a = torch.LongTensor([[0, 1], [2,3], [1,3], [4,5], [3,4]])
+        e = torch.rand(5, 10)
+        r_in = torch.rand(6, 10)
+        model = MessagePassingModule()
+        r_out = model(r_in, e, a)
+        self.assertEqual(r_in.shape, r_out.shape, "The node feature dimensions should be same for the base case")
 
-    def __init__(
-        self,
-        n_atom_basis,
-        n_filters,
-        n_gaussians,
-        cutoff,
-        trainable_gauss,
-        mean_pooling=False
-    ):
+    def testBaseMessagePassing(self):
 
-        super().__init__()
+        # initialize basic graphs 
+        a = torch.LongTensor([[0, 1], [2,3], [1,3], [4,5], [3,4]])
+        e_in = torch.rand(5, 10)
+        r = torch.rand(6, 10)
+        model = EdgeUpdateModule()
+        e_out = model(r, e_in, a)
+        self.assertEqual(e_in.shape, e_out.shape, "The edge feature dimensions should be same for the base case")
 
-        self.mean_pooling = mean_pooling
-        self.smearing = GaussianSmearing(start=0.0,
-                                         stop=cutoff,
-                                         n_gaussians=n_gaussians,
-                                         trainable=trainable_gauss)
+    def testSchNetMPNN(self):
+        # contruct a graph 
+        a = torch.LongTensor([[0, 1], [2,3], [1,3], [4,5], [3,4]])
+        # SchNet params 
+        n_atom_basis = 10
+        n_filters = 10
+        n_gaussians = 10
+        num_nodes = 6
+        cutoff = 0.5
 
-        self.distance_filter_1 = Dense(in_features=n_gaussians,
-                                       out_features=n_gaussians,
-                                       activation=shifted_softplus)
+        e = torch.rand(5, n_atom_basis)
+        r_in = torch.rand(num_nodes, n_atom_basis)
 
-        self.distance_filter_2 = Dense(in_features=n_gaussians,
-                                       out_features=n_filters)
-
-        self.atom_filter = Dense(in_features=n_atom_basis,
-                                 out_features=n_filters,
-                                 bias=False)
-
-        self.dense_1 = Dense(in_features=n_filters,
-                             out_features=n_atom_basis,
-                             activation=shifted_softplus)
-
-        self.dense_2 = Dense(in_features=n_atom_basis,
-                             out_features=n_atom_basis,
-                             activation=None)
- 
-    def forward(self, r, e, a):
-        """
-        Args:
-            r: feature tensor
-            e: edge tensor
-        """
-
-        e = self.smearing(e, is_batch=True)
-        e = self.distance_filter_1(e)
-        W = self.distance_filter_2(e)
-        W = W.squeeze()
-
-        r = self.atom_filter(r)
-
-        y = scatter_add(src=r[a[:, 0]].squeeze() * W, 
-                    index=a[:, 1], 
-                    dim=0, 
-                    dim_size=r.shape[0])
-
-        y += scatter_add(src=r[a[:, 1]].squeeze() * W, 
-                    index=a[:, 0], 
-                    dim=0, 
-                    dim_size=r.shape[0])
-               
-        # last layers
-        y = self.dense_1(y)
-        y = self.dense_2(y)
-
-        return y
-        
-
-class GraphAttention(nn.Module):
-    def __init__(self, n_atom_basis):
-        super().__init__()
-        
-        self.n_atom_basis = n_atom_basis
-        self.W = nn.Linear(n_atom_basis, n_atom_basis)
-        self.a = nn.Linear(2 * n_atom_basis, 1)
-        self.LeakyRelu = nn.RReLU()
-        
-    def forward(self, h, A):
-        n_atom_basis = self.n_atom_basis
-        B = h.shape[0]
-        N_atom = h.shape[1]
-        
-        hi = h[:, :, None, :].expand(B, N_atom, N_atom, n_atom_basis)
-        hj = h[:, None, :, :].expand(B, N_atom, N_atom, n_atom_basis)
-
-        hi = self.W(hi)
-        hj = self.W(hj)
-
-        # attention is directional, the attention i->j is different from j -> i
-        hij = torch.cat((hi, hj), dim=3)
-        hij = self.a(hij)
-        
-        # construct attention vector using softmax
-        alpha = (torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1))
-        alpha_sum = torch.sum(
-            torch.exp(hij) * A[:, :, :, None].expand(B, N_atom, N_atom, 1),
-            dim=2
+        model = SchNetConv(
+            n_atom_basis,
+            n_filters,
+            n_gaussians,
+            cutoff=2.0,
+            trainable_gauss=False,
         )
-        alpha = alpha/alpha_sum.unsqueeze(2).expand_as(hij)
 
-        h_prime = (
-            h[:, None, :, :].expand(B, N_atom, N_atom, n_atom_basis) * alpha
-        ).sum(2)
-        
-        return h_prime
+        r_out = model(r_in, e, a)
+        self.assertEqual(r_in.shape, r_out.shape, "The node feature dimensions should be same for the SchNet Convolution case")
+
+    def testSchNetEdgeUpdate(self):
+        # contruct a graph 
+        a = torch.LongTensor([[0, 1], [2,3], [1,3], [4,5], [3,4]])
+        # SchNet params 
+        n_atom_basis = 10
+        num_nodes = 6
+
+        e_in = torch.rand(5, 1)
+        r = torch.rand(num_nodes, n_atom_basis)
+
+        model = SchNetEdgeUpdate(n_atom_basis=n_atom_basis)
+        e_out = model(r, e_in, a)
+
+        self.assertEqual(e_in.shape, e_out.shape, "The edge feature dimensions should be same for the SchNet Edge Update case")
+
+    def testGAT(self):
+        n_atom_basis= 10
+
+        a = torch.LongTensor([[0, 1], [2,3], [1,3], [4,5], [3,4]])
+        e = torch.rand(5, n_atom_basis)
+        r_in = torch.rand(6, n_atom_basis)
+
+        attention = GraphAttention(n_atom_basis=n_atom_basis)
+
+        r_out = attention(r_in, e, a)
+
+        self.assertEqual(r_out.shape, r_in.shape)
+
+    def testmultitask(self):
+
+        n_atom = 10 
+        r = torch.rand(n_atom, 5)
+
+        multitaskdict = {
+                        "myenergy0":
+                                    [
+                                        {'name': 'Dense', 'param' : { 'in_features': 5, 'out_features': 20}},
+                                        {'name': 'shifted_softplus', 'param': {}},
+                                        {'name': 'Dense', 'param' : { 'in_features': 20, 'out_features': 1}}
+                                    ],
+
+                        "myenergy1":
+                                    [
+                                        {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                                        {'name': 'Dense', 'param' : { 'in_features': 20, 'out_features': 1}}
+                                    ],
+                        "Muliken charges": 
+                                    [
+                                        {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                                        {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+                                    ]
+                        }
+
+        model = NodeMultiTaskReadOut(multitaskdict)
+        output = model(r)
+
+
+if __name__ == '__main__':
+    unittest.main()
+
+
+

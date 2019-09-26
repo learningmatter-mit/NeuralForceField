@@ -1,12 +1,14 @@
+import torch
 import numpy as np
 from pymatgen.core.structure import Structure
 
 
 def get_crystal_graph(crystal, cutoff):
-    """Creates nxyz and periodic reindexing for a given Structure
+    """Creates nxyz and periodic reindexing for a given Structure.
 
     Args:
         crystal (Structure)
+        cutoff (float): cutoff to get neighbors of atoms
 
     Returns:
         nxyz (np.array): atomic numbers and xyz of relevant atoms
@@ -18,13 +20,14 @@ def get_crystal_graph(crystal, cutoff):
     sites = crystal.sites.copy()
     pbc = list(range(len(sites)))
 
-    for site in crystal.sites;
-        for nbr, _, idx in crystal.get_neighbors(site, cutoff, include_index=True):
-            if nbr not in sites:
-                sites.append(nbr)
+    for site in crystal.sites:
+        for site, _, idx, _ in crystal.get_neighbors(site, cutoff, include_index=True, include_image=True):
+            if site not in sites:
+                sites.append(site)
                 pbc.append(idx)
 
-    nxyz = np.array([[s.specie.number, *s.coords] for s in sites])
+    nxyz = torch.Tensor([[s.specie.number, *s.coords] for s in sites])
+    pbc = torch.LongTensor(pbc)
 
     return nxyz, pbc
 

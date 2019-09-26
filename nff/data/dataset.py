@@ -1,12 +1,16 @@
 import torch 
 import numpy as np 
+from copy import deepcopy
+from collections.abc import Iterable
 
 from sklearn.utils import shuffle as skshuffle
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset as TorchDataset
 
-from nff.data import GraphDataset
+from nff.data import get_neighbor_list
+from nff.data.sparse import sparsify_tensor
 import nff.utils.constants as const
+import copy
 
 
 class Dataset(TorchDataset):
@@ -14,120 +18,167 @@ class Dataset(TorchDataset):
          from the cluster later.
 
     Attributes:
-        nxyz (array): (N, 4) array with atomic number and xyz coordinates
-            for each of the N atoms
-        energy (array): (N, ) array with energies
-        force (array): (N, 3) array with forces
-        smiles (array): (N, ) array with SMILES strings
+        props (list of dicts): list of dictionaries containing all properties of the system.
+            Keys are the name of the property and values are the properties. Each value
+            is given by `props[idx][key]`. The only mandatory key is 'nxyz'. If inputting
+            energies, forces or hessians of different electronic states, the quantities 
+            should be distinguished with a "_n" suffix, where n = 0, 1, 2, ...
+            Whatever name is given to the energy of state n, the corresponding force name
+            must be the exact same name, but with "energy" replaced by "force".
+
+            Example:
+
+                props = {
+                    'nxyz': [np.array([[1, 0, 0, 0], [1, 1.1, 0, 0]]), np.array([[1, 3, 0, 0], [1, 1.1, 5, 0]])],
+                    'energy_0': [1, 1.2],
+                    'energy_0_grad': [np.array([[0, 0, 0], [0.1, 0.2, 0.3]]), np.array([[0, 0, 0], [0.1, 0.2, 0.3]])],
+                    'energy_1': [1.5, 1.5],
+                    'energy_1_grad': [np.array([[0, 0, 1], [0.1, 0.5, 0.8]]), np.array([[0, 0, 1], [0.1, 0.5, 0.8]])],
+                    'dipole_2': [3, None]
+                }
+
+            Periodic boundary conditions must be specified through the 'offset' key in props.
+                Once the neighborlist is created, distances between
+                atoms are computed by subtracting their xyz coordinates
+                and adding to the offset vector. This ensures images
+                of atoms outside of the unit cell have different
+                distances when compared to atoms inside of the unit cell.
+                This also bypasses the need for a reindexing.
+
+        units (str): units of the energies, forces etc.
+
     """
 
     def __init__(self,
-                 nxyz,
-                 energy,
-                 force,
-                 smiles,
-                 pbc=None,
-                 units='atomic'):
+                 props,
+                 units='kcal/mol'):
         """Constructor for Dataset class.
 
         Args:
-            nxyz (array): (N, 4) array with atomic number and xyz coordinates
-                for each of the N atoms
-            energy (array): (N, ) array with energies
-            force (array): (N, 3) array with forces
-            smiles (array): (N, ) array with SMILES strings
-            pbc (array): array with indices for periodic boundary conditions
-            atomic_units (bool): if True, input values are given in atomic units.
-                They will be converted to kcal/mol.
+            props (dictionary of lists): dictionary containing the
+                properties of the system. Each key has a list, and 
+                all lists have the same length.
+            units (str): units of the system.
         """
-
-        if pbc is None:
-            pbc = [None] * len(nxyz)
-
-        assert all([
-            len(_) == len(nxyz)
-            for _ in [energy, force, smiles, pbc]
-        ]), 'All lists should have the same length.'
-
-        self.nxyz = self._to_array(nxyz)
-        self.energy = energy
-        self.force = self._to_array(force)
-        self.smiles = smiles
-        self.pbc = pbc
-
+        
+        self.props = self._check_dictionary(deepcopy(props))
         self.units = units
         self.to_units('kcal/mol')
 
     def __len__(self):
-        return len(self.nxyz)
+        return len(self.props['nxyz'])
 
     def __getitem__(self, idx):
-        return self.nxyz[idx], self.energy[idx], self.force[idx], self.smiles[idx], self.pbc[idx]
+        return {key: val[idx] for key, val in self.props.items()}
 
     def __add__(self, other):
-        if other.units != self.units:
-            print('changing units')
-            other.to_units(self.units)
-        
-        nxyz = np.concatenate((self.nxyz, other.nxyz), axis=0)
-        energy = np.concatenate((self.energy, other.energy), axis=0)
 
-        # force, smiles and pbc are lists
-        force = self.force + other.force
-        smiles = self.smiles + other.smiles
-        pbc = self.pbc + other.pbc
+        if other.units != self.units:
+            other = other.copy().to_units(self.units)
         
-        return Dataset(
-            nxyz,
-            energy,
-            force,
-            smiles,
-            pbc,
-            units=self.units
-        )
+        props = concatenate_dict(self.props, other.props)
+
+        return Dataset(props, units=self.units)
+
+    def _check_dictionary(self, props):
+        """Check the dictionary or properties to see if it has the
+            specified format.
+        """
+
+        assert 'nxyz' in props.keys()
+        n_atoms = [len(x) for x in props['nxyz']]
+        n_geoms = len(props['nxyz'])
+
+        if 'num_atoms' not in props.keys():
+            props['num_atoms'] = torch.LongTensor(n_atoms)
+        else:
+            props['num_atoms'] = torch.LongTensor(props['num_atoms'])
+
+        for key, val in props.items():
+            if val is None:
+                props[key] = self._to_array([np.nan] * n_geoms)
+
+            elif any([x is None for x in val]):
+                bad_indices = [i for i, item in enumerate(val) if item is None]
+                good_index = [index for index in range(len(val)) if index not in bad_indices][0]
+                nan_list = (np.array(val[good_index]) * float('NaN')).tolist()
+                for index in bad_indices:
+                    props[key][index] = nan_list
+                props.update({key: self._to_array(val)})
+
+            else:
+                assert len(val) == n_geoms, \
+                    'length of {} is not compatible with {} geometries'.format(key, n_geoms)
+                props[key] = self._to_array(val)
+
+        return props
 
     def _to_array(self, x):
         """Converts input `x` to array"""
-        array = np.array
+        array = torch.Tensor
+        if isinstance(x[0], (array, str)):
+            return x
         
-        if type(x[0]) == float:
-            return array(x)
-        else:
+        if isinstance(x[0], Iterable):
             return [array(_) for _ in x]
+        else:
+            return array(x)
+
+    def generate_neighbor_list(self, cutoff):
+        """Generates a neighbor list for each one of the atoms in the dataset.
+            By default, does not consider periodic boundary conditions.
+
+        Args:
+            cutoff (float): distance up to which atoms are considered bonded.
+        """
+        self.props['nbr_list'] = [
+            get_neighbor_list(nxyz[:, 1:4], cutoff)
+            for nxyz in self.props['nxyz']
+        ]
+
+        # self.props['offsets'] = [0] * len(self)
+
+        return
+
+    def copy(self):
+        """Copies the current dataset"""
+        return Dataset(self.props, self.units)
 
     def to_units(self, target_unit):
+        """Converts the dataset to the desired unit. Modifies the dictionary of properties
+            in place.
+
+        Args:
+            target_unit (str): unit to use as final one
+        """
+
+        if target_unit not in ['kcal/mol', 'atomic']:
+            raise NotImplementedError(
+                'unit conversion for {} not implemented'.format(target_unit)
+            )
+
         if target_unit == 'kcal/mol' and self.units == 'atomic':
-            self.to_kcal_mol()
+            self.props = const.convert_units(
+                self.props,
+                const.AU_TO_KCAL
+            )
 
         elif target_unit == 'atomic' and self.units == 'kcal/mol':
-            self.to_atomic_units()
-
+            self.props = const.convert_units(
+                self.props,
+                const.KCAL_TO_AU
+            )
         else:
-            pass
+            return
 
-    def to_kcal_mol(self): 
-        """Converts forces and energies from atomic units to kcal/mol."""
-
-        self.force = [
-            x * const.HARTREE_TO_KCAL_MOL / const.BOHR_RADIUS
-            for x in self.force
-        ]
-        self.energy = [x * const.HARTREE_TO_KCAL_MOL for x in self.energy]
-
-        self.units = 'kcal/mol'
-
-    def to_atomic_units(self):
-        self.force = [
-            x / const.HARTREE_TO_KCAL_MOL * const.BOHR_RADIUS
-            for x in self.force
-        ]
-        self.energy = [x / const.HARTREE_TO_KCAL_MOL for x in self.energy]
-        self.units = 'atomic'
+        self.units = target_unit
+        return
 
     def shuffle(self):
-        self.nxyz, self.force, self.energy, self.smiles, self.pbc = skshuffle(
-            self.nxyz, self.force, self.energy, self.smiles, self.pbc
-        )
+        idx = list(range(len(self)))
+        reindex = skshuffle(idx)
+        self.props = {key: val[reindex] for key, val in self.props.items()}
+
         return 
 
     def save(self, path):
@@ -144,45 +195,66 @@ class Dataset(TorchDataset):
             )
 
 
+def concatenate_dict(*dicts):
+    """Concatenates dictionaries as long as they have the same keys.
+        If one dictionary has one key that the others do not have,
+        the dictionaries lacking the key will have that key replaced by None. All dictionaries must have the key `nxyz`.
+
+    Args:
+        *dicts (any number of dictionaries)
+    """
+
+    assert all([type(d) == dict for d in dicts]), \
+        'all arguments have to be dictionaries'
+
+    keys = set(sum([list(d.keys()) for d in dicts], []))
+    
+    joint_dict = {}
+    for key in keys:
+        joint_dict[key] = [
+            d.get(key, [None] * len(d['nxyz']))
+            for d in dicts
+        ]
+
+    return joint_dict
+
+
 def split_train_test(dataset, test_size=0.2):
     """Splits the current dataset in two, one for training and
         another for testing.
     """
 
-    (
-        nxyz_train, nxyz_test,
-        energy_train, energy_test,
-        force_train, force_test,
-        smiles_train, smiles_test,
-        pbc_train, pbc_test
-    ) = train_test_split(
-        dataset.nxyz,
-        dataset.energy,
-        dataset.force,
-        dataset.smiles,
-        dataset.pbc,
-        test_size=test_size
-    )
-
+    idx = list(range(len(dataset)))
+    idx_train, idx_test = train_test_split(idx)
     train = Dataset(
-        nxyz=nxyz_train,
-        energy=energy_train,
-        force=force_train,
-        smiles=smiles_train,
-        pbc=pbc_train,
+        props={key: [val[i] for i in idx_train] for key, val in dataset.props.items()},
         units=dataset.units
     )
-
     test = Dataset(
-        nxyz=nxyz_test,
-        energy=energy_test,
-        force=force_test,
-        smiles=smiles_test,
-        pbc=pbc_test,
+        props={key: [val[i] for i in idx_test] for key, val in dataset.props.items()},
         units=dataset.units
     )
 
     return train, test
+
+
+def slice_props_by_idx(idx, dictionary):
+    """for a dicionary of lists, build a new dictionary given index
+    
+    Args:
+        idx (list): Description
+        dictionary (dict): Description
+    
+    Returns:
+        dict: sliced dictionary
+    """
+    props_dict = {}
+    for key, val in dictionary.items(): 
+        val_list = []
+        for i in idx:
+            val_list.append(val[i])
+        props_dict[key] = val_list
+    return props_dict
 
 
 def split_train_validation_test(dataset, val_size=0.2, test_size=0.2):

@@ -1,27 +1,31 @@
 import torch
 import numpy as np
 
-from nff.data import Graph, GraphDataset
 
+def get_neighbor_list(xyz, cutoff=5):
+    """Get neighbor list from xyz positions of atoms.
 
-def species_geom_from_batches(graph_data, n_batches):
-    '''Retrieve species, features and xyz from graphbuilder.GraphDataset
-    '''
+    Args:
+        xyz (torch.Tensor or np.array): (N, 3) array with positions
+            of the atoms.
+        cutoff (float): maximum distance to consider atoms as
+            connected.
 
-    species_dict = {}
+    Returns:
+        nbr_list (torch.Tensor): (num_edges, 2) array with the
+            indices of connected atoms.
+    """
 
-    name_list = []
-    r_list = []
-    xyz_list = []
+    xyz = torch.Tensor(xyz)
+    n = xyz.size(0)
 
-    for i in range(n_batch):
-        batch = graph_data.batches[i]
+    # calculating distances
+    dist = (xyz.expand(n, n, 3) - xyz.expand(n, n, 3).transpose(0, 1)).pow(2).sum(dim=2).sqrt()
 
-        xyz_list += list(torch.split(batch.data['xyz'], batch.data['N']))
-        r_list += list(torch.split(batch.data['r'], batch.data['N']))
-        name_list += batch.data['name']
+    # neighbor list
+    mask = (dist <= cutoff)
+    mask[np.diag_indices(n)] = 0
+    nbr_list = mask.nonzero()
 
-    for index, name in enumerate(name_list):
-        species_dict[name] = species_dict.get(name, []) + [index]
+    return nbr_list
 
-    return species_dict, r_list, xyz_list
