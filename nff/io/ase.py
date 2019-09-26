@@ -39,9 +39,9 @@ class AtomsBatch(Atoms):
         super().__init__(*args, **kwargs)
 
         self.props = props
-        self.nbr_list = self.props.get('nbr_list', None)
-        self.offsets = self.props.get('offsets', None)
-        self.num_atoms = self.props.get('num_atoms', len(self))
+        self.nbr_list = props.get('nbr_list', None)
+        self.offsets = props.get('offsets', None)
+        self.num_atoms = props.get('num_atoms', len(self))
         self.cutoff = cutoff
 
     def get_nxyz(self):
@@ -109,6 +109,15 @@ class AtomsBatch(Atoms):
     def batch_virial():
         pass
 
+    @classmethod
+    def from_atoms(cls, atoms):
+        return cls(
+            atoms,
+            positions=atoms.positions,
+            numbers=atoms.numbers,
+            props={},
+        )
+
 
 class NeuralFF(Calculator):
     """ASE calculator using a pretrained NeuralFF model"""
@@ -158,7 +167,7 @@ class NeuralFF(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # run model 
-        atomsbatch = AtomsBatch(atoms) 
+        atomsbatch = AtomsBatch.from_atoms(atoms) 
         batch = batch_to(atomsbatch.get_batch(), self.device)
         
         # add keys so that the readout function can calculate these properties
@@ -170,12 +179,15 @@ class NeuralFF(Calculator):
         
         # change energy and force to numpy array 
         energy = prediction['energy'].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
-        energy_grad = prediction['energy_grad'].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+        if 'forces' in properties:
+            energy_grad = prediction['energy_grad'].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
         
         self.results = {
             'energy': energy.reshape(-1),
-            'forces': -energy_grad.reshape(-1, 3)
         }
+
+        if 'forces' in properties:
+            self.results['forces'] = -energy_grad.reshape(-1, 3)
 
     @classmethod
     def from_file(
