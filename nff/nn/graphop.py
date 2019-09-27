@@ -4,6 +4,29 @@ import torch.nn.functional as F
 from nff.utils.scatter import compute_grad
 
 
+def split_and_sum(tensor, N):
+    """spliting a torch Tensor into a list of uneven sized tensors,
+    and sum each tensor and stack 
+
+    Example: 
+        A = torch.rand(10, 10)
+        N = [4,6]
+        split_and_sum(A, N).shape # (2, 10) 
+    
+    Args:
+        tensor (torch.Tensor): tensors to be split and summed
+        N (list): list of number of atoms 
+    
+    Returns:
+        torch.Tensor: stacked tensor of summed smaller tensor 
+    """
+    batched_prop = list(torch.split(tensor, N))
+
+    for batch_idx in range(len(N)):
+        batched_prop[batch_idx] = torch.sum(batched_prop[batch_idx], dim=0)
+
+    return torch.stack(batched_prop)
+
 def batch_and_sum(dict_input, N, predict_keys, xyz):
     """Pooling function to get graph property.
         Separate the outputs back into batches, pool the results,
@@ -25,16 +48,15 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
 
     for key, val in dict_input.items():
         #split 
-        if key in predict_keys and "_grad" not in key:
-            batched_prop = list(torch.split(val, N))
-
-            for batch_idx in range(len(N)):
-                batched_prop[batch_idx] = torch.sum(batched_prop[batch_idx], dim=0)
-
-            results[key] = torch.stack(batched_prop)
-
-        # indicates that this key requires a grad computation
-        if key + "_grad" in predict_keys:
+        if key in predict_keys and key + "_grad" not in keys:
+            results[key] = split_and_sum(val, N)
+        if key in predict_keys and key + "_grad" in keys:
+            results[key] = split_and_sum(val, N)
+            grad = compute_grad(inputs=xyz, output=results[key])
+            results[key + "_grad"] = grad
+        # For the case only predicting gradient 
+        if key not in predict_keys and key + "_grad" in predict_keys:
+            results[key] = split_and_sum(val, N)
             grad = compute_grad(inputs=xyz, output=results[key])
             results[key + "_grad"] = grad
 
