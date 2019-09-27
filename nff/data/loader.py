@@ -28,7 +28,7 @@ def collate_dicts(dicts):
     for n, d in zip(cumulative_atoms, dicts):
         for key in REINDEX_KEYS:
             if key in d:
-                d[key] = d[key] + n
+                d[key] = d[key] + int(n)
 
     # batching the data
     batch = {}
