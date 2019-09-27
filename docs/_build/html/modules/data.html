@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>schnetpack.data &mdash; SchNetPack 1.0rc documentation</title>
+  <title>nff.data &mdash; Neural Force Field 1.0rc documentation</title>
   
 
   
@@ -25,8 +25,6 @@
         <script type="text/javascript" src="../_static/underscore.js"></script>
         <script type="text/javascript" src="../_static/doctools.js"></script>
         <script type="text/javascript" src="../_static/language_data.js"></script>
-        <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
-        <script type="text/x-mathjax-config">MathJax.Hub.Config({"tex2jax": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true, "ignoreClass": "document", "processClass": "math|output_area"}})</script>
     
     <script type="text/javascript" src="../_static/js/theme.js"></script>
 
@@ -37,8 +35,7 @@
   <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="schnetpack.datasets" href="datasets.html" />
-    <link rel="prev" title="schnetpack" href="base.html" /> 
+    <link rel="prev" title="&lt;no title&gt;" href="index.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -52,7 +49,7 @@
           
 
           
-            <a href="../index.html" class="icon icon-home"> SchNetPack
+            <a href="../index.html" class="icon icon-home"> Neural Force Field
           
 
           
@@ -86,37 +83,14 @@
               
             
             
-              <p class="caption"><span class="caption-text">Getting Started</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../getstarted/getstarted.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../getstarted/getstarted.html#scripts-for-benchmark-data-sets">Scripts for benchmark data sets</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../getstarted/getstarted.html#using-scripts-with-custom-datasets">Using Scripts with custom Datasets</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../getstarted/getstarted.html#using-argument-files-for-training">Using Argument Files for Training</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../getstarted/getstarted.html#supported-models">Supported Models</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../getstarted/getstarted.html#benchmark-datasets">Benchmark Datasets</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../getstarted/getstarted.html#references">References</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../getstarted/benchmarks.html">Benchmarks and Trained Models</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Modules</span></p>
+              <p class="caption"><span class="caption-text">Modules</span></p>
 <ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="base.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">schnetpack</span></code></a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">schnetpack.data</span></code></a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#data-loading">Data Loading</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#predefined-datasets">Predefined Datasets</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#molecule-datasets">Molecule datasets</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#materials-datasets">Materials datasets</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">nff.data</span></code></a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#creating-datasets">Creating datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#joining-and-splitting-the-data-from-the-dataset">Joining and splitting the data from the dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#custom-collate-function-for-the-dataloader">Custom collate function for the DataLoader</a></li>
 </ul>
 </li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="datasets.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">schnetpack.datasets</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="environment.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">schnetpack.environment</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="nn.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">schnetpack.nn</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="representation.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">schnetpack.representation</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="atomistic.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">schnetpack.atomistic</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="train.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">schnetpack.train</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="md.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">schnetpack.md</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">schnetpack.utils</span></code></a></li>
 </ul>
 
             
@@ -131,7 +105,7 @@
       <nav class="wy-nav-top" aria-label="top navigation">
         
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../index.html">SchNetPack</a>
+          <a href="../index.html">Neural Force Field</a>
         
       </nav>
 
@@ -164,7 +138,7 @@
         
           <li><a href="index.html">&lt;no title&gt;</a> &raquo;</li>
         
-      <li><code class="xref py py-mod docutils literal notranslate"><span class="pre">schnetpack.data</span></code></li>
+      <li><code class="xref py py-mod docutils literal notranslate"><span class="pre">nff.data</span></code></li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -207,19 +181,151 @@
     text-align: unset;
 }
 </style>
-<div class="section" id="schnetpack-data">
-<h1><code class="xref py py-mod docutils literal notranslate"><span class="pre">schnetpack.data</span></code><a class="headerlink" href="#schnetpack-data" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="data-loading">
-<h2>Data Loading<a class="headerlink" href="#data-loading" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="module-nff.data">
+<span id="nff-data"></span><h1><a class="reference internal" href="#module-nff.data" title="nff.data"><code class="xref py py-mod docutils literal notranslate"><span class="pre">nff.data</span></code></a><a class="headerlink" href="#module-nff.data" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="creating-datasets">
+<h2>Creating datasets<a class="headerlink" href="#creating-datasets" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="nff.data.Dataset">
+<em class="property">class </em><code class="sig-prename descclassname">nff.data.</code><code class="sig-name descname">Dataset</code><span class="sig-paren">(</span><em class="sig-param">props</em>, <em class="sig-param">units='kcal/mol'</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/nff/data/dataset.html#Dataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#nff.data.Dataset" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="simple">
+<dt>Dataset to deal with NFF calculations. Can be expanded to retrieve calculations</dt><dd><p>from the cluster later.</p>
+</dd>
+</dl>
+<dl class="attribute">
+<dt id="nff.data.Dataset.props">
+<code class="sig-name descname">props</code><a class="headerlink" href="#nff.data.Dataset.props" title="Permalink to this definition">¶</a></dt>
+<dd><p>list of dictionaries containing all properties of the system.
+Keys are the name of the property and values are the properties. Each value
+is given by <cite>props[idx][key]</cite>. The only mandatory key is ‘nxyz’. If inputting
+energies, forces or hessians of different electronic states, the quantities
+should be distinguished with a “_n” suffix, where n = 0, 1, 2, …
+Whatever name is given to the energy of state n, the corresponding force name
+must be the exact same name, but with “energy” replaced by “force”.</p>
+<p class="rubric">Example</p>
+<dl class="simple">
+<dt>props = {</dt><dd><p>‘nxyz’: [np.array([[1, 0, 0, 0], [1, 1.1, 0, 0]]), np.array([[1, 3, 0, 0], [1, 1.1, 5, 0]])],
+‘energy_0’: [1, 1.2],
+‘energy_0_grad’: [np.array([[0, 0, 0], [0.1, 0.2, 0.3]]), np.array([[0, 0, 0], [0.1, 0.2, 0.3]])],
+‘energy_1’: [1.5, 1.5],
+‘energy_1_grad’: [np.array([[0, 0, 1], [0.1, 0.5, 0.8]]), np.array([[0, 0, 1], [0.1, 0.5, 0.8]])],
+‘dipole_2’: [3, None]</p>
+</dd>
+</dl>
+<p>}</p>
+<dl class="simple">
+<dt>Periodic boundary conditions must be specified through the ‘offset’ key in props.</dt><dd><p>Once the neighborlist is created, distances between
+atoms are computed by subtracting their xyz coordinates
+and adding to the offset vector. This ensures images
+of atoms outside of the unit cell have different
+distances when compared to atoms inside of the unit cell.
+This also bypasses the need for a reindexing.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list of dicts</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="nff.data.Dataset.units">
+<code class="sig-name descname">units</code><a class="headerlink" href="#nff.data.Dataset.units" title="Permalink to this definition">¶</a></dt>
+<dd><p>units of the energies, forces etc.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="nff.data.Dataset.copy">
+<code class="sig-name descname">copy</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/nff/data/dataset.html#Dataset.copy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#nff.data.Dataset.copy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Copies the current dataset</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="nff.data.Dataset.generate_neighbor_list">
+<code class="sig-name descname">generate_neighbor_list</code><span class="sig-paren">(</span><em class="sig-param">cutoff</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/nff/data/dataset.html#Dataset.generate_neighbor_list"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#nff.data.Dataset.generate_neighbor_list" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="simple">
+<dt>Generates a neighbor list for each one of the atoms in the dataset.</dt><dd><p>By default, does not consider periodic boundary conditions.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>cutoff</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – distance up to which atoms are considered bonded.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="nff.data.Dataset.to_units">
+<code class="sig-name descname">to_units</code><span class="sig-paren">(</span><em class="sig-param">target_unit</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/nff/data/dataset.html#Dataset.to_units"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#nff.data.Dataset.to_units" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="simple">
+<dt>Converts the dataset to the desired unit. Modifies the dictionary of properties</dt><dd><p>in place.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>target_unit</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – unit to use as final one</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
 </div>
-<div class="section" id="predefined-datasets">
-<h2>Predefined Datasets<a class="headerlink" href="#predefined-datasets" title="Permalink to this headline">¶</a></h2>
-<div class="section" id="molecule-datasets">
-<h3>Molecule datasets<a class="headerlink" href="#molecule-datasets" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="joining-and-splitting-the-data-from-the-dataset">
+<h2>Joining and splitting the data from the dataset<a class="headerlink" href="#joining-and-splitting-the-data-from-the-dataset" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="nff.data.concatenate_dict">
+<code class="sig-prename descclassname">nff.data.</code><code class="sig-name descname">concatenate_dict</code><span class="sig-paren">(</span><em class="sig-param">*dicts</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/nff/data/dataset.html#concatenate_dict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#nff.data.concatenate_dict" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="simple">
+<dt>Concatenates dictionaries as long as they have the same keys.</dt><dd><p>If one dictionary has one key that the others do not have,
+the dictionaries lacking the key will have that key replaced by None. All dictionaries must have the key <cite>nxyz</cite>.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>*dicts</strong> (<em>any number of dictionaries</em>) – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="nff.data.split_train_test">
+<code class="sig-prename descclassname">nff.data.</code><code class="sig-name descname">split_train_test</code><span class="sig-paren">(</span><em class="sig-param">dataset</em>, <em class="sig-param">test_size=0.2</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/nff/data/dataset.html#split_train_test"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#nff.data.split_train_test" title="Permalink to this definition">¶</a></dt>
+<dd><p>Splits the current dataset in two, one for training and
+another for testing.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="nff.data.split_train_validation_test">
+<code class="sig-prename descclassname">nff.data.</code><code class="sig-name descname">split_train_validation_test</code><span class="sig-paren">(</span><em class="sig-param">dataset</em>, <em class="sig-param">val_size=0.2</em>, <em class="sig-param">test_size=0.2</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/nff/data/dataset.html#split_train_validation_test"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#nff.data.split_train_validation_test" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
 </div>
-<div class="section" id="materials-datasets">
-<h3>Materials datasets<a class="headerlink" href="#materials-datasets" title="Permalink to this headline">¶</a></h3>
-</div>
+<div class="section" id="custom-collate-function-for-the-dataloader">
+<h2>Custom collate function for the DataLoader<a class="headerlink" href="#custom-collate-function-for-the-dataloader" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="nff.data.collate_dicts">
+<code class="sig-prename descclassname">nff.data.</code><code class="sig-name descname">collate_dicts</code><span class="sig-paren">(</span><em class="sig-param">dicts</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/nff/data/loader.html#collate_dicts"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#nff.data.collate_dicts" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="simple">
+<dt>Collates dictionaries within a single batch. Automatically reindexes neighbor lists</dt><dd><p>and periodic boundary conditions to deal with the batch.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>dicts</strong> (<em>list of dict</em>) – each element of the dataset</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>batch (dict)</p>
+</dd>
+</dl>
+</dd></dl>
+
 </div>
 </div>
 
@@ -231,10 +337,8 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="datasets.html" class="btn btn-neutral float-right" title="schnetpack.datasets" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
-      
-        <a href="base.html" class="btn btn-neutral float-left" title="schnetpack" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="index.html" class="btn btn-neutral float-left" title="&lt;no title&gt;" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

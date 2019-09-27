@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# SchNetPack documentation build configuration file, created by
+# Neural Force Field documentation build configuration file, created by
 # sphinx-quickstart on Mon Jul 30 18:07:50 2018.
 #
 # This file is execfile()d with the current directory set to its
@@ -45,7 +45,7 @@ extensions = [
     "nbsphinx",
 ]
 
-autodoc_mock_imports = ["torch"]
+autodoc_mock_imports = ["torch", "numpy", "sklearn", "networkx", "pymatgen"]
 
 
 # Add any paths that contain templates here, relative to this directory.
@@ -61,7 +61,7 @@ source_suffix = ".rst"
 master_doc = "index"
 
 # General information about the project.
-project = "SchNetPack"
+project = "Neural Force Field"
 copyright = "2019, Wujie Wang, Daniel Schwalbe-Koda"
 author = "Wujie Wang, Daniel Schwalbe-Koda"
 
@@ -180,7 +180,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [(master_doc, "schnetpack", "SchNetPack Documentation", [author], 1)]
+man_pages = [(master_doc, "nff", "Neural Force Field Documentation", [author], 1)]
 
 
 # -- Options for Texinfo output -------------------------------------------
@@ -191,10 +191,10 @@ man_pages = [(master_doc, "schnetpack", "SchNetPack Documentation", [author], 1)
 texinfo_documents = [
     (
         master_doc,
-        "SchNetPack",
-        "SchNetPack Documentation",
+        "Neural Force Field",
+        "Neural Force Field Documentation",
         author,
-        "SchNetPack",
+        "Neural Force Field",
         "One line description of project.",
         "Miscellaneous",
     )

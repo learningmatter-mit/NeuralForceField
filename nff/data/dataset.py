@@ -238,25 +238,6 @@ def split_train_test(dataset, test_size=0.2):
     return train, test
 
 
-def slice_props_by_idx(idx, dictionary):
-    """for a dicionary of lists, build a new dictionary given index
-    
-    Args:
-        idx (list): Description
-        dictionary (dict): Description
-    
-    Returns:
-        dict: sliced dictionary
-    """
-    props_dict = {}
-    for key, val in dictionary.items(): 
-        val_list = []
-        for i in idx:
-            val_list.append(val[i])
-        props_dict[key] = val_list
-    return props_dict
-
-
 def split_train_validation_test(dataset, val_size=0.2, test_size=0.2):
     train, validation = split_train_test(dataset, test_size=val_size)
     train, test = split_train_test(train, test_size=test_size)

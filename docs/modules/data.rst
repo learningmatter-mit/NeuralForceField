@@ -1,51 +1,23 @@
-:mod:`schnetpack.data`
+:mod:`nff.data`
 ======================
 
-.. automodule:: schnetpack.data
+.. automodule:: nff.data
 
 
-Data Loading
-------------
+Creating datasets
+---------------------
 
-.. autoclass:: schnetpack.data.AtomsData
+.. autoclass:: nff.data.Dataset
    :members:
 
-.. autoclass:: schnetpack.data.AtomsLoader
-   :members:
+Joining and splitting the data from the dataset
+-----------------------------------------------------
+
+.. autofunction:: concatenate_dict
+.. autofunction:: split_train_test
+.. autofunction:: split_train_validation_test
 
 
-Predefined Datasets
--------------------
-
-.. automodule:: schnetpack.datasets
-
-.. autoclass:: schnetpack.data.DownloadableAtomsData
-   :members:
-
-Molecule datasets
-~~~~~~~~~~~~~~~~~
-
-.. autoclass:: schnetpack.datasets.QM9
-   :members:
-
-
-.. autoclass:: schnetpack.datasets.MD17
-   :members:
-
-
-.. autoclass:: schnetpack.datasets.ISO17
-   :members:
-
-
-.. autoclass:: schnetpack.datasets.ANI1
-   :members:
-
-
-Materials datasets
-~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: schnetpack.datasets.MaterialsProject
-   :members:
-
-.. autoclass:: schnetpack.datasets.OrganicMaterialsDatabase
-   :members:
+Custom collate function for the DataLoader
+------------------------------------------------
+.. autofunction:: collate_dicts
