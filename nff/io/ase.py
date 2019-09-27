@@ -28,7 +28,7 @@ class AtomsBatch(Atoms):
         **kwargs
     ):
         """
-        
+
         Args:
             *args: Description
             nbr_list (None, optional): Description
@@ -72,13 +72,13 @@ class AtomsBatch(Atoms):
 
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
         self.props['num_atoms'] = torch.LongTensor([len(self)])
- 
+
         return self.props
 
     def update_nbr_list(self, cutoff):
         """Update neighbor list and the periodic reindexing
             for the given Atoms object.
-        
+
         Args:
             cutoff (float): maximum cutoff for which atoms are
                 considered interacting.
@@ -88,7 +88,7 @@ class AtomsBatch(Atoms):
             nxyz (torch.Tensor)
         """
 
-        edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
+        edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff)
         nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         # torch.sparse has no storage yet.
         #offsets = offsets.dot(self.get_cell())
@@ -100,11 +100,11 @@ class AtomsBatch(Atoms):
         return nbr_list, offsets
 
     def batch_properties():
-        pass 
+        pass
 
     def batch_kinetic_energy():
         pass
-    
+
     def batch_virial():
         pass
 
@@ -194,11 +194,14 @@ class BulkPhaseMaterials(Atoms):
 
         if exclude_atoms_nbr_list:
             assert 'atoms_nbr_list' in self.props
-            atoms_nbr_list = self.props["atoms_nbr_list"].tolist()
-            nbr_list = nbr_list.tolist()
             nbr_list = torch.LongTensor(
-                [x for x in nbr_list if x not in atoms_nbr_list]
+                [x for x in nbr_list.tolist() 
+                                    if x not in self.props["atoms_nbr_list"].tolist()]
             )
+
+            offsets =torch.stack([offsets[i] for i, x in enumerate(nbr_list.tolist()) 
+                                    if x not in self.atoms_nbr_list.tolist()] )
+
         self.nbr_list = nbr_list
         self.offsets = offsets
 
