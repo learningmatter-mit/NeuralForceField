@@ -47,7 +47,10 @@ class Dynamics:
         integrator = self.mdparam['thermostat']
         
         self.integrator = integrator(self.atomsbatch, 
-                                     self.mdparam['time_step'] * units.fs)
+                                     self.mdparam['time_step'] * units.fs,
+                                     self.mdparam['T_init'] * units.kB,
+                                     20.0
+                                     )
         
         # attach trajectory dump 
         self.traj = Trajectory(self.mdparam['traj_filename'], 'w', self.atomsbatch)
@@ -60,8 +63,12 @@ class Dynamics:
                                         mode='a'), interval=mdparam['save_frequency'])
     
     def run(self):
+        # 
+        epochs = int(self.mdparam['steps'] // self.mdparam['nbr_list_update_freq'])
         
-        self.integrator.run(self.mdparam['steps'])
+        for step in range(epochs):
+            self.integrator.run(self.mdparam['nbr_list_update_freq'])
+            self.atomsbatch.update_nbr_list()
 
         self.traj.close()
         
@@ -78,7 +85,7 @@ class Dynamics:
         xyz = []
         
         skip = self.mdparam['skip']
-        traj = traj[skip:] if len(traj) > skip else traj
+        traj = list(traj)[skip:] if len(traj) > skip else traj
 
         for snapshot in traj:
             frames = np.concatenate([
