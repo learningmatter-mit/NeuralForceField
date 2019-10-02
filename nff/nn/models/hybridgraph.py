@@ -10,6 +10,7 @@ from nff.nn.graphop import batch_and_sum
 from nff.nn.utils import get_default_readout
 
 from nff.utils.scatter import scatter_add
+
 class HyBridGraphConv(nn.Module):
 
     def __init__(self, modelparams):
@@ -58,14 +59,14 @@ class HyBridGraphConv(nn.Module):
     def SeqConv(self, node, xyz, nbr_list, conv_module, pbc_offsets=None):
         if pbc_offsets is None:
             pbc_offsets = 0
-        e = (xyz[nbr_list[:, 0]] - xyz[nbr_list[:, 1]] + pbc_offsets).pow(2).sum(1).sqrt()[:, None]
+        e = (xyz[nbr_list[:, 1]] - xyz[nbr_list[:, 0]] + pbc_offsets).pow(2).sum(1).sqrt()[:, None]
         for i, conv in enumerate(conv_module):
             dr = conv(r=node, e=e, a=nbr_list)
             node = node + dr
         return node
     
     def V_ex(self, xyz, nbr_list, pbc_offsets):
-        dist = (xyz[nbr_list[:, 0]] - xyz[nbr_list[:, 1]] + pbc_offsets).pow(2).sum(1).sqrt()
+        dist = (xyz[nbr_list[:, 1]] - xyz[nbr_list[:, 0]] + pbc_offsets).pow(2).sum(1).sqrt()
         potential = ((dist.reciprocal() * self.sigma).pow(self.power))
         return scatter_add(potential, nbr_list[:, 0], dim_size=xyz.shape[0])[:, None]
     
@@ -75,20 +76,19 @@ class HyBridGraphConv(nn.Module):
         N = batch['num_atoms'].reshape(-1).tolist()
         a_mol = batch['atoms_nbr_list']
         a_sys = batch['nbr_list']
-        cell = batch['cell']
 
         # offsets take care of periodic boundary conditions
         offsets = batch.get('offsets', 0) # offsets only affect nbr_list 
-        xyz.requires_grad = True  
+        xyz.requires_grad = True
         node_input = self.atom_embed(r.long()).squeeze()
         
         # system convolution 
         r_sys = self.SeqConv(node_input, xyz, a_sys, self.system_convolutions, offsets)
         r_mol = self.SeqConv(node_input, xyz, a_mol, self.molecule_convolutions)
         # Excluded Volume interactions 
-        r_ex = self.V_ex(xyz, a_sys, offsets)
+        #r_ex = self.V_ex(xyz, a_sys, offsets)
         results = self.atomwisereadout(r_sys + r_mol)
         # add excluded volume interactions 
-        results['energy'] += r_ex
+        #results['energy'] += r_ex
         results = batch_and_sum(results, N, list(batch.keys()), xyz)
-        return results 
+        return results
