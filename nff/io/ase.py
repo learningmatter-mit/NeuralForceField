@@ -75,7 +75,7 @@ class AtomsBatch(Atoms):
 
         return self.props
 
-    def update_nbr_list(self, cutoff):
+    def update_nbr_list(self):
         """Update neighbor list and the periodic reindexing
             for the given Atoms object.
 
@@ -162,17 +162,19 @@ class BulkPhaseMaterials(Atoms):
                 'num_atoms', 'nbr_list' and 'offsets'
         """
         if self.nbr_list is None or self.offsets is None:
-            self.update_nbr_list(self.cutoff)
+            self.update_nbr_list()
             self.props['nbr_list'] = self.nbr_list
+            self.props['atoms_nbr_list'] = self.atoms_nbr_list
             self.props['offsets'] = self.offsets
 
         self.props['nbr_list'] = self.nbr_list
+        self.props['atoms_nbr_list'] = self.atoms_nbr_list
         self.props['offsets'] = self.offsets
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
 
         return self.props
 
-    def update_atomsbatch_nbr_list(self, cutoff, exclude_atoms_nbr_list=True):
+    def update_system_nbr_list(self, cutoff, exclude_atoms_nbr_list=True):
         """Update neighbor list and the periodic reindexing
             for the given Atoms object.
 
@@ -189,24 +191,21 @@ class BulkPhaseMaterials(Atoms):
         edge_from, edge_to, offsets = neighbor_list('ijS', self, cutoff)
         nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]]
-        nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
-        #offsets = sparsify_array(offsets.numpy().dot(self.get_cell()))
+        nbr_list_tmp = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
         if exclude_atoms_nbr_list:
-            assert 'atoms_nbr_list' in self.props
+
             nbr_list = torch.LongTensor(
-                [x for x in nbr_list.tolist() 
-                                    if x not in self.props["atoms_nbr_list"].tolist()]
+                [x for x in nbr_list_tmp.tolist() 
+                                    if x not in self.atoms_nbr_list.tolist()]
             )
 
-            offsets =torch.stack([offsets[i] for i, x in enumerate(nbr_list.tolist()) 
+            offsets = torch.stack([offsets[i] for i, x in enumerate(nbr_list_tmp.tolist()) 
                                     if x not in self.atoms_nbr_list.tolist()] )
-
+    
         self.nbr_list = nbr_list
-        self.offsets = offsets
-
-        return nbr_list, offsets
-
+        self.offsets = sparsify_array(offsets.numpy().dot(self.get_cell()))
+        
     def get_list_atoms(self):
 
         mol_split_idx = self.props['num_subgraphs'].tolist()
@@ -241,16 +240,10 @@ class BulkPhaseMaterials(Atoms):
 
         intra_nbr_list = torch.cat(intra_nbr_list)
         self.atoms_nbr_list = intra_nbr_list
-        self.props['atoms_nbr_list'] = intra_nbr_list
-
-    def batch_properties():
-        pass
-
-    def batch_kinetic_energy():
-        pass
-
-    def batch_virial():
-        pass
+    
+    def update_nbr_list(self):
+        self.update_atoms_nbr_list(self.props['atoms_cutoff'])
+        self.update_system_nbr_list(self.props['system_cutoff'])
 
 
 class NeuralFF(Calculator):
