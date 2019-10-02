@@ -48,14 +48,14 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
 
     for key, val in dict_input.items():
         #split 
-        if key in predict_keys and key + "_grad" not in keys:
+        if key in predict_keys and key + "_grad" not in predict_keys:
             results[key] = split_and_sum(val, N)
-        if key in predict_keys and key + "_grad" in keys:
+        elif key in predict_keys and key + "_grad" in predict_keys:
             results[key] = split_and_sum(val, N)
             grad = compute_grad(inputs=xyz, output=results[key])
             results[key + "_grad"] = grad
         # For the case only predicting gradient 
-        if key not in predict_keys and key + "_grad" in predict_keys:
+        elif key not in predict_keys and key + "_grad" in predict_keys:
             results[key] = split_and_sum(val, N)
             grad = compute_grad(inputs=xyz, output=results[key])
             results[key + "_grad"] = grad
