@@ -14,15 +14,17 @@ from nff.md.utils import NeuralMDLogger, write_traj
 from nff.io.ase import NeuralFF
 
 DEFAULTNVEPARAMS = {
-    'T_init': 300.0, 
-    'time_step': 0.5, 
-    'thermostat': VelocityVerlet,  # or Langevin or NPT or NVT or Thermodynamic Integration
-    'nbr_list_update_freq': 50,
-    'steps': 100,
-    'save_frequency': 20,
+    'T_init': 120.0, 
+#     'thermostat': NoseHoover,   # or Langevin or NPT or NVT or Thermodynamic Integration
+#     'thermostat_params': {'timestep': 0.5 * units.fs, "temperature": 120.0 * units.kB,  "ttime": 20.0}
+    'thermostat': VelocityVerlet,  
+    'thermostat_params': {'timestep': 0.5 * units.fs},
+    'nbr_list_update_freq': 20,
+    'steps': 3000,
+    'save_frequency': 10,
     'thermo_filename': './thermo.log', 
     'traj_filename': './atom.traj',
-    'skip': 50
+    'skip': 0
 }
 
 
@@ -46,11 +48,7 @@ class Dynamics:
         # set thermostats 
         integrator = self.mdparam['thermostat']
         
-        self.integrator = integrator(self.atomsbatch, 
-                                     self.mdparam['time_step'] * units.fs,
-                                     self.mdparam['T_init'] * units.kB,
-                                     20.0
-                                     )
+        self.integrator = integrator(self.atomsbatch, **self.mdparam['thermostat_params'])
         
         # attach trajectory dump 
         self.traj = Trajectory(self.mdparam['traj_filename'], 'w', self.atomsbatch)
