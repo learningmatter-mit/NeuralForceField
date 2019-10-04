@@ -194,15 +194,21 @@ class BulkPhaseMaterials(Atoms):
         nbr_list_tmp = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
         if exclude_atoms_nbr_list:
+            offsets_mat = torch.zeros(self.get_number_of_atoms(),
+                                      self.get_number_of_atoms(), 3)
+            nbr_list_mat = torch.zeros(self.get_number_of_atoms(), 
+                                       self.get_number_of_atoms()).to(torch.long)
+            atom_nbr_list_mat = torch.zeros(self.get_number_of_atoms(), 
+                                            self.get_number_of_atoms()).to(torch.long)
+            
+            offsets_mat[nbr_list_tmp[:, 0], nbr_list_tmp[:, 1]] = offsets
+            nbr_list_mat[nbr_list_tmp[:, 0], nbr_list_tmp[:, 1]] = 1
+            atom_nbr_list_mat[self.atoms_nbr_list[:, 0], self.atoms_nbr_list[:, 1]] = 1
 
-            nbr_list = torch.LongTensor(
-                [x for x in nbr_list_tmp.tolist() 
-                                    if x not in self.atoms_nbr_list.tolist()]
-            )
+            nbr_list_mat = nbr_list_mat - atom_nbr_list_mat
+            nbr_list = nbr_list_mat.nonzero()
+            offsets = offsets_mat[nbr_list[:,0], nbr_list[:,1], :]
 
-            offsets = torch.stack([offsets[i] for i, x in enumerate(nbr_list_tmp.tolist()) 
-                                    if x not in self.atoms_nbr_list.tolist()] )
-    
         self.nbr_list = nbr_list
         self.offsets = sparsify_array(offsets.numpy().dot(self.get_cell()))
         
@@ -244,6 +250,7 @@ class BulkPhaseMaterials(Atoms):
     def update_nbr_list(self):
         self.update_atoms_nbr_list(self.props['atoms_cutoff'])
         self.update_system_nbr_list(self.props['system_cutoff'])
+
 
 
 class NeuralFF(Calculator):
