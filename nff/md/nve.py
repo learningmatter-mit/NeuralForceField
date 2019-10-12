@@ -36,7 +36,6 @@ class Dynamics:
         # initialize the atoms batch system 
         self.atomsbatch = atomsbatch
         self.mdparam = mdparam
-        self.mdparam = mdparam
    
         # todo: structure optimization before starting
         
