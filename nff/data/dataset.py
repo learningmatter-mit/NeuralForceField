@@ -225,7 +225,7 @@ def split_train_test(dataset, test_size=0.2):
     """
 
     idx = list(range(len(dataset)))
-    idx_train, idx_test = train_test_split(idx)
+    idx_train, idx_test = train_test_split(idx, test_size=test_size)
     train = Dataset(
         props={key: [val[i] for i in idx_train] for key, val in dataset.props.items()},
         units=dataset.units
