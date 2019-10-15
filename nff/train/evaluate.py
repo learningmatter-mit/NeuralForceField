@@ -39,6 +39,9 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
         all_results.append(to_cpu(results))
         all_batches.append(to_cpu(batch))
 
+        del results
+        del batch
+
     # weighted average over batches
     if loss_is_normalized:
         eval_loss /= n_eval
