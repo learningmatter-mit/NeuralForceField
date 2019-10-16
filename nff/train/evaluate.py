@@ -2,7 +2,7 @@ import numpy as np
 
 import torch
 
-from nff.utils.cuda import batch_to
+from nff.utils.cuda import batch_to, batch_detach
 from nff.utils.scatter import compute_grad
 from nff.data.dataset import concatenate_dict
 
@@ -36,8 +36,8 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
         else:
             eval_loss += eval_batch_loss
 
-        all_results.append(results)
-        all_batches.append(batch)
+        all_results.append(batch_detach(results))
+        all_batches.append(batch_detach(batch))
 
     # weighted average over batches
     if loss_is_normalized:
