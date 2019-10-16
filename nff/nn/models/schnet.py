@@ -83,8 +83,10 @@ class SchNet(nn.Module):
 
         xyz.requires_grad = True
 
-        # calculating the distances
-        e = (xyz[a[:, 0]] - xyz[a[:, 1]] + offsets).pow(2).sum(1).sqrt()[:, None]
+        if offsets.shape != torch.Size([0]):
+            e = (xyz[a[:, 0]] - xyz[a[:, 1]] - offsets).pow(2).sum(1).sqrt()[:, None]
+        else:
+            e = (xyz[a[:, 0]] - xyz[a[:, 1]]).pow(2).sum(1).sqrt()[:, None]
 
         # ensuring image atoms have the same vectors of their corresponding
         # atom inside the unit cell
