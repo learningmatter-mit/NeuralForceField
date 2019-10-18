@@ -1,4 +1,5 @@
 import torch 
+import numbers
 import numpy as np 
 from copy import deepcopy
 from collections.abc import Iterable
@@ -96,7 +97,7 @@ class Dataset(TorchDataset):
 
         for key, val in props.items():
             if val is None:
-                props[key] = self._to_array([np.nan] * n_geoms)
+                props[key] = to_tensor([np.nan] * n_geoms)
 
             elif any([x is None for x in val]):
                 bad_indices = [i for i, item in enumerate(val) if item is None]
@@ -104,25 +105,14 @@ class Dataset(TorchDataset):
                 nan_list = (np.array(val[good_index]) * float('NaN')).tolist()
                 for index in bad_indices:
                     props[key][index] = nan_list
-                props.update({key: self._to_array(val)})
+                props.update({key: to_tensor(val)})
 
             else:
                 assert len(val) == n_geoms, \
                     'length of {} is not compatible with {} geometries'.format(key, n_geoms)
-                props[key] = self._to_array(val)
+                props[key] = to_tensor(val)
 
         return props
-
-    def _to_array(self, x):
-        """Converts input `x` to array"""
-        array = torch.Tensor
-        if isinstance(x[0], (array, str)):
-            return x
-        
-        if isinstance(x[0], Iterable):
-            return [array(_) for _ in x]
-        else:
-            return array(x)
 
     def generate_neighbor_list(self, cutoff):
         """Generates a neighbor list for each one of the atoms in the dataset.
@@ -195,26 +185,87 @@ class Dataset(TorchDataset):
             )
 
 
+def to_tensor(x):
+    """
+    Converts input `x` to torch.Tensor
+
+    Args:
+        x: input to be converted. Can be: number, string, list, array, tensor
+
+    Returns:
+        torch.Tensor or list, depending on the type of x
+    """
+
+    # a single number should be a list
+    if isinstance(x, numbers.Number):
+        return torch.Tensor([x])
+
+    if isinstance(x, str):
+        return [x]
+
+    if isinstance(x, Iterable):
+        # list of strings
+        if any([isinstance(y, str) for y in x]):
+            return x
+
+        # list of numbers
+        if all([isinstance(y, numbers.Number) for y in x]):
+            return torch.Tensor(x)
+
+        # list of tensors with zero or one effective dimension
+        if all([
+            isinstance(y, torch.Tensor) and len(y.shape) <= 1
+            for y in x
+        ]):
+            return torch.cat([y.view(-1) for y in x], dim=0)
+        
+        if any([not isinstance(y, torch.Tensor) for y in x]):
+            return [torch.Tensor(y) for y in x]
+
+        else:
+            return x
+
+    else:
+        raise TypeError('Data type not understood')
+
+
 def concatenate_dict(*dicts):
     """Concatenates dictionaries as long as they have the same keys.
         If one dictionary has one key that the others do not have,
-        the dictionaries lacking the key will have that key replaced by None. All dictionaries must have the key `nxyz`.
+        the dictionaries lacking the key will have that key replaced by None.
 
     Args:
         *dicts (any number of dictionaries)
+        Example:
+            dict_1 = {
+                'nxyz': [...],
+                'energy': [...]
+            }
+            dict_2 = {
+                'nxyz': [...],
+                'energy': [...]
+            }
+            dicts = [dict_1, dict_2]
     """
 
     assert all([type(d) == dict for d in dicts]), \
         'all arguments have to be dictionaries'
 
     keys = set(sum([list(d.keys()) for d in dicts], []))
-    
+
     joint_dict = {}
     for key in keys:
-        joint_dict[key] = [
-            d.get(key, [None] * len(d['nxyz']))
-            for d in dicts
-        ]
+        # flatten list of values
+        values = []
+        for d in dicts:
+            num_values = len([x for x in d.values() if x is not None][0])
+            val = d.get(key, to_tensor([np.nan] * num_values))
+            if type(val) == list:
+                values += val
+            else:
+                values.append(val)
+
+        joint_dict[key] = to_tensor(values)
 
     return joint_dict
 

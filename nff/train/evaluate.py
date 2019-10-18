@@ -27,7 +27,6 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
         n_eval += vsize
 
         results = model(batch)
-        #results["nxyz"] = batch["nxyz"]
 
         eval_batch_loss = loss_fn(batch, results).data.cpu().numpy()
 
@@ -35,6 +34,8 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
             eval_loss += eval_batch_loss * vsize
         else:
             eval_loss += eval_batch_loss
+
+        results['nxyz'] = batch['nxyz']
 
         all_results.append(to_cpu(results))
         all_batches.append(to_cpu(batch))
