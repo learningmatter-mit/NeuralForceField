@@ -77,7 +77,7 @@ class Dataset(TorchDataset):
         if other.units != self.units:
             other = other.copy().to_units(self.units)
         
-        props = concatenate_dict(self.props, other.props)
+        props = concatenate_dict(self.props, other.props, stack=False)
 
         return Dataset(props, units=self.units)
 
@@ -185,12 +185,13 @@ class Dataset(TorchDataset):
             )
 
 
-def to_tensor(x):
+def to_tensor(x, stack=False):
     """
     Converts input `x` to torch.Tensor
 
     Args:
         x: input to be converted. Can be: number, string, list, array, tensor
+        stack (bool): if True, concatenates torch.Tensors in the batching dimension
 
     Returns:
         torch.Tensor or list, depending on the type of x
@@ -203,49 +204,59 @@ def to_tensor(x):
     if isinstance(x, str):
         return [x]
 
-    if isinstance(x, Iterable):
+    if isinstance(x, torch.Tensor):
+        return x
+
+    # all objects in x are tensors
+    if isinstance(x, list) and all([isinstance(y, torch.Tensor) for y in x]):
+        # list of tensors with zero or one effective dimension
+        # flatten the tensor
+        if all([len(y.shape) <= 1 for y in x]):
+            return torch.cat([y.view(-1) for y in x], dim=0)
+
+        elif stack:
+            return torch.cat(x, dim=0)
+
+        # list of multidimensional tensors
+        else:
+            return x
+
+    # some objects are not tensors
+    elif isinstance(x, list):
         # list of strings
-        if any([isinstance(y, str) for y in x]):
+        if all([isinstance(y, str) for y in x]):
             return x
 
         # list of numbers
         if all([isinstance(y, numbers.Number) for y in x]):
             return torch.Tensor(x)
 
-        # list of tensors with zero or one effective dimension
-        if all([
-            isinstance(y, torch.Tensor) and len(y.shape) <= 1
-            for y in x
-        ]):
-            return torch.cat([y.view(-1) for y in x], dim=0)
-        
-        if any([not isinstance(y, torch.Tensor) for y in x]):
+        # list of arrays or other formats
+        if any([isinstance(y, (list, np.ndarray)) for y in x]):
             return [torch.Tensor(y) for y in x]
 
-        else:
-            return x
-
-    else:
-        raise TypeError('Data type not understood')
+    raise TypeError('Data type not understood')
 
 
-def concatenate_dict(*dicts):
+def concatenate_dict(*dicts, stack=False):
     """Concatenates dictionaries as long as they have the same keys.
         If one dictionary has one key that the others do not have,
         the dictionaries lacking the key will have that key replaced by None.
 
     Args:
         *dicts (any number of dictionaries)
-        Example:
-            dict_1 = {
-                'nxyz': [...],
-                'energy': [...]
-            }
-            dict_2 = {
-                'nxyz': [...],
-                'energy': [...]
-            }
-            dicts = [dict_1, dict_2]
+            Example:
+                dict_1 = {
+                    'nxyz': [...],
+                    'energy': [...]
+                }
+                dict_2 = {
+                    'nxyz': [...],
+                    'energy': [...]
+                }
+                dicts = [dict_1, dict_2]
+        stack (bool): if True, stacks the values when converting them to
+            tensors.
     """
 
     assert all([type(d) == dict for d in dicts]), \
@@ -265,7 +276,9 @@ def concatenate_dict(*dicts):
             else:
                 values.append(val)
 
-        joint_dict[key] = to_tensor(values)
+        values = to_tensor(values, stack=stack)
+
+        joint_dict[key] = values
 
     return joint_dict
 
