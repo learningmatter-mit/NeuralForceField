@@ -11,7 +11,6 @@ from torch.utils.data import Dataset as TorchDataset
 from nff.data import get_neighbor_list
 from nff.data.sparse import sparsify_tensor
 import nff.utils.constants as const
-import copy
 
 
 class Dataset(TorchDataset):
