@@ -77,7 +77,7 @@ class Dataset(TorchDataset):
         if other.units != self.units:
             other = other.copy().to_units(self.units)
         
-        props = concatenate_dict(self.props, other.props, stack=False)
+        props = concatenate_dict(self.props, other.props)
 
         return Dataset(props, units=self.units)
 
@@ -187,10 +187,10 @@ class Dataset(TorchDataset):
 
 def to_tensor(x, stack=False):
     """
-    Converts input `x` to torch.Tensor
+    Converts input `x` to torch.Tensor.
 
     Args:
-        x: input to be converted. Can be: number, string, list, array, tensor
+        x (list of lists): input to be converted. Can be: number, string, list, array, tensor
         stack (bool): if True, concatenates torch.Tensors in the batching dimension
 
     Returns:
@@ -238,7 +238,7 @@ def to_tensor(x, stack=False):
     raise TypeError('Data type not understood')
 
 
-def concatenate_dict(*dicts, stack=False):
+def concatenate_dict(*dicts):
     """Concatenates dictionaries as long as they have the same keys.
         If one dictionary has one key that the others do not have,
         the dictionaries lacking the key will have that key replaced by None.
@@ -264,20 +264,33 @@ def concatenate_dict(*dicts, stack=False):
 
     keys = set(sum([list(d.keys()) for d in dicts], []))
 
+    # we have to see how many values the properties of each dictionary has.
+    values_per_dict = []
+    for d in dicts:
+        if any([isinstance(item, numbers.Number) for item in d.values()]):
+            num_values = 1
+
+        else:
+            lists = [item for item in d.values() if isinstance(item, list)]
+
+            if len(lists) > 0:
+                num_values = min([len(l) for l in lists])
+            else:
+                num_values = 1
+
+        values_per_dict.append(num_values)
+
+    # creating the joint dicionary
     joint_dict = {}
     for key in keys:
         # flatten list of values
         values = []
-        for d in dicts:
-            num_values = len([x for x in d.values() if x is not None][0])
-            val = d.get(key, to_tensor([np.nan] * num_values))
-            if type(val) == list:
-                values += val
-            else:
-                values.append(val)
+        for num_values, d in zip(values_per_dict, dicts):
+            # if the dictionary does not have that key, we replace that with None
+            val = d.get(key, [None] * num_values)
+            values.append([val] if num_values == 1 else val)
 
-        values = to_tensor(values, stack=stack)
-
+        values = [subitem for sublist in values for subitem in sublist]
         joint_dict[key] = values
 
     return joint_dict

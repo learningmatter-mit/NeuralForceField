@@ -12,6 +12,8 @@ class TestFunctions(unittest.TestCase):
 
         concat_dict = concatenate_dict(dict_1, dict_2)
 
+        print(concat_dict['energy'])
+        print(concat_dict['smiles'])
 
 if __name__ == '__main__':
     unittest.main()
