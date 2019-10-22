@@ -66,9 +66,9 @@ class AtomsBatch(Atoms):
                 'num_atoms', 'nbr_list' and 'offsets'
         """
         if self.nbr_list is None or self.offsets is None:
-            self.update_nbr_list(self.cutoff)
-            self.props['nbr_list'] = self.nbr_list
-            self.props['offsets'] = self.offsets
+            self.update_nbr_list()
+        self.props['nbr_list'] = self.nbr_list
+        self.props['offsets'] = self.offsets
 
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
         self.props['num_atoms'] = torch.LongTensor([len(self)])
