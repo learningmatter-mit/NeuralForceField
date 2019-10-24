@@ -4,8 +4,7 @@
 import os
 import numpy as np
 import torch
-from nff.nn.models import SchNet
-
+from nff.nn.models import SchNet, SchNetAuTopology
 
 class ParameterError(Exception):
     """Raised when a hyperparameter is of incorrect type"""
@@ -25,7 +24,7 @@ def check_parameters(params_type, params):
               )
 
 
-def get_model(params):
+def get_model(params, type="SchNet"):
     """Create new model with the given parameters.
 
     Args:
@@ -35,20 +34,28 @@ def get_model(params):
         model (nff.nn.models.SchNet)
     """
 
-    params_type = {
-        'n_atom_basis': int,
-        'n_filters': int,
-        'n_gaussians': int,
-        'n_convolutions': int,
-        'cutoff': float,
-        'bond_par': float,
-        'trainable_gauss': bool,
-        'box_size': np.array
-    }
+    # model_type = model_dic[type]
 
-    check_parameters(params_type, params)
+    if type == "SchNet":
 
-    model = SchNet(params)
+      params_type = {
+          'n_atom_basis': int,
+          'n_filters': int,
+          'n_gaussians': int,
+          'n_convolutions': int,
+          'cutoff': float,
+          'bond_par': float,
+          'trainable_gauss': bool,
+          'box_size': np.array
+      }
+
+      check_parameters(params_type, params)
+
+      model = SchNet(params)
+
+    elif type == "SchNetAuTopology":
+
+      model = SchNetAuTopology(params)
 
     return model
 

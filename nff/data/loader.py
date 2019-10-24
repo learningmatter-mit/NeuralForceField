@@ -1,13 +1,32 @@
 import numpy as np 
 from collections.abc import Iterable
-
 import torch 
+import pdb
 
-REINDEX_KEYS = ['nbr_list']
+
+REINDEX_KEYS = ['nbr_list', 'bonds', 'angles', 'dihedrals', 'impropers'] # , 'neighbors', 'pairs']
+
+
+# TYPE_KEYS = {
+#     'nbr_list': torch.long,
+#     'num_atoms': torch.long,
+#     'bonds': torch.long,
+#     'angles': torch.long,
+#     'dihedrals': torch.long,
+#     'impropers': torch.long,
+#     'pairs': torch.long,
+#     'neighbors': torch.long,
+# }
 
 TYPE_KEYS = {
     'nbr_list': torch.long,
-    'num_atoms': torch.long
+    'num_atoms': torch.long,
+    'bonds': torch.long,
+    'angles': torch.long,
+    'dihedrals': torch.long,
+    'impropers': torch.long
+    # 'neighbors': torch.long,
+    # 'pairs': torch.long,
 }
 
 def collate_dicts(dicts):
@@ -26,6 +45,7 @@ def collate_dicts(dicts):
     cumulative_atoms = np.cumsum([0] + [d['num_atoms'] for d in dicts])[:-1]
 
     for n, d in zip(cumulative_atoms, dicts):
+
         for key in REINDEX_KEYS:
             if key in d:
                 d[key] = d[key] + int(n)
