@@ -184,6 +184,29 @@ class Dataset(TorchDataset):
             )
 
 
+def force_to_energy_grad(dataset):
+    """
+    Converts forces to energy gradients in a dataset. This conforms to
+        the notation that a key with `_grad` is the gradient of the
+        property preceding it. Modifies the database in-place.
+
+    Args:
+        dataset (nff.data.Dataset)
+
+    Returns:
+        success (bool): if True, forces were removed and energy_grad
+            became the new key.
+    """
+    if 'forces' not in dataset.props.keys():
+        return False
+    else:
+        dataset.props['energy_grad'] = [
+            -x
+            for x in dataset.props.pop('forces')
+        ]
+        return True
+
+
 def to_tensor(x, stack=False):
     """
     Converts input `x` to torch.Tensor.
