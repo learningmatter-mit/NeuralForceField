@@ -8,7 +8,7 @@ from sklearn.utils import shuffle as skshuffle
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset as TorchDataset
 
-from nff.data import get_neighbor_list
+from nff.data import get_neighbor_list, get_bonded_neighbors
 from nff.data.sparse import sparsify_tensor
 import nff.utils.constants as const
 import copy
@@ -161,6 +161,27 @@ class Dataset(TorchDataset):
 
         return
 
+    def generate_bonded_neighbor_list(self):
+        """Generates a neighbor list for each one of the atoms in the dataset.
+            By default, does not consider periodic boundary conditions.
+
+        Args:
+            cutoff (float): distance up to which atoms are considered bonded.
+        """
+
+
+        self.props['bonded_nbr_list'] = [
+             get_bonded_neighbors(nxyz, int(num_atoms))
+            for nxyz, num_atoms in zip(self.props['nxyz'], self.props['num_atoms'])
+        ]
+
+        # pdb.set_trace()
+
+        # self.props['offsets'] = [0] * len(self)
+
+        return
+
+
     def copy(self):
         """Copies the current dataset"""
         return Dataset(self.props, self.units)
@@ -205,21 +226,24 @@ class Dataset(TorchDataset):
     def set_degree_vec(self):
 
         self.props["degree_vec"] = []
-        for num_atoms, nbr_list in zip(self.props["num_atoms"], self.props["nbr_list"]):
+        for num_atoms, bonded_nbr_list in zip(self.props["num_atoms"], self.props["bonded_nbr_list"]):
+
+            # pdb.set_trace()
 
             A = torch.zeros(num_atoms, num_atoms).to(torch.long)
             # every pair of indices with a bond then gets a 1
-            A[nbr_list[:, 0], nbr_list[:, 1]] = 1
+            A[bonded_nbr_list[:, 0], bonded_nbr_list[:, 1]] = 1
             d = A.sum(1)
             self.props["degree_vec"].append(d)
 
 
-    def unique_pairs(self, nbr_list):
+
+    def unique_pairs(self, bonded_nbr_list):
 
         # pdb.set_trace()
 
         unique_pairs = []
-        for pair in nbr_list:
+        for pair in bonded_nbr_list:
             sorted_pair = torch.sort(pair)[0].numpy().tolist()
             if sorted_pair not in unique_pairs:
                 unique_pairs.append(sorted_pair)
@@ -239,10 +263,11 @@ class Dataset(TorchDataset):
         self.props["neighbors"] = []
         self.props["num_bonds"] = []
 
-        for nbr_list, degree_vec in zip(self.props["nbr_list"], self.props["degree_vec"]):
+        for bonded_nbr_list, degree_vec in zip(self.props["bonded_nbr_list"], self.props["degree_vec"]):
 
-            bonds = self.unique_pairs(nbr_list)
-            neighbors = list(torch.split(nbr_list, degree_vec.tolist()))
+            bonds = self.unique_pairs(bonded_nbr_list)
+            # pdb.set_trace()
+            neighbors = list(torch.split(bonded_nbr_list, degree_vec.tolist()))
             second_arg_neighbors = [neigbor[:,1].tolist() for neigbor in neighbors]
 
             self.props["bonds"].append(bonds)
@@ -351,6 +376,7 @@ class Dataset(TorchDataset):
 
         # pdb.set_trace()
 
+        self.generate_bonded_neighbor_list()
         self.set_degree_vec()
         self.set_bonds()
         self.set_angles()
@@ -435,7 +461,7 @@ def to_tensor(x, stack=False):
             return torch.Tensor(x)
 
         # list of arrays or other formats
-        pdb.set_trace()
+        # pdb.set_trace()
         if any([isinstance(y, (list, np.ndarray)) for y in x]):
             return [torch.Tensor(y) for y in x]
 

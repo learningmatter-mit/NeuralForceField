@@ -257,8 +257,8 @@ class SchNetAuTopology(nn.Module):
             for key_row in self.matrix_keys:
                 matrix.append([diabatic_results[key][i] for key in key_row])
             matrix = np.array(matrix)
-            # eigvals = diagonalize(matrix)
-            eigvals = [matrix[0, 0], matrix[1, 1]]
+            eigvals = diagonalize(matrix)
+            # eigvals = [matrix[0, 0], matrix[1, 1]]
 
             for j, key in enumerate(self.sorted_result_keys):
                 final_results[key].append(eigvals[j])

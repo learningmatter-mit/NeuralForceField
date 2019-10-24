@@ -133,6 +133,9 @@ class AngleNet(torch.nn.Module):
         angles = batch["angles"]
         num_angles = batch["num_angles"].tolist()
 
+        if num_angles == [0]*len(num_angles):
+            return torch.tensor([0.0 for _ in range(len(num_angles))])
+            
         N = xyz.shape[0]
         D = xyz.expand(N, N, 3) - xyz.expand(N, N, 3).transpose(0, 1)
         angle_vec1 = D[angles[:, 0], angles[:, 1], :]
@@ -186,6 +189,9 @@ class DihedralNet(torch.nn.Module):
         dihedrals = batch["dihedrals"]
         num_dihedrals = batch["num_dihedrals"].tolist()
 
+        if num_dihedrals == [0]*len(num_dihedrals):
+            return torch.tensor([0.0 for _ in range(len(num_dihedrals))])
+
         N = xyz.shape[0]
         D = xyz.expand(N, N, 3) - xyz.expand(N, N, 3).transpose(0, 1)
         vec1 = D[dihedrals[:, 1], dihedrals[:, 0]]
@@ -234,6 +240,9 @@ class ImproperNet(torch.nn.Module):
 
         impropers = batch["impropers"]
         num_impropers = batch["num_impropers"].tolist()
+
+        if num_impropers == [0]*len(num_impropers):
+            return torch.tensor([0.0 for _ in range(len(num_impropers))])
 
         N = xyz.shape[0]
         D = xyz.expand(N, N, 3) - xyz.expand(N, N, 3).transpose(0, 1)
