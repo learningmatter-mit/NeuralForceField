@@ -249,7 +249,11 @@ def to_tensor(x, stack=False):
         if all([isinstance(y, str) for y in x]):
             return x
 
-        # list of numbers
+        # list of ints
+        if all([isinstance(y, int) for y in x]):
+            return torch.LongTensor(x)
+
+        # list of floats
         if all([isinstance(y, numbers.Number) for y in x]):
             return torch.Tensor(x)
 
