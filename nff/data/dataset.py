@@ -3,19 +3,14 @@ import numbers
 import numpy as np
 from copy import deepcopy
 from collections.abc import Iterable
-
 from sklearn.utils import shuffle as skshuffle
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset as TorchDataset
-
 from nff.data import get_neighbor_list, get_bond_list
 from nff.data.sparse import sparsify_tensor
 import nff.utils.constants as const
 import copy
 import itertools
-
-
-import pdb
 
 
 class Dataset(TorchDataset):
@@ -65,7 +60,6 @@ class Dataset(TorchDataset):
                 all lists have the same length.
             units (str): units of the system.
         """
-        # pdb.set_trace()
         self.props = self._check_dictionary(deepcopy(props))
         self.units = units
         self.to_units('kcal/mol')
@@ -471,14 +465,7 @@ def to_tensor(x, stack=False):
     # all objects in x are tensors
     if isinstance(x, list) and all([isinstance(y, torch.Tensor) for y in x]):
 
-        # if some are empty, just return the list
-        # pdb.set_trace()
-        # shapes = [y.shape for y in x]
-        # if any([len(shape) == 0 for shape in shapes]):
-        #     return x
 
-        # list of tensors with zero or one effective dimension
-        # flatten the tensor
         if all([len(y.shape) <= 1 for y in x]):
             return torch.cat([y.view(-1) for y in x], dim=0)
 
@@ -491,11 +478,16 @@ def to_tensor(x, stack=False):
 
     # some objects are not tensors
     elif isinstance(x, list):
+        
         # list of strings
         if all([isinstance(y, str) for y in x]):
             return x
 
-        # list of numbers
+        # list of ints
+        if all([isinstance(y, int) for y in x]):
+            return torch.LongTensor(x)
+
+        # list of floats
         if all([isinstance(y, numbers.Number) for y in x]):
             return torch.Tensor(x)
 
