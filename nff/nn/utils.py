@@ -73,3 +73,10 @@ def get_default_readout(n_atom_basis):
     }
 
     return DEFAULT_READOUT
+
+# def NULL_FUNC(x):
+#     """
+#     A function that returns a zero tensor. 
+#     """
+#     return torch.tensor(0)
+

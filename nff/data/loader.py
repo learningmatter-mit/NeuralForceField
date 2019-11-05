@@ -4,19 +4,8 @@ import torch
 import pdb
 
 
-REINDEX_KEYS = ['nbr_list', 'bonds', 'angles', 'dihedrals', 'impropers'] # , 'neighbors', 'pairs']
+REINDEX_KEYS = ['nbr_list', 'bonds', 'angles', 'dihedrals', 'impropers'] # , 'pairs']
 
-
-# TYPE_KEYS = {
-#     'nbr_list': torch.long,
-#     'num_atoms': torch.long,
-#     'bonds': torch.long,
-#     'angles': torch.long,
-#     'dihedrals': torch.long,
-#     'impropers': torch.long,
-#     'pairs': torch.long,
-#     'neighbors': torch.long,
-# }
 
 TYPE_KEYS = {
     'nbr_list': torch.long,
@@ -25,7 +14,6 @@ TYPE_KEYS = {
     'angles': torch.long,
     'dihedrals': torch.long,
     'impropers': torch.long
-    # 'neighbors': torch.long,
     # 'pairs': torch.long,
 }
 

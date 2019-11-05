@@ -9,7 +9,7 @@ from nff.utils.scatter import scatter_add
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphconv import MessagePassingModule, EdgeUpdateModule, \
     GeometricOperations, TopologyOperations
-from nff.nn.utils import construct_sequential, construct_module_dict
+from nff.nn.utils import construct_sequential, construct_module_dict # , NULL_FUNC
 import unittest
 import itertools
 import copy
@@ -20,45 +20,84 @@ EPSILON = 1e-15
 TOPS = ['bond', 'angle', 'dihedral', 'improper']
 
 
+class ZeroNet(torch.nn.Module):
+    """
+    Network to return an array of all zeroes.
+    """
+    def __init__(self, L_out):
+        """
+        Args:
+            L_out: dimension of zero vector
+        """
+        super(ZeroNet, self).__init__()
+        self.L_out = L_out
+        
+    def forward(self, x):
+        # written in this roundabout way to ensure that if x is on a GPU
+        # then the output will also be on a GPU
+        result_layer  = torch.stack([(x.reshape(-1)*0.0)[0].detach()]*self.L_out)
+        # one array of zeros per input:
+        output = torch.stack([result_layer for _ in range(len(x))])
+        return output
+
 class ParameterPredictor(torch.nn.Module):
-    def __init__(self, L_in, L_hidden, L_out):
+    """
+    Class for predicting parameters from a neural net. Used for AuTopology.
+    """
+    def __init__(self, L_in, L_hidden, L_out, trainable=False):
+
+        """
+        Args:
+            L_in: 
+            L_hidden:
+            L_out:
+            trainable: If true, then these parameters have a trainable
+                prediction. Otherwise the parameters just return zero.
+
+        """
+
         super(ParameterPredictor, self).__init__()
-        modules = torch.nn.ModuleList()
-        Lh = [L_in] + L_hidden
-        for Lh_in, Lh_out in [Lh[i:i + 2] for i in range(len(Lh) - 1)]:
-            modules.append(torch.nn.Linear(Lh_in, Lh_out))
-            modules.append(torch.nn.Tanh())
-        modules.append(torch.nn.Linear(Lh[-1], L_out))
-        self.net = torch.nn.Sequential(*modules)
+        if trainable:
+            modules = torch.nn.ModuleList()
+            Lh = [L_in] + L_hidden
+            for Lh_in, Lh_out in [Lh[i:i + 2] for i in range(len(Lh) - 1)]:
+                modules.append(torch.nn.Linear(Lh_in, Lh_out))
+                modules.append(torch.nn.Tanh())
+            modules.append(torch.nn.Linear(Lh[-1], L_out))
+            self.net = torch.nn.Sequential(*modules)
+        else:
+            self.net = ZeroNet(L_out)
 
     def forward(self, x):
         return self.net(x)
 
 
 class BondNet(torch.nn.Module):
-    def __init__(self, Fr, Lh, terms=['harmonic']):
+    def __init__(self, Fr, Lh, terms=['harmonic'], trainable=False):
         super(BondNet, self).__init__()
         self.Fr = Fr
         self.Lh = Lh
         self.terms = terms
         self.true_params = None
         self.learned_params = {}
+
         if 'harmonic' in self.terms:
-            self.r0_harmonic = ParameterPredictor(Fr, Lh, 1)
-            self.k_harmonic = ParameterPredictor(Fr, Lh, 1)
+            self.r0_harmonic = ParameterPredictor(Fr, Lh, 1, trainable=trainable)
+            self.k_harmonic = ParameterPredictor(Fr, Lh, 1, trainable=trainable)
             self.learned_params['harmonic'] = {'r0': None, 'k': None}
         if 'morse' in self.terms:
-            self.r0_morse = ParameterPredictor(Fr, Lh, 1)
-            self.a_morse = ParameterPredictor(Fr, Lh, 1)
-            self.De_morse = ParameterPredictor(Fr, Lh, 1)
+
+            self.r0_morse = ParameterPredictor(Fr, Lh, 1, trainable=trainable)
+            self.a_morse = ParameterPredictor(Fr, Lh, 1, trainable=trainable)
+            self.De_morse = ParameterPredictor(Fr, Lh, 1, trainable=trainable)
             self.learned_params['morse'] = {'r0': None, 'a': None, 'De': None}
         if 'cubic' in self.terms:
-            self.r0_cubic = ParameterPredictor(Fr, Lh, 1)
-            self.k_cubic = ParameterPredictor(Fr, Lh, 1)
+            self.r0_cubic = ParameterPredictor(Fr, Lh, 1, trainable=trainable)
+            self.k_cubic = ParameterPredictor(Fr, Lh, 1, trainable=trainable)
             self.learned_params['cubic'] = {'r0': None, 'k': None}
         if 'quartic' in self.terms:
-            self.r0_quartic = ParameterPredictor(Fr, Lh, 1)
-            self.k_quartic = ParameterPredictor(Fr, Lh, 1)
+            self.r0_quartic = ParameterPredictor(Fr, Lh, 1, trainable=trainable)
+            self.k_quartic = ParameterPredictor(Fr, Lh, 1, trainable=trainable)
             self.learned_params['quartic'] = {'r0': None, 'k': None}
 
     def forward(self, r, batch, xyz):
@@ -85,6 +124,9 @@ class BondNet(torch.nn.Module):
             a_morse = self.a_morse(node_input).pow(2)
             De_morse = self.De_morse(node_input).pow(2)
             E = E + De_morse * (1 - torch.exp(-a_morse * (D - r0_morse))).pow(2)
+
+            # pdb.set_trace()
+
             self.learned_params['morse']['r0'] = r0_morse.tolist()
             self.learned_params['morse']['a'] = a_morse.tolist()
             self.learned_params['morse']['De'] = De_morse.tolist()
@@ -108,7 +150,7 @@ class BondNet(torch.nn.Module):
 
 
 class AngleNet(torch.nn.Module):
-    def __init__(self, Fr, Lh, terms=['harmonic']):
+    def __init__(self, Fr, Lh, terms=['harmonic'], trainable=False):
         super(AngleNet, self).__init__()
         self.Fr = Fr
         self.Lh = Lh
@@ -116,16 +158,16 @@ class AngleNet(torch.nn.Module):
         self.true_params = None
         self.learned_params = {}
         if 'harmonic' in self.terms:
-            self.theta0_harmonic = ParameterPredictor(2 * Fr, Lh, 1)
-            self.k_harmonic = ParameterPredictor(2 * Fr, Lh, 1)
+            self.theta0_harmonic = ParameterPredictor(2 * Fr, Lh, 1, trainable=trainable)
+            self.k_harmonic = ParameterPredictor(2 * Fr, Lh, 1, trainable=trainable)
             self.learned_params['harmonic'] = {'theta0': None, 'k': None}
         if 'cubic' in self.terms:
-            self.theta0_cubic = ParameterPredictor(2 * Fr, Lh, 1)
-            self.k_cubic = ParameterPredictor(2 * Fr, Lh, 1)
+            self.theta0_cubic = ParameterPredictor(2 * Fr, Lh, 1, trainable=trainable)
+            self.k_cubic = ParameterPredictor(2 * Fr, Lh, 1, trainable=trainable)
             self.learned_params['cubic'] = {'theta0': None, 'k': None}
         if 'quartic' in self.terms:
-            self.theta0_quartic = ParameterPredictor(2 * Fr, Lh, 1)
-            self.k_quartic = ParameterPredictor(2 * Fr, Lh, 1)
+            self.theta0_quartic = ParameterPredictor(2 * Fr, Lh, 1, trainable=trainable)
+            self.k_quartic = ParameterPredictor(2 * Fr, Lh, 1, trainable=trainable)
             self.learned_params['quartic'] = {'theta0': None, 'k': None}
 
     def forward(self, r, batch, xyz):
@@ -169,19 +211,20 @@ class AngleNet(torch.nn.Module):
 
 
 class DihedralNet(torch.nn.Module):
-    def __init__(self, Fr, Lh, terms=['OPLS']):
+    def __init__(self, Fr, Lh, terms=['OPLS'], trainable=False):
         super(DihedralNet, self).__init__()
         self.Fr = Fr
         self.Lh = Lh
         self.terms = terms
         self.true_params = None
         self.learned_params = {}
-        self.nonlinear = ParameterPredictor(2 * self.Fr, Lh, Lh[-1])
+        self.nonlinear = ParameterPredictor(2 * self.Fr, Lh, Lh[-1], trainable=trainable)
         if 'multiharmonic' in self.terms:
-            self.dihedralnet_multiharmonic = ParameterPredictor(Lh[-1], Lh, 5)
+            self.dihedralnet_multiharmonic = ParameterPredictor(Lh[-1], Lh, 5, trainable=trainable)
             self.learned_params['multiharmonic'] = {'dihedralnet': None}
         if 'OPLS' in self.terms:
-            self.dihedralnet_OPLS = ParameterPredictor(Lh[-1], Lh, 4)
+            # pdb.set_trace()
+            self.dihedralnet_OPLS = ParameterPredictor(Lh[-1], Lh, 4, trainable=trainable)
             self.learned_params['OPLS'] = {'dihedralnet': None}
 
     def forward(self, r, batch, xyz):
@@ -213,6 +256,7 @@ class DihedralNet(torch.nn.Module):
                 E = E + A * (cos_phi.pow(m))
             self.learned_params['multiharmonic']['dihedralnet'] = multiharmonic_constants.tolist()
         if 'OPLS' in self.terms:
+            # pdb.set_trace()
             OPLS_constants = self.dihedralnet_OPLS(dihedral_input)
             phi = torch.acos(cos_phi / 1.000001)
             for m in range(4):
@@ -224,22 +268,24 @@ class DihedralNet(torch.nn.Module):
 
 
 class ImproperNet(torch.nn.Module):
-    def __init__(self, Fr, Lh, terms=['harmonic']):
+    def __init__(self, Fr, Lh, terms=['harmonic'], trainable=False):
         super(ImproperNet, self).__init__()
         self.Fr = Fr
         self.Lh = Lh
         self.terms = terms
         self.true_params = None
         self.learned_params = {}
-        self.nonlinear = ParameterPredictor(2 * self.Fr, Lh, Lh[-1])
+        self.nonlinear = ParameterPredictor(2 * self.Fr, Lh, Lh[-1], trainable=trainable)
         if 'harmonic' in self.terms:
-            self.k_harmonic = ParameterPredictor(Lh[-1], Lh, 1)
+            self.k_harmonic = ParameterPredictor(Lh[-1], Lh, 1, trainable=trainable)
             self.learned_params['harmonic'] = {'k': None}
 
     def forward(self, r, batch, xyz):
 
         impropers = batch["impropers"]
         num_impropers = batch["num_impropers"].tolist()
+
+
 
         if num_impropers == [0]*len(num_impropers):
             return torch.tensor([0.0 for _ in range(len(num_impropers))])
@@ -426,20 +472,13 @@ class ImproperNet(torch.nn.Module):
 #         E = E + E_dipole
 #         return (E)
 
-# TopologyNet = {
-#     'bond': BondNet,
-#     'angle': AngleNet,
-#     'dihedral': DihedralNet,
-#     'improper': ImproperNet,
-#     'pair': PairNet
-# }
-
 
 TopologyNet = {
     'bond': BondNet,
     'angle': AngleNet,
     'dihedral': DihedralNet,
-    'improper': ImproperNet
+    'improper': ImproperNet,
+    # 'pair': PairNet
 }
 
 class AuTopologyReadOut(nn.Module):
@@ -448,6 +487,7 @@ class AuTopologyReadOut(nn.Module):
 
         super(AuTopologyReadOut, self).__init__()
 
+        trainable = multitaskdict["trainable_prior"]
         Fr = multitaskdict["Fr"]
         Lh = multitaskdict["Lh"]
         bond_terms = multitaskdict.get("bond_terms", ["morse"])
@@ -455,7 +495,8 @@ class AuTopologyReadOut(nn.Module):
         dihedral_terms = multitaskdict.get("dihedral_terms", ['OPLS'])  # OPLS and/or multiharmonic
         improper_terms = multitaskdict.get("improper_terms", ['harmonic'])  # harmonic
         pair_terms = multitaskdict.get("pair_terms", ['coulomb', 'LJ'])  # coulomb and/or LJ and/or induced_dipole
-        autopology_keys = multitaskdict["autopology_keys"]
+        autopology_keys = multitaskdict["sorted_result_keys"]
+
 
         self.terms = {
             'bond': bond_terms,
@@ -468,7 +509,7 @@ class AuTopologyReadOut(nn.Module):
 
         self.topologynet = {}
         for top in self.terms.keys():
-            self.topologynet[top] = TopologyNet[top](Fr, Lh, self.terms[top])
+            self.topologynet[top] = TopologyNet[top](Fr, Lh, self.terms[top], trainable=trainable)
 
         self.auto_modules = ModuleDict({key: torch.nn.ModuleList(self.topologynet.values())
                                 for key in autopology_keys})
@@ -485,10 +526,9 @@ class AuTopologyReadOut(nn.Module):
                     E[top] = self.topologynet[top](r, batch, xyz)
                     learned_params[top] = self.topologynet[top].learned_params
                 E['total'] += E[top]
-            output[output_key] = E["total"] # *0.0
+            output[output_key] = E["total"] 
 
         return output
-
 
 
 class SchNetEdgeUpdate(EdgeUpdateModule):

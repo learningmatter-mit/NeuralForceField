@@ -6,11 +6,14 @@ Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/s
 import os
 import numpy as np
 import torch
+import gc
+
 
 from nff.utils.cuda import batch_to
 from nff.utils.scatter import compute_grad
 from nff.train.evaluate import evaluate
-
+import pdb
+import sys
 
 MAX_EPOCHS = 100
 
@@ -47,6 +50,7 @@ class Trainer:
         optimizer,
         train_loader,
         validation_loader,
+        mini_batches=1,
         checkpoints_to_keep=3,
         checkpoint_interval=10,
         validation_interval=1,
@@ -62,6 +66,7 @@ class Trainer:
         self.checkpoints_to_keep = checkpoints_to_keep
         self.hooks = hooks
         self.loss_is_normalized = loss_is_normalized
+        self.mini_batches = mini_batches
 
         self._model = model
         self._stop = False
@@ -178,8 +183,10 @@ class Trainer:
                 if self._stop:
                     break
 
-                for batch in self.train_loader:
+                num_batches = 0
+                for j, batch in enumerate(self.train_loader):
 
+                    loss = 0.0
                     batch = batch_to(batch, device)
 
                     self.optimizer.zero_grad()
@@ -188,10 +195,17 @@ class Trainer:
                         h.on_batch_begin(self, batch)
 
                     results = self._model(batch)
-                    loss = self.loss_fn(batch, results)
-                    loss.backward()
-                    self.optimizer.step()
-                    self.step += 1
+                    loss += self.loss_fn(batch, results)
+
+                    # update the loss self.minibatches number
+                    # of times before taking a step
+                    num_batches += 1
+                    if num_batches == self.mini_batches:
+                        loss.backward()
+                        self.optimizer.step()
+                        self.step += 1
+                        num_batches = 0
+
 
                     for h in self.hooks:
                         h.on_batch_end(self, batch, results, loss)
