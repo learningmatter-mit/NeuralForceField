@@ -142,6 +142,7 @@ class BondNet(torch.nn.Module):
             self.learned_params['quartic']['r0'] = r0_quartic.tolist()
             self.learned_params['quartic']['r0'] = k_quartic.tolist()
 
+        # split the results into per-molecule energies through batch["num_bonds"]
         E = torch.stack([e.sum(0) for e in torch.split(E, num_bonds)])
         return (E)
 
@@ -203,6 +204,8 @@ class AngleNet(torch.nn.Module):
             E = E + (k_quartic / 2) * (theta - theta0_quartic).pow(4)
             self.learned_params['quartic']['theta0'] = theta0_quartic.tolist()
             self.learned_params['quartic']['k'] = k_quartic.tolist()
+
+        # split the results into per-molecule energies through batch["num_angles"]
         E = torch.stack([e.sum(0) for e in torch.split(E, num_angles)])
         return (E)
 
@@ -258,6 +261,9 @@ class DihedralNet(torch.nn.Module):
                 V = OPLS_constants[:, m].view(-1, 1)
                 E = E + (V / 2) * (1 + ((-1) ** m) * torch.cos((m + 1) * phi))
             self.learned_params['OPLS']['dihedralnet'] = OPLS_constants.tolist()
+
+        # split the results into per-molecule energies through batch["num_dihedrals"]
+
         E = torch.stack([e.sum(0) for e in torch.split(E, num_dihedrals)])
         return (E)
 
@@ -306,6 +312,8 @@ class ImproperNet(torch.nn.Module):
             k_harmonic = self.k_harmonic(improper_input).pow(2)
             E = E + (k_harmonic / 2) * (phi.pow(2))
             self.learned_params['harmonic']['k'] = k_harmonic.tolist()
+
+        # split the results into per-molecule energies through batch["num_impropers"]
 
         E = torch.stack([e.sum(0) for e in torch.split(E, num_impropers)])
         return E

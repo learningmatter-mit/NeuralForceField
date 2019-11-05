@@ -293,7 +293,6 @@ class SchNetAuTopology(nn.Module):
         final_results = {key: [] for key in self.sorted_result_keys}
 
         for i in range(batch_length):
-            # pdb.set_trace()
             # sort the outputs and take the zeroth element (the zeroth element is the sorted
             # result, and the first element is the indices)
             sorted_energies = torch.sort(torch.cat([pre_results[key][i] for key in
@@ -303,6 +302,8 @@ class SchNetAuTopology(nn.Module):
 
         for key in self.sorted_result_keys:
             final_results[key] = torch.stack(final_results[key])
+            # add the autopology results by putting "auto_" in front of each key
+            final_results["auto_{}".format(key)] = autopology_results[key]
 
             if "{}_grad".format(key) not in self.grad_keys:
                 continue
@@ -310,10 +311,6 @@ class SchNetAuTopology(nn.Module):
             # compute the gradient with respect to the sorted energies
             grad = compute_grad(inputs=xyz, output=final_results[key])
             final_results[key + "_grad"] = grad
-
-            # add the autopology results by putting "auto_" in front of each key
-
-            final_results["auto_{}".format(key)] = autopology_results[key]
             final_results["auto_{}_grad".format(key)] = autopology_results["{}_grad".format(key)]
 
         return final_results
