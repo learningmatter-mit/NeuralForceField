@@ -9,7 +9,7 @@ from nff.utils.scatter import scatter_add
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphconv import MessagePassingModule, EdgeUpdateModule, \
     GeometricOperations, TopologyOperations
-from nff.nn.utils import construct_sequential, construct_module_dict # , NULL_FUNC
+from nff.nn.utils import construct_sequential, construct_module_dict
 import unittest
 import itertools
 import copy
@@ -31,7 +31,7 @@ class ZeroNet(torch.nn.Module):
         """
         super(ZeroNet, self).__init__()
         self.L_out = L_out
-        
+
     def forward(self, x):
         # written in this roundabout way to ensure that if x is on a GPU
         # then the output will also be on a GPU
@@ -124,9 +124,6 @@ class BondNet(torch.nn.Module):
             a_morse = self.a_morse(node_input).pow(2)
             De_morse = self.De_morse(node_input).pow(2)
             E = E + De_morse * (1 - torch.exp(-a_morse * (D - r0_morse))).pow(2)
-
-            # pdb.set_trace()
-
             self.learned_params['morse']['r0'] = r0_morse.tolist()
             self.learned_params['morse']['a'] = a_morse.tolist()
             self.learned_params['morse']['De'] = De_morse.tolist()
@@ -223,7 +220,6 @@ class DihedralNet(torch.nn.Module):
             self.dihedralnet_multiharmonic = ParameterPredictor(Lh[-1], Lh, 5, trainable=trainable)
             self.learned_params['multiharmonic'] = {'dihedralnet': None}
         if 'OPLS' in self.terms:
-            # pdb.set_trace()
             self.dihedralnet_OPLS = ParameterPredictor(Lh[-1], Lh, 4, trainable=trainable)
             self.learned_params['OPLS'] = {'dihedralnet': None}
 
@@ -256,7 +252,6 @@ class DihedralNet(torch.nn.Module):
                 E = E + A * (cos_phi.pow(m))
             self.learned_params['multiharmonic']['dihedralnet'] = multiharmonic_constants.tolist()
         if 'OPLS' in self.terms:
-            # pdb.set_trace()
             OPLS_constants = self.dihedralnet_OPLS(dihedral_input)
             phi = torch.acos(cos_phi / 1.000001)
             for m in range(4):

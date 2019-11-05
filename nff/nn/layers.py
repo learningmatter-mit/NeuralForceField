@@ -129,35 +129,3 @@ class Dense(nn.Linear):
             y = self.activation(y)
 
         return y
-
-# class Diagonalize(nn.Module):
-
-#     def __init__(self):
-#         pass 
-#         # super().__init__()
-#         # offset = torch.linspace(start, stop, n_gaussians)
-#         # widths = torch.FloatTensor((offset[1] - offset[0]) * torch.ones_like(offset))
-#         # if trainable:
-#         #     self.width = nn.Parameter(widths)
-#         #     self.offsets = nn.Parameter(offset)
-#         # else:
-#         #     self.register_buffer('width', widths)
-#         #     self.register_buffer('offsets', offset)
-#         # self.centered = centered
-
-#     def forward(self, distances):
-#         """
-#         Args:
-#             distances (torch.Tensor): Tensor of interatomic distances.
-
-#         Returns:
-#             torch.Tensor: Tensor of convolved distances.
-
-#         """
-#         result = gaussian_smearing(distances,
-#                                    self.offsets,
-#                                    self.width,
-#                                    centered=self.centered)
-
-#         return result
-

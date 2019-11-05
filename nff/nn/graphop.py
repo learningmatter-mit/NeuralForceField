@@ -5,35 +5,6 @@ from nff.utils.scatter import compute_grad
 
 EPS = 1e-15
 
-def batch_energies(dict_input, N, predict_keys, xyz):
-    """Pooling function to get graph property.
-        Separate the outputs back into batches, pool the results,
-        compute gradient of scalar properties if "_grad" is in the key name.
-    
-    Args:
-        dict_input (dict): Description
-        N (list): number of batches
-        predict_keys (list): Description
-        xyz (tensor): xyz of the molecule
-    
-    Returns:
-        dict: batched and pooled results 
-    """
-
-    results = dict()
-
-    for key, val in dict_input.items():
-        #split 
-        if key in predict_keys and "_grad" not in key:
-            batched_prop = list(torch.split(val, N))
-
-            for batch_idx in range(len(N)):
-                batched_prop[batch_idx] = torch.sum(batched_prop[batch_idx], dim=0)
-
-            results[key] = torch.stack(batched_prop)
-
-    return results
-
 
 def batch_and_sum(dict_input, N, predict_keys, xyz):
     """Pooling function to get graph property.
@@ -66,6 +37,29 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
         if key + "_grad" in predict_keys:
             grad = compute_grad(inputs=xyz, output=results[key])
             results[key + "_grad"] = grad
+
+    return results
+
+def batch_energies(dict_input, N, predict_keys, xyz):
+
+    """
+    Same as batch_and_sum, but does not act on anything with "_grad" in the name.
+    So only energies get batched. This is useful, for example if we want to sort
+    the ground and excited energies for each molecule, and then take the gradients
+    at the end.
+    """
+
+    results = dict()
+
+    for key, val in dict_input.items():
+
+        if key in predict_keys and "_grad" not in key:
+            batched_prop = list(torch.split(val, N))
+
+            for batch_idx in range(len(N)):
+                batched_prop[batch_idx] = torch.sum(batched_prop[batch_idx], dim=0)
+
+            results[key] = torch.stack(batched_prop)
 
     return results
 
@@ -105,25 +99,5 @@ def get_atoms_inside_cell(r, N, pbc):
     r = r[atoms_in_cell]
 
     return r, N
-
-def diagonalize(mat):
-    """
-    Example
-        mat = [["energy_0", "lambda_01"], ["lambda_01", "energy_1"]]
-    """
-
-    assert len(mat) == 2, "Cannot analytically diagonalize matrix of dim > 2"
-    assert mat[0, 1] == mat[1, 0], "Matrix should be Hermitian"
-
-    diag_sum = mat[0, 0] + mat[1, 1]
-    diag_diff = mat[0, 0] - mat[1, 1]
-    coupling = mat[0, 1]
-
-    eigvals = [
-        1.0/2.0*(diag_sum - torch.sqrt((diag_diff)**2 + 4*coupling**2 + EPS) ),
-        1.0/2.0*(diag_sum + torch.sqrt((diag_diff)**2 + 4*coupling**2 + EPS) ),
-    ]
-
-    return eigvals
 
 

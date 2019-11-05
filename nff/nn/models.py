@@ -7,7 +7,7 @@ from nff.nn.layers import Dense, GaussianSmearing
 from nff.nn.modules import (GraphDis, SchNetConv, BondEnergyModule, SchNetEdgeUpdate, NodeMultiTaskReadOut,
                             AuTopologyReadOut)
 from nff.nn.activations import shifted_softplus
-from nff.nn.graphop import batch_and_sum, get_atoms_inside_cell, diagonalize, batch_energies
+from nff.nn.graphop import batch_and_sum, get_atoms_inside_cell, batch_energies
 from nff.nn.utils import get_default_readout
 from nff.utils.scatter import compute_grad
 import numpy as np

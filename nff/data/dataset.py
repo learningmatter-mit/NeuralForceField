@@ -459,12 +459,12 @@ def to_tensor(x, stack=False):
     if isinstance(x, torch.Tensor):
         return x
 
-    # must deal with the case that some or all of the constituent tensors are empty,
-    # and/or they have different shapes
 
     # all objects in x are tensors
     if isinstance(x, list) and all([isinstance(y, torch.Tensor) for y in x]):
 
+        # list of tensors with zero or one effective dimension
+        # flatten the tensor
 
         if all([len(y.shape) <= 1 for y in x]):
             return torch.cat([y.view(-1) for y in x], dim=0)
@@ -478,7 +478,7 @@ def to_tensor(x, stack=False):
 
     # some objects are not tensors
     elif isinstance(x, list):
-        
+
         # list of strings
         if all([isinstance(y, str) for y in x]):
             return x
@@ -492,7 +492,6 @@ def to_tensor(x, stack=False):
             return torch.Tensor(x)
 
         # list of arrays or other formats
-        # pdb.set_trace()
         if any([isinstance(y, (list, np.ndarray)) for y in x]):
             return [torch.Tensor(y) for y in x]
 
@@ -552,7 +551,6 @@ def split_train_test(dataset, test_size=0.2):
     idx = list(range(len(dataset)))
     idx_train, idx_test = train_test_split(idx, test_size=test_size)
 
-    # pdb.set_trace()
     props = {key: [val[i] for i in idx_train]
              for key, val in dataset.props.items()}
 
@@ -572,7 +570,6 @@ def split_train_test(dataset, test_size=0.2):
 
 def split_train_validation_test(dataset, val_size=0.2, test_size=0.2):
 
-    # pdb.set_trace()
     train, validation = split_train_test(dataset, test_size=val_size)
     train, test = split_train_test(train, test_size=test_size / (1 - val_size))
 

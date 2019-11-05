@@ -1,10 +1,11 @@
-import numpy as np 
+import numpy as np
 from collections.abc import Iterable
-import torch 
+import torch
 import pdb
 
 
-REINDEX_KEYS = ['nbr_list', 'bonds', 'angles', 'dihedrals', 'impropers'] # , 'pairs']
+REINDEX_KEYS = ['nbr_list', 'bonds', 'angles',
+                'dihedrals', 'impropers']  # , 'pairs']
 
 
 TYPE_KEYS = {
@@ -16,6 +17,7 @@ TYPE_KEYS = {
     'impropers': torch.long
     # 'pairs': torch.long,
 }
+
 
 def collate_dicts(dicts):
     """Collates dictionaries within a single batch. Automatically reindexes neighbor lists
@@ -59,4 +61,3 @@ def collate_dicts(dicts):
         batch[key] = batch[key].to(dtype)
 
     return batch
-
