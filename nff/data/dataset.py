@@ -186,8 +186,19 @@ class Dataset(TorchDataset):
             None
         """
 
-        self.props['bonded_nbr_list'] = [torch.tensor(get_bond_list(nxyz))
-            for nxyz in self.props['nxyz']]
+        self.props['bonded_nbr_list'] = []
+        old_pct = 0
+        for i, nxyz in enumerate(self.props['nxyz']):
+
+            new_pct = int(i/len(self.props["nxyz"])*100)
+            if new_pct != old_pct:
+                old_pct = new_pct
+                print("{}% complete generating bonded neighbor list".format(new_pct))
+
+            self.props['bonded_nbr_list'].append(torch.tensor(get_bond_list(nxyz)))
+
+        # self.props['bonded_nbr_list'] = [torch.tensor(get_bond_list(nxyz))
+        #     for nxyz in self.props['nxyz']]
         
     def set_degree_vec(self):
 
@@ -260,7 +271,18 @@ class Dataset(TorchDataset):
         self.props["neighbors"] = []
         self.props["num_bonds"] = []
 
-        for bonded_nbr_list, degree_vec in zip(self.props["bonded_nbr_list"], self.props["degree_vec"]):
+        old_pct = 0
+        i = 0
+
+        for bonded_nbr_list, degree_vec in zip(self.props["bonded_nbr_list"],
+            self.props["degree_vec"]):
+
+            i +=1
+
+            new_pct = int(i/len(self.props["bonded_nbr_list"])*100)
+            if new_pct != old_pct:
+                old_pct = new_pct
+                print("{}% complete bonds".format(new_pct))
 
             # get the unique set of bonded pairs
             bonds = self.unique_pairs(bonded_nbr_list)
@@ -295,8 +317,14 @@ class Dataset(TorchDataset):
 
         self.props["angles"] = []
         self.props["num_angles"] = []
+        old_pct = 0
 
-        for neighbors in self.props["neighbors"]:
+        for i, neighbors in enumerate(self.props["neighbors"]):
+
+            new_pct = int(i/len(self.props["neighbors"])*100)
+            if new_pct != old_pct:
+                old_pct = new_pct
+                print("{}% complete angles".format(new_pct))
 
             angles = [list(itertools.combinations(x, 2)) for x in neighbors]
             angles = [[[pair[0]]+[i]+[pair[1]] for pair in pairs]
@@ -319,8 +347,15 @@ class Dataset(TorchDataset):
 
         self.props["dihedrals"] = []
         self.props["num_dihedrals"] = []
+        old_pct = 0
 
-        for neighbors in self.props["neighbors"]:
+        for i, neighbors in enumerate(self.props["neighbors"]):
+
+            new_pct = int(i/len(self.props["neighbors"])*100)
+            if new_pct != old_pct:
+                old_pct = new_pct
+                print("{}% complete dihedrals".format(new_pct))
+
             dihedrals = copy.deepcopy(neighbors)
             for i in range(len(neighbors)):
                 for counter, j in enumerate(neighbors[i]):
