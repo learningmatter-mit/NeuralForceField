@@ -168,6 +168,10 @@ class Trainer:
         self.to(device)
 
         self._stop = False
+        # initialize loss, num_batches, and optimizer grad to 0
+        loss = torch.tensor(0.0).to(device)
+        num_batches = 0
+        self.optimizer.zero_grad()
 
         for h in self.hooks:
             h.on_train_begin(self)
@@ -182,13 +186,9 @@ class Trainer:
                 if self._stop:
                     break
 
-                num_batches = 0
                 for j, batch in enumerate(self.train_loader):
 
-                    loss = 0.0
                     batch = batch_to(batch, device)
-
-                    self.optimizer.zero_grad()
 
                     for h in self.hooks:
                         h.on_batch_begin(self, batch)
@@ -203,8 +203,10 @@ class Trainer:
                         loss.backward()
                         self.optimizer.step()
                         self.step += 1
+                        # reset loss, num_batches, and the optimizer grad
+                        loss = torch.tensor(0.0).to(device)
                         num_batches = 0
-
+                        self.optimizer.zero_grad()
 
                     for h in self.hooks:
                         h.on_batch_end(self, batch, results, loss)
