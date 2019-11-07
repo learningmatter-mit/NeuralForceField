@@ -510,11 +510,12 @@ class AuTopologyReadOut(nn.Module):
         }
 
 
-        self.topologynet = {}
-        for top in self.terms.keys():
-            self.topologynet[top] = TopologyNet[top](Fr, Lh, self.terms[top], trainable=trainable)
+        self.topologynet = {key: {} for key in autopology_keys}
+        for key in autopology_keys:
+            for top in self.terms.keys():
+                self.topologynet[key][top] = TopologyNet[top](Fr, Lh, self.terms[top], trainable=trainable)
 
-        self.auto_modules = ModuleDict({key: torch.nn.ModuleList(self.topologynet.values())
+        self.auto_modules = ModuleDict({key: torch.nn.ModuleList(self.topologynet[key].values())
                                 for key in autopology_keys})
 
     def forward(self, r, batch, xyz):
@@ -526,8 +527,8 @@ class AuTopologyReadOut(nn.Module):
             learned_params = {}
             for top in self.terms.keys():
                 if self.terms[top]:
-                    E[top] = self.topologynet[top](r, batch, xyz)
-                    learned_params[top] = self.topologynet[top].learned_params
+                    E[top] = self.topologynet[output_key][top](r, batch, xyz)
+                    learned_params[top] = self.topologynet[output_key][top].learned_params
                 E['total'] += E[top]
             output[output_key] = E["total"] 
 
