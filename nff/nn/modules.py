@@ -286,8 +286,6 @@ class ImproperNet(torch.nn.Module):
         impropers = batch["impropers"]
         num_impropers = batch["num_impropers"].tolist()
 
-
-
         if num_impropers == [0]*len(num_impropers):
             return torch.tensor([0.0 for _ in range(len(num_impropers))])
 
@@ -486,7 +484,26 @@ TopologyNet = {
 
 class AuTopologyReadOut(nn.Module):
 
+    """
+    Class for reading out results from a convolution using AuTopology.
+    Attributes:
+        terms (dict): dictionary of the types of AuTopology potentials used
+            for each kind of topology (e.g. Morse for harmonic, LJ for pairs,
+            etc.)
+        auto_modules (torch.nn.ModuleDict): module dictionary for all the topology
+            nets associated with each energy state. E.g. of the form {"energy_0":
+            {"bond": BondNet0, "angle": AngletNet0}, "energy_1": {"bond": BondNet1,
+            "angle": AngletNet1} }.
+    """
+
     def __init__(self, multitaskdict):
+
+        """
+        Args:
+            multitaskdict (dict): dictionary of items used for setting up the networks.
+        Returns:
+            None
+        """
 
         super(AuTopologyReadOut, self).__init__()
 
@@ -515,6 +532,8 @@ class AuTopologyReadOut(nn.Module):
             for top in self.terms.keys():
                 topologynet[key][top] = TopologyNet[top](Fr, Lh, self.terms[top], trainable=trainable)
 
+        # module dictionary of the form {"energy_0": {"bond": BondNet0, "angle": AngletNet0},
+        # "energy_1": {"bond": BondNet1, "angle": AngletNet1} }
         self.auto_modules = ModuleDict({key: ModuleDict({top: topologynet[key][top] for top in
             self.terms.keys()}) for key in autopology_keys})
 
@@ -523,9 +542,12 @@ class AuTopologyReadOut(nn.Module):
 
         output = dict()
 
+        # loop through output keys (e.g. energy_0 and energy_1)
         for output_key, top_set in self.auto_modules.items():
             E = {key: 0.0 for key in list(self.terms.keys()) + ['total']}
             learned_params = {}
+            # loop through associated topology nets (e.g. BondNet0 and AngletNet0 or
+            # BondNet1 and AngletNet1)
             for top, top_net in top_set.items():
                 E[top] = top_net(r, batch, xyz)
                 learned_params[top] = top_net.learned_params
