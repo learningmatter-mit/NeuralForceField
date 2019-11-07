@@ -510,29 +510,30 @@ class AuTopologyReadOut(nn.Module):
         }
 
 
-        self.topologynet = {key: {} for key in autopology_keys}
+        topologynet = {key: {} for key in autopology_keys}
         for key in autopology_keys:
             for top in self.terms.keys():
-                self.topologynet[key][top] = TopologyNet[top](Fr, Lh, self.terms[top], trainable=trainable)
+                topologynet[key][top] = TopologyNet[top](Fr, Lh, self.terms[top], trainable=trainable)
 
-        self.auto_modules = ModuleDict({key: torch.nn.ModuleList(self.topologynet[key].values())
-                                for key in autopology_keys})
+        self.auto_modules = ModuleDict({key: ModuleDict({top: topologynet[key][top] for top in
+            self.terms.keys()}) for key in autopology_keys})
+
 
     def forward(self, r, batch, xyz):
 
         output = dict()
 
-        for output_key in self.auto_modules.keys():
+        for output_key, top_set in self.auto_modules.items():
             E = {key: 0.0 for key in list(self.terms.keys()) + ['total']}
             learned_params = {}
-            for top in self.terms.keys():
-                if self.terms[top]:
-                    E[top] = self.topologynet[output_key][top](r, batch, xyz)
-                    learned_params[top] = self.topologynet[output_key][top].learned_params
+            for top, top_net in top_set.items():
+                E[top] = top_net(r, batch, xyz)
+                learned_params[top] = top_net.learned_params
                 E['total'] += E[top]
             output[output_key] = E["total"] 
 
         return output
+
 
 
 class SchNetEdgeUpdate(EdgeUpdateModule):

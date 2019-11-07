@@ -30,6 +30,7 @@ PARAMS_TYPE = {"SchNet":
                    "sorted_result_keys": list,
                    "grad_keys": list,
                    "trainable_prior": bool,
+                   "sort_results": bool,
                    "autopology_Lh": list,
                    "bond_terms": list,
                    "angle_terms": list,
