@@ -540,7 +540,7 @@ class AuTopologyReadOut(nn.Module):
             self.terms.keys()}) for key in autopology_keys})
 
 
-    def forward(self, r, batch, xyz, grad=True):
+    def forward(self, r, batch, xyz, take_grad=True):
 
         output = dict()
 
@@ -555,8 +555,9 @@ class AuTopologyReadOut(nn.Module):
                 learned_params[top] = top_net.learned_params
                 E['total'] += E[top]
             output[output_key] = E["total"] 
-            grad = compute_grad(inputs=xyz, output=E["total"] )
-            output[output_key + "_grad"] = grad
+            if take_grad:
+                grad = compute_grad(inputs=xyz, output=E["total"] )
+                output[output_key + "_grad"] = grad
 
         return output
 
