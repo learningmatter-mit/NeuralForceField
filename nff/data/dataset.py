@@ -12,6 +12,7 @@ import nff.utils.constants as const
 import copy
 import itertools
 from nff.data.topology import update_props_topologies
+from nff.data.graphs import get_neighbor_list
 
 class Dataset(TorchDataset):
     """Dataset to deal with NFF calculations. Can be expanded to retrieve calculations
