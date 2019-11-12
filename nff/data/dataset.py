@@ -9,7 +9,6 @@ from torch.utils.data import Dataset as TorchDataset
 # from nff.data import get_neighbor_list, get_bond_list
 from nff.data.sparse import sparsify_tensor
 import nff.utils.constants as const
-from nff.utils import htvs
 import copy
 import itertools
 from nff.data.topology import update_props_topologies
@@ -176,26 +175,16 @@ class Dataset(TorchDataset):
 
         return
 
-    def generate_topologies(self, groupname, method_name, use_1_4_pairs=True):
+    def generate_topologies(self, bond_dic, use_1_4_pairs=True):
 
         """
         Generate topology for each Geom in the dataset.
         Args:
-            groupname (str): name of Species group to query in the database when finding
-                reference graphs.
-            method_name (str): name of Geom method names to query in the database when finding
-                reference graphs.
+            bond_dic (dict): dictionary of bond lists for each smiles
             use_1_4_pairs (bool): consider 1-4 pairs when generating non-bonded neighbor list
         Returns:
             None
         """
-
-        assert "smiles" in self.props, "Smiles must be part of props"
-
-        smileslist = list(set(self.props["smiles"]))
-        # get reference molecule bond list for each Species
-        mol_ref = htvs.get_mol_ref(smileslist, groupname, method_name)
-        bond_dic = {key: val[0] for key, val in mol_ref.items()}
 
         # use the bond list to generate topologies for the props
         new_props = update_props_topologies(props=self.props, bond_dic=bond_dic, use_1_4_pairs=use_1_4_pairs)

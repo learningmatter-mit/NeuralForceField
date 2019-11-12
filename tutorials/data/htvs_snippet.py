@@ -8,6 +8,7 @@ import sys
 import os
 import pdb
 
+# change to your htvs directory
 htvs_dir = "/home/saxelrod/htvs"
 
 import django
@@ -19,6 +20,7 @@ django.setup()
 
 from analysis.reacted_geometry import getrootconformers, get_component_order, DISTANCETHRESHOLDICT
 from pgmols.models import Calc, Geom, Species, Stoichiometry, Method, Cluster
+
 
 
 def get_all_clusters(spec_query):
@@ -180,3 +182,4 @@ def get_mol_ref(smileslist,
                 mol_ref[sp.smiles] = get_nuclei_bond_and_bondlen(geom)
         
     return mol_ref
+
