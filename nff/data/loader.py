@@ -2,21 +2,15 @@ import numpy as np
 from collections.abc import Iterable
 import torch
 import pdb
+from nff.data.topology import TOPOLOGIES, ALL_TOPOLOGY_KEYS
 
-
-REINDEX_KEYS = ['nbr_list', 'bonds', 'angles',
-                'dihedrals', 'impropers']  # , 'pairs']
+REINDEX_KEYS = ['nbr_list', *TOPOLOGIES]
 
 
 TYPE_KEYS = {
     'nbr_list': torch.long,
     'num_atoms': torch.long,
-    'bonds': torch.long,
-    'angles': torch.long,
-    'dihedrals': torch.long,
-    'impropers': torch.long
-    # 'pairs': torch.long,
-}
+    **{key: torch.long for key in ALL_TOPOLOGY_KEYS}}
 
 
 def collate_dicts(dicts):
@@ -58,6 +52,7 @@ def collate_dicts(dicts):
 
     # adjusting the data types:
     for key, dtype in TYPE_KEYS.items():
-        batch[key] = batch[key].to(dtype)
+        if key in batch:
+            batch[key] = batch[key].to(dtype)
 
     return batch

@@ -10,6 +10,8 @@ from nff.nn.activations import shifted_softplus
 from nff.nn.graphconv import MessagePassingModule, EdgeUpdateModule, \
     GeometricOperations, TopologyOperations
 from nff.nn.utils import construct_sequential, construct_module_dict
+from nff.utils.scatter import compute_grad
+
 import unittest
 import itertools
 import copy
@@ -538,7 +540,7 @@ class AuTopologyReadOut(nn.Module):
             self.terms.keys()}) for key in autopology_keys})
 
 
-    def forward(self, r, batch, xyz):
+    def forward(self, r, batch, xyz, grad=True):
 
         output = dict()
 
@@ -553,6 +555,8 @@ class AuTopologyReadOut(nn.Module):
                 learned_params[top] = top_net.learned_params
                 E['total'] += E[top]
             output[output_key] = E["total"] 
+            grad = compute_grad(inputs=xyz, output=E["total"] )
+            output[output_key + "_grad"] = grad
 
         return output
 

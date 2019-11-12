@@ -6,12 +6,13 @@ from collections.abc import Iterable
 from sklearn.utils import shuffle as skshuffle
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset as TorchDataset
-from nff.data import get_neighbor_list, get_bond_list
+# from nff.data import get_neighbor_list, get_bond_list
 from nff.data.sparse import sparsify_tensor
 import nff.utils.constants as const
+from nff.utils import htvs
 import copy
 import itertools
-
+from nff.data.topology import update_props_topologies
 
 class Dataset(TorchDataset):
     """Dataset to deal with NFF calculations. Can be expanded to retrieve calculations
@@ -175,287 +176,30 @@ class Dataset(TorchDataset):
 
         return
 
-    def generate_bonded_neighbor_list(self):
+    def generate_topologies(self, groupname, method_name, use_1_4_pairs=True):
 
         """
-        Generates a list of bonded neighbors in self.props. Uses nff.data.graphs.get_bonded_neighbors,
-        which uses a set of bond distance cutoffs for different types of atom pairs.
+        Generate topology for each Geom in the dataset.
         Args:
-            None
+            groupname (str): name of Species group to query in the database when finding
+                reference graphs.
+            method_name (str): name of Geom method names to query in the database when finding
+                reference graphs.
+            use_1_4_pairs (bool): consider 1-4 pairs when generating non-bonded neighbor list
         Returns:
             None
         """
 
-        self.props['bonded_nbr_list'] = []
-        old_pct = 0
-        for i, nxyz in enumerate(self.props['nxyz']):
+        assert "smiles" in self.props, "Smiles must be part of props"
 
-            new_pct = int(i/len(self.props["nxyz"])*100)
-            if new_pct != old_pct:
-                old_pct = new_pct
-                print("{}% complete generating bonded neighbor list".format(new_pct))
+        smileslist = list(set(self.props["smiles"]))
+        # get reference molecule bond list for each Species
+        mol_ref = htvs.get_mol_ref(smileslist, groupname, method_name)
+        bond_dic = {key: val[0] for key, val in mol_ref.items()}
 
-            self.props['bonded_nbr_list'].append(torch.tensor(get_bond_list(nxyz)))
-
-        # self.props['bonded_nbr_list'] = [torch.tensor(get_bond_list(nxyz))
-        #     for nxyz in self.props['nxyz']]
-        
-    def set_degree_vec(self):
-
-        """
-        Sets the degree vector. This is a list of the number of atoms bonded to each atom in
-        the dataset. Each different molecule gets its own degree vector.
-        Args:
-            None
-        Returns:
-            None 
-        """
-
-        self.props["degree_vec"] = []
-        for num_atoms, bonded_nbr_list in zip(self.props["num_atoms"], self.props["bonded_nbr_list"]):
-
-            # define A as an N x N zero matrix (N is the number of atoms)
-            A = torch.zeros(num_atoms, num_atoms).to(torch.long)
-            # every pair of indices with a bond then gets a 1
-            A[bonded_nbr_list[:, 0], bonded_nbr_list[:, 1]] = 1
-            # sum over one of the dimensions to get an array with bond number
-            # for each atom
-            d = A.sum(1)
-            self.props["degree_vec"].append(d)
-
-    def unique_pairs(self, bonded_nbr_list):
-
-        """
-        Reduces the bonded neighbor list to only include unique pairs of bonds. For example,
-        if atoms 3 and 5 are bonded, then `bonded_nbr_list` will have items [3, 5] and also
-        [5, 3]. This function will reduce the pairs only to [3, 5] (i.e. only the pair in which
-        the first index is lower).
-
-        Args:
-            bonded_nbr_list (list): list of arrays of bonded pairs for each molecule.
-        Returns:
-            sorted_pairs (list): same as bonded_nbr_list but without duplicate pairs.
-
-        """
-
-        unique_pairs = []
-        for pair in bonded_nbr_list:
-            # sort according to the first item in the pair
-            sorted_pair = torch.sort(pair)[0].numpy().tolist()
-            if sorted_pair not in unique_pairs:
-                unique_pairs.append(sorted_pair)
-
-        # now make sure that the sorting is still good (this may be unnecessary but I added
-        # it just to make sure)
-        idx = list(range(len(unique_pairs)))
-        # first_arg = list of the the first node in each pair
-        first_arg = [pair[0] for pair in unique_pairs]
-        # sorted_idx = sort the indices of unique_pairs by the first node in each pair
-        sorted_idx = [item[-1] for item in sorted(zip(first_arg, idx))]
-        # re-arrange by sorted_idx
-        sorted_pairs = torch.LongTensor(np.array(unique_pairs)[sorted_idx])
-
-        return sorted_pairs
-
-    def set_bonds(self):
-
-        """
-        Set the bonds between atoms.
-        Args:
-            None
-        Returns:
-            None
-        """
-
-        self.props["bonds"] = []
-        self.props["neighbors"] = []
-        self.props["num_bonds"] = []
-
-        old_pct = 0
-        i = 0
-
-        for bonded_nbr_list, degree_vec in zip(self.props["bonded_nbr_list"],
-            self.props["degree_vec"]):
-
-            i +=1
-
-            new_pct = int(i/len(self.props["bonded_nbr_list"])*100)
-            if new_pct != old_pct:
-                old_pct = new_pct
-                print("{}% complete bonds".format(new_pct))
-
-            # get the unique set of bonded pairs
-            bonds = self.unique_pairs(bonded_nbr_list)
-            # neighbors is a list of bonded neighbor pairs for each atom.
-            # Get it by splitting the bonded neighbor list by degree_vec
-            neighbors = list(torch.split(bonded_nbr_list, degree_vec.tolist()))
-            # second_arg_neighbors is just the second node in each set of bonded
-            # neighbor pairs. Since the first node is already given implicitly by
-            # the first index of `neighbors`, we don't need to use it anymore
-            second_arg_neighbors = [neigbor[:, 1].tolist()
-                                    for neigbor in neighbors]
-
-            # props["bonds"] is the full set of unique pairs of bonded atoms
-            self.props["bonds"].append(bonds)
-            # props["num_bonds"] is teh number of bonds
-            self.props["num_bonds"].append(torch.tensor(len(bonds)))
-            # props["neighbors"] is the `second_arg_neighbors` intrdoduced above.
-            # Note that props["neighbors"] is for bonded neighbors, as opposed
-            # to props["nbr_list"], which is just everything within a 5 A radius.
-            self.props["neighbors"].append(second_arg_neighbors)
-
-    def set_angles(self):
-
-        """
-        Set the angles among bonded atoms.
-        Args:
-            None
-        Returns:
-            None
-
-        """
-
-        self.props["angles"] = []
-        self.props["num_angles"] = []
-        old_pct = 0
-
-        for i, neighbors in enumerate(self.props["neighbors"]):
-
-            new_pct = int(i/len(self.props["neighbors"])*100)
-            if new_pct != old_pct:
-                old_pct = new_pct
-                print("{}% complete angles".format(new_pct))
-
-            angles = [list(itertools.combinations(x, 2)) for x in neighbors]
-            angles = [[[pair[0]]+[i]+[pair[1]] for pair in pairs]
-                      for i, pairs in enumerate(angles)]
-            angles = list(itertools.chain(*angles))
-            angles = torch.LongTensor(angles)
-            self.props["angles"].append(angles)
-            self.props["num_angles"].append(torch.tensor(len(angles)))
-
-    def set_dihedrals(self):
-
-        """
-        Set the dihedral angles among bonded atoms.
-        Args:
-            None
-        Returns:
-            None
-
-        """
-
-        self.props["dihedrals"] = []
-        self.props["num_dihedrals"] = []
-        old_pct = 0
-
-        for i, neighbors in enumerate(self.props["neighbors"]):
-
-            new_pct = int(i/len(self.props["neighbors"])*100)
-            if new_pct != old_pct:
-                old_pct = new_pct
-                print("{}% complete dihedrals".format(new_pct))
-
-            dihedrals = copy.deepcopy(neighbors)
-            for i in range(len(neighbors)):
-                for counter, j in enumerate(neighbors[i]):
-                    k = set(neighbors[i])-set([j])
-                    l = set(neighbors[j])-set([i])
-                    pairs = list(
-                        filter(lambda pair: pair[0] < pair[1], itertools.product(k, l)))
-                    dihedrals[i][counter] = [[pair[0]]+[i]+[j]+[pair[1]]
-                                             for pair in pairs]
-            dihedrals = list(itertools.chain(
-                *list(itertools.chain(*dihedrals))))
-            dihedrals = torch.LongTensor(dihedrals)
-            self.props["dihedrals"].append(dihedrals)
-            self.props["num_dihedrals"].append(torch.tensor(len(dihedrals)))
-
-    def set_impropers(self):
-
-        """
-        Set the improper angles among bonded atoms.
-        Args:
-            None
-        Returns:
-            None
-
-        """
-        self.props["impropers"] = []
-        self.props["num_impropers"] = []
-
-        for neighbors in self.props["neighbors"]:
-            impropers = copy.deepcopy(neighbors)
-            for i in range(len(impropers)):
-                impropers[i] = [
-                    [i]+list(x) for x in itertools.combinations(neighbors[i], 3)]
-            impropers = list(itertools.chain(*impropers))
-            impropers = torch.LongTensor(impropers)
-
-            self.props["impropers"].append(impropers)
-            self.props["num_impropers"].append(torch.tensor(len(impropers)))
-
-    def set_pairs(self, use_1_4_pairs):
-
-        """
-        Set the non-bonded pairs.
-        Args:
-            None
-        Returns:
-            None
-
-        """
-
-        self.props["pairs"] = []
-        self.props["num_pairs"] = []
-
-
-        for i, neighbors in enumerate(self.props["neighbors"]):
-            bonds = self.props["bonds"][i]
-            angles = self.props["angles"][i]
-            dihedrals = self.props["dihedrals"][i]
-            impropers = self.props["impropers"][i]
-            num_atoms = self.props["num_atoms"][i]
-
-            pairs = torch.eye(num_atoms, num_atoms)
-            topologies = [bonds, angles, impropers]
-
-            if use_1_4_pairs is False:
-                topologies.append(dihedrals)
-            for topology in topologies:
-                for interaction_list in topology:
-                    for pair in itertools.combinations(interaction_list, 2):
-                        pairs[pair[0], pair[1]] = 1
-                        pairs[pair[1], pair[0]] = 1
-            pairs = (pairs == 0).nonzero()
-            pairs = pairs.sort(dim=1)[0].unique(dim=0).tolist()
-            pairs = torch.LongTensor(pairs)
-
-            self.props["pairs"].append(pairs)
-            self.props["num_pairs"].append(torch.tensor(len(pairs)))
-
-    def generate_topologies(self, use_1_4_pairs=True):
-
-        """
-        Generate bond, angle, dihedral, and improper topologies. Non-bonded pairs
-        haven't been tested yet.
-        Args:
-            use_1_4_pairs (bool): whether or not to use 1-4 pairs when settings non-
-                bonded pairs
-        Returns:
-            None
-        """
-
-        self.generate_bonded_neighbor_list()
-        self.set_degree_vec()
-        self.set_bonds()
-        self.set_angles()
-        self.set_dihedrals()
-        self.set_impropers()
-        # self.set_pairs(use_1_4_pairs)
-
-        # remove props["neighbors"] because we don't need it anymore
-        self.props.pop("neighbors")
+        # use the bond list to generate topologies for the props
+        new_props = update_props_topologies(props=self.props, bond_dic=bond_dic, use_1_4_pairs=use_1_4_pairs)
+        self.props = new_props
 
 
     def save(self, path):
