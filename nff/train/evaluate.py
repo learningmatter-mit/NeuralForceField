@@ -47,7 +47,7 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
     if loss_is_normalized:
         eval_loss /= n_eval
 
-    all_results = concatenate_dict(*all_results, stack=True)
-    all_batches = concatenate_dict(*all_batches, stack=True)
+    all_results = concatenate_dict(*all_results)
+    all_batches = concatenate_dict(*all_batches)
 
     return all_results, all_batches, eval_loss
