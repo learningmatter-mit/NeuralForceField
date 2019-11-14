@@ -3,6 +3,8 @@ import torch.nn as nns
 import torch.nn.functional as F
 from nff.utils.scatter import compute_grad
 
+EPS = 1e-15
+
 
 def batch_and_sum(dict_input, N, predict_keys, xyz):
     """Pooling function to get graph property.
@@ -74,3 +76,5 @@ def get_atoms_inside_cell(r, N, pbc):
     r = r[atoms_in_cell]
 
     return r, N
+
+

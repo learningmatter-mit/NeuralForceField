@@ -1,14 +1,17 @@
-import numpy as np 
+import numpy as np
 from collections.abc import Iterable
+import torch
+import pdb
+from nff.data.topology import TOPOLOGIES, ALL_TOPOLOGY_KEYS
 
-import torch 
+REINDEX_KEYS = ['nbr_list', *TOPOLOGIES]
 
-REINDEX_KEYS = ['nbr_list']
 
 TYPE_KEYS = {
     'nbr_list': torch.long,
-    'num_atoms': torch.long
-}
+    'num_atoms': torch.long,
+    **{key: torch.long for key in ALL_TOPOLOGY_KEYS}}
+
 
 def collate_dicts(dicts):
     """Collates dictionaries within a single batch. Automatically reindexes neighbor lists
@@ -26,6 +29,7 @@ def collate_dicts(dicts):
     cumulative_atoms = np.cumsum([0] + [d['num_atoms'] for d in dicts])[:-1]
 
     for n, d in zip(cumulative_atoms, dicts):
+
         for key in REINDEX_KEYS:
             if key in d:
                 d[key] = d[key] + int(n)
@@ -48,7 +52,7 @@ def collate_dicts(dicts):
 
     # adjusting the data types:
     for key, dtype in TYPE_KEYS.items():
-        batch[key] = batch[key].to(dtype)
+        if key in batch:
+            batch[key] = batch[key].to(dtype)
 
     return batch
-
