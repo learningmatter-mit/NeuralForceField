@@ -13,9 +13,9 @@ def sparsify_tensor(tensor):
         sparse (torch.sparse.Tensor)
     """
     ij = tensor.nonzero()
-    v = tensor[ij[:, 0], ij[:, 1]]
 
     if len(ij) > 0:
+        v = tensor[ij[:, 0], ij[:, 1]]
         return sp.FloatTensor(ij.t(), v, tensor.size())
     else:
         return 0
