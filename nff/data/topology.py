@@ -9,7 +9,9 @@ import numpy as np
 import itertools
 
 TOPOLOGIES = ["bonds", "angles", "dihedrals", "impropers", "pairs"]
-ALL_TOPOLOGY_KEYS = [*TOPOLOGIES, *["num_{}".format(key) for key in TOPOLOGIES]]
+ALL_TOPOLOGY_KEYS = [*TOPOLOGIES, *["num_{}".format(key) for key in TOPOLOGIES], "bonded_nbr_list"]
+RE_INDEX_TOPOLOGY_KEYS = [*TOPOLOGIES, "bonded_nbr_list"]
+
 
 def create_smiles_dic(props):
 
@@ -295,7 +297,10 @@ def smiles_dic_to_props(smiles_dic, props):
             # update new_props with sub_dic, a dictionary with topology information about the
             # corresponding smiles
             sub_dic = smiles_dic[smiles]
-            new_props[key].append(sub_dic[key])
+            if key == "degree_vec":
+                new_props[key].append(sub_dic[key].reshape(-1, 1))
+            else:
+                new_props[key].append(sub_dic[key])
 
     return new_props
 
@@ -335,7 +340,7 @@ def update_props_topologies(props, bond_dic, use_1_4_pairs=True):
     set_angles(smiles_dic)
     set_dihedrals(smiles_dic)
     set_impropers(smiles_dic)
-    # set_pairs(smiles_dic, use_1_4_pairs)
+    set_pairs(smiles_dic, use_1_4_pairs)
 
     new_props = smiles_dic_to_props(smiles_dic=smiles_dic, props=props)
 

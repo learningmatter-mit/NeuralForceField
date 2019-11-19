@@ -5,13 +5,19 @@ import torch.nn.functional as F
 
 from nff.nn.layers import Dense, GaussianSmearing
 from nff.nn.modules import (GraphDis, SchNetConv, BondEnergyModule, SchNetEdgeUpdate, NodeMultiTaskReadOut,
-                            AuTopologyReadOut)
+                            AuTopologyReadOut, DoubleNodeConv, SingleNodeConv)
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphop import batch_and_sum, get_atoms_inside_cell
 from nff.nn.utils import get_default_readout
 from nff.utils.scatter import compute_grad
 import numpy as np
 import pdb
+
+
+STRING_TO_MODULE = {
+    "double_node": DoubleNodeConv,
+    "single_node": SingleNodeConv
+}
 
 
 class SchNet(nn.Module):
@@ -37,9 +43,42 @@ class SchNet(nn.Module):
 
         Args:
             modelparams (TYPE): Description
+
+        Example:
+
+            n_atom_basis = 256
+
+            readoutdict = {
+                                "energy_0": [{'name': 'linear', 'param' : { 'in_features': n_atom_basis,
+                                                                          'out_features': int(n_atom_basis / 2)}},
+                                           {'name': 'shifted_softplus', 'param': {}},
+                                           {'name': 'linear', 'param' : { 'in_features': int(n_atom_basis / 2),
+                                                                          'out_features': 1}}],
+                                "energy_1": [{'name': 'linear', 'param' : { 'in_features': n_atom_basis,
+                                                                          'out_features': int(n_atom_basis / 2)}},
+                                           {'name': 'shifted_softplus', 'param': {}},
+                                           {'name': 'linear', 'param' : { 'in_features': int(n_atom_basis / 2),
+                                                                          'out_features': 1}}]
+                            }
+
+
+            modelparams = {
+                'n_atom_basis': n_atom_basis,
+                'n_filters': 256,
+                'n_gaussians': 32,
+                'n_convolutions': 4,
+                'cutoff': 5.0,
+                'trainable_gauss': True,
+                'readoutdict': readoutdict,    
+
+
+            }
+
+            model = SchNet(modelparams)
+
         """
 
-        super().__init__()
+        nn.Module.__init__(self)
 
         n_atom_basis = modelparams['n_atom_basis']
         n_filters = modelparams['n_filters']
@@ -48,12 +87,14 @@ class SchNet(nn.Module):
         cutoff = modelparams['cutoff']
         trainable_gauss = modelparams.get('trainable_gauss', False)
 
+
+        self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
+
         # default predict var
         readoutdict = modelparams.get(
             'readoutdict', get_default_readout(n_atom_basis))
         post_readout = modelparams.get('post_readout', None)
 
-        self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
 
         self.convolutions = nn.ModuleList([
             SchNetConv(n_atom_basis=n_atom_basis,
@@ -68,6 +109,9 @@ class SchNet(nn.Module):
         self.atomwisereadout = NodeMultiTaskReadOut(
             multitaskdict=readoutdict, post_readout=post_readout)
         self.device = None
+
+
+
 
     def convolve(self, batch):
         """
@@ -107,7 +151,7 @@ class SchNet(nn.Module):
 
         return r, N, xyz
 
-    def forward(self, batch, other_results=False):
+    def forward(self, batch):
         """Summary
 
         Args:
@@ -124,7 +168,92 @@ class SchNet(nn.Module):
         return results
 
 
-class SchNetAuTopology(SchNet):
+class AuTopology(nn.Module):
+
+    def __init__(self, modelparams):
+
+        """
+        Example:
+            n_autopology_features = 256
+
+            modelparams = {
+                "n_features": n_autopology_features,
+                "n_convolutions": 4,
+                "conv_type": "double_node",
+
+
+                "conv_update_layers": [{'name': 'linear', 'param' : {'in_features': int(2*n_autopology_features),
+                                                                'out_features': n_autopology_features}},
+                                  {'name': 'Tanh', 'param': {}},
+                                  {'name': 'linear', 'param' : {'in_features': n_autopology_features,
+                                                          'out_features': n_autopology_features}},
+                                  {'name': 'Tanh', 'param': {}}
+
+                        ],
+                
+                
+                "readout_hidden_nodes": [40, 20],
+                
+                "bond_terms": ["morse"],
+                "angle_terms": ["harmonic"],
+                "dihedral_terms": ["OPLS"],
+                "improper_terms": ["harmonic"],
+                "pair_terms": ["LJ"],
+                
+                "output_keys": ["energy_0", "energy_1"],
+                "trainable_prior": True
+
+            }
+
+            model = AuTopology(modelparams)
+
+
+        """
+
+        nn.Module.__init__(self)
+
+        n_features = modelparams["n_features"]
+        update_layers = modelparams["conv_update_layers"]
+        conv_type = modelparams["conv_type"]
+        n_convolutions = modelparams["n_convolutions"]
+
+        self.atom_embed = nn.Embedding(100, n_features, padding_idx=0)
+
+        self.convolutions = nn.ModuleList([
+            STRING_TO_MODULE[conv_type](update_layers)
+            for _ in range(n_convolutions)
+        ])
+
+
+        Lh = modelparams["readout_hidden_nodes"]
+        Fr = modelparams["n_features"]
+        modelparams.update({"Lh": Lh, "Fr": Fr})
+
+        self.readout = AuTopologyReadOut(multitaskdict=modelparams)
+
+
+    def convolve(self, batch):
+
+
+        # not implemented for PBC yet
+
+        a = batch["bonded_nbr_list"]
+        z = batch['nxyz'][:, 0]
+        r = self.atom_embed(z.long()).squeeze()
+
+        for i, conv in enumerate(self.convolutions):
+            dr = conv(r=r, a=a, e=None)
+            r = r + dr
+
+        return r
+
+    def forward(self, batch, xyz):
+        r = self.convolve(batch)
+        results = self.readout(r=r, batch=batch, xyz=xyz)
+        return results
+
+
+class SchNetAuTopology(nn.Module):
 
     """
     A neural network model that combines AuTopology with SchNet.
@@ -146,105 +275,98 @@ class SchNetAuTopology(SchNet):
 
     """
 
-    def __init__(self, modelparams):
+    def __init__(self, modelparams, add_autopology=True, add_schnet=False):
         """Constructs a SchNet model.
 
         Args:
             modelparams (dict): dictionary of parameters for the model
+            add_autpology (bool): add the autopology result to the final energy
+            add_schnet (bool): add the schnet result to the final energy
+
         Returns:
             None
 
         Example:
 
-            modelparams =  { 
-              "sorted_result_keys": ["energy_0", "energy_1"],
-              "grad_keys": ["energy_0_grad", "energy_1_grad"],
 
-              "n_atom_basis": 256,
-              "n_filters": 256,
-              "n_gaussians": 32,
-              "n_convolutions": 4,
-              "cutoff": 5.0,
-              "trainable_gauss": True,
+            # given `autopology_params` and `schnet_params`, like the ones given as examples in the SchNet and
+            # AuTopology docstrings:
 
-              "schnet_readout": {"energy_0":
-                        [
-                            {'name': 'Dense', 'param': {'in_features': 5, 'out_features': 20}},
-                            {'name': 'shifted_softplus', 'param': {}},
-                            {'name': 'Dense', 'param': {'in_features': 20, 'out_features': 1}}
-                        ],
-
-                    "energy_1":
-                        [
-                            {'name': 'linear', 'param': {'in_features': 5, 'out_features': 20}},
-                            {'name': 'Dense', 'param': {'in_features': 20, 'out_features': 1}}
-                        ]
-                }, # parameters for the SchNet part of the readout
-
-
-              "trainable_prior": True, # whether the AuTopology parameters are learnable or not
-              "sort_results": True, # whether to sort the final results by energy
-              "autopology_Lh": [40, 20], # layer parameters for AuTopology
-              "bond_terms": ["morse"], # type of classical bond prior
-              "angle_terms": ["harmonic"], # type of classical angle prior
-              "dihedral_terms": ["OPLS"],  # type of classical dihedral prior
-              "improper_terms": ["harmonic"], # type of classical improper prior
-              "pair_terms": ["LJ"], # type of classical non-bonded pair prior
-
+            modelparams = {
+                
+                "autopology_params": autopology_params,
+                "schnet_params": schnet_params,
+                "sorted_result_keys": ["energy_0", "energy_1"],
+                "grad_keys": ["energy_0_grad", "energy_1_grad"],
+                "sort_results": False,
+                
             }
 
             example_module = SchNetAuTopology(modelparams)
 
         """
 
-        # Initialize SchNet
-        schnet_params = copy.deepcopy(modelparams)
-        schnet_params.update({"readoutdict": modelparams["schnet_readout"]})
-        super().__init__(schnet_params)
-        self.schnet_readout = self.atomwisereadout
-        self.schnet_convolve = self.convolve
+        super().__init__()
 
 
-        # Initialize autopology
-        auto_readout = copy.deepcopy(modelparams)
-        auto_readout.update(
-            {"Fr": modelparams["n_atom_basis"], "Lh": modelparams.get("autopology_Lh")})
-        self.auto_readout = AuTopologyReadOut(multitaskdict=auto_readout)
+        schnet_params = modelparams["schnet_params"]
+        self.schnet = SchNet(schnet_params)
+
+        autopology_params = modelparams["autopology_params"]
+        self.autopology = AuTopology(autopology_params)
+
 
         # Add some other useful attributes
         self.sorted_result_keys = modelparams["sorted_result_keys"]
         self.grad_keys = modelparams["grad_keys"]
         self.sort_results = modelparams["sort_results"]
-        # the autopology keys are just the sorted_result_keys with "auto_" in front
-        self.auto_keys = ["auto_{}".format(key) for key in self.sorted_result_keys]
 
 
-    def get_sorted_results(self, pre_results, auto_results):
+        # Decide whether to add the autopology and/or schnet results to the final answer
+        self.add_autopology = add_autopology
+        self.add_schnet = add_schnet
+
+
+    def transfer_to_schnet(self):
+        """
+        Shift the learning from AuTopology to SchNet.
+        """
+
+        # Freeze the AuTopology parameters so they can no longer be learned.
+
+        for param in self.autopology.parameters():
+            param.requires_grad = False
+
+        # Start adding the SchNet result to the final result
+        self.add_schnet = True
+
+
+    def get_sorted_results(self, pre_results):
+
+        """
+        Sort results by energies.
+        Args:
+            pre_results (dict): dictionary of the network output before sorting
+        Returns:
+            final_results (dict): dictionary of the network output after sorting
+        """
 
         # sort the energies for each molecule in the batch and put the results in
         # `final_results`.
         batch_length = len(pre_results[self.sorted_result_keys[0]])
-        final_results = {key: [] for key in [*self.sorted_result_keys, *self.auto_keys]}
+        final_results = {key: [] for key in self.sorted_result_keys}
 
         for i in range(batch_length):
             # sort the outputs
             sorted_energies, sorted_idx = torch.sort(torch.cat([pre_results[key][i] for key in
                                                                 self.sorted_result_keys]))
 
-            # sort the autopology energies according to the ordering of the total energies
-            sorted_auto_energies = torch.cat([auto_results[key][i] for key in
-                                              self.sorted_result_keys])[sorted_idx]
-
             for key, sorted_energy in zip(self.sorted_result_keys, sorted_energies):
                 final_results[key].append(sorted_energy)
 
-            for auto_key, sorted_auto_energy in zip(self.auto_keys, sorted_auto_energies):
-                final_results[auto_key].append(sorted_auto_energy)
-
         # re-batch the output energies  
-        for key, auto_key in zip(self.sorted_result_keys, self.auto_keys):
+        for key in self.sorted_result_keys: #  auto_key in zip(self.sorted_result_keys, self.auto_keys):
             final_results[key] = torch.stack(final_results[key])
-            final_results[auto_key] = torch.stack(final_results[auto_key])
 
         return final_results
 
@@ -256,51 +378,57 @@ class SchNetAuTopology(SchNet):
             batch (dict): dictionary of props
         Returns:
             final_results (dict): A dictionary of results for each key in
-                self.sorted_results_keys and self.grad_keys. Also contains
-                results of just the autopology part of the calculation, in
-                case you want to also minimize the force error with respect
-                to the autopology calculation.
+                self.sorted_results_keys and self.grad_keys. 
 
         """
 
-        # get features, N, and xyz from the convolutions
-        r, N, xyz = self.schnet_convolve(batch)
-        # apply the SchNet readout to r
-        schnet_r = self.schnet_readout(r)
-        # get the SchNet results for the energies by un-batching them
-        # Gradients not included because gradient keys not in  self.sorted_result_keys
-        schnet_results = batch_and_sum(
-            schnet_r, N, self.sorted_result_keys, xyz)
-        # get the autopology results, which are automatically un-batched
-        auto_results = self.auto_readout(r=r, batch=batch, xyz=xyz)
 
+        if self.add_schnet:
+            r, N, xyz = self.schnet.convolve(batch)
+            # apply the SchNet readout to r
+            schnet_r = self.schnet.atomwisereadout(r)
+            # get the SchNet results for the energies by un-batching them
+            # Gradients not included because gradient keys not in  self.sorted_result_keys
+            schnet_results = batch_and_sum(
+                schnet_r, N, self.sorted_result_keys, xyz)
+
+        if not self.add_schnet:
+            xyz = batch['nxyz'][:, 1:4]
+            xyz.requires_grad = True
+
+        if self.add_autopology:
+            # get the autopology results, which are automatically un-batched
+            auto_results = self.autopology(batch=batch, xyz=xyz)
 
         # pre_results is the dictionary of results before sorting energies
         pre_results = dict()
+
         for key in self.sorted_result_keys:
-            # get pre_results by adding schnet_results to auto_results
-            pre_results[key] = schnet_results[key] + auto_results[key]
+            if self.add_schnet:
+                pre_results[key] = schnet_results[key]
 
+            if self.add_schnet and self.add_autopology:
+                pre_results[key] += auto_results[key]
+
+            elif self.add_autopology and not self.add_schnet:
+                pre_results[key] = auto_results[key]
+
+
+        # sort the results if necessary
         if self.sort_results:
-            final_results = self.get_sorted_results(pre_results, auto_results)
-
+            final_results = self.get_sorted_results(pre_results)
         else:
             final_results = {key: pre_results[key] for key in self.sorted_result_keys}
-            final_results.update({auto_key: auto_results[key] for key, auto_key in zip(
-                self.sorted_result_keys, self.auto_keys)})
 
         # compute gradients
-
-        for key, auto_key in zip(self.sorted_result_keys, self.auto_keys):
-
+        for key in self.sorted_result_keys:
             if "{}_grad".format(key) not in self.grad_keys:
                 continue
 
             grad = compute_grad(inputs=xyz, output=final_results[key])
             final_results[key + "_grad"] = grad
 
-            autopology_grad = compute_grad(
-                inputs=xyz, output=final_results[auto_key])
-            final_results[auto_key + "_grad"] = autopology_grad
-
         return final_results
+
+
+

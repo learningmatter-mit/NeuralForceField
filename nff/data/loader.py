@@ -2,9 +2,9 @@ import numpy as np
 from collections.abc import Iterable
 import torch
 import pdb
-from nff.data.topology import TOPOLOGIES, ALL_TOPOLOGY_KEYS
+from nff.data.topology import ALL_TOPOLOGY_KEYS, RE_INDEX_TOPOLOGY_KEYS
 
-REINDEX_KEYS = ['nbr_list', *TOPOLOGIES]
+REINDEX_KEYS = ['nbr_list', *RE_INDEX_TOPOLOGY_KEYS]
 
 
 TYPE_KEYS = {
@@ -37,6 +37,8 @@ def collate_dicts(dicts):
     # batching the data
     batch = {}
     for key, val in dicts[0].items():
+        # if key == "degree_vec":
+        #     pdb.set_trace()
         if type(val) == str:
             batch[key] = [data[key] for data in dicts]
         elif len(val.shape) > 0:

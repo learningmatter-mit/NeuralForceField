@@ -4,7 +4,7 @@
 import os
 import numpy as np
 import torch
-from nff.nn.models import SchNet, SchNetAuTopology
+from nff.nn.models import SchNet, SchNetAuTopology, AuTopology
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -18,31 +18,37 @@ PARAMS_TYPE = {"SchNet":
                    'box_size': np.array
                },
 
-               "SchNetAuTopology":
+               "AuTopology":
                {
-                   'n_atom_basis': int,
-                   'n_filters': int,
-                   'n_gaussians': int,
-                   'n_convolutions': int,
-                   'cutoff': float,
-                   'trainable_gauss': bool,
-                   'schnet_readout': dict,
-                   "sorted_result_keys": list,
-                   "grad_keys": list,
-                   "trainable_prior": bool,
-                   "sort_results": bool,
-                   "autopology_Lh": list,
-                   "bond_terms": list,
-                   "angle_terms": list,
-                   "dihedral_terms": list,
-                   "improper_terms": list,
-                   "pair_terms": list
-               },
+                  "n_features": int,
+                  "n_convolutions": int,
+                  "conv_type": str,
+                  "conv_update_layers": list,
+                  "readout_hidden_nodes": list,
+                  "bond_terms": list,
+                  "angle_terms": list,
+                  "dihedral_terms": list,
+                  "improper_terms": list,
+                  "pair_terms": list,
+                  "output_keys": list,
+                  "trainable_prior": bool
+                },
+
+
+               "SchNetAuTopology":
+                {
+                  "autopology_params": dict,
+                  "schnet_params": dict,
+                  "sorted_result_keys": list,
+                  "grad_keys": list,
+                  "sort_results": bool,
+                }
 
                }
 
 MODEL_DICT = {
     "SchNet": SchNet,
+    "AuTopology": AuTopology,
     "SchNetAuTopology": SchNetAuTopology,
 }
 
@@ -64,8 +70,12 @@ def check_parameters(params_type, params):
                 '%s is not %s' % (str(key), params_type[key])
             )
 
+        for model in PARAMS_TYPE.keys():
+          if key == "{}_params".format(model.lower()):
+            check_parameters(PARAMS_TYPE[model], val)
 
-def get_model(params, model_type="SchNet"):
+
+def get_model(params, model_type="SchNet", **kwargs):
     """Create new model with the given parameters.
 
     Args:
@@ -77,7 +87,7 @@ def get_model(params, model_type="SchNet"):
     """
 
     check_parameters(PARAMS_TYPE[model_type], params)
-    model = MODEL_DICT[model_type](params)
+    model = MODEL_DICT[model_type](params, **kwargs)
 
     return model
 
