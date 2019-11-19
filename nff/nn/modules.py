@@ -18,8 +18,7 @@ import copy
 import pdb
 
 EPSILON = 1e-15
-# TOPS = ['bond', 'angle', 'dihedral', 'improper', 'pair']
-TOPS = ['bond', 'angle', 'dihedral', 'improper']
+TOPS = ['bond', 'angle', 'dihedral', 'improper', 'pair']
 
 
 class ZeroNet(torch.nn.Module):
@@ -59,6 +58,7 @@ class ParameterPredictor(torch.nn.Module):
         """
 
         super(ParameterPredictor, self).__init__()
+
         if trainable:
             modules = torch.nn.ModuleList()
             Lh = [L_in] + L_hidden
@@ -318,162 +318,58 @@ class ImproperNet(torch.nn.Module):
         E = torch.stack([e.sum(0) for e in torch.split(E, num_impropers)])
         return E
 
+class PairNet(torch.nn.Module):
 
-# class PairNet(torch.nn.Module):
-#     def __init__(self, Fr, Lh, terms=['coulomb', 'LJ']):
-#         super(PairNet, self).__init__()
-#         self.Fr = Fr
-#         self.Lh = Lh
-#         self.terms = terms
-#         self.true_params = None
-#         self.learned_params = {}
-#         if 'LJ' in self.terms:
-#             self.sigma = ParameterPredictor(Fr, Lh, 1)
-#             self.epsilon = ParameterPredictor(Fr, Lh, 1)
-#             self.learned_params['LJ'] = {'sigma': None, 'epsilon': None}
-#         if 'coulomb' in self.terms:
-#             self.charge = ParameterPredictor(Fr, Lh, 1)
-#             self.learned_params['coulomb'] = {'charge': None}
-#         if 'induced_dipole' in self.terms:
-#             self.alpha = ParameterPredictor(Fr, Lh, 1)
-#             self.learned_params['induced_dipole'] = {'alpha': None}
-#         self.coulomb_constant = torch.tensor([332.0636])
-#         self.use_dft_charges = False
-#         self.charges = None  ######################################################### rename to learned_charges?
+    """
+    Only Lennard-Jones for now
+    """
 
-#     def forward(self, batch):
+    def __init__(self, Fr, Lh, terms=['LJ'], trainable=False):
+        super(PairNet, self).__init__()
+        self.Fr = Fr
+        self.Lh = Lh
+        self.terms = terms
+        self.learned_params = dict()
 
-#         r = batch["r"]
-#         xyz = batch["xyz"]
-#         pairs = batch["pairs"]
-#         # will need to fix this:
-#         num_pairs = len(pairs)
+        if 'LJ' in self.terms:
+            self.sigma = ParameterPredictor(Fr, Lh, 1, trainable=trainable)
+            self.epsilon = ParameterPredictor(Fr, Lh, 1, trainable=trainable)
+            self.learned_params['LJ'] = {'sigma': None, 'epsilon': None}
 
-#         # pairs = topology['pair'] # ['indices']
-#         # num_pairs = topology['pair']['num']
+    
+    def forward(self, r, batch, xyz):
 
-#         # self.true_params = topology['true_params']['pair']
-#         try:
-#             # _1_4_pairs = topology['dihedral']['indices'][:, [0, 3]]
-#             _1_4_pairs = topology['dihedral'][:, [0, 3]]
-#             _1_4_pair_indices = (pairs.unsqueeze(1) - _1_4_pairs.unsqueeze(0)).abs().sum(2)
-#             _1_4_pair_indices = (_1_4_pair_indices == 0).nonzero()[:, 0].unique()
-#         except:
-#             _1_4_pair_indices = []
-#         N = xyz.shape[0]
-#         displacements = xyz.unsqueeze(1).expand(N, N, 3)
-#         displacements = -(displacements - displacements.transpose(0, 1))
-#         # displacements[i,j] is the vector from atom i to  atom j (xyz_j - xyz_i)
-#         D2 = displacements.pow(2).sum(2)
-#         D2 = D2[pairs[:, 0], pairs[:, 1]].view(-1, 1)
-#         inv_D = D2.pow(-0.5)
-#         E = 0.0
-#         if 'coulomb' in self.terms:
-#             # if self.use_dft_charges:
-#             #     self.charges = self.true_params[:, [0]]
-#             #     charge_product = self.charges[pairs].prod(1)
-#             # else:
-#             self.charges = self.charge(r)
-#             charge_product = self.charges[pairs].prod(1)
-#             E = E + charge_product * inv_D * self.coulomb_constant.to(r.device)
-#             self.learned_params['coulomb']['charge'] = self.charges.tolist()
-#             if 'induced_dipole' in self.terms:
-#                 # Method: Induced Point Dipole Model with Thole Damping
-#                 # Reference: Antila H.S., Salonen E. (2013) Polarizable Force Fields.
-#                 # In: Monticelli L., Salonen E. (eds) Biomolecular Simulations.
-#                 # Methods in Molecular Biology (Methods and Protocols), vol 924.
-#                 # (pp 215-241). Humana Press, Totowa, NJ.
-#                 # if use_true_params:
-#                 #     raise Exception("Figure out formatting for true alpha values.")
-#                 # else:
-                    
-#                 alpha = self.alpha(r).pow(2)
-#                 q = self.charges.unsqueeze(2).expand(N, N, 3)
-#                 # Add ones along the diagonal to avoid division by zero
-#                 Displacements = displacements + (1 / np.sqrt(3)) * torch.eye(N).unsqueeze(2).expand(N, N, 3).to(
-#                     r.device)
-#                 E_field = q * Displacements / (Displacements.pow(2).sum(2, keepdim=True).pow(1.5))
-#                 # E_field[i,j] is the electric field at atom j due to atom i
-#                 # After the following manipulations, E_field[i] will be the total electric field
-#                 # at atom i due to the permanent partial charges at all other atoms (j != i) with
-#                 # which it has a pair interaction
-#                 pair_mask = torch.zeros(N, N).to(r.device)
-#                 pair_mask[pairs[:, 0], pairs[:, 1]] += 1
-#                 pair_mask = pair_mask + pair_mask.t()
-#                 pair_mask = pair_mask.unsqueeze(2).expand(N, N, 3)
-#                 E_field = pair_mask * E_field
-#                 E_field = E_field.sum(0)
-#                 # Now that I have the electric field at each atom due to the permanent charges of all
-#                 # other atoms with which it has a pair interaction, I need to consider dipole-dipole
-#                 # interactions. I will construct the shape function tensor t, the interaction tensor
-#                 # T, and the polarizability tensor Alpha, from which the dipole tensor mu can be
-#                 # calculated by matrix inversion as described in the reference above.
-#                 R = Displacements.pow(2).sum(2).pow(0.5)
-#                 # Finally, I will re-zero the diagonal elements of the distance tensor
-#                 R = R * (1 - torch.eye(N, N)).to(r.device)
-#                 # Thole Model for Damped Interactions
-#                 # To clarify my approach, I will define a few new terms. See Equation (21) at the
-#                 # reference above. I will treat these two terms separately, and will further
-#                 # break down each term as defined by: t = tau1*delta1 + mixed_alpha*tau2*delta2,
-#                 # where tau1 and tau2 are the tensor elements which depend only on atom indices,
-#                 # delta1 and delta2 are the tensors elements which depend on both cartesian indices
-#                 # and atom indices, and mixed_alpha is a pre-factor for the second term which
-#                 # depends only on the atom indices.
-#                 a = 0.39
-#                 mixed_alpha = (alpha.expand(N, N) * alpha.expand(N, N).t()).pow(1. / 6)
-#                 u = R / mixed_alpha
-#                 tau1 = u.pow(3) * (1 - ((a ** 2) * u.pow(2) / 2. + a * u + 1) * torch.exp(-a * u))
-#                 tau1 = tau1 + torch.eye(N, N).to(r.device)
-#                 tau1 = 1. / tau1
-#                 tau1 = tau1 - torch.eye(N, N).to(r.device)
-#                 tau2 = R.pow(5) * (
-#                             1 - ((a ** 3) * R.pow(3) / 6. + (a ** 2) * R.pow(2) / 2. + a * R + 1) * torch.exp(-a * u))
-#                 tau2 = tau2 + torch.eye(N, N).to(r.device)
-#                 tau2 = 1. / tau2
-#                 tau2 = tau2 - torch.eye(N, N).to(r.device)
-#                 tau2 = -3. * tau2
-#                 delta1 = torch.eye(3).view(1, 1, 3, 3).expand(N, N, 3, 3).to(r.device)
-#                 delta1 = delta1 * (1 - torch.eye(N)).view(N, N, 1, 1).to(r.device)
-#                 indices = torch.ones(3, 3).nonzero().view(3, 3, 2)
-#                 delta2 = displacements[:, :, indices[:, :, 0]] * displacements[:, :, indices[:, :, 1]]
-#                 tau1 = tau1.view(N, N, 1, 1)
-#                 tau2 = tau2.view(N, N, 1, 1)
-#                 mixed_alpha = mixed_alpha.view(N, N, 1, 1)
-#                 t = tau1 * delta1 + mixed_alpha * tau2 * delta2
-#                 T = t / ((alpha.expand(N, N) * alpha.expand(N, N).t()).pow(0.5).view(N, N, 1, 1))
-#                 T = T.transpose(1, 2).reshape(3 * N, 3 * N)
-#                 Alpha = torch.diag(alpha.expand(N, 3).reshape(-1))
-#                 A = Alpha.inverse() + T
-#                 B = A.inverse()
-#                 mu = torch.matmul(B, E_field.view(-1, 1)).view(N, 3)
-#                 # With the induced dipoles known, I can now calculate the interaction energies
-#                 E_dipole = -0.5 * (mu * E_field).sum(1) * self.coulomb_constant.to(r.device)
-#                 E_dipole = E_dipole.view(-1, 1)
-#                 E_dipole = torch.stack([e.sum(0) for e in torch.split(E_dipole, N)])
-#                 self.learned_params['induced_dipole']['alpha'] = alpha.tolist()
-#             else:
-#                 E_dipole = 0.0
-#         else:
-#             E_dipole = 0.0
-#         if 'LJ' in self.terms:
-#             # if use_true_params:
-#             #     sigma = self.true_params[:, [2]]
-#             #     epsilon = self.true_params[:, [1]]
-#             # else:
-#                 sigma = ((self.true_params[:, [2]] ** 0.5) + 0.1 * self.sigma(r)).pow(2)
-#                 epsilon = ((self.true_params[:, [1]] ** 0.5) + 0.01 * self.epsilon(r)).pow(2)
-#             sigma_mixed = sigma[pairs].prod(1).pow(0.5)
-#             epsilon_mixed = epsilon[pairs].prod(1).pow(0.5)
-#             D_inv_scal = sigma_mixed * inv_D
-#             E = E + (4 * epsilon_mixed * (D_inv_scal.pow(12) - D_inv_scal.pow(6)))
-#             self.learned_params['LJ']['sigma'] = sigma.tolist()
-#             self.learned_params['LJ']['epsilon'] = epsilon.tolist()
-#         f = torch.ones_like(E).to(torch.float)
-#         f[_1_4_pair_indices] *= 0.5
-#         E = f * E
-#         E = torch.stack([e.sum(0) for e in torch.split(E, num_pairs)])
-#         E = E + E_dipole
-#         return (E)
+        pairs = batch["pairs"]
+        num_pairs = batch["num_pairs"].tolist()
+
+        N = xyz.shape[0]
+        displacements = xyz.unsqueeze(1).expand(N,N,3)
+        displacements = -(displacements-displacements.transpose(0,1))
+        # displacements[i,j] is the vector from atom i to  atom j (xyz_j - xyz_i)
+        D2 = displacements.pow(2).sum(2)
+        D2 = D2[pairs[:,0], pairs[:,1]].view(-1,1)
+        inv_D = D2.pow(-0.5)
+
+        E = 0.0*inv_D
+
+        if 'LJ' in self.terms:
+
+
+            sigma = 4.0+10*self.sigma(r).pow(2)
+            epsilon = 0.1*self.epsilon(r).pow(2)
+
+            sigma_mixed = sigma[pairs].prod(1).pow(0.5)
+            epsilon_mixed = epsilon[pairs].prod(1).pow(0.5)
+
+            D_inv_scal = sigma_mixed*inv_D
+            E = E + (4*epsilon_mixed*(D_inv_scal.pow(12)-D_inv_scal.pow(6)))
+
+            self.learned_params["LJ"]["sigma"] = sigma
+            self.learned_params["LJ"]["epsilon"] = epsilon
+
+        E = torch.stack([e.sum(0) for e in torch.split(E, num_pairs)])
+
+        return E
 
 
 TopologyNet = {
@@ -481,7 +377,7 @@ TopologyNet = {
     'angle': AngleNet,
     'dihedral': DihedralNet,
     'improper': ImproperNet,
-    # 'pair': PairNet
+    'pair': PairNet
 }
 
 class AuTopologyReadOut(nn.Module):
@@ -516,16 +412,16 @@ class AuTopologyReadOut(nn.Module):
         angle_terms =  multitaskdict.get("angle_terms", ['harmonic'])  # harmonic and/or cubic and/or quartic
         dihedral_terms = multitaskdict.get("dihedral_terms", ['OPLS'])  # OPLS and/or multiharmonic
         improper_terms = multitaskdict.get("improper_terms", ['harmonic'])  # harmonic
-        pair_terms = multitaskdict.get("pair_terms", ['coulomb', 'LJ'])  # coulomb and/or LJ and/or induced_dipole
-        autopology_keys = multitaskdict["sorted_result_keys"]
+        pair_terms = multitaskdict.get("pair_terms", ['LJ'])  # coulomb and/or LJ and/or induced_dipole
+        autopology_keys = multitaskdict["output_keys"]
 
 
         self.terms = {
             'bond': bond_terms,
             'angle': angle_terms,
             'dihedral': dihedral_terms,
-            'improper': improper_terms
-            # 'pair': pair_terms
+            'improper': improper_terms,
+            'pair': pair_terms
         }
 
 
@@ -534,13 +430,18 @@ class AuTopologyReadOut(nn.Module):
             for top in self.terms.keys():
                 topologynet[key][top] = TopologyNet[top](Fr, Lh, self.terms[top], trainable=trainable)
 
+
         # module dictionary of the form {"energy_0": {"bond": BondNet0, "angle": AngletNet0},
         # "energy_1": {"bond": BondNet1, "angle": AngletNet1} }
         self.auto_modules = ModuleDict({key: ModuleDict({top: topologynet[key][top] for top in
             self.terms.keys()}) for key in autopology_keys})
 
+        # energy offset for each state
+        self.offset = ModuleDict({key: ParameterPredictor(Fr, Lh, 1)
+            for key in autopology_keys})
 
-    def forward(self, r, batch, xyz, take_grad=True):
+
+    def forward(self, r, batch, xyz, take_grad=False):
 
         output = dict()
 
@@ -554,7 +455,13 @@ class AuTopologyReadOut(nn.Module):
                 E[top] = top_net(r, batch, xyz)
                 learned_params[top] = top_net.learned_params
                 E['total'] += E[top]
-            output[output_key] = E["total"] 
+
+            N = batch["num_atoms"].cpu().numpy().tolist()
+            offset = torch.split(self.offset[output_key](r), N)
+            offset = (torch.stack([torch.sum(item) for item in offset])).reshape(-1, 1)
+
+            output[output_key] = E["total"] + offset
+
             if take_grad:
                 grad = compute_grad(inputs=xyz, output=E["total"] )
                 output[output_key + "_grad"] = grad
@@ -625,6 +532,7 @@ class SchNetConv(MessagePassingModule):
             )
         })
 
+
     def message(self, r, e, a):
         """The message function for SchNet convoltuions
 
@@ -647,6 +555,125 @@ class SchNetConv(MessagePassingModule):
 
     def update(self, r):
         return self.moduledict['update_function'](r)
+
+
+
+class AuTopologyConv(MessagePassingModule):
+
+    """
+    Base class for AuTopology convolutions.
+    Attributes:
+        update_function (nn.Module): network to update features after convolution
+
+    """
+
+    def __init__(self, update_layers):
+        super(AuTopologyConv, self).__init__()
+
+        """
+        Args:
+            update_layers (dict): dictionary of layers to apply after the convolution
+        Returns:
+            None
+        Example:
+                update_layers =  [{'name': 'linear', 'param' : {'in_features': 256,
+                                                                        'out_features': 256}},
+                                          {'name': 'tanh', 'param': {}},
+                                          {'name': 'linear', 'param' : {'in_features': 256,
+                                                                  'out_features': 256}},
+                                          {'name': 'tanh', 'param': {}}
+        """
+
+        self.update_function = construct_sequential(update_layers)
+
+    def update(self, r):
+        return self.update_function(r)
+
+    def message(self, r, e, a):
+        raise NotImplementedError
+
+
+class DoubleNodeConv(AuTopologyConv):
+
+    """
+
+    AuTopology convolution that uses a features of bonded nodes and center nodes.
+
+    """
+
+    def __init__(self, update_layers):
+
+        """
+        Args:
+            update_layers (dict): dictionary of layers to apply after the convolution
+        Returns:
+            None
+        """
+
+        super(DoubleNodeConv, self).__init__(update_layers)
+
+    def message(self, r, e, a):
+        """ 
+        Get the message:
+        Args:
+            r (tensor): feature matrix
+            e (None): edge features (not used)
+            a (tensor): bonded neighbor list
+        """
+        # the message is simply the features of all the atoms bonded to the current atom
+        return r[a[:, 0]], r[a[:, 1]]
+
+    def forward(self, r, e, a):
+
+        rij, rji = self.message(r, e, a)
+
+        graph_size = r.shape[0]
+        # sum over all bonded node features
+        bonded_node_sum = self.aggregate(rij, a[:, 1], graph_size)
+        bonded_node_sum += self.aggregate(rji, a[:, 0], graph_size)
+
+        # sum the features of this node once for each of its bonds 
+        this_node_sum = self.aggregate(r[a[:, 0]], a[:, 0], graph_size)
+        this_node_sum += self.aggregate(r[a[:, 1]], a[:, 1], graph_size)
+
+        # the new feature vector is a concatenation
+        new_r = torch.cat([bonded_node_sum, this_node_sum], dim=-1)
+        new_r = self.update(new_r)
+
+        return new_r
+
+class SingleNodeConv(AuTopologyConv):
+
+    """
+
+    AuTopology convolution that adds the features of bonded nodes without concatenating them with
+    the features of the center node.
+
+    """
+
+    def __init__(self, update_layers):
+
+        """
+        Args:
+            update_layers (dict): dictionary of layers to apply after the convolution
+        Returns:
+            None
+        """
+
+        super(SingleNodeConv, self).__init__(update_layers)
+
+    def message(self, r, e, a):
+        """ 
+        Get the message:
+        Args:
+            r (tensor): feature matrix
+            e (None): edge features (not used)
+            a (tensor): bonded neighbor list
+        """
+        # the message is simply the features of all the atoms bonded to the current atom
+
+        return r[a[:, 0]], r[a[:, 1]]
+
 
 
 class GraphAttention(MessagePassingModule):
@@ -877,12 +904,14 @@ class BondEnergyModule(nn.Module):
         return energy
 
 
+
 # Test
 
 class TestModules(unittest.TestCase):
 
     def testBaseEdgeUpdate(self):
         # initialize basic graphs
+
         a = torch.LongTensor([[0, 1], [2, 3], [1, 3], [4, 5], [3, 4]])
         e = torch.rand(5, 10)
         r_in = torch.rand(6, 10)
@@ -921,6 +950,51 @@ class TestModules(unittest.TestCase):
         )
 
         r_out = model(r_in, e, a)
+        self.assertEqual(r_in.shape, r_out.shape,
+                         "The node feature dimensions should be same.")
+
+
+    def testDoubleNodeConv(self):
+
+        # contruct a graph
+        a = torch.LongTensor([[0, 1], [2, 3], [1, 3], [4, 5], [3, 4]])
+        num_nodes = 6
+        num_features = 12
+
+        update_layers =  [{'name': 'linear', 'param' : {'in_features': 2*num_features,
+                                                        'out_features': num_features}},
+                          {'name': 'shifted_softplus', 'param': {}},
+                          {'name': 'linear', 'param' : {'in_features': num_features,
+                                                  'out_features': num_features}},
+                          {'name': 'shifted_softplus', 'param': {}}]
+
+
+        r_in = torch.rand(num_nodes, num_features)
+        model = DoubleNodeConv(update_layers)
+        r_out = model(r=r_in, e=None, a=a)
+
+        self.assertEqual(r_in.shape, r_out.shape,
+                         "The node feature dimensions should be same.")
+
+    def testSingleNodeConv(self):
+
+        # contruct a graph
+        a = torch.LongTensor([[0, 1], [2, 3], [1, 3], [4, 5], [3, 4]])
+        num_nodes = 6
+        num_features = 12
+
+        update_layers =  [{'name': 'linear', 'param' : {'in_features': num_features,
+                                                        'out_features': num_features}},
+                          {'name': 'shifted_softplus', 'param': {}},
+                          {'name': 'linear', 'param' : {'in_features': num_features,
+                                                  'out_features': num_features}},
+                          {'name': 'shifted_softplus', 'param': {}}]
+
+
+        r_in = torch.rand(num_nodes, num_features)
+        model = SingleNodeConv(update_layers)
+        r_out = model(r=r_in, e=None, a=a)
+
         self.assertEqual(r_in.shape, r_out.shape,
                          "The node feature dimensions should be same for the SchNet Convolution case")
 

@@ -6,6 +6,7 @@ import torch.nn as nn
 from nff.utils.scatter import scatter_add
 import unittest
 
+import pdb
 
 class MessagePassingModule(nn.Module):
 
@@ -16,21 +17,25 @@ class MessagePassingModule(nn.Module):
         super(MessagePassingModule, self).__init__()
 
     def message(self, r, e, a):
+
+        # pdb.()
+
         # Basic message case
         assert r.shape[-1] == e.shape[-1]
         # mixing node and edge feature, multiply by default
-        # possible options: 
+        # possible options:
         # (ri [] eij) -> rj,
         # where []: *, +, (,), permutation....
         message = r[a[:, 0]] * e, r[a[:, 1]] * e
         return message
 
     def aggregate(self, message, index, size):
-        r = scatter_add(src=message,
+        # pdb.set_trace()
+        new_r = scatter_add(src=message,
                         index=index,
                         dim=0,
                         dim_size=size)
-        return r
+        return new_r
 
     def update(self, r):
         return r
@@ -38,6 +43,7 @@ class MessagePassingModule(nn.Module):
     def forward(self, r, e, a):
 
         graph_size = r.shape[0]
+        
         rij, rji = self.message(r, e, a)
         # i -> j propagate
         r = self.aggregate(rij, a[:, 1], graph_size)
@@ -48,7 +54,7 @@ class MessagePassingModule(nn.Module):
 
 
 class EdgeUpdateModule(nn.Module):
-    """Update Edge State Based on information from connected nodes 
+    """Update Edge State Based on information from connected nodes
     """
 
     def __init__(self):
@@ -56,12 +62,12 @@ class EdgeUpdateModule(nn.Module):
 
     def message(self, r, e, a):
         """Summary
-        
+
         Args:
-            r (TYPE): node vectors 
+            r (TYPE): node vectors
             e (TYPE): edge vectors
             a (TYPE): neighbor list
-        
+
         Returns:
             TYPE: Description
         """
@@ -70,12 +76,12 @@ class EdgeUpdateModule(nn.Module):
 
     def aggregate(self, message, neighborlist):
         """aggregate function that aggregates information from
-            connected nodes 
-            
+            connected nodes
+
         Args:
             message (TYPE): Description
             neighborlist (TYPE): Description
-        
+
         Returns:
             TYPE: Description
         """
@@ -98,14 +104,14 @@ class GeometricOperations(nn.Module):
 
     """Compute geomtrical properties based on XYZ coordinates
     """
-    
+
     def __init__(self):
         super(GeometricOperations, self).__init__()
 
 
 class TopologyOperations(nn.Module):
 
-    """Change the topology index given geomtrical properties 
+    """Change the topology index given geomtrical properties
     """
 
     def __init__(self):
