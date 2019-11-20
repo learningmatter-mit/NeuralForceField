@@ -71,7 +71,7 @@ class Dynamics:
         self.traj.close()
         
     
-    def save_as_xyz(self):
+    def save_as_xyz(self, filename='./traj.xyz'):
         
         '''
         TODO: save time information 
@@ -93,4 +93,4 @@ class Dynamics:
             
             xyz.append(frames)
             
-        write_traj('./traj.xyz', np.array(xyz))
+        write_traj(filename, np.array(xyz))
