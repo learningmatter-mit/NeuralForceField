@@ -1,12 +1,6 @@
 import numpy as np
-
 import torch
-
-<<<<<<< HEAD
-from nff.utils.cuda import batch_to, batch_detach
-=======
-from nff.utils.cuda import batch_to, to_cpu
->>>>>>> hybridgraph
+from nff.utils.cuda import batch_to, to_cpu, batch_detach
 from nff.utils.scatter import compute_grad
 from nff.data.dataset import concatenate_dict
 
