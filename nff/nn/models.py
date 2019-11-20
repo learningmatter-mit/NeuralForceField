@@ -113,7 +113,7 @@ class SchNet(nn.Module):
 
 
 
-    def convolve(self, batch):
+    def convolve(self, batch, xyz=None):
         """
 
         Apply the convolutional layers to the batch.
@@ -127,14 +127,21 @@ class SchNet(nn.Module):
             xyz: xyz (with a "requires_grad") for the batch
         """
 
+        # Note: we've given the option to input xyz from another source.
+        # E.g. if you already created an xyz  and set requires_grad=True,
+        # you don't want to make a whole new one.
+
+        if xyz is None:
+            xyz = batch['nxyz'][:, 1:4]
+            xyz.requires_grad = True
+
         r = batch['nxyz'][:, 0]
-        xyz = batch['nxyz'][:, 1:4]
         N = batch['num_atoms'].reshape(-1).tolist()
         a = batch['nbr_list']
 
+
         # offsets take care of periodic boundary conditions
         offsets = batch.get('offsets', 0)
-        xyz.requires_grad = True
 
         # calculating the distances
         e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
@@ -151,17 +158,19 @@ class SchNet(nn.Module):
 
         return r, N, xyz
 
-    def forward(self, batch):
+    def forward(self, batch, xyz=None):
         """Summary
 
         Args:
             batch (dict): dictionary of props
+            xyz (torch.tensor): (optional) coordinates
 
         Returns:
-            dict: dionary of results 
+            dict: dionary of results
+
         """
 
-        r, N, xyz = self.convolve(batch)
+        r, N, xyz = self.convolve(batch, xyz)
         r = self.atomwisereadout(r)
         results = batch_and_sum(r, N, list(batch.keys()), xyz)
 
@@ -247,7 +256,15 @@ class AuTopology(nn.Module):
 
         return r
 
-    def forward(self, batch, xyz):
+    def forward(self, batch, xyz=None):
+        # Give the option to input xyz from another source. E.g. if you already created
+        # an xyz with schnet and set requires_grad=True, you don't want to make a whole
+        # new one.
+
+        if xyz is None:
+            xyz = batch['nxyz'][:, 1:4]
+            xyz.requires_grad = True
+
         r = self.convolve(batch)
         results = self.readout(r=r, batch=batch, xyz=xyz)
         return results
@@ -341,12 +358,13 @@ class SchNetAuTopology(nn.Module):
         self.add_schnet = True
 
 
-    def get_sorted_results(self, pre_results):
+    def get_sorted_results(self, pre_results, num_atoms):
 
         """
         Sort results by energies.
         Args:
             pre_results (dict): dictionary of the network output before sorting
+            num_atoms (torch.tensor): array of number of atoms per molecule
         Returns:
             final_results (dict): dictionary of the network output after sorting
         """
@@ -354,19 +372,31 @@ class SchNetAuTopology(nn.Module):
         # sort the energies for each molecule in the batch and put the results in
         # `final_results`.
         batch_length = len(pre_results[self.sorted_result_keys[0]])
-        final_results = {key: [] for key in self.sorted_result_keys}
+        final_results = {key: [] for key in [*self.sorted_result_keys, *self.grad_keys]}
+
+        # de-batch the gradients
+        N = num_atoms.cpu().numpy().tolist()
+        for key in self.grad_keys:
+            pre_results[key] = torch.split(pre_results[key], N)
+
 
         for i in range(batch_length):
             # sort the outputs
             sorted_energies, sorted_idx = torch.sort(torch.cat([pre_results[key][i] for key in
                                                                 self.sorted_result_keys]))
 
-            for key, sorted_energy in zip(self.sorted_result_keys, sorted_energies):
-                final_results[key].append(sorted_energy)
+            for index, energy_key in zip(sorted_idx, self.sorted_result_keys):
 
-        # re-batch the output energies  
-        for key in self.sorted_result_keys: #  auto_key in zip(self.sorted_result_keys, self.auto_keys):
+                corresponding_key = self.sorted_result_keys[index]
+
+                final_results[energy_key].append(pre_results[corresponding_key][i])
+                final_results[energy_key + "_grad"].append(pre_results[corresponding_key + "_grad"][i])
+
+
+        # re-batch the outputs  
+        for key in self.sorted_result_keys:
             final_results[key] = torch.stack(final_results[key])
+            final_results[key + "_grad"] = torch.cat(final_results[key + "_grad"])
 
         return final_results
 
@@ -383,27 +413,19 @@ class SchNetAuTopology(nn.Module):
         """
 
 
-        if self.add_schnet:
-            r, N, xyz = self.schnet.convolve(batch)
-            # apply the SchNet readout to r
-            schnet_r = self.schnet.atomwisereadout(r)
-            # get the SchNet results for the energies by un-batching them
-            # Gradients not included because gradient keys not in  self.sorted_result_keys
-            schnet_results = batch_and_sum(
-                schnet_r, N, self.sorted_result_keys, xyz)
+        xyz = batch["nxyz"][:, 1:4]
+        xyz.requires_grad = True
 
-        if not self.add_schnet:
-            xyz = batch['nxyz'][:, 1:4]
-            xyz.requires_grad = True
+        if self.add_schnet:
+            schnet_results = self.schnet(batch=batch, xyz=xyz)
 
         if self.add_autopology:
-            # get the autopology results, which are automatically un-batched
             auto_results = self.autopology(batch=batch, xyz=xyz)
 
         # pre_results is the dictionary of results before sorting energies
         pre_results = dict()
 
-        for key in self.sorted_result_keys:
+        for key in [*self.sorted_result_keys, *self.grad_keys]:
             if self.add_schnet:
                 pre_results[key] = schnet_results[key]
 
@@ -416,17 +438,10 @@ class SchNetAuTopology(nn.Module):
 
         # sort the results if necessary
         if self.sort_results:
-            final_results = self.get_sorted_results(pre_results)
+            final_results = self.get_sorted_results(pre_results, batch["num_atoms"])
         else:
-            final_results = {key: pre_results[key] for key in self.sorted_result_keys}
+            final_results = pre_results
 
-        # compute gradients
-        for key in self.sorted_result_keys:
-            if "{}_grad".format(key) not in self.grad_keys:
-                continue
-
-            grad = compute_grad(inputs=xyz, output=final_results[key])
-            final_results[key + "_grad"] = grad
 
         return final_results
 

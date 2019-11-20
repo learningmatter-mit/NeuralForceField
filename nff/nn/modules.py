@@ -441,7 +441,7 @@ class AuTopologyReadOut(nn.Module):
             for key in autopology_keys})
 
 
-    def forward(self, r, batch, xyz, take_grad=False):
+    def forward(self, r, batch, xyz, take_grad=True):
 
         output = dict()
 
@@ -463,7 +463,7 @@ class AuTopologyReadOut(nn.Module):
             output[output_key] = E["total"] + offset
 
             if take_grad:
-                grad = compute_grad(inputs=xyz, output=E["total"] )
+                grad = compute_grad(inputs=xyz, output=E["total"])
                 output[output_key + "_grad"] = grad
 
         return output
