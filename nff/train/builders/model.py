@@ -4,7 +4,7 @@
 import os
 import numpy as np
 import torch
-from nff.nn.models import SchNet
+from nff.nn.models.schnet import SchNet
 
 
 class ParameterError(Exception):

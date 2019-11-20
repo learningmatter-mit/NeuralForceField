@@ -1,8 +1,6 @@
 import numpy as np
-
 import torch
-
-from nff.utils.cuda import batch_to, to_cpu
+from nff.utils.cuda import batch_to, to_cpu, batch_detach
 from nff.utils.scatter import compute_grad
 from nff.data.dataset import concatenate_dict
 
@@ -35,10 +33,8 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
         else:
             eval_loss += eval_batch_loss
 
-        results['nxyz'] = batch['nxyz']
-
-        all_results.append(to_cpu(results))
-        all_batches.append(to_cpu(batch))
+        all_results.append(batch_detach(results))
+        all_batches.append(batch_detach(batch))
 
         del results
         del batch
