@@ -27,15 +27,12 @@ class SchNet(nn.Module):
     Attributes:
         atom_embed (torch.nn.Embedding): Convert atomic number into an
             embedding vector of size n_atom_basis
+        convolutions (torch.nn.Module): convolution layers applied to the graph
+        atomwisereadout (torch.nn.Module): fully connected layers applied to the graph
+            to get the results of interest
+        device (int): GPU being used.
 
-        atomwise1 (Dense): dense layer 1 to compute energy
-        atomwise2 (Dense): dense layer 2 to compute energy
-        convolutions (torch.nn.ModuleList): include all the convolutions
-        prop_dics (dict): A dictionary of the form {name: prop_dic}, where name is the
-            property name and prop_dic is a dictionary for that property.
-        module_dict (ModuleDict): a dictionary of modules. Each entry has the form
-            {name: mod_list}, where name is the name of a property object and mod_list
-            is a ModuleList of layers to predict that property.
+
     """
 
     def __init__(self, modelparams):
@@ -90,12 +87,12 @@ class SchNet(nn.Module):
 
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
 
-        # default predict var
         readoutdict = modelparams.get(
             'readoutdict', get_default_readout(n_atom_basis))
         post_readout = modelparams.get('post_readout', None)
 
 
+        # convolutions
         self.convolutions = nn.ModuleList([
             SchNetConv(n_atom_basis=n_atom_basis,
                        n_filters=n_filters,
@@ -166,7 +163,7 @@ class SchNet(nn.Module):
             xyz (torch.tensor): (optional) coordinates
 
         Returns:
-            dict: dionary of results
+            dict: dictionary of results
 
         """
 
@@ -179,9 +176,22 @@ class SchNet(nn.Module):
 
 class AuTopology(nn.Module):
 
+    """
+    AuTopology model for getting classical forces.
+    Attributes:
+        atom_embed (torch.nn.Embedding): Convert atomic number into an
+            embedding vector of size n_atom_basis
+        convolutions (torch.nn.Module): convolution layers applied to the graph
+        atomwisereadout (torch.nn.Module): fully connected layers applied to the graph
+            to get the results of interest
+        device (int): GPU being used.
+
+    """
+
     def __init__(self, modelparams):
 
         """
+        Constructs an AuTopology model.
         Example:
             n_autopology_features = 256
 
@@ -239,12 +249,23 @@ class AuTopology(nn.Module):
         modelparams.update({"Lh": Lh, "Fr": Fr})
 
         self.readout = AuTopologyReadOut(multitaskdict=modelparams)
+        self.device = None
 
 
     def convolve(self, batch):
 
+        """
 
-        # not implemented for PBC yet
+        Apply the convolutional layers to the batch.
+
+        Args:
+            batch (dict): dictionary of props
+
+        Returns:
+            r: new feature vector after the convolutions
+        """
+
+        # not implemented for PBC yet (?)
 
         a = batch["bonded_nbr_list"]
         z = batch['nxyz'][:, 0]
@@ -257,6 +278,18 @@ class AuTopology(nn.Module):
         return r
 
     def forward(self, batch, xyz=None):
+
+        """Summary
+
+        Args:
+            batch (dict): dictionary of props
+            xyz (torch.tensor): (optional) coordinates
+
+        Returns:
+            dict: dictionary of results
+
+        """
+
         # Give the option to input xyz from another source. E.g. if you already created
         # an xyz with schnet and set requires_grad=True, you don't want to make a whole
         # new one.
@@ -277,18 +310,19 @@ class SchNetAuTopology(nn.Module):
     Attributes:
 
 
-        sorted_result_keys (list): a list of energies that you want the network to predict.
-            These keys should be ordered by energy (e.g. ["energy_0", "energy_1"]).
-        grad_keys (list): A list of gradients that you want the network to give (all members
-            of this list should be elements of sorted_result_keys with "_grad" at the end)
-        sort_results (bool): Whether or not to sort the final results by energy (i.e. enforce
-            that E0 < E1 < E2 ... )
-        atom_embed (torch.nn.Embedding): Convert atomic number into an
-            embedding vector of size n_atom_basis
-        convolutions (torch.nn.ModuleList): include all the convolutions
-        schnet_readout (nn.Module): a module for reading out results from SchNet
-        auto_readout (nn.Module): a module for reading out results from AuTopology
-        device (int): GPU device number
+        schnet (models.SchNet): SchNet model
+        autopology (models.AuTopology): AuTopology model
+
+        sorted_result_keys (list): names of energies to output, sorted from lowest to highest
+            (e.g. ["energy_0", "energy_1", "energy_2"]) 
+        grad_keys (list): same as sorted_result_keys, but with "_grad" at the end for gradients
+        sort_results (bool): whether or not to sort results so that the energies are guaranteed
+            to be ordered properly
+
+        sadd_autopology (bool): use the autopology module in the final results
+        add_schnet (bool): use the schnet module in the final results
+
+
 
     """
 
@@ -319,12 +353,11 @@ class SchNetAuTopology(nn.Module):
                 
             }
 
-            example_module = SchNetAuTopology(modelparams)
+            example_module = SchNetAuTopology(modelparams, add_autopology=True, add_schnet=False)
 
         """
 
         super().__init__()
-
 
         schnet_params = modelparams["schnet_params"]
         self.schnet = SchNet(schnet_params)
@@ -412,6 +445,9 @@ class SchNetAuTopology(nn.Module):
 
         """
 
+
+        # define xyz here to avoid making two graphs (one for schnet and
+        # one for autopology)
 
         xyz = batch["nxyz"][:, 1:4]
         xyz.requires_grad = True
