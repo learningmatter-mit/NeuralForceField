@@ -27,15 +27,12 @@ class SchNet(nn.Module):
     Attributes:
         atom_embed (torch.nn.Embedding): Convert atomic number into an
             embedding vector of size n_atom_basis
+        convolutions (torch.nn.Module): convolution layers applied to the graph
+        atomwisereadout (torch.nn.Module): fully connected layers applied to the graph
+            to get the results of interest
+        device (int): GPU being used.
 
-        atomwise1 (Dense): dense layer 1 to compute energy
-        atomwise2 (Dense): dense layer 2 to compute energy
-        convolutions (torch.nn.ModuleList): include all the convolutions
-        prop_dics (dict): A dictionary of the form {name: prop_dic}, where name is the
-            property name and prop_dic is a dictionary for that property.
-        module_dict (ModuleDict): a dictionary of modules. Each entry has the form
-            {name: mod_list}, where name is the name of a property object and mod_list
-            is a ModuleList of layers to predict that property.
+
     """
 
     def __init__(self, modelparams):
@@ -90,12 +87,12 @@ class SchNet(nn.Module):
 
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
 
-        # default predict var
         readoutdict = modelparams.get(
             'readoutdict', get_default_readout(n_atom_basis))
         post_readout = modelparams.get('post_readout', None)
 
 
+        # convolutions
         self.convolutions = nn.ModuleList([
             SchNetConv(n_atom_basis=n_atom_basis,
                        n_filters=n_filters,
@@ -113,7 +110,7 @@ class SchNet(nn.Module):
 
 
 
-    def convolve(self, batch):
+    def convolve(self, batch, xyz=None):
         """
 
         Apply the convolutional layers to the batch.
@@ -127,14 +124,21 @@ class SchNet(nn.Module):
             xyz: xyz (with a "requires_grad") for the batch
         """
 
+        # Note: we've given the option to input xyz from another source.
+        # E.g. if you already created an xyz  and set requires_grad=True,
+        # you don't want to make a whole new one.
+
+        if xyz is None:
+            xyz = batch['nxyz'][:, 1:4]
+            xyz.requires_grad = True
+
         r = batch['nxyz'][:, 0]
-        xyz = batch['nxyz'][:, 1:4]
         N = batch['num_atoms'].reshape(-1).tolist()
         a = batch['nbr_list']
 
+
         # offsets take care of periodic boundary conditions
         offsets = batch.get('offsets', 0)
-        xyz.requires_grad = True
 
         # calculating the distances
         e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
@@ -151,17 +155,19 @@ class SchNet(nn.Module):
 
         return r, N, xyz
 
-    def forward(self, batch):
+    def forward(self, batch, xyz=None):
         """Summary
 
         Args:
             batch (dict): dictionary of props
+            xyz (torch.tensor): (optional) coordinates
 
         Returns:
-            dict: dionary of results 
+            dict: dictionary of results
+
         """
 
-        r, N, xyz = self.convolve(batch)
+        r, N, xyz = self.convolve(batch, xyz)
         r = self.atomwisereadout(r)
         results = batch_and_sum(r, N, list(batch.keys()), xyz)
 
@@ -170,9 +176,22 @@ class SchNet(nn.Module):
 
 class AuTopology(nn.Module):
 
+    """
+    AuTopology model for getting classical forces.
+    Attributes:
+        atom_embed (torch.nn.Embedding): Convert atomic number into an
+            embedding vector of size n_atom_basis
+        convolutions (torch.nn.Module): convolution layers applied to the graph
+        atomwisereadout (torch.nn.Module): fully connected layers applied to the graph
+            to get the results of interest
+        device (int): GPU being used.
+
+    """
+
     def __init__(self, modelparams):
 
         """
+        Constructs an AuTopology model.
         Example:
             n_autopology_features = 256
 
@@ -230,12 +249,23 @@ class AuTopology(nn.Module):
         modelparams.update({"Lh": Lh, "Fr": Fr})
 
         self.readout = AuTopologyReadOut(multitaskdict=modelparams)
+        self.device = None
 
 
     def convolve(self, batch):
 
+        """
 
-        # not implemented for PBC yet
+        Apply the convolutional layers to the batch.
+
+        Args:
+            batch (dict): dictionary of props
+
+        Returns:
+            r: new feature vector after the convolutions
+        """
+
+        # not implemented for PBC yet (?)
 
         a = batch["bonded_nbr_list"]
         z = batch['nxyz'][:, 0]
@@ -247,7 +277,27 @@ class AuTopology(nn.Module):
 
         return r
 
-    def forward(self, batch, xyz):
+    def forward(self, batch, xyz=None):
+
+        """Summary
+
+        Args:
+            batch (dict): dictionary of props
+            xyz (torch.tensor): (optional) coordinates
+
+        Returns:
+            dict: dictionary of results
+
+        """
+
+        # Give the option to input xyz from another source. E.g. if you already created
+        # an xyz with schnet and set requires_grad=True, you don't want to make a whole
+        # new one.
+
+        if xyz is None:
+            xyz = batch['nxyz'][:, 1:4]
+            xyz.requires_grad = True
+
         r = self.convolve(batch)
         results = self.readout(r=r, batch=batch, xyz=xyz)
         return results
@@ -260,18 +310,19 @@ class SchNetAuTopology(nn.Module):
     Attributes:
 
 
-        sorted_result_keys (list): a list of energies that you want the network to predict.
-            These keys should be ordered by energy (e.g. ["energy_0", "energy_1"]).
-        grad_keys (list): A list of gradients that you want the network to give (all members
-            of this list should be elements of sorted_result_keys with "_grad" at the end)
-        sort_results (bool): Whether or not to sort the final results by energy (i.e. enforce
-            that E0 < E1 < E2 ... )
-        atom_embed (torch.nn.Embedding): Convert atomic number into an
-            embedding vector of size n_atom_basis
-        convolutions (torch.nn.ModuleList): include all the convolutions
-        schnet_readout (nn.Module): a module for reading out results from SchNet
-        auto_readout (nn.Module): a module for reading out results from AuTopology
-        device (int): GPU device number
+        schnet (models.SchNet): SchNet model
+        autopology (models.AuTopology): AuTopology model
+
+        sorted_result_keys (list): names of energies to output, sorted from lowest to highest
+            (e.g. ["energy_0", "energy_1", "energy_2"]) 
+        grad_keys (list): same as sorted_result_keys, but with "_grad" at the end for gradients
+        sort_results (bool): whether or not to sort results so that the energies are guaranteed
+            to be ordered properly
+
+        sadd_autopology (bool): use the autopology module in the final results
+        add_schnet (bool): use the schnet module in the final results
+
+
 
     """
 
@@ -302,12 +353,11 @@ class SchNetAuTopology(nn.Module):
                 
             }
 
-            example_module = SchNetAuTopology(modelparams)
+            example_module = SchNetAuTopology(modelparams, add_autopology=True, add_schnet=False)
 
         """
 
         super().__init__()
-
 
         schnet_params = modelparams["schnet_params"]
         self.schnet = SchNet(schnet_params)
@@ -341,12 +391,13 @@ class SchNetAuTopology(nn.Module):
         self.add_schnet = True
 
 
-    def get_sorted_results(self, pre_results):
+    def get_sorted_results(self, pre_results, num_atoms):
 
         """
         Sort results by energies.
         Args:
             pre_results (dict): dictionary of the network output before sorting
+            num_atoms (torch.tensor): array of number of atoms per molecule
         Returns:
             final_results (dict): dictionary of the network output after sorting
         """
@@ -354,19 +405,31 @@ class SchNetAuTopology(nn.Module):
         # sort the energies for each molecule in the batch and put the results in
         # `final_results`.
         batch_length = len(pre_results[self.sorted_result_keys[0]])
-        final_results = {key: [] for key in self.sorted_result_keys}
+        final_results = {key: [] for key in [*self.sorted_result_keys, *self.grad_keys]}
+
+        # de-batch the gradients
+        N = num_atoms.cpu().numpy().tolist()
+        for key in self.grad_keys:
+            pre_results[key] = torch.split(pre_results[key], N)
+
 
         for i in range(batch_length):
             # sort the outputs
             sorted_energies, sorted_idx = torch.sort(torch.cat([pre_results[key][i] for key in
                                                                 self.sorted_result_keys]))
 
-            for key, sorted_energy in zip(self.sorted_result_keys, sorted_energies):
-                final_results[key].append(sorted_energy)
+            for index, energy_key in zip(sorted_idx, self.sorted_result_keys):
 
-        # re-batch the output energies  
-        for key in self.sorted_result_keys: #  auto_key in zip(self.sorted_result_keys, self.auto_keys):
+                corresponding_key = self.sorted_result_keys[index]
+
+                final_results[energy_key].append(pre_results[corresponding_key][i])
+                final_results[energy_key + "_grad"].append(pre_results[corresponding_key + "_grad"][i])
+
+
+        # re-batch the outputs  
+        for key in self.sorted_result_keys:
             final_results[key] = torch.stack(final_results[key])
+            final_results[key + "_grad"] = torch.cat(final_results[key + "_grad"])
 
         return final_results
 
@@ -383,27 +446,22 @@ class SchNetAuTopology(nn.Module):
         """
 
 
-        if self.add_schnet:
-            r, N, xyz = self.schnet.convolve(batch)
-            # apply the SchNet readout to r
-            schnet_r = self.schnet.atomwisereadout(r)
-            # get the SchNet results for the energies by un-batching them
-            # Gradients not included because gradient keys not in  self.sorted_result_keys
-            schnet_results = batch_and_sum(
-                schnet_r, N, self.sorted_result_keys, xyz)
+        # define xyz here to avoid making two graphs (one for schnet and
+        # one for autopology)
 
-        if not self.add_schnet:
-            xyz = batch['nxyz'][:, 1:4]
-            xyz.requires_grad = True
+        xyz = batch["nxyz"][:, 1:4]
+        xyz.requires_grad = True
+
+        if self.add_schnet:
+            schnet_results = self.schnet(batch=batch, xyz=xyz)
 
         if self.add_autopology:
-            # get the autopology results, which are automatically un-batched
             auto_results = self.autopology(batch=batch, xyz=xyz)
 
         # pre_results is the dictionary of results before sorting energies
         pre_results = dict()
 
-        for key in self.sorted_result_keys:
+        for key in [*self.sorted_result_keys, *self.grad_keys]:
             if self.add_schnet:
                 pre_results[key] = schnet_results[key]
 
@@ -416,17 +474,10 @@ class SchNetAuTopology(nn.Module):
 
         # sort the results if necessary
         if self.sort_results:
-            final_results = self.get_sorted_results(pre_results)
+            final_results = self.get_sorted_results(pre_results, batch["num_atoms"])
         else:
-            final_results = {key: pre_results[key] for key in self.sorted_result_keys}
+            final_results = pre_results
 
-        # compute gradients
-        for key in self.sorted_result_keys:
-            if "{}_grad".format(key) not in self.grad_keys:
-                continue
-
-            grad = compute_grad(inputs=xyz, output=final_results[key])
-            final_results[key + "_grad"] = grad
 
         return final_results
 
