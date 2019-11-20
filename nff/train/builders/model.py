@@ -104,8 +104,11 @@ def load_model(path):
     """
 
     if os.path.isdir(path):
-        return torch.load(os.path.join(path, 'best_model'))
+        return torch.load(
+            os.path.join(path, 'best_model'),
+            map_location='cpu'
+        )
     elif os.path.exists(path):
-        return torch.load(path)
+        return torch.load(path, map_location='cpu')
     else:
         raise FileNotFoundError('{} was not found'.format(path))
