@@ -29,7 +29,8 @@ def collate_dicts(dicts):
     for n, d in zip(cumulative_atoms, dicts):
         for key in redindex_keys:
             if key in d:
-                d[key] = d[key] + n
+                d[key] = d[key] + int(n)
+
     # batching the data
     batch = {}
     for key, val in dicts[0].items():

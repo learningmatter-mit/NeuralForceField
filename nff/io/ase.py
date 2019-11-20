@@ -39,9 +39,9 @@ class AtomsBatch(Atoms):
         super().__init__(*args, **kwargs)
 
         self.props = props
-        self.nbr_list = self.props.get('nbr_list', None)
-        self.offsets = self.props.get('offsets', None)
-        self.num_atoms = self.props.get('num_atoms', len(self))
+        self.nbr_list = props.get('nbr_list', None)
+        self.offsets = props.get('offsets', None)
+        self.num_atoms = props.get('num_atoms', len(self))
         self.cutoff = cutoff
 
     def get_nxyz(self):
@@ -71,8 +71,8 @@ class AtomsBatch(Atoms):
         self.props['offsets'] = self.offsets
 
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
-        self.props['num_atoms'] = torch.LongTensor([self.props['nxyz'].shape[0]])
-
+        self.props['num_atoms'] = torch.LongTensor([len(self)])
+ 
         return self.props
 
     def update_nbr_list(self):
@@ -107,6 +107,15 @@ class AtomsBatch(Atoms):
 
     def batch_virial():
         pass
+
+    @classmethod
+    def from_atoms(cls, atoms):
+        return cls(
+            atoms,
+            positions=atoms.positions,
+            numbers=atoms.numbers,
+            props={},
+        )
 
 
 class BulkPhaseMaterials(Atoms):
@@ -320,8 +329,10 @@ class NeuralFF(Calculator):
 
         self.results = {
             'energy': energy.reshape(-1),
-            'forces': -energy_grad.reshape(-1, 3)
         }
+
+        if 'forces' in properties:
+            self.results['forces'] = -energy_grad.reshape(-1, 3)
 
     @classmethod
     def from_file(

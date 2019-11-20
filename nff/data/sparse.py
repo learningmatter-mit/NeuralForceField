@@ -13,7 +13,7 @@ def sparsify_tensor(tensor):
         sparse (torch.sparse.Tensor)
     """
     ij = tensor.nonzero()
-    v = tensor[ij[:,0], ij[:, 1]] #tensor[ij]
+    v = tensor[ij[:, 0], ij[:, 1]]
 
     if len(ij) > 0:
         return sp.FloatTensor(ij.t(), v, tensor.size())

@@ -2,7 +2,11 @@ import numpy as np
 
 import torch
 
+<<<<<<< HEAD
 from nff.utils.cuda import batch_to, batch_detach
+=======
+from nff.utils.cuda import batch_to, to_cpu
+>>>>>>> hybridgraph
 from nff.utils.scatter import compute_grad
 from nff.data.dataset import concatenate_dict
 
@@ -27,7 +31,6 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
         n_eval += vsize
 
         results = model(batch)
-        results["nxyz"] = batch["nxyz"]
 
         eval_batch_loss = loss_fn(batch, results).data.cpu().numpy()
 
@@ -38,6 +41,9 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
 
         all_results.append(batch_detach(results))
         all_batches.append(batch_detach(batch))
+
+        del results
+        del batch
 
     # weighted average over batches
     if loss_is_normalized:

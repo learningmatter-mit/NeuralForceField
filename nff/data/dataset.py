@@ -1,4 +1,5 @@
 import torch 
+import numbers
 import numpy as np 
 from copy import deepcopy
 from collections.abc import Iterable
@@ -10,7 +11,6 @@ from torch.utils.data import Dataset as TorchDataset
 from nff.data import get_neighbor_list
 from nff.data.sparse import sparsify_tensor
 import nff.utils.constants as const
-import copy
 
 
 class Dataset(TorchDataset):
@@ -96,7 +96,7 @@ class Dataset(TorchDataset):
 
         for key, val in props.items():
             if val is None:
-                props[key] = self._to_array([np.nan] * n_geoms)
+                props[key] = to_tensor([np.nan] * n_geoms)
 
             elif any([x is None for x in val]):
                 bad_indices = [i for i, item in enumerate(val) if item is None]
@@ -104,25 +104,14 @@ class Dataset(TorchDataset):
                 nan_list = (np.array(val[good_index]) * float('NaN')).tolist()
                 for index in bad_indices:
                     props[key][index] = nan_list
-                props.update({key: self._to_array(val)})
+                props.update({key: to_tensor(val)})
 
             else:
                 assert len(val) == n_geoms, \
                     'length of {} is not compatible with {} geometries'.format(key, n_geoms)
-                props[key] = self._to_array(val)
+                props[key] = to_tensor(val)
 
         return props
-
-    def _to_array(self, x):
-        """Converts input `x` to array"""
-        array = torch.Tensor
-        if isinstance(x[0], (array, str)):
-            return x
-        
-        if isinstance(x[0], Iterable):
-            return [array(_) for _ in x]
-        else:
-            return array(x)
 
     def generate_neighbor_list(self, cutoff):
         """Generates a neighbor list for each one of the atoms in the dataset.
@@ -195,26 +184,140 @@ class Dataset(TorchDataset):
             )
 
 
+def force_to_energy_grad(dataset):
+    """
+    Converts forces to energy gradients in a dataset. This conforms to
+        the notation that a key with `_grad` is the gradient of the
+        property preceding it. Modifies the database in-place.
+
+    Args:
+        dataset (nff.data.Dataset)
+
+    Returns:
+        success (bool): if True, forces were removed and energy_grad
+            became the new key.
+    """
+    if 'forces' not in dataset.props.keys():
+        return False
+    else:
+        dataset.props['energy_grad'] = [
+            -x
+            for x in dataset.props.pop('forces')
+        ]
+        return True
+
+
+def to_tensor(x, stack=False):
+    """
+    Converts input `x` to torch.Tensor.
+
+    Args:
+        x (list of lists): input to be converted. Can be: number, string, list, array, tensor
+        stack (bool): if True, concatenates torch.Tensors in the batching dimension
+
+    Returns:
+        torch.Tensor or list, depending on the type of x
+    """
+
+    # a single number should be a list
+    if isinstance(x, numbers.Number):
+        return torch.Tensor([x])
+
+    if isinstance(x, str):
+        return [x]
+
+    if isinstance(x, torch.Tensor):
+        return x
+
+    # all objects in x are tensors
+    if isinstance(x, list) and all([isinstance(y, torch.Tensor) for y in x]):
+        # list of tensors with zero or one effective dimension
+        # flatten the tensor
+        if all([len(y.shape) <= 1 for y in x]):
+            return torch.cat([y.view(-1) for y in x], dim=0)
+
+        elif stack:
+            return torch.cat(x, dim=0)
+
+        # list of multidimensional tensors
+        else:
+            return x
+
+    # some objects are not tensors
+    elif isinstance(x, list):
+        # list of strings
+        if all([isinstance(y, str) for y in x]):
+            return x
+
+        # list of ints
+        if all([isinstance(y, int) for y in x]):
+            return torch.LongTensor(x)
+
+        # list of floats
+        if all([isinstance(y, numbers.Number) for y in x]):
+            return torch.Tensor(x)
+
+        # list of arrays or other formats
+        if any([isinstance(y, (list, np.ndarray)) for y in x]):
+            return [torch.Tensor(y) for y in x]
+
+    raise TypeError('Data type not understood')
+
+
 def concatenate_dict(*dicts):
     """Concatenates dictionaries as long as they have the same keys.
         If one dictionary has one key that the others do not have,
-        the dictionaries lacking the key will have that key replaced by None. All dictionaries must have the key `nxyz`.
+        the dictionaries lacking the key will have that key replaced by None.
 
     Args:
         *dicts (any number of dictionaries)
+            Example:
+                dict_1 = {
+                    'nxyz': [...],
+                    'energy': [...]
+                }
+                dict_2 = {
+                    'nxyz': [...],
+                    'energy': [...]
+                }
+                dicts = [dict_1, dict_2]
+        stack (bool): if True, stacks the values when converting them to
+            tensors.
     """
 
     assert all([type(d) == dict for d in dicts]), \
         'all arguments have to be dictionaries'
 
     keys = set(sum([list(d.keys()) for d in dicts], []))
-    
+
+    # we have to see how many values the properties of each dictionary has.
+    values_per_dict = []
+    for d in dicts:
+        if any([isinstance(item, numbers.Number) for item in d.values()]):
+            num_values = 1
+
+        else:
+            lists = [item for item in d.values() if isinstance(item, list)]
+
+            if len(lists) > 0:
+                num_values = min([len(l) for l in lists])
+            else:
+                num_values = 1
+
+        values_per_dict.append(num_values)
+
+    # creating the joint dicionary
     joint_dict = {}
     for key in keys:
-        joint_dict[key] = [
-            d.get(key, [None] * len(d['nxyz']))
-            for d in dicts
-        ]
+        # flatten list of values
+        values = []
+        for num_values, d in zip(values_per_dict, dicts):
+            # if the dictionary does not have that key, we replace that with None
+            val = d.get(key, [None] * num_values)
+            values.append([val] if num_values == 1 else val)
+
+        values = [subitem for sublist in values for subitem in sublist]
+        joint_dict[key] = values
 
     return joint_dict
 
@@ -225,7 +328,7 @@ def split_train_test(dataset, test_size=0.2):
     """
 
     idx = list(range(len(dataset)))
-    idx_train, idx_test = train_test_split(idx)
+    idx_train, idx_test = train_test_split(idx, test_size=test_size)
     train = Dataset(
         props={key: [val[i] for i in idx_train] for key, val in dataset.props.items()},
         units=dataset.units
@@ -238,27 +341,8 @@ def split_train_test(dataset, test_size=0.2):
     return train, test
 
 
-def slice_props_by_idx(idx, dictionary):
-    """for a dicionary of lists, build a new dictionary given index
-    
-    Args:
-        idx (list): Description
-        dictionary (dict): Description
-    
-    Returns:
-        dict: sliced dictionary
-    """
-    props_dict = {}
-    for key, val in dictionary.items(): 
-        val_list = []
-        for i in idx:
-            val_list.append(val[i])
-        props_dict[key] = val_list
-    return props_dict
-
-
 def split_train_validation_test(dataset, val_size=0.2, test_size=0.2):
     train, validation = split_train_test(dataset, test_size=val_size)
-    train, test = split_train_test(train, test_size=test_size)
+    train, test = split_train_test(train, test_size=test_size / (1 - val_size))
 
     return train, validation, test

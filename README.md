@@ -36,14 +36,14 @@ pip install .
 The simplest way to use the `nff` package is to use the premade scripts (in the `scripts`) folder. As an example, to train a SchNet model with the default parameters using the example dataset (ethanol geometries) from the command line, run the command
 
 ```bash
-nff_train.py train schnet examples/dataset.pth.tar examples/train_model --device cuda:0
+nff_train.py train schnet tutorials/data/dataset.pth.tar $HOME/train_model --device cuda:0
 ```
 
-This will use 60% of the dataset for training, 20% for validation and 20% for testing. The training will happen on the device `cuda:0`. Results of training, checkpoints and hyperparameters will be saved on the path `examples/train_model`.
+This will use 60% of the dataset for training, 20% for validation and 20% for testing. The training will happen on the device `cuda:0`. Results of training, checkpoints and hyperparameters will be saved on the path `$HOME/train_model`.
 
 ### Usage with Jupyter Notebooks and other scripts
 
-A series of tutorials illustrating how `nff` can be used in conjunction with Jupyter Notebooks or other scripts is provided in the `example/` folder. It also covers how to integrate a pre-trained model with an ASE calculator.
+A series of tutorials illustrating how `nff` can be used in conjunction with Jupyter Notebooks or other scripts is provided in the `tutorials/` folder. It also covers how to integrate a pre-trained model with an ASE calculator.
 
 
 ## References

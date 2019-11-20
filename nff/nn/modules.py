@@ -180,17 +180,17 @@ class NodeMultiTaskReadOut(nn.Module):
         example multitaskdict:
 
         multitaskdict = {
-            'myenergy0': [
-                            {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
-                            {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+            'myenergy_0': [
+                {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
             ],
-            'myenergy1': [
-                            {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
-                            {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+            'myenergy_1': [
+                {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
             ],
-            'Muliken charges': [
-                            {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
-                            {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+            'muliken_charges': [
+                {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+                {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
             ]
         }
 

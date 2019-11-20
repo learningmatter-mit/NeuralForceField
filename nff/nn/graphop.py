@@ -31,8 +31,6 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
     """Pooling function to get graph property.
         Separate the outputs back into batches, pool the results,
         compute gradient of scalar properties if "_grad" is in the key name.
-
-    TO DO: handle cases for atom-wise and edge-wise outputs  
     
     Args:
         dict_input (dict): Description
@@ -74,7 +72,7 @@ def get_atoms_inside_cell(r, N, pbc):
         pbc (troch.long): atomic embeddings
     
     Returns:
-        TYPE: Description
+        torch.float: atomnic embedding tensors inside the cell 
     """
     N = N.to(torch.long).tolist()
 
