@@ -26,15 +26,10 @@ def collate_dicts(dicts):
     # new indices for the batch: the first one is zero and the last does not matter
 
     cumulative_atoms = np.cumsum([0] + [d['num_atoms'] for d in dicts])[:-1]
-    redindex_keys = [key for key in dicts[0].keys() if key.endswith("nbr_list")]
+    redindex_keys = [key for key in list(dicts[0].keys()) + list(TYPE_KEYS.keys()) if key.endswith("nbr_list")]
 
     for n, d in zip(cumulative_atoms, dicts):
-<<<<<<< HEAD
         for key in redindex_keys:
-=======
-
-        for key in REINDEX_KEYS:
->>>>>>> bfb201138edf0471b711c7534b1daaaf79292c2d
             if key in d:
                 d[key] = d[key] + int(n)
 
