@@ -4,7 +4,53 @@
 import os
 import numpy as np
 import torch
-from nff.nn.models.schnet import SchNet
+from nff.nn.models import SchNet, SchNetAuTopology, AuTopology
+
+PARAMS_TYPE = {"SchNet":
+               {
+                   'n_atom_basis': int,
+                   'n_filters': int,
+                   'n_gaussians': int,
+                   'n_convolutions': int,
+                   'cutoff': float,
+                   'bond_par': float,
+                   'trainable_gauss': bool,
+                   'box_size': np.array
+               },
+
+               "AuTopology":
+               {
+                  "n_features": int,
+                  "n_convolutions": int,
+                  "conv_type": str,
+                  "conv_update_layers": list,
+                  "readout_hidden_nodes": list,
+                  "bond_terms": list,
+                  "angle_terms": list,
+                  "dihedral_terms": list,
+                  "improper_terms": list,
+                  "pair_terms": list,
+                  "output_keys": list,
+                  "trainable_prior": bool
+                },
+
+
+               "SchNetAuTopology":
+                {
+                  "autopology_params": dict,
+                  "schnet_params": dict,
+                  "sorted_result_keys": list,
+                  "grad_keys": list,
+                  "sort_results": bool,
+                }
+
+               }
+
+MODEL_DICT = {
+    "SchNet": SchNet,
+    "AuTopology": AuTopology,
+    "SchNetAuTopology": SchNetAuTopology,
+}
 
 
 class ParameterError(Exception):
@@ -13,42 +59,35 @@ class ParameterError(Exception):
 
 
 def check_parameters(params_type, params):
-     """Check whether the parameters correspond to the specified types
- 
-     Args:
-         params (dict)
-     """
-     for key, val in params.items():
-         if key in params_type and not isinstance(val, params_type[key]):
-                 raise ParameterError(
-                         '%s is not %s' % (str(key), params_type[key])
-              )
+    """Check whether the parameters correspond to the specified types
+
+    Args:
+        params (dict)
+    """
+    for key, val in params.items():
+        if key in params_type and not isinstance(val, params_type[key]):
+            raise ParameterError(
+                '%s is not %s' % (str(key), params_type[key])
+            )
+
+        for model in PARAMS_TYPE.keys():
+          if key == "{}_params".format(model.lower()):
+            check_parameters(PARAMS_TYPE[model], val)
 
 
-def get_model(params):
+def get_model(params, model_type="SchNet", **kwargs):
     """Create new model with the given parameters.
 
     Args:
         params (dict): parameters used to construct the model
+        model_type (str): name of the model to be used
 
     Returns:
-        model (nff.nn.models.SchNet)
+        model (nff.nn.models)
     """
 
-    params_type = {
-        'n_atom_basis': int,
-        'n_filters': int,
-        'n_gaussians': int,
-        'n_convolutions': int,
-        'cutoff': float,
-        'bond_par': float,
-        'trainable_gauss': bool,
-        'box_size': np.array
-    }
-
-    check_parameters(params_type, params)
-
-    model = SchNet(params)
+    check_parameters(PARAMS_TYPE[model_type], params)
+    model = MODEL_DICT[model_type](params, **kwargs)
 
     return model
 
@@ -59,14 +98,17 @@ def load_model(path):
 
     Args:
         path (str): path where the model was trained.
-    
+
     Returns:
         model
     """
 
     if os.path.isdir(path):
-        return torch.load(os.path.join(path, 'best_model'))
+        return torch.load(
+            os.path.join(path, 'best_model'),
+            map_location='cpu'
+        )
     elif os.path.exists(path):
-        return torch.load(path)
+        return torch.load(path, map_location='cpu')
     else:
         raise FileNotFoundError('{} was not found'.format(path))

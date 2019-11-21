@@ -4,7 +4,7 @@ from nff.utils.cuda import batch_to, to_cpu, batch_detach
 from nff.utils.scatter import compute_grad
 from nff.data.dataset import concatenate_dict
 
-def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
+def evaluate(model, loader, loss_fn, device, loss_is_normalized=True, submodel=None):
     """Evaluate the current state of the model using a given dataloader
     """
 
@@ -24,7 +24,12 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True):
         vsize = batch['nxyz'].size(0)
         n_eval += vsize
 
-        results = model(batch)
+        # e.g. if the result is a sum of results from two models, and you just
+        # want the prediction of one of those models
+        if submodel is not None:
+            results = getattr(model, submodel)(batch)
+        else:
+            results = model(batch)
 
         eval_batch_loss = loss_fn(batch, results).data.cpu().numpy()
 

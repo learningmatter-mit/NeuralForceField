@@ -1,14 +1,16 @@
-import numpy as np 
+import numpy as np
 from collections.abc import Iterable
+import torch
+import pdb
+from nff.data.topology import ALL_TOPOLOGY_KEYS, RE_INDEX_TOPOLOGY_KEYS
 
-import torch 
+REINDEX_KEYS = ['nbr_list', *RE_INDEX_TOPOLOGY_KEYS]
 
-REINDEX_KEYS = ['nbr_list']
 
 TYPE_KEYS = {
     'nbr_list': torch.long,
     'num_atoms': torch.long,
-}
+    **{key: torch.long for key in ALL_TOPOLOGY_KEYS}}
 
 def collate_dicts(dicts):
     """Collates dictionaries within a single batch. Automatically reindexes neighbor lists
@@ -27,13 +29,20 @@ def collate_dicts(dicts):
     redindex_keys = [key for key in dicts[0].keys() if key.endswith("nbr_list")]
 
     for n, d in zip(cumulative_atoms, dicts):
+<<<<<<< HEAD
         for key in redindex_keys:
+=======
+
+        for key in REINDEX_KEYS:
+>>>>>>> bfb201138edf0471b711c7534b1daaaf79292c2d
             if key in d:
                 d[key] = d[key] + int(n)
 
     # batching the data
     batch = {}
     for key, val in dicts[0].items():
+        # if key == "degree_vec":
+        #     pdb.set_trace()
         if type(val) == str:
             batch[key] = [data[key] for data in dicts]
         elif len(val.shape) > 0:
@@ -49,7 +58,7 @@ def collate_dicts(dicts):
 
     # adjusting the data types:
     for key, dtype in TYPE_KEYS.items():
-        batch[key] = batch[key].to(dtype)
+        if key in batch:
+            batch[key] = batch[key].to(dtype)
 
     return batch
-

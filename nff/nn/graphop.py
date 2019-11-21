@@ -3,6 +3,8 @@ import torch.nn as nns
 import torch.nn.functional as F
 from nff.utils.scatter import compute_grad
 
+EPS = 1e-15
+
 
 def split_and_sum(tensor, N):
     """spliting a torch Tensor into a list of uneven sized tensors,
@@ -96,3 +98,5 @@ def get_atoms_inside_cell(r, N, pbc):
     r = r[atoms_in_cell]
 
     return r, N
+
+

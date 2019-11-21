@@ -1,16 +1,18 @@
-import torch 
+import torch
 import numbers
-import numpy as np 
+import numpy as np
 from copy import deepcopy
 from collections.abc import Iterable
-
 from sklearn.utils import shuffle as skshuffle
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset as TorchDataset
-
-from nff.data import get_neighbor_list
+# from nff.data import get_neighbor_list, get_bond_list
 from nff.data.sparse import sparsify_tensor
 import nff.utils.constants as const
+import copy
+import itertools
+from nff.data.topology import update_props_topologies
+from nff.data.graphs import get_neighbor_list
 
 
 class Dataset(TorchDataset):
@@ -60,7 +62,6 @@ class Dataset(TorchDataset):
                 all lists have the same length.
             units (str): units of the system.
         """
-        
         self.props = self._check_dictionary(deepcopy(props))
         self.units = units
         self.to_units('kcal/mol')
@@ -75,7 +76,7 @@ class Dataset(TorchDataset):
 
         if other.units != self.units:
             other = other.copy().to_units(self.units)
-        
+
         props = concatenate_dict(self.props, other.props)
 
         return Dataset(props, units=self.units)
@@ -95,20 +96,28 @@ class Dataset(TorchDataset):
             props['num_atoms'] = torch.LongTensor(props['num_atoms'])
 
         for key, val in props.items():
+
             if val is None:
                 props[key] = to_tensor([np.nan] * n_geoms)
 
             elif any([x is None for x in val]):
                 bad_indices = [i for i, item in enumerate(val) if item is None]
-                good_index = [index for index in range(len(val)) if index not in bad_indices][0]
-                nan_list = (np.array(val[good_index]) * float('NaN')).tolist()
+                good_indices = [index for index in range(
+                    len(val)) if index not in bad_indices]
+                if len(good_indices) == 0:
+                    nan_list = np.array([float("NaN")]).tolist()
+                else:
+                    good_index = good_indices[0]
+                    nan_list = (np.array(val[good_index])
+                                * float('NaN')).tolist()
                 for index in bad_indices:
                     props[key][index] = nan_list
                 props.update({key: to_tensor(val)})
 
             else:
                 assert len(val) == n_geoms, \
-                    'length of {} is not compatible with {} geometries'.format(key, n_geoms)
+                    'length of {} is not compatible with {} geometries'.format(
+                        key, n_geoms)
                 props[key] = to_tensor(val)
 
         return props
@@ -124,8 +133,6 @@ class Dataset(TorchDataset):
             get_neighbor_list(nxyz[:, 1:4], cutoff)
             for nxyz in self.props['nxyz']
         ]
-
-        # self.props['offsets'] = [0] * len(self)
 
         return
 
@@ -168,7 +175,23 @@ class Dataset(TorchDataset):
         reindex = skshuffle(idx)
         self.props = {key: val[reindex] for key, val in self.props.items()}
 
-        return 
+        return
+
+    def generate_topologies(self, bond_dic, use_1_4_pairs=True):
+
+        """
+        Generate topology for each Geom in the dataset.
+        Args:
+            bond_dic (dict): dictionary of bond lists for each smiles
+            use_1_4_pairs (bool): consider 1-4 pairs when generating non-bonded neighbor list
+        Returns:
+            None
+        """
+
+        # use the bond list to generate topologies for the props
+        new_props = update_props_topologies(props=self.props, bond_dic=bond_dic, use_1_4_pairs=use_1_4_pairs)
+        self.props = new_props
+
 
     def save(self, path):
         torch.save(self, path)
@@ -229,10 +252,13 @@ def to_tensor(x, stack=False):
     if isinstance(x, torch.Tensor):
         return x
 
+
     # all objects in x are tensors
     if isinstance(x, list) and all([isinstance(y, torch.Tensor) for y in x]):
+
         # list of tensors with zero or one effective dimension
         # flatten the tensor
+
         if all([len(y.shape) <= 1 for y in x]):
             return torch.cat([y.view(-1) for y in x], dim=0)
 
@@ -245,6 +271,7 @@ def to_tensor(x, stack=False):
 
     # some objects are not tensors
     elif isinstance(x, list):
+
         # list of strings
         if all([isinstance(y, str) for y in x]):
             return x
@@ -281,8 +308,7 @@ def concatenate_dict(*dicts):
                     'energy': [...]
                 }
                 dicts = [dict_1, dict_2]
-        stack (bool): if True, stacks the values when converting them to
-            tensors.
+
     """
 
     assert all([type(d) == dict for d in dicts]), \
@@ -329,12 +355,18 @@ def split_train_test(dataset, test_size=0.2):
 
     idx = list(range(len(dataset)))
     idx_train, idx_test = train_test_split(idx, test_size=test_size)
+
+    props = {key: [val[i] for i in idx_train]
+             for key, val in dataset.props.items()}
+
     train = Dataset(
-        props={key: [val[i] for i in idx_train] for key, val in dataset.props.items()},
+        props={key: [val[i] for i in idx_train]
+               for key, val in dataset.props.items()},
         units=dataset.units
     )
     test = Dataset(
-        props={key: [val[i] for i in idx_test] for key, val in dataset.props.items()},
+        props={key: [val[i] for i in idx_test]
+               for key, val in dataset.props.items()},
         units=dataset.units
     )
 
@@ -342,7 +374,9 @@ def split_train_test(dataset, test_size=0.2):
 
 
 def split_train_validation_test(dataset, val_size=0.2, test_size=0.2):
+
     train, validation = split_train_test(dataset, test_size=val_size)
     train, test = split_train_test(train, test_size=test_size / (1 - val_size))
 
     return train, validation, test
+

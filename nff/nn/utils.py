@@ -104,4 +104,3 @@ def torch_nbr_list(atomsobject, cutoff, device='cuda:0'):
     offsets = offsets[mask.nonzero()[:, 0], mask.nonzero()[:, 1], :].detach().to("cpu").numpy()
 
     return i, j, offsets 
-
