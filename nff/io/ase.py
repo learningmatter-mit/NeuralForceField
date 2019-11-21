@@ -7,6 +7,7 @@ from ase.neighborlist import neighbor_list
 from ase.calculators.calculator import Calculator, all_changes
 
 import nff.utils.constants as const
+from nff.nn.utils import torch_nbr_list
 from nff.train import load_model, evaluate
 from nff.utils.cuda import batch_to
 from nff.data.sparse import sparsify_array
@@ -128,6 +129,8 @@ class BulkPhaseMaterials(Atoms):
         *args,
         props={},
         cutoff=DEFAULT_CUTOFF,
+        nbr_torch=False,
+        device='cpu',
         **kwargs
     ):
         """
@@ -146,6 +149,8 @@ class BulkPhaseMaterials(Atoms):
         self.offsets = self.props.get('offsets', None)
         self.num_atoms = self.props.get('num_atoms', None)
         self.cutoff = cutoff
+        self.nbr_torch = nbr_torch
+        self.device = device 
 
     def get_nxyz(self):
         """Gets the atomic number and the positions of the atoms
@@ -196,8 +201,11 @@ class BulkPhaseMaterials(Atoms):
             offsets (torch.Tensor)
             nxyz (torch.Tensor)
         """
+        if self.nbr_torch:
+            edge_from, edge_to, offsets = torch_nbr_list(self, cutoff, device=self.device)
+        else:
+            edge_from, edge_to, offsets = neighbor_list('ijS', self, cutoff)
 
-        edge_from, edge_to, offsets = neighbor_list('ijS', self, cutoff)
         nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]]
         nbr_list_tmp = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
