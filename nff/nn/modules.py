@@ -44,7 +44,7 @@ class SchNetEdgeUpdate(EdgeUpdateModule):
 
 class SchNetConv(MessagePassingModule):
 
-    """The convolution layer with filter. To be merged with GraphConv class.
+    """The convolution layer with filter.
     
     Attributes:
         moduledict (TYPE): Description
@@ -78,7 +78,7 @@ class SchNetConv(MessagePassingModule):
             )
         })
 
-    def message(self, r, e, a):
+    def message(self, r, e, a, aggr_wgt=None):
         """The message function for SchNet convoltuions 
         
         
@@ -86,6 +86,7 @@ class SchNetConv(MessagePassingModule):
             r (TYPE): node inputs 
             e (TYPE): edge inputs 
             a (TYPE): neighbor list
+            aggr_wgt (None, optional): Description
         
         Returns:
             TYPE: message should a pair of message and 
@@ -94,6 +95,11 @@ class SchNetConv(MessagePassingModule):
         e = self.moduledict['message_edge_filter'](e)
         # convection: update 
         r = self.moduledict['message_node_filter'](r)
+
+        # soft aggr if aggr_wght is provided
+        if aggr_wgt is not None:
+            r = r * aggr_wgt
+
         # combine node and edge info
         message = r[a[:, 0]] * e, r[a[:, 1]] * e  # (ri [] eij) -> rj, []: *, +, (,)
         return message 

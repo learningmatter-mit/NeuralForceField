@@ -32,7 +32,7 @@ class NoseHoover(MolecularDynamics):
         self.Q =  3.0 * self.Natom * self.T * self.ttime * self.dt
         self.zeta = 0.0
     
-    def step(self, f):
+    def step(self):
         
         # get current acceleration and velocity: 
         accel = self.atoms.get_forces() / self.atoms.get_masses().reshape(-1, 1)

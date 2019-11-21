@@ -7,7 +7,7 @@ REINDEX_KEYS = ['nbr_list']
 
 TYPE_KEYS = {
     'nbr_list': torch.long,
-    'num_atoms': torch.long
+    'num_atoms': torch.long,
 }
 
 def collate_dicts(dicts):
@@ -24,9 +24,10 @@ def collate_dicts(dicts):
     # new indices for the batch: the first one is zero and the last does not matter
 
     cumulative_atoms = np.cumsum([0] + [d['num_atoms'] for d in dicts])[:-1]
+    redindex_keys = [key for key in dicts[0].keys() if key.endswith("nbr_list")]
 
     for n, d in zip(cumulative_atoms, dicts):
-        for key in REINDEX_KEYS:
+        for key in redindex_keys:
             if key in d:
                 d[key] = d[key] + int(n)
 

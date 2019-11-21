@@ -14,15 +14,17 @@ from nff.md.utils import NeuralMDLogger, write_traj
 from nff.io.ase import NeuralFF
 
 DEFAULTNVEPARAMS = {
-    'T_init': 300.0, 
-    'time_step': 0.5, 
-    'thermostat': VelocityVerlet,  # or Langevin or NPT or NVT or Thermodynamic Integration
-    'steps': 100,
-    'save_frequency': 20,
-    'nbr_list_update_freq': 50,
+    'T_init': 120.0, 
+#     'thermostat': NoseHoover,   # or Langevin or NPT or NVT or Thermodynamic Integration
+#     'thermostat_params': {'timestep': 0.5 * units.fs, "temperature": 120.0 * units.kB,  "ttime": 20.0}
+    'thermostat': VelocityVerlet,  
+    'thermostat_params': {'timestep': 0.5 * units.fs},
+    'nbr_list_update_freq': 20,
+    'steps': 3000,
+    'save_frequency': 10,
     'thermo_filename': './thermo.log', 
     'traj_filename': './atom.traj',
-    'skip': 50
+    'skip': 0
 }
 
 
@@ -45,8 +47,7 @@ class Dynamics:
         # set thermostats 
         integrator = self.mdparam['thermostat']
         
-        self.integrator = integrator(self.atomsbatch, 
-                                     self.mdparam['time_step'] * units.fs)
+        self.integrator = integrator(self.atomsbatch, **self.mdparam['thermostat_params'])
         
         # attach trajectory dump 
         self.traj = Trajectory(self.mdparam['traj_filename'], 'w', self.atomsbatch)
@@ -59,13 +60,17 @@ class Dynamics:
                                         mode='a'), interval=mdparam['save_frequency'])
     
     def run(self):
+        # 
+        epochs = int(self.mdparam['steps'] // self.mdparam['nbr_list_update_freq'])
         
-        self.integrator.run(self.mdparam['steps'])
+        for step in range(epochs):
+            self.integrator.run(self.mdparam['nbr_list_update_freq'])
+            self.atomsbatch.update_nbr_list()
 
         self.traj.close()
         
     
-    def save_as_xyz(self):
+    def save_as_xyz(self, filename='./traj.xyz'):
         
         '''
         TODO: save time information 
@@ -77,7 +82,7 @@ class Dynamics:
         xyz = []
         
         skip = self.mdparam['skip']
-        traj = traj[skip:] if len(traj) > skip else traj
+        traj = list(traj)[skip:] if len(traj) > skip else traj
 
         for snapshot in traj:
             frames = np.concatenate([
@@ -87,4 +92,4 @@ class Dynamics:
             
             xyz.append(frames)
             
-        write_traj('./traj.xyz', np.array(xyz))
+        write_traj(filename, np.array(xyz))
