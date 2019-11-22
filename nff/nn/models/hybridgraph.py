@@ -4,7 +4,7 @@ import copy
 import torch.nn.functional as F
 
 from nff.nn.layers import Dense, GaussianSmearing
-from nff.nn.modules import GraphDis, SchNetConv, BondEnergyModule, SchNetEdgeUpdate, NodeMultiTaskReadOut
+from nff.nn.modules import SchNetConv, BondEnergyModule, SchNetEdgeUpdate, NodeMultiTaskReadOut
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphop import batch_and_sum
 from nff.nn.utils import get_default_readout

@@ -4,7 +4,7 @@ import copy
 import torch.nn.functional as F
 
 from nff.nn.layers import Dense, GaussianSmearing
-from nff.nn.modules import (GraphDis, SchNetConv, BondEnergyModule, SchNetEdgeUpdate, NodeMultiTaskReadOut,
+from nff.nn.modules import (SchNetConv, BondEnergyModule, SchNetEdgeUpdate, NodeMultiTaskReadOut,
                             AuTopologyReadOut, DoubleNodeConv, SingleNodeConv)
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphop import batch_and_sum, get_atoms_inside_cell
@@ -136,10 +136,8 @@ class SchNet(nn.Module):
         N = batch['num_atoms'].reshape(-1).tolist()
         a = batch['nbr_list']
 
-
         # offsets take care of periodic boundary conditions
         offsets = batch.get('offsets', 0)
-        xyz.requires_grad = True
         
         e = (xyz[a[:, 0]] - xyz[a[:, 1]] - offsets).pow(2).sum(1).sqrt()[:, None]
 
