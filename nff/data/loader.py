@@ -4,10 +4,10 @@ import torch
 import pdb
 from nff.data.topology import ALL_TOPOLOGY_KEYS, RE_INDEX_TOPOLOGY_KEYS
 
-REINDEX_KEYS = ['nbr_list', *RE_INDEX_TOPOLOGY_KEYS]
-
+REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', *RE_INDEX_TOPOLOGY_KEYS]
 
 TYPE_KEYS = {
+    'atoms_nbr_list': torch.long,
     'nbr_list': torch.long,
     'num_atoms': torch.long,
     **{key: torch.long for key in ALL_TOPOLOGY_KEYS}}
@@ -26,10 +26,9 @@ def collate_dicts(dicts):
     # new indices for the batch: the first one is zero and the last does not matter
 
     cumulative_atoms = np.cumsum([0] + [d['num_atoms'] for d in dicts])[:-1]
-    redindex_keys = [key for key in list(dicts[0].keys()) if key.endswith("nbr_list")]
 
     for n, d in zip(cumulative_atoms, dicts):
-        for key in redindex_keys:
+        for key in REINDEX_KEYS:
             if key in d:
                 d[key] = d[key] + int(n)
 
