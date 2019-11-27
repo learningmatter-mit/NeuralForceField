@@ -175,6 +175,8 @@ class Trainer:
 
         for h in self.hooks:
             h.on_train_begin(self)
+            if hasattr(h, "mini_batches"):
+                h.mini_batches = self.mini_batches
 
         try:
             for _ in range(n_epochs):
@@ -195,6 +197,7 @@ class Trainer:
 
                     results = self._model(batch)
                     loss += self.loss_fn(batch, results)
+                    self.step += 1
 
                     # update the loss self.minibatches number
                     # of times before taking a step
@@ -202,14 +205,15 @@ class Trainer:
                     if num_batches == self.mini_batches:
                         loss.backward()
                         self.optimizer.step()
-                        self.step += 1
+
+
+                        for h in self.hooks:
+                            h.on_batch_end(self, batch, results, loss)
+
                         # reset loss, num_batches, and the optimizer grad
                         loss = torch.tensor(0.0).to(device)
                         num_batches = 0
                         self.optimizer.zero_grad()
-
-                    for h in self.hooks:
-                        h.on_batch_end(self, batch, results, loss)
 
                     if self._stop:
                         break
