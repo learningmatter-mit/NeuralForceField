@@ -30,6 +30,7 @@ class LoggingHook(Hook):
         log_train_loss=True,
         log_validation_loss=True,
         log_learning_rate=True,
+        mini_batches=1,
     ):
         self.log_train_loss = log_train_loss
         self.log_validation_loss = log_validation_loss
@@ -39,7 +40,8 @@ class LoggingHook(Hook):
         self._train_loss = 0
         self._counter = 0
         self.metrics = metrics
-
+        self.mini_batches = mini_batches
+        
     def on_epoch_begin(self, trainer):
         """Log at the beginning of train epoch.
 
@@ -57,7 +59,7 @@ class LoggingHook(Hook):
     def on_batch_end(self, trainer, train_batch, result, loss):
         if self.log_train_loss:
             n_samples = self._batch_size(result)
-            self._train_loss += float(loss.data) * n_samples
+            self._train_loss += float(loss.data) * n_samples / self.mini_batches
             self._counter += n_samples
 
     def _batch_size(self, result):
@@ -99,10 +101,11 @@ class CSVHook(LoggingHook):
         log_validation_loss=True,
         log_learning_rate=True,
         every_n_epochs=1,
+        mini_batches=1,
     ):
         log_path = os.path.join(log_path, "log.csv")
         super().__init__(
-            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate
+            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate, mini_batches
         )
         self._offset = 0
         self._restart = False
@@ -211,11 +214,12 @@ class TensorboardHook(LoggingHook):
         every_n_epochs=1,
         img_every_n_epochs=10,
         log_histogram=False,
+        mini_batches=1
     ):
         from tensorboardX import SummaryWriter
 
         super().__init__(
-            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate
+            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate, mini_batches
         )
         self.writer = SummaryWriter(self.log_path)
         self.every_n_epochs = every_n_epochs
@@ -310,11 +314,12 @@ class PrintingHook(LoggingHook):
         every_n_epochs=1,
         separator=' ',
         time_strf=r'%Y-%m-%d %H:%M:%S',
-        str_format=r'{1:>{0}}'
+        str_format=r'{1:>{0}}',
+        mini_batches=1
     ):
         log_path = os.path.join(log_path, "log_human_read.csv")
         super().__init__(
-            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate
+            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate, mini_batches
         )
 
         self.every_n_epochs = every_n_epochs
