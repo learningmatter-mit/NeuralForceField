@@ -1,3 +1,5 @@
+"""Summary
+"""
 import numpy as np
 
 import torch
@@ -7,7 +9,8 @@ from torch.autograd.gradcheck import zero_gradients
 
 def compute_jacobian(inputs, output, device):
     """
-        Compute Jacobians 
+    Compute Jacobians 
+    
     Args:
         inputs (torch.Tensor): size (N_in, )
         output (torch.Tensor): size (N_in, N_out, )
@@ -72,32 +75,22 @@ def compute_hess(inputs, output, device):
     
     return hess
 
-def neural_hess(xyz, r, model, device, bond_adj=None, bond_len=None):
-    """Compute Hessians for Net() model
 
+def get_schnet_hessians(batch, model, device=0):
+    """Get Hessians from schnet models 
+    
     Args:
-        xyz (torch.Tensor): xyz coorindates of dim (N_batch, N_atom, 3)
-        r (torch.Tensor): atomic number Tensor
-        model (callable): Net()
-        device (integer): integer
-        bond_adj (None, optional): long tensor of dim (N_bond, 2)
-        bond_len (None, optional): float tensor (N_bond, 1)
-    
-    Returns:
-        torch.Tensor: 3N_atom, 3N_atom, 1
+        batch (dict): batch of data
+        model (TYPE): Description
+        device (int, optional): Description
     """
-    assert len(xyz.shape) == 3
-    assert len(r.shape) == 2
-    assert xyz.shape[0] == r.shape[0]
-    
-    N_atom = xyz.shape[1]
-    
-    xyz_reshape = xyz.reshape(-1, N_atom * 3)
+    N_atom = batch['nxyz'].shape[0]
+    xyz_reshape = batch["nxyz"][:, 1:].reshape(1, N_atom * 3)
     xyz_reshape.requires_grad = True
+    xyz_input = xyz_reshape.reshape(N_atom, 3)
     
-    xyz_input = xyz_reshape.reshape(-1, N_atom, 3)
-    U = model(r=r, xyz=xyz_input, bond_len=bond_len, bond_adj=bond_adj)
+    r, N, xyz = model.convolve(batch, xyz_input)
+    energy = model.atomwisereadout.readout["energy"](r).sum()
+    hess = compute_hess(inputs=xyz_reshape, output=energy, device=device)
 
-    hess = compute_hess(inputs=xyz_reshape, output=U, device=device)
-    
     return hess
