@@ -26,6 +26,7 @@ class AtomsBatch(Atoms):
         *args,
         props={},
         cutoff=DEFAULT_CUTOFF,
+        nbr_torch=False,
         **kwargs
     ):
         """
@@ -42,6 +43,7 @@ class AtomsBatch(Atoms):
         self.props = props
         self.nbr_list = props.get('nbr_list', None)
         self.offsets = props.get('offsets', None)
+        self.nbr_torch = nbr_torch
         self.num_atoms = props.get('num_atoms', len(self))
         self.cutoff = cutoff
 
@@ -89,7 +91,11 @@ class AtomsBatch(Atoms):
             nxyz (torch.Tensor)
         """
 
-        edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff)
+        if self.nbr_torch:
+            edge_from, edge_to, offsets = torch_nbr_list(self, cutoff, device=self.device)
+        else:
+            edge_from, edge_to, offsets = neighbor_list('ijS', self, cutoff)
+
         nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         # torch.sparse has no storage yet.
         #offsets = offsets.dot(self.get_cell())
