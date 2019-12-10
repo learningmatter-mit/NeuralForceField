@@ -44,7 +44,7 @@ class TI:
             modelparams['n_convolutions'] = 3
             modelparams['n_convolutions'] = 3
             modelparams['cutoff'] = 3
-            thermo_int = GraphConvIntergation(modelparams)
+            thermo_int = GraphConvIntegration(modelparams)
 
             calc = NeuralFF(model=thermo_int, device=1)
 

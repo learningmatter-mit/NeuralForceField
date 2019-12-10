@@ -10,7 +10,7 @@ from nff.nn.graphop import batch_and_sum, get_atoms_inside_cell
 from nff.nn.utils import get_default_readout
 
 
-class GraphConvIntergation(nn.Module):
+class GraphConvIntegration(nn.Module):
 
     """SchNet with optional aggr_weight for thermodynamic intergration
     

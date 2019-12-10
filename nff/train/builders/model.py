@@ -5,7 +5,7 @@ import os
 import numpy as np
 import torch
 from nff.nn.models.schnet import SchNet, SchNetAuTopology, AuTopology
-from nff.nn.models.hybridgraph import HyBridGraphConv
+from nff.nn.models.hybridgraph import HybridGraphConv
 
 PARAMS_TYPE = {"SchNet":
                {

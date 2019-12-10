@@ -11,7 +11,7 @@ from nff.nn.utils import get_default_readout
 
 from nff.utils.scatter import scatter_add
 
-class HyBridGraphConv(nn.Module):
+class HybridGraphConv(nn.Module):
 
     def __init__(self, modelparams):
         super().__init__()
