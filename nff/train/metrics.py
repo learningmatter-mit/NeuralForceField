@@ -33,8 +33,6 @@ class Metric:
     def add_batch(self, batch, results):
         """ Add a batch to calculate the metric on """
 
-        # pdb.set_trace()
-
         y = batch[self.target]
         yp = results[self.target]
 

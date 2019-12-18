@@ -29,10 +29,10 @@ class NoseHoover(MolecularDynamics):
         self.T = temperature
         self.targeEkin = 0.5 * (3.0 * self.Natom ) * self.T
         self.ttime = ttime #* units.fs
-        self.Q =  3.0 * self.Natom * self.T * self.ttime * self.dt
+        self.Q =  3.0 * self.Natom * self.T * (self.ttime * self.dt) ** 2
         self.zeta = 0.0
     
-    def step(self, f):
+    def step(self, f=None):
         
         # get current acceleration and velocity: 
         accel = self.atoms.get_forces() / self.atoms.get_masses().reshape(-1, 1)

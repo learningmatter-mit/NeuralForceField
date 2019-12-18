@@ -55,7 +55,7 @@ def build_mse_loss(loss_coef, correspondence_keys=None):
             pred = results[key].view(targ.shape)
 
             # select only properties which are given
-            valid_idx = 1 - torch.isnan(targ)
+            valid_idx = torch.bitwise_not(torch.isnan(targ))
             targ = targ[valid_idx]
             pred = pred[valid_idx]
 
