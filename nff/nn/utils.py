@@ -74,7 +74,7 @@ def get_default_readout(n_atom_basis):
 
     return DEFAULT_READOUT
 
-def torch_nbr_list(atomsobject, cutoff, device='cuda:0'):
+def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
     """Pytorch implementations of nbr_list for minimum image convention, the offsets are only limited to 0, 1, -1:
     it means that no pair interactions is allowed for more than 1 periodic box length. It is so much faster than 
     neighbor_list algorithm in ase.
@@ -99,8 +99,13 @@ def torch_nbr_list(atomsobject, cutoff, device='cuda:0'):
 
     dis_sq = dis_mat.pow(2).sum(-1)
     mask = (dis_sq < cutoff ** 2) & (dis_sq != 0)
-    i, j  = mask.nonzero()[:, 0].detach().to("cpu").numpy(), mask.nonzero()[:, 1].detach().to("cpu").numpy()
 
-    offsets = offsets[mask.nonzero()[:, 0], mask.nonzero()[:, 1], :].detach().to("cpu").numpy()
+    nbr_list = mask.nonzero()
+    if directed:
+        nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
+
+    i, j  = nbr_list[:, 0].detach().to("cpu").numpy(), nbr_list[:, 1].detach().to("cpu").numpy()
+
+    offsets = offsets[nbr_list[:, 0], nbr_list[:, 1], :].detach().to("cpu").numpy()
 
     return i, j, offsets 

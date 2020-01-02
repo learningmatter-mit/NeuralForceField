@@ -46,6 +46,7 @@ class AtomsBatch(Atoms):
         self.nbr_torch = nbr_torch
         self.num_atoms = props.get('num_atoms', len(self))
         self.cutoff = cutoff
+        self.device = 0
 
     def get_nxyz(self):
         """Gets the atomic number and the positions of the atoms
@@ -75,6 +76,8 @@ class AtomsBatch(Atoms):
 
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
         self.props['num_atoms'] = torch.LongTensor([len(self)])
+
+        self.cutoff = self.props
  
         return self.props
 
@@ -92,11 +95,14 @@ class AtomsBatch(Atoms):
         """
 
         if self.nbr_torch:
-            edge_from, edge_to, offsets = torch_nbr_list(self, cutoff, device=self.device)
+            edge_from, edge_to, offsets = torch_nbr_list(self, self.cutoff, device=self.device)
+            nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         else:
-            edge_from, edge_to, offsets = neighbor_list('ijS', self, cutoff)
+            edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
+            nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
+            offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]].detach().cpu().numpy()
+            nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
-        nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         # torch.sparse has no storage yet.
         #offsets = offsets.dot(self.get_cell())
         offsets = sparsify_array(offsets.dot(self.get_cell()))
@@ -195,8 +201,8 @@ class BulkPhaseMaterials(Atoms):
         return self.props
 
     def update_system_nbr_list(self, cutoff, exclude_atoms_nbr_list=True):
-        """Update neighbor list and the periodic reindexing
-            for the given Atoms object.
+        """Update undirected neighbor list and the periodic reindexing
+            for the given Atoms object.ß
 
         Args:
             cutoff (float): maximum cutoff for which atoms are
@@ -208,13 +214,13 @@ class BulkPhaseMaterials(Atoms):
             nxyz (torch.Tensor)
         """
         if self.nbr_torch:
-            edge_from, edge_to, offsets = torch_nbr_list(self, cutoff, device=self.device)
+            edge_from, edge_to, offsets = torch_nbr_list(self, self.cutoff, device=self.device)
+            nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         else:
-            edge_from, edge_to, offsets = neighbor_list('ijS', self, cutoff)
-
-        nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-        offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]]
-        nbr_list_tmp = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
+            edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
+            nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
+            offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]].numpy()
+            nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
         if exclude_atoms_nbr_list:
             offsets_mat = torch.zeros(self.get_number_of_atoms(),
@@ -224,8 +230,8 @@ class BulkPhaseMaterials(Atoms):
             atom_nbr_list_mat = torch.zeros(self.get_number_of_atoms(), 
                                             self.get_number_of_atoms()).to(torch.long)
             
-            offsets_mat[nbr_list_tmp[:, 0], nbr_list_tmp[:, 1]] = offsets
-            nbr_list_mat[nbr_list_tmp[:, 0], nbr_list_tmp[:, 1]] = 1
+            offsets_mat[nbr_list[:, 0], nbr_list[:, 1]] = offsets
+            nbr_list_mat[nbr_list[:, 0], nbr_list[:, 1]] = 1
             atom_nbr_list_mat[self.atoms_nbr_list[:, 0], self.atoms_nbr_list[:, 1]] = 1
 
             nbr_list_mat = nbr_list_mat - atom_nbr_list_mat
@@ -233,7 +239,7 @@ class BulkPhaseMaterials(Atoms):
             offsets = offsets_mat[nbr_list[:,0], nbr_list[:,1], :]
 
         self.nbr_list = nbr_list
-        self.offsets = sparsify_array(offsets.numpy().dot(self.get_cell()))
+        self.offsets = sparsify_array(offsets.dot(self.get_cell()))
         
     def get_list_atoms(self):
 
@@ -263,7 +269,7 @@ class BulkPhaseMaterials(Atoms):
         for i, atoms in enumerate(Atoms_list):
             edge_from, edge_to = neighbor_list('ij', atoms, cutoff)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
+            # nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
             intra_nbr_list.append(
                 self.props['num_subgraphs'][: i].sum() + nbr_list)
 
