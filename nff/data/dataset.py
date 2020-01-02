@@ -122,7 +122,7 @@ class Dataset(TorchDataset):
 
         return props
 
-    def generate_neighbor_list(self, cutoff):
+    def generate_neighbor_list(self, cutoff, undirected=True):
         """Generates a neighbor list for each one of the atoms in the dataset.
             By default, does not consider periodic boundary conditions.
 
@@ -130,7 +130,7 @@ class Dataset(TorchDataset):
             cutoff (float): distance up to which atoms are considered bonded.
         """
         self.props['nbr_list'] = [
-            get_neighbor_list(nxyz[:, 1:4], cutoff)
+            get_neighbor_list(nxyz[:, 1:4], cutoff, undirected)
             for nxyz in self.props['nxyz']
         ]
 

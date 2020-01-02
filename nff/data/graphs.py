@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 
-def get_neighbor_list(xyz, cutoff=5):
+def get_neighbor_list(xyz, cutoff=5, undirected=True):
     """Get neighbor list from xyz positions of atoms.
 
     Args:
@@ -26,6 +26,9 @@ def get_neighbor_list(xyz, cutoff=5):
     mask = (dist <= cutoff)
     mask[np.diag_indices(n)] = 0
     nbr_list = mask.nonzero()
+
+    if undirected:
+        nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
     return nbr_list
 
