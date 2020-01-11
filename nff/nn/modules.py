@@ -408,27 +408,42 @@ class AuTopologyReadOut(nn.Module):
         trainable = multitaskdict["trainable_prior"]
         Fr = multitaskdict["Fr"]
         Lh = multitaskdict["Lh"]
-        bond_terms = multitaskdict.get("bond_terms", ["morse"])
-        angle_terms =  multitaskdict.get("angle_terms", ['harmonic'])  # harmonic and/or cubic and/or quartic
-        dihedral_terms = multitaskdict.get("dihedral_terms", ['OPLS'])  # OPLS and/or multiharmonic
-        improper_terms = multitaskdict.get("improper_terms", ['harmonic'])  # harmonic
-        pair_terms = multitaskdict.get("pair_terms", ['LJ'])  # coulomb and/or LJ and/or induced_dipole
+        # bond_terms = multitaskdict.get("bond_terms", ["morse"])
+        # angle_terms =  multitaskdict.get("angle_terms", ['harmonic'])  # harmonic and/or cubic and/or quartic
+        # dihedral_terms = multitaskdict.get("dihedral_terms", ['OPLS'])  # OPLS and/or multiharmonic
+        # improper_terms = multitaskdict.get("improper_terms", ['harmonic'])  # harmonic
+        # pair_terms = multitaskdict.get("pair_terms", ['LJ'])  # coulomb and/or LJ and/or induced_dipole
         autopology_keys = multitaskdict["output_keys"]
 
-
-        self.terms = {
-            'bond': bond_terms,
-            'angle': angle_terms,
-            'dihedral': dihedral_terms,
-            'improper': improper_terms,
-            'pair': pair_terms
+        default_terms_dict = {
+            "bond_terms": ["morse"],
+            "angle_terms": ["harmonic"],
+            "dihedral_terms": ["OPLS"],
+            "improper_terms": ["harmonic"],
+            "bond_terms": ["LJ"]
         }
+
+
+        # self.terms = {
+        #     'bond': bond_terms,
+        #     'angle': angle_terms,
+        #     'dihedral': dihedral_terms,
+        #     'improper': improper_terms,
+        #     'pair': pair_terms
+        # }
+        self.terms = {}
+
+        # remove terms that is not included 
+        for top in ['bond', 'angle', 'dihedral', 'improper', 'pair']:
+            if top + '_terms' in multitaskdict.keys():
+                self.terms[top] = multitaskdict.get(top + '_terms', default_terms_dict[top + '_terms'])
 
 
         topologynet = {key: {} for key in autopology_keys}
         for key in autopology_keys:
             for top in self.terms.keys():
-                topologynet[key][top] = TopologyNet[top](Fr, Lh, self.terms[top], trainable=trainable)
+                if top + '_terms' in multitaskdict:
+                    topologynet[key][top] = TopologyNet[top](Fr, Lh, self.terms[top], trainable=trainable)
 
 
         # module dictionary of the form {"energy_0": {"bond": BondNet0, "angle": AngletNet0},
