@@ -76,8 +76,6 @@ class AtomsBatch(Atoms):
 
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
         self.props['num_atoms'] = torch.LongTensor([len(self)])
-
-        self.cutoff = self.props
  
         return self.props
 
