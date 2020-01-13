@@ -8,7 +8,6 @@ from ase.calculators.calculator import Calculator, all_changes
 
 import nff.utils.constants as const
 from nff.nn.utils import torch_nbr_list
-from nff.train import load_model, evaluate
 from nff.utils.cuda import batch_to
 from nff.data.sparse import sparsify_array
 
@@ -359,5 +358,5 @@ class NeuralFF(Calculator):
         device='cuda',
         **kwargs
     ):
-        model = load_model(model_path)
+        model = nff.train.builders.models.load_model(model_path)
         return cls(model, device, **kwargs)
