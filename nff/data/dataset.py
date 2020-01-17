@@ -1,18 +1,20 @@
+"""Summary
+"""
 import torch
 import numbers
 import numpy as np
+import copy
+import itertools
+import nff.utils.constants as const
 from copy import deepcopy
 from collections.abc import Iterable
 from sklearn.utils import shuffle as skshuffle
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset as TorchDataset
-# from nff.data import get_neighbor_list, get_bond_list
 from nff.data.sparse import sparsify_tensor
-import nff.utils.constants as const
-import copy
-import itertools
 from nff.data.topology import update_props_topologies
-from nff.data.graphs import get_neighbor_list
+from nff.data.graphs import reconstruct_atoms
+from nff.io import AtomsBatch
 
 
 class Dataset(TorchDataset):
@@ -67,13 +69,33 @@ class Dataset(TorchDataset):
         self.to_units('kcal/mol')
 
     def __len__(self):
+        """Summary
+
+        Returns:
+            TYPE: Description
+        """
         return len(self.props['nxyz'])
 
     def __getitem__(self, idx):
+        """Summary
+
+        Args:
+            idx (TYPE): Description
+
+        Returns:
+            TYPE: Description
+        """
         return {key: val[idx] for key, val in self.props.items()}
 
     def __add__(self, other):
+        """Summary
 
+        Args:
+            other (TYPE): Description
+
+        Returns:
+            TYPE: Description
+        """
         if other.units != self.units:
             other = other.copy().to_units(self.units)
 
@@ -83,7 +105,13 @@ class Dataset(TorchDataset):
 
     def _check_dictionary(self, props):
         """Check the dictionary or properties to see if it has the
-            specified format.
+        specified format.
+
+        Args:
+            props (TYPE): Description
+
+        Returns:
+            TYPE: Description
         """
 
         assert 'nxyz' in props.keys()
@@ -128,6 +156,10 @@ class Dataset(TorchDataset):
 
         Args:
             cutoff (float): distance up to which atoms are considered bonded.
+            undirected (bool, optional): Description
+
+        Returns:
+            TYPE: Description
         """
         self.props['nbr_list'] = [
             get_neighbor_list(nxyz[:, 1:4], cutoff, undirected)
@@ -137,7 +169,11 @@ class Dataset(TorchDataset):
         return
 
     def copy(self):
-        """Copies the current dataset"""
+        """Copies the current dataset
+
+        Returns:
+            TYPE: Description
+        """
         return Dataset(self.props, self.units)
 
     def to_units(self, target_unit):
@@ -146,6 +182,12 @@ class Dataset(TorchDataset):
 
         Args:
             target_unit (str): unit to use as final one
+
+        Returns:
+            TYPE: Description
+
+        Raises:
+            NotImplementedError: Description
         """
 
         if target_unit not in ['kcal/mol', 'atomic']:
@@ -171,33 +213,74 @@ class Dataset(TorchDataset):
         return
 
     def shuffle(self):
+        """Summary
+
+        Returns:
+            TYPE: Description
+        """
         idx = list(range(len(self)))
         reindex = skshuffle(idx)
         self.props = {key: val[reindex] for key, val in self.props.items()}
 
         return
 
-    def generate_topologies(self, bond_dic, use_1_4_pairs=True):
+    def unwrap_xyz(self, mol_dic):
+        """
+        Unwrap molecular coordinates by displacing atoms by box vectors
 
+
+        Args:
+            mol_dic (dict): dictionary of nodes of each disconnected subgraphs
+        """
+        for i in range(len(self.props['nxyz'])):
+            # makes atoms object
+            atoms = AtomsBatch(positions=self.props['nxyz'][i][:, 1:4],
+                               numbers=self.props['nxyz'][i][:, 0],
+                               cell=self.props["cell"][i],
+                               pbc=True
+                               )
+
+            # recontruct coordinates based on subgraphs index
+            if self.props['smiles']:
+                mol_idx = mol_dic[self.props['smiles'][i]]
+                atoms.set_positions(reconstruct_atoms(atoms, mol_idx))
+                nxyz = atoms.get_nxyz()
+            self.props['nxyz'][i] = torch.Tensor(nxyz)
+
+    def generate_topologies(self, bond_dic, use_1_4_pairs=True):
         """
         Generate topology for each Geom in the dataset.
+
         Args:
             bond_dic (dict): dictionary of bond lists for each smiles
             use_1_4_pairs (bool): consider 1-4 pairs when generating non-bonded neighbor list
-        Returns:
-            None
         """
-
         # use the bond list to generate topologies for the props
-        new_props = update_props_topologies(props=self.props, bond_dic=bond_dic, use_1_4_pairs=use_1_4_pairs)
+        new_props = update_props_topologies(
+            props=self.props, bond_dic=bond_dic, use_1_4_pairs=use_1_4_pairs)
         self.props = new_props
 
-
     def save(self, path):
+        """Summary
+
+        Args:
+            path (TYPE): Description
+        """
         torch.save(self, path)
 
     @classmethod
     def from_file(cls, path):
+        """Summary
+
+        Args:
+            path (TYPE): Description
+
+        Returns:
+            TYPE: Description
+
+        Raises:
+            TypeError: Description
+        """
         obj = torch.load(path)
         if isinstance(obj, cls):
             return obj
@@ -214,6 +297,7 @@ def force_to_energy_grad(dataset):
         property preceding it. Modifies the database in-place.
 
     Args:
+        dataset (TYPE): Description
         dataset (nff.data.Dataset)
 
     Returns:
@@ -240,6 +324,9 @@ def to_tensor(x, stack=False):
 
     Returns:
         torch.Tensor or list, depending on the type of x
+
+    Raises:
+        TypeError: Description
     """
 
     # a single number should be a list
@@ -251,7 +338,6 @@ def to_tensor(x, stack=False):
 
     if isinstance(x, torch.Tensor):
         return x
-
 
     # all objects in x are tensors
     if isinstance(x, list) and all([isinstance(y, torch.Tensor) for y in x]):
@@ -297,6 +383,7 @@ def concatenate_dict(*dicts):
         the dictionaries lacking the key will have that key replaced by None.
 
     Args:
+        *dicts: Description
         *dicts (any number of dictionaries)
             Example:
                 dict_1 = {
@@ -308,6 +395,9 @@ def concatenate_dict(*dicts):
                     'energy': [...]
                 }
                 dicts = [dict_1, dict_2]
+
+    Returns:
+        TYPE: Description
 
     """
 
@@ -350,7 +440,14 @@ def concatenate_dict(*dicts):
 
 def split_train_test(dataset, test_size=0.2):
     """Splits the current dataset in two, one for training and
-        another for testing.
+    another for testing.
+
+    Args:
+        dataset (TYPE): Description
+        test_size (float, optional): Description
+
+    Returns:
+        TYPE: Description
     """
 
     idx = list(range(len(dataset)))
@@ -374,9 +471,17 @@ def split_train_test(dataset, test_size=0.2):
 
 
 def split_train_validation_test(dataset, val_size=0.2, test_size=0.2):
+    """Summary
 
+    Args:
+        dataset (TYPE): Description
+        val_size (float, optional): Description
+        test_size (float, optional): Description
+
+    Returns:
+        TYPE: Description
+    """
     train, validation = split_train_test(dataset, test_size=val_size)
     train, test = split_train_test(train, test_size=test_size / (1 - val_size))
 
     return train, validation, test
-
