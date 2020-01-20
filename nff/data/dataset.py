@@ -345,7 +345,7 @@ def to_tensor(x, stack=False):
         # list of tensors with zero or one effective dimension
         # flatten the tensor
 
-        if all([len(y.shape) <= 1 for y in x]):
+        if all([len(y.shape) < 1 for y in x]):
             return torch.cat([y.view(-1) for y in x], dim=0)
 
         elif stack:
@@ -452,7 +452,7 @@ def split_train_test(dataset, test_size=0.2):
 
     idx = list(range(len(dataset)))
     idx_train, idx_test = train_test_split(idx, test_size=test_size)
-
+    
     props = {key: [val[i] for i in idx_train]
              for key, val in dataset.props.items()}
 

@@ -18,7 +18,19 @@ PARAMS_TYPE = {"SchNet":
                    'trainable_gauss': bool,
                    'box_size': np.array
                },
-
+               "HybridGraphConv":
+               {
+                   'n_atom_basis': int,
+                   'n_filters': int,
+                   'n_gaussians': int,
+                   'mol_n_convolutions': int,
+                   'mol_n_cutoff': float,
+                   'sys_n_convolutions': int,
+                   'sys_n_cutoff': float,
+                   'V_ex_power': int,
+                   'V_ex_sigma': float,
+                   'trainable_gauss': bool
+               },
                "AuTopology":
                {
                   "n_features": int,
@@ -51,6 +63,7 @@ MODEL_DICT = {
     "SchNet": SchNet,
     "AuTopology": AuTopology,
     "SchNetAuTopology": SchNetAuTopology,
+    "HybridGraphConv": HybridGraphConv,
 }
 
 
