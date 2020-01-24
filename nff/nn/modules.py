@@ -20,6 +20,8 @@ import pdb
 EPSILON = 1e-15
 TOPS = ['bond', 'angle', 'dihedral', 'improper', 'pair']
 
+DEFAULT_BONDPRIOR_PARAM = {'k': 20.0}
+
 
 class ZeroNet(torch.nn.Module):
     """
@@ -809,22 +811,34 @@ class NodeMultiTaskReadOut(nn.Module):
         return predict_dict
 
 
-class BondEnergyModule(nn.Module):
+class BondPrior(torch.nn.Module):
 
-    def __init__(self, batch=True):
-        super().__init__()
-
-    def forward(self, xyz, bond_adj, bond_len, bond_par):
-        e = (
-                    xyz[bond_adj[:, 0]] - xyz[bond_adj[:, 1]]
-            ).pow(2).sum(1).sqrt()[:, None]
-
-        ebond = bond_par * (e - bond_len) ** 2
-        energy = 0.5 * scatter_add(src=ebond, index=bond_adj[:, 0], dim=0, dim_size=xyz.shape[0])
-        energy += 0.5 * scatter_add(src=ebond, index=bond_adj[:, 1], dim=0, dim_size=xyz.shape[0])
-
-        return energy
-
+    def __init__(self, modelparams=DEFAULT_BONDPRIOR_PARAM):
+        torch.nn.Module.__init__(self)
+        self.k = modelparams['k']
+        
+    def forward(self, batch):
+        
+        result = {}
+        
+        num_bonds = batch["num_bonds"].tolist()
+        
+        xyz = batch['nxyz'][:, 1:4]
+        xyz.requires_grad = True
+        bond_list = batch["bonds"]
+        
+        r_0 = batch['bond_len'].squeeze()
+        
+        r = (xyz[bond_list[:, 0]] - xyz[bond_list[:, 1]]).pow(2).sum(-1).sqrt()
+        
+        e = self.k * ( r - r_0).pow(2)
+        
+        E = torch.stack([e.sum(0) for e in torch.split(e, num_bonds)])
+        
+        result['energy'] = E.sum()
+        result['energy_grad'] = compute_grad(inputs=xyz, output=E)
+        
+        return result
 
 
 # Test
