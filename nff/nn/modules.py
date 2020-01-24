@@ -420,9 +420,8 @@ class AuTopologyReadOut(nn.Module):
             "angle_terms": ["harmonic"],
             "dihedral_terms": ["OPLS"],
             "improper_terms": ["harmonic"],
-            "bond_terms": ["LJ"]
+            "pair_terms": ["LJ", "coulombs"]
         }
-
 
         # self.terms = {
         #     'bond': bond_terms,
