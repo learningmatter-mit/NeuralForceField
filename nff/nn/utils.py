@@ -90,7 +90,7 @@ def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
         i, j, cutoff: just like ase.neighborlist.neighbor_list
     
     """
-    xyz = torch.Tensor(atomsobject.get_positions() ).to(device)
+    xyz = torch.Tensor(atomsobject.get_positions(wrap=True) ).to(device)
     dis_mat = xyz[None, :, :] - xyz[:, None, :]
     cell_dim = torch.Tensor(atomsobject.get_cell()).diag().to(device)
 
