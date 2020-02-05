@@ -427,15 +427,31 @@ def concatenate_dict(*dicts):
     for key in keys:
         # flatten list of values
         values = []
+        old_values = values_per_dict[0]
         for num_values, d in zip(values_per_dict, dicts):
             # if the dictionary does not have that key, we replace that with None
             val = d.get(key, [None] * num_values)
-            values.append([val] if num_values == 1 else val)
+            if type(val) is list and val == [None]:
+                val = None
+            if (hasattr(val, '__len__') and len(val) == 1) or (num_values == 1 and old_values != 1):
+                values.append(val)
+            else:
+                values.append([val] if num_values == 1 else val)
 
-        values = [subitem for sublist in values for subitem in sublist]
-        joint_dict[key] = values
 
-    return joint_dict
+            old_values = num_values
+
+
+        new_values = []
+        subitem_0 = values[0][0]
+        for i, sublist in enumerate(values):
+            for subitem in sublist:
+                if type(subitem) is torch.Tensor: 
+                    new_values.append(subitem.reshape(-1, *subitem_0.shape[1:] ))
+                else:
+                    new_values.append(subitem)
+
+        joint_dict[key] = new_values
 
 
 def split_train_test(dataset, test_size=0.2):
