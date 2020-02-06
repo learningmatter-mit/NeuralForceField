@@ -428,15 +428,13 @@ def concatenate_dict(*dicts):
         return value
 
     # we have to see how many values the properties of each dictionary has.
-    values_per_dict = [values_len(d) for d in dicts]
+    values_per_dict = [get_length_of_values(d) for d in dicts]
 
     # creating the joint dicionary
     joint_dict = {}
     for key in keys:
         # flatten list of values
         values = []
-        import pdb
-        pdb.set_trace()
         old_values = values_per_dict[0]
         for num_values, d in zip(values_per_dict, dicts):
             # if the dictionary does not have that key, we replace that with None
