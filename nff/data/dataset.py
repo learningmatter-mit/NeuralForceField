@@ -406,16 +406,27 @@ def concatenate_dict(*dicts):
 
     keys = set(sum([list(d.keys()) for d in dicts], []))
 
-    def values_len(dict_):
-        if any([isinstance(item, numbers.Number) for item in d.values()]):
-            return 1
-
-        lists = [item for item in d.values() if isinstance(item, list)]
-        if len(lists) > 0:
-            return min([len(l) for l in lists])
-
+    def get_length(value):
+        if isinstance(value, list):
+            return len(value)
         return 1
-    
+
+    def get_length_of_values(dict_):
+        return min([get_length(v) for v in dict_.values()])
+
+    def flatten_val(value):
+        """Given a value, which can be a number, a list or
+            a torch.Tensor, return its flattened version
+            to be appended to a list of values
+        """
+        if isinstance(value, list):
+            return value
+
+        elif get_length(value) == 1:
+            return [value]
+        
+        return value
+
     # we have to see how many values the properties of each dictionary has.
     values_per_dict = [values_len(d) for d in dicts]
 
@@ -424,12 +435,16 @@ def concatenate_dict(*dicts):
     for key in keys:
         # flatten list of values
         values = []
+        import pdb
+        pdb.set_trace()
         old_values = values_per_dict[0]
         for num_values, d in zip(values_per_dict, dicts):
             # if the dictionary does not have that key, we replace that with None
-            val = d.get(key, [None] * num_values)
-            if type(val) is list and val == [None]:
-                val = None
+            val = d.get(
+                key,
+                [None] * num_values if num_values > 1 else None
+            )
+
             if (hasattr(val, '__len__') and len(val) == 1) or (num_values == 1 and old_values != 1):
                 values.append(val)
             else:
