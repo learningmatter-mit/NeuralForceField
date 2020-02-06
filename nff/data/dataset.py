@@ -406,21 +406,18 @@ def concatenate_dict(*dicts):
 
     keys = set(sum([list(d.keys()) for d in dicts], []))
 
-    # we have to see how many values the properties of each dictionary has.
-    values_per_dict = []
-    for d in dicts:
+    def values_len(dict_):
         if any([isinstance(item, numbers.Number) for item in d.values()]):
-            num_values = 1
+            return 1
 
-        else:
-            lists = [item for item in d.values() if isinstance(item, list)]
+        lists = [item for item in d.values() if isinstance(item, list)]
+        if len(lists) > 0:
+            return min([len(l) for l in lists])
 
-            if len(lists) > 0:
-                num_values = min([len(l) for l in lists])
-            else:
-                num_values = 1
-
-        values_per_dict.append(num_values)
+        return 1
+    
+    # we have to see how many values the properties of each dictionary has.
+    values_per_dict = [values_len(d) for d in dicts]
 
     # creating the joint dicionary
     joint_dict = {}
@@ -438,7 +435,6 @@ def concatenate_dict(*dicts):
             else:
                 values.append([val] if num_values == 1 else val)
 
-
             old_values = num_values
 
 
@@ -452,6 +448,8 @@ def concatenate_dict(*dicts):
                     new_values.append(subitem)
 
         joint_dict[key] = new_values
+
+    return joint_dict
 
 
 def split_train_test(dataset, test_size=0.2):
