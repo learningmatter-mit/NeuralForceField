@@ -1,14 +1,17 @@
+import os
 import unittest
 import numpy as np
 import torch
 from nff.data.dataset import Dataset, concatenate_dict 
 from nff.data.stats import remove_dataset_outliers
 
+NFF_PATH = '../../../'
+DATASET_PATH = os.path.join(NFF_PATH, 'tutorials/data/dataset.pth.tar')
 
 class TestFunctions(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.dataset = Dataset.from_file('../../tutorials/data/dataset.pth.tar')
+        self.dataset = Dataset.from_file(DATASET_PATH)
 
     def test_concatenate(self):
         dict_1 = self.dataset[0]
@@ -19,11 +22,13 @@ class TestFunctions(unittest.TestCase):
         print(concat_dict['energy'])
         print(concat_dict['smiles'])
 
+    
+
 
 class TestStats(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.dataset = Dataset.from_file('../../tutorials/data/dataset.pth.tar')
+        self.dataset = Dataset.from_file(DATASET_PATH)
 
     def test_remove_outliers(self):
         TEST_KEY = 'energy'
