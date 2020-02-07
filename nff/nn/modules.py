@@ -20,6 +20,8 @@ import pdb
 EPSILON = 1e-15
 TOPS = ['bond', 'angle', 'dihedral', 'improper', 'pair']
 
+DEFAULT_BONDPRIOR_PARAM = {'k': 20.0}
+
 
 class ZeroNet(torch.nn.Module):
     """
@@ -408,27 +410,41 @@ class AuTopologyReadOut(nn.Module):
         trainable = multitaskdict["trainable_prior"]
         Fr = multitaskdict["Fr"]
         Lh = multitaskdict["Lh"]
-        bond_terms = multitaskdict.get("bond_terms", ["morse"])
-        angle_terms =  multitaskdict.get("angle_terms", ['harmonic'])  # harmonic and/or cubic and/or quartic
-        dihedral_terms = multitaskdict.get("dihedral_terms", ['OPLS'])  # OPLS and/or multiharmonic
-        improper_terms = multitaskdict.get("improper_terms", ['harmonic'])  # harmonic
-        pair_terms = multitaskdict.get("pair_terms", ['LJ'])  # coulomb and/or LJ and/or induced_dipole
+        # bond_terms = multitaskdict.get("bond_terms", ["morse"])
+        # angle_terms =  multitaskdict.get("angle_terms", ['harmonic'])  # harmonic and/or cubic and/or quartic
+        # dihedral_terms = multitaskdict.get("dihedral_terms", ['OPLS'])  # OPLS and/or multiharmonic
+        # improper_terms = multitaskdict.get("improper_terms", ['harmonic'])  # harmonic
+        # pair_terms = multitaskdict.get("pair_terms", ['LJ'])  # coulomb and/or LJ and/or induced_dipole
         autopology_keys = multitaskdict["output_keys"]
 
-
-        self.terms = {
-            'bond': bond_terms,
-            'angle': angle_terms,
-            'dihedral': dihedral_terms,
-            'improper': improper_terms,
-            'pair': pair_terms
+        default_terms_dict = {
+            "bond_terms": ["morse"],
+            "angle_terms": ["harmonic"],
+            "dihedral_terms": ["OPLS"],
+            "improper_terms": ["harmonic"],
+            "pair_terms": ["LJ", "coulombs"]
         }
+
+        # self.terms = {
+        #     'bond': bond_terms,
+        #     'angle': angle_terms,
+        #     'dihedral': dihedral_terms,
+        #     'improper': improper_terms,
+        #     'pair': pair_terms
+        # }
+        self.terms = {}
+
+        # remove terms that is not included 
+        for top in ['bond', 'angle', 'dihedral', 'improper', 'pair']:
+            if top + '_terms' in multitaskdict.keys():
+                self.terms[top] = multitaskdict.get(top + '_terms', default_terms_dict[top + '_terms'])
 
 
         topologynet = {key: {} for key in autopology_keys}
         for key in autopology_keys:
             for top in self.terms.keys():
-                topologynet[key][top] = TopologyNet[top](Fr, Lh, self.terms[top], trainable=trainable)
+                if top + '_terms' in multitaskdict:
+                    topologynet[key][top] = TopologyNet[top](Fr, Lh, self.terms[top], trainable=trainable)
 
 
         # module dictionary of the form {"energy_0": {"bond": BondNet0, "angle": AngletNet0},
@@ -498,8 +514,9 @@ class SchNetEdgeUpdate(EdgeUpdateModule):
 
 
 class SchNetConv(MessagePassingModule):
-    """The convolution layer with filter. To be merged with GraphConv class.
 
+    """The convolution layer with filter.
+    
     Attributes:
         moduledict (TYPE): Description
     """
@@ -532,15 +549,13 @@ class SchNetConv(MessagePassingModule):
             )
         })
 
-
-    def message(self, r, e, a):
-        """The message function for SchNet convoltuions
-
-
+    def message(self, r, e, a, aggr_wgt=None):
+        """The message function for SchNet convoltuions 
         Args:
             r (TYPE): node inputs
             e (TYPE): edge inputs
             a (TYPE): neighbor list
+            aggr_wgt (None, optional): Description
 
         Returns:
             TYPE: message should a pair of message and
@@ -549,6 +564,11 @@ class SchNetConv(MessagePassingModule):
         e = self.moduledict['message_edge_filter'](e)
         # convection: update
         r = self.moduledict['message_node_filter'](r)
+
+        # soft aggr if aggr_wght is provided
+        if aggr_wgt is not None:
+            r = r * aggr_wgt
+
         # combine node and edge info
         message = r[a[:, 0]] * e, r[a[:, 1]] * e  # (ri [] eij) -> rj, []: *, +, (,)
         return message
@@ -791,118 +811,34 @@ class NodeMultiTaskReadOut(nn.Module):
         return predict_dict
 
 
-class GraphDis(GeometricOperations):
-    """Compute distance matrix on the fly
+class BondPrior(torch.nn.Module):
 
-    Attributes:
-        box_size (numpy.array): Length of the box, dim = (3, )
-        cutoff (float): cutoff for convolution
-        F (int): Fr + Fe
-        Fe (int): edge feature length
-        Fr (int): node feature length
-    """
-
-    def __init__(
-            self,
-            cutoff,
-            box_size=None
-    ):
-        super(GraphDis, self).__init__()
-
-        self.cutoff = cutoff
-
-        if box_size is not None:
-            self.box_size = torch.Tensor(box_size)
-        else:
-            self.box_size = None
-
-    def get_bond_vector_matrix(self, frame):
-        """A function to compute the distance matrix
-
-        Args:
-            frame (torch.FloatTensor): coordinates of (B, N, 3)
-
-        Returns:
-            torch.FloatTensor: distance matrix of dim (B, N, N, 1)
-        """
-        device = frame.device
-
-        n_atoms = frame.shape[0]
-        frame = frame.view(-1, n_atoms, 1, 3)
-        dis_mat = frame.expand(-1, n_atoms, n_atoms, 3) \
-                  - frame.expand(-1, n_atoms, n_atoms, 3).transpose(1, 2)
-
-        if self.box_size is not None:
-            box_size = self.box_size.to(device)
-
-            # build minimum image convention
-            box_size = self.box_size
-            mask_pos = dis_mat.ge(0.5 * box_size).float()
-            mask_neg = dis_mat.lt(-0.5 * box_size).float()
-
-            # modify distance
-            dis_add = mask_neg * box_size
-            dis_sub = mask_pos * box_size
-            dis_mat = dis_mat + dis_add - dis_sub
-
-        # create cutoff mask
-
-        # compute squared distance of dim (B, N, N)
-        dis_sq = dis_mat.pow(2).sum(3)
-
-        # mask is a byte tensor of dim (B, N, N)
-        mask = (dis_sq <= self.cutoff ** 2) & (dis_sq != 0)
-
-        A = mask.unsqueeze(3).float()
-
-        # 1) PBC 2) # gradient of zero distance
-        dis_sq = dis_sq.unsqueeze(3)
-
-        # to make sure the distance is not zero
-        # otherwise there will be inf gradient
-        dis_sq = (dis_sq * A) + EPSILON
-        dis_mat = dis_sq.sqrt()
-
-        return dis_mat, A.squeeze(3)
-
-    def forward(self, xyz):
-        frame = xyz
-        e, A = self.get_bond_vector_matrix(frame=frame)
-
-        n_atoms = frame.shape[0]
-
-        #  use only upper triangular to generative undirected adjacency matrix
-        A = A * torch.ones(n_atoms, n_atoms).triu()[None, :, :].to(A.device)
-        e = e * A.unsqueeze(-1)
-
-        # compute neighbor list
-        a = A.nonzero()
-
-        # reshape distance list
-        e = e[a[:, 0], a[:, 1], a[:, 2], :].reshape(-1, 1)
-
-        # reindex neighbor list
-        a = (a[:, 0] * n_atoms)[:, None] + a[:, 1:3]
-
-        return e, a
-
-
-class BondEnergyModule(nn.Module):
-
-    def __init__(self, batch=True):
-        super().__init__()
-
-    def forward(self, xyz, bond_adj, bond_len, bond_par):
-        e = (
-                    xyz[bond_adj[:, 0]] - xyz[bond_adj[:, 1]]
-            ).pow(2).sum(1).sqrt()[:, None]
-
-        ebond = bond_par * (e - bond_len) ** 2
-        energy = 0.5 * scatter_add(src=ebond, index=bond_adj[:, 0], dim=0, dim_size=xyz.shape[0])
-        energy += 0.5 * scatter_add(src=ebond, index=bond_adj[:, 1], dim=0, dim_size=xyz.shape[0])
-
-        return energy
-
+    def __init__(self, modelparams=DEFAULT_BONDPRIOR_PARAM):
+        torch.nn.Module.__init__(self)
+        self.k = modelparams['k']
+        
+    def forward(self, batch):
+        
+        result = {}
+        
+        num_bonds = batch["num_bonds"].tolist()
+        
+        xyz = batch['nxyz'][:, 1:4]
+        xyz.requires_grad = True
+        bond_list = batch["bonds"]
+        
+        r_0 = batch['bond_len'].squeeze()
+        
+        r = (xyz[bond_list[:, 0]] - xyz[bond_list[:, 1]]).pow(2).sum(-1).sqrt()
+        
+        e = self.k * ( r - r_0).pow(2)
+        
+        E = torch.stack([e.sum(0) for e in torch.split(e, num_bonds)])
+        
+        result['energy'] = E.sum()
+        result['energy_grad'] = compute_grad(inputs=xyz, output=E)
+        
+        return result
 
 
 # Test

@@ -16,16 +16,16 @@ class MessagePassingModule(nn.Module):
     def __init__(self):
         super(MessagePassingModule, self).__init__()
 
-    def message(self, r, e, a):
-
-        # pdb.()
-
+    def message(self, r, e, a, aggr_wgt):
         # Basic message case
         assert r.shape[-1] == e.shape[-1]
         # mixing node and edge feature, multiply by default
         # possible options:
         # (ri [] eij) -> rj,
         # where []: *, +, (,), permutation....
+        if aggr_wgt is not None:
+            r = r * aggr_wgt
+
         message = r[a[:, 0]] * e, r[a[:, 1]] * e
         return message
 
@@ -40,11 +40,11 @@ class MessagePassingModule(nn.Module):
     def update(self, r):
         return r
 
-    def forward(self, r, e, a):
+    def forward(self, r, e, a, aggr_wgt=None):
 
         graph_size = r.shape[0]
-        
-        rij, rji = self.message(r, e, a)
+
+        rij, rji = self.message(r, e, a, aggr_wgt)
         # i -> j propagate
         r = self.aggregate(rij, a[:, 1], graph_size)
         # j -> i propagate

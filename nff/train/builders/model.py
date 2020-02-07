@@ -4,7 +4,8 @@
 import os
 import numpy as np
 import torch
-from nff.nn.models import SchNet, SchNetAuTopology, AuTopology
+from nff.nn.models.schnet import SchNet, SchNetAuTopology, AuTopology
+from nff.nn.models.hybridgraph import HybridGraphConv
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -17,7 +18,19 @@ PARAMS_TYPE = {"SchNet":
                    'trainable_gauss': bool,
                    'box_size': np.array
                },
-
+               "HybridGraphConv":
+               {
+                   'n_atom_basis': int,
+                   'n_filters': int,
+                   'n_gaussians': int,
+                   'mol_n_convolutions': int,
+                   'mol_n_cutoff': float,
+                   'sys_n_convolutions': int,
+                   'sys_n_cutoff': float,
+                   'V_ex_power': int,
+                   'V_ex_sigma': float,
+                   'trainable_gauss': bool
+               },
                "AuTopology":
                {
                   "n_features": int,
@@ -50,6 +63,7 @@ MODEL_DICT = {
     "SchNet": SchNet,
     "AuTopology": AuTopology,
     "SchNetAuTopology": SchNetAuTopology,
+    "HybridGraphConv": HybridGraphConv,
 }
 
 
@@ -104,8 +118,11 @@ def load_model(path):
     """
 
     if os.path.isdir(path):
-        return torch.load(os.path.join(path, 'best_model'))
+        return torch.load(
+            os.path.join(path, 'best_model'),
+            map_location='cpu'
+        )
     elif os.path.exists(path):
-        return torch.load(path)
+        return torch.load(path, map_location='cpu')
     else:
         raise FileNotFoundError('{} was not found'.format(path))
