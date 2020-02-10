@@ -16,7 +16,8 @@ PARAMS_TYPE = {"SchNet":
                    'cutoff': float,
                    'bond_par': float,
                    'trainable_gauss': bool,
-                   'box_size': np.array
+                   'box_size': np.array,
+                   'dropout_rate': float
                },
                "HybridGraphConv":
                {
