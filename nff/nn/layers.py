@@ -107,9 +107,9 @@ class Dense(nn.Linear):
         self.weight_init = weight_init
         self.bias_init = bias_init
         self.activation = activation
-        self.dropout = nn.Dropout(p=dropout_rate)
 
         super().__init__(in_features, out_features, bias)
+        self.dropout = nn.Dropout(p=dropout_rate)
 
     def reset_parameters(self):
         """

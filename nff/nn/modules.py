@@ -542,7 +542,7 @@ class SchNetConv(MessagePassingModule):
                 shifted_softplus(),
                 Dense(in_features=n_gaussians, out_features=n_filters, dropout_rate=dropout_rate)
             ),
-            'message_node_filter': Dense(in_features=n_atom_basis, out_features=n_filters, dropout_rate),
+            'message_node_filter': Dense(in_features=n_atom_basis, out_features=n_filters, dropout_rate=dropout_rate),
             'update_function': Sequential(
                 Dense(in_features=n_filters, out_features=n_atom_basis, dropout_rate=dropout_rate),
                 shifted_softplus(),
