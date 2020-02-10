@@ -8,6 +8,7 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True, submodel=N
     """Evaluate the current state of the model using a given dataloader
     """
 
+    model.eval()
     model.to(device)
 
     eval_loss = 0.0
