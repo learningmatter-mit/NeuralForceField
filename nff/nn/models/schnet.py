@@ -4,8 +4,14 @@ import copy
 import torch.nn.functional as F
 
 from nff.nn.layers import Dense, GaussianSmearing, DEFAULT_DROPOUT_RATE
-from nff.nn.modules import (SchNetConv, SchNetEdgeUpdate, NodeMultiTaskReadOut,
-                            AuTopologyReadOut, DoubleNodeConv, SingleNodeConv)
+from nff.nn.modules import (
+    SchNetConv,
+    SchNetEdgeUpdate,
+    NodeMultiTaskReadOut,
+    AuTopologyReadOut,
+    DoubleNodeConv,
+    SingleNodeConv,
+)
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphop import batch_and_sum, get_atoms_inside_cell
 from nff.nn.utils import get_default_readout
@@ -14,10 +20,7 @@ import numpy as np
 import pdb
 
 
-STRING_TO_MODULE = {
-    "double_node": DoubleNodeConv,
-    "single_node": SingleNodeConv
-}
+STRING_TO_MODULE = {"double_node": DoubleNodeConv, "single_node": SingleNodeConv}
 
 
 class SchNet(nn.Module):
@@ -76,36 +79,38 @@ class SchNet(nn.Module):
 
         nn.Module.__init__(self)
 
-        n_atom_basis = modelparams['n_atom_basis']
-        n_filters = modelparams['n_filters']
-        n_gaussians = modelparams['n_gaussians']
-        n_convolutions = modelparams['n_convolutions']
-        cutoff = modelparams['cutoff']
-        trainable_gauss = modelparams.get('trainable_gauss', False)
-        dropout_rate = modelparams.get('dropout_rate', DEFAULT_DROPOUT_RATE)
-
+        n_atom_basis = modelparams["n_atom_basis"]
+        n_filters = modelparams["n_filters"]
+        n_gaussians = modelparams["n_gaussians"]
+        n_convolutions = modelparams["n_convolutions"]
+        cutoff = modelparams["cutoff"]
+        trainable_gauss = modelparams.get("trainable_gauss", False)
+        dropout_rate = modelparams.get("dropout_rate", DEFAULT_DROPOUT_RATE)
 
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
 
-        readoutdict = modelparams.get(
-            'readoutdict', get_default_readout(n_atom_basis))
-        post_readout = modelparams.get('post_readout', None)
-
+        readoutdict = modelparams.get("readoutdict", get_default_readout(n_atom_basis))
+        post_readout = modelparams.get("post_readout", None)
 
         # convolutions
-        self.convolutions = nn.ModuleList([
-            SchNetConv(n_atom_basis=n_atom_basis,
-                       n_filters=n_filters,
-                       n_gaussians=n_gaussians,
-                       cutoff=cutoff,
-                       trainable_gauss=trainable_gauss,
-                       dropout_rate=dropout_rate)
-            for _ in range(n_convolutions)
-        ])
+        self.convolutions = nn.ModuleList(
+            [
+                SchNetConv(
+                    n_atom_basis=n_atom_basis,
+                    n_filters=n_filters,
+                    n_gaussians=n_gaussians,
+                    cutoff=cutoff,
+                    trainable_gauss=trainable_gauss,
+                    dropout_rate=dropout_rate,
+                )
+                for _ in range(n_convolutions)
+            ]
+        )
 
         # ReadOut
         self.atomwisereadout = NodeMultiTaskReadOut(
-            multitaskdict=readoutdict, post_readout=post_readout)
+            multitaskdict=readoutdict, post_readout=post_readout
+        )
         self.device = None
 
     def convolve(self, batch, xyz=None):
@@ -127,16 +132,16 @@ class SchNet(nn.Module):
         # you don't want to make a whole new one.
 
         if xyz is None:
-            xyz = batch['nxyz'][:, 1:4]
+            xyz = batch["nxyz"][:, 1:4]
             xyz.requires_grad = True
 
-        r = batch['nxyz'][:, 0]
-        N = batch['num_atoms'].reshape(-1).tolist()
-        a = batch['nbr_list']
+        r = batch["nxyz"][:, 0]
+        N = batch["num_atoms"].reshape(-1).tolist()
+        a = batch["nbr_list"]
 
         # offsets take care of periodic boundary conditions
-        offsets = batch.get('offsets', 0)
-        
+        offsets = batch.get("offsets", 0)
+
         e = (xyz[a[:, 0]] - xyz[a[:, 1]] - offsets).pow(2).sum(1).sqrt()[:, None]
 
         # ensuring image atoms have the same vectors of their corresponding
@@ -233,11 +238,9 @@ class AuTopology(nn.Module):
 
         self.atom_embed = nn.Embedding(100, n_features, padding_idx=0)
 
-        self.convolutions = nn.ModuleList([
-            STRING_TO_MODULE[conv_type](update_layers)
-            for _ in range(n_convolutions)
-        ])
-
+        self.convolutions = nn.ModuleList(
+            [STRING_TO_MODULE[conv_type](update_layers) for _ in range(n_convolutions)]
+        )
 
         Lh = modelparams["readout_hidden_nodes"]
         Fr = modelparams["n_features"]
@@ -245,7 +248,6 @@ class AuTopology(nn.Module):
 
         self.readout = AuTopologyReadOut(multitaskdict=modelparams)
         self.device = None
-
 
     def convolve(self, batch):
 
@@ -263,7 +265,7 @@ class AuTopology(nn.Module):
         # not implemented for PBC yet (?)
 
         a = batch["bonded_nbr_list"]
-        z = batch['nxyz'][:, 0]
+        z = batch["nxyz"][:, 0]
         r = self.atom_embed(z.long()).squeeze()
 
         for i, conv in enumerate(self.convolutions):
@@ -290,7 +292,7 @@ class AuTopology(nn.Module):
         # new one.
 
         if xyz is None:
-            xyz = batch['nxyz'][:, 1:4]
+            xyz = batch["nxyz"][:, 1:4]
             xyz.requires_grad = True
 
         r = self.convolve(batch)
@@ -360,17 +362,14 @@ class SchNetAuTopology(nn.Module):
         autopology_params = modelparams["autopology_params"]
         self.autopology = AuTopology(autopology_params)
 
-
         # Add some other useful attributes
         self.sorted_result_keys = modelparams["sorted_result_keys"]
         self.grad_keys = modelparams["grad_keys"]
         self.sort_results = modelparams["sort_results"]
 
-
         # Decide whether to add the autopology and/or schnet results to the final answer
         self.add_autopology = add_autopology
         self.add_schnet = add_schnet
-
 
     def transfer_to_schnet(self):
         """
@@ -384,7 +383,6 @@ class SchNetAuTopology(nn.Module):
 
         # Start adding the SchNet result to the final result
         self.add_schnet = True
-
 
     def get_sorted_results(self, pre_results, num_atoms):
 
@@ -407,27 +405,27 @@ class SchNetAuTopology(nn.Module):
         for key in self.grad_keys:
             pre_results[key] = torch.split(pre_results[key], N)
 
-
         for i in range(batch_length):
             # sort the outputs
-            sorted_energies, sorted_idx = torch.sort(torch.cat([pre_results[key][i] for key in
-                                                                self.sorted_result_keys]))
+            sorted_energies, sorted_idx = torch.sort(
+                torch.cat([pre_results[key][i] for key in self.sorted_result_keys])
+            )
 
             for index, energy_key in zip(sorted_idx, self.sorted_result_keys):
 
                 corresponding_key = self.sorted_result_keys[index]
 
                 final_results[energy_key].append(pre_results[corresponding_key][i])
-                final_results[energy_key + "_grad"].append(pre_results[corresponding_key + "_grad"][i])
+                final_results[energy_key + "_grad"].append(
+                    pre_results[corresponding_key + "_grad"][i]
+                )
 
-
-        # re-batch the outputs  
+        # re-batch the outputs
         for key in self.sorted_result_keys:
             final_results[key] = torch.stack(final_results[key])
             final_results[key + "_grad"] = torch.cat(final_results[key + "_grad"])
 
         return final_results
-
 
     def forward(self, batch):
         """
@@ -439,7 +437,6 @@ class SchNetAuTopology(nn.Module):
                 self.sorted_results_keys and self.grad_keys. 
 
         """
-
 
         # define xyz here to avoid making two graphs (one for schnet and
         # one for autopology)
@@ -466,15 +463,10 @@ class SchNetAuTopology(nn.Module):
             elif self.add_autopology and not self.add_schnet:
                 pre_results[key] = auto_results[key]
 
-
         # sort the results if necessary
         if self.sort_results:
             final_results = self.get_sorted_results(pre_results, batch["num_atoms"])
         else:
             final_results = pre_results
 
-
         return final_results
-
-
-
