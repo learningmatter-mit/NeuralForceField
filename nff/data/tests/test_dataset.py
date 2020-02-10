@@ -8,21 +8,44 @@ from nff.data.stats import remove_dataset_outliers
 NFF_PATH = '../../../'
 DATASET_PATH = os.path.join(NFF_PATH, 'tutorials/data/dataset.pth.tar')
 
-class TestFunctions(unittest.TestCase):
+class TestConcatenate(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.dataset = Dataset.from_file(DATASET_PATH)
+        self.dict_a = {
+            'a': 1,
+            'b': 2
+        }
 
-    def test_concatenate(self):
-        dict_1 = self.dataset[0]
-        dict_2 = self.dataset[1:3]
+        self.dict_b = {
+            'a': 3,
+            'b': 4
+        }
 
-        concat_dict = concatenate_dict(dict_1, dict_2)
+        self.dict_c = {
+            'a': [5, 6],
+            'b': [7, 8],
+            'c': [9, 10]
+        }
 
-        print(concat_dict['energy'])
-        print(concat_dict['smiles'])
+        self.dict_ab = {
+            'a': [1, 3],
+            'b': [2, 4],
+        }
 
-    
+        self.dict_ac = {
+            'a': [1, 5, 6],
+            'b': [2, 7, 8],
+            'c': [None, 9, 10]
+        }
+
+    def test_concat_1(self):
+        ab = concatenate_dict(self.dict_a, self.dict_b)
+        self.assertEqual(ab, self.dict_ab)
+
+    def test_concat_2(self):
+        ac = concatenate_dict(self.dict_a, self.dict_c)
+        self.assertEqual(ac, self.dict_ac)
 
 
 class TestStats(unittest.TestCase):
@@ -49,9 +72,9 @@ class TestStats(unittest.TestCase):
         assert np.max(new_array) - np.min(new_array) \
             <= 2 * std, 'range is not working'
 
-        print(mean, std)
-        print(np.mean(new_array), np.std(new_array))
-        print(np.max(new_array), np.min(new_array))
+#        print(mean, std)
+#        print(np.mean(new_array), np.std(new_array))
+#        print(np.max(new_array), np.min(new_array))
 
 if __name__ == '__main__':
     unittest.main()
