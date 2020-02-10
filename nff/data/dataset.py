@@ -408,7 +408,11 @@ def concatenate_dict(*dicts):
 
     def get_length(value):
         if isinstance(value, list):
-            return len(value)
+            if isinstance(value[0], list):
+                return 1
+            else:
+                return len(value)
+
         return 1
 
     def get_length_of_values(dict_):
@@ -435,32 +439,14 @@ def concatenate_dict(*dicts):
     for key in keys:
         # flatten list of values
         values = []
-        old_values = values_per_dict[0]
         for num_values, d in zip(values_per_dict, dicts):
-            # if the dictionary does not have that key, we replace that with None
             val = d.get(
                 key,
                 [None] * num_values if num_values > 1 else None
             )
+            values += flatten_val(val)
 
-            if (hasattr(val, '__len__') and len(val) == 1) or (num_values == 1 and old_values != 1):
-                values.append(val)
-            else:
-                values.append([val] if num_values == 1 else val)
-
-            old_values = num_values
-
-
-        new_values = []
-        subitem_0 = values[0][0]
-        for i, sublist in enumerate(values):
-            for subitem in sublist:
-                if type(subitem) is torch.Tensor: 
-                    new_values.append(subitem.reshape(-1, *subitem_0.shape[1:] ))
-                else:
-                    new_values.append(subitem)
-
-        joint_dict[key] = new_values
+        joint_dict[key] = values
 
     return joint_dict
 
