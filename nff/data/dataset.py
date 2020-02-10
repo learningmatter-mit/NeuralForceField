@@ -11,7 +11,6 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset as TorchDataset
 from nff.data.sparse import sparsify_tensor
 from nff.data.graphs import reconstruct_atoms, get_neighbor_list
-from nff.io import AtomsBatch
 
 
 class Dataset(TorchDataset):
@@ -229,6 +228,8 @@ class Dataset(TorchDataset):
         Args:
             mol_dic (dict): dictionary of nodes of each disconnected subgraphs
         """
+        from nff.io.ase import AtomsBatch
+
         for i in range(len(self.props['nxyz'])):
             # makes atoms object
             atoms = AtomsBatch(positions=self.props['nxyz'][i][:, 1:4],
