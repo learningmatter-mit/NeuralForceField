@@ -11,7 +11,7 @@ import gc
 
 from nff.utils.cuda import batch_to
 from nff.utils.scatter import compute_grad
-#from nff.train.evaluate import evaluate
+from nff.train.evaluate import evaluate
 
 MAX_EPOCHS = 100
 

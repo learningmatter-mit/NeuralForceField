@@ -4,71 +4,43 @@
 import os
 import numpy as np
 import torch
-from nff.nn.models.schnet import SchNet, SchNetAuTopology, AuTopology
+from nff.nn.models.schnet import SchNet
 from nff.nn.models.hybridgraph import HybridGraphConv
 
-PARAMS_TYPE = {"SchNet":
-               {
-                   'n_atom_basis': int,
-                   'n_filters': int,
-                   'n_gaussians': int,
-                   'n_convolutions': int,
-                   'cutoff': float,
-                   'bond_par': float,
-                   'trainable_gauss': bool,
-                   'box_size': np.array
-               },
-               "HybridGraphConv":
-               {
-                   'n_atom_basis': int,
-                   'n_filters': int,
-                   'n_gaussians': int,
-                   'mol_n_convolutions': int,
-                   'mol_n_cutoff': float,
-                   'sys_n_convolutions': int,
-                   'sys_n_cutoff': float,
-                   'V_ex_power': int,
-                   'V_ex_sigma': float,
-                   'trainable_gauss': bool
-               },
-               "AuTopology":
-               {
-                  "n_features": int,
-                  "n_convolutions": int,
-                  "conv_type": str,
-                  "conv_update_layers": list,
-                  "readout_hidden_nodes": list,
-                  "bond_terms": list,
-                  "angle_terms": list,
-                  "dihedral_terms": list,
-                  "improper_terms": list,
-                  "pair_terms": list,
-                  "output_keys": list,
-                  "trainable_prior": bool
-                },
-
-
-               "SchNetAuTopology":
-                {
-                  "autopology_params": dict,
-                  "schnet_params": dict,
-                  "sorted_result_keys": list,
-                  "grad_keys": list,
-                  "sort_results": bool,
-                }
-
-               }
+PARAMS_TYPE = {
+    "SchNet": {
+        "n_atom_basis": int,
+        "n_filters": int,
+        "n_gaussians": int,
+        "n_convolutions": int,
+        "cutoff": float,
+        "bond_par": float,
+        "trainable_gauss": bool,
+        "box_size": np.array,
+    },
+    "HybridGraphConv": {
+        "n_atom_basis": int,
+        "n_filters": int,
+        "n_gaussians": int,
+        "mol_n_convolutions": int,
+        "mol_n_cutoff": float,
+        "sys_n_convolutions": int,
+        "sys_n_cutoff": float,
+        "V_ex_power": int,
+        "V_ex_sigma": float,
+        "trainable_gauss": bool,
+    },
+}
 
 MODEL_DICT = {
     "SchNet": SchNet,
-    "AuTopology": AuTopology,
-    "SchNetAuTopology": SchNetAuTopology,
     "HybridGraphConv": HybridGraphConv,
 }
 
 
 class ParameterError(Exception):
     """Raised when a hyperparameter is of incorrect type"""
+
     pass
 
 
@@ -80,13 +52,11 @@ def check_parameters(params_type, params):
     """
     for key, val in params.items():
         if key in params_type and not isinstance(val, params_type[key]):
-            raise ParameterError(
-                '%s is not %s' % (str(key), params_type[key])
-            )
+            raise ParameterError("%s is not %s" % (str(key), params_type[key]))
 
         for model in PARAMS_TYPE.keys():
-          if key == "{}_params".format(model.lower()):
-            check_parameters(PARAMS_TYPE[model], val)
+            if key == "{}_params".format(model.lower()):
+                check_parameters(PARAMS_TYPE[model], val)
 
 
 def get_model(params, model_type="SchNet", **kwargs):
@@ -118,11 +88,8 @@ def load_model(path):
     """
 
     if os.path.isdir(path):
-        return torch.load(
-            os.path.join(path, 'best_model'),
-            map_location='cpu'
-        )
+        return torch.load(os.path.join(path, "best_model"), map_location="cpu")
     elif os.path.exists(path):
-        return torch.load(path, map_location='cpu')
+        return torch.load(path, map_location="cpu")
     else:
-        raise FileNotFoundError('{} was not found'.format(path))
+        raise FileNotFoundError("{} was not found".format(path))
