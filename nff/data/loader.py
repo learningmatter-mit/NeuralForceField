@@ -2,15 +2,14 @@ import numpy as np
 from collections.abc import Iterable
 import torch
 import pdb
-from nff.data.topology import ALL_TOPOLOGY_KEYS, RE_INDEX_TOPOLOGY_KEYS
 
-REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', *RE_INDEX_TOPOLOGY_KEYS]
+REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list']
 
 TYPE_KEYS = {
     'atoms_nbr_list': torch.long,
     'nbr_list': torch.long,
     'num_atoms': torch.long,
-    **{key: torch.long for key in ALL_TOPOLOGY_KEYS}}
+}
 
 def collate_dicts(dicts):
     """Collates dictionaries within a single batch. Automatically reindexes neighbor lists

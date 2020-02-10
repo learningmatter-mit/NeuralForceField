@@ -1,5 +1,3 @@
-"""Summary
-"""
 import torch
 import numbers
 import numpy as np
@@ -12,8 +10,7 @@ from sklearn.utils import shuffle as skshuffle
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset as TorchDataset
 from nff.data.sparse import sparsify_tensor
-from nff.data.topology import update_props_topologies
-from nff.data.graphs import reconstruct_atoms
+from nff.data.graphs import reconstruct_atoms, get_neighbor_list
 from nff.io import AtomsBatch
 
 
@@ -246,19 +243,6 @@ class Dataset(TorchDataset):
                 atoms.set_positions(reconstruct_atoms(atoms, mol_idx))
                 nxyz = atoms.get_nxyz()
             self.props['nxyz'][i] = torch.Tensor(nxyz)
-
-    def generate_topologies(self, bond_dic, use_1_4_pairs=True):
-        """
-        Generate topology for each Geom in the dataset.
-
-        Args:
-            bond_dic (dict): dictionary of bond lists for each smiles
-            use_1_4_pairs (bool): consider 1-4 pairs when generating non-bonded neighbor list
-        """
-        # use the bond list to generate topologies for the props
-        new_props = update_props_topologies(
-            props=self.props, bond_dic=bond_dic, use_1_4_pairs=use_1_4_pairs)
-        self.props = new_props
 
     def save(self, path):
         """Summary
