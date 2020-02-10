@@ -9,6 +9,7 @@ from torch.nn.init import xavier_uniform_, constant_
 
 
 zeros_initializer = partial(constant_, val=0.)
+DEFAULT_DROPOUT_RATE = 0.0
 
 
 def gaussian_smearing(distances, offset, widths, centered=False):
@@ -98,6 +99,7 @@ class Dense(nn.Linear):
         out_features,
         bias=True,
         activation=None,
+        dropout_rate=DEFAULT_DROPOUT_RATE,
         weight_init=xavier_uniform_,
         bias_init=zeros_initializer
     ):
@@ -105,6 +107,7 @@ class Dense(nn.Linear):
         self.weight_init = weight_init
         self.bias_init = bias_init
         self.activation = activation
+        self.dropout = nn.Dropout(p=dropout_rate)
 
         super().__init__(in_features, out_features, bias)
 
@@ -125,6 +128,7 @@ class Dense(nn.Linear):
             torch.Tensor: Output of the dense layer.
         """
         y = super().forward(inputs)
+        y = self.dropout(y)
         if self.activation:
             y = self.activation(y)
 

@@ -3,7 +3,7 @@ import torch.nn as nn
 import copy
 import torch.nn.functional as F
 
-from nff.nn.layers import Dense, GaussianSmearing
+from nff.nn.layers import Dense, GaussianSmearing, DEFAULT_DROPOUT_RATE
 from nff.nn.modules import (SchNetConv, SchNetEdgeUpdate, NodeMultiTaskReadOut,
                             AuTopologyReadOut, DoubleNodeConv, SingleNodeConv)
 from nff.nn.activations import shifted_softplus
@@ -67,8 +67,7 @@ class SchNet(nn.Module):
                 'cutoff': 5.0,
                 'trainable_gauss': True,
                 'readoutdict': readoutdict,    
-
-
+                'dropout_rate': 0.2
             }
 
             model = SchNet(modelparams)
@@ -83,6 +82,7 @@ class SchNet(nn.Module):
         n_convolutions = modelparams['n_convolutions']
         cutoff = modelparams['cutoff']
         trainable_gauss = modelparams.get('trainable_gauss', False)
+        dropout_rate = modelparams.get('dropout_rate', DEFAULT_DROPOUT_RATE)
 
 
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
@@ -98,7 +98,8 @@ class SchNet(nn.Module):
                        n_filters=n_filters,
                        n_gaussians=n_gaussians,
                        cutoff=cutoff,
-                       trainable_gauss=trainable_gauss)
+                       trainable_gauss=trainable_gauss,
+                       dropout_rate=dropout_rate)
             for _ in range(n_convolutions)
         ])
 
@@ -106,9 +107,6 @@ class SchNet(nn.Module):
         self.atomwisereadout = NodeMultiTaskReadOut(
             multitaskdict=readoutdict, post_readout=post_readout)
         self.device = None
-
-
-
 
     def convolve(self, batch, xyz=None):
         """
