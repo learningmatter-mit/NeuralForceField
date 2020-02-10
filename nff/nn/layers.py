@@ -128,7 +128,11 @@ class Dense(nn.Linear):
             torch.Tensor: Output of the dense layer.
         """
         y = super().forward(inputs)
-        y = self.dropout(y)
+
+        # kept for compatibility with earlier versions of nff
+        if hasattr(self, 'dropout'):
+            y = self.dropout(y)
+
         if self.activation:
             y = self.activation(y)
 
