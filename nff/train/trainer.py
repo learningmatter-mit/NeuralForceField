@@ -179,6 +179,8 @@ class Trainer:
 
         try:
             for _ in range(n_epochs):
+                self._model.train()
+
                 self.epoch += 1
 
                 for h in self.hooks:
@@ -245,6 +247,8 @@ class Trainer:
     def validate(self, device):
         """Validate the current state of the model using the validation set
         """
+
+        self._model.eval()
 
         for h in self.hooks:
             h.on_validation_begin(self)

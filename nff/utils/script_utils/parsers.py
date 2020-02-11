@@ -157,6 +157,12 @@ def add_subparsers(cmd_parser, defaults={}):
         action='store_true',
         help="If set, sets gaussians as learnable parameters (default: False)",
     )
+    schnet_parser.add_argument(
+        "--dropout_rate",
+        type=float,
+        default=0.0
+        help="Dropout rate for SchNet convolutions (default: %(default)s)",
+    )
 
     ## setup subparser structure
     cmd_subparsers = cmd_parser.add_subparsers(

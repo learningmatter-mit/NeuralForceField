@@ -278,7 +278,6 @@ class BulkPhaseMaterials(Atoms):
         self.update_system_nbr_list(self.props['system_cutoff'])
 
 
-
 class NeuralFF(Calculator):
     """ASE calculator using a pretrained NeuralFF model"""
 
@@ -301,6 +300,7 @@ class NeuralFF(Calculator):
 
         Calculator.__init__(self, **kwargs)
         self.model = model
+        self.model.eval()
         self.device = device
         self.to(device)
 

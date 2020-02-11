@@ -8,7 +8,8 @@ from torch.nn import Parameter
 from torch.nn.init import xavier_uniform_, constant_
 
 
-zeros_initializer = partial(constant_, val=0.)
+zeros_initializer = partial(constant_, val=0.0)
+DEFAULT_DROPOUT_RATE = 0.0
 
 
 def gaussian_smearing(distances, offset, widths, centered=False):
@@ -59,8 +60,8 @@ class GaussianSmearing(nn.Module):
             self.width = nn.Parameter(widths)
             self.offsets = nn.Parameter(offset)
         else:
-            self.register_buffer('width', widths)
-            self.register_buffer('offsets', offset)
+            self.register_buffer("width", widths)
+            self.register_buffer("offsets", offset)
         self.centered = centered
 
     def forward(self, distances):
@@ -72,10 +73,9 @@ class GaussianSmearing(nn.Module):
             torch.Tensor: Tensor of convolved distances.
 
         """
-        result = gaussian_smearing(distances,
-                                   self.offsets,
-                                   self.width,
-                                   centered=self.centered)
+        result = gaussian_smearing(
+            distances, self.offsets, self.width, centered=self.centered
+        )
 
         return result
 
@@ -98,8 +98,9 @@ class Dense(nn.Linear):
         out_features,
         bias=True,
         activation=None,
+        dropout_rate=DEFAULT_DROPOUT_RATE,
         weight_init=xavier_uniform_,
-        bias_init=zeros_initializer
+        bias_init=zeros_initializer,
     ):
 
         self.weight_init = weight_init
@@ -107,6 +108,7 @@ class Dense(nn.Linear):
         self.activation = activation
 
         super().__init__(in_features, out_features, bias)
+        self.dropout = nn.Dropout(p=dropout_rate)
 
     def reset_parameters(self):
         """
@@ -125,6 +127,11 @@ class Dense(nn.Linear):
             torch.Tensor: Output of the dense layer.
         """
         y = super().forward(inputs)
+
+        # kept for compatibility with earlier versions of nff
+        if hasattr(self, "dropout"):
+            y = self.dropout(y)
+
         if self.activation:
             y = self.activation(y)
 
