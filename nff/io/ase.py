@@ -266,7 +266,7 @@ class BulkPhaseMaterials(Atoms):
         for i, atoms in enumerate(Atoms_list):
             edge_from, edge_to = neighbor_list('ij', atoms, cutoff)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            # nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
+            nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
             intra_nbr_list.append(
                 self.props['num_subgraphs'][: i].sum() + nbr_list)
 
