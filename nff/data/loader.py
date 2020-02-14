@@ -35,8 +35,6 @@ def collate_dicts(dicts):
     # batching the data
     batch = {}
     for key, val in dicts[0].items():
-        # if key == "degree_vec":
-        #     pdb.set_trace()
         if type(val) == str:
             batch[key] = [data[key] for data in dicts]
         elif len(val.shape) > 0:
