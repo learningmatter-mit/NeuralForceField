@@ -14,34 +14,41 @@ class TestConcatenate(unittest.TestCase):
         self.dataset = Dataset.from_file(DATASET_PATH)
         self.dict_a = {
             'a': 1,
-            'b': 2
+            'b': 2,
+            'str': 'abc'
         }
 
         self.dict_a_list = {
             'a': [1],
-            'b': [2]
+            'b': [2],
+            'str': ['abc']
         }
 
         self.dict_b = {
             'a': 3,
-            'b': 4
+            'b': 4,
+            'str': 'efg'
         }
 
         self.dict_c = {
             'a': [5, 6],
             'b': [7, 8],
-            'c': [9, 10]
+            'c': [9, 10],
+            'str': ['aaa', 'bbb']
         }
 
         self.dict_ab = {
             'a': [1, 3],
             'b': [2, 4],
+            'str': ['abc', 'efg']
+
         }
 
         self.dict_ac = {
             'a': [1, 5, 6],
             'b': [2, 7, 8],
-            'c': [None, 9, 10]
+            'c': [None, 9, 10],
+            'str': ['abc', 'aaa', 'bbb']
         }
 
     def test_concat_1(self):
