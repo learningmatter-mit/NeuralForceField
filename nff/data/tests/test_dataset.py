@@ -36,6 +36,11 @@ class TestConcatenate(unittest.TestCase):
             'str': ['aaa', 'bbb']
         }
 
+        self.dict_d = {
+            'a': [[1]],
+            'b': [[2]],
+        }
+
         self.dict_ab = {
             'a': [1, 3],
             'b': [2, 4],
@@ -48,6 +53,11 @@ class TestConcatenate(unittest.TestCase):
             'b': [2, 7, 8],
             'c': [None, 9, 10],
             'str': ['abc', 'aaa', 'bbb']
+        }
+
+        self.dict_dd = {
+            'a': [[[1]], [[1]]],
+            'b': [[[2]], [[2]]],
         }
 
     def test_concat_1(self):
@@ -65,6 +75,10 @@ class TestConcatenate(unittest.TestCase):
     def test_concat_single_dict_lists(self):
         a = concatenate_dict(self.dict_a_list)
         self.assertEqual(a, self.dict_a_list)
+
+    def test_concat_list_lists(self):
+        dd = concatenate_dict(self.dict_d, self.dict_d)
+        self.assertEqual(dd, self.dict_dd)
 
 
 class TestStats(unittest.TestCase):

@@ -432,12 +432,17 @@ def concatenate_dict(*dicts):
 
     keys = set(sum([list(d.keys()) for d in dicts], []))
 
-    def get_length(value):
+    def is_list_of_lists(value):
         if isinstance(value, list):
-            if isinstance(value[0], list):
-                return 1
-            else:
-                return len(value)
+            return isinstance(value[0], list)
+        return False
+
+    def get_length(value):
+        if is_list_of_lists(value):
+            return 1
+
+        elif isinstance(value, list):
+            return len(value)
 
         return 1
 
@@ -449,12 +454,15 @@ def concatenate_dict(*dicts):
             a torch.Tensor, return its flattened version
             to be appended to a list of values
         """
-        if isinstance(value, list):
+        if is_list_of_lists(value):
+            return [value]
+
+        elif isinstance(value, list):
             return value
 
         elif get_length(value) == 1:
             return [value]
-        
+
         return value
 
     # we have to see how many values the properties of each dictionary has.
