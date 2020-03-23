@@ -9,8 +9,7 @@ NFF_PATH = '../../../'
 DATASET_PATH = os.path.join(NFF_PATH, 'tutorials/data/dataset.pth.tar')
 
 class TestConcatenate(unittest.TestCase):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def setUp(self):
         self.dataset = Dataset.from_file(DATASET_PATH)
         self.dict_a = {
             'a': 1,
@@ -69,8 +68,7 @@ class TestConcatenate(unittest.TestCase):
 
 
 class TestStats(unittest.TestCase):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def setUp(self):
         self.dataset = Dataset.from_file(DATASET_PATH)
 
     def test_remove_outliers(self):
@@ -95,6 +93,33 @@ class TestStats(unittest.TestCase):
 #        print(mean, std)
 #        print(np.mean(new_array), np.std(new_array))
 #        print(np.max(new_array), np.min(new_array))
+
+class TestPeriodicDataset(unittest.TestCase):
+    def setUp(self):
+        self.quartz  = {
+            "nxyz": np.array([
+                [14.0, -1.19984241582007, 2.07818802527655, 4.59909615202747],
+                [14.0, 1.31404847917993, 2.27599872954824, 2.7594569553608],
+                [14.0, 2.39968483164015, 0.0, 0.919817758694137],
+                [8.0, -1.06646793438585, 3.24694318819338, 0.20609293956337],
+                [8.0, 0.235189576572621, 1.80712683722845, 3.8853713328967],
+                [8.0, 0.831278357813231, 3.65430348422777, 2.04573213623004],
+                [8.0, 3.34516925281323, 0.699883270597028, 5.31282465043663],
+                [8.0, 1.44742296061415, 1.10724356663142, 1.6335462571033],
+                [8.0, 2.74908047157262, 2.54705991759635, 3.47318545376996]
+            ]),
+            "lattice": np.array([
+                [5.02778179, 0.0, 3.07862843796742e-16],
+                [-2.513890895, 4.3541867548248, 3.07862843796742e-16],
+                [0.0, 0.0, 5.51891759]
+            ])
+        }
+
+        self.qtz_dataset = Dataset(concatenate_dict(*[self.quartz]*3))
+
+    def test_neighbor_list(self):
+        nbrs, offs = self.qtz_dataset.generate_neighbor_list(cutoff=5)
+
 
 if __name__ == '__main__':
     unittest.main()

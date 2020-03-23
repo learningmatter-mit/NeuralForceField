@@ -14,7 +14,6 @@ from torch.utils.data import Dataset as TorchDataset
 from nff.data.sparse import sparsify_tensor
 from nff.data.topology import update_props_topologies
 from nff.data.graphs import reconstruct_atoms, get_neighbor_list
-from nff.io import AtomsBatch
 
 
 class Dataset(TorchDataset):
@@ -161,11 +160,36 @@ class Dataset(TorchDataset):
         Returns:
             TYPE: Description
         """
-        self.props['nbr_list'] = [
-            get_neighbor_list(nxyz[:, 1:4], cutoff, undirected)
-            for nxyz in self.props['nxyz']
-        ]
+        if 'lattice' not in self.props:
+            self.props['nbr_list'] = [
+                get_neighbor_list(nxyz[:, 1:4], cutoff, undirected)
+                for nxyz in self.props['nxyz']
+            ]
+        else:
+            self._get_periodic_neighbor_list(cutoff, undirected)
+            return self.props['nbr_list'], self.props['offsets']
 
+        return self.props['nbr_list']
+
+    def _get_periodic_neighbor_list(self, cutoff, undirected=False):
+        from nff.io.ase import AtomsBatch
+        
+        nbrlist = []
+        offsets = []
+        for nxyz, lattice in zip(self.props['nxyz'], self.props['lattice']):
+            atoms = AtomsBatch(
+                nxyz[:, 0].long(),
+                positions=nxyz[:, 1:],
+                cell=lattice,
+                pbc=True,
+                cutoff=cutoff
+            )
+            nbrs, offs = atoms.update_nbr_list()
+            nbrlist.append(nbrs)
+            offsets.append(offs)
+
+        self.props['nbr_list'] = nbrlist
+        self.props['offsets'] = offsets
         return
 
     def copy(self):
@@ -232,6 +256,8 @@ class Dataset(TorchDataset):
         Args:
             mol_dic (dict): dictionary of nodes of each disconnected subgraphs
         """
+        from nff.io.ase import AtomsBatch
+
         for i in range(len(self.props['nxyz'])):
             # makes atoms object
             atoms = AtomsBatch(positions=self.props['nxyz'][i][:, 1:4],
