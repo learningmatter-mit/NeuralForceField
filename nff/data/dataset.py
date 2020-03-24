@@ -444,7 +444,7 @@ def concatenate_dict(*dicts):
                 key,
                 [None] * num_values if num_values > 1 else None
             )
-            values += flatten_val(val)
+            values.append(torch.Tensor(flatten_val(val)))
 
         joint_dict[key] = values
 
