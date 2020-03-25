@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-
+# import pdb
 
 class Metric:
     r"""
@@ -134,6 +134,7 @@ class MeanAbsoluteError(Metric):
 
 
 class Classifier(Metric):
+    """" Metric for binary classification."""
     def __init__(
         self,
         target,
@@ -145,8 +146,6 @@ class Classifier(Metric):
             name=name,
         )
 
-        self.loss = 0.0
-        self.num_pred = 0
 
     def add_batch(self, batch, results):
         """ Add a batch to calculate the metric on """
@@ -156,17 +155,9 @@ class Classifier(Metric):
 
         loss, num_pred = self.loss_fn(y, yp)
 
-        self.num_pred += num_pred
+        self.n_entries += num_pred
         self.loss += loss
 
-    def aggregate(self):
-        """Aggregate metric over all previously added batches."""
-        return self.loss / self.num_pred
-
-    def reset(self):
-        """Reset metric attributes after aggregation to collect new batches."""
-        self.loss = 0.0
-        self.num_pred = 0.0
 
 class FalsePositives(Classifier):
     """
@@ -236,6 +227,7 @@ class FalseNegatives(Classifier):
         # the number of negative predictions
         num_pred = len(pred) - np.sum(pred)
         num_pred_false = -np.sum(false_negatives)
+
 
         return num_pred_false, num_pred
 
