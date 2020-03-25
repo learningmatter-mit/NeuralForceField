@@ -204,6 +204,4 @@ class WeightedConformers(nn.Module):
         conf_fps = torch.stack(conf_fps)
         results = self.readout(conf_fps)
 
-        print(results)
-
         return results
