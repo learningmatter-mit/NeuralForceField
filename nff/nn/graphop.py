@@ -1,25 +1,45 @@
 import torch
 from nff.utils.scatter import compute_grad
 
-import pdb
-
 EPS = 1e-15
 
+
 def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn):
+    """
+    Pool atomic representations of conformers into molecular fingerprint,
+    and then add those fingerprints together with Boltzmann weights.
+    Args:
+        smiles_fp (torch.Tensor): (mol_size * num_conf) x M fingerprint,
+            where mol_size is the number of atoms per molecle, num_conf
+            is the number of conformers for the species, and M is the
+            number of features in the fingerprint.
+        mol_size (int): number of atoms per molecle
+        boltzmann_weights (torch.Tensor): tensor of length num_conf
+            with boltzmann weights of each fonroerm.
+        mol_fp_nn (torch.nn.Module): network that converts the sum
+            of atomic fingerprints into a molecular fingerprint.
+    Returns:
+        final_fp (torch.Tensor): H-dimensional tensor, where
+            H is the number of features in the molecular fingerprint.
+    """
 
-    
-
+    # total number of atoms
     num_atoms = smiles_fp.shape[0]
+    # unmber of conformers
     num_confs = num_atoms // mol_size
     N = [mol_size] * num_confs
     conf_fps = []
 
+    # split the atomic fingerprints up by conformer
     for atomic_fps in torch.split(smiles_fp, N):
+        # sum them an then convert to molecular fp
         summed_atomic_fps = atomic_fps.sum(dim=0)
         mol_fp = mol_fp_nn(summed_atomic_fps)
+        # add to the list of conformer fp's
         conf_fps.append(mol_fp)
 
     conf_fps = torch.stack(conf_fps)
+    # multiply each conformer fp by a Boltzmann weight and sum
     final_fp = (conf_fps * boltzmann_weights.reshape(-1, 1)).sum(dim=0)
 
     return final_fp
@@ -33,11 +53,11 @@ def split_and_sum(tensor, N):
         A = torch.rand(10, 10)
         N = [4,6]
         split_and_sum(A, N).shape # (2, 10) 
-    
+
     Args:
         tensor (torch.Tensor): tensors to be split and summed
         N (list): list of number of atoms 
-    
+
     Returns:
         torch.Tensor: stacked tensor of summed smaller tensor 
     """
@@ -53,13 +73,13 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
     """Pooling function to get graph property.
         Separate the outputs back into batches, pool the results,
         compute gradient of scalar properties if "_grad" is in the key name.
-    
+
     Args:
         dict_input (dict): Description
         N (list): number of batches
         predict_keys (list): Description
         xyz (tensor): xyz of the molecule
-    
+
     Returns:
         dict: batched and pooled results 
     """
@@ -67,14 +87,14 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
     results = dict()
 
     for key, val in dict_input.items():
-        #split 
+        # split
         if key in predict_keys and key + "_grad" not in predict_keys:
             results[key] = split_and_sum(val, N)
         elif key in predict_keys and key + "_grad" in predict_keys:
             results[key] = split_and_sum(val, N)
             grad = compute_grad(inputs=xyz, output=results[key])
             results[key + "_grad"] = grad
-        # For the case only predicting gradient 
+        # For the case only predicting gradient
         elif key not in predict_keys and key + "_grad" in predict_keys:
             results[key] = split_and_sum(val, N)
             grad = compute_grad(inputs=xyz, output=results[key])
@@ -83,23 +103,22 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
     return results
 
 
-
 def get_atoms_inside_cell(r, N, pbc):
     """Removes atoms outside of the unit cell which are carried in `r`
         to ensure correct periodic boundary conditions. Does that by discarding
         all atoms beyond N which are not in the reindexing mapping `pbc`.
-    
+
     Args:
         r (torch.float): atomic embeddings 
         N (torch.long): number of atoms inside each graph
         pbc (troch.long): atomic embeddings
-    
+
     Returns:
         torch.float: atomnic embedding tensors inside the cell 
     """
     N = N.to(torch.long).tolist()
 
-    # make N a list if it is a int 
+    # make N a list if it is a int
     if type(N) == int:
         N = [N]
 
@@ -119,5 +138,3 @@ def get_atoms_inside_cell(r, N, pbc):
     r = r[atoms_in_cell]
 
     return r, N
-
-

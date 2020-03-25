@@ -10,21 +10,31 @@ from nff.nn.modules import (
 from nff.nn.graphop import conf_pool
 from nff.nn.utils import construct_sequential
 
-import pdb
+
+"""
+Model that uses a representation of a molecule in terms of different 3D
+conformers to predict properties.
+"""
+
 
 class WeightedConformers(nn.Module):
 
     def __init__(self, modelparams):
-        """Constructs a SchNet model.
+        """Constructs a SchNet-Like model using a conformer representation.
 
         Args:
-            modelparams (TYPE): Description
+            modelparams (dict): dictionary of parameters for model. All
+                are the same as in SchNet, except for  `mol_fp_layers`,
+                which describes how to convert atomic fingerprints into
+                a single molecular fingerprint.
 
         Example:
 
             n_atom_basis = 256
             mol_basis = 512
 
+            # all the atomic fingerprints get added together, then go through the network created
+            # by `mol_fp_layers` to turn into a molecular fingerprint
             mol_fp_layers = [{'name': 'linear', 'param' : { 'in_features': n_atom_basis,
                                                                           'out_features': int((n_atom_basis + mol_basis)/2)}},
                                            {'name': 'shifted_softplus', 'param': {}},
@@ -66,7 +76,6 @@ class WeightedConformers(nn.Module):
         trainable_gauss = modelparams.get("trainable_gauss", False)
         dropout_rate = modelparams.get("dropout_rate", DEFAULT_DROPOUT_RATE)
 
-
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
 
         # convolutions
@@ -84,11 +93,12 @@ class WeightedConformers(nn.Module):
             ]
         )
 
-        
         mol_fp_layers = modelparams["mol_fp_layers"]
         readoutdict = modelparams["readoutdict"]
 
+        # the nn that converts atomic finerprints to a molecular fp
         self.mol_fp_nn = construct_sequential(mol_fp_layers)
+        # the readout acts on these molecular fingerprints
         self.readout = NodeMultiTaskReadOut(multitaskdict=readoutdict)
 
     def convolve(self, batch, xyz=None):
@@ -135,12 +145,11 @@ class WeightedConformers(nn.Module):
             dr = conv(r=r, e=e, a=a)
             r = r + dr
 
-        
-
-        # split the fingerprints into fingerprints of the different conformers
+        # split the fingerprints by species
         fps_by_smiles = torch.split(r, N)
-
+        # split the boltzmann weights by species
         boltzmann_weights = torch.split(batch["weights"], num_confs)
+        # return everything in a dictionary
         outputs = dict(r=r,
                        N=N,
                        xyz=xyz,
@@ -151,7 +160,16 @@ class WeightedConformers(nn.Module):
         return outputs
 
     def forward(self, batch, xyz=None):
-        """Summary
+        """
+
+        Use the outputs of the convolutions to make a prediction.
+        Here, the atomic fingerprints for each geometry get converted
+        into a molecular fingerprint. Then, the molecular
+        fingerprints for the different conformers of a given species
+        get multiplied by the Boltzmann weights of those conformers and
+        added together to make a final fingerprint for the species.
+        Two fully-connected layers act on this final fingerprint to make
+        a prediction.
 
         Args:
             batch (dict): dictionary of props
@@ -169,11 +187,13 @@ class WeightedConformers(nn.Module):
         mol_sizes = outputs["mol_sizes"]
 
         conf_fps = []
+        # go through each species
         for i in range(len(fps_by_smiles)):
             boltzmann_weights = batched_weights[i]
             smiles_fp = fps_by_smiles[i]
             mol_size = mol_sizes[i]
 
+            # pool the atomic fingerprints as described above
             conf_fp = conf_pool(smiles_fp=smiles_fp,
                                 mol_size=mol_size,
                                 boltzmann_weights=boltzmann_weights,

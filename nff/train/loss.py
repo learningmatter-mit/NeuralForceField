@@ -7,12 +7,15 @@ EPS = 1e-15
 
 def build_general_loss(loss_coef, operation, correspondence_keys=None):
     """
-    Build the mean squared error loss function.
+    Build a general  loss function.
 
     Args:
         loss_coef (dict): dictionary containing the weight coefficients
             for each property being predicted.
             Example: `loss_coef = {'energy': rho, 'force': 1}`
+        operation (function): a function that acts on the prediction and
+            the target to produce a result (e.g. square it, put it through
+            cross-entropy, etc.)
         correspondence_keys (dict): a dictionary that links an output key to
             a different key in the dataset.
             Example: correspondence_keys = {"autopology_energy_grad": "energy_grad"}
@@ -71,20 +74,52 @@ def build_general_loss(loss_coef, operation, correspondence_keys=None):
     return loss_fn
 
 def mse_operation(targ, pred):
+    """
+    Square the difference of target and predicted.
+    Args:
+        targ (torch.Tensor): target
+        pred (torch.Tensor): prediction
+    Returns:
+        diff (torch.Tensor): difference squared
+    """
     diff = (targ - pred) ** 2
     return diff
 
 def cross_entropy(targ, pred):
+    """
+    Take the cross-entropy between predicted and target.
+    Args:
+        targ (torch.Tensor): target
+        pred (torch.Tensor): prediction
+    Returns:
+        diff (torch.Tensor): cross-entropy.
+    """
 
     targ = targ.to(torch.float)
     diff = -(targ * torch.log(pred + EPS) + (1-targ) * torch.log(1 - pred + EPS))
     return diff
 
 def build_mse_loss(loss_coef, correspondence_keys=None):
+    """
+    Build MSE loss from loss_coef.
+    Args:
+        loss_coef, correspondence_keys: see `build_general_loss`.
+    Returns:
+        loss_fn (function): loss function
+    """
+
     loss_fn =  build_general_loss(loss_coef=loss_coef, operation=mse_operation, correspondence_keys=correspondence_keys)
     return loss_fn
 
 def build_cross_entropy_loss(loss_coef, correspondence_keys=None):
+    """
+    Build cross-entropy loss from loss_coef.
+    Args:
+        loss_coef, correspondence_keys: see `build_general_loss`.
+    Returns:
+        loss_fn (function): loss function
+    """
+
     loss_fn =  build_general_loss(loss_coef=loss_coef, operation=cross_entropy, correspondence_keys=correspondence_keys)
     return loss_fn
 

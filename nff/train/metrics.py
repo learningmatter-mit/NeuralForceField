@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 
+
 class Metric:
     r"""
     Base class for all metrics.
@@ -76,8 +77,12 @@ class MeanSquaredError(Metric):
         diff = y - yp.view(y.shape)
         return torch.sum(diff.view(-1) ** 2).detach().cpu().data.numpy()
 
-class FalsePositives(Metric):
 
+class FalsePositives(Metric):
+    """
+    Percentage of claimed positives that are actually wrong for a 
+    binary classifier.
+    """
 
     def __init__(
         self,
@@ -97,7 +102,11 @@ class FalsePositives(Metric):
         pred = yp.detach().cpu().numpy().round().reshape(-1)
         delta = pred - actual
 
-        false_positives = list(filter(lambda x: x>0, delta))
+        # if pred - actual > 0, then you predicted positive
+        # but it was negative
+        false_positives = list(filter(lambda x: x > 0, delta))
+        # number of predicted positive is the sum of the total
+        # predictions
         num_pred = np.sum(pred)
         num_pred_false = np.sum(false_positives)
         false_rate = num_pred_false / num_pred
@@ -107,6 +116,10 @@ class FalsePositives(Metric):
 
 class FalseNegatives(Metric):
 
+    """
+    Percentage of claimed negatives that are actually wrong for a 
+    binary classifier.
+    """
 
     def __init__(
         self,
@@ -126,15 +139,25 @@ class FalseNegatives(Metric):
         pred = yp.detach().cpu().numpy().round().reshape(-1)
         delta = pred - actual
 
-        false_negatives= list(filter(lambda x: x < 0, delta))
+        # if pred - actual < 0, then you predicted negative
+        # but it was positive
+        false_negatives = list(filter(lambda x: x < 0, delta))
+        # number of predicted positive is the sum of the total
+        # predictions, so len(pred) minus this is
+        # the number of negative predictions
         num_pred = len(pred) - np.sum(pred)
         num_pred_false = -np.sum(false_negatives)
         false_rate = num_pred_false / num_pred
 
         return false_rate
 
+
 class TruePositives(Metric):
 
+    """
+    Percentage of claimed positives that are actually right for a 
+    binary classifier.
+    """
 
     def __init__(
         self,
@@ -154,16 +177,24 @@ class TruePositives(Metric):
         pred = yp.detach().cpu().numpy().round().reshape(-1)
         delta = pred - actual
 
-        true_positives = [i for i, diff in enumerate(delta
-            ) if diff == 0 and pred[i] == 1]
+        # if the prediction is 1 and delta = 0 then it's
+        # a correct positive
+        true_positives = [i for i, diff in enumerate(
+            delta) if diff == 0 and pred[i] == 1]
+        # number of predicted positives
         num_pred = np.sum(pred)
         num_pred_correct = np.sum(true_positives)
         correct_rate = num_pred_correct / num_pred
 
         return correct_rate
 
+
 class TrueNegatives(Metric):
 
+    """
+    Percentage of claimed negatives that are actually right for a 
+    binary classifier.
+    """
 
     def __init__(
         self,
@@ -183,13 +214,17 @@ class TrueNegatives(Metric):
         pred = yp.detach().cpu().numpy().round().reshape(-1)
         delta = pred - actual
 
-        true_negatives = [i for i, diff in enumerate(delta
-            ) if diff == 0 and pred[i] == 0]
-        num_pred = np.sum(pred)
+        # if the prediction is 0 and delta = 0 then it's
+        # a correct negative
+        true_negatives = [i for i, diff in enumerate(
+            delta) if diff == 0 and pred[i] == 0]
+        # number of predicted negatives
+        num_pred = len(pred) - np.sum(pred)
         num_pred_correct = np.sum(true_negatives)
         correct_rate = num_pred_correct / num_pred
 
         return correct_rate
+
 
 class RootMeanSquaredError(MeanSquaredError):
     r"""
@@ -244,4 +279,3 @@ class MeanAbsoluteError(Metric):
         # pdb.set_trace()
         diff = y - yp.view(y.shape)
         return torch.sum(torch.abs(diff).view(-1)).detach().cpu().data.numpy()
-
