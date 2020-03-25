@@ -2,6 +2,7 @@ import numpy as np
 import torch
 # import pdb
 
+
 class Metric:
     r"""
     Base class for all metrics.
@@ -135,6 +136,7 @@ class MeanAbsoluteError(Metric):
 
 class Classifier(Metric):
     """" Metric for binary classification."""
+
     def __init__(
         self,
         target,
@@ -146,7 +148,6 @@ class Classifier(Metric):
             name=name,
         )
 
-
     def add_batch(self, batch, results):
         """ Add a batch to calculate the metric on """
 
@@ -157,6 +158,14 @@ class Classifier(Metric):
 
         self.n_entries += num_pred
         self.loss += loss
+
+    def aggregate(self):
+        """Aggregate metric over all previously added batches."""
+        if self.n_entries == 0:
+            result = float('nan')
+        else:
+            result = self.loss / self.n_entries
+        return result
 
 
 class FalsePositives(Classifier):
@@ -181,18 +190,15 @@ class FalsePositives(Classifier):
 
         actual = y.detach().cpu().numpy().round().reshape(-1)
         pred = yp.detach().cpu().numpy().round().reshape(-1)
-        delta = pred - actual
 
-        # if pred - actual > 0, then you predicted positive
-        # but it was negative
-        false_positives = list(filter(lambda x: x > 0, delta))
-        # number of predicted positive is the sum of the total
-        # predictions
-        num_pred = np.sum(pred)
-        num_pred_false = np.sum(false_positives)
+        all_positives = [i for i, item in enumerate(pred) if item == 1]
+        false_positives = [i for i in all_positives if pred[i] != actual[i]]
 
-        return num_pred_false, num_pred
+        # number of predicted negatives
+        num_pred = len(all_positives)
+        num_pred_correct = len(false_positives)
 
+        return num_pred_correct, num_pred
 
 class FalseNegatives(Classifier):
 
@@ -217,19 +223,16 @@ class FalseNegatives(Classifier):
 
         actual = y.detach().cpu().numpy().round().reshape(-1)
         pred = yp.detach().cpu().numpy().round().reshape(-1)
-        delta = pred - actual
 
-        # if pred - actual < 0, then you predicted negative
-        # but it was positive
-        false_negatives = list(filter(lambda x: x < 0, delta))
-        # number of predicted positive is the sum of the total
-        # predictions, so len(pred) minus this is
-        # the number of negative predictions
-        num_pred = len(pred) - np.sum(pred)
-        num_pred_false = -np.sum(false_negatives)
+        all_negatives = [i for i, item in enumerate(pred) if item == 0]
+        false_negatives = [i for i in all_negatives if pred[i] != actual[i]]
 
+        # number of predicted negatives
+        num_pred = len(all_negatives)
+        num_pred_correct = len(false_negatives)
 
-        return num_pred_false, num_pred
+        return num_pred_correct, num_pred
+
 
 
 class TruePositives(Classifier):
@@ -255,15 +258,13 @@ class TruePositives(Classifier):
 
         actual = y.detach().cpu().numpy().round().reshape(-1)
         pred = yp.detach().cpu().numpy().round().reshape(-1)
-        delta = pred - actual
 
-        # if the prediction is 1 and delta = 0 then it's
-        # a correct positive
-        true_positives = [i for i, diff in enumerate(
-            delta) if diff == 0 and pred[i] == 1]
-        # number of predicted positives
-        num_pred = np.sum(pred)
-        num_pred_correct = np.sum(true_positives)
+        all_positives = [i for i, item in enumerate(pred) if item == 1]
+        true_positives = [i for i in all_positives if pred[i] == actual[i]]
+
+        # number of predicted negatives
+        num_pred = len(all_positives)
+        num_pred_correct = len(true_positives)
 
         return num_pred_correct, num_pred
 
@@ -291,15 +292,12 @@ class TrueNegatives(Classifier):
 
         actual = y.detach().cpu().numpy().round().reshape(-1)
         pred = yp.detach().cpu().numpy().round().reshape(-1)
-        delta = pred - actual
 
-        # if the prediction is 0 and delta = 0 then it's
-        # a correct negative
-        true_negatives = [i for i, diff in enumerate(
-            delta) if diff == 0 and pred[i] == 0]
+        all_negatives = [i for i, item in enumerate(pred) if item == 0]
+        true_negatives = [i for i in all_negatives if pred[i] == actual[i]]
+
         # number of predicted negatives
-        num_pred = len(pred) - np.sum(pred)
+        num_pred = len(all_negatives)
         num_pred_correct = len(true_negatives)
 
         return num_pred_correct, num_pred
-

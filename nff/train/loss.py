@@ -1,4 +1,5 @@
 import torch
+import pdb
 
 __all__ = ["build_mse_loss"]
 
@@ -82,6 +83,7 @@ def mse_operation(targ, pred):
     Returns:
         diff (torch.Tensor): difference squared
     """
+    targ = targ.to(torch.float)
     diff = (targ - pred) ** 2
     return diff
 
@@ -94,6 +96,9 @@ def cross_entropy(targ, pred):
     Returns:
         diff (torch.Tensor): cross-entropy.
     """
+
+    # if 1 in targ and 0 in targ:
+    #     pdb.set_trace()
 
     targ = targ.to(torch.float)
     diff = -(targ * torch.log(pred + EPS) + (1-targ) * torch.log(1 - pred + EPS))
