@@ -76,6 +76,120 @@ class MeanSquaredError(Metric):
         diff = y - yp.view(y.shape)
         return torch.sum(diff.view(-1) ** 2).detach().cpu().data.numpy()
 
+class FalsePositives(Metric):
+
+
+    def __init__(
+        self,
+        target,
+        name=None,
+    ):
+        name = "FalsePositive_" + target if name is None else name
+        super().__init__(
+            target=target,
+            name=name,
+        )
+
+    @staticmethod
+    def loss_fn(y, yp):
+
+        actual = y.detach().cpu().numpy().round().reshape(-1)
+        pred = yp.detach().cpu().numpy().round().reshape(-1)
+        delta = pred - actual
+
+        false_positives = list(filter(lambda x: x>0, delta))
+        num_pred = np.sum(pred)
+        num_pred_false = np.sum(false_positives)
+        false_rate = num_pred_false / num_pred
+
+        return false_rate
+
+
+class FalseNegatives(Metric):
+
+
+    def __init__(
+        self,
+        target,
+        name=None,
+    ):
+        name = "FalseNegative_" + target if name is None else name
+        super().__init__(
+            target=target,
+            name=name,
+        )
+
+    @staticmethod
+    def loss_fn(y, yp):
+
+        actual = y.detach().cpu().numpy().round().reshape(-1)
+        pred = yp.detach().cpu().numpy().round().reshape(-1)
+        delta = pred - actual
+
+        false_negatives= list(filter(lambda x: x < 0, delta))
+        num_pred = len(pred) - np.sum(pred)
+        num_pred_false = -np.sum(false_negatives)
+        false_rate = num_pred_false / num_pred
+
+        return false_rate
+
+class TruePositives(Metric):
+
+
+    def __init__(
+        self,
+        target,
+        name=None,
+    ):
+        name = "TruePositive_" + target if name is None else name
+        super().__init__(
+            target=target,
+            name=name,
+        )
+
+    @staticmethod
+    def loss_fn(y, yp):
+
+        actual = y.detach().cpu().numpy().round().reshape(-1)
+        pred = yp.detach().cpu().numpy().round().reshape(-1)
+        delta = pred - actual
+
+        true_positives = [i for i, diff in enumerate(delta
+            ) if diff == 0 and pred[i] == 1]
+        num_pred = np.sum(pred)
+        num_pred_correct = np.sum(true_positives)
+        correct_rate = num_pred_correct / num_pred
+
+        return correct_rate
+
+class TrueNegatives(Metric):
+
+
+    def __init__(
+        self,
+        target,
+        name=None,
+    ):
+        name = "TruePositive_" + target if name is None else name
+        super().__init__(
+            target=target,
+            name=name,
+        )
+
+    @staticmethod
+    def loss_fn(y, yp):
+
+        actual = y.detach().cpu().numpy().round().reshape(-1)
+        pred = yp.detach().cpu().numpy().round().reshape(-1)
+        delta = pred - actual
+
+        true_negatives = [i for i, diff in enumerate(delta
+            ) if diff == 0 and pred[i] == 0]
+        num_pred = np.sum(pred)
+        num_pred_correct = np.sum(true_negatives)
+        correct_rate = num_pred_correct / num_pred
+
+        return correct_rate
 
 class RootMeanSquaredError(MeanSquaredError):
     r"""

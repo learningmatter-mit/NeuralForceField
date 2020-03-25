@@ -15,7 +15,8 @@ layer_types = {
     "Tanh": torch.nn.Tanh,
     "ReLU": torch.nn.ReLU,
     "Dense": Dense,
-    "shifted_softplus": shifted_softplus
+    "shifted_softplus": shifted_softplus,
+    "sigmoid": torch.nn.Sigmoid
 }
 
 

@@ -13,6 +13,7 @@ from torch.nn import ModuleDict, Sequential
 from nff.nn.activations import shifted_softplus
 from nff.nn.layers import Dense
 
+import pdb
 
 
 __all__ = [
@@ -27,7 +28,8 @@ layer_types = {
                 "Tanh": torch.nn.Tanh,
                 "ReLU": torch.nn.ReLU,
                 "Dense": Dense,
-                "shifted_softplus": shifted_softplus
+                "shifted_softplus": shifted_softplus,
+                "sigmoid": torch.nn.Sigmoid
               }
 
 
@@ -44,6 +46,7 @@ def construct_Sequential(layers):
     Returns:
         Sequential: Stacked Sequential Model 
     """
+
     return Sequential(collections.OrderedDict([ layer['name']+str(i), 
                                                layer_types[layer['name']](**layer['param'])
                                               ] for i, layer in enumerate(layers)))

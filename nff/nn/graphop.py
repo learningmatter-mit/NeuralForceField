@@ -1,9 +1,28 @@
 import torch
-import torch.nn as nns
-import torch.nn.functional as F
 from nff.utils.scatter import compute_grad
 
+import pdb
+
 EPS = 1e-15
+
+def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn):
+
+    
+
+    num_atoms = smiles_fp.shape[0]
+    num_confs = num_atoms // mol_size
+    N = [mol_size] * num_confs
+    conf_fps = []
+
+    for atomic_fps in torch.split(smiles_fp, N):
+        summed_atomic_fps = atomic_fps.sum(dim=0)
+        mol_fp = mol_fp_nn(summed_atomic_fps)
+        conf_fps.append(mol_fp)
+
+    conf_fps = torch.stack(conf_fps)
+    final_fp = (conf_fps * boltzmann_weights.reshape(-1, 1)).sum(dim=0)
+
+    return final_fp
 
 
 def split_and_sum(tensor, N):
@@ -28,6 +47,7 @@ def split_and_sum(tensor, N):
         batched_prop[batch_idx] = torch.sum(batched_prop[batch_idx], dim=0)
 
     return torch.stack(batched_prop)
+
 
 def batch_and_sum(dict_input, N, predict_keys, xyz):
     """Pooling function to get graph property.
@@ -61,6 +81,7 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
             results[key + "_grad"] = grad
 
     return results
+
 
 
 def get_atoms_inside_cell(r, N, pbc):

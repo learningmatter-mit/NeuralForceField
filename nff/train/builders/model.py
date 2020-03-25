@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from nff.nn.models.schnet import SchNet, SchNetAuTopology, AuTopology
 from nff.nn.models.hybridgraph import HybridGraphConv
+from nff.nn.models.conformers import WeightedConformers
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -56,6 +57,19 @@ PARAMS_TYPE = {"SchNet":
                   "sorted_result_keys": list,
                   "grad_keys": list,
                   "sort_results": bool,
+                },
+
+                "WeightedConformers":
+                {
+                   'n_atom_basis': int,
+                   'n_filters': int,
+                   'n_gaussians': int,
+                   'n_convolutions': int,
+                   'cutoff': float,
+                   'trainable_gauss': bool,
+                   'dropout_rate': float,
+                   'readoutdict': dict,
+                   'mol_fp_layers': list                
                 }
 
                }
@@ -65,6 +79,7 @@ MODEL_DICT = {
     "AuTopology": AuTopology,
     "SchNetAuTopology": SchNetAuTopology,
     "HybridGraphConv": HybridGraphConv,
+    "WeightedConformers": WeightedConformers
 }
 
 

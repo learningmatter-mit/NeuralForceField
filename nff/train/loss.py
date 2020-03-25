@@ -2,8 +2,10 @@ import torch
 
 __all__ = ["build_mse_loss"]
 
+EPS = 1e-15
 
-def build_mse_loss(loss_coef, correspondence_keys=None):
+
+def build_general_loss(loss_coef, operation, correspondence_keys=None):
     """
     Build the mean squared error loss function.
 
@@ -60,10 +62,33 @@ def build_mse_loss(loss_coef, correspondence_keys=None):
             pred = pred[valid_idx]
 
             if len(targ) != 0:
-                diff = (targ - pred ) ** 2
+                diff = operation(targ=targ, pred=pred)
                 err_sq = coef * torch.mean(diff)
                 loss += err_sq
 
         return loss
 
     return loss_fn
+
+def mse_operation(targ, pred):
+    diff = (targ - pred) ** 2
+    return diff
+
+def cross_entropy(targ, pred):
+
+    targ = targ.to(torch.float)
+    diff = -(targ * torch.log(pred + EPS) + (1-targ) * torch.log(1 - pred + EPS))
+    return diff
+
+def build_mse_loss(loss_coef, correspondence_keys=None):
+    loss_fn =  build_general_loss(loss_coef=loss_coef, operation=mse_operation, correspondence_keys=correspondence_keys)
+    return loss_fn
+
+def build_cross_entropy_loss(loss_coef, correspondence_keys=None):
+    loss_fn =  build_general_loss(loss_coef=loss_coef, operation=cross_entropy, correspondence_keys=correspondence_keys)
+    return loss_fn
+
+
+
+
+
