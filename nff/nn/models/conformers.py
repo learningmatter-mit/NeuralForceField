@@ -41,6 +41,7 @@ class WeightedConformers(nn.Module):
                                            {'name': 'linear', 'param' : { 'in_features': int((n_atom_basis + mol_basis)/2),
                                                                           'out_features': mol_basis}}]
 
+
             readoutdict = {
                                 "covid": [{'name': 'linear', 'param' : { 'in_features': mol_basis,
                                                                           'out_features': int(mol_basis / 2)}},
@@ -49,6 +50,19 @@ class WeightedConformers(nn.Module):
                                                                           'out_features': 1}},
                                            {'name': 'sigmoid', 'param': {}}],
                             }
+
+            # dictionary to tell you what to do with the Boltzmann factors
+            # ex. 1:
+
+            boltzmann_dict = {"type": "multiply"}
+
+            # ex. 2
+            boltzmann_layers = [{'name': 'linear', 'param': {'in_features': mol_basis + 1,
+                                                           'out_features': mol_basis}},
+                                {'name': 'shifted_softplus', 'param': {}},
+                                {'name': 'linear', 'param': {'in_features': mol_basis,
+                                                           'out_features': mol_basis}}]
+            boltzmann_dict = {"type": "layers", "layers": boltzmann_layers}
 
 
             modelparams = {
@@ -59,6 +73,8 @@ class WeightedConformers(nn.Module):
                 'cutoff': 5.0,
                 'trainable_gauss': True,
                 'readoutdict': readoutdict,    
+                'mol_fp_layers': mol_fp_layers,
+                'boltzmann_dict': boltzmann_dict
                 'dropout_rate': 0.2
             }
 
@@ -95,11 +111,37 @@ class WeightedConformers(nn.Module):
 
         mol_fp_layers = modelparams["mol_fp_layers"]
         readoutdict = modelparams["readoutdict"]
+        boltzmann_dict = modelparams["boltzmann_dict"]
+
 
         # the nn that converts atomic finerprints to a molecular fp
         self.mol_fp_nn = construct_sequential(mol_fp_layers)
-        # the readout acts on these molecular fingerprints
+
+        # create a module that lets a molecular fp interact with the
+        # conformer's boltzmann weight to give a final molecular fp
+        self.boltz_nn = self.make_boltz_nn(boltzmann_dict)
+
+        # the readout acts on this final molceular fp
         self.readout = NodeMultiTaskReadOut(multitaskdict=readoutdict)
+
+
+    def make_boltz_nn(self, boltzmann_dict):
+        if boltzmann_dict["type"] == "multiply":
+            return
+        layers = boltzmann_dict["layers"]
+        network = construct_sequential(layers)
+        return network
+
+    def make_boltz_module(self, boltzmann_dict):
+        if boltzmann_dict["type"] == "multiply":
+            def func(conf_fp, weight):
+                return conf_fp * weight
+        elif boltzmann_dict["type"] == "layers":
+            def func(conf_fp, weight):
+                new_fp = torch.cat((conf_fp, torch.Tensor([weight])))
+                return self.boltz_nn(new_fp)
+        return func
+
 
     def convolve(self, batch, xyz=None):
         """
@@ -197,7 +239,8 @@ class WeightedConformers(nn.Module):
             conf_fp = conf_pool(smiles_fp=smiles_fp,
                                 mol_size=mol_size,
                                 boltzmann_weights=boltzmann_weights,
-                                mol_fp_nn=self.mol_fp_nn)
+                                mol_fp_nn=self.mol_fp_nn,
+                                boltz_nn=self.boltz_nn)
 
             conf_fps.append(conf_fp)
 

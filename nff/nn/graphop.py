@@ -4,7 +4,34 @@ from nff.utils.scatter import compute_grad
 EPS = 1e-15
 
 
-def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn):
+def update_boltz(conf_fp, weight, boltz_nn):
+    """
+    Given a conformer fingerprint and Boltzmann weight,
+    return a new updated fingerprint.
+    Args:
+        conf_fp (torch.Tensor): molecular finerprint of
+            a conformer
+        weight (float): Boltzmann weight
+        boltz_nn (torch.nn.Module): network that converts
+            the fingerprint and weight into a new
+            fingerprint. If None, just multiply the Boltzmann
+            factor with the fingerprint.
+    Returns:
+        boltzmann_fp (torch.Tensor): updated fingerprint
+    """
+    # if no boltzmann nn, just multiply
+    if boltz_nn is None:
+        boltzmann_fp = conf_fp * weight
+    # otherwise concatenate the weight with the fingerprint
+    # and put it through the boltzmann nn
+    else:
+        weight_tens = torch.Tensor([weight]).to(conf_fp.device)
+        new_fp = torch.cat((conf_fp, weight_tens))
+        boltzmann_fp = boltz_nn(new_fp)
+    return boltzmann_fp
+
+
+def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn, boltz_nn):
     """
     Pool atomic representations of conformers into molecular fingerprint,
     and then add those fingerprints together with Boltzmann weights.
@@ -18,6 +45,9 @@ def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn):
             with boltzmann weights of each fonroerm.
         mol_fp_nn (torch.nn.Module): network that converts the sum
             of atomic fingerprints into a molecular fingerprint.
+        boltz_nn (torch.nn.Module): nn that takes a molecular
+            fingerprint and boltzmann weight as input and returns
+            a new fingerprint. 
     Returns:
         final_fp (torch.Tensor): H-dimensional tensor, where
             H is the number of features in the molecular fingerprint.
@@ -38,9 +68,19 @@ def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn):
         # add to the list of conformer fp's
         conf_fps.append(mol_fp)
 
-    conf_fps = torch.stack(conf_fps)
-    # multiply each conformer fp by a Boltzmann weight and sum
-    final_fp = (conf_fps * boltzmann_weights.reshape(-1, 1)).sum(dim=0)
+    # get a new fingerprint for each conformer based on its Boltzmann weight
+    boltzmann_fps = []
+    for i, conf_fp in enumerate(conf_fps):
+        weight = boltzmann_weights[i]
+        boltzmann_fp = update_boltz(conf_fp=conf_fp,
+                                    weight=weight,
+                                    boltz_nn=boltz_nn)
+        boltzmann_fps.append(boltzmann_fp)
+
+    boltzmann_fps = torch.stack(boltzmann_fps)
+
+    # sum all the conformer fingerprints
+    final_fp = boltzmann_fps.sum(dim=0)
 
     return final_fp
 
