@@ -304,3 +304,35 @@ class TrueNegatives(Classifier):
         num_pred_correct = len(true_negatives)
 
         return num_pred_correct, num_pred
+
+
+class Accuracy(Classifier):
+
+    """
+    Overall accuracy of classifier.
+    """
+
+    def __init__(
+        self,
+        target,
+        name=None,
+    ):
+        name = "Accuracy_" + target if name is None else name
+        super().__init__(
+            target=target,
+            name=name,
+        )
+
+    @staticmethod
+    def loss_fn(y, yp):
+
+        actual = y.detach().cpu().numpy().round().reshape(-1)
+        pred = yp.detach().cpu().numpy().round().reshape(-1)
+
+    
+        # number of predicted negatives
+        num_pred = len(actual)
+        correct = [i for i in range(num_pred) if actual[i] == pred[i]]
+        num_pred_correct = len(correct)
+
+        return num_pred_correct, num_pred
