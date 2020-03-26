@@ -132,16 +132,6 @@ class WeightedConformers(nn.Module):
         network = construct_sequential(layers)
         return network
 
-    def make_boltz_module(self, boltzmann_dict):
-        if boltzmann_dict["type"] == "multiply":
-            def func(conf_fp, weight):
-                return conf_fp * weight
-        elif boltzmann_dict["type"] == "layers":
-            def func(conf_fp, weight):
-                new_fp = torch.cat((conf_fp, torch.Tensor([weight])))
-                return self.boltz_nn(new_fp)
-        return func
-
 
     def convolve(self, batch, xyz=None):
         """
