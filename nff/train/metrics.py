@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-# import pdb
+import pdb
 
 
 class Metric:
@@ -192,13 +192,15 @@ class FalsePositives(Classifier):
         pred = yp.detach().cpu().numpy().round().reshape(-1)
 
         all_positives = [i for i, item in enumerate(pred) if item == 1]
-        false_positives = [i for i in all_positives if pred[i] != actual[i]]
+        false_positives = [i for i in pred if pred[i]
+                           == 1 and pred[i] != actual[i]]
 
         # number of predicted negatives
         num_pred = len(all_positives)
         num_pred_correct = len(false_positives)
 
         return num_pred_correct, num_pred
+
 
 class FalseNegatives(Classifier):
 
@@ -225,14 +227,13 @@ class FalseNegatives(Classifier):
         pred = yp.detach().cpu().numpy().round().reshape(-1)
 
         all_negatives = [i for i, item in enumerate(pred) if item == 0]
-        false_negatives = [i for i in all_negatives if pred[i] != actual[i]]
-
+        false_negatives = [i for i in pred if pred[i]
+                           == 0 and pred[i] != actual[i]]
         # number of predicted negatives
         num_pred = len(all_negatives)
         num_pred_correct = len(false_negatives)
 
         return num_pred_correct, num_pred
-
 
 
 class TruePositives(Classifier):
@@ -260,7 +261,8 @@ class TruePositives(Classifier):
         pred = yp.detach().cpu().numpy().round().reshape(-1)
 
         all_positives = [i for i, item in enumerate(pred) if item == 1]
-        true_positives = [i for i in all_positives if pred[i] == actual[i]]
+        true_positives = [i for i in pred if pred[i]
+                          == 1 and pred[i] == actual[i]]
 
         # number of predicted negatives
         num_pred = len(all_positives)
@@ -294,7 +296,8 @@ class TrueNegatives(Classifier):
         pred = yp.detach().cpu().numpy().round().reshape(-1)
 
         all_negatives = [i for i, item in enumerate(pred) if item == 0]
-        true_negatives = [i for i in all_negatives if pred[i] == actual[i]]
+        true_negatives = [i for i in pred if pred[i]
+                          == 0 and pred[i] == actual[i]]
 
         # number of predicted negatives
         num_pred = len(all_negatives)
