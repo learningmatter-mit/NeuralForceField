@@ -192,7 +192,7 @@ class FalsePositives(Classifier):
         pred = yp.detach().cpu().numpy().round().reshape(-1)
 
         all_positives = [i for i, item in enumerate(pred) if item == 1]
-        false_positives = [i for i in pred if pred[i]
+        false_positives = [i for i in range(len(pred)) if pred[i]
                            == 1 and pred[i] != actual[i]]
 
         # number of predicted negatives
@@ -227,7 +227,7 @@ class FalseNegatives(Classifier):
         pred = yp.detach().cpu().numpy().round().reshape(-1)
 
         all_negatives = [i for i, item in enumerate(pred) if item == 0]
-        false_negatives = [i for i in pred if pred[i]
+        false_negatives = [i for i in range(len(pred)) if pred[i]
                            == 0 and pred[i] != actual[i]]
         # number of predicted negatives
         num_pred = len(all_negatives)
@@ -261,7 +261,7 @@ class TruePositives(Classifier):
         pred = yp.detach().cpu().numpy().round().reshape(-1)
 
         all_positives = [i for i, item in enumerate(pred) if item == 1]
-        true_positives = [i for i in pred if pred[i]
+        true_positives = [i for i in range(len(pred)) if pred[i]
                           == 1 and pred[i] == actual[i]]
 
         # number of predicted negatives
@@ -296,7 +296,7 @@ class TrueNegatives(Classifier):
         pred = yp.detach().cpu().numpy().round().reshape(-1)
 
         all_negatives = [i for i, item in enumerate(pred) if item == 0]
-        true_negatives = [i for i in pred if pred[i]
+        true_negatives = [i for i in range(len(pred)) if pred[i]
                           == 0 and pred[i] == actual[i]]
 
         # number of predicted negatives
