@@ -5,7 +5,7 @@ from torch.autograd import Variable
 
 from ase import units
 from ase.md.md import MolecularDynamics
-from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
+from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
 from ase.md.verlet import VelocityVerlet
 from ase.io import Trajectory
 
@@ -43,6 +43,8 @@ class Dynamics:
         
         # intialize system momentum 
         MaxwellBoltzmannDistribution(self.atomsbatch, self.mdparam['T_init'] * units.kB)
+        Stationary(self.atomsbatch)  # zero linear momentum
+        ZeroRotation(self.atomsbatch)
         
         # set thermostats 
         integrator = self.mdparam['thermostat']
