@@ -1,5 +1,10 @@
 import numpy as np
 import torch
+import scipy
+from sklearn.metrics import roc_auc_score
+
+
+
 import pdb
 
 
@@ -304,6 +309,64 @@ class TrueNegatives(Classifier):
         num_pred_correct = len(true_negatives)
 
         return num_pred_correct, num_pred
+
+class Auc(Classifier):
+
+    """
+    AUC metric (area under true-positive vs. false-positive curve).
+    """
+
+    def __init__(
+        self,
+        target,
+        name=None,
+    ):
+        name = "AUC_" + target if name is None else name
+        super().__init__(
+            target=target,
+            name=name,
+        )
+
+        # list of actual and predicted probabilities
+        self.actual = []
+        self.pred = []
+
+
+    def reset(self):
+        """Reset metric attributes after aggregation to collect new batches."""
+
+        self.actual = []
+        self.pred = []
+
+    def loss_fn(self, y, yp):
+
+        """The loss function here is not actually a loss function,
+        but just returns actual and predicted values to add to the total.
+        The AUC is calculated in the aggregate step."""
+
+        actual = y.detach().cpu().numpy().reshape(-1).tolist()
+        pred = yp.detach().cpu().numpy().reshape(-1).tolist()
+
+        return actual, pred
+
+    def add_batch(self, batch, results):
+        """ Add a batch to calculate the metric on """
+
+        y = batch[self.target]
+        yp = results[self.target]
+
+        actual, pred = self.loss_fn(y, yp)
+        # add to actual and predicted
+        self.actual += actual
+        self.pred += pred
+
+
+    def aggregate(self):
+        """Calculate the auc score from all the data."""
+        auc = roc_auc_score(y_true=self.actual, y_score=self.pred)
+        return auc
+
+
 
 
 class Accuracy(Classifier):
