@@ -176,7 +176,7 @@ def generate_mol_atoms(atomic_nums, xyz, cell):
 
 def generate_subgraphs(atomsobject, unwrap=True, get_edge=False):
     
-    atoms = AtomsBatch(atomsobject)
+    atoms = nff.io.ase.AtomsBatch(atomsobject)
     z, adj, dmat,  threshold = adjdistmat(atoms, unwrap=unwrap)
     box_len = torch.Tensor( np.diag(atoms.get_cell()) )
     G=nx.from_numpy_matrix(adj)
@@ -194,12 +194,11 @@ def generate_subgraphs(atomsobject, unwrap=True, get_edge=False):
         if get_edge:
             edge_list.append(list(sg.edges))
         
-    #print("found {} molecules".format(len(partitions)))
-    
     if len(edge_list) != 0:
         return partitions, edge_list
     else:
         return partitions
+
 
 def get_single_molecule(atomsobject, mol_idx, single_mol_id):    
     z = atomsobject.get_atomic_numbers()[mol_idx[single_mol_id]]
