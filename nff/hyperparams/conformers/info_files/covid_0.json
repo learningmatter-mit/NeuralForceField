@@ -1,0 +1,43 @@
+{
+	"project_name": "covid_schnet",
+
+	"param_regime": [{"name": "morgan_length", "type": "int", "bounds": {"min": 0, "max": 256}},
+					{"name": "dropout_rate", "type": "double", "bounds": {"min": 0, "max": 0.5}},
+					{"name": "n_conv", "type": "int", "bounds": {"min": 2, "max": 5}},
+					{"name": "n_filters", "type": "int", "bounds": {"min": 128, "max": 256}},
+					{"name": "n_gaussians", "type": "int", "bounds": {"min": 20, "max": 60}},
+					{"name": "n_atom_basis", "type": "int", "bounds": {"min": 128, "max": 256}},
+					{"name": "mol_basis", "type": "int", "bounds": {"min": 128, "max": 256}},
+					{"name": "num_mol_layers", "type": "int", "bounds": {"min": 1, "max": 4}},
+					{"name": "cutoff", "type": "double", "bounds": {"min": 4.0, "max": 7.0}},
+                                        {"name": "num_confs", "type": "int", "bounds": {"min": 1, "max": 10}}
+				],
+
+	"set_params": {"boltz_params": {"boltz_type": "multiply"},
+				"readout_names": ["bind"],
+				"trainable_gauss": true,
+				"layer_act": "shifted_softplus",
+				"num_readout_layers": 3,
+				"batch_size": 15}
+
+
+	"budget": "default",
+	"device": 3,
+	"num_epochs": 10,
+	"loss_name": "cross_entropy",
+	"target_name": "bind",
+	"client_token": "JQJLZYNHOWKBUXWMYBZFKRKHURZAZRIQWERJSBKWZUBODXEQ",
+	"save_dir": "/home/saxelrod/data",
+
+	"objective": "maximize",
+
+	"val_size": 0.2,
+	"test_size": 0.2,
+	"dataset_path": "/home/saxelrod/Repo/projects/covid_nff/NeuralForceField/tutorials/data/covid_crest_10.pth.tar",
+
+	"eval_metric": "roc_auc",
+        "eval_on": "val",
+	"monitor_metrics": ["RocAuc", "PrAuc"]
+
+}
+

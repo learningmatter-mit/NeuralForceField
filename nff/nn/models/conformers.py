@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 
-
 from nff.nn.layers import DEFAULT_DROPOUT_RATE
 from nff.nn.modules import (
     SchNetConv,
@@ -9,7 +8,6 @@ from nff.nn.modules import (
 )
 from nff.nn.graphop import conf_pool
 from nff.nn.utils import construct_sequential
-
 
 """
 Model that uses a representation of a molecule in terms of different 3D
@@ -181,13 +179,22 @@ class WeightedConformers(nn.Module):
         fps_by_smiles = torch.split(r, N)
         # split the boltzmann weights by species
         boltzmann_weights = torch.split(batch["weights"], num_confs)
+        # get the morgan fp per species if it exists
+        if "morgan" in batch.keys():
+            num_mols = len(fps_by_smiles)
+            morgan_len = len(batch["morgan"]) // num_mols
+            splits = [morgan_len] * num_mols
+            morgan = torch.split(batch["morgan"], splits)
+        else:
+            morgan = None
         # return everything in a dictionary
         outputs = dict(r=r,
                        N=N,
                        xyz=xyz,
                        fps_by_smiles=fps_by_smiles,
                        boltzmann_weights=boltzmann_weights,
-                       mol_sizes=mol_sizes)
+                       mol_sizes=mol_sizes,
+                       morgan=morgan)
 
         return outputs
 
@@ -217,6 +224,7 @@ class WeightedConformers(nn.Module):
         fps_by_smiles = outputs["fps_by_smiles"]
         batched_weights = outputs["boltzmann_weights"]
         mol_sizes = outputs["mol_sizes"]
+        morgan_fps = outputs["morgan"]
 
         conf_fps = []
         # go through each species
@@ -224,13 +232,15 @@ class WeightedConformers(nn.Module):
             boltzmann_weights = batched_weights[i]
             smiles_fp = fps_by_smiles[i]
             mol_size = mol_sizes[i]
+            morgan = morgan_fps[i]
 
             # pool the atomic fingerprints as described above
             conf_fp = conf_pool(smiles_fp=smiles_fp,
                                 mol_size=mol_size,
                                 boltzmann_weights=boltzmann_weights,
                                 mol_fp_nn=self.mol_fp_nn,
-                                boltz_nn=self.boltz_nn)
+                                boltz_nn=self.boltz_nn,
+                                morgan_fp=morgan)
 
             conf_fps.append(conf_fp)
 

@@ -4,7 +4,7 @@ from nff.utils.scatter import compute_grad
 EPS = 1e-15
 
 
-def update_boltz(conf_fp, weight, boltz_nn):
+def update_boltz(conf_fp, weight, boltz_nn, morgan_fp=None):
     """
     Given a conformer fingerprint and Boltzmann weight,
     return a new updated fingerprint.
@@ -16,10 +16,17 @@ def update_boltz(conf_fp, weight, boltz_nn):
             the fingerprint and weight into a new
             fingerprint. If None, just multiply the Boltzmann
             factor with the fingerprint.
+        morgan_fp (torch.Tensor): morgan finerprint that
+            gets tacked on to the end of the SchNet-generated
+            fingerprint.
     Returns:
         boltzmann_fp (torch.Tensor): updated fingerprint
     """
     # if no boltzmann nn, just multiply
+    if morgan_fp is not None:
+        morgan_fp = morgan_fp.to(conf_fp.device)
+        conf_fp = torch.cat((conf_fp, morgan_fp))
+
     if boltz_nn is None:
         boltzmann_fp = conf_fp * weight
     # otherwise concatenate the weight with the fingerprint
@@ -31,7 +38,7 @@ def update_boltz(conf_fp, weight, boltz_nn):
     return boltzmann_fp
 
 
-def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn, boltz_nn):
+def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn, boltz_nn, morgan_fp=None):
     """
     Pool atomic representations of conformers into molecular fingerprint,
     and then add those fingerprints together with Boltzmann weights.
@@ -48,6 +55,9 @@ def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn, boltz_nn):
         boltz_nn (torch.nn.Module): nn that takes a molecular
             fingerprint and boltzmann weight as input and returns
             a new fingerprint. 
+        morgan_fp (torch.Tensor): morgan finerprint that
+            gets tacked on to the end of the SchNet-generated
+            fingerprint.
     Returns:
         final_fp (torch.Tensor): H-dimensional tensor, where
             H is the number of features in the molecular fingerprint.
@@ -74,7 +84,8 @@ def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn, boltz_nn):
         weight = boltzmann_weights[i]
         boltzmann_fp = update_boltz(conf_fp=conf_fp,
                                     weight=weight,
-                                    boltz_nn=boltz_nn)
+                                    boltz_nn=boltz_nn,
+                                    morgan_fp=morgan_fp)
         boltzmann_fps.append(boltzmann_fp)
 
     boltzmann_fps = torch.stack(boltzmann_fps)
