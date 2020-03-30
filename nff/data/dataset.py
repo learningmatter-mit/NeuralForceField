@@ -10,10 +10,12 @@ from copy import deepcopy
 from collections.abc import Iterable
 from sklearn.utils import shuffle as skshuffle
 from sklearn.model_selection import train_test_split
+from ase import Atoms
+from ase.neighborlist import neighbor_list
 from torch.utils.data import Dataset as TorchDataset
 from nff.data.sparse import sparsify_tensor
 from nff.data.topology import update_props_topologies
-from nff.data.graphs import reconstruct_atoms, get_neighbor_list
+from nff.data.graphs import reconstruct_atoms, get_neighbor_list, generate_subgraphs, DISTANCETHRESHOLDICT_Z 
 from nff.io import AtomsBatch
 
 
@@ -267,6 +269,84 @@ class Dataset(TorchDataset):
             path (TYPE): Description
         """
         torch.save(self, path)
+
+    def gen_bond_prior(self):
+
+        if not self.props:
+            raise TypeError("the dataset has no data yet")
+
+        bond_dict = {}
+        bond_len_dict = {}
+        bond_count_dict = {}
+        mol_idx_dict = {}
+        for i in range(len(self.props['nxyz'])):
+            z = self.props['nxyz'][i][:, 0]
+            xyz = self.props['nxyz'][i][:, 1:4]
+            
+            # generate arguments for ase Atoms boject 
+            ase_param = {"numbers": z,
+                         "positions":xyz,
+                         "pbc": True, 
+                         "cell": self.props['cell'][i] if 'cell' in self.props.keys() else None }
+            
+            atoms = Atoms(**ase_param)
+            sys_name = self.props['smiles'][i]
+            if sys_name not in bond_dict.keys():
+                print(sys_name)
+                i, j = neighbor_list("ij", atoms, DISTANCETHRESHOLDICT_Z)
+                
+                bond_list = torch.LongTensor(np.stack((i, j) ,axis=1)).tolist()
+                bond_dict[sys_name] = bond_list
+
+                # generate molecular graph 
+                # TODO: there is redundant code in generate_subgraphs 
+                subgraph_index = generate_subgraphs(atoms)
+                mol_idx_dict[sys_name] =  subgraph_index
+                
+                bond_len_dict[sys_name] = torch.Tensor([[0.0]] * (len(bond_list)//2) )
+                bond_count_dict[sys_name] = 0
+
+        # generate topologies 
+        # TODO: include options to only generate bond topology 
+        self.generate_topologies(bond_dic=bond_dict)
+        if 'cell' in self.props.keys():
+            self.unwrap_xyz(mol_idx_dict)
+
+        # generate bond statistics
+        for i in range(len(self.props['nxyz'])):
+            z = self.props['nxyz'][i][:, 0]
+            xyz = self.props['nxyz'][i][:, 1:4]
+            sys_name = self.props['smiles'][i]
+            bond_list = self.props['bonds'][i]
+            bond_len = (xyz[bond_list[:,0]] - xyz[bond_list[:,1]]).pow(2).sum(-1).sqrt()[:, None]
+            
+            bond_type_list = torch.stack( (z[ bond_list[:,0] ], z[ bond_list[:,1] ]) ).t()
+            bond_dict = dict()
+            for i, bond in enumerate(bond_type_list):
+                bond = tuple( torch.LongTensor(sorted( bond ) ).tolist() )
+                if bond not in bond_dict.keys():
+                    bond_dict[bond] = [bond_len[i]]
+                else:
+                    bond_dict[bond].append(bond_len[i])
+
+        # compute bond len averages   
+        bond_dict = {key: torch.stack(bond_dict[key]).mean(0) for key in bond_dict.keys()} 
+
+        # update bond len 
+        all_bond_len = []
+        for i in range(len(self.props['nxyz'])):    
+            bond_type_list = torch.stack( (z[ bond_list[:,0] ], z[ bond_list[:,1] ]) ).t()
+            bond_len_list = []
+            for bond in bond_type_list:
+                bond_type = tuple( torch.LongTensor(sorted( bond ) ).tolist() )
+                bond_len_list.append(bond_dict[bond_type])        
+            all_bond_len.append(torch.Tensor(bond_len_list).reshape(-1, 1))
+
+        # update 
+        self.props['bond_len'] = all_bond_len
+        self._check_dictionary(deepcopy(self.props))
+
+
 
     @classmethod
     def from_file(cls, path):
