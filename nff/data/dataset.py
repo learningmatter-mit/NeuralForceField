@@ -303,9 +303,6 @@ class Dataset(TorchDataset):
                 subgraph_index = generate_subgraphs(atoms)
                 mol_idx_dict[sys_name] =  subgraph_index
                 
-                bond_len_dict[sys_name] = torch.Tensor([[0.0]] * (len(bond_list)//2) )
-                bond_count_dict[sys_name] = 0
-
         # generate topologies 
         # TODO: include options to only generate bond topology 
         self.generate_topologies(bond_dic=bond_dict)
@@ -321,25 +318,26 @@ class Dataset(TorchDataset):
             bond_len = (xyz[bond_list[:,0]] - xyz[bond_list[:,1]]).pow(2).sum(-1).sqrt()[:, None]
             
             bond_type_list = torch.stack( (z[ bond_list[:,0] ], z[ bond_list[:,1] ]) ).t()
-            bond_dict = dict()
             for i, bond in enumerate(bond_type_list):
                 bond = tuple( torch.LongTensor(sorted( bond ) ).tolist() )
-                if bond not in bond_dict.keys():
-                    bond_dict[bond] = [bond_len[i]]
+                if bond not in bond_len_dict.keys():
+                    bond_len_dict[bond] = [bond_len[i]]
                 else:
-                    bond_dict[bond].append(bond_len[i])
+                    bond_len_dict[bond].append(bond_len[i])
 
         # compute bond len averages   
-        bond_dict = {key: torch.stack(bond_dict[key]).mean(0) for key in bond_dict.keys()} 
+        bond_len_dict = {key: torch.stack(bond_len_dict[key]).mean(0) for key in bond_len_dict.keys()} 
 
         # update bond len 
         all_bond_len = []
-        for i in range(len(self.props['nxyz'])):    
+        for i in range(len(self.props['nxyz'])):
+            z = self.props['nxyz'][i][:, 0]
+            bond_list = self.props['bonds'][i] 
             bond_type_list = torch.stack( (z[ bond_list[:,0] ], z[ bond_list[:,1] ]) ).t()
             bond_len_list = []
             for bond in bond_type_list:
                 bond_type = tuple( torch.LongTensor(sorted( bond ) ).tolist() )
-                bond_len_list.append(bond_dict[bond_type])        
+                bond_len_list.append(bond_len_dict[bond_type])        
             all_bond_len.append(torch.Tensor(bond_len_list).reshape(-1, 1))
 
         # update 
