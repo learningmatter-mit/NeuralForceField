@@ -1,10 +1,11 @@
 import torch
 from nff.utils.scatter import compute_grad
+import pdb
 
 EPS = 1e-15
 
 
-def update_boltz(conf_fp, weight, boltz_nn, morgan_fp=None):
+def update_boltz(conf_fp, weight, boltz_nn, extra_feats=None):
     """
     Given a conformer fingerprint and Boltzmann weight,
     return a new updated fingerprint.
@@ -16,16 +17,16 @@ def update_boltz(conf_fp, weight, boltz_nn, morgan_fp=None):
             the fingerprint and weight into a new
             fingerprint. If None, just multiply the Boltzmann
             factor with the fingerprint.
-        morgan_fp (torch.Tensor): morgan finerprint that
+        extra_feats (torch.Tensor): extra fingerprint that
             gets tacked on to the end of the SchNet-generated
             fingerprint.
     Returns:
         boltzmann_fp (torch.Tensor): updated fingerprint
     """
     # if no boltzmann nn, just multiply
-    if morgan_fp is not None:
-        morgan_fp = morgan_fp.to(conf_fp.device)
-        conf_fp = torch.cat((conf_fp, morgan_fp))
+    if extra_feats is not None:
+        extra_feats = extra_feats.to(conf_fp.device)
+        conf_fp = torch.cat((conf_fp, extra_feats))
 
     if boltz_nn is None:
         boltzmann_fp = conf_fp * weight
@@ -38,7 +39,7 @@ def update_boltz(conf_fp, weight, boltz_nn, morgan_fp=None):
     return boltzmann_fp
 
 
-def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn, boltz_nn, morgan_fp=None):
+def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn, boltz_nn, extra_feats=None):
     """
     Pool atomic representations of conformers into molecular fingerprint,
     and then add those fingerprints together with Boltzmann weights.
@@ -55,7 +56,7 @@ def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn, boltz_nn, morga
         boltz_nn (torch.nn.Module): nn that takes a molecular
             fingerprint and boltzmann weight as input and returns
             a new fingerprint. 
-        morgan_fp (torch.Tensor): morgan finerprint that
+        extra_feats (torch.Tensor): extra fingerprint that
             gets tacked on to the end of the SchNet-generated
             fingerprint.
     Returns:
@@ -85,7 +86,7 @@ def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn, boltz_nn, morga
         boltzmann_fp = update_boltz(conf_fp=conf_fp,
                                     weight=weight,
                                     boltz_nn=boltz_nn,
-                                    morgan_fp=morgan_fp)
+                                    extra_feats=extra_feats)
         boltzmann_fps.append(boltzmann_fp)
 
     boltzmann_fps = torch.stack(boltzmann_fps)

@@ -73,7 +73,14 @@ def make_class_model(model_type, param_dic):
 
     classifications = [True] * len(param_dic["readout_names"])
 
-    num_basis = param_dic["mol_basis"] + param_dic["morgan_length"]
+    if "extra_feat_length" in param_dic:
+        extra_feats = param_dic["extra_feat_length"]
+        num_basis = param_dic["mol_basis"] + extra_feats
+    elif "morgan_length" in param_dic:
+        num_basis = param_dic["mol_basis"] + param_dic["morgan_length"]
+    else:
+        num_basis = param_dic["mol_basis"]
+
     readout = make_readout(names=param_dic["readout_names"],
                            classifications=classifications,
                            num_basis=num_basis,
@@ -87,16 +94,14 @@ def make_class_model(model_type, param_dic):
                                 last_act=None)
 
     params = {
-        'n_atom_basis': param_dic["n_atom_basis"],
-        'n_filters': param_dic["n_filters"],
-        'n_gaussians': param_dic["n_gaussians"],
         'n_convolutions': param_dic["n_conv"],
-        'cutoff': param_dic["cutoff"],
-        'trainable_gauss': param_dic["trainable_gauss"],
-        'dropout_rate': param_dic["dropout_rate"],
+        'extra_features': param_dic.get('extra_features'),
         'mol_fp_layers': mol_fp_layers,
         'readoutdict': readout
     }
+
+    params.update(param_dic)
+
 
     if param_dic.get("boltz_params") is not None:
         boltz = make_boltz(**param_dic["boltz_params"])

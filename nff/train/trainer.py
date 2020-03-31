@@ -88,6 +88,9 @@ class Trainer:
         self._model.to(device)
         self.optimizer.load_state_dict(self.optimizer.state_dict())
 
+    def call_model(self, batch):
+        return self._model(batch)
+
     def _check_is_parallel(self):
         return True if isinstance(self._model, torch.nn.DataParallel) else False
 
@@ -196,7 +199,7 @@ class Trainer:
                     for h in self.hooks:
                         h.on_batch_begin(self, batch)
 
-                    results = self._model(batch)
+                    results = self.call_model(batch)
                     loss += self.loss_fn(batch, results)
                     self.step += 1
 
@@ -268,7 +271,7 @@ class Trainer:
                 h.on_validation_batch_begin(self)
 
             # move input to gpu, if needed
-            results = self._model(val_batch)
+            results = self.call_model(val_batch)
 
             val_batch_loss = self.loss_fn(val_batch, results).data.cpu().numpy()
 
@@ -301,4 +304,12 @@ class Trainer:
             device,
             self.loss_is_normalized
         )
+
+
+
+
+
+
+
+
 

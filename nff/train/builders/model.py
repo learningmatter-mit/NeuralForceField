@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from nff.nn.models.schnet import SchNet, SchNetAuTopology, AuTopology
 from nff.nn.models.hybridgraph import HybridGraphConv
-from nff.nn.models.conformers import WeightedConformers
+from nff.nn.models.conformers import WeightedConformers, ChemProp3D
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -70,6 +70,19 @@ PARAMS_TYPE = {"SchNet":
                    'dropout_rate': float,
                    'readoutdict': dict,
                    'mol_fp_layers': list                
+                },
+
+                "ChemProp3D":
+                {
+                   'n_atom_basis': int,
+                   'n_filters': int,
+                   'n_gaussians': int,
+                   'n_convolutions': int,
+                   'cutoff': float,
+                   'trainable_gauss': bool,
+                   'dropout_rate': float,
+                   'readoutdict': dict,
+                   'mol_fp_layers': list                
                 }
 
                }
@@ -79,7 +92,8 @@ MODEL_DICT = {
     "AuTopology": AuTopology,
     "SchNetAuTopology": SchNetAuTopology,
     "HybridGraphConv": HybridGraphConv,
-    "WeightedConformers": WeightedConformers
+    "WeightedConformers": WeightedConformers,
+    "ChemProp3D": ChemProp3D
 }
 
 

@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from munch import Munch
 
 from nff.nn.layers import DEFAULT_DROPOUT_RATE
 from nff.nn.modules import (
@@ -9,10 +10,18 @@ from nff.nn.modules import (
 from nff.nn.graphop import conf_pool
 from nff.nn.utils import construct_sequential
 
+from chemprop.models import build_model as build_chemprop
+from chemprop.data.data import MoleculeDataset
+
+import pdb
+
+
 """
 Model that uses a representation of a molecule in terms of different 3D
 conformers to predict properties.
 """
+
+FEAT_SCALING = 20
 
 
 class WeightedConformers(nn.Module):
@@ -107,10 +116,12 @@ class WeightedConformers(nn.Module):
             ]
         )
 
+        # extra features to consider
+        self.extra_feats = modelparams.get("extra_features", [])
+
         mol_fp_layers = modelparams["mol_fp_layers"]
         readoutdict = modelparams["readoutdict"]
         boltzmann_dict = modelparams["boltzmann_dict"]
-
 
         # the nn that converts atomic finerprints to a molecular fp
         self.mol_fp_nn = construct_sequential(mol_fp_layers)
@@ -122,7 +133,6 @@ class WeightedConformers(nn.Module):
         # the readout acts on this final molceular fp
         self.readout = NodeMultiTaskReadOut(multitaskdict=readoutdict)
 
-
     def make_boltz_nn(self, boltzmann_dict):
         if boltzmann_dict["type"] == "multiply":
             return
@@ -130,8 +140,39 @@ class WeightedConformers(nn.Module):
         network = construct_sequential(layers)
         return network
 
+    def add_features(self, batch, num_mols, **kwargs):
 
-    def convolve(self, batch, xyz=None):
+        if self.extra_feats == []:
+            return [torch.tensor([]) for _ in range(num_mols)]
+
+        assert all([feat in batch.keys() for feat in self.extra_feats])
+        feats = []
+        for feat_name in self.extra_feats:
+            feat_len = len(batch[feat_name]) // num_mols
+            splits = [feat_len] * num_mols
+            feat = list(torch.split(batch[feat_name] * FEAT_SCALING, splits))
+
+            # ##
+            # # pdb.set_trace()
+            # for i in range(len(feat)):
+            #     new_feat = torch.zeros(len(feat[i]))
+            # #     new_feat = feat[i].to('cpu')
+            #     feat[i] = new_feat
+
+            # ##
+
+            feats.append(feat)
+
+        common_feats = []
+        for j in range(len(feats[0])):
+            common_feats.append([])
+            for i in range(len(feats)):
+                common_feats[-1].append(feats[i][j])
+            common_feats[-1] = torch.cat(common_feats[-1])
+
+        return common_feats
+
+    def convolve(self, batch, xyz=None, **kwargs):
         """
 
         Apply the convolutional layers to the batch.
@@ -180,13 +221,11 @@ class WeightedConformers(nn.Module):
         # split the boltzmann weights by species
         boltzmann_weights = torch.split(batch["weights"], num_confs)
         # get the morgan fp per species if it exists
-        if "morgan" in batch.keys():
-            num_mols = len(fps_by_smiles)
-            morgan_len = len(batch["morgan"]) // num_mols
-            splits = [morgan_len] * num_mols
-            morgan = torch.split(batch["morgan"], splits)
-        else:
-            morgan = None
+
+        num_mols = len(fps_by_smiles)
+        extra_feats = self.add_features(batch=batch, num_mols=num_mols,
+                                        **kwargs)
+
         # return everything in a dictionary
         outputs = dict(r=r,
                        N=N,
@@ -194,11 +233,11 @@ class WeightedConformers(nn.Module):
                        fps_by_smiles=fps_by_smiles,
                        boltzmann_weights=boltzmann_weights,
                        mol_sizes=mol_sizes,
-                       morgan=morgan)
+                       extra_feats=extra_feats)
 
         return outputs
 
-    def forward(self, batch, xyz=None):
+    def forward(self, batch, xyz=None, **kwargs):
         """
 
         Use the outputs of the convolutions to make a prediction.
@@ -219,12 +258,14 @@ class WeightedConformers(nn.Module):
 
         """
 
-        outputs = self.convolve(batch, xyz)
+        outputs = self.convolve(batch=batch,
+                                xyz=xyz,
+                                **kwargs)
 
         fps_by_smiles = outputs["fps_by_smiles"]
         batched_weights = outputs["boltzmann_weights"]
         mol_sizes = outputs["mol_sizes"]
-        morgan_fps = outputs["morgan"]
+        extra_feat_fps = outputs["extra_feats"]
 
         conf_fps = []
         # go through each species
@@ -232,7 +273,7 @@ class WeightedConformers(nn.Module):
             boltzmann_weights = batched_weights[i]
             smiles_fp = fps_by_smiles[i]
             mol_size = mol_sizes[i]
-            morgan = morgan_fps[i]
+            extra_feats = extra_feat_fps[i]
 
             # pool the atomic fingerprints as described above
             conf_fp = conf_pool(smiles_fp=smiles_fp,
@@ -240,7 +281,7 @@ class WeightedConformers(nn.Module):
                                 boltzmann_weights=boltzmann_weights,
                                 mol_fp_nn=self.mol_fp_nn,
                                 boltz_nn=self.boltz_nn,
-                                morgan_fp=morgan)
+                                extra_feats=extra_feats)
 
             conf_fps.append(conf_fp)
 
@@ -248,3 +289,38 @@ class WeightedConformers(nn.Module):
         results = self.readout(conf_fps)
 
         return results
+
+
+class ChemProp3D(WeightedConformers):
+    def __init__(self, modelparams):
+
+        WeightedConformers.__init__(self, modelparams)
+
+        namespace = Munch(modelparams["chemprop"])
+        self.cp_model = build_chemprop(namespace)
+        self.cp_data_name = namespace.get("data_name",
+                                          "chemprop_data")
+
+    def get_chemprop_inp(self, batch, cp_data, smiles_dic):
+
+        schnet_smiles = batch["smiles"]
+        cp_idx = [smiles_dic[smiles] for smiles in schnet_smiles]
+        cp_batch = MoleculeDataset([cp_data[idx]
+                                    for idx in cp_idx])
+        smiles_batch = cp_batch.smiles()
+        features_batch = cp_batch.features()
+
+        return (smiles_batch, features_batch)
+
+    def add_features(self, batch, ex_data, smiles_dics, **kwargs):
+
+        cp_data = ex_data[0]
+        smiles_dic = smiles_dics[0]
+        inputs = self.get_chemprop_inp(batch=batch,
+                                       cp_data=cp_data,
+                                       smiles_dic=smiles_dic)
+        cp_feats = self.cp_model.encoder(*inputs)
+        out_feats = [item for item in cp_feats]
+
+        return out_feats
+
