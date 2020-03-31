@@ -20,7 +20,6 @@ from nff.hyperparams.utils import (create_expt,
                                    loop_end_msg,
                                    conclude_round)
 
-import pdb
 
 def init_loop(conn,
               experiment,
@@ -138,7 +137,6 @@ def main(project_name,
             T.train(device=device, n_epochs=num_epochs)
         except Exception as e:
             print(e)
-            pdb.post_mortem()
             experiment = conclude_round(conn=conn,
                                         experiment=experiment,
                                         suggestion=suggestion,
