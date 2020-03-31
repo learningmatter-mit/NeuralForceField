@@ -208,8 +208,9 @@ class WeightedConformers(nn.Module):
         fps_by_smiles = torch.split(r, N)
         # split the boltzmann weights by species
         boltzmann_weights = torch.split(batch["weights"], num_confs)
-        # get the morgan fp per species if it exists
+        
 
+        # add extra features (e.g. from Morgan fingerprint or MPNN)
         num_mols = len(fps_by_smiles)
         extra_feats = self.add_features(batch=batch, num_mols=num_mols,
                                         **kwargs)
