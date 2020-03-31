@@ -132,7 +132,6 @@ def main(project_name,
 
         begin_log(model_folder=model_folder, project_name=project_name,
                   suggestion=suggestion)
-
         try:
             T.train(device=device, n_epochs=num_epochs)
         except Exception as e:

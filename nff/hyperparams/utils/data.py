@@ -6,6 +6,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from nff.data import collate_dicts
 
+
 def add_morgan(dataset, vec_length):
     dataset.props["morgan"] = []
     for smiles in dataset.props['smiles']:
@@ -26,16 +27,22 @@ def add_morgan(dataset, vec_length):
 
 def trim_confs(dataset, num_confs):
 
-    for i, nxyz in enumerate(dataset.props["nxyz"]):
+    for i in range(len(dataset)):
 
         mol_size = dataset.props["mol_size"][i]
-        new_num_atoms = int(mol_size * num_confs)
+        old_num_atoms = dataset.props["num_atoms"][i]
 
-        if new_num_atoms == dataset.props["num_atoms"][i]:
-        	continue
-        
-        # update the number of atoms and the nxyz
-        dataset.props["num_atoms"][i] = new_num_atoms
+        # if conformers in batch beforehand
+        # are less than num_confs, use
+        # the old number of conformers
+
+        confs_in_batch = old_num_atoms // mol_size
+        new_num_atoms = int(mol_size * min(
+            confs_in_batch, num_confs))
+        dataset.props["num_atoms"][i] = torch.tensor(
+            new_num_atoms)
+
+        # update nxyz
         dataset.props["nxyz"][i] = dataset.props["nxyz"][i][
             :new_num_atoms]
 
@@ -45,16 +52,13 @@ def trim_confs(dataset, num_confs):
         dataset.props["weights"][i] = new_weights
 
         # trim the neighbour list
-        new_nbr_list = dataset.props["nbr_list"][i]
-        good_idx = []
-        for j, pair in enumerate(new_nbr_list):
-        	max_idx = np.max(pair.numpy())
-        	if max_idx <= new_num_atoms - 1:
-        		good_idx.append(j)
 
-        new_nbr_list = new_nbr_list[good_idx]
-        dataset.props["nbr_list"][i] = new_nbr_list
+        nbr_list = dataset.props["nbr_list"][i]
+        max_neighbor, _ = torch.max(nbr_list, dim=1)
+        mask = (max_neighbor <= new_num_atoms - 1)
+        good_idx = mask.nonzero().reshape(-1)
 
+        dataset.props["nbr_list"][i] = nbr_list[good_idx]
 
 
 def get_data_dic(base_train, base_val, base_test, params):

@@ -10,7 +10,7 @@
 					{"name": "mol_basis", "type": "int", "bounds": {"min": 128, "max": 256}},
 					{"name": "num_mol_layers", "type": "int", "bounds": {"min": 1, "max": 4}},
 					{"name": "cutoff", "type": "double", "bounds": {"min": 4.0, "max": 7.0}},
-                    {"name": "num_confs", "type": "int", "bounds": {"min": 7, "max": 9}}
+                    {"name": "num_confs", "type": "int", "bounds": {"min": 1, "max": 10}}
 				],
 
 	"set_params": {"boltz_params": {"boltz_type": "multiply"},
