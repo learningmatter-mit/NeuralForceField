@@ -135,7 +135,8 @@ class Trainer:
         )
         torch.save(self.state_dict, chkpt)
 
-        chpts = [f for f in os.listdir(self.checkpoint_path) if f.endswith(".pth.tar")]
+        chpts = [f for f in os.listdir(
+            self.checkpoint_path) if f.endswith(".pth.tar")]
         if len(chpts) > self.checkpoints_to_keep:
             chpt_epochs = [int(f.split(".")[0].split("-")[-1]) for f in chpts]
             sidx = np.argsort(chpt_epochs)
@@ -210,7 +211,6 @@ class Trainer:
                         loss.backward()
                         self.optimizer.step()
 
-
                         for h in self.hooks:
                             h.on_batch_end(self, batch, results, loss)
 
@@ -260,7 +260,7 @@ class Trainer:
         n_val = 0
 
         for val_batch in self.validation_loader:
-            
+
             val_batch = batch_to(val_batch, device)
 
             # append batch_size
@@ -273,7 +273,8 @@ class Trainer:
             # move input to gpu, if needed
             results = self.call_model(val_batch)
 
-            val_batch_loss = self.loss_fn(val_batch, results).data.cpu().numpy()
+            val_batch_loss = self.loss_fn(
+                val_batch, results).data.cpu().numpy()
 
             if self.loss_is_normalized:
                 val_loss += val_batch_loss * vsize
@@ -304,12 +305,3 @@ class Trainer:
             device,
             self.loss_is_normalized
         )
-
-
-
-
-
-
-
-
-

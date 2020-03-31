@@ -21,8 +21,6 @@ Model that uses a representation of a molecule in terms of different 3D
 conformers to predict properties.
 """
 
-FEAT_SCALING = 20
-
 
 class WeightedConformers(nn.Module):
 
@@ -151,16 +149,6 @@ class WeightedConformers(nn.Module):
             feat_len = len(batch[feat_name]) // num_mols
             splits = [feat_len] * num_mols
             feat = list(torch.split(batch[feat_name] * FEAT_SCALING, splits))
-
-            # ##
-            # # pdb.set_trace()
-            # for i in range(len(feat)):
-            #     new_feat = torch.zeros(len(feat[i]))
-            # #     new_feat = feat[i].to('cpu')
-            #     feat[i] = new_feat
-
-            # ##
-
             feats.append(feat)
 
         common_feats = []
