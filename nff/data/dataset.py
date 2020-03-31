@@ -490,6 +490,8 @@ def concatenate_dict(*dicts):
                 return 1
             else:
                 return len(value)
+        if isinstance(value, torch.Tensor):
+            return value.shape[0]
 
         return 1
 
@@ -503,6 +505,10 @@ def concatenate_dict(*dicts):
         """
         if isinstance(value, list):
             return value
+
+        elif isinstance(value, torch.Tensor):
+            if value.type() == 'torch.LongTensor':
+                return [item for item in value]
 
         elif get_length(value) == 1:
             return [value]
@@ -522,8 +528,7 @@ def concatenate_dict(*dicts):
                 key,
                 [None] * num_values if num_values > 1 else None
             )
-            values.append(torch.Tensor(flatten_val(val)))
-
+            values += flatten_val(val)
         joint_dict[key] = values
 
     return joint_dict
