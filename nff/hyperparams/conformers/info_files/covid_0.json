@@ -9,7 +9,7 @@
 					{"name": "n_atom_basis", "type": "int", "bounds": {"min": 128, "max": 256}},
 					{"name": "mol_basis", "type": "int", "bounds": {"min": 128, "max": 256}},
 					{"name": "num_mol_layers", "type": "int", "bounds": {"min": 1, "max": 4}},
-                    {"name": "num_confs", "type": "int", "bounds": {"min": 1, "max": 10}}
+					{"name": "num_confs", "type": "int", "bounds": {"min": 1, "max": 10}}
 				],
 
 	"set_params": {"boltz_params": {"boltz_type": "multiply"},
@@ -20,9 +20,9 @@
 				"batch_size": 15,
 				"cutoff": 5.0},
 
-	"budget": "default",
+	"budget": 1000,
 	"device": 3,
-	"num_epochs": 10,
+	"num_epochs": 15,
 	"loss_name": "cross_entropy",
 	"target_name": "bind",
 	"client_token": "JQJLZYNHOWKBUXWMYBZFKRKHURZAZRIQWERJSBKWZUBODXEQ",
@@ -35,7 +35,7 @@
 	"dataset_path": "/home/saxelrod/Repo/projects/covid_nff/NeuralForceField/tutorials/data/covid_crest_10.pth.tar",
 
 	"eval_metric": "roc_auc",
-        "eval_on": "val",
+    "eval_on": "val",
 	"monitor_metrics": ["RocAuc", "PrAuc"]
 
 }
