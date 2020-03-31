@@ -35,7 +35,7 @@
 	"dataset_path": "/home/saxelrod/Repo/projects/covid_nff/NeuralForceField/tutorials/data/covid_crest_10.pth.tar",
 
 	"eval_metric": "roc_auc",
-    "eval_on": "val",
+	"eval_on": "val",
 	"monitor_metrics": ["RocAuc", "PrAuc"]
 
 }
