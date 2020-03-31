@@ -286,8 +286,6 @@ class ChemProp3D(WeightedConformers):
 
         namespace = Munch(modelparams["chemprop"])
         self.cp_model = build_chemprop(namespace)
-        self.cp_data_name = namespace.get("data_name",
-                                          "chemprop_data")
 
     def get_chemprop_inp(self, batch, cp_data, smiles_dic):
 
