@@ -6,7 +6,6 @@ import numpy as np
 from torch.utils.data import DataLoader
 from nff.data import collate_dicts
 
-
 def add_morgan(dataset, vec_length):
     dataset.props["morgan"] = []
     for smiles in dataset.props['smiles']:
@@ -33,8 +32,8 @@ def trim_confs(dataset, num_confs):
         new_num_atoms = int(mol_size * num_confs)
 
         if new_num_atoms == dataset.props["num_atoms"][i]:
-        	return
-
+        	continue
+        
         # update the number of atoms and the nxyz
         dataset.props["num_atoms"][i] = new_num_atoms
         dataset.props["nxyz"][i] = dataset.props["nxyz"][i][
@@ -55,6 +54,7 @@ def trim_confs(dataset, num_confs):
 
         new_nbr_list = new_nbr_list[good_idx]
         dataset.props["nbr_list"][i] = new_nbr_list
+
 
 
 def get_data_dic(base_train, base_val, base_test, params):
