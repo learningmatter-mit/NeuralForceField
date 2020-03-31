@@ -282,6 +282,28 @@ class WeightedConformers(nn.Module):
 
 class ChemProp3D(WeightedConformers):
     def __init__(self, modelparams):
+        """
+        Example:
+            cp_params = {"num_tasks": 1, 
+                         "dataset_type": "classification",
+                         "atom_messages": False, 
+                         "hidden_size": 300,
+                         "bias": False, 
+                         "depth": 3, 
+                         "dropout": 0.2,
+                         "undirected": False, 
+                         "features_only": False,
+                         "use_input_features": True,
+                         "activation": "ReLU",
+                         "features_dim": 1, # doesn't matter if loading
+                         "ffn_num_layers": 2,
+                         "ffn_hidden_size": 300,
+                         "no_cache": False,
+                         "cuda": True}
+
+            modelparams.update({"chemprop": cp_params})
+            model = ChemProp3D(modelparams)
+        """
 
         WeightedConformers.__init__(self, modelparams)
 
