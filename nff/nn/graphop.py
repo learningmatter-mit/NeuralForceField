@@ -72,7 +72,7 @@ def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn, boltz_nn, extra
 
     # split the atomic fingerprints up by conformer
     for atomic_fps in torch.split(smiles_fp, N):
-        # sum them an then convert to molecular fp
+        # sum them and then convert to molecular fp
         summed_atomic_fps = atomic_fps.sum(dim=0)
         mol_fp = mol_fp_nn(summed_atomic_fps)
         # add to the list of conformer fp's

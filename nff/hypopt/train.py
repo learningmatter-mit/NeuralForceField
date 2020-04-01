@@ -67,6 +67,7 @@ def get_train_class(model_type):
     if model_type == "ChemProp3D":
         return MixedDataTrainer
 
+
 def get_train_kwargs(param_dic):
 
     kwargs = copy.deepcopy(param_dic)

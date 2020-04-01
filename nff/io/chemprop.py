@@ -1,6 +1,7 @@
 import subprocess
 import os
 
+
 def make_cp_features(cp_dir, smiles_path, save_path, feat_type):
     """
     Call chemprop to make external features

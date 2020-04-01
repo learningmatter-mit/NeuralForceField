@@ -10,7 +10,6 @@ from nff.nn.graphop import conf_pool
 from nff.nn.utils import construct_sequential
 
 
-
 """
 Model that uses a representation of a molecule in terms of different 3D
 conformers to predict properties.

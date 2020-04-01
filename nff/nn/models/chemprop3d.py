@@ -7,6 +7,7 @@ from chemprop.data.data import MoleculeDataset
 
 from nff.nn.models.conformers import WeightedConformers
 
+
 class ChemProp3D(WeightedConformers):
     def __init__(self, modelparams):
         """
@@ -59,4 +60,3 @@ class ChemProp3D(WeightedConformers):
         out_feats = [item for item in cp_feats]
 
         return out_feats
-

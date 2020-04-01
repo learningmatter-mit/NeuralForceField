@@ -6,6 +6,7 @@ from sklearn.metrics import (roc_auc_score,
                              precision_recall_curve)
 
 from nff.train import evaluate as nff_evaluate
+from nff.train.chemprop import load_external_data
 
 IO_MODELS = ["ChemProp3D"]
 
@@ -34,7 +35,6 @@ def get_eval_kwargs(model_type, param_dic):
         return {}
 
     if model_type == "ChemProp3D":
-        from nff.train.io import load_external_data
         load_dics = param_dic["chemprop"]["load_dics"]
         data, smiles_dic = load_external_data(load_dics[0])
         eval_kwargs = {"ex_data": [data], "smiles_dics": [smiles_dic]}

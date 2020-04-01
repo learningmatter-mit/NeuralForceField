@@ -38,7 +38,7 @@ def make_all_cp_feats(info):
     for feat_path, feat_type in zip(features_paths, feat_types):
         msg = ("Creating {} chemprop features "
                "from {} and saving to {}".format(
-               	feat_type, smiles_path, feat_path))
+                   feat_type, smiles_path, feat_path))
         print(msg)
         make_cp_features(cp_dir=cp_dir,
                          smiles_path=smiles_path,
@@ -51,6 +51,6 @@ def create_features(info):
         make_smiles_file(info)
         make_all_cp_feats(info)
 
-def preprocess(info):
-	create_features(info)
 
+def preprocess(info):
+    create_features(info)

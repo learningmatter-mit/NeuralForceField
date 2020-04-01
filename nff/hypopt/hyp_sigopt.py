@@ -3,19 +3,19 @@ from sigopt import Connection
 import os
 
 from nff.hypopt.io import (make_model_folder,
-                               save_info,
-                               get_splits)
+                           save_info,
+                           get_splits)
 from nff.hypopt.data import get_data_dic
 from nff.hypopt.params import (make_wc_model,
-                                   make_cp3d_model)
+                               make_cp3d_model)
 from nff.hypopt.eval import evaluate_model
 from nff.hypopt.train import make_trainer
 
 from nff.data import Dataset
 
+
 def create_expt(name, param_regime, objective, client_token, budget='default'):
-    conn = Connection(
-        client_token=client_token)
+    conn = Connection(client_token=client_token)
 
     # usually 10-20 x number of parameters
     if budget == 'default':
@@ -234,6 +234,7 @@ def run_loop(project_name,
                                                      metrics=monitor_metrics,
                                                      model_type=model_type)
 
+        print(model)
         T = make_trainer(model=model,
                          model_type=model_type,
                          train_loader=data_dic["train"]["loader"],

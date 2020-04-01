@@ -39,7 +39,7 @@ def make_layers(in_basis,
 
         layers += [lin_layer, act_layer, drop_layer]
     # remove the last activation layer
-    layers = layers[:-1]
+    layers = layers[:-2]
     # update with a final activation if needed
     if last_act is not None:
         layers.append({"name": last_act, "param": {}})
@@ -95,14 +95,17 @@ def get_extra_wc_feats(param_dic):
         extra_length = 0
     return extra_length
 
+
 def get_extra_cp_feats(cp_params):
-  cp_feats = cp_params["hidden_size"]
-  extra_feats = cp_params.get("extra_features")
-  if extra_feats is None:
+
+    cp_feats = cp_params["hidden_size"]
+    extra_feats = cp_params.get("extra_features")
+    if extra_feats is None:
+        return cp_feats
+    for extra_feat in extra_feats:
+        cp_feats += extra_feat["length"]
     return cp_feats
-  for extra_feat in extra_feats:
-    cp_feats += extra_feat["length"] 
-  return cp_feats
+
 
 def get_wc_params(param_dic, num_extra_feats):
     """
