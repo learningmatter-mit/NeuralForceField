@@ -270,13 +270,35 @@ class Dataset(TorchDataset):
         """
         torch.save(self, path)
 
-    def gen_bond_prior(self):
+    def gen_bond_stats(self):
+
+        bond_len_dict = {}
+        # generate bond statistics
+        for i in range(len(self.props['nxyz'])):
+            z = self.props['nxyz'][i][:, 0]
+            xyz = self.props['nxyz'][i][:, 1:4]
+            bond_list = self.props['bonds'][i]
+            bond_len = (xyz[bond_list[:,0]] - xyz[bond_list[:,1]]).pow(2).sum(-1).sqrt()[:, None]
+            
+            bond_type_list = torch.stack( (z[ bond_list[:,0] ], z[ bond_list[:,1] ]) ).t()
+            for i, bond in enumerate(bond_type_list):
+                bond = tuple( torch.LongTensor(sorted( bond ) ).tolist() )
+                if bond not in bond_len_dict.keys():
+                    bond_len_dict[bond] = [bond_len[i]]
+                else:
+                    bond_len_dict[bond].append(bond_len[i])
+
+        # compute bond len averages   
+        self.bond_len_dict = {key: torch.stack(bond_len_dict[key]).mean(0) for key in bond_len_dict.keys()} 
+
+        return self.bond_len_dict
+
+    def gen_bond_prior(self, bond_len_dict=None):
 
         if not self.props:
             raise TypeError("the dataset has no data yet")
 
         bond_dict = {}
-        bond_len_dict = {}
         bond_count_dict = {}
         mol_idx_dict = {}
         for i in range(len(self.props['nxyz'])):
@@ -309,24 +331,9 @@ class Dataset(TorchDataset):
         if 'cell' in self.props.keys():
             self.unwrap_xyz(mol_idx_dict)
 
-        # generate bond statistics
-        for i in range(len(self.props['nxyz'])):
-            z = self.props['nxyz'][i][:, 0]
-            xyz = self.props['nxyz'][i][:, 1:4]
-            sys_name = self.props['smiles'][i]
-            bond_list = self.props['bonds'][i]
-            bond_len = (xyz[bond_list[:,0]] - xyz[bond_list[:,1]]).pow(2).sum(-1).sqrt()[:, None]
-            
-            bond_type_list = torch.stack( (z[ bond_list[:,0] ], z[ bond_list[:,1] ]) ).t()
-            for i, bond in enumerate(bond_type_list):
-                bond = tuple( torch.LongTensor(sorted( bond ) ).tolist() )
-                if bond not in bond_len_dict.keys():
-                    bond_len_dict[bond] = [bond_len[i]]
-                else:
-                    bond_len_dict[bond].append(bond_len[i])
-
-        # compute bond len averages   
-        bond_len_dict = {key: torch.stack(bond_len_dict[key]).mean(0) for key in bond_len_dict.keys()} 
+        # generate bond length dictionary if not given 
+        if not bond_len_dict:
+            bond_len_dict = self.gen_bond_stats()
 
         # update bond len 
         all_bond_len = []
