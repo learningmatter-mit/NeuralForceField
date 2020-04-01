@@ -911,7 +911,7 @@ class BondPrior(torch.nn.Module):
 
         e = self.k * (r - r_0).pow(2)
 
-        E = torch.stack([e.sum(0) for e in torch.split(e, num_bonds)])
+        E = torch.stack([e.sum(0).reshape(1) for e in torch.split(e, num_bonds)])
 
         result["energy"] = E
         result["energy_grad"] = compute_grad(inputs=xyz, output=E)
