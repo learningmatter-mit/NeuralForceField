@@ -1,5 +1,6 @@
 from nff.train import get_model
 
+
 def make_feat_nums(in_basis, out_basis, num_layers):
     if num_layers == 0:
         return []
@@ -86,19 +87,30 @@ def make_readout(names,
     return dic
 
 
-def get_wc_params(param_dic):
-    """
-    Get params for a WeightedConformer model
-    """
-
-    classifications = [True] * len(param_dic["readout_names"])
+def get_extra_wc_feats(param_dic):
     extra_feats = param_dic.get("extra_features")
     if extra_feats is not None:
         extra_length = sum([dic["length"] for dic in extra_feats])
     else:
         extra_length = 0
+    return extra_length
 
-    num_basis = param_dic["mol_basis"] + extra_length
+def get_extra_cp_feats(cp_params):
+  cp_feats = cp_params["hidden_size"]
+  extra_feats = cp_params.get("extra_features")
+  if extra_feats is None:
+    return cp_feats
+  for extra_feat in extra_feats:
+    cp_feats += extra_feat["length"] 
+  return cp_feats
+
+def get_wc_params(param_dic, num_extra_feats):
+    """
+    Get params for a WeightedConformer model
+    """
+
+    classifications = [True] * len(param_dic["readout_names"])
+    num_basis = param_dic["mol_basis"] + num_extra_feats
 
     readout = make_readout(names=param_dic["readout_names"],
                            classifications=classifications,
@@ -163,8 +175,10 @@ def make_wc_model(param_dic):
     Make a WeightedConformer model
     """
 
-    params = get_wc_params(param_dic)
-    model = get_model(params, model_type="WeightedConformers")
+    num_extra_feats = get_extra_wc_feats(param_dic)
+    wc_params = get_wc_params(param_dic=param_dic,
+                              num_extra_feats=num_extra_feats)
+    model = get_model(wc_params, model_type="WeightedConformers")
 
     return model
 
@@ -175,9 +189,11 @@ def make_cp3d_model(param_dic):
     """
 
     cp_params = get_cp_params(param_dic)
-    wc_params = get_wc_params(param_dic)
+    num_extra_feats = get_extra_cp_feats(cp_params)
+    wc_params = get_wc_params(param_dic=param_dic,
+                              num_extra_feats=num_extra_feats)
     wc_params.pop("chemprop")
-    
+
     final_params = {"chemprop": cp_params,
                     **wc_params}
     model = get_model(final_params, model_type="ChemProp3D")

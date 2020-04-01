@@ -7,8 +7,6 @@ from chemprop.data.data import MoleculeDataset
 
 from nff.nn.models.conformers import WeightedConformers
 
-import pdb
-
 class ChemProp3D(WeightedConformers):
     def __init__(self, modelparams):
         """

@@ -13,6 +13,7 @@ from nff.hypopt.hyp_train import make_trainer
 
 from nff.data import Dataset
 
+import pdb
 
 def create_expt(name, param_regime, objective, client_token, budget='default'):
     conn = Connection(
@@ -253,6 +254,7 @@ def run_loop(project_name,
             T.train(device=device, n_epochs=num_epochs)
         except Exception as e:
             print(e)
+            pdb.post_mortem()
             experiment = conclude_round(conn=conn,
                                         experiment=experiment,
                                         suggestion=suggestion,

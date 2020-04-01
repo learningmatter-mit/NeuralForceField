@@ -1,6 +1,5 @@
 import torch
 from nff.utils.scatter import compute_grad
-import pdb
 
 EPS = 1e-15
 

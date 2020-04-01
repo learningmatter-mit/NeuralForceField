@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from munch import Munch
 
 from nff.nn.layers import DEFAULT_DROPOUT_RATE
 from nff.nn.modules import (
@@ -10,7 +9,6 @@ from nff.nn.modules import (
 from nff.nn.graphop import conf_pool
 from nff.nn.utils import construct_sequential
 
-import pdb
 
 
 """
