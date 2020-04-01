@@ -1,8 +1,7 @@
 {
-	"project_name": "covid_schnet",
+	"project_name": "covid_chemprop3d",
 
-	"param_regime": [{"name": "morgan_length", "type": "int", "bounds": {"min": 0, "max": 256}},
-					{"name": "readout_dropout", "type": "double", "bounds": {"min": 0, "max": 0.5}},
+	"param_regime": [{"name": "readout_dropout", "type": "double", "bounds": {"min": 0, "max": 0.5}},
 					{"name": "mol_nn_dropout", "type": "double", "bounds": {"min": 0, "max": 0.5}},
                     {"name": "schnet_dropout", "type": "double", "bounds": {"min": 0, "max": 0.5}},
                     {"name": "n_conv", "type": "int", "bounds": {"min": 2, "max": 5}},
@@ -25,7 +24,38 @@
 				"min_lr": 1e-7,
 				"patience": 30,
 				"factor": 0.5,
-                "extra_features": [{"name": "morgan"}]},
+                "extra_features": null,
+
+	"chemprop": {"num_tasks": 1,
+	             "dataset_type": "classification",
+	             "atom_messages": false,
+	             "hidden_size": 300,
+	             "bias": false,
+	             "depth": 3,
+	             "dropout": 0.2,
+	             "undirected": false,
+	             "features_only": false,
+	             "use_input_features": true,
+	             "activation": "ReLU",
+	             "features_dim": 1,
+	             "ffn_num_layers": 2,
+	             "ffn_hidden_size": 300,
+	             "no_cache": false,
+	             "cuda": true,
+	             "features_scaling": false}
+
+	},
+
+	"load_dics": [{"data_type": "chemprop",
+	              "smiles_path": "/home/saxelrod/data/covid_data/all_crest.csv",
+	              "features_path": ["/home/saxelrod/data/covid_data/all_crest.npz"],
+	              "name": "chemprop_data",
+	              "args": {"max_data_size": null,
+	                       "features_dim": 1,
+	                       "use_compound_names": false,
+	                       "features_generator": null}
+
+	}],
 
 	"budget": 1000,
 	"device": 3,
@@ -45,7 +75,7 @@
 	"eval_on": "val",
 	"monitor_metrics": ["RocAuc", "PrAuc"],
 
-    "model_type": "WeightedConformers",
+    "model_type": "ChemProp3D",
     "model_kind": "classification",
     "loss_coef": {"bind": 1.0}
 

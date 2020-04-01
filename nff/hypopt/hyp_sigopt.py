@@ -6,7 +6,8 @@ from nff.hypopt.hyp_io import (make_model_folder,
                                save_info,
                                get_splits)
 from nff.hypopt.hyp_data import get_data_dic
-from nff.hypopt.hyp_params import make_class_model
+from nff.hypopt.hyp_params import (make_wc_model,
+                                   make_cp3d_model)
 from nff.hypopt.hyp_eval import evaluate_model
 from nff.hypopt.hyp_train import make_trainer
 
@@ -140,8 +141,8 @@ def init_class_loop(conn,
                             base_test=base_test,
                             params=param_dic)
 
-    model = make_class_model(model_type=model_type,
-                             param_dic=param_dic)
+    model_builder = get_model_builder(model_type)
+    model = model_builder(param_dic=param_dic)
     metric_dics = [{"target": target_name, "metric": name}
                    for name in metrics]
 
@@ -173,6 +174,12 @@ def end_log(value, eval_metric, model_folder, project_name):
 def get_init_func(model_kind):
     dic = {"classification": init_class_loop}
     return dic[model_kind]
+
+
+def get_model_builder(model_type):
+    dic = {"WeightedConformers": make_wc_model,
+           "ChemProp3D": make_cp3d_model}
+    return dic[model_type]
 
 
 def run_loop(project_name,
@@ -229,13 +236,16 @@ def run_loop(project_name,
                                                      model_type=model_type)
 
         T = make_trainer(model=model,
+                         model_type=model_type,
                          train_loader=data_dic["train"]["loader"],
                          val_loader=data_dic["val"]["loader"],
                          model_folder=model_folder,
                          loss_name=loss_name,
                          loss_coef=loss_coef,
                          metric_dics=metric_dics,
-                         max_epochs=num_epochs)
+                         max_epochs=num_epochs,
+                         **param_dic,
+                         **kwargs)
 
         begin_log(model_folder=model_folder, project_name=project_name,
                   suggestion=suggestion)

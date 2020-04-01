@@ -54,6 +54,7 @@ class Trainer:
         validation_interval=1,
         hooks=[],
         loss_is_normalized=True,
+        **kwargs
     ):
         self.model_path = model_path
         self.checkpoint_path = os.path.join(self.model_path, "checkpoints")

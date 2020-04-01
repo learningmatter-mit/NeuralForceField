@@ -1,6 +1,9 @@
 from nff.train import loss, metrics, hooks, Trainer
 from torch.optim import Adam
 
+
+IO_MODELS = ["ChemProp3D"]
+
 def get_loss(loss_name, loss_coef):
     loss_build_name = "build_{}_loss".format(loss_name)
     loss_builder = getattr(loss, loss_build_name)
@@ -54,8 +57,14 @@ def make_metrics(metric_dics):
 
     return train_metrics
 
+def get_train_class(model_type):
+    if model_type not in IO_MODELS:
+        return Trainer
+    from nff.train.io import MixedDataTrainer
+    return MixedDataTrainer
 
 def make_trainer(model,
+                 model_type,
                  train_loader,
                  val_loader,
                  model_folder,
@@ -63,15 +72,17 @@ def make_trainer(model,
                  loss_coef,
                  metric_dics,
                  max_epochs,
-                 min_lr=1e-7,
-                 patience=30,
-                 factor=0.5):
+                 lr,
+                 min_lr,
+                 patience,
+                 factor,
+                 **kwargs):
 
     loss_fn = get_loss(loss_name=loss_name,
                        loss_coef=loss_coef)
 
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
-    optimizer = Adam(trainable_params, lr=1e-5)
+    optimizer = Adam(trainable_params, lr=lr)
     train_metrics = make_metrics(metric_dics)
 
     train_hooks = make_hooks(max_epochs=max_epochs,
@@ -81,7 +92,9 @@ def make_trainer(model,
                              min_lr=min_lr,
                              patience=patience,
                              factor=factor)
-    T = Trainer(
+
+    train_class = get_train_class(model_type)
+    T = train_class(
         model_path=model_folder,
         model=model,
         loss_fn=loss_fn,
@@ -89,6 +102,7 @@ def make_trainer(model,
         train_loader=train_loader,
         validation_loader=val_loader,
         checkpoint_interval=1,
-        hooks=train_hooks
+        hooks=train_hooks,
+        **kwargs
     )
     return T

@@ -1,4 +1,4 @@
-from nff.nn.models.conformers import ChemProp3D
+from nff.nn.models.chemprop3d import ChemProp3D
 
 PARAMS_TYPE = {
                 "ChemProp3D":

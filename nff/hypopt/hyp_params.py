@@ -87,7 +87,10 @@ def make_readout(names,
     return dic
 
 
-def make_class_model(model_type, param_dic):
+def get_wc_params(param_dic):
+    """
+    Get params for a WeightedConformer model
+    """
 
     classifications = [True] * len(param_dic["readout_names"])
     extra_feats = param_dic.get("extra_features")
@@ -103,20 +106,21 @@ def make_class_model(model_type, param_dic):
                            num_basis=num_basis,
                            num_layers=param_dic["num_readout_layers"],
                            layer_act=param_dic["layer_act"],
-                           dropout_rate=param_dic["dropout_rate"])
+                           dropout_rate=param_dic["readout_dropout"])
 
     mol_fp_layers = make_layers(in_basis=param_dic["n_atom_basis"],
                                 out_basis=param_dic["mol_basis"],
                                 num_layers=param_dic["num_mol_layers"],
                                 layer_act=param_dic["layer_act"],
                                 last_act=None,
-                                dropout_rate=param_dic["dropout_rate"])
+                                dropout_rate=param_dic["mol_nn_dropout"])
 
     params = {
         'n_convolutions': param_dic["n_conv"],
         'extra_features': param_dic.get('extra_features'),
         'mol_fp_layers': mol_fp_layers,
-        'readoutdict': readout
+        'readoutdict': readout,
+        'dropout_rate': param_dic["schnet_dropout"]
     }
 
     params.update(param_dic)
@@ -125,6 +129,29 @@ def make_class_model(model_type, param_dic):
         boltz = make_boltz(**param_dic["boltz_params"])
         params.update({'boltzmann_dict': boltz})
 
-    model = get_model(params, model_type=model_type)
+    return params
+
+
+def make_wc_model(param_dic):
+    """
+    Make a WeightedConformer model
+    """
+
+    params = get_wc_params(param_dic)
+    model = get_model(params, model_type="WeightedConformers")
+
+    return model
+
+
+def make_cp3d_model(param_dic):
+    """
+    Make a ChemProp3D model
+    """
+
+    cp_params = param_dic["chemprop"]
+    wc_params = get_wc_params(param_dic)
+    final_params = {"chemprop": cp_params,
+                    **wc_params}
+    model = get_model(final_params, model_type="ChemProp3D")
 
     return model
