@@ -1,22 +1,13 @@
-import torch
-import torch.nn as nn
-from munch import Munch
 
-from nff.nn.layers import DEFAULT_DROPOUT_RATE
-from nff.nn.modules import (
-    SchNetConv,
-    NodeMultiTaskReadOut,
-)
-from nff.nn.graphop import conf_pool
-from nff.nn.utils import construct_sequential
+from munch import Munch
 
 from chemprop.models import build_model as build_chemprop
 from chemprop.data.data import MoleculeDataset
 
-import pdb
 
 from nff.nn.models.conformers import WeightedConformers
 
+import pdb
 
 class ChemProp3D(WeightedConformers):
     def __init__(self, modelparams):

@@ -10,7 +10,10 @@
 					{"name": "n_atom_basis", "type": "int", "bounds": {"min": 128, "max": 256}},
 					{"name": "mol_basis", "type": "int", "bounds": {"min": 128, "max": 256}},
 					{"name": "num_mol_layers", "type": "int", "bounds": {"min": 1, "max": 4}},
-					{"name": "num_confs", "type": "int", "bounds": {"min": 1, "max": 10}}
+					{"name": "num_confs", "type": "int", "bounds": {"min": 1, "max": 10}},
+					{"name": "cp_hidden_size", "type": "int", "bounds": {"min": 200, "max": 400}},
+					{"name": "cp_dropout", "type": "double", "bounds": {"min": 0, "max": 0.5}},
+					{"name": "cp_depth", "type": "int", "bounds": {"min": 1, "max": 4}}
 				],
 
 	"set_params": {"boltz_params": {"boltz_type": "multiply"},
@@ -25,24 +28,20 @@
 				"patience": 30,
 				"factor": 0.5,
                 "extra_features": null,
-
-	"chemprop": {"num_tasks": 1,
-	             "dataset_type": "classification",
-	             "atom_messages": false,
-	             "hidden_size": 300,
-	             "bias": false,
-	             "depth": 3,
-	             "dropout": 0.2,
-	             "undirected": false,
-	             "features_only": false,
-	             "use_input_features": true,
-	             "activation": "ReLU",
-	             "features_dim": 1,
-	             "ffn_num_layers": 2,
-	             "ffn_hidden_size": 300,
-	             "no_cache": false,
-	             "cuda": true,
-	             "features_scaling": false}
+				"chemprop": {"num_tasks": 1,
+				             "dataset_type": "classification",
+				             "atom_messages": false,
+				             "bias": false,
+				             "undirected": false,
+				             "features_only": false,
+				             "use_input_features": true,
+				             "activation": "ReLU",
+				             "features_dim": 1,
+				             "ffn_num_layers": 2,
+				             "ffn_hidden_size": 300,
+				             "no_cache": false,
+				             "cuda": true,
+				             "features_scaling": false}
 
 	},
 
@@ -75,9 +74,9 @@
 	"eval_on": "val",
 	"monitor_metrics": ["RocAuc", "PrAuc"],
 
-    "model_type": "ChemProp3D",
-    "model_kind": "classification",
-    "loss_coef": {"bind": 1.0}
+	"model_type": "ChemProp3D",
+	"model_kind": "classification",
+	"loss_coef": {"bind": 1.0}
 
 }
 

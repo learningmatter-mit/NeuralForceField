@@ -45,9 +45,9 @@
 	"eval_on": "val",
 	"monitor_metrics": ["RocAuc", "PrAuc"],
 
-    "model_type": "WeightedConformers",
-    "model_kind": "classification",
-    "loss_coef": {"bind": 1.0}
+	"model_type": "WeightedConformers",
+	"model_kind": "classification",
+	"loss_coef": {"bind": 1.0}
 
 }
 

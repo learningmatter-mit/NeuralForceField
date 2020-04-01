@@ -1,6 +1,5 @@
 from nff.train import get_model
 
-
 def make_feat_nums(in_basis, out_basis, num_layers):
     if num_layers == 0:
         return []
@@ -132,6 +131,33 @@ def get_wc_params(param_dic):
     return params
 
 
+def get_cp_params(param_dic):
+    """
+    Example:
+        info = {
+            "param_regime": [{"name": "cp_hidden_size", "type": "int", "bounds": {"min": 100, "max": 200}}],
+            "set_params": {"readout_names": ["bind"],
+                            "chemprop": ["depth": 3]}}
+        In a given iteration, this would lead to something like this:
+            param_dic = {"cp_hidden_size": 132, "readout_name": ["bind"],
+                         "chemprop": ["depth": 3]}]
+        After applying this `get_cp_params`, we get
+            param_dic = {readout_name": ["bind"],
+                         "chemprop": ["depth": 3, "hidden_size": 132]}]
+    """
+
+    params = {**param_dic["chemprop"]}
+    # anything that starts with "cp_"
+    # is a chemprop param
+
+    for key, val in param_dic.items():
+        if key.startswith("cp_"):
+            new_key = key.replace("cp_", "")
+            params.update({new_key: val})
+
+    return params
+
+
 def make_wc_model(param_dic):
     """
     Make a WeightedConformer model
@@ -148,8 +174,10 @@ def make_cp3d_model(param_dic):
     Make a ChemProp3D model
     """
 
-    cp_params = param_dic["chemprop"]
+    cp_params = get_cp_params(param_dic)
     wc_params = get_wc_params(param_dic)
+    wc_params.pop("chemprop")
+    
     final_params = {"chemprop": cp_params,
                     **wc_params}
     model = get_model(final_params, model_type="ChemProp3D")
