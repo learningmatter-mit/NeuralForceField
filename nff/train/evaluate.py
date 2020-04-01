@@ -1,10 +1,14 @@
-import numpy as np
-import torch
-from nff.utils.cuda import batch_to, to_cpu, batch_detach
-from nff.utils.scatter import compute_grad
+from nff.utils.cuda import batch_to, batch_detach
 from nff.data.dataset import concatenate_dict
 
-def evaluate(model, loader, loss_fn, device, loss_is_normalized=True, submodel=None):
+
+def evaluate(model,
+             loader,
+             loss_fn,
+             device,
+             loss_is_normalized=True,
+             submodel=None,
+             **kwargs):
     """Evaluate the current state of the model using a given dataloader
     """
 
@@ -30,7 +34,7 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True, submodel=N
         if submodel is not None:
             results = getattr(model, submodel)(batch)
         else:
-            results = model(batch)
+            results = model(batch, **kwargs)
 
         eval_batch_loss = loss_fn(batch, results).data.cpu().numpy()
 

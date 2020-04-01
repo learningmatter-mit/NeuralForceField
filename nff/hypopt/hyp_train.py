@@ -1,8 +1,10 @@
 from nff.train import loss, metrics, hooks, Trainer
 from torch.optim import Adam
 
+import copy
 
 IO_MODELS = ["ChemProp3D"]
+
 
 def get_loss(loss_name, loss_coef):
     loss_build_name = "build_{}_loss".format(loss_name)
@@ -57,11 +59,23 @@ def make_metrics(metric_dics):
 
     return train_metrics
 
+
 def get_train_class(model_type):
     if model_type not in IO_MODELS:
         return Trainer
     from nff.train.io import MixedDataTrainer
     return MixedDataTrainer
+
+
+def get_train_kwargs(param_dic):
+
+    kwargs = copy.deepcopy(param_dic)
+    if "chemprop" in param_dic:
+        kwargs.update(**param_dic["chemprop"])
+        kwargs.pop("chemprop")
+
+    return kwargs
+
 
 def make_trainer(model,
                  model_type,
@@ -72,28 +86,26 @@ def make_trainer(model,
                  loss_coef,
                  metric_dics,
                  max_epochs,
-                 lr,
-                 min_lr,
-                 patience,
-                 factor,
-                 **kwargs):
+                 param_dic):
 
     loss_fn = get_loss(loss_name=loss_name,
                        loss_coef=loss_coef)
 
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
-    optimizer = Adam(trainable_params, lr=lr)
+    optimizer = Adam(trainable_params, lr=param_dic["lr"])
     train_metrics = make_metrics(metric_dics)
 
     train_hooks = make_hooks(max_epochs=max_epochs,
                              train_metrics=train_metrics,
                              optimizer=optimizer,
                              model_folder=model_folder,
-                             min_lr=min_lr,
-                             patience=patience,
-                             factor=factor)
+                             min_lr=param_dic["min_lr"],
+                             patience=param_dic["patience"],
+                             factor=param_dic["factor"])
 
     train_class = get_train_class(model_type)
+    train_kwargs = get_train_kwargs(param_dic)
+
     T = train_class(
         model_path=model_folder,
         model=model,
@@ -103,6 +115,6 @@ def make_trainer(model,
         validation_loader=val_loader,
         checkpoint_interval=1,
         hooks=train_hooks,
-        **kwargs
+        **train_kwargs
     )
     return T

@@ -44,25 +44,23 @@
 				             "gpu": 3,
 				             "features_scaling": false,
 				         	 "extra_features": [{"name": "rdkit_2d_normalized", 
-				         	 					 "length": 200}]}
+				         	 					 "length": 200}],
+				         	 "load_dics": [{"data_type": "chemprop",
+				         	 	"smiles_path": "/home/saxelrod/data/covid_data/all_crest.csv",
+				         	 	"features_path": ["/home/saxelrod/data/covid_data/all_crest.npz"],
+				         	 	"name": "chemprop_data",
+				         	 	"args": {"max_data_size": null,
+				         	 		"features_dim": 1,
+				         	 		"use_compound_names": false,
+				         	 		"features_generator": null,
+				         	 	"gpu": 3}}]
+				         	}
 
 	},
-
-	"load_dics": [{"data_type": "chemprop",
-	              "smiles_path": "/home/saxelrod/data/covid_data/all_crest.csv",
-	              "features_path": ["/home/saxelrod/data/covid_data/all_crest.npz"],
-	              "name": "chemprop_data",
-	              "args": {"max_data_size": null,
-	                       "features_dim": 1,
-	                       "use_compound_names": false,
-	                       "features_generator": null,
-						   "gpu": 3}
-
-	}],
-
+	
 	"budget": 1000,
 	"device": 3,
-	"num_epochs": 15,
+	"num_epochs": 1,
 	"loss_name": "cross_entropy",
 	"target_name": "bind",
 	"client_token": "JQJLZYNHOWKBUXWMYBZFKRKHURZAZRIQWERJSBKWZUBODXEQ",

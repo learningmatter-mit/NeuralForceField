@@ -155,7 +155,7 @@ class SchNet(nn.Module):
 
         return r, N, xyz
 
-    def forward(self, batch, xyz=None):
+    def forward(self, batch, xyz=None, **kwargs):
         """Summary
 
         Args:
@@ -274,7 +274,7 @@ class AuTopology(nn.Module):
 
         return r
 
-    def forward(self, batch, xyz=None):
+    def forward(self, batch, xyz=None, **kwargs):
 
         """Summary
 
@@ -427,7 +427,7 @@ class SchNetAuTopology(nn.Module):
 
         return final_results
 
-    def forward(self, batch):
+    def forward(self, batch, **kwargs):
         """
         Applies the neural network to a batch.
         Args:

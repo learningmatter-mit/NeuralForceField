@@ -243,8 +243,7 @@ def run_loop(project_name,
                          loss_coef=loss_coef,
                          metric_dics=metric_dics,
                          max_epochs=num_epochs,
-                         **param_dic,
-                         **kwargs)
+                         param_dic=param_dic)
 
         begin_log(model_folder=model_folder, project_name=project_name,
                   suggestion=suggestion)
@@ -261,9 +260,11 @@ def run_loop(project_name,
         best_model = T.get_best_model()
 
         value = evaluate_model(model=best_model,
+                               model_type=model_type,
                                target_name=target_name,
                                metric_name=eval_metric,
-                               loader=data_dic[eval_on]["loader"])
+                               loader=data_dic[eval_on]["loader"],
+                               param_dic=param_dic)
         experiment = conclude_round(conn=conn,
                                     experiment=experiment,
                                     suggestion=suggestion,
