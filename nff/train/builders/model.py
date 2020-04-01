@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from nff.nn.models.schnet import SchNet, SchNetAuTopology, AuTopology
 from nff.nn.models.hybridgraph import HybridGraphConv
-from nff.nn.models.conformers import WeightedConformers, ChemProp3D
+from nff.nn.models.conformers import WeightedConformers
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -70,19 +70,6 @@ PARAMS_TYPE = {"SchNet":
                    'dropout_rate': float,
                    'readoutdict': dict,
                    'mol_fp_layers': list                
-                },
-
-                "ChemProp3D":
-                {
-                   'n_atom_basis': int,
-                   'n_filters': int,
-                   'n_gaussians': int,
-                   'n_convolutions': int,
-                   'cutoff': float,
-                   'trainable_gauss': bool,
-                   'dropout_rate': float,
-                   'readoutdict': dict,
-                   'mol_fp_layers': list                
                 }
 
                }
@@ -93,7 +80,6 @@ MODEL_DICT = {
     "SchNetAuTopology": SchNetAuTopology,
     "HybridGraphConv": HybridGraphConv,
     "WeightedConformers": WeightedConformers,
-    "ChemProp3D": ChemProp3D
 }
 
 
@@ -118,6 +104,9 @@ def check_parameters(params_type, params):
           if key == "{}_params".format(model.lower()):
             check_parameters(PARAMS_TYPE[model], val)
 
+def import_io():
+  from nff.train.builders.io import PARAMS_TYPE, MODEL_DICT
+  return PARAMS_TYPE, MODEL_DICT
 
 def get_model(params, model_type="SchNet", **kwargs):
     """Create new model with the given parameters.
@@ -130,8 +119,14 @@ def get_model(params, model_type="SchNet", **kwargs):
         model (nff.nn.models)
     """
 
-    check_parameters(PARAMS_TYPE[model_type], params)
-    model = MODEL_DICT[model_type](params, **kwargs)
+    if model_type in PARAMS_TYPE and model_type in MODEL_DICT:
+      params_type = PARAMS_TYPE
+      model_dict = MODEL_DICT
+    else:
+      params_type, model_dict = import_io()
+      
+    check_parameters(params_type[model_type], params)
+    model = model_dict[model_type](params, **kwargs)
 
     return model
 

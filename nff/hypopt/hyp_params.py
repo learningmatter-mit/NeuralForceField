@@ -47,7 +47,11 @@ def make_layers(in_basis,
     return layers
 
 
-def make_boltz(boltz_type, num_layers=None, mol_basis=None, layer_act=None, last_act=None):
+def make_boltz(boltz_type,
+               num_layers=None,
+               mol_basis=None,
+               layer_act=None,
+               last_act=None):
     if boltz_type == "multiply":
         dic = {"type": "multiply"}
         return dic
@@ -86,14 +90,13 @@ def make_readout(names,
 def make_class_model(model_type, param_dic):
 
     classifications = [True] * len(param_dic["readout_names"])
-
-    if "extra_feat_length" in param_dic:
-        extra_feats = param_dic["extra_feat_length"]
-        num_basis = param_dic["mol_basis"] + extra_feats
-    elif "morgan_length" in param_dic:
-        num_basis = param_dic["mol_basis"] + param_dic["morgan_length"]
+    extra_feats = param_dic.get("extra_features")
+    if extra_feats is not None:
+        extra_length = sum([dic["length"] for dic in extra_feats])
     else:
-        num_basis = param_dic["mol_basis"]
+        extra_length = 0
+
+    num_basis = param_dic["mol_basis"] + extra_length
 
     readout = make_readout(names=param_dic["readout_names"],
                            classifications=classifications,

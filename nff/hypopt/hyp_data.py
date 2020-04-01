@@ -24,7 +24,15 @@ def add_morgan(dataset, vec_length):
         morgan_tens = torch.tensor(arr_morgan)
         dataset.props["morgan"].append(morgan_tens)
 
+def add_features(params, dataset):
+    func_dic = {"morgan": add_morgan}
+    extra_features = params["extra_features"]
 
+    for dic in extra_features:
+        name = dic["name"]
+        vec_length = dic["length"]
+        func_dic[name](dataset, vec_length)
+        
 def trim_confs(dataset, num_confs):
 
     for i in range(len(dataset)):
@@ -60,7 +68,6 @@ def trim_confs(dataset, num_confs):
 
         dataset.props["nbr_list"][i] = nbr_list[good_idx]
 
-
 def get_data_dic(base_train, base_val, base_test, params):
 
     data_dic = {"train": {"dataset": base_train.copy()},
@@ -69,9 +76,9 @@ def get_data_dic(base_train, base_val, base_test, params):
 
     for key, split in data_dic.items():
         this_set = split["dataset"]
-        if params.get("morgan_length") is not None:
-            add_morgan(dataset=this_set,
-                       vec_length=params["morgan_length"])
+        if params.get("extra_features") is not None:
+            add_features(params=params,
+                         dataset=this_set)
         if params.get("num_confs") is not None:
             num_confs = params["num_confs"]
             trim_confs(dataset=this_set,

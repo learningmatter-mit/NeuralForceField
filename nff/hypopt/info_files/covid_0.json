@@ -18,7 +18,8 @@
 				"layer_act": "shifted_softplus",
 				"num_readout_layers": 3,
 				"batch_size": 15,
-				"cutoff": 5.0},
+				"cutoff": 5.0,
+                                "extra_features": [{"name": "morgan"}]},
 
 	"budget": 1000,
 	"device": 3,
@@ -36,7 +37,11 @@
 
 	"eval_metric": "roc_auc",
 	"eval_on": "val",
-	"monitor_metrics": ["RocAuc", "PrAuc"]
+	"monitor_metrics": ["RocAuc", "PrAuc"],
+
+        "model_type": "WeightedConformers",
+        "model_kind": "classification",
+        "loss_coef": {"bind": 1.0}
 
 }
 
