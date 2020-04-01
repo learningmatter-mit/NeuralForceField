@@ -1,7 +1,7 @@
 # Overview
 This is a module for optimizing NFF hyperparameters. To run `sigopt` to optimize the parameters, call
 ```
-python run_sigopt.py <param_file.json>,
+python run_sigopt.py <param_file.json>
 ```
 where `<param_file.json>` is the name of the `JSON` file with the parameters you want to use. For an example file, see `info_files/covid_0.json`.
 
