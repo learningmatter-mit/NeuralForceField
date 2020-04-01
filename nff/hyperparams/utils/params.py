@@ -18,7 +18,12 @@ def make_feat_nums(in_basis, out_basis, num_layers):
     return feature_nums
 
 
-def make_layers(in_basis, out_basis, num_layers, layer_act, last_act=None):
+def make_layers(in_basis,
+                out_basis,
+                num_layers,
+                layer_act,
+                dropout_rate,
+                last_act=None):
     feature_nums = make_feat_nums(in_basis=in_basis,
                                   out_basis=out_basis,
                                   num_layers=num_layers)
@@ -30,7 +35,9 @@ def make_layers(in_basis, out_basis, num_layers, layer_act, last_act=None):
         lin_layer = {'name': 'linear', 'param': {'in_features': in_features,
                                                  'out_features': out_features}}
         act_layer = {'name': layer_act, 'param': {}}
-        layers += [lin_layer, act_layer]
+        drop_layer = {'name': 'Dropout', 'param': {'p': dropout_rate}}
+
+        layers += [lin_layer, act_layer, drop_layer]
     # remove the last activation layer
     layers = layers[:-1]
     # update with a final activation if needed
@@ -49,12 +56,18 @@ def make_boltz(boltz_type, num_layers=None, mol_basis=None, layer_act=None, last
                          out_basis=mol_basis,
                          num_layers=num_layers,
                          layer_act=layer_act,
-                         last_act=last_act)
+                         last_act=last_act,
+                         dropout_rate=0)
     dic = {"type": "layers", "layers": layers}
     return dic
 
 
-def make_readout(names, classifications, num_basis, num_layers, layer_act):
+def make_readout(names,
+                 classifications,
+                 num_basis,
+                 num_layers,
+                 layer_act,
+                 dropout_rate):
 
     dic = {}
     for name, classification in zip(names, classifications):
@@ -63,7 +76,8 @@ def make_readout(names, classifications, num_basis, num_layers, layer_act):
                              out_basis=1,
                              num_layers=num_layers,
                              layer_act=layer_act,
-                             last_act=last_act)
+                             last_act=last_act,
+                             dropout_rate=dropout_rate)
         dic.update({name: layers})
 
     return dic
@@ -85,13 +99,15 @@ def make_class_model(model_type, param_dic):
                            classifications=classifications,
                            num_basis=num_basis,
                            num_layers=param_dic["num_readout_layers"],
-                           layer_act=param_dic["layer_act"])
+                           layer_act=param_dic["layer_act"],
+                           dropout_rate=param_dic["dropout_rate"])
 
     mol_fp_layers = make_layers(in_basis=param_dic["n_atom_basis"],
                                 out_basis=param_dic["mol_basis"],
                                 num_layers=param_dic["num_mol_layers"],
                                 layer_act=param_dic["layer_act"],
-                                last_act=None)
+                                last_act=None,
+                                dropout_rate=param_dic["dropout_rate"])
 
     params = {
         'n_convolutions': param_dic["n_conv"],
@@ -101,7 +117,6 @@ def make_class_model(model_type, param_dic):
     }
 
     params.update(param_dic)
-
 
     if param_dic.get("boltz_params") is not None:
         boltz = make_boltz(**param_dic["boltz_params"])

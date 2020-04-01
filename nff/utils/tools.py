@@ -29,7 +29,8 @@ layer_types = {
                 "ReLU": torch.nn.ReLU,
                 "Dense": Dense,
                 "shifted_softplus": shifted_softplus,
-                "sigmoid": torch.nn.Sigmoid
+                "sigmoid": torch.nn.Sigmoid,
+                "Dropout": torch.nn.Dropout
               }
 
 
