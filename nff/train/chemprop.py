@@ -1,3 +1,5 @@
+from munch import Munch
+
 from chemprop.data.utils import get_data
 from chemprop.data.data import MoleculeDataset
 
@@ -14,7 +16,7 @@ def hash_smiles(cp_data):
 
 def load_chemprop_data(features_path, smiles_path, args, **kwargs):
     data = get_data(path=smiles_path, features_path=features_path,
-                    args=args)
+                    args=Munch(args))
     smiles_dic = hash_smiles(data)
 
     return data, smiles_dic
@@ -33,7 +35,7 @@ class MixedDataTrainer(Trainer):
         Example:
                 args =  Munch({"max_data_size": None, "features_dim": 2248,
                             "use_compound_names": False,
-                            "features_generator": None}) 
+                            "features_generator": None})
 
             load_dics = [{"data_type": "chemprop",
                           "smiles_path": "/home/saxelrod/Repo/projects/coronavirus_data/data/mmff_train.csv",

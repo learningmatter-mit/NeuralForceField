@@ -2,14 +2,14 @@ from datetime import datetime
 from sigopt import Connection
 import os
 
-from nff.hypopt.hyp_io import (make_model_folder,
+from nff.hypopt.io import (make_model_folder,
                                save_info,
                                get_splits)
-from nff.hypopt.hyp_data import get_data_dic
-from nff.hypopt.hyp_params import (make_wc_model,
+from nff.hypopt.data import get_data_dic
+from nff.hypopt.params import (make_wc_model,
                                    make_cp3d_model)
-from nff.hypopt.hyp_eval import evaluate_model
-from nff.hypopt.hyp_train import make_trainer
+from nff.hypopt.eval import evaluate_model
+from nff.hypopt.train import make_trainer
 
 from nff.data import Dataset
 

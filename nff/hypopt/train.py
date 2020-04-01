@@ -1,4 +1,5 @@
 from nff.train import loss, metrics, hooks, Trainer
+from nff.train.chemprop import MixedDataTrainer
 from torch.optim import Adam
 
 import copy
@@ -63,9 +64,8 @@ def make_metrics(metric_dics):
 def get_train_class(model_type):
     if model_type not in IO_MODELS:
         return Trainer
-    from nff.train.io import MixedDataTrainer
-    return MixedDataTrainer
-
+    if model_type == "ChemProp3D":
+        return MixedDataTrainer
 
 def get_train_kwargs(param_dic):
 

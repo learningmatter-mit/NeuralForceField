@@ -53,14 +53,15 @@
 				         	 		"features_dim": 1,
 				         	 		"use_compound_names": false,
 				         	 		"features_generator": null,
-				         	 	"gpu": 3}}]
+				         	 	"gpu": 3}}],
+				         	 "cp_dir": "/home/saxelrod/Repo/projects/chemprop"
 				         	}
 
 	},
 
 	"budget": 1000,
 	"device": 3,
-	"num_epochs": 10,
+	"num_epochs": 50,
 	"loss_name": "cross_entropy",
 	"target_name": "bind",
 	"client_token": "JQJLZYNHOWKBUXWMYBZFKRKHURZAZRIQWERJSBKWZUBODXEQ",

@@ -6,6 +6,7 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 from ase.calculators.calculator import Calculator, all_changes
 
+import nff
 import nff.utils.constants as const
 from nff.nn.utils import torch_nbr_list
 from nff.utils.cuda import batch_to

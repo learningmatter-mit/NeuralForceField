@@ -1,10 +1,11 @@
 import sys
 sys.path.insert(0, "/home/saxelrod/Repo/projects/covid_nff/NeuralForceField")
 
-import argparse
-import json
 
+from nff.hypopt.feats import preprocess
 from nff.hypopt.hyp_sigopt import run_loop
+import json
+import argparse
 
 
 if __name__ == "__main__":
@@ -18,4 +19,5 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
     with open(arguments.info_file, "r") as f:
         info = json.load(f)
+    preprocess(info)
     run_loop(**info)
