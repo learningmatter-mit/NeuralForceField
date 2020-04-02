@@ -203,6 +203,7 @@ def make_cp3d_model(param_dic):
 
     return model
 
+
 def make_cp2d_model(param_dic):
     """
     Make a ChemProp2D model
@@ -223,8 +224,7 @@ def make_cp2d_model(param_dic):
     final_params = {
         "chemprop": cp_params,
         'readoutdict': readout,
-      }
-
+    }
 
     model = get_model(final_params, model_type="ChemProp2D")
 

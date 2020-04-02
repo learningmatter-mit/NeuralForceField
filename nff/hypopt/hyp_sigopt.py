@@ -30,8 +30,8 @@ def create_expt(name,
         budget = 15 * len(param_regime)
 
     if expt_id is not None:
-        experiment = conn.experiments().fetch(
-            id=expt_id).data[0]
+        experiment = conn.experiments(id=expt_id
+                                      ).fetch()
     else:
         experiment = conn.experiments().create(
             name=name,
