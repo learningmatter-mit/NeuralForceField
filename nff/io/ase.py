@@ -92,7 +92,7 @@ class AtomsBatch(Atoms):
         """
 
         if self.nbr_torch:
-            edge_from, edge_to, offsets = torch_nbr_list(self, self.cutoff, device=self.device)
+            edge_from, edge_to, offsets = torch_nbr_list(self, self.cutoff, device=self.device, directed=False)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         else:
             edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
