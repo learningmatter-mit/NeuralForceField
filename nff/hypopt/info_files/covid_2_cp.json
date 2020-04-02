@@ -80,7 +80,9 @@
 
 	"model_type": "ChemProp3D",
 	"model_kind": "classification",
-	"loss_coef": {"bind": 1.0}
+	"loss_coef": {"bind": 1.0},
+
+	"expt_id": 182429
 
 }
 

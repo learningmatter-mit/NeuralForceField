@@ -21,19 +21,24 @@ def create_expt(name,
                 objective,
                 client_token,
                 metric_name,
-                budget='default'):
+                budget='default',
+                expt_id=None):
     conn = Connection(client_token=client_token)
 
     # usually 10-20 x number of parameters
     if budget == 'default':
         budget = 15 * len(param_regime)
 
-    experiment = conn.experiments().create(
-        name=name,
-        metrics=[dict(name=metric_name, objective=objective)],
-        parameters=param_regime,
-        observation_budget=budget
-    )
+    if expt_id is not None:
+        experiment = conn.experiments().fetch(
+            id=expt_id).data[0]
+    else:
+        experiment = conn.experiments().create(
+            name=name,
+            metrics=[dict(name=metric_name, objective=objective)],
+            parameters=param_regime,
+            observation_budget=budget
+        )
 
     return conn, experiment
 
@@ -259,7 +264,7 @@ def report_scores(eval_metric,
     log_file = get_log_file(model_folder)
     names = ["train", "val", "test"]
     for name in names:
-        score = score_dic[name] 
+        score = score_dic[name]
         msg = "%s score on %s set is %.3f" % (eval_metric,
                                               name,
                                               score)
@@ -327,7 +332,7 @@ def retrain_best(project_name,
                  model_type,
                  loss_coef,
                  **kwargs):
-    
+
     # get data
     dataset = Dataset.from_file(dataset_path)
     base_train, base_val, base_test = get_splits(dataset=dataset,
@@ -405,6 +410,7 @@ def run_loop(project_name,
              model_type,
              model_kind,
              loss_coef,
+             expt_id=None,
              **kwargs):
 
     conn, experiment = create_expt(name=project_name,
@@ -412,7 +418,8 @@ def run_loop(project_name,
                                    objective=objective,
                                    client_token=client_token,
                                    budget=budget,
-                                   metric_name=eval_metric)
+                                   metric_name=eval_metric,
+                                   expt_id=expt_id)
 
     dataset = Dataset.from_file(dataset_path)
 
