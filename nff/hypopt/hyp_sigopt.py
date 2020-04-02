@@ -1,6 +1,7 @@
 from datetime import datetime
 from sigopt import Connection
 import os
+import json
 
 from nff.hypopt.io import (make_model_folder,
                            save_info,
@@ -13,8 +14,15 @@ from nff.hypopt.train import make_trainer
 
 from nff.data import Dataset
 
+import pdb
 
-def create_expt(name, param_regime, objective, client_token, budget='default'):
+
+def create_expt(name,
+                param_regime,
+                objective,
+                client_token,
+                target_name,
+                budget='default'):
     conn = Connection(client_token=client_token)
 
     # usually 10-20 x number of parameters
@@ -23,7 +31,7 @@ def create_expt(name, param_regime, objective, client_token, budget='default'):
 
     experiment = conn.experiments().create(
         name=name,
-        metrics=[dict(name="objective", objective=objective)],
+        metrics=[dict(name=target_name, objective=objective)],
         parameters=param_regime,
         observation_budget=budget
     )
@@ -181,6 +189,121 @@ def get_model_builder(model_type):
     return dic[model_type]
 
 
+def get_expt_ids(project_name, save_dir):
+
+    main_dir = os.path.join(save_dir, "sigopt", project_name)
+    folders = os.listdir(main_dir)
+    model_folders = [folder for folder in folders
+                     if folder.startswith("model_")]
+    expt_ids = []
+
+    for folder in model_folders:
+        job_info_file = os.path.join(main_dir,
+                                     folder, "job_info.json")
+        if not os.path.isfile(job_info_file):
+            continue
+        with open(job_info_file, "r") as f:
+            job_info = json.load(f)
+        expt_id = job_info["experiment_id"]
+        expt_ids.append(expt_id)
+
+    expt_ids = list(set(expt_ids))
+
+    return expt_ids
+
+
+def get_best_params(project_name,
+                    save_dir,
+                    client_token,
+                    set_params,
+                    objective):
+
+    expt_ids = get_expt_ids(project_name=project_name,
+                            save_dir=save_dir)
+    conn = Connection(client_token=client_token)
+
+    comparison_dic = {"minimize": lambda old, new: new < old,
+                      "maximize": lambda old, new: new > old}
+    best_val = None
+
+    for expt_id in expt_ids:
+        all_best_assignments = conn.experiments(expt_id
+                                                ).best_assignments().fetch()
+        new_val = all_best_assignments.data[0].value
+        if best_val is None:
+            best_val = new_val
+        else:
+            better = comparison_dic[objective](best_val, new_val)
+            if better:
+                best_val = new_val
+
+        if best_val == new_val:
+            assignments = dict(all_best_assignments.data[0].assignments)
+            param_dic = make_param_dic(set_params=set_params,
+                                       assignments=assignments)
+            assgn_id = all_best_assignments.data[0].id
+
+    return param_dic, assgn_id
+
+
+def retrain_best(project_name,
+                 save_dir,
+                 val_size,
+                 test_size,
+                 objective,
+                 client_token,
+                 dataset_path,
+                 target_name,
+                 monitor_metrics,
+                 set_params,
+                 loss_name,
+                 num_epochs,
+                 device,
+                 model_type,
+                 loss_coef,
+                 **kwargs):
+
+    dataset = Dataset.from_file(dataset_path)
+    base_train, base_val, base_test = get_splits(dataset=dataset,
+                                                 val_size=val_size,
+                                                 test_size=test_size,
+                                                 save_dir=save_dir,
+                                                 project_name=project_name)
+    param_dic, assgn_id = get_best_params(project_name=project_name,
+                                          save_dir=save_dir,
+                                          client_token=client_token,
+                                          set_params=set_params,
+                                          objective=objective)
+
+    model_id = "assgn_{}_retrain".format(assgn_id)
+    model_folder = make_model_folder(save_dir=save_dir,
+                                     project_name=project_name,
+                                     model_id=model_id)
+
+    data_dic = get_data_dic(base_train=base_train,
+                            base_val=base_val,
+                            base_test=base_test,
+                            params=param_dic)
+
+    model_builder = get_model_builder(model_type)
+    model = model_builder(param_dic=param_dic)
+    metric_dics = [{"target": target_name, "metric": name}
+                   for name in monitor_metrics]
+
+    T = make_trainer(model=model,
+                     model_type=model_type,
+                     train_loader=data_dic["train"]["loader"],
+                     val_loader=data_dic["val"]["loader"],
+                     model_folder=model_folder,
+                     loss_name=loss_name,
+                     loss_coef=loss_coef,
+                     metric_dics=metric_dics,
+                     max_epochs=num_epochs,
+                     param_dic=param_dic)
+
+    T.train(device=device, n_epochs=num_epochs)
+
+
 def run_loop(project_name,
              save_dir,
              param_regime,
@@ -207,7 +330,8 @@ def run_loop(project_name,
                                    param_regime=param_regime,
                                    objective=objective,
                                    client_token=client_token,
-                                   budget=budget)
+                                   budget=budget,
+                                   target_name=target_name)
 
     dataset = Dataset.from_file(dataset_path)
 

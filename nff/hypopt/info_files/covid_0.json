@@ -32,7 +32,7 @@
 	"num_epochs": 15,
 	"loss_name": "cross_entropy",
 	"target_name": "bind",
-	"client_token": "JQJLZYNHOWKBUXWMYBZFKRKHURZAZRIQWERJSBKWZUBODXEQ",
+	"client_token": "KTNMWLZQYQSNCHVHPGIWSAVXEWLEWABZAHIJOLXKWAHQDRQE",
 	"save_dir": "/home/saxelrod/data",
 
 	"objective": "maximize",
