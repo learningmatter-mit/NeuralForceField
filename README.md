@@ -23,7 +23,8 @@ tqdm -c pytorch -c conda-forge -c rdkit
 Next install remaining pip requirements:
 
 ```bash
-pip install sigopt git+https://github.com/bp-kelley/descriptastorus git+https://github.com/simonaxelrod/chemprop
+pip install sigopt git+https://github.com/bp-kelley/descriptastorus \ 
+git+https://github.com/simonaxelrod/chemprop
 ```
 
 Some of the requirements allow for interfacing NFF with [ChemProp](https://github.com/chemprop/chemprop) [5], a module for property prediction based on a 2D molecular representation. You need to activate the `nff` environment to install the NFF package:
