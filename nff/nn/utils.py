@@ -101,7 +101,7 @@ def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
     mask = (dis_sq < cutoff ** 2) & (dis_sq != 0)
 
     nbr_list = mask.nonzero()
-    if directed:
+    if not directed:
         nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
     i, j  = nbr_list[:, 0].detach().to("cpu").numpy(), nbr_list[:, 1].detach().to("cpu").numpy()
