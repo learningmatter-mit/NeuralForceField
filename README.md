@@ -15,7 +15,7 @@ We highly recommend to create a `conda` environment to run the code. To do that,
 
 ```bash
 conda upgrade conda
-conda create -n nff python=3.7 scikit-learn pytorch=1.2.0 cudatoolkit=10.0 ase pandas pymatgen gunicorn \
+conda create -n nff python=3.7 scikit-learn pytorch=1.2.0 cudatoolkit=10.0 ase pandas pymatgen gunicorn
 rdkit torchvision flask hyperopt numpy scipy tensorflow tensorboardX tqdm -c pytorch -c conda-forge -c rdkit
 ```
 
