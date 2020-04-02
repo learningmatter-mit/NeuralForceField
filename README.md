@@ -15,8 +15,9 @@ We highly recommend to create a `conda` environment to run the code. To do that,
 
 ```bash
 conda upgrade conda
-conda create -n nff python=3.7 scikit-learn pytorch=1.2.0 cudatoolkit=10.0 ase pandas pymatgen gunicorn \
-rdkit torchvision flask hyperopt numpy scipy tensorflow tensorboardX tqdm -c pytorch -c conda-forge -c rdkit
+conda create -n nff python=3.7 scikit-learn pytorch=1.2.0 cudatoolkit=10.0 ase pandas \
+pymatgen gunicorn rdkit torchvision flask hyperopt numpy scipy tensorflow tensorboardX \
+tqdm -c pytorch -c conda-forge -c rdkit
 ```
 
 Next install remaining pip requirements:
@@ -25,7 +26,7 @@ Next install remaining pip requirements:
 pip install sigopt git+https://github.com/bp-kelley/descriptastorus git+https://github.com/simonaxelrod/chemprop
 ```
 
-You need to activate the `nff` environment to install the NFF package:
+Some of the requirements allow for interfacing NFF with [ChemProp](https://github.com/chemprop/chemprop) [5], a module for property prediction based on a 2D molecular representation. You need to activate the `nff` environment to install the NFF package:
 
 ```bash
 conda activate nff
