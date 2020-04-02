@@ -29,3 +29,5 @@ hyperparameter, its type, and its possible values.
 - `model_type`: Type of network you're training
 - `model_kind`: Classification or regression
 - `loss_coef`: Loss coefficient dictionary for training.
+
+If your experiment has been interrupted, you can go to either the siopt website, or the `job_info.json` file in any of your models to get the ID of your experiment. Then, simply add `expt_id: <expt_id>` to your json file of arguments and the loop will pick up where it left off.
