@@ -301,6 +301,8 @@ class Dataset(TorchDataset):
         bond_dict = {}
         bond_count_dict = {}
         mol_idx_dict = {}
+
+        #---------This part can be simplified---------#
         for i in range(len(self.props['nxyz'])):
             z = self.props['nxyz'][i][:, 0]
             xyz = self.props['nxyz'][i][:, 1:4]
@@ -330,6 +332,7 @@ class Dataset(TorchDataset):
         self.generate_topologies(bond_dic=bond_dict)
         if 'cell' in self.props.keys():
             self.unwrap_xyz(mol_idx_dict)
+        #---------This part can be simplified---------#
 
         # generate bond length dictionary if not given 
         if not bond_len_dict:
@@ -338,6 +341,7 @@ class Dataset(TorchDataset):
         # update bond len and offsets
         all_bond_len = []
         all_offsets = []
+        all_nbr_list = []
         for i in range(len(self.props['nxyz'])):
             z = self.props['nxyz'][i][:, 0]
             xyz = self.props['nxyz'][i][:, 1:4]
@@ -355,16 +359,19 @@ class Dataset(TorchDataset):
                          "positions":xyz,
                          "pbc": True, 
                          "cutoff": cutoff,
-                         "cell": self.props['cell'][i] if 'cell' in self.props.keys() else None }
+                         "cell": self.props['cell'][i] if 'cell' in self.props.keys() else None, 
+                         "nbr_torch": False}
 
             # the coordinates have been unwrapped and try to results offsets 
             atoms = AtomsBatch(**ase_param)
             atoms.update_nbr_list()
             all_offsets.append(atoms.offsets)
+            all_nbr_list.append(atoms.nbr_list)
 
         # update 
         self.props['bond_len'] = all_bond_len
         self.props['offsets'] = all_offsets
+        self.props['nbr_list'] = all_nbr_list
         self._check_dictionary(deepcopy(self.props))
 
 
