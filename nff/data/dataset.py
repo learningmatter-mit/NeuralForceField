@@ -293,7 +293,7 @@ class Dataset(TorchDataset):
 
         return self.bond_len_dict
 
-    def gen_bond_prior(self, bond_len_dict=None):
+    def gen_bond_prior(self, cutoff, bond_len_dict=None):
 
         if not self.props:
             raise TypeError("the dataset has no data yet")
@@ -335,10 +335,13 @@ class Dataset(TorchDataset):
         if not bond_len_dict:
             bond_len_dict = self.gen_bond_stats()
 
-        # update bond len 
+        # update bond len and offsets
         all_bond_len = []
+        all_offsets = []
         for i in range(len(self.props['nxyz'])):
             z = self.props['nxyz'][i][:, 0]
+            xyz = self.props['nxyz'][i][:, 1:4]
+
             bond_list = self.props['bonds'][i] 
             bond_type_list = torch.stack( (z[ bond_list[:,0] ], z[ bond_list[:,1] ]) ).t()
             bond_len_list = []
@@ -347,8 +350,21 @@ class Dataset(TorchDataset):
                 bond_len_list.append(bond_len_dict[bond_type])        
             all_bond_len.append(torch.Tensor(bond_len_list).reshape(-1, 1))
 
+            # update offsets 
+            ase_param = {"numbers": z,
+                         "positions":xyz,
+                         "pbc": True, 
+                         "cutoff": cutoff,
+                         "cell": self.props['cell'][i] if 'cell' in self.props.keys() else None }
+
+            # the coordinates have been unwrapped and try to results offsets 
+            atoms = AtomsBatch(**ase_param)
+            atoms.update_nbr_list()
+            all_offsets.append(atoms.offsets)
+
         # update 
         self.props['bond_len'] = all_bond_len
+        self.props['offsets'] = all_offsets
         self._check_dictionary(deepcopy(self.props))
 
 
