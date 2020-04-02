@@ -10,11 +10,6 @@ from chemprop.models import build_model as build_chemprop
 from chemprop.data.data import MoleculeDataset
 
 
-"""
-Model that uses a representation of a molecule in terms of different 3D
-conformers to predict properties.
-"""
-
 FEAT_SCALING = 20
 
 
