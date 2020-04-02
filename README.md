@@ -23,7 +23,7 @@ tqdm -c pytorch -c conda-forge -c rdkit
 Next install remaining pip requirements:
 
 ```bash
-pip install sigopt git+https://github.com/bp-kelley/descriptastorus \ 
+pip install munch sigopt git+https://github.com/bp-kelley/descriptastorus \ 
 git+https://github.com/simonaxelrod/chemprop
 ```
 
