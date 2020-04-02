@@ -8,7 +8,8 @@ from nff.hypopt.io import (make_model_folder,
                            get_splits)
 from nff.hypopt.data import get_data_dic
 from nff.hypopt.params import (make_wc_model,
-                               make_cp3d_model)
+                               make_cp3d_model,
+                               make_cp2d_model)
 from nff.hypopt.eval import evaluate_model
 from nff.hypopt.train import make_trainer
 
@@ -19,7 +20,7 @@ def create_expt(name,
                 param_regime,
                 objective,
                 client_token,
-                target_name,
+                metric_name,
                 budget='default'):
     conn = Connection(client_token=client_token)
 
@@ -29,7 +30,7 @@ def create_expt(name,
 
     experiment = conn.experiments().create(
         name=name,
-        metrics=[dict(name=target_name, objective=objective)],
+        metrics=[dict(name=metric_name, objective=objective)],
         parameters=param_regime,
         observation_budget=budget
     )
@@ -188,7 +189,8 @@ def get_init_func(model_kind):
 
 def get_model_builder(model_type):
     dic = {"WeightedConformers": make_wc_model,
-           "ChemProp3D": make_cp3d_model}
+           "ChemProp3D": make_cp3d_model,
+           "ChemProp2D": make_cp2d_model}
     return dic[model_type]
 
 
@@ -410,7 +412,7 @@ def run_loop(project_name,
                                    objective=objective,
                                    client_token=client_token,
                                    budget=budget,
-                                   target_name=target_name)
+                                   metric_name=eval_metric)
 
     dataset = Dataset.from_file(dataset_path)
 

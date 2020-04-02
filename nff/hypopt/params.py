@@ -130,11 +130,11 @@ def get_wc_params(param_dic, num_extra_feats):
                                 dropout_rate=param_dic["mol_nn_dropout"])
 
     params = {
-        'n_convolutions': param_dic["n_conv"],
+        'n_convolutions': param_dic.get("n_conv"),
         'extra_features': param_dic.get('extra_features'),
         'mol_fp_layers': mol_fp_layers,
         'readoutdict': readout,
-        'dropout_rate': param_dic["schnet_dropout"]
+        'dropout_rate': param_dic.get("schnet_dropout")
     }
 
     params.update(param_dic)
@@ -200,5 +200,32 @@ def make_cp3d_model(param_dic):
     final_params = {"chemprop": cp_params,
                     **wc_params}
     model = get_model(final_params, model_type="ChemProp3D")
+
+    return model
+
+def make_cp2d_model(param_dic):
+    """
+    Make a ChemProp2D model
+    """
+
+    cp_params = get_cp_params(param_dic)
+    num_extra_feats = get_extra_cp_feats(cp_params)
+    classifications = [True] * len(param_dic["readout_names"])
+    num_basis = num_extra_feats
+
+    readout = make_readout(names=param_dic["readout_names"],
+                           classifications=classifications,
+                           num_basis=num_basis,
+                           num_layers=param_dic["num_readout_layers"],
+                           layer_act=param_dic["layer_act"],
+                           dropout_rate=param_dic["readout_dropout"])
+
+    final_params = {
+        "chemprop": cp_params,
+        'readoutdict': readout,
+      }
+
+
+    model = get_model(final_params, model_type="ChemProp2D")
 
     return model

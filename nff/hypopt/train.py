@@ -4,7 +4,7 @@ from torch.optim import Adam
 
 import copy
 
-IO_MODELS = ["ChemProp3D"]
+IO_MODELS = ["ChemProp3D", "ChemProp2D"]
 
 
 def get_loss(loss_name, loss_coef):
@@ -64,7 +64,8 @@ def make_metrics(metric_dics):
 def get_train_class(model_type):
     if model_type not in IO_MODELS:
         return Trainer
-    if model_type == "ChemProp3D":
+    if model_type in ["ChemProp3D",
+                      "ChemProp2D"]:
         return MixedDataTrainer
 
 

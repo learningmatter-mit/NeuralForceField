@@ -8,6 +8,7 @@ from nff.nn.models.schnet import SchNet, SchNetAuTopology, AuTopology
 from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.models.chemprop3d import ChemProp3D
+from nff.nn.models.chemprop2d import ChemProp2D
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -84,6 +85,11 @@ PARAMS_TYPE = {"SchNet":
                    'dropout_rate': float,
                    'readoutdict': dict,
                    'mol_fp_layers': list
+                },
+
+                "ChemProp2D":
+                {
+                   'readoutdict': dict,
                 }
 
                }
@@ -94,7 +100,8 @@ MODEL_DICT = {
     "SchNetAuTopology": SchNetAuTopology,
     "HybridGraphConv": HybridGraphConv,
     "WeightedConformers": WeightedConformers,
-    "ChemProp3D": ChemProp3D
+    "ChemProp3D": ChemProp3D,
+    "ChemProp2D": ChemProp2D
 }
 
 
