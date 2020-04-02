@@ -1,9 +1,9 @@
 import os
 from datetime import datetime
 import json
+import shutil
 
 from nff.data import Dataset, split_train_validation_test
-
 
 def get_path_names(save_dir, project_name):
     sigopt_path = os.path.join(save_dir, "sigopt")
@@ -47,6 +47,12 @@ def make_model_folder(save_dir, project_name, model_id):
                                                project_name=project_name)
 
     new_model_folder = os.path.join(project_path, "model_" + str(model_id))
+
+    if os.path.isdir(new_model_folder):
+        backup_folder = new_model_folder + "_backup"
+        if os.path.isdir(backup_folder):
+            shutil.rmtree(backup_folder)
+        shutil.move(new_model_folder, backup_folder)
     os.mkdir(new_model_folder)
 
     return new_model_folder

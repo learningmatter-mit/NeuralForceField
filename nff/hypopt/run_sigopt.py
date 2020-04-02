@@ -1,11 +1,9 @@
+import argparse
+import json
+from nff.hypopt.hyp_sigopt import run_loop, retrain_best
+from nff.hypopt.feats import preprocess
 import sys
 sys.path.insert(0, "/home/saxelrod/Repo/projects/covid_nff/NeuralForceField")
-
-
-from nff.hypopt.feats import preprocess
-from nff.hypopt.hyp_sigopt import run_loop, retrain_best
-import json
-import argparse
 
 
 if __name__ == "__main__":
@@ -17,12 +15,12 @@ if __name__ == "__main__":
                               'about the hyperparameter optimization.'))
     parser.add_argument('--retrain_best',
                         action="store_true",
-                        help=('find the best model and train it.'))
+                        help=('find the best hyperparameters and '
+                              'retrain a model with those parameters.'))
     parser.add_argument('--best_epochs',
                         type=int,
                         help=('Number of epochs to train the best model for'),
                         default=500)
-
 
     arguments = parser.parse_args()
     with open(arguments.info_file, "r") as f:
@@ -30,7 +28,7 @@ if __name__ == "__main__":
     preprocess(info)
 
     if arguments.retrain_best:
-    	info.update({"num_epochs": arguments.best_epochs})
-    	retrain_best(**info)
+        info.update({"num_epochs": arguments.best_epochs})
+        retrain_best(**info)
     else:
-	    run_loop(**info)
+        run_loop(**info)
