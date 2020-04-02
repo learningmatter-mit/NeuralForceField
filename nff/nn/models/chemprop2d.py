@@ -49,25 +49,6 @@ class ChemProp2D(nn.Module):
         return cp_feats
 
     def forward(self, batch, xyz=None, **kwargs):
-        """
-
-        Use the outputs of the convolutions to make a prediction.
-        Here, the atomic fingerprints for each geometry get converted
-        into a molecular fingerprint. Then, the molecular
-        fingerprints for the different conformers of a given species
-        get multiplied by the Boltzmann weights of those conformers and
-        added together to make a final fingerprint for the species.
-        Two fully-connected layers act on this final fingerprint to make
-        a prediction.
-
-        Args:
-            batch (dict): dictionary of props
-            xyz (torch.tensor): (optional) coordinates
-
-        Returns:
-            dict: dictionary of results
-
-        """
 
         N = batch["num_atoms"].reshape(-1).tolist()
         num_mols = len(N)
