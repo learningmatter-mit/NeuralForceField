@@ -1,16 +1,11 @@
 import torch.nn as nn
 
-from nff.nn.modules import (
-    NodeMultiTaskReadOut,
-)
+from nff.nn.modules import NodeMultiTaskReadOut
 
 from munch import Munch
 
 from chemprop.models import build_model as build_chemprop
 from chemprop.data.data import MoleculeDataset
-
-
-FEAT_SCALING = 20
 
 
 class ChemProp2D(nn.Module):
