@@ -15,7 +15,13 @@ We highly recommend to create a `conda` environment to run the code. To do that,
 
 ```bash
 conda upgrade conda
-conda create -n nff python=3.7 scikit-learn pytorch=1.2.0 cudatoolkit=10.0 ase pandas pymatgen -c pytorch -c conda-forge
+conda create -n nff python=3.7 scikit-learn pytorch=1.2.0 cudatoolkit=10.0 ase pandas pymatgen gunicorn rdkit torchvision flask hyperopt numpy scipy tensorflow tensorboardX tqdm -c pytorch -c conda-forge -c rdkit
+```
+
+Next install remaining pip requirements:
+
+```bash
+pip install sigopt git+https://github.com/bp-kelley/descriptastorus git+https://github.com/simonaxelrod/chemprop
 ```
 
 You need to activate the `nff` environment to install the NFF package:
@@ -64,3 +70,10 @@ The Journal of Chemical Physics 148(24), 241722 (2018) [10.1063/1.5019779](https
 * [4] K.T. Schütt, P. Kessel, M. Gastegger, K. Nicoli, A. Tkatchenko, K.-R. Müller.
 *SchNetPack: A Deep Learning Toolbox For Atomistic Systems.*
 J. Chem. Theory Comput. **15**(1), 448-455 (2019). [10.1021/acs.jctc.8b00908](https://doi.org/10.1021/acs.jctc.8b00908)
+
+* [5] K. Yang, *et. al*. *Analyzing learned molecular representations for property prediction.*
+J. Chem. Info. Model. **59**(8), 3370-3388 (2019). [10.1021/acs.jcim.9b00237](https://doi.org/10.1021/acs.jcim.9b00237)
+
+
+
+
