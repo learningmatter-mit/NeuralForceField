@@ -10,8 +10,24 @@ This software requires the following packages:
 - [scikit-learn](http://scikit-learn.org/stable/)
 - [ase](https://wiki.fysik.dtu.dk/ase/)
 - [networkx](https://networkx.github.io/)
+- [sigopt](https://sigopt.com/)
 
-We highly recommend to create a `conda` environment to run the code. To do that, use the following commands:
+For interfacing NFF with [ChemProp](https://github.com/chemprop/chemprop) [5], a module for property prediction based on 2D molecular graphs, the following additional packages are required:
+- [gunicorn](https://gunicorn.org/)
+- [RDKit](https://www.rdkit.org/)
+- [torchvision](https://pytorch.org/docs/stable/torchvision/index.html)
+- [flask](https://flask.palletsprojects.com/en/1.1.x/)
+- [hyperopt](https://github.com/hyperopt/hyperopt)
+- [numpy](https://numpy.org/)
+- [scipy](https://www.scipy.org/)
+- [tensorflow](https://www.tensorflow.org/)
+- [tensorboardX](https://github.com/lanpa/tensorboardX)
+- [tqdm](https://github.com/tqdm/tqdm)
+- [munch](https://github.com/Infinidat/munch)
+- [descriptasorus](https://github.com/bp-kelley/descriptastorus)
+- [chemprop](https://github.com/chemprop/chemprop)
+
+We highly recommend creating a `conda` environment to run the code. To do that, use the following commands:
 
 ```bash
 conda upgrade conda
@@ -26,8 +42,6 @@ Next install remaining pip requirements:
 pip install munch sigopt git+https://github.com/bp-kelley/descriptastorus \ 
 git+https://github.com/simonaxelrod/chemprop
 ```
-
-Some of the requirements allow for interfacing NFF with [ChemProp](https://github.com/chemprop/chemprop) [5], a module for property prediction based on a 2D molecular representation.
 
 You need to activate the `nff` environment to install the NFF package:
 
