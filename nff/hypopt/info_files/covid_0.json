@@ -2,16 +2,16 @@
 	"project_name": "covid_schnet",
 
 	"param_regime": [{"name": "morgan_length", "type": "int", "bounds": {"min": 0, "max": 256}},
-					{"name": "readout_dropout", "type": "double", "bounds": {"min": 0, "max": 0.5}},
-					{"name": "mol_nn_dropout", "type": "double", "bounds": {"min": 0, "max": 0.5}},
-                    {"name": "schnet_dropout", "type": "double", "bounds": {"min": 0, "max": 0.5}},
-                    {"name": "n_conv", "type": "int", "bounds": {"min": 2, "max": 5}},
-					{"name": "n_filters", "type": "int", "bounds": {"min": 128, "max": 256}},
-					{"name": "n_gaussians", "type": "int", "bounds": {"min": 20, "max": 60}},
-					{"name": "n_atom_basis", "type": "int", "bounds": {"min": 128, "max": 256}},
-					{"name": "mol_basis", "type": "int", "bounds": {"min": 128, "max": 256}},
-					{"name": "num_mol_layers", "type": "int", "bounds": {"min": 1, "max": 4}},
-					{"name": "num_confs", "type": "int", "bounds": {"min": 1, "max": 10}}
+			{"name": "readout_dropout", "type": "double", "bounds": {"min": 0, "max": 0.5}},
+			{"name": "mol_nn_dropout", "type": "double", "bounds": {"min": 0, "max": 0.5}},
+                	{"name": "schnet_dropout", "type": "double", "bounds": {"min": 0, "max": 0.5}},
+                    	{"name": "n_conv", "type": "int", "bounds": {"min": 2, "max": 5}},
+			{"name": "n_filters", "type": "int", "bounds": {"min": 128, "max": 256}},
+			{"name": "n_gaussians", "type": "int", "bounds": {"min": 20, "max": 60}},
+			{"name": "n_atom_basis", "type": "int", "bounds": {"min": 128, "max": 256}},
+			{"name": "mol_basis", "type": "int", "bounds": {"min": 128, "max": 256}},
+			{"name": "num_mol_layers", "type": "int", "bounds": {"min": 1, "max": 4}},
+			{"name": "num_confs", "type": "int", "bounds": {"min": 1, "max": 10}}
 				],
 
 	"set_params": {"boltz_params": {"boltz_type": "multiply"},
@@ -25,7 +25,7 @@
 				"min_lr": 1e-7,
 				"patience": 30,
 				"factor": 0.5,
-                "extra_features": [{"name": "morgan"}]},
+		                "extra_features": [{"name": "morgan"}]},
 
 	"budget": 1000,
 	"device": 3,

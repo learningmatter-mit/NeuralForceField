@@ -17,7 +17,7 @@
 				"min_lr": 1e-7,
 				"patience": 10,
 				"factor": 0.5,
-                "extra_features": null,
+		                "extra_features": null,
 				"chemprop": {"num_tasks": 1,
 				             "dataset_type": "classification",
 				             "atom_messages": false,
