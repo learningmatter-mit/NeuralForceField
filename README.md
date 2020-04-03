@@ -27,7 +27,7 @@ For interfacing NFF with [ChemProp](https://github.com/chemprop/chemprop) [5], a
 - [descriptasorus](https://github.com/bp-kelley/descriptastorus)
 - [chemprop](https://github.com/chemprop/chemprop)
 
-We highly recommend to create a `conda` environment to run the code. To do that, use the following commands:
+We highly recommend creating a `conda` environment to run the code. To do that, use the following commands:
 
 ```bash
 conda upgrade conda
