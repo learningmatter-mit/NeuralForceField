@@ -6,12 +6,10 @@ Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/s
 import os
 import numpy as np
 import torch
-import gc
 
 
 from nff.utils.cuda import batch_to
-from nff.utils.scatter import compute_grad
-#from nff.train.evaluate import evaluate
+from nff.train.evaluate import evaluate
 
 MAX_EPOCHS = 100
 

@@ -25,7 +25,7 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
     with open(arguments.info_file, "r") as f:
         info = json.load(f)
-    # preprocess(info)
+    preprocess(info)
 
     if arguments.retrain_best:
         info.update({"num_epochs": arguments.best_epochs})
