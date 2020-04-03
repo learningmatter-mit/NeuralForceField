@@ -10,10 +10,10 @@ This software requires the following packages:
 - [scikit-learn](http://scikit-learn.org/stable/)
 - [ase](https://wiki.fysik.dtu.dk/ase/)
 - [networkx](https://networkx.github.io/)
-- [sigopt] (https://sigopt.com/)
+- [sigopt](https://sigopt.com/)
 
 For interfacing NFF with [ChemProp](https://github.com/chemprop/chemprop) [5], a module for property prediction based on a 2D molecular representation, the following additional packages are required:
-- [Gunicorn] (https://gunicorn.org/)
+- [Gunicorn](https://gunicorn.org/)
 - [RDKit] (https://www.rdkit.org/)
 - [Torchvision] (https://pytorch.org/docs/stable/torchvision/index.html)
 - [Flask] (https://flask.palletsprojects.com/en/1.1.x/)
