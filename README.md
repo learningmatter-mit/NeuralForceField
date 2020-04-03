@@ -12,9 +12,9 @@ This software requires the following packages:
 - [networkx](https://networkx.github.io/)
 - [sigopt](https://sigopt.com/)
 
-For interfacing NFF with [ChemProp](https://github.com/chemprop/chemprop) [5], a module for property prediction based on a 2D molecular representation, the following additional packages are required:
+For interfacing NFF with [ChemProp](https://github.com/chemprop/chemprop) [5], a module for property prediction based on 2D molecular graphs, the following additional packages are required:
 - [gunicorn](https://gunicorn.org/)
-- [rDKit](https://www.rdkit.org/)
+- [RDKit](https://www.rdkit.org/)
 - [torchvision](https://pytorch.org/docs/stable/torchvision/index.html)
 - [flask](https://flask.palletsprojects.com/en/1.1.x/)
 - [hyperopt](https://github.com/hyperopt/hyperopt)
