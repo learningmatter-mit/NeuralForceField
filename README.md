@@ -13,19 +13,19 @@ This software requires the following packages:
 - [sigopt](https://sigopt.com/)
 
 For interfacing NFF with [ChemProp](https://github.com/chemprop/chemprop) [5], a module for property prediction based on a 2D molecular representation, the following additional packages are required:
-- [Gunicorn](https://gunicorn.org/)
-- [RDKit] (https://www.rdkit.org/)
-- [Torchvision] (https://pytorch.org/docs/stable/torchvision/index.html)
-- [Flask] (https://flask.palletsprojects.com/en/1.1.x/)
-- [Hyperopt] (https://github.com/hyperopt/hyperopt)
-- [Numpy] (https://numpy.org/)
-- [Scipy] (https://www.scipy.org/)
-- [Tensorflow] (https://www.tensorflow.org/)
-- [TensorboardX] (https://github.com/lanpa/tensorboardX)
-- [Tqdm] (https://github.com/tqdm/tqdm)
-- [Munch] (https://github.com/Infinidat/munch)
-- [Descriptasorus] (https://github.com/bp-kelley/descriptastorus)
-- [Chemprop] (https://github.com/chemprop/chemprop)
+- [gunicorn](https://gunicorn.org/)
+- [rDKit](https://www.rdkit.org/)
+- [torchvision](https://pytorch.org/docs/stable/torchvision/index.html)
+- [flask](https://flask.palletsprojects.com/en/1.1.x/)
+- [hyperopt](https://github.com/hyperopt/hyperopt)
+- [numpy](https://numpy.org/)
+- [scipy](https://www.scipy.org/)
+- [tensorflow](https://www.tensorflow.org/)
+- [tensorboardX](https://github.com/lanpa/tensorboardX)
+- [tqdm](https://github.com/tqdm/tqdm)
+- [munch](https://github.com/Infinidat/munch)
+- [descriptasorus](https://github.com/bp-kelley/descriptastorus)
+- [chemprop](https://github.com/chemprop/chemprop)
 
 We highly recommend to create a `conda` environment to run the code. To do that, use the following commands:
 
