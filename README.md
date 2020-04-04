@@ -6,10 +6,10 @@ The Neural Force Field (NFF) code is an API based on SchNet [1-4]. It provides a
 
 This software requires the following packages:
 
-- [PyTorch](http://pytorch.org)
+- [PyTorch=1.4](http://pytorch.org)
 - [scikit-learn](http://scikit-learn.org/stable/)
-- [ase](https://wiki.fysik.dtu.dk/ase/)
-- [networkx](https://networkx.github.io/)
+- [ase=3.18](https://wiki.fysik.dtu.dk/ase/)
+- [networkx=2.3](https://networkx.github.io/)
 
 We highly recommend to create a `conda` environment to run the code. To do that, use the following commands:
 
