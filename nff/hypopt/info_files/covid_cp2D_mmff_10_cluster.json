@@ -69,7 +69,6 @@
 
 	"model_type": "ChemProp2D",
 	"model_kind": "classification",
-	"loss_coef": {"bind": 1.0},
-
+	"loss_coef": {"bind": 1.0}
 }
 
