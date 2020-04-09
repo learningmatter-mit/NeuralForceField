@@ -1,5 +1,5 @@
 {
-	"project_name": "covid_chemprop3d_2_transfer_mmff",
+	"project_name": "covid_chemprop3d_2_mmff_10_transfer",
 
 	"param_regime": [{"name": "readout_dropout", "type": "double", "bounds": {"min": 0, "max": 0.4}},
 					{"name": "mol_nn_dropout", "type": "double", "bounds": {"min": 0, "max": 0.4}},
