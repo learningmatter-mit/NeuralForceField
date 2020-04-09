@@ -42,7 +42,7 @@
 				             "ffn_hidden_size": 300,
 				             "no_cache": false,
 				             "cuda": true,
-				             "gpu": 3,
+				             "gpu": 0,
 				             "features_scaling": false,
 				         	 "extra_features": [{"name": "rdkit_2d_normalized",
 				         	 					 "length": 200}],
@@ -54,14 +54,14 @@
 				         	 		"features_dim": 1,
 				         	 		"use_compound_names": false,
 				         	 		"features_generator": null,
-				         	 	"gpu": 3}}],
+				         	 	"gpu": 0}}],
 				         	 "cp_dir": "/home/saxelrod/engaging/repo/chemprop/saxelrod/chemprop"
 				         	}
 
 	},
 
 	"budget": 100,
-	"device": 3,
+	"device": 0,
 	"num_epochs": 30,
 	"loss_name": "cross_entropy",
 	"target_name": "bind",
