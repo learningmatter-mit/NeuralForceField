@@ -1,5 +1,6 @@
-
 from munch import Munch
+import torch
+import os
 
 from chemprop.models import build_model as build_chemprop
 from chemprop.data.data import MoleculeDataset
@@ -33,10 +34,65 @@ class ChemProp3D(WeightedConformers):
             model = ChemProp3D(modelparams)
         """
 
-        WeightedConformers.__init__(self, modelparams)
+        cp_params = modelparams["chemprop"]
+        cp_path = cp_params.get("transfer_cp")
 
-        namespace = Munch(modelparams["chemprop"])
-        self.cp_model = build_chemprop(namespace)
+        if cp_path is not None:
+            cp_model, modelparams = self.init_with_cp(modelparams)
+        else:
+            namespace = Munch(cp_params)
+            cp_model = build_chemprop(namespace)
+
+        WeightedConformers.__init__(self, modelparams)
+        self.cp_model = cp_model
+
+    def load_cp_model(self, cp_params):
+
+        cp_path = cp_params["transfer_cp"]
+        gpu = cp_params["gpu"]
+
+        model = torch.load(
+            os.path.join(cp_path, 'best_model')
+        )
+
+        cp_model = model.cp_model
+        cp_model.gpu = gpu
+        cp_model = cp_model.to(gpu)
+
+        cp_model.encoder.args.gpu = gpu
+        cp_model.encoder.gpu = gpu
+        cp_model.encoder = cp_model.encoder.to(gpu)
+
+        cp_model.encoder.encoder.gpu = gpu
+
+        for param in cp_model.parameters():
+            param.requires_grad = False
+
+        return cp_model
+
+    def adjust_readout(self, modelparams, cp_params, cp_model):
+
+        encoder = cp_model.encoder.encoder
+        learned_cp_num = encoder.W_o.out_features
+        extra_feats = cp_params["extra_features"]
+        num_extra = sum([feat["length"]
+                         for feat in extra_feats])
+        cp_num = learned_cp_num + num_extra
+
+        schnet_num = modelparams['mol_fp_layers'][-1]['param'
+                                                      ]['out_features']
+
+        for key, layers in modelparams['readoutdict'].items():
+            layers[0]['param']['in_features'] = schnet_num + cp_num
+
+    def init_with_cp(self, modelparams):
+
+        cp_params = modelparams["chemprop"]
+        cp_model = self.load_cp_model(cp_params=cp_params)
+        self.adjust_readout(modelparams=modelparams,
+                            cp_params=cp_params,
+                            cp_model=cp_model)
+        return cp_model, modelparams
 
     def get_chemprop_inp(self, batch, cp_data, smiles_dic):
 
@@ -56,6 +112,7 @@ class ChemProp3D(WeightedConformers):
         inputs = self.get_chemprop_inp(batch=batch,
                                        cp_data=cp_data,
                                        smiles_dic=smiles_dic)
+
         cp_feats = self.cp_model.encoder(*inputs)
         out_feats = [item for item in cp_feats]
 
