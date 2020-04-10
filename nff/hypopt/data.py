@@ -5,6 +5,7 @@ import numpy as np
 
 from torch.utils.data import DataLoader
 from nff.data import collate_dicts
+from nff.data.loader import ImbalancedDatasetSampler
 
 
 def add_morgan(dataset, vec_length):
@@ -24,6 +25,7 @@ def add_morgan(dataset, vec_length):
         morgan_tens = torch.tensor(arr_morgan)
         dataset.props["morgan"].append(morgan_tens)
 
+
 def add_features(params, dataset):
     func_dic = {"morgan": add_morgan}
     extra_features = params["extra_features"]
@@ -32,7 +34,8 @@ def add_features(params, dataset):
         name = dic["name"]
         vec_length = dic["length"]
         func_dic[name](dataset, vec_length)
-        
+
+
 def trim_confs(dataset, num_confs):
 
     for i in range(len(dataset)):
@@ -68,6 +71,7 @@ def trim_confs(dataset, num_confs):
 
         dataset.props["nbr_list"][i] = nbr_list[good_idx]
 
+
 def get_data_dic(base_train, base_val, base_test, params):
 
     data_dic = {"train": {"dataset": base_train.copy()},
@@ -76,6 +80,17 @@ def get_data_dic(base_train, base_val, base_test, params):
 
     for key, split in data_dic.items():
         this_set = split["dataset"]
+        data_kwargs = {"batch_size": params["batch_size"]}
+
+        if key == "train" and params.get("target_balance"
+                                         ) is not None:
+            props = this_set.props
+            target_name = params["target_balance"]
+            sampler = ImbalancedDatasetSampler(
+                target_name=target_name,
+                props=props)
+            data_kwargs.update({"sampler": sampler})
+
         if params.get("extra_features") is not None:
             add_features(params=params,
                          dataset=this_set)
@@ -84,7 +99,7 @@ def get_data_dic(base_train, base_val, base_test, params):
             trim_confs(dataset=this_set,
                        num_confs=num_confs)
         loader = DataLoader(this_set,
-                            batch_size=params["batch_size"],
-                            collate_fn=collate_dicts)
+                            collate_fn=collate_dicts,
+                            **data_kwargs)
         data_dic[key]["loader"] = loader
     return data_dic
