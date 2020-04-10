@@ -7,7 +7,8 @@
 					{"name": "cp_depth", "type": "int", "bounds": {"min": 1, "max": 6}}
 				],
 
-	"set_params": {"boltz_params": {"boltz_type": "multiply"},
+	"set_params": {"target_balance": "bind",
+				"boltz_params": {"boltz_type": "multiply"},
 				"readout_names": ["bind"],
 				"layer_act": "ReLU",
 				"num_readout_layers": 3,

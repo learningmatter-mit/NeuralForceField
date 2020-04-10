@@ -12,7 +12,8 @@
 					{"name": "cp_depth", "type": "int", "bounds": {"min": 4, "max": 6}}
 				],
 
-	"set_params": {"boltz_params": {"boltz_type": "multiply"},
+	"set_params": {"target_balance": "bind",
+				"boltz_params": {"boltz_type": "multiply"},
 				"readout_names": ["bind"],
 				"n_atom_basis": 112,
 				"n_gaussians": 52,
