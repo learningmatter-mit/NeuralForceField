@@ -21,7 +21,9 @@ def pr_auc(y_true, probas_pred):
 def get_metric(name):
     dic = {
         "roc_auc": roc_auc_score,
+        "RocAuc": roc_auc_score,
         "pr_auc": pr_auc,
+        "PrAuc": pr_auc,
         "mae": mean_absolute_error,
         "mse": mean_squared_error
     }

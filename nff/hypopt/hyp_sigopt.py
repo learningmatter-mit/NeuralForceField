@@ -295,7 +295,7 @@ def get_scores(eval_metric,
     return score_dic
 
 
-def get_and_report_scores(eval_metric,
+def get_and_report_scores(metrics,
                           best_model,
                           model_folder,
                           project_name,
@@ -303,16 +303,18 @@ def get_and_report_scores(eval_metric,
                           target_name,
                           data_dic,
                           param_dic):
-    score_dic = get_scores(eval_metric=eval_metric,
-                           best_model=best_model,
-                           model_type=model_type,
-                           target_name=target_name,
-                           data_dic=data_dic,
-                           param_dic=param_dic)
-    report_scores(eval_metric=eval_metric,
-                  model_folder=model_folder,
-                  project_name=project_name,
-                  score_dic=score_dic)
+
+    for metric in metrics:
+        score_dic = get_scores(eval_metric=metric,
+                               best_model=best_model,
+                               model_type=model_type,
+                               target_name=target_name,
+                               data_dic=data_dic,
+                               param_dic=param_dic)
+        report_scores(eval_metric=metric,
+                      model_folder=model_folder,
+                      project_name=project_name,
+                      score_dic=score_dic)
 
 
 def retrain_best(project_name,
@@ -380,7 +382,7 @@ def retrain_best(project_name,
     best_model = T.get_best_model()
 
     # get and report scores
-    get_and_report_scores(eval_metric=eval_metric,
+    get_and_report_scores(metrics=monitor_metrics,
                           best_model=best_model,
                           model_folder=model_folder,
                           project_name=project_name,

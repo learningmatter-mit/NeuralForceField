@@ -82,8 +82,11 @@ def get_data_dic(base_train, base_val, base_test, params):
         this_set = split["dataset"]
         data_kwargs = {"batch_size": params["batch_size"]}
 
-        if key == "train" and params.get("target_balance"
-                                         ) is not None:
+        # if key == "train" and params.get("target_balance"
+        #                                  ) is not None:
+
+        if params.get("target_balance") is not None:
+
             props = this_set.props
             target_name = params["target_balance"]
             sampler = ImbalancedDatasetSampler(
