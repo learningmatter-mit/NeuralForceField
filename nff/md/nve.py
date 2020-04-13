@@ -113,7 +113,14 @@ class Dynamics:
         
         for step in range(epochs):
             self.integrator.run(self.mdparam['nbr_list_update_freq'])
+
+            # # unwrap coordinates if mol_idx is defined 
+            # if self.atomsbatch.props.get("mol_idx", None) :
+            #     self.atomsbatch.set_positions(self.atoms.get_positions(wrap=True))
+            #     self.atomsbatch.set_positions(reconstruct_atoms(atoms, self.atomsbatch.props['mol_idx']))
+
             self.atomsbatch.update_nbr_list()
+
         self.traj.close()
         
     
