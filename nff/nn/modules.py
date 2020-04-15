@@ -6,7 +6,8 @@ from torch.nn import (Sequential, Linear, ReLU, LeakyReLU,
                       ModuleDict, Dropout)
 
 from nff.nn.layers import Dense, GaussianSmearing
-from nff.utils.scatter import scatter_add, chemprop_msg_update
+from nff.utils.scatter import (scatter_add, chemprop_msg_update,
+                               chemprop_msg_to_node)
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphconv import (
     MessagePassingModule,
@@ -939,38 +940,70 @@ class BondPrior(torch.nn.Module):
 
 
 class ChemPropConv(MessagePassingModule):
+
     def __init__(self,
-                 n_bond_hidden,
+                 n_edge_hidden,
                  dropout_rate):
         super(MessagePassingModule, self).__init__()
 
         self.linear = Linear(
-            in_features=n_bond_hidden,
-            out_features=n_bond_hidden)
+            in_features=n_edge_hidden,
+            out_features=n_edge_hidden)
         self.dropout = Dropout(p=dropout_rate)
         self.activation = ReLU()
 
-    def message(self, bond_feats, bond_nbrs):
-        msg = chemprop_msg_update(h=bond_feats,
-                                  nbrs=bond_nbrs)
+    def message(self, h_new, nbrs):
+        msg = chemprop_msg_update(h=h_new,
+                                  nbrs=nbrs)
         return msg
 
-    def update(self, msg, init_bond_feats):
+    def update(self, msg, h_0):
 
-        add_feats = init_bond_feats + self.linear(msg)
+        add_feats = h_0 + self.linear(msg)
         update_feats = self.dropout(add_feats)
         update_feats = self.activation(update_feats)
 
         return update_feats
 
-    def forward(self, init_bond_feats, bond_feats, bond_nbrs):
+    def forward(self, h_0, h_new, nbrs):
 
-        msg = self.message(bond_feats=bond_feats,
-                           bond_nbrs=bond_nbrs)
+        msg = self.message(h_new=h_new,
+                           nbrs=nbrs)
         update_feats = self.update(msg=msg,
-                                   init_bond_feats=init_bond_feats)
+                                   h_0=h_0)
 
         return update_feats
+
+
+class ChemPropMsgToNode(nn.Module):
+    def __init__(self, output_layers):
+        nn.Module.__init__(self)
+
+        self.output = construct_sequential(output_layers)
+
+    def forward(self, r, h, nbrs, num_nodes):
+        msg_to_node = chemprop_msg_to_node(h=h,
+                                           nbrs=nbrs,
+                                           num_nodes=num_nodes)
+        cat_node = torch.cat((r, msg_to_node), dim=1)
+        new_node_feats = self.output(cat_node)
+
+        return new_node_feats
+
+
+class ChemPropInit(nn.Module):
+
+    def __init__(self, input_layers):
+        nn.Module.__init__(self)
+
+        self.input = construct_sequential(input_layers)
+
+    def forward(self, r, bond_feats, bond_nbrs):
+        cat_feats = torch.cat((r[bond_nbrs[:, 0]], bond_feats),
+                              dim=1)
+        hidden_feats = self.input(cat_feats)
+
+        return hidden_feats
 
 
 class SchNetFeaturesConv(SchNetConv):

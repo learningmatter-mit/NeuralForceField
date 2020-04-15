@@ -137,3 +137,18 @@ def read_from_json(jsonpath):
         dict = json.loads(handle.read())
         namespace_dict = Namespace(**dict)
     return namespace_dict
+
+
+def make_directed(nbr_list):
+
+    gtr_ij = (nbr_list[:, 0] > nbr_list[:, 1]).any().item()
+    gtr_ji = (nbr_list[:, 1] > nbr_list[:, 0]).any().item()
+    directed = gtr_ij and gtr_ji
+
+    if directed:
+        return nbr_list, directed
+
+    new_nbrs = torch.cat([nbr_list, nbr_list.flip(1)], dim=0)
+    return new_nbrs, directed
+
+
