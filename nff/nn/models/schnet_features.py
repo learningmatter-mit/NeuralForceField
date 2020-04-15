@@ -35,36 +35,35 @@ class SchNetFeatures(WeightedConformers):
         return convs
 
     def make_h(self, batch, nbr_list, r):
-
         """
         Initialize the hidden bond features
         """
 
         # get the directed bond list and bond features
 
-        bond_list, was_directed = make_directed(batch["bonded_nbr_list"])
-        if was_directed:
-            bond_feats = batch["bond_features"]
-        else:
-            bond_feats = torch.cat([batch["bond_features"]] * 2, dim=0)
+        bond_nbrs, was_directed = make_directed(batch["bonded_nbr_list"])
+        bond_feats = batch["bond_features"]
+
+        if not was_directed:
+            bond_feats = torch.cat([bond_feats] * 2, dim=0)
 
         # initialize hidden bond features
 
         h_0_bond = self.W_i(r=r,
                             bond_feats=bond_feats,
-                            bond_nbrs=bond_list)
+                            bond_nbrs=bond_nbrs)
 
         # initialize `h_0`, the features of all edges
         # (including non-bonded ones), to zero
 
         nbr_dim = nbr_list.shape[0]
         h_0 = torch.zeros((nbr_dim,  self.n_bond_hidden))
-        h_0 = h_0.to(bond_list.device)
+        h_0 = h_0.to(bond_nbrs.device)
 
         # set the features of bonded edges equal to the bond
         # features
 
-        bond_idx = (bond_list[:, None] == nbr_list
+        bond_idx = (bond_nbrs[:, None] == nbr_list
                     ).prod(-1).nonzero()[:, 1]
         h_0[bond_idx] = h_0_bond
 
@@ -80,8 +79,6 @@ class SchNetFeatures(WeightedConformers):
 
         a, _ = make_directed(batch["nbr_list"])
         r = batch["atom_features"]
-
-        # offsets take care of periodic boundary conditions
         offsets = batch.get("offsets", 0)
         e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
              offsets).pow(2).sum(1).sqrt()[:, None]
@@ -110,8 +107,5 @@ class SchNetFeatures(WeightedConformers):
                                   h=h_new,
                                   nbrs=a,
                                   num_nodes=r.shape[0])
-
-        # TO GET PROPER COMPARISON TO ORIGINAL CHEMPROP,
-        # NEED TO CONCATENATE WITH RDKIT 2D FEATURES
 
         return new_node_feats, xyz
