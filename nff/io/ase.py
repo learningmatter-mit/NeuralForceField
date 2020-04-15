@@ -216,7 +216,7 @@ class BulkPhaseMaterials(Atoms):
         else:
             edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]].numpy()
+            offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]]#.numpy()
             nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
         if exclude_atoms_nbr_list:
@@ -236,7 +236,7 @@ class BulkPhaseMaterials(Atoms):
             offsets = offsets_mat[nbr_list[:,0], nbr_list[:,1], :]
 
         self.nbr_list = nbr_list
-        self.offsets = sparsify_array(offsets.dot(self.get_cell()))
+        self.offsets = sparsify_array(offsets.matmul( torch.Tensor(self.get_cell())))
         
     def get_list_atoms(self):
 
