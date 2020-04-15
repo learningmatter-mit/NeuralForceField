@@ -13,8 +13,6 @@ from torch.nn import ModuleDict, Sequential
 from nff.nn.activations import shifted_softplus
 from nff.nn.layers import Dense
 
-import pdb
-
 
 __all__ = [
     "set_random_seed",
@@ -24,40 +22,42 @@ __all__ = [
 ]
 
 layer_types = {
-                "linear": torch.nn.Linear,
-                "Tanh": torch.nn.Tanh,
-                "ReLU": torch.nn.ReLU,
-                "Dense": Dense,
-                "shifted_softplus": shifted_softplus,
-                "sigmoid": torch.nn.Sigmoid,
-                "Dropout": torch.nn.Dropout
-              }
+    "linear": torch.nn.Linear,
+    "Tanh": torch.nn.Tanh,
+    "ReLU": torch.nn.ReLU,
+    "Dense": Dense,
+    "shifted_softplus": shifted_softplus,
+    "sigmoid": torch.nn.Sigmoid,
+    "Dropout": torch.nn.Dropout
+}
 
 
 def construct_Sequential(layers):
     """Construct a sequential model from list of params 
-    
+
     Args:
         layers (list): list to describe the stacked layer params 
                         example:    [
                                         {'name': 'linear', 'param' : {'in_features': 10, 'out_features': 20}},
                                         {'name': 'linear', 'param' : {'in_features': 10, 'out_features': 1}}
                                     ]
-    
+
     Returns:
         Sequential: Stacked Sequential Model 
     """
 
-    return Sequential(collections.OrderedDict([ layer['name']+str(i), 
-                                               layer_types[layer['name']](**layer['param'])
-                                              ] for i, layer in enumerate(layers)))
+    return Sequential(collections.OrderedDict([layer['name']+str(i),
+                                               layer_types[layer['name']](
+                                                   **layer['param'])
+                                               ] for i, layer in enumerate(layers)))
+
 
 def construct_ModuleDict(moduledict):
     """construct moduledict from a dictionary of layers
-    
+
     Args:
         moduledict (dict): Description
-    
+
     Returns:
         ModuleDict: Description
     """
@@ -65,6 +65,7 @@ def construct_ModuleDict(moduledict):
     for key in moduledict:
         models[key] = construct_Sequential(moduledict[key])
     return models
+
 
 def set_random_seed(seed):
     """
@@ -136,4 +137,3 @@ def read_from_json(jsonpath):
         dict = json.loads(handle.read())
         namespace_dict = Namespace(**dict)
     return namespace_dict
-

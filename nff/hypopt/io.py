@@ -2,8 +2,11 @@ import os
 from datetime import datetime
 import json
 import shutil
+import torch
+import pdb
 
 from nff.data import Dataset, split_train_validation_test
+
 
 def get_path_names(save_dir, project_name):
     sigopt_path = os.path.join(save_dir, "sigopt")
@@ -57,6 +60,16 @@ def make_model_folder(save_dir, project_name, model_id):
 
     return new_model_folder
 
+
+def save_ensemble(ensemble, num, save_dir, project_name):
+    folder_name = "{}_fold_ensemble".format(num)
+    ensemble_folder = make_model_folder(save_dir=save_dir,
+                                        project_name=project_name,
+                                        model_id=folder_name)
+    best_model_file = os.path.join(ensemble_folder, "best_model")
+    torch.save(ensemble, best_model_file)
+
+    return ensemble_folder
 
 def save_info(param_regime,
               assignments,

@@ -2,10 +2,14 @@ from datetime import datetime
 from sigopt import Connection
 import os
 import json
+import copy
+
+import pdb
 
 from nff.hypopt.io import (make_model_folder,
                            save_info,
-                           get_splits)
+                           get_splits,
+                           save_ensemble)
 from nff.hypopt.data import get_data_dic
 from nff.hypopt.params import (make_wc_model,
                                make_cp3d_model,
@@ -14,6 +18,7 @@ from nff.hypopt.eval import evaluate_model
 from nff.hypopt.train import make_trainer
 
 from nff.data import Dataset
+from nff.nn.glue import Stack
 
 
 def create_expt(name,
@@ -272,9 +277,16 @@ def report_scores(eval_metric,
             msg=msg,
             log_file=log_file)
 
+    score_dics = [score_dic]
     stats_file = os.path.join(model_folder, "stats.json")
+
+    if os.path.isfile(stats_file):
+        with open(stats_file, "r") as f:
+            old_scores = json.load(f)
+        score_dics += old_scores
+
     with open(stats_file, "w") as f:
-        json.dump(score_dic, f, indent=4, sort_keys=True)
+        json.dump(score_dics, f, indent=4, sort_keys=True)
 
 
 def get_scores(eval_metric,
@@ -317,6 +329,51 @@ def get_and_report_scores(metrics,
                       score_dic=score_dic)
 
 
+def ensemble_wrapper(train_func):
+
+    def main(**kwargs):
+
+        num = kwargs.get("num_ensembles", 1)
+
+        if num == 1:
+            train_func(**kwargs)
+            return
+
+        target_name = kwargs["target_name"]
+        save_dir = kwargs["save_dir"]
+        project_name = kwargs["project_name"]
+        set_params = kwargs["set_params"]
+        device = kwargs["device"]
+
+        models = []
+
+        for i in range(num):
+            model = train_func(model_suffix=i, **kwargs)
+            models.append(model)
+
+        model_dict = {str(i): model for i, model in enumerate(models)}
+        ensemble = Stack(model_dict=model_dict,
+                         mode='mean')
+        ensemble = ensemble.to(device)
+        ensemble.device = device
+        ensemble_folder = save_ensemble(ensemble=ensemble,
+                                        num=num,
+                                        save_dir=save_dir,
+                                        project_name=project_name)
+
+        new_set_params = copy.deepcopy(set_params)
+        new_set_params.update({"keys_to_combine": [target_name]})
+
+        new_kwargs = copy.deepcopy(kwargs)
+        new_kwargs.update({"set_params": new_set_params,
+                           "best_model": ensemble,
+                           "model_folder": ensemble_folder})
+        train_func(**new_kwargs)
+
+    return main
+
+
+@ensemble_wrapper
 def retrain_best(project_name,
                  save_dir,
                  val_size,
@@ -333,6 +390,8 @@ def retrain_best(project_name,
                  device,
                  model_type,
                  loss_coef,
+                 best_model=None,
+                 model_folder=None,
                  **kwargs):
 
     # get data
@@ -350,10 +409,11 @@ def retrain_best(project_name,
                                           objective=objective)
 
     # make a new folder for retraining
-    model_id = "assgn_{}_retrain".format(assgn_id)
-    model_folder = make_model_folder(save_dir=save_dir,
-                                     project_name=project_name,
-                                     model_id=model_id)
+    if model_folder is None:
+        model_id = "assgn_{}_retrain".format(assgn_id)
+        model_folder = make_model_folder(save_dir=save_dir,
+                                         project_name=project_name,
+                                         model_id=model_id)
 
     # get the data, build the model and make the trainer
     data_dic = get_data_dic(base_train=base_train,
@@ -366,20 +426,21 @@ def retrain_best(project_name,
     metric_dics = [{"target": target_name, "metric": name}
                    for name in monitor_metrics]
 
-    T = make_trainer(model=model,
-                     model_type=model_type,
-                     train_loader=data_dic["train"]["loader"],
-                     val_loader=data_dic["val"]["loader"],
-                     model_folder=model_folder,
-                     loss_name=loss_name,
-                     loss_coef=loss_coef,
-                     metric_dics=metric_dics,
-                     max_epochs=num_epochs,
-                     param_dic=param_dic)
+    if best_model is None:
+        T = make_trainer(model=model,
+                         model_type=model_type,
+                         train_loader=data_dic["train"]["loader"],
+                         val_loader=data_dic["val"]["loader"],
+                         model_folder=model_folder,
+                         loss_name=loss_name,
+                         loss_coef=loss_coef,
+                         metric_dics=metric_dics,
+                         max_epochs=num_epochs,
+                         param_dic=param_dic)
 
-    # train
-    T.train(device=device, n_epochs=num_epochs)
-    best_model = T.get_best_model()
+        # train
+        T.train(device=device, n_epochs=num_epochs)
+        best_model = T.get_best_model()
 
     # get and report scores
     get_and_report_scores(metrics=monitor_metrics,
@@ -390,6 +451,8 @@ def retrain_best(project_name,
                           target_name=target_name,
                           data_dic=data_dic,
                           param_dic=param_dic)
+
+    return best_model
 
 
 def run_loop(project_name,

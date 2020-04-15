@@ -2,10 +2,11 @@ import numpy as np
 
 import torch
 import torch.nn as nn
-from torch.nn import Sequential, Linear, ReLU, LeakyReLU, ModuleDict
+from torch.nn import (Sequential, Linear, ReLU, LeakyReLU,
+                      ModuleDict, Dropout)
 
 from nff.nn.layers import Dense, GaussianSmearing
-from nff.utils.scatter import scatter_add
+from nff.utils.scatter import scatter_add, chemprop_msg_update
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphconv import (
     MessagePassingModule,
@@ -43,7 +44,8 @@ class ZeroNet(torch.nn.Module):
     def forward(self, x):
         # written in this roundabout way to ensure that if x is on a GPU
         # then the output will also be on a GPU
-        result_layer = torch.stack([(x.reshape(-1) * 0.0)[0].detach()] * self.L_out)
+        result_layer = torch.stack(
+            [(x.reshape(-1) * 0.0)[0].detach()] * self.L_out)
         # one array of zeros per input:
         output = torch.stack([result_layer for _ in range(len(x))])
         return output
@@ -55,7 +57,6 @@ class ParameterPredictor(torch.nn.Module):
     """
 
     def __init__(self, L_in, L_hidden, L_out, trainable=False):
-
         """
         Args:
             L_in: 
@@ -71,7 +72,7 @@ class ParameterPredictor(torch.nn.Module):
         if trainable:
             modules = torch.nn.ModuleList()
             Lh = [L_in] + L_hidden
-            for Lh_in, Lh_out in [Lh[i : i + 2] for i in range(len(Lh) - 1)]:
+            for Lh_in, Lh_out in [Lh[i: i + 2] for i in range(len(Lh) - 1)]:
                 modules.append(torch.nn.Linear(Lh_in, Lh_out))
                 modules.append(torch.nn.Tanh())
             modules.append(torch.nn.Linear(Lh[-1], L_out))
@@ -93,8 +94,10 @@ class BondNet(torch.nn.Module):
         self.learned_params = {}
 
         if "harmonic" in self.terms:
-            self.r0_harmonic = ParameterPredictor(Fr, Lh, 1, trainable=trainable)
-            self.k_harmonic = ParameterPredictor(Fr, Lh, 1, trainable=trainable)
+            self.r0_harmonic = ParameterPredictor(
+                Fr, Lh, 1, trainable=trainable)
+            self.k_harmonic = ParameterPredictor(
+                Fr, Lh, 1, trainable=trainable)
             self.learned_params["harmonic"] = {"r0": None, "k": None}
         if "morse" in self.terms:
 
@@ -107,7 +110,8 @@ class BondNet(torch.nn.Module):
             self.k_cubic = ParameterPredictor(Fr, Lh, 1, trainable=trainable)
             self.learned_params["cubic"] = {"r0": None, "k": None}
         if "quartic" in self.terms:
-            self.r0_quartic = ParameterPredictor(Fr, Lh, 1, trainable=trainable)
+            self.r0_quartic = ParameterPredictor(
+                Fr, Lh, 1, trainable=trainable)
             self.k_quartic = ParameterPredictor(Fr, Lh, 1, trainable=trainable)
             self.learned_params["quartic"] = {"r0": None, "k": None}
 
@@ -124,7 +128,8 @@ class BondNet(torch.nn.Module):
         E = 0.0
         if "harmonic" in self.terms:
 
-            r0_harmonic = ((1.5 ** 0.5) + 0.1 * self.r0_harmonic(node_input)).pow(2)
+            r0_harmonic = ((1.5 ** 0.5) + 0.1 *
+                           self.r0_harmonic(node_input)).pow(2)
             k_harmonic = ((100 ** 0.5) + self.k_harmonic(node_input)).pow(2)
             E = E + (k_harmonic / 2) * (D - r0_harmonic).pow(2)
             self.learned_params["harmonic"]["r0"] = r0_harmonic.tolist()
@@ -134,7 +139,8 @@ class BondNet(torch.nn.Module):
             r0_morse = self.r0_morse(node_input).pow(2)
             a_morse = self.a_morse(node_input).pow(2)
             De_morse = self.De_morse(node_input).pow(2)
-            E = E + De_morse * (1 - torch.exp(-a_morse * (D - r0_morse))).pow(2)
+            E = E + De_morse * \
+                (1 - torch.exp(-a_morse * (D - r0_morse))).pow(2)
             self.learned_params["morse"]["r0"] = r0_morse.tolist()
             self.learned_params["morse"]["a"] = a_morse.tolist()
             self.learned_params["morse"]["De"] = De_morse.tolist()
@@ -170,15 +176,20 @@ class AngleNet(torch.nn.Module):
             self.theta0_harmonic = ParameterPredictor(
                 2 * Fr, Lh, 1, trainable=trainable
             )
-            self.k_harmonic = ParameterPredictor(2 * Fr, Lh, 1, trainable=trainable)
+            self.k_harmonic = ParameterPredictor(
+                2 * Fr, Lh, 1, trainable=trainable)
             self.learned_params["harmonic"] = {"theta0": None, "k": None}
         if "cubic" in self.terms:
-            self.theta0_cubic = ParameterPredictor(2 * Fr, Lh, 1, trainable=trainable)
-            self.k_cubic = ParameterPredictor(2 * Fr, Lh, 1, trainable=trainable)
+            self.theta0_cubic = ParameterPredictor(
+                2 * Fr, Lh, 1, trainable=trainable)
+            self.k_cubic = ParameterPredictor(
+                2 * Fr, Lh, 1, trainable=trainable)
             self.learned_params["cubic"] = {"theta0": None, "k": None}
         if "quartic" in self.terms:
-            self.theta0_quartic = ParameterPredictor(2 * Fr, Lh, 1, trainable=trainable)
-            self.k_quartic = ParameterPredictor(2 * Fr, Lh, 1, trainable=trainable)
+            self.theta0_quartic = ParameterPredictor(
+                2 * Fr, Lh, 1, trainable=trainable)
+            self.k_quartic = ParameterPredictor(
+                2 * Fr, Lh, 1, trainable=trainable)
             self.learned_params["quartic"] = {"theta0": None, "k": None}
 
     def forward(self, r, batch, xyz):
@@ -194,14 +205,17 @@ class AngleNet(torch.nn.Module):
         angle_vec1 = D[angles[:, 0], angles[:, 1], :]
         angle_vec2 = D[angles[:, 1], angles[:, 2], :]
         dot_unnorm = (-angle_vec1 * angle_vec2).sum(1)
-        norm = torch.sqrt((angle_vec1.pow(2)).sum(1) * (angle_vec2.pow(2)).sum(1))
+        norm = torch.sqrt((angle_vec1.pow(2)).sum(1)
+                          * (angle_vec2.pow(2)).sum(1))
         cos_theta = (dot_unnorm / norm).view(-1, 1)
         theta = torch.acos(cos_theta / 1.000001)
-        node_input = torch.cat([r[angles[:, [0, 2]]].sum(1), r[angles[:, 1]]], dim=1)
+        node_input = torch.cat(
+            [r[angles[:, [0, 2]]].sum(1), r[angles[:, 1]]], dim=1)
         E = 0.0
         if "harmonic" in self.terms:
             theta0_harmonic = (
-                ((109.5 * np.pi / 180) ** 0.5) + self.theta0_harmonic(node_input)
+                ((109.5 * np.pi / 180) ** 0.5) +
+                self.theta0_harmonic(node_input)
             ).pow(2)
             k_harmonic = ((10 ** 0.5) + self.k_harmonic(node_input)).pow(2)
             E = E + (k_harmonic / 2) * (theta - theta0_harmonic).pow(2)
@@ -274,7 +288,8 @@ class DihedralNet(torch.nn.Module):
         dihedral_input = pair1 + pair2
         E = 0.0
         if "multiharmonic" in self.terms:
-            multiharmonic_constants = self.dihedralnet_multiharmonic(dihedral_input)
+            multiharmonic_constants = self.dihedralnet_multiharmonic(
+                dihedral_input)
             for m in range(5):
                 A = multiharmonic_constants[:, m].view(-1, 1)
                 E = E + A * (cos_phi.pow(m))
@@ -307,7 +322,8 @@ class ImproperNet(torch.nn.Module):
             2 * self.Fr, Lh, Lh[-1], trainable=trainable
         )
         if "harmonic" in self.terms:
-            self.k_harmonic = ParameterPredictor(Lh[-1], Lh, 1, trainable=trainable)
+            self.k_harmonic = ParameterPredictor(
+                Lh[-1], Lh, 1, trainable=trainable)
             self.learned_params["harmonic"] = {"k": None}
 
     def forward(self, r, batch, xyz):
@@ -394,7 +410,8 @@ class PairNet(torch.nn.Module):
             epsilon_mixed = epsilon[pairs].prod(1).pow(0.5)
 
             D_inv_scal = sigma_mixed * inv_D
-            E = E + (4 * epsilon_mixed * (D_inv_scal.pow(12) - D_inv_scal.pow(6)))
+            E = E + (4 * epsilon_mixed *
+                     (D_inv_scal.pow(12) - D_inv_scal.pow(6)))
 
             self.learned_params["LJ"]["sigma"] = sigma
             self.learned_params["LJ"]["epsilon"] = epsilon
@@ -428,7 +445,6 @@ class AuTopologyReadOut(nn.Module):
     """
 
     def __init__(self, multitaskdict):
-
         """
         Args:
             multitaskdict (dict): dictionary of items used for setting up the networks.
@@ -513,7 +529,8 @@ class AuTopologyReadOut(nn.Module):
 
             N = batch["num_atoms"].cpu().numpy().tolist()
             offset = torch.split(self.offset[output_key](r), N)
-            offset = (torch.stack([torch.sum(item) for item in offset])).reshape(-1, 1)
+            offset = (torch.stack([torch.sum(item)
+                                   for item in offset])).reshape(-1, 1)
 
             output[output_key] = E["total"] + offset
 
@@ -556,7 +573,7 @@ class SchNetEdgeUpdate(EdgeUpdateModule):
 class SchNetConv(MessagePassingModule):
 
     """The convolution layer with filter.
-    
+
     Attributes:
         moduledict (TYPE): Description
     """
@@ -614,6 +631,9 @@ class SchNetConv(MessagePassingModule):
         )
 
     def message(self, r, e, a, aggr_wgt=None):
+
+        pdb.set_trace()
+
         """The message function for SchNet convoltuions 
         Args:
             r (TYPE): node inputs
@@ -634,7 +654,8 @@ class SchNetConv(MessagePassingModule):
             r = r * aggr_wgt
 
         # combine node and edge info
-        message = r[a[:, 0]] * e, r[a[:, 1]] * e  # (ri [] eij) -> rj, []: *, +, (,)
+        message = r[a[:, 0]] * e, r[a[:, 1]] * \
+            e  # (ri [] eij) -> rj, []: *, +, (,)
         return message
 
     def update(self, r):
@@ -685,7 +706,6 @@ class DoubleNodeConv(AuTopologyConv):
     """
 
     def __init__(self, update_layers):
-
         """
         Args:
             update_layers (dict): dictionary of layers to apply after the convolution
@@ -736,7 +756,6 @@ class SingleNodeConv(AuTopologyConv):
     """
 
     def __init__(self, update_layers):
-
         """
         Args:
             update_layers (dict): dictionary of layers to apply after the convolution
@@ -917,6 +936,135 @@ class BondPrior(torch.nn.Module):
         result["energy_grad"] = compute_grad(inputs=xyz, output=E)
 
         return result
+
+
+class ChemPropConv(MessagePassingModule):
+    def __init__(self,
+                 n_bond_hidden,
+                 dropout_rate):
+        super(MessagePassingModule, self).__init__()
+
+        self.linear = Linear(
+            in_features=n_bond_hidden,
+            out_features=n_bond_hidden)
+        self.dropout = Dropout(p=dropout_rate)
+        self.activation = ReLU()
+
+    def message(self, bond_feats, bond_nbrs):
+        msg = chemprop_msg_update(h=bond_feats,
+                                  nbrs=bond_nbrs)
+        return msg
+
+    def update(self, msg, init_bond_feats):
+
+        add_feats = init_bond_feats + self.linear(msg)
+        update_feats = self.dropout(add_feats)
+        update_feats = self.activation(update_feats)
+
+        return update_feats
+
+    def forward(self, init_bond_feats, bond_feats, bond_nbrs):
+
+        msg = self.message(bond_feats=bond_feats,
+                           bond_nbrs=bond_nbrs)
+        update_feats = self.update(msg=msg,
+                                   init_bond_feats=init_bond_feats)
+
+        return update_feats
+
+
+class SchNetFeaturesConv(SchNetConv):
+
+    def __init__(
+        self,
+        n_atom_basis,
+        n_filters,
+        n_gaussians,
+        cutoff,
+        trainable_gauss,
+        dropout_rate,
+        n_bond_hidden,
+        gauss_embed
+    ):
+        super(SchNetFeaturesConv, self).__init__(
+            n_atom_basis=n_atom_basis,
+            n_filters=n_filters,
+            n_gaussians=n_gaussians,
+            cutoff=cutoff,
+            trainable_gauss=trainable_gauss,
+            dropout_rate=dropout_rate)
+
+        if not gauss_embed:
+            self.moduledict.pop("message_edge_filter")
+            tot_bond_feats = 1 + n_bond_hidden
+        else:
+            tot_bond_feats = n_filters + n_bond_hidden
+
+        self.moduledict.update({
+            "message_node_filter": Dense(
+                in_features=n_atom_basis,
+                out_features=tot_bond_feats,
+                dropout_rate=dropout_rate,
+            ),
+
+            "update_function": Sequential(
+                Dense(
+                    in_features=tot_bond_feats,
+                    out_features=n_atom_basis,
+                    dropout_rate=dropout_rate,
+                ),
+                shifted_softplus(),
+                Dense(
+                    in_features=n_atom_basis,
+                    out_features=n_atom_basis,
+                    dropout_rate=dropout_rate,
+                ),
+            )})
+
+    def message(self, r, e, a, bond_ij, bond_ji, aggr_wgt=None):
+
+        # update edge feature
+        if "message_edge_filter" in self.moduledict:
+            e = self.moduledict["message_edge_filter"](e)
+
+        e_ij = torch.cat((e, bond_ij), dim=1)
+        e_ji = torch.cat((e, bond_ji), dim=1)
+
+        # convection: update
+        r = self.moduledict["message_node_filter"](r)
+
+        # soft aggr if aggr_wght is provided
+        if aggr_wgt is not None:
+            r = r * aggr_wgt
+
+        # combine node and edge info
+        message = r[a[:, 0]] * e_ji, r[a[:, 1]] * \
+            e_ij
+
+        return message
+
+    def update(self, r):
+        return self.moduledict["update_function"](r)
+
+    def forward(self, r, e, a, bond_ij, bond_ji, aggr_wgt=None):
+
+        graph_size = r.shape[0]
+
+        rij, rji = self.message(r=r,
+                                e=e,
+                                a=a,
+                                bond_ij=bond_ij,
+                                bond_ji=bond_ji,
+                                aggr_wgt=aggr_wgt)
+        # i -> j propagate
+
+        pdb.set_trace()
+
+        r = self.aggregate(rij, a[:, 1], graph_size)
+        # j -> i propagate
+        r += self.aggregate(rji, a[:, 0], graph_size)
+        r = self.update(r)
+        return r
 
 
 # Test

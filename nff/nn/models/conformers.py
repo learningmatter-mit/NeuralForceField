@@ -141,7 +141,6 @@ class WeightedConformers(nn.Module):
         feat_names = [dic["name"] for dic in feat_dics]
         return feat_names
 
-
     def make_boltz_nn(self, boltzmann_dict):
         if boltzmann_dict["type"] == "multiply":
             return
@@ -194,10 +193,6 @@ class WeightedConformers(nn.Module):
             xyz.requires_grad = True
 
         r = batch["nxyz"][:, 0]
-        mol_sizes = batch["mol_size"].reshape(-1).tolist()
-        N = batch["num_atoms"].reshape(-1).tolist()
-        num_confs = (torch.tensor(N) / torch.tensor(mol_sizes)).tolist()
-
         a = batch["nbr_list"]
 
         # offsets take care of periodic boundary conditions
@@ -215,11 +210,17 @@ class WeightedConformers(nn.Module):
             dr = conv(r=r, e=e, a=a)
             r = r + dr
 
+        return r, xyz
+
+    def post_process(self, batch, r, xyz, **kwargs):
+
+        mol_sizes = batch["mol_size"].reshape(-1).tolist()
+        N = batch["num_atoms"].reshape(-1).tolist()
+        num_confs = (torch.tensor(N) / torch.tensor(mol_sizes)).tolist()
         # split the fingerprints by species
         fps_by_smiles = torch.split(r, N)
         # split the boltzmann weights by species
         boltzmann_weights = torch.split(batch["weights"], num_confs)
-        
 
         # add extra features (e.g. from Morgan fingerprint or MPNN)
         num_mols = len(fps_by_smiles)
@@ -258,9 +259,12 @@ class WeightedConformers(nn.Module):
 
         """
 
-        outputs = self.convolve(batch=batch,
-                                xyz=xyz,
-                                **kwargs)
+        r, xyz = self.convolve(batch=batch,
+                               xyz=xyz,
+                               **kwargs)
+        outputs = self.post_process(batch=batch,
+                                    r=r,
+                                    xyz=xyz, **kwargs)
 
         fps_by_smiles = outputs["fps_by_smiles"]
         batched_weights = outputs["boltzmann_weights"]
@@ -289,5 +293,3 @@ class WeightedConformers(nn.Module):
         results = self.readout(conf_fps)
 
         return results
-
-

@@ -14,6 +14,7 @@ from torch.utils.data import Dataset as TorchDataset
 from nff.data.sparse import sparsify_tensor
 from nff.data.topology import update_props_topologies
 from nff.data.graphs import reconstruct_atoms, get_neighbor_list
+from nff.data.features import featurize_dataset, ATOM_FEAT_TYPES, BOND_FEAT_TYPES
 
 
 class Dataset(TorchDataset):
@@ -223,6 +224,11 @@ class Dataset(TorchDataset):
 
         return
 
+    def featurize(self, bond_feats=BOND_FEAT_TYPES, atom_feats=ATOM_FEAT_TYPES):
+        featurize_dataset(self,
+                          bond_feats=bond_feats,
+                          atom_feats=atom_feats)
+
     def unwrap_xyz(self, mol_dic):
         """
         Unwrap molecular coordinates by displacing atoms by box vectors
@@ -232,7 +238,7 @@ class Dataset(TorchDataset):
             mol_dic (dict): dictionary of nodes of each disconnected subgraphs
         """
         from nff.io import AtomsBatch
-        
+
         for i in range(len(self.props['nxyz'])):
             # makes atoms object
 
@@ -430,7 +436,7 @@ def concatenate_dict(*dicts):
 
         elif get_length(value) == 1:
             return [value]
-        
+
         return value
 
     # we have to see how many values the properties of each dictionary has.
@@ -467,7 +473,7 @@ def split_train_test(dataset, test_size=0.2):
 
     idx = list(range(len(dataset)))
     idx_train, idx_test = train_test_split(idx, test_size=test_size)
-    
+
     props = {key: [val[i] for i in idx_train]
              for key, val in dataset.props.items()}
 

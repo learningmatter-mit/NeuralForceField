@@ -8,8 +8,6 @@ from sklearn.metrics import (roc_auc_score,
 from nff.train import evaluate as nff_evaluate
 from nff.train.chemprop import load_external_data
 
-from nff.hypopt.train import IO_MODELS
-
 
 def pr_auc(y_true, probas_pred):
     precision, recall, thresholds = precision_recall_curve(
@@ -33,13 +31,15 @@ def get_metric(name):
 
 def get_eval_kwargs(model_type, param_dic):
 
-    if model_type not in IO_MODELS:
-        return {}
+    eval_kwargs = {}
+    if "keys_to_combine" in param_dic:
+        keys_to_combine = param_dic["keys_to_combine"]
+        eval_kwargs.update({"keys_to_combine": keys_to_combine})
 
     if model_type in ["ChemProp3D", "ChemProp2D"]:
         load_dics = param_dic["chemprop"]["load_dics"]
         data, smiles_dic = load_external_data(load_dics[0])
-        eval_kwargs = {"ex_data": [data], "smiles_dics": [smiles_dic]}
+        eval_kwargs.update({"ex_data": [data], "smiles_dics": [smiles_dic]})
 
     return eval_kwargs
 

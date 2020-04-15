@@ -1,4 +1,7 @@
+from torch import nn
 from nff.train import get_model
+
+import pdb
 
 
 def make_feat_nums(in_basis, out_basis, num_layers):
@@ -182,6 +185,22 @@ def make_wc_model(param_dic):
     wc_params = get_wc_params(param_dic=param_dic,
                               num_extra_feats=num_extra_feats)
     model = get_model(wc_params, model_type="WeightedConformers")
+
+    if not param_dic.get("random_weights", False):
+        return model
+
+    modules = {}
+
+    for name in dir(model):
+        if hasattr(model, name) and isinstance(
+                getattr(model, name),  nn.Module):
+            module = getattr(model, name)
+            modules[name] = module
+    for name, module in modules.items():
+        if name.lower() == "readout":
+            continue
+        for param in module.parameters():
+            param.requires_grad = False
 
     return model
 

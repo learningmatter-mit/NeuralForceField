@@ -3,8 +3,8 @@
 
 	"param_regime": [{"name": "readout_dropout", "type": "double", "bounds": {"min": 0, "max": 0.4}},
 					{"name": "mol_nn_dropout", "type": "double", "bounds": {"min": 0, "max": 0.4}},
-		                        {"name": "schnet_dropout", "type": "double", "bounds": {"min": 0, "max": 0.4}},
-                		        {"name": "n_conv", "type": "int", "bounds": {"min": 1, "max": 5}},
+		            {"name": "schnet_dropout", "type": "double", "bounds": {"min": 0, "max": 0.4}},
+                	{"name": "n_conv", "type": "int", "bounds": {"min": 1, "max": 5}},
 					{"name": "n_filters", "type": "int", "bounds": {"min": 300, "max": 500}},
 					{"name": "num_mol_layers", "type": "int", "bounds": {"min": 4, "max": 6}},
 					{"name": "cp_hidden_size", "type": "int", "bounds": {"min": 300, "max": 500}},

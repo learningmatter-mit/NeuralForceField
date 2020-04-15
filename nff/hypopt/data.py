@@ -71,6 +71,36 @@ def trim_confs(dataset, num_confs):
 
         dataset.props["nbr_list"][i] = nbr_list[good_idx]
 
+       # trim the bonded neighbour list
+
+        if "bonded_nbr_list" in dataset.props:
+            bond_list = dataset.props["bonded_nbr_list"][i]
+            max_neighbor, _ = torch.max(bond_list, dim=1)
+            mask = (max_neighbor <= new_num_atoms - 1)
+            good_idx = mask.nonzero().reshape(-1)
+
+            dataset.props["bonded_nbr_list"][i] = bond_list[good_idx]
+
+        # trim the features
+
+        if "bond_features" in dataset.props:
+
+            num_bonds = dataset.props["num_bonds"][i]
+            bond_feats = dataset.props["bond_features"][i]
+
+            new_bond_feats = torch.cat(torch.split(
+                bond_feats, num_bonds)[:num_confs])
+
+            dataset.props["bond_features"][i] = new_bond_feats
+            dataset.props["num_bonds"][i] = num_bonds[:num_confs]
+
+        if "atom_features" in dataset.props:
+            
+            atom_feats = dataset.props["atom_features"][i]
+            new_at_feats = atom_feats[:new_num_atoms, :]
+
+            dataset.props["atom_features"][i] = new_at_feats
+
 
 def get_data_dic(base_train, base_val, base_test, params):
 

@@ -22,6 +22,13 @@ if __name__ == "__main__":
     parser.add_argument('--make_features',
                         action='store_true',
                         help=('Make chemprop features'))
+    parser.add_argument('--target_balance',
+                        type=str,
+                        help=('Target for balanced training'))
+    parser.add_argument('--ensembles',
+                        type=int,
+                        help=('Number of ensembles for training'))
+
 
     arguments = parser.parse_args()
     with open(arguments.info_file, "r") as f:
@@ -29,9 +36,14 @@ if __name__ == "__main__":
         
     if arguments.make_features:
         preprocess(info)
+    if arguments.target_balance:
+        info.update({"target_balance": arguments.target_balance})
+    if arguments.ensembles:
+        info.update({"num_ensembles": arguments.ensembles})
 
     if arguments.retrain_best:
         info.update({"num_epochs": arguments.best_epochs})
         retrain_best(**info)
+
     else:
         run_loop(**info)

@@ -2,7 +2,6 @@ from munch import Munch
 import torch
 import os
 
-from chemprop.models import build_model as build_chemprop
 from chemprop.data.data import MoleculeDataset
 
 
@@ -40,6 +39,7 @@ class ChemProp3D(WeightedConformers):
         if cp_path is not None:
             cp_model, modelparams = self.init_with_cp(modelparams)
         else:
+            from chemprop.models import build_model as build_chemprop
             namespace = Munch(cp_params)
             cp_model = build_chemprop(namespace)
 

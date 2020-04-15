@@ -9,6 +9,7 @@ from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.models.chemprop3d import ChemProp3D
 from nff.nn.models.chemprop2d import ChemProp2D
+from nff.nn.models.schnet_features import SchNetFeatures
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -90,8 +91,20 @@ PARAMS_TYPE = {"SchNet":
                 "ChemProp2D":
                 {
                    'readoutdict': dict,
-                }
+                },
 
+              "SchNetFeatures":
+               {
+                   'n_atom_basis': int,
+                   'n_filters': int,
+                   'n_gaussians': int,
+                   'n_convolutions': int,
+                   'cutoff': float,
+                   'bond_par': float,
+                   'trainable_gauss': bool,
+                   'box_size': np.array,
+                   'dropout_rate': float
+               },
                }
 
 MODEL_DICT = {
@@ -101,7 +114,8 @@ MODEL_DICT = {
     "HybridGraphConv": HybridGraphConv,
     "WeightedConformers": WeightedConformers,
     "ChemProp3D": ChemProp3D,
-    "ChemProp2D": ChemProp2D
+    "ChemProp2D": ChemProp2D,
+    "SchNetFeatures": SchNetFeatures
 }
 
 

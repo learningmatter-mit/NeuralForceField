@@ -1,5 +1,5 @@
 {
-	"project_name": "covid_schnet",
+	"project_name": "covid_schnet_random",
 
 	"param_regime": [{"name": "readout_dropout", "type": "double", "bounds": {"min": 0, "max": 0.4}},
 					{"name": "mol_nn_dropout", "type": "double", "bounds": {"min": 0, "max": 0.4}},
@@ -15,6 +15,7 @@
 				],
 
 	"set_params": {
+				"random_weights": true,
 				"boltz_params": {"boltz_type": "multiply"},
 				"readout_names": ["bind"],
 				"trainable_gauss": true,
@@ -32,7 +33,7 @@
 	},
 
 	"budget": 200,
-	"device": 0,
+	"device": 2,
 	"num_epochs": 30,
 	"loss_name": "cross_entropy",
 	"target_name": "bind",
