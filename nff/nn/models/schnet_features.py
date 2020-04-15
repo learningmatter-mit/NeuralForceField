@@ -1,72 +1,44 @@
 from torch import nn
 import torch
-import copy
 
-import pdb
-
-
-from nff.nn.models.schnet import DEFAULT_DROPOUT_RATE
 from nff.nn.models.conformers import WeightedConformers
-from nff.nn.modules import (SchNetFeaturesConv, ChemPropConv,
-                            ChemPropMsgToNode, ChemPropInit)
-from nff.nn.utils import construct_sequential
-from nff.utils.scatter import chemprop_msg_to_node
+from nff.nn.modules import (CpSchNetConv, ChemPropMsgToNode,
+                            ChemPropInit)
 from nff.utils.tools import make_directed
 
 
 class SchNetFeatures(WeightedConformers):
     def __init__(self, modelparams):
+
         WeightedConformers.__init__(self, modelparams)
 
-        n_atom_basis = modelparams["n_atom_basis"]
-        n_edge_hidden = modelparams["n_edge_hidden"]
-        n_filters = modelparams["n_filters"]
-        n_gaussians = modelparams["n_gaussians"]
-        gauss_embed = modelparams.get("gauss_embed", True)
-        n_convolutions = modelparams["n_convolutions"]
-        cutoff = modelparams["cutoff"]
-        trainable_gauss = modelparams["trainable_gauss"]
-        dropout_rate = modelparams.get("dropout_rate",
-                                       DEFAULT_DROPOUT_RATE)
         input_layers = modelparams["input_layers"]
         output_layers = modelparams["output_layers"]
 
-        # self.convolutions = nn.ModuleList(
-        #     [
-        #         SchNetFeaturesConv(
-        #             n_atom_basis=n_atom_basis,
-        #             n_bond_hidden=n_bond_hidden,
-        #             n_filters=n_filters,
-        #             n_gaussians=n_gaussians,
-        #             cutoff=cutoff,
-        #             trainable_gauss=trainable_gauss,
-        #             dropout_rate=dropout_rate,
-        #             gauss_embed=gauss_embed
-        #         )
-        #         for _ in range(n_convolutions)
-        #     ]
-        # )
-
-        # self.convolution = SchNetFeaturesConv(
-        #     n_atom_basis=n_atom_basis,
-        #     n_bond_hidden=n_bond_hidden,
-        #     n_filters=n_filters,
-        #     n_gaussians=n_gaussians,
-        #     cutoff=cutoff,
-        #     trainable_gauss=trainable_gauss,
-        #     dropout_rate=dropout_rate,
-        #     gauss_embed=gauss_embed
-        # )
-
         self.W_i = ChemPropInit(input_layers=input_layers)
-        self.W_h = ChemPropConv(n_edge_hidden=n_edge_hidden,
-                                dropout_rate=dropout_rate)
-        self.W_o = ChemPropMsgToNode(output_layers=output_layers)
+        self.convolutions = self.make_convs(modelparams)
+        self.W_o = ChemPropMsgToNode(
+            output_layers=output_layers)
 
-        self.num_conv = n_convolutions
-        self.n_edge_hidden = n_edge_hidden
+        self.n_bond_hidden = modelparams["n_bond_hidden"]
+
+    def make_convs(self, modelparams):
+
+        num_conv = modelparams["n_convolutions"]
+        same_filters = modelparams["same_filters"]
+
+        convs = nn.ModuleList([CpSchNetConv(**modelparams)
+                               for _ in range(num_conv)])
+        if same_filters:
+            convs = nn.ModuleList([convs[0] for _ in range(num_conv)])
+
+        return convs
 
     def make_h(self, batch, nbr_list, r):
+
+        """
+        Initialize the hidden bond features
+        """
 
         # get the directed bond list and bond features
 
@@ -86,7 +58,7 @@ class SchNetFeatures(WeightedConformers):
         # (including non-bonded ones), to zero
 
         nbr_dim = nbr_list.shape[0]
-        h_0 = torch.zeros((nbr_dim,  self.n_edge_hidden))
+        h_0 = torch.zeros((nbr_dim,  self.n_bond_hidden))
         h_0 = h_0.to(bond_list.device)
 
         # set the features of bonded edges equal to the bond
@@ -106,16 +78,13 @@ class SchNetFeatures(WeightedConformers):
         if xyz_grad:
             xyz.requires_grad = True
 
-        # a, _ = make_directed(batch["nbr_list"])
-        a, _ = make_directed(batch["bonded_nbr_list"])
+        a, _ = make_directed(batch["nbr_list"])
         r = batch["atom_features"]
 
         # offsets take care of periodic boundary conditions
-        # offsets = batch.get("offsets", 0)
-        # e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
-        #      offsets).pow(2).sum(1).sqrt()[:, None]
-
-        # initialize with atom features from graph
+        offsets = batch.get("offsets", 0)
+        e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
+             offsets).pow(2).sum(1).sqrt()[:, None]
 
         # initialize hidden bond features
 
@@ -127,12 +96,13 @@ class SchNetFeatures(WeightedConformers):
 
         # update edge features
 
-        for i in range(self.num_conv):
+        for conv in self.convolutions:
 
-            h_new = self.W_h(
+            h_new = conv(
                 h_0=h_0,
                 h_new=h_new,
-                nbrs=a)
+                all_nbrs=a,
+                e=e)
 
         # convert back to node features
 
@@ -140,5 +110,8 @@ class SchNetFeatures(WeightedConformers):
                                   h=h_new,
                                   nbrs=a,
                                   num_nodes=r.shape[0])
+
+        # TO GET PROPER COMPARISON TO ORIGINAL CHEMPROP,
+        # NEED TO CONCATENATE WITH RDKIT 2D FEATURES
 
         return new_node_feats, xyz

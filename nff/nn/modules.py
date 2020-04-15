@@ -632,9 +632,6 @@ class SchNetConv(MessagePassingModule):
         )
 
     def message(self, r, e, a, aggr_wgt=None):
-
-        pdb.set_trace()
-
         """The message function for SchNet convoltuions 
         Args:
             r (TYPE): node inputs
@@ -944,7 +941,8 @@ class ChemPropConv(MessagePassingModule):
     def __init__(self,
                  n_edge_hidden,
                  dropout_rate):
-        super(MessagePassingModule, self).__init__()
+
+        MessagePassingModule.__init__(self)
 
         self.linear = Linear(
             in_features=n_edge_hidden,
@@ -953,6 +951,7 @@ class ChemPropConv(MessagePassingModule):
         self.activation = ReLU()
 
     def message(self, h_new, nbrs):
+
         msg = chemprop_msg_update(h=h_new,
                                   nbrs=nbrs)
         return msg
@@ -973,6 +972,72 @@ class ChemPropConv(MessagePassingModule):
                                    h_0=h_0)
 
         return update_feats
+
+
+class CpSchNetConv(ChemPropConv):
+
+    def __init__(
+        self,
+        n_bond_hidden,
+        cp_dropout,
+        gauss_embed,
+        cutoff,
+        n_gaussians,
+        trainable_gauss,
+        n_filters,
+        schnet_dropout,
+        **kwargs
+
+    ):
+
+        ChemPropConv.__init__(self,
+                              n_edge_hidden=n_bond_hidden,
+                              dropout_rate=cp_dropout)
+
+        self.n_bond_hidden = n_bond_hidden
+        self.moduledict = ModuleDict({})
+
+        if not gauss_embed:
+            return
+
+        edge_filter = Sequential(
+            GaussianSmearing(
+                start=0.0,
+                stop=cutoff,
+                n_gaussians=n_gaussians,
+                trainable=trainable_gauss,
+            ),
+            Dense(
+                in_features=n_gaussians,
+                out_features=n_filters,
+                dropout_rate=schnet_dropout,
+            ),
+            ReLU())
+
+
+        self.moduledict["edge_filter"] = edge_filter
+
+    def add_schnet_feats(self, e, h_new):
+
+        if "edge_filter" in self.moduledict:
+            e = self.moduledict["edge_filter"](e)
+
+        new_msg = torch.cat((h_new, e), dim=1)
+
+        return new_msg
+
+    def forward(self, h_0, h_new, all_nbrs, e):
+
+        cp_h = h_new[:, :self.n_bond_hidden]
+        cp_msg = self.message(h_new=cp_h,
+                              nbrs=all_nbrs)
+        h_new = self.update(msg=cp_msg,
+                            h_0=h_0)
+
+        final_h = self.add_schnet_feats(e=e,
+                                        h_new=h_new)
+
+        return final_h
 
 
 class ChemPropMsgToNode(nn.Module):
@@ -1090,8 +1155,6 @@ class SchNetFeaturesConv(SchNetConv):
                                 bond_ji=bond_ji,
                                 aggr_wgt=aggr_wgt)
         # i -> j propagate
-
-        pdb.set_trace()
 
         r = self.aggregate(rij, a[:, 1], graph_size)
         # j -> i propagate
