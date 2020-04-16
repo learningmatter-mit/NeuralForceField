@@ -51,7 +51,7 @@ def rejoin_props(datasets):
 def gen_parallel(func, kwargs_list):
 
     cpu_count = os.cpu_count()
-    with futures.ProcessPoolExecutor(num_workers=cpu_count) as executor:
+    with futures.ProcessPoolExecutor(max_workers=cpu_count) as executor:
         future_objs = []
         for kwargs in kwargs_list:
             result = executor.submit(func, **kwargs)
