@@ -14,7 +14,8 @@ from torch.utils.data import Dataset as TorchDataset
 from nff.data.sparse import sparsify_tensor
 from nff.data.topology import update_props_topologies
 from nff.data.graphs import reconstruct_atoms, get_neighbor_list
-from nff.data.features import featurize_dataset, ATOM_FEAT_TYPES, BOND_FEAT_TYPES
+from nff.data.parallel import featurize_parallel, NUM_PROCS
+from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
 
 
 class Dataset(TorchDataset):
@@ -224,10 +225,14 @@ class Dataset(TorchDataset):
 
         return
 
-    def featurize(self, bond_feats=BOND_FEAT_TYPES, atom_feats=ATOM_FEAT_TYPES):
-        featurize_dataset(self,
-                          bond_feats=bond_feats,
-                          atom_feats=atom_feats)
+    def featurize(self,
+                  num_procs=NUM_PROCS,
+                  bond_feats=BOND_FEAT_TYPES,
+                  atom_feats=ATOM_FEAT_TYPES):
+        featurize_parallel(self,
+                           num_procs=num_procs,
+                           bond_feats=bond_feats,
+                           atom_feats=atom_feats)
 
     def unwrap_xyz(self, mol_dic):
         """

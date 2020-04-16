@@ -59,12 +59,14 @@ NUM_H = [0, 1, 2, 3, 4]
 RING_SIZE = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 
-def remove_bad_idx(dataset, smiles_list, bad_idx):
+def remove_bad_idx(dataset, smiles_list, bad_idx, verbose=True):
     bad_idx = sorted(list(set(bad_idx)))
     new_props = {}
     for key, values in dataset.props.items():
         new_props[key] = [val for i, val in enumerate(
             values) if i not in bad_idx]
+        if not new_props[key]:
+            continue
         if type(values) is torch.Tensor:
             new_props[key] = torch.stack(new_props[key])
 
@@ -74,7 +76,8 @@ def remove_bad_idx(dataset, smiles_list, bad_idx):
     good_len = total_len - len(bad_idx)
     conv_pct = good_len / total_len * 100
 
-    print(("Converted %d of %d "
+    if verbose:
+        print(("Converted %d of %d "
            "species (%.2f%%)" % (
                good_len, total_len, conv_pct)))
 
@@ -185,7 +188,7 @@ def log_missing(missing_e):
             ", ".join(missing_e)))
 
 
-def make_rd_mols(dataset):
+def make_rd_mols(dataset, verbose=True):
 
     num_atoms = dataset.props['num_atoms']
     mol_size = dataset.props.get("mol_size", num_atoms).tolist()
@@ -197,7 +200,9 @@ def make_rd_mols(dataset):
     all_mols = []
     bad_idx = []
 
-    for i, smiles in tqdm(enumerate(smiles_list)):
+    # for i, smiles in tqdm(enumerate(smiles_list)):
+
+    for i, smiles in enumerate(smiles_list):
 
         num_confs = (num_atoms[i] // mol_size[i]).item()
         split_sizes = [mol_size[i]] * num_confs
@@ -228,12 +233,13 @@ def make_rd_mols(dataset):
 
             except Exception as e:
 
-                print(("xyz2mol failed for idx "
-                       "{} with error '{}' ".format(i, e)))
+                print(("xyz2mol failed "
+                       "with error '{}' ".format(e)))
                 print("Removing smiles {}".format(smiles))
                 bad_idx.append(i)
 
-                log_failure(bad_idx=bad_idx, i=i)
+                if verbose:
+                    log_failure(bad_idx=bad_idx, i=i)
 
                 if str(e).isdigit():
                     missing_e.append(int(str(e)))
@@ -245,15 +251,16 @@ def make_rd_mols(dataset):
         all_mols.append(spec_mols)
         dataset.props["rd_mols"].append(spec_mols)
 
-        time.sleep(0.3)
-
     remove_bad_idx(dataset=dataset,
                    smiles_list=smiles_list,
-                   bad_idx=bad_idx)
+                   bad_idx=bad_idx,
+                   verbose=verbose)
 
-    log_missing(missing_e)
+    if verbose:
+        log_missing(missing_e)
 
-    return all_mols
+
+    return dataset
 
 
 def make_one_hot(options, result):
@@ -441,6 +448,7 @@ def featurize_bonds(dataset, feat_types=BOND_FEAT_TYPES):
         props["bond_list"][-1] = torch.cat(props["bond_list"][-1])
         props["bond_features"].append(torch.stack(all_props))
 
+    return dataset
 
 def featurize_atoms(dataset, feat_types=ATOM_FEAT_TYPES):
 
@@ -462,6 +470,7 @@ def featurize_atoms(dataset, feat_types=ATOM_FEAT_TYPES):
 
         props["atom_features"].append(torch.stack(all_props))
 
+    return dataset
 
 def decode_one_hot(options, vector):
 
@@ -544,15 +553,15 @@ def featurize_dataset(dataset,
                       atom_feats=ATOM_FEAT_TYPES):
 
     print("Converting xyz to RDKit mols...")
-    make_rd_mols(dataset)
+    dataset = make_rd_mols(dataset)
     print("Completed conversion to RDKit mols.")
 
     print("Featurizing bonds...")
-    featurize_bonds(dataset, feat_types=bond_feats)
+    dataset = featurize_bonds(dataset, feat_types=bond_feats)
     print("Completed featurizing bonds.")
 
     print("Featurizing atoms...")
-    featurize_atoms(dataset, feat_types=atom_feats)
+    dataset = featurize_atoms(dataset, feat_types=atom_feats)
     print("Completed featurizing atoms.")
 
     props = dataset.props

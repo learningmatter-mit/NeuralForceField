@@ -8,9 +8,11 @@ from nff.utils.tools import make_directed
 
 
 class SchNetFeatures(WeightedConformers):
+    
     def __init__(self, modelparams):
 
         WeightedConformers.__init__(self, modelparams)
+        delattr(self, "atom_embed")
 
         input_layers = modelparams["input_layers"]
         output_layers = modelparams["output_layers"]
@@ -43,6 +45,7 @@ class SchNetFeatures(WeightedConformers):
 
         bond_nbrs, was_directed = make_directed(batch["bonded_nbr_list"])
         bond_feats = batch["bond_features"]
+        device = bond_nbrs.device
 
         if not was_directed:
             bond_feats = torch.cat([bond_feats] * 2, dim=0)
@@ -58,7 +61,7 @@ class SchNetFeatures(WeightedConformers):
 
         nbr_dim = nbr_list.shape[0]
         h_0 = torch.zeros((nbr_dim,  self.n_bond_hidden))
-        h_0 = h_0.to(bond_nbrs.device)
+        h_0 = h_0.to(device)
 
         # set the features of bonded edges equal to the bond
         # features
@@ -67,7 +70,7 @@ class SchNetFeatures(WeightedConformers):
                     ).prod(-1).nonzero()[:, 1]
         h_0[bond_idx] = h_0_bond
 
-        return h_0
+        return h_0, bond_nbrs, bond_idx
 
     def convolve(self, batch, xyz=None, xyz_grad=False):
 
@@ -85,27 +88,27 @@ class SchNetFeatures(WeightedConformers):
 
         # initialize hidden bond features
 
-        h_0, h_new = [
-            self.make_h(batch=batch,
-                        nbr_list=a,
-                        r=r) for _ in range(2)
-        ]
+        h_0, bond_nbrs, bond_idx = self.make_h(batch=batch,
+                                               nbr_list=a,
+                                               r=r)
+
+        h_new = h_0.clone()
 
         # update edge features
 
         for conv in self.convolutions:
 
-            h_new = conv(
-                h_0=h_0,
-                h_new=h_new,
-                all_nbrs=a,
-                e=e)
+            h_new = conv(h_0=h_0,
+                         h_new=h_new,
+                         all_nbrs=a,
+                         bond_nbrs=bond_nbrs,
+                         bond_idx=bond_idx,
+                         e=e)
 
         # convert back to node features
 
         new_node_feats = self.W_o(r=r,
                                   h=h_new,
-                                  nbrs=a,
-                                  num_nodes=r.shape[0])
+                                  nbrs=a)
 
         return new_node_feats, xyz

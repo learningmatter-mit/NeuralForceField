@@ -6,8 +6,8 @@ from torch.nn import (Sequential, Linear, ReLU, LeakyReLU,
                       ModuleDict, Dropout)
 
 from nff.nn.layers import Dense, GaussianSmearing
-from nff.utils.scatter import (scatter_add, chemprop_msg_update,
-                               chemprop_msg_to_node)
+from nff.utils.scatter import scatter_add
+from nff.nn.utils import chemprop_msg_update, chemprop_msg_to_node
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphconv import (
     MessagePassingModule,
@@ -944,10 +944,11 @@ class ChemPropConv(MessagePassingModule):
 
         MessagePassingModule.__init__(self)
 
-        self.linear = Linear(
+        self.dense = Dense(
             in_features=n_edge_hidden,
-            out_features=n_edge_hidden)
-        self.dropout = Dropout(p=dropout_rate)
+            out_features=n_edge_hidden,
+            dropout_rate=dropout_rate
+        )
         self.activation = ReLU()
 
     def message(self, h_new, nbrs):
@@ -958,9 +959,8 @@ class ChemPropConv(MessagePassingModule):
 
     def update(self, msg, h_0):
 
-        add_feats = h_0 + self.linear(msg)
-        update_feats = self.dropout(add_feats)
-        update_feats = self.activation(update_feats)
+        add_feats = h_0 + self.dense(msg)
+        update_feats = self.activation(add_feats)
 
         return update_feats
 
@@ -1014,7 +1014,6 @@ class CpSchNetConv(ChemPropConv):
             ),
             ReLU())
 
-
         self.moduledict["edge_filter"] = edge_filter
 
     def add_schnet_feats(self, e, h_new):
@@ -1026,13 +1025,21 @@ class CpSchNetConv(ChemPropConv):
 
         return new_msg
 
-    def forward(self, h_0, h_new, all_nbrs, e):
+    def forward(self, h_0, h_new, all_nbrs, bond_nbrs,
+                bond_idx, e):
 
-        cp_h = h_new[:, :self.n_bond_hidden]
+        cp_h = h_new[:, :self.n_bond_hidden][bond_idx]
+        h0_bond = h_0[bond_idx]
+
         cp_msg = self.message(h_new=cp_h,
-                              nbrs=all_nbrs)
-        h_new = self.update(msg=cp_msg,
-                            h_0=h_0)
+                              nbrs=bond_nbrs)
+        h_new_bond = self.update(msg=cp_msg,
+                                 h_0=h0_bond)
+
+        nbr_dim = all_nbrs.shape[0]
+        h_new = torch.zeros((nbr_dim,  self.n_bond_hidden))
+        h_new = h_new.to(bond_idx.device)
+        h_new[bond_idx] = h_new_bond
 
         final_h = self.add_schnet_feats(e=e,
                                         h_new=h_new)
@@ -1046,7 +1053,8 @@ class ChemPropMsgToNode(nn.Module):
 
         self.output = construct_sequential(output_layers)
 
-    def forward(self, r, h, nbrs, num_nodes):
+    def forward(self, r, h, nbrs):
+        num_nodes = r.shape[0]
         msg_to_node = chemprop_msg_to_node(h=h,
                                            nbrs=nbrs,
                                            num_nodes=num_nodes)
@@ -1071,96 +1079,96 @@ class ChemPropInit(nn.Module):
         return hidden_feats
 
 
-class SchNetFeaturesConv(SchNetConv):
+# class SchNetFeaturesConv(SchNetConv):
 
-    def __init__(
-        self,
-        n_atom_basis,
-        n_filters,
-        n_gaussians,
-        cutoff,
-        trainable_gauss,
-        dropout_rate,
-        n_bond_hidden,
-        gauss_embed
-    ):
-        super(SchNetFeaturesConv, self).__init__(
-            n_atom_basis=n_atom_basis,
-            n_filters=n_filters,
-            n_gaussians=n_gaussians,
-            cutoff=cutoff,
-            trainable_gauss=trainable_gauss,
-            dropout_rate=dropout_rate)
+#     def __init__(
+#         self,
+#         n_atom_basis,
+#         n_filters,
+#         n_gaussians,
+#         cutoff,
+#         trainable_gauss,
+#         dropout_rate,
+#         n_bond_hidden,
+#         gauss_embed
+#     ):
+#         super(SchNetFeaturesConv, self).__init__(
+#             n_atom_basis=n_atom_basis,
+#             n_filters=n_filters,
+#             n_gaussians=n_gaussians,
+#             cutoff=cutoff,
+#             trainable_gauss=trainable_gauss,
+#             dropout_rate=dropout_rate)
 
-        if not gauss_embed:
-            self.moduledict.pop("message_edge_filter")
-            tot_bond_feats = 1 + n_bond_hidden
-        else:
-            tot_bond_feats = n_filters + n_bond_hidden
+#         if not gauss_embed:
+#             self.moduledict.pop("message_edge_filter")
+#             tot_bond_feats = 1 + n_bond_hidden
+#         else:
+#             tot_bond_feats = n_filters + n_bond_hidden
 
-        self.moduledict.update({
-            "message_node_filter": Dense(
-                in_features=n_atom_basis,
-                out_features=tot_bond_feats,
-                dropout_rate=dropout_rate,
-            ),
+#         self.moduledict.update({
+#             "message_node_filter": Dense(
+#                 in_features=n_atom_basis,
+#                 out_features=tot_bond_feats,
+#                 dropout_rate=dropout_rate,
+#             ),
 
-            "update_function": Sequential(
-                Dense(
-                    in_features=tot_bond_feats,
-                    out_features=n_atom_basis,
-                    dropout_rate=dropout_rate,
-                ),
-                shifted_softplus(),
-                Dense(
-                    in_features=n_atom_basis,
-                    out_features=n_atom_basis,
-                    dropout_rate=dropout_rate,
-                ),
-            )})
+#             "update_function": Sequential(
+#                 Dense(
+#                     in_features=tot_bond_feats,
+#                     out_features=n_atom_basis,
+#                     dropout_rate=dropout_rate,
+#                 ),
+#                 shifted_softplus(),
+#                 Dense(
+#                     in_features=n_atom_basis,
+#                     out_features=n_atom_basis,
+#                     dropout_rate=dropout_rate,
+#                 ),
+#             )})
 
-    def message(self, r, e, a, bond_ij, bond_ji, aggr_wgt=None):
+#     def message(self, r, e, a, bond_ij, bond_ji, aggr_wgt=None):
 
-        # update edge feature
-        if "message_edge_filter" in self.moduledict:
-            e = self.moduledict["message_edge_filter"](e)
+#         # update edge feature
+#         if "message_edge_filter" in self.moduledict:
+#             e = self.moduledict["message_edge_filter"](e)
 
-        e_ij = torch.cat((e, bond_ij), dim=1)
-        e_ji = torch.cat((e, bond_ji), dim=1)
+#         e_ij = torch.cat((e, bond_ij), dim=1)
+#         e_ji = torch.cat((e, bond_ji), dim=1)
 
-        # convection: update
-        r = self.moduledict["message_node_filter"](r)
+#         # convection: update
+#         r = self.moduledict["message_node_filter"](r)
 
-        # soft aggr if aggr_wght is provided
-        if aggr_wgt is not None:
-            r = r * aggr_wgt
+#         # soft aggr if aggr_wght is provided
+#         if aggr_wgt is not None:
+#             r = r * aggr_wgt
 
-        # combine node and edge info
-        message = r[a[:, 0]] * e_ji, r[a[:, 1]] * \
-            e_ij
+#         # combine node and edge info
+#         message = r[a[:, 0]] * e_ji, r[a[:, 1]] * \
+#             e_ij
 
-        return message
+#         return message
 
-    def update(self, r):
-        return self.moduledict["update_function"](r)
+#     def update(self, r):
+#         return self.moduledict["update_function"](r)
 
-    def forward(self, r, e, a, bond_ij, bond_ji, aggr_wgt=None):
+#     def forward(self, r, e, a, bond_ij, bond_ji, aggr_wgt=None):
 
-        graph_size = r.shape[0]
+#         graph_size = r.shape[0]
 
-        rij, rji = self.message(r=r,
-                                e=e,
-                                a=a,
-                                bond_ij=bond_ij,
-                                bond_ji=bond_ji,
-                                aggr_wgt=aggr_wgt)
-        # i -> j propagate
+#         rij, rji = self.message(r=r,
+#                                 e=e,
+#                                 a=a,
+#                                 bond_ij=bond_ij,
+#                                 bond_ji=bond_ji,
+#                                 aggr_wgt=aggr_wgt)
+#         # i -> j propagate
 
-        r = self.aggregate(rij, a[:, 1], graph_size)
-        # j -> i propagate
-        r += self.aggregate(rji, a[:, 0], graph_size)
-        r = self.update(r)
-        return r
+#         r = self.aggregate(rij, a[:, 1], graph_size)
+#         # j -> i propagate
+#         r += self.aggregate(rji, a[:, 0], graph_size)
+#         r = self.update(r)
+#         return r
 
 
 # Test
