@@ -3,6 +3,9 @@ from concurrent import futures
 import copy
 import torch
 import os
+from bounded_pool_executor import BoundedProcessPoolExecutor
+import queue
+
 
 from nff.data.features import (make_rd_mols, featurize_bonds,
                                featurize_atoms, BOND_FEAT_TYPES,
@@ -50,11 +53,20 @@ def rejoin_props(datasets):
 
 def gen_parallel(func, kwargs_list):
 
-    cpu_count = os.cpu_count()
-    with futures.ProcessPoolExecutor(max_workers=cpu_count) as executor:
+    # cpu_count = os.cpu_count()
+    # with futures.ProcessPoolExecutor(max_workers=cpu_count) as executor:
+    # with futures.ProcessPoolExecutor(max_workers=4) as executor:
+
+    q = queue.Queue()
+
+    with BoundedProcessPoolExecutor(max_workers=4) as executor:
+
         future_objs = []
         for kwargs in kwargs_list:
             result = executor.submit(func, **kwargs)
+
+            q.put(None)
+
             future_objs.append(result)
 
     result_dsets = [obj.result() for obj in future_objs]
