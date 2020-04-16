@@ -17,19 +17,23 @@ TEMPLATE = """#!/bin/bash
 #SBATCH --no-requeue
 #SBATCH --signal=B:2@300
 
-source ~/.bashrc
 source deactivate
+
+source $HOME/.bashrc
+export NFFDIR=/home/saxelrod/repo/nff/covid/NeuralForceField
+export PYTHONPATH="$NFFDIR"
+
 conda activate covid_mit
 
-featurize=/home/saxelrod/Repo/projects/covid_nff/NeuralForceField/scripts/featurize.py
+featurize=$HOME/repo/nff/covid/NeuralForceField/scripts/featurize.py
 python  $featurize dataset.pth.tar
 
 """
 
 # JOB_DIR = "/home/saxelrod/local_jobs"
-JOB_DIR = "/home/saxelrod//engaging_nfs/jobs/inbox"
-D_PATH = "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data/covid_mmff94_1_50k.pth.tar"
-# D_PATH = "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data/all_crest.pth.tar"
+JOB_DIR = "/home/saxelrod//engaging_nfs/jobs"
+# D_PATH = "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data/covid_mmff94_1_50k.pth.tar"
+D_PATH = "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data/all_crest.pth.tar"
 
 
 def main(d_path=D_PATH, num_jobs=100, job_dir=JOB_DIR):
@@ -40,6 +44,10 @@ def main(d_path=D_PATH, num_jobs=100, job_dir=JOB_DIR):
     print("Finished splitting datasets.")
 
     for d_set in datasets:
+
+        import pdb
+        pdb.set_trace()
+
         folder_name = "0000_featurize_" + str(uuid.uuid4())
         
         tmp_path = "/tmp/{}".format(folder_name)
@@ -50,6 +58,8 @@ def main(d_path=D_PATH, num_jobs=100, job_dir=JOB_DIR):
 
         real_path = os.path.join(job_dir, "inbox", folder_name)
         shutil.move(tmp_path, real_path)
+
+        break
 
 if __name__ == "__main__":
     main()

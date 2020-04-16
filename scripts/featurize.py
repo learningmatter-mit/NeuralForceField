@@ -1,6 +1,3 @@
-import sys
-sys.path.insert(0, "$HOME/repo/nff/covid/NeuralForceField")
-
 from nff.data import Dataset
 
 def main():
