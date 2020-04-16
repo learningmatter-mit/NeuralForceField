@@ -1,8 +1,6 @@
 import torch
 import numpy as np
 import copy
-import time
-from tqdm import tqdm
 from rdkit import Chem
 from nff.utils.xyz2mol import xyz2mol
 
@@ -51,12 +49,42 @@ STEREO_OPTIONS = ["stereonone",
                   "stereocis",
                   "stereotrans"]
 
-MAX_AT_NUM = 100
-AT_NUM = list(range(1, MAX_AT_NUM + 1))
+AT_NUM = list(range(1, 100))
 FORMAL_CHARGES = [-2, -1, 0, 1, 2]
 BONDS = [0, 1, 2, 3, 4, 5]
 NUM_H = [0, 1, 2, 3, 4]
 RING_SIZE = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+FEAT_DIC = {"bond_type": {"options": BOND_OPTIONS,
+                          "num": len(BOND_OPTIONS) + 1},
+            "conjugated": {"options": [bool],
+                           "num": 1},
+            "in_ring": {"options": [bool],
+                        "num": 1},
+            "stereo": {"options": STEREO_OPTIONS,
+                       "num": len(STEREO_OPTIONS) + 1},
+            "in_ring_size": {"options": RING_SIZE,
+                             "num": len(RING_SIZE) + 1},
+            "atom_type": {"options": AT_NUM,
+                          "num": len(AT_NUM) + 1},
+            "num_bonds": {"options": BONDS,
+                          "num": len(BONDS) + 1},
+            "formal_charge": {"options": FORMAL_CHARGES,
+                              "num": len(FORMAL_CHARGES) + 1},
+            "chirality": {"options": CHIRAL_OPTIONS,
+                          "num": len(CHIRAL_OPTIONS) + 1},
+            "num_bonded_h": {"options": NUM_H,
+                             "num": len(NUM_H) + 1},
+            "hybrid": {"options": HYBRID_OPTIONS,
+                       "num": len(HYBRID_OPTIONS) + 1},
+            "aromaticity": {"options": [bool],
+                            "num": 1},
+            "mass": {"options": [float],
+                     "num": 1}}
+
+META_DATA = {"bond_features": BOND_FEAT_TYPES,
+             "atom_features": ATOM_FEAT_TYPES,
+             "details": FEAT_DIC}
 
 
 def remove_bad_idx(dataset, smiles_list, bad_idx, verbose=True):
@@ -78,8 +106,8 @@ def remove_bad_idx(dataset, smiles_list, bad_idx, verbose=True):
 
     if verbose:
         print(("Converted %d of %d "
-           "species (%.2f%%)" % (
-               good_len, total_len, conv_pct)))
+               "species (%.2f%%)" % (
+                   good_len, total_len, conv_pct)))
 
 
 def smiles_from_smiles(smiles):
@@ -259,7 +287,6 @@ def make_rd_mols(dataset, verbose=True):
     if verbose:
         log_missing(missing_e)
 
-
     return dataset
 
 
@@ -317,10 +344,11 @@ def get_bond_features(bond, feat_type):
 def get_atom_features(atom, feat_type):
 
     if feat_type == "atom_type":
-        atom_num = atom.GetAtomicNum() - 1
-        options = list(range(MAX_AT_NUM))
+        atom_num = atom.GetAtomicNum()
+        options = AT_NUM
         one_hot = make_one_hot(options=options,
                                result=atom_num)
+
         return one_hot
 
     elif feat_type == "num_bonds":
@@ -328,6 +356,7 @@ def get_atom_features(atom, feat_type):
         options = BONDS
         one_hot = make_one_hot(options=options,
                                result=num_bonds)
+
         return one_hot
 
     elif feat_type == "formal_charge":
@@ -344,6 +373,7 @@ def get_atom_features(atom, feat_type):
         options = CHIRAL_OPTIONS
         one_hot = make_one_hot(options=options,
                                result=chirality)
+
         return one_hot
 
     elif feat_type == "num_bonded_h":
@@ -356,43 +386,52 @@ def get_atom_features(atom, feat_type):
         options = NUM_H
         one_hot = make_one_hot(options=options,
                                result=num_h)
+
         return one_hot
 
     elif feat_type == "hybrid":
+
         hybrid = atom.GetHybridization().name.lower()
         options = HYBRID_OPTIONS
         one_hot = make_one_hot(options=options,
                                result=hybrid)
+
         return one_hot
 
     elif feat_type == "aromaticity":
         aromatic = atom.GetIsAromatic()
         one_hot = torch.Tensor([aromatic])
+
         return one_hot
 
     elif feat_type == "mass":
         mass = atom.GetMass() / 100
         result = torch.Tensor([mass])
+
         return result
 
 
 def get_all_bond_feats(bond, feat_types):
 
     feat_dic = {}
+
     for feat_type in feat_types:
         feature = get_bond_features(bond=bond,
                                     feat_type=feat_type)
         feat_dic[feat_type] = feature
+
     return feat_dic
 
 
 def get_all_atom_feats(atom, feat_types):
 
     feat_dic = {}
+
     for feat_type in feat_types:
         feature = get_atom_features(atom=atom,
                                     feat_type=feat_type)
         feat_dic[feat_type] = feature
+
     return feat_dic
 
 
@@ -450,6 +489,7 @@ def featurize_bonds(dataset, feat_types=BOND_FEAT_TYPES):
 
     return dataset
 
+
 def featurize_atoms(dataset, feat_types=ATOM_FEAT_TYPES):
 
     props = dataset.props
@@ -465,12 +505,14 @@ def featurize_atoms(dataset, feat_types=ATOM_FEAT_TYPES):
                 all_props.append(torch.tensor([]))
                 feat_dic = get_all_atom_feats(atom=atom,
                                               feat_types=feat_types)
+
                 for key, feat in feat_dic.items():
                     all_props[-1] = torch.cat((all_props[-1], feat))
 
         props["atom_features"].append(torch.stack(all_props))
 
     return dataset
+
 
 def decode_one_hot(options, vector):
 
@@ -480,7 +522,7 @@ def decode_one_hot(options, vector):
         return vector.item()
 
     index = vector.nonzero()
-    if len(index) == 0:
+    if len(index) == 0 or index >= len(options):
         result = None
     else:
         result = options[index]
@@ -488,29 +530,20 @@ def decode_one_hot(options, vector):
     return result
 
 
-def decode_atomic(features):
+def decode_atomic(features, meta_data=META_DATA):
 
-    options_list = [AT_NUM,
-                    BONDS,
-                    FORMAL_CHARGES,
-                    CHIRAL_OPTIONS,
-                    NUM_H,
-                    HYBRID_OPTIONS,
-                    [bool],
-                    [float]]
-
-    indices = []
-    for i, item in enumerate(options_list):
-        indices.append(len(item))
-        if item not in [[bool], [float]]:
-            indices[-1] += 1
+    feat_names = meta_data["atom_features"]
+    details = meta_data["details"]
+    indices = [details[feat]["num"] for feat in feat_names]
+    options_list = [details[feat]["options"] for feat in feat_names]
 
     vectors = torch.split(features, indices)
 
     dic = {}
     for i, vector in enumerate(vectors):
         options = options_list[i]
-        name = ATOM_FEAT_TYPES[i]
+        name = feat_names[i]
+
         result = decode_one_hot(options=options,
                                 vector=vector)
         dic[name] = result
@@ -520,26 +553,20 @@ def decode_atomic(features):
     return dic
 
 
-def decode_bond(features):
+def decode_bond(features, meta_data=META_DATA):
 
-    options_list = [BOND_OPTIONS,
-                    [bool],
-                    [bool],
-                    STEREO_OPTIONS,
-                    RING_SIZE]
-
-    indices = []
-    for i, item in enumerate(options_list):
-        indices.append(len(item))
-        if item not in [[bool], [float]]:
-            indices[-1] += 1
+    feat_names = meta_data["bond_features"]
+    details = meta_data["details"]
+    indices = [details[feat]["num"] for feat in feat_names]
+    options_list = [details[feat]["options"] for feat in feat_names]
 
     vectors = torch.split(features, indices)
+
     dic = {}
 
     for i, vector in enumerate(vectors):
         options = options_list[i]
-        name = BOND_FEAT_TYPES[i]
+        name = feat_names[i]
 
         result = decode_one_hot(options=options,
                                 vector=vector)

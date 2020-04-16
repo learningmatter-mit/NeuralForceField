@@ -464,7 +464,24 @@ def concatenate_dict(*dicts):
     return joint_dict
 
 
-def split_train_test(dataset, test_size=0.2):
+def binary_split(dataset, targ_name, test_size):
+
+    pos_idx = [i for i, targ in enumerate(dataset.props[targ_name])
+               if targ]
+    neg_idx = [i for i in range(len(dataset)) if i not in pos_idx]
+
+    pos_idx_train, pos_idx_test = train_test_split(
+        pos_idx, test_size=test_size)
+    neg_idx_train, neg_idx_test = train_test_split(
+        neg_idx, test_size=test_size)
+
+    idx_train = pos_idx_train + neg_idx_train
+    idx_test = pos_idx_test + neg_idx_test
+
+    return idx_train, idx_test
+
+
+def split_train_test(dataset, test_size=0.2, binary=False, targ_name=None):
     """Splits the current dataset in two, one for training and
     another for testing.
 
@@ -476,11 +493,12 @@ def split_train_test(dataset, test_size=0.2):
         TYPE: Description
     """
 
-    idx = list(range(len(dataset)))
-    idx_train, idx_test = train_test_split(idx, test_size=test_size)
-
-    props = {key: [val[i] for i in idx_train]
-             for key, val in dataset.props.items()}
+    if binary:
+        idx_train, idx_test = binary_split(dataset=dataset,
+                                           targ_name=targ_name, test_size=test_size)
+    else:
+        idx = list(range(len(dataset)))
+        idx_train, idx_test = train_test_split(idx, test_size=test_size)
 
     train = Dataset(
         props={key: [val[i] for i in idx_train]
@@ -496,7 +514,7 @@ def split_train_test(dataset, test_size=0.2):
     return train, test
 
 
-def split_train_validation_test(dataset, val_size=0.2, test_size=0.2):
+def split_train_validation_test(dataset, val_size=0.2, test_size=0.2, **kwargs):
     """Summary
 
     Args:
@@ -507,7 +525,7 @@ def split_train_validation_test(dataset, val_size=0.2, test_size=0.2):
     Returns:
         TYPE: Description
     """
-    train, validation = split_train_test(dataset, test_size=val_size)
-    train, test = split_train_test(train, test_size=test_size / (1 - val_size))
+    train, validation = split_train_test(dataset, test_size=val_size, **kwargs)
+    train, test = split_train_test(train, test_size=test_size / (1 - val_size), **kwargs)
 
     return train, validation, test
