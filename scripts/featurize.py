@@ -1,7 +1,7 @@
-from nff.data import Dataset
 import sys
 sys.path.insert(0, "..")
 
+from nff.data import Dataset
 
 def main():
     pth = "dataset.pth.tar"
@@ -9,7 +9,6 @@ def main():
     dataset = Dataset(props=dataset.props, units=dataset.units)
     dataset.featurize()
     dataset.save(pth)
-
 
 if __name__ == "__main__":
     main()
