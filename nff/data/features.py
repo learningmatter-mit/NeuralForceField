@@ -233,14 +233,12 @@ def make_rd_mols(dataset, verbose=True):
 
             except Exception as e:
 
-
+                print(("xyz2mol failed "
+                       "with error '{}' ".format(e)))
+                print("Removing smiles {}".format(smiles))
                 bad_idx.append(i)
 
                 if verbose:
-
-                    print(("xyz2mol failed "
-                           "with error '{}' ".format(e)))
-                    print("Removing smiles {}".format(smiles))
                     log_failure(bad_idx=bad_idx, i=i)
 
                 if str(e).isdigit():

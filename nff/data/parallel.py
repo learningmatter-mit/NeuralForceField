@@ -49,7 +49,7 @@ def rejoin_props(datasets):
 
 def gen_parallel(func, kwargs_list):
 
-    with futures.ProcessPoolExecutor(max_workers=1) as executor:
+    with futures.ProcessPoolExecutor() as executor:
         future_objs = []
         for kwargs in kwargs_list:
             result = executor.submit(func, **kwargs)
