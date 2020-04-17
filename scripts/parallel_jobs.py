@@ -9,11 +9,11 @@ from nff.data.parallel import split_dataset
 from nff.data.dataset import Dataset
 
 TEMPLATE = """#!/bin/bash
-#SBATCH -n 1
+#SBATCH -n 4
 #SBATCH -N 1
 #SBATCH -t 300
 #SBATCH -p sched_mit_rafagb,sched_opportunist
-#SBATCH --mem-per-cpu=400
+#SBATCH --mem-per-cpu=4000
 #SBATCH --no-requeue
 #SBATCH --signal=B:2@300
 
@@ -31,8 +31,13 @@ python  $featurize dataset.pth.tar
 """
 
 # JOB_DIR = "/home/saxelrod/local_jobs"
-JOB_DIR = "/home/saxelrod//engaging_nfs/jobs"
-D_PATH = "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data/covid_mmff94_1_50k.pth.tar"
+# JOB_DIR = "/home/saxelrod//engaging_nfs/jobs"
+JOB_DIR = "/pool001/saxelrod/engaging_nfs/jobs"
+
+# D_PATH = "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data/covid_mmff94_10.pth.tar"
+D_PATH = "/pool001/saxelrod/data_from_fock/data/covid_data/covid_mmff94_10.pth.tar"
+
+# D_PATH = "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data/covid_mmff94_10_50k.pth.tar"
 # D_PATH = "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data/all_crest.pth.tar"
 
 
