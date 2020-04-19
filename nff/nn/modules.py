@@ -7,7 +7,7 @@ from torch.nn import (Sequential, Linear, ReLU, LeakyReLU,
 
 from nff.nn.layers import Dense, GaussianSmearing
 from nff.utils.scatter import scatter_add
-from nff.nn.utils import chemprop_msg_update, chemprop_msg_to_node
+from nff.nn.utils import chemprop_msg_update, chemprop_msg_to_node, remove_bias
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphconv import (
     MessagePassingModule,
@@ -944,10 +944,22 @@ class ChemPropConv(MessagePassingModule):
 
         MessagePassingModule.__init__(self)
 
+        # As in the original ChemProp paper,
+        # the features are added together linearly
+        # with no bias. This means that features 
+        # equal to 0 don't contribute to the output.
+
+        # This is important, for example, for 
+        # CpSchNetConv, in which every non-
+        # bonded neighbour has zeros for its 
+        # ChemProp bond features. We don't want
+        # these zeros contributing to the output.
+
         self.dense = Dense(
             in_features=n_edge_hidden,
             out_features=n_edge_hidden,
-            dropout_rate=dropout_rate
+            dropout_rate=dropout_rate,
+            bias=False
         )
         self.activation = ReLU()
 
@@ -1051,7 +1063,10 @@ class ChemPropMsgToNode(nn.Module):
     def __init__(self, output_layers):
         nn.Module.__init__(self)
 
-        self.output = construct_sequential(output_layers)
+        # remove bias from linear layers if there
+
+        new_layers = remove_bias(output_layers)
+        self.output = construct_sequential(new_layers)
 
     def forward(self, r, h, nbrs):
         num_nodes = r.shape[0]
@@ -1069,7 +1084,10 @@ class ChemPropInit(nn.Module):
     def __init__(self, input_layers):
         nn.Module.__init__(self)
 
-        self.input = construct_sequential(input_layers)
+        # remove bias from linear layers if there
+
+        new_layers = remove_bias(input_layers)
+        self.input = construct_sequential(new_layers)
 
     def forward(self, r, bond_feats, bond_nbrs):
         cat_feats = torch.cat((r[bond_nbrs[:, 0]], bond_feats),

@@ -1,6 +1,7 @@
 """Tools to build layers"""
 import collections
 import torch
+import copy
 
 from torch.nn import ModuleDict, Sequential
 from nff.nn.activations import shifted_softplus
@@ -313,3 +314,11 @@ def chemprop_msg_to_node(h, nbrs, num_nodes):
                                 dim_size=num_nodes)
 
     return node_features
+
+
+def remove_bias(layers):
+    new_layers = copy.deepcopy(layers)
+    for layer in new_layers:
+        if layer['name'] == 'linear':
+            layer['param'].update({'bias': False})
+    return new_layers
