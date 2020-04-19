@@ -1021,7 +1021,7 @@ class CpSchNetConv(ChemPropConv):
         if "edge_filter" in self.moduledict:
             e = self.moduledict["edge_filter"](e)
 
-        new_msg = torch.cat((h_new, e), dim=1)
+        new_msg = torch.cat((h_new, e * 0), dim=1)
 
         return new_msg
 

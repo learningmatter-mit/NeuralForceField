@@ -1,8 +1,5 @@
 """Tools to build layers"""
 import collections
-from argparse import Namespace
-
-import numpy as np
 import torch
 
 from torch.nn import ModuleDict, Sequential
@@ -23,30 +20,30 @@ layer_types = {
 
 
 def construct_sequential(layers):
-    """Construct a sequential model from list of params 
-    
+    """Construct a sequential model from list of params
+
     Args:
         layers (list): list to describe the stacked layer params. Example:
             layers = [
                 {'name': 'linear', 'param' : {'in_features': 10, 'out_features': 20}},
                 {'name': 'linear', 'param' : {'in_features': 10, 'out_features': 1}}
             ]
-    
+
     Returns:
-        Sequential: Stacked Sequential Model 
+        Sequential: Stacked Sequential Model
     """
     return Sequential(collections.OrderedDict(
-            [layer['name'] + str(i), layer_types[layer['name']](**layer['param'])] 
-            for i, layer in enumerate(layers)
+        [layer['name'] + str(i), layer_types[layer['name']](**layer['param'])]
+        for i, layer in enumerate(layers)
     ))
 
 
 def construct_module_dict(moduledict):
     """construct moduledict from a dictionary of layers
-    
+
     Args:
         moduledict (dict): Description
-    
+
     Returns:
         ModuleDict: Description
     """
@@ -69,35 +66,39 @@ def get_default_readout(n_atom_basis):
 
     DEFAULT_READOUT = {
         'energy': [
-            {'name': 'linear', 'param' : { 'in_features': n_atom_basis, 'out_features': int(n_atom_basis / 2)}},
+            {'name': 'linear', 'param': {'in_features': n_atom_basis,
+                                         'out_features': int(n_atom_basis / 2)}},
             {'name': 'shifted_softplus', 'param': {}},
-            {'name': 'linear', 'param' : { 'in_features': int(n_atom_basis / 2), 'out_features': 1}}
+            {'name': 'linear', 'param': {'in_features': int(
+                n_atom_basis / 2), 'out_features': 1}}
         ]
     }
 
     return DEFAULT_READOUT
 
+
 def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
     """Pytorch implementations of nbr_list for minimum image convention, the offsets are only limited to 0, 1, -1:
-    it means that no pair interactions is allowed for more than 1 periodic box length. It is so much faster than 
+    it means that no pair interactions is allowed for more than 1 periodic box length. It is so much faster than
     neighbor_list algorithm in ase.
 
     It is similar to the output of neighbor_list("ijS", atomsobject, cutoff) but a lot faster
-    
+
     Args:
         atomsobject (TYPE): Description
-        cutoff (float): cutoff for 
+        cutoff (float): cutoff for
         device (str, optional): Description
-    
+
     Returns:
         i, j, cutoff: just like ase.neighborlist.neighbor_list
-    
+
     """
-    xyz = torch.Tensor(atomsobject.get_positions(wrap=True) ).to(device)
+    xyz = torch.Tensor(atomsobject.get_positions(wrap=True)).to(device)
     dis_mat = xyz[None, :, :] - xyz[:, None, :]
     cell_dim = torch.Tensor(atomsobject.get_cell()).diag().to(device)
 
-    offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + dis_mat.lt(-0.5 * cell_dim).to(torch.float)
+    offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + \
+        dis_mat.lt(-0.5 * cell_dim).to(torch.float)
     dis_mat = dis_mat + offsets * cell_dim
 
     dis_sq = dis_mat.pow(2).sum(-1)
@@ -107,44 +108,110 @@ def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
     if directed:
         nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
-    i, j  = nbr_list[:, 0].detach().to("cpu").numpy(), nbr_list[:, 1].detach().to("cpu").numpy()
+    i, j = nbr_list[:, 0].detach().to("cpu").numpy(
+    ), nbr_list[:, 1].detach().to("cpu").numpy()
 
-    offsets = offsets[nbr_list[:, 0], nbr_list[:, 1], :].detach().to("cpu").numpy()
+    offsets = offsets[nbr_list[:, 0],
+                      nbr_list[:, 1], :].detach().to("cpu").numpy()
 
-    return i, j, offsets 
+    return i, j, offsets
+
 
 def chemprop_msg_update(h, nbrs):
+    r"""
+
+        Function for updating the messages in a GCNN, as implemented in ChemProp
+        (Yang, Kevin, et al. "Analyzing learned molecular representations for 
+        property prediction."  Journal of chemical information and modeling 
+        59.8 (2019): 3370-3388. https://doi.org/10.1021/acs.jcim.9b00237). 
+
+        Args:
+                h (torch.tensor): hidden edge tensor h_vw. It is a tensor of 
+                        dimension `edge` x `hidden`, where edge is the number of 
+                        directed edges, and `hidden` is the dimension of the hidden
+                        edge features. The indices vw can be obtained from the 
+                        first index of h as described below.
+
+                nbrs (torch.tensor): bond directed neighbor list. It is a 
+                        tensor of dimension `edge` x 2. The indidces vw of h[j] 
+                        for an arbitrary index j are given by nbrs[j].
+        Returns:
+                message (torch.tensor): updated message m_vw =
+                 \sum_{k \in N(v) \ w} h_{kv}, of dimension `edge` x `hidden. 
+                 More details in the example below.
+
+    Example:
+        h = torch.tensor([[0.5488, 0.7152, 0.6028],
+                        [0.5449, 0.4237, 0.6459],
+                        [0.4376, 0.8918, 0.9637],
+                        [0.3834, 0.7917, 0.5289],
+                        [0.5680, 0.9256, 0.0710],
+                        [0.0871, 0.0202, 0.8326]])
+        nbrs = torch.tensor([[1, 2],
+                        [2, 1],
+                        [2, 3],
+                        [3, 2],
+                        [2, 4],
+                        [4, 2]])
+        h_12, h_21, h_23, h_32, h_24, h_42 = h
+
+        # m_{vw} = \sum_{k \in N(v) \ w} h_{kv}
+        # m = [m_{12}, m_{21}, m_{23}, m_{32}, m_{24}, m_{42}]
+        # = [0, h_{32} + h_{42}, h_{12} + h_{42}, 0, h_{12} + h_{32},
+        #    0]
+
+        m = chemprop_msg_update(h, nbrs)
+        print(m)
+
+        # >> tensor([[0.0000, 0.0000, 0.0000],
+        #         [0.4706, 0.8119, 1.3615],
+        #         [0.6359, 0.7354, 1.4354],
+        #         [0.0000, 0.0000, 0.0000],
+        #         [0.9323, 1.5069, 1.1317],
+        #         [0.0000, 0.0000, 0.0000]])
+
+        expec_m = torch.stack(
+            [0 * h_32, h_32+ h_42, h_12 + h_42, h_12 + h_32, 0 *h_12])
+        print(expec_m)
+
+        # >> tensor([[0.0000, 0.0000, 0.0000],
+        #         [0.4706, 0.8119, 1.3615],
+        #         [0.6359, 0.7354, 1.4354],
+        #         [0.0000, 0.0000, 0.0000],
+        #         [0.9323, 1.5069, 1.1317],
+        #         [0.0000, 0.0000, 0.0000]])
+
+    """
 
     # nbr_dim x nbr_dim matrix, e.g. for nbr_dim = 4, all_idx =
     # [[0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3]]
     all_idx = torch.stack([torch.arange(0, len(nbrs))] * len(nbrs)).long()
 
-    # The first argument gives nbr list indices for which the second
-    # neighbor of the nbr element matches the second neighbor of this element.
-    # The second argument makes you ignore nbr elements equal to this one.
-    # Example:
-    # nbrs = [[1,2], [2, 1], [2, 3], [3, 2], [2, 4], [4, 2]].
-    # message = [m_{12}, m_{21}, m_{23}, m_{32}, m_{24}, m_{42}]
-    # Then m_{12} = h_{32} + h_{42} (and not + h_{12})
+    # We want to sum m_{vw} = \sum h_{kv}, such that k is a neighbour
+    # of v but not equal to w. i.e. nbrs[:, :] = kv and
+    # nbrs[:, :, None] = vw, so that  nbrs[:, 0, None] = nbrs[:, 1] = v.
+    # Also, we want k != w, so that (nbrs[:, 0] != nbrs[:, 1, None].
+    # To have both of these met, we multiply the two results together.
 
-    mask = (nbrs[:, 1] == nbrs[:, 1, None]) * (nbrs[:, 0] != nbrs[:, 0, None])
+    # In the example here, we would get mask =
+    # >> tensor([[False, False, False, False, False, False],
+    #     [False, False, False,  True, False,  True],
+    #     [ True, False, False, False, False,  True],
+    #     [False, False, False, False, False, False],
+    #     [ True, False, False,  True, False, False],
+    #     [False, False, False, False, False, False]])
+
+    mask = (nbrs[:, 1] == nbrs[:, 0, None]) * (nbrs[:, 0] != nbrs[:, 1, None])
 
     # select the values of all_idx that are allowed by `mask`
     good_idx = all_idx[mask]
-
     # get the h's of these indices
     h_to_add = h[good_idx]
-
-    # number of nbr_list matches for each index of `message`.
-    # E.g. for the first index, with m_{12}, we got two matches
-
-    num_matches = mask.sum(1).tolist()
     # map from indices `h_to_add` to the indices of `message`
-    match_idx = torch.cat([torch.LongTensor([index] * match)
-                           for index, match in enumerate(num_matches)])
-    match_idx = match_idx.to(h.device)
-
+    match_idx = mask.nonzero()[:, 0]
     graph_size = h.shape[0]
+
+    # add together
 
     message = scatter_add(src=h_to_add,
                           index=match_idx,
@@ -155,24 +222,91 @@ def chemprop_msg_update(h, nbrs):
 
 
 def chemprop_msg_to_node(h, nbrs, num_nodes):
+    r"""
+
+        Converts message hidden edge vectors into node messages
+        after the last convolution, as implemented in ChemProp.
+
+        Args:
+                h (torch.tensor): hidden edge tensor h_vw. It is a tensor of 
+                        dimension `edge` x `hidden`, where edge is the number of 
+                        directed edges, and `hidden` is the dimension of the hidden
+                        edge features. The indices vw can be obtained from the 
+                        first index of h as described below.
+
+                nbrs (torch.tensor): bond directed neighbor list. It is a 
+                        tensor of dimension `edge` x 2. The indidces vw of h[j] 
+                        for an arbitrary index j are given by nbrs[j].
+
+                num_nodes (int): number of nodes in the graph
+
+        Returns:
+                node_features (torch.Tensor): Updated node message 
+                m_v = \sum_{w \in N(v)} h_{vw}, of dimension `num_nodes` x
+                `hidden`. More details in the example below.
+
+    Example:
+            h = torch.tensor([[0.5488, 0.7152, 0.6028],
+                            [0.5449, 0.4237, 0.6459],
+                            [0.4376, 0.8918, 0.9637],
+                            [0.3834, 0.7917, 0.5289],
+                            [0.5680, 0.9256, 0.0710],
+                            [0.0871, 0.0202, 0.8326]])
+            nbrs = torch.tensor([[1, 2],
+                            [2, 1],
+                            [2, 3],
+                            [3, 2],
+                            [2, 4],
+                            [4, 2]])
+            h_12, h_21, h_23, h_32, h_24, h_42 = h
+            num_nodes = 5
+
+            # m_v = \sum_{w \in N(v)} h_{vw}
+            # = [m_0, m_1, m_2, m_3, m_4]
+            # = [0, h_12, h_21 + h_23 + h_24, h_32, h_42]
+
+            m = chemprop_msg_to_node(h, nbrs, 5)
+            print(m)
+
+            # >> tensor([[0.0000, 0.0000, 0.0000],
+            #         [0.5488, 0.7152, 0.6028],
+            #         [1.5505, 2.2411, 1.6806],
+            #         [0.3834, 0.7917, 0.5289],
+            #         [0.0871, 0.0202, 0.8326]])
+
+            expec_m = torch.stack([torch.zeros_like(h_12),
+                        h_12, h_21 + h_23 + h_24, h_32, h_42])
+
+            print(expec_m)
+
+            # >> tensor([[0.0000, 0.0000, 0.0000],
+            #         [0.5488, 0.7152, 0.6028],
+            #         [1.5505, 2.2411, 1.6806],
+            #         [0.3834, 0.7917, 0.5289],
+            #         [0.0871, 0.0202, 0.8326]])
+
+    """
 
     node_idx = torch.arange(num_nodes).to(h.device)
     nbr_idx = torch.arange(len(nbrs)).to(h.device)
+    # nbr_dim x node_idx matrix, e.g. for nbr_dim = 4, node_dim = 5,
+    # we'd get [[0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3],
+    # [0, 1, 2, 3], [0, 1, 2, 3]]
     node_nbr_idx = torch.stack([nbr_idx] * len(node_idx))
 
+    # we want neighbours vw for which v is equal to the node index
+    # of interest
     mask = (nbrs[:, 0] == node_idx[:, None])
-    num_matches = mask.sum(1).tolist()
-    match_idx = torch.cat([torch.LongTensor([index] * match)
-                           for index, match in enumerate(num_matches)])
-    match_idx = match_idx.to(h.device)
+    match_idx = mask.nonzero()[:, 0]
 
+    # get the indices of h to add for each node
     good_idx = node_nbr_idx[mask]
     h_to_add = h[good_idx]
 
+    # add together
     node_features = scatter_add(src=h_to_add,
                                 index=match_idx,
                                 dim=0,
                                 dim_size=num_nodes)
 
     return node_features
-

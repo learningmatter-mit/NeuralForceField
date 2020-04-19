@@ -53,17 +53,10 @@ def gen_parallel(func, kwargs_list):
 
     cpu_count = os.cpu_count()
     with futures.ProcessPoolExecutor(max_workers=cpu_count) as executor:
-    # with futures.ProcessPoolExecutor(max_workers=4) as executor:
-
-    # q = queue.Queue()
-
-    # with BoundedProcessPoolExecutor(max_workers=4) as executor:
 
         future_objs = []
         for kwargs in kwargs_list:
             result = executor.submit(func, **kwargs)
-
-            # q.put(None)
 
             future_objs.append(result)
 
@@ -137,4 +130,3 @@ def featurize_parallel(dataset,
     new_props.pop("rd_mols")
     new_props["bonded_nbr_list"] = copy.deepcopy(new_props["bond_list"])
     new_props.pop("bond_list")
-
