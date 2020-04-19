@@ -126,14 +126,14 @@ def chemprop_msg_update(h, nbrs):
         59.8 (2019): 3370-3388. https://doi.org/10.1021/acs.jcim.9b00237). 
 
         Args:
-                h (torch.tensor): hidden edge tensor h_vw. It is a tensor of 
+                h (torch.tensor): hidden edge vector h_vw. It is a tensor of 
                         dimension `edge` x `hidden`, where edge is the number of 
                         directed edges, and `hidden` is the dimension of the hidden
                         edge features. The indices vw can be obtained from the 
-                        first index of h as described below.
+                        first index of `nbrs`, as described below.
 
                 nbrs (torch.tensor): bond directed neighbor list. It is a 
-                        tensor of dimension `edge` x 2. The indidces vw of h[j] 
+                        tensor of dimension `edge` x 2. The indices vw of h[j] 
                         for an arbitrary index j are given by nbrs[j].
         Returns:
                 message (torch.tensor): updated message m_vw =
@@ -171,7 +171,10 @@ def chemprop_msg_update(h, nbrs):
         #         [0.0000, 0.0000, 0.0000]])
 
         expec_m = torch.stack(
-            [0 * h_32, h_32+ h_42, h_12 + h_42, h_12 + h_32, 0 *h_12])
+            [torch.zeros_like(h_12), h_32 + h_42, h_12 + h_42, h_12 + h_32,
+            torch.zeros_like(h_12)]
+            )
+
         print(expec_m)
 
         # >> tensor([[0.0000, 0.0000, 0.0000],
