@@ -317,6 +317,16 @@ def chemprop_msg_to_node(h, nbrs, num_nodes):
 
 
 def remove_bias(layers):
+    """
+    Update a list of layers so that the linear layers don't have a bias.
+    Args:
+            layers (list): list of dictionaries of the form {"name": "...",
+                    "param": {...}}
+    Returns:
+            new_layers (list): same idea as `layers`, but with "param" of 
+                    linear layers updated to contain {"bias": False}.
+
+    """
     new_layers = copy.deepcopy(layers)
     for layer in new_layers:
         if layer['name'] == 'linear':
