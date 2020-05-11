@@ -10,7 +10,7 @@ import nff.utils.constants as const
 from nff.nn.utils import torch_nbr_list
 from nff.utils.cuda import batch_to
 from nff.data.sparse import sparsify_array
-from nff.train.builders.models import load_model
+from nff.train.builders.model import load_model
 
 
 DEFAULT_CUTOFF = 5.0
@@ -96,6 +96,7 @@ class AtomsBatch(Atoms):
             edge_from, edge_to, offsets = torch_nbr_list(self, self.cutoff, device=self.device)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         else:
+            self.wrap()
             edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
             offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]].detach().cpu().numpy()
