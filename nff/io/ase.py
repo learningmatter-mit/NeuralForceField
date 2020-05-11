@@ -10,6 +10,7 @@ import nff.utils.constants as const
 from nff.nn.utils import torch_nbr_list
 from nff.utils.cuda import batch_to
 from nff.data.sparse import sparsify_array
+from nff.train.builders.models import load_model
 
 
 DEFAULT_CUTOFF = 5.0
@@ -358,5 +359,5 @@ class NeuralFF(Calculator):
         device='cuda',
         **kwargs
     ):
-        model = nff.train.builders.models.load_model(model_path)
+        model = load_model(model_path)
         return cls(model, device, **kwargs)
