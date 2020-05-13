@@ -1,4 +1,5 @@
 import os 
+import copy
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -63,11 +64,15 @@ class Dynamics:
         # 
         epochs = int(self.mdparam['steps'] // self.mdparam['nbr_list_update_freq'])
         
+        # TODO: remove debugging tools
+        atoms = []
         for step in range(epochs):
             self.integrator.run(self.mdparam['nbr_list_update_freq'])
+            atoms.append(copy.deepcopy(self.atomsbatch))
             self.atomsbatch.update_nbr_list()
 
         self.traj.close()
+        return atoms
         
     
     def save_as_xyz(self, filename='./traj.xyz'):
