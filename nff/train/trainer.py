@@ -6,12 +6,8 @@ Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/s
 import os
 import numpy as np
 import torch
-import gc
-
-
 from nff.utils.cuda import batch_to
-from nff.utils.scatter import compute_grad
-#from nff.train.evaluate import evaluate
+from nff.train.evaluate import evaluate
 
 MAX_EPOCHS = 100
 
@@ -37,7 +33,9 @@ class Trainer:
        hooks (list, optional): hooks to customize training process.
        loss_is_normalized (bool, optional): if True, the loss per data point will be
            reported. Otherwise, the accumulated loss is reported.
-
+        make_checks (bool, optional): if True, model checkpoints will be saved and
+            outputs will be written. Should be set to False for a model being trained
+            on multiple gpus, for all gpus but the "base" or "master" gpu.
    """
 
     def __init__(
@@ -54,6 +52,7 @@ class Trainer:
         validation_interval=1,
         hooks=[],
         loss_is_normalized=True,
+        make_checks=True
     ):
         self.model_path = model_path
         self.checkpoint_path = os.path.join(self.model_path, "checkpoints")
@@ -70,17 +69,20 @@ class Trainer:
         self._stop = False
         self.checkpoint_interval = checkpoint_interval
 
+        self.make_checks = make_checks
         self.loss_fn = loss_fn
         self.optimizer = optimizer
 
         if os.path.exists(self.checkpoint_path):
             self.restore_checkpoint()
         else:
-            os.makedirs(self.checkpoint_path)
             self.epoch = 0
             self.step = 0
             self.best_loss = float("inf")
-            self.store_checkpoint()
+
+            if self.make_checks:
+                os.makedirs(self.checkpoint_path)
+                self.store_checkpoint()
 
     def to(self, device):
         """Changes the device"""
@@ -89,7 +91,8 @@ class Trainer:
         self.optimizer.load_state_dict(self.optimizer.state_dict())
 
     def _check_is_parallel(self):
-        return True if isinstance(self._model, torch.nn.DataParallel) else False
+        return True if isinstance(self._model,
+                                  torch.nn.DataParallel) else False
 
     def _load_model_state_dict(self, state_dict):
         if self._check_is_parallel():
@@ -132,7 +135,8 @@ class Trainer:
         )
         torch.save(self.state_dict, chkpt)
 
-        chpts = [f for f in os.listdir(self.checkpoint_path) if f.endswith(".pth.tar")]
+        chpts = [f for f in os.listdir(
+            self.checkpoint_path) if f.endswith(".pth.tar")]
         if len(chpts) > self.checkpoints_to_keep:
             chpt_epochs = [int(f.split(".")[0].split("-")[-1]) for f in chpts]
             sidx = np.argsort(chpt_epochs)
@@ -155,7 +159,8 @@ class Trainer:
         self.state_dict = torch.load(chkpt)
 
     def train(self, device, n_epochs=MAX_EPOCHS):
-        """Train the model for the given number of epochs on a specified device.
+        """Train the model for the given number of epochs on a specified 
+        device.
 
         Args:
             device (torch.torch.Device): device on which training takes place.
@@ -207,7 +212,6 @@ class Trainer:
                         loss.backward()
                         self.optimizer.step()
 
-
                         for h in self.hooks:
                             h.on_batch_end(self, batch, results, loss)
 
@@ -219,11 +223,13 @@ class Trainer:
                     if self._stop:
                         break
 
-                if self.epoch % self.checkpoint_interval == 0:
+                if (self.epoch % self.checkpoint_interval == 0
+                        and self.make_checks):
                     self.store_checkpoint()
 
                 # validation
-                if self.epoch % self.validation_interval == 0 or self._stop:
+                if ((self.epoch % self.validation_interval == 0 or self._stop)
+                        and self.make_checks):
                     self.validate(device)
 
                 for h in self.hooks:
@@ -236,7 +242,9 @@ class Trainer:
             # run hooks & store checkpoint
             for h in self.hooks:
                 h.on_train_ends(self)
-            self.store_checkpoint()
+
+            if self.make_checks:
+                self.store_checkpoint()
 
         except Exception as e:
             for h in self.hooks:
@@ -257,7 +265,7 @@ class Trainer:
         n_val = 0
 
         for val_batch in self.validation_loader:
-            
+
             val_batch = batch_to(val_batch, device)
 
             # append batch_size
@@ -270,7 +278,8 @@ class Trainer:
             # move input to gpu, if needed
             results = self._model(val_batch)
 
-            val_batch_loss = self.loss_fn(val_batch, results).data.cpu().numpy()
+            val_batch_loss = self.loss_fn(
+                val_batch, results).data.cpu().numpy()
 
             if self.loss_is_normalized:
                 val_loss += val_batch_loss * vsize
@@ -301,4 +310,3 @@ class Trainer:
             device,
             self.loss_is_normalized
         )
-
