@@ -272,7 +272,7 @@ class Trainer:
         info_file = os.path.join(
             self_folder, "val_epoch_{}".format(self.epoch))
         with open(info_file, "w") as f:
-            f.write(self.val_loss.item())
+            f.write(str(val_loss.item()))
 
     def load_val_loss(self):
 
