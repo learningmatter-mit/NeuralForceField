@@ -285,8 +285,12 @@ class Trainer:
                 val_file = os.path.join(folder, "val_epoch_{}".format(self.epoch))
                 if not os.path.isfile(val_file):
                     continue
-                with open(val_file, "r") as f:
-                    val_loss = float(f.read())
+                while True:
+                    try:
+                        with open(val_file, "r") as f:
+                            val_loss = float(f.read())
+                    except ValueError:
+                        continue
                 loaded_vals[folder] = val_loss
 
         avg_loss = np.mean(list(loaded_vals.values()))
