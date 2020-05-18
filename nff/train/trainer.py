@@ -6,10 +6,12 @@ Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/s
 import os
 import numpy as np
 import torch
+
 from nff.utils.cuda import batch_to
 from nff.train.evaluate import evaluate
 
 MAX_EPOCHS = 100
+PAR_INFO_FILE = "info.json"
 
 
 class Trainer:
@@ -33,9 +35,11 @@ class Trainer:
        hooks (list, optional): hooks to customize training process.
        loss_is_normalized (bool, optional): if True, the loss per data point will be
            reported. Otherwise, the accumulated loss is reported.
-        make_checks (bool, optional): if True, model checkpoints will be saved and
-            outputs will be written. Should be set to False for a model being trained
-            on multiple gpus, for all gpus but the "base" or "master" gpu.
+       global_rank (int, optional): overall rank of the current gpu for parallel
+            training (e.g. for the second gpu on the third node, with four
+            gpus per node, the global rank is 7).
+       world_size (int, optional): the total number of gpus over which training is
+            parallelized.
    """
 
     def __init__(
@@ -50,9 +54,10 @@ class Trainer:
         checkpoints_to_keep=3,
         checkpoint_interval=10,
         validation_interval=1,
-        hooks=[],
+        hooks=None,
         loss_is_normalized=True,
-        make_checks=True
+        global_rank=0,
+        world_size=1
     ):
         self.model_path = model_path
         self.checkpoint_path = os.path.join(self.model_path, "checkpoints")
@@ -61,7 +66,7 @@ class Trainer:
         self.validation_loader = validation_loader
         self.validation_interval = validation_interval
         self.checkpoints_to_keep = checkpoints_to_keep
-        self.hooks = hooks
+        self.hooks = [] if hooks is None else hooks
         self.loss_is_normalized = loss_is_normalized
         self.mini_batches = mini_batches
 
@@ -69,9 +74,14 @@ class Trainer:
         self._stop = False
         self.checkpoint_interval = checkpoint_interval
 
-        self.make_checks = make_checks
         self.loss_fn = loss_fn
         self.optimizer = optimizer
+
+        self.parallel = world_size > 1
+        self.global_rank = global_rank
+        self.world_size = world_size
+        self.par_folders = self.get_par_folders()
+        self.base = global_rank == 0
 
         if os.path.exists(self.checkpoint_path):
             self.restore_checkpoint()
@@ -80,7 +90,7 @@ class Trainer:
             self.step = 0
             self.best_loss = float("inf")
 
-            if self.make_checks:
+            if self.base:
                 os.makedirs(self.checkpoint_path)
                 self.store_checkpoint()
 
@@ -90,12 +100,8 @@ class Trainer:
         self._model.to(device)
         self.optimizer.load_state_dict(self.optimizer.state_dict())
 
-    def _check_is_parallel(self):
-        return True if isinstance(self._model,
-                                  torch.nn.DataParallel) else False
-
     def _load_model_state_dict(self, state_dict):
-        if self._check_is_parallel():
+        if self.parallel:
             self._model.module.load_state_dict(state_dict)
         else:
             self._model.load_state_dict(state_dict)
@@ -112,7 +118,7 @@ class Trainer:
             "optimizer": self.optimizer.state_dict(),
             "hooks": [h.state_dict for h in self.hooks],
         }
-        if self._check_is_parallel():
+        if self.parallel:
             state_dict["model"] = self._model.module.state_dict()
         else:
             state_dict["model"] = self._model.state_dict()
@@ -224,12 +230,11 @@ class Trainer:
                         break
 
                 if (self.epoch % self.checkpoint_interval == 0
-                        and self.make_checks):
+                        and self.base):
                     self.store_checkpoint()
 
                 # validation
-                if ((self.epoch % self.validation_interval == 0 or self._stop)
-                        and self.make_checks):
+                if (self.epoch % self.validation_interval == 0 or self._stop):
                     self.validate(device)
 
                 for h in self.hooks:
@@ -243,7 +248,7 @@ class Trainer:
             for h in self.hooks:
                 h.on_train_ends(self)
 
-            if self.make_checks:
+            if self.base:
                 self.store_checkpoint()
 
         except Exception as e:
@@ -251,6 +256,43 @@ class Trainer:
                 h.on_train_failed(self)
 
             raise e
+
+    def get_par_folders(self):
+
+        par_folders = [os.path.join(self.model_path, i)
+                       for i in range(self.world_size)]
+        self_folder = par_folders[self.global_rank]
+        os.makedirs(self_folder)
+
+        return par_folders
+
+    def save_val_loss(self, val_loss):
+
+        self_folder = self.par_folders[self.global_rank]
+        info_file = os.path.join(
+            self_folder, "epoch_{}".format(self.epoch))
+        with open(info_file, "w") as f:
+            f.write(self.val_loss.item())
+
+    def load_val_loss(self):
+
+        loaded_vals = {folder: None for folder in self.par_folders}
+        remaining_folders = 
+
+        while None in list(loaded_vals.values()):
+            for folder in self.par_folders:
+                if loaded_vals[folder] is not None:
+                    continue
+                val_file = os.path.join(folder, "epoch_{}".format(self.epoch))
+                if not os.path.isfile(val_file):
+                    continue
+                with open(val_file, "r") as f:
+                    val_loss = float(f.read())
+                loaded_vals[folder] = val_loss
+
+        avg_loss = np.mean(list(loaded_vals.values()))
+
+        return avg_loss
 
     def validate(self, device):
         """Validate the current state of the model using the validation set
@@ -293,9 +335,15 @@ class Trainer:
         if self.loss_is_normalized:
             val_loss /= n_val
 
+        if self.parallel:
+            self.save_val_loss(val_loss)
+            val_loss = self.load_val_loss()
+
+
         if self.best_loss > val_loss:
             self.best_loss = val_loss
-            torch.save(self._model, self.best_model)
+            if self.base:
+                torch.save(self._model, self.best_model)
 
         for h in self.hooks:
             h.on_validation_end(self, val_loss)
