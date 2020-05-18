@@ -277,7 +277,6 @@ class Trainer:
     def load_val_loss(self):
 
         loaded_vals = {folder: None for folder in self.par_folders}
-        remaining_folders = 
 
         while None in list(loaded_vals.values()):
             for folder in self.par_folders:
