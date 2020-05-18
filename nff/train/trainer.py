@@ -289,6 +289,7 @@ class Trainer:
                     try:
                         with open(val_file, "r") as f:
                             val_loss = float(f.read())
+                        break
                     except ValueError:
                         continue
                 loaded_vals[folder] = val_loss
