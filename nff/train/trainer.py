@@ -285,6 +285,7 @@ class Trainer:
                 val_file = os.path.join(folder, "val_epoch_{}".format(self.epoch))
                 if not os.path.isfile(val_file):
                     continue
+                # try loading until the float has been written
                 while True:
                     try:
                         with open(val_file, "r") as f:
