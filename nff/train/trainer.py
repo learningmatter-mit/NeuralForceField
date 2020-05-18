@@ -259,7 +259,7 @@ class Trainer:
 
     def get_par_folders(self):
 
-        par_folders = [os.path.join(self.model_path, i)
+        par_folders = [os.path.join(self.model_path, str(i))
                        for i in range(self.world_size)]
         self_folder = par_folders[self.global_rank]
         os.makedirs(self_folder)
@@ -270,7 +270,7 @@ class Trainer:
 
         self_folder = self.par_folders[self.global_rank]
         info_file = os.path.join(
-            self_folder, "epoch_{}".format(self.epoch))
+            self_folder, "val_epoch_{}".format(self.epoch))
         with open(info_file, "w") as f:
             f.write(self.val_loss.item())
 
@@ -282,7 +282,7 @@ class Trainer:
             for folder in self.par_folders:
                 if loaded_vals[folder] is not None:
                     continue
-                val_file = os.path.join(folder, "epoch_{}".format(self.epoch))
+                val_file = os.path.join(folder, "val_epoch_{}".format(self.epoch))
                 if not os.path.isfile(val_file):
                     continue
                 with open(val_file, "r") as f:
