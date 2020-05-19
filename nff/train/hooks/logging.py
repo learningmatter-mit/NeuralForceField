@@ -186,9 +186,9 @@ class LoggingHook(Hook):
                             path_dic = json.load(f)
                         par_dic[folder] = path_dic[metric.name]
                     except (json.JSONDecodeError, FileNotFoundError, KeyError) as e:
-                        # raise e
-                        print(e)
-                        continue
+                        raise e
+                        # print(e)
+                        # continue
 
             # average appropriately
 
