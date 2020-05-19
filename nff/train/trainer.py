@@ -101,7 +101,9 @@ class Trainer:
         self.optimizer.load_state_dict(self.optimizer.state_dict())
 
     def _check_is_parallel(self):
-            return True if isinstance(self._model, torch.nn.DataParallel) else False
+        data_par = isinstance(self._model, torch.nn.DataParallel)
+        dist_dat_par = isinstance(self._model, torch.nn.parallel.DistributedDataParallel)
+        return any((data_par, dist_dat_par))
 
     def _load_model_state_dict(self, state_dict):
         if self.parallel:
