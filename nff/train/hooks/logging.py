@@ -169,7 +169,6 @@ class LoggingHook(Hook):
 
         # save metrics from this process
 
-        raise Exception
         self.save_metrics(epoch)
         metric_dic = {}
 
@@ -188,9 +187,7 @@ class LoggingHook(Hook):
                             path_dic = json.load(f)
                         par_dic[folder] = path_dic[metric.name]
                     except (json.JSONDecodeError, FileNotFoundError, KeyError) as e:
-                        raise e
-                        # print(e)
-                        # continue
+                        continue
 
             # average appropriately
 

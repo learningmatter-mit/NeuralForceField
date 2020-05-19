@@ -345,11 +345,10 @@ class Trainer:
                 try:
                     with open(val_file, "r") as f:
                         val_loss = float(f.read())
-                    break
+                    loaded_vals[folder] = val_loss
                 except (ValueError, FileNotFoundError):
                     continue
-                loaded_vals[folder] = val_loss
-
+                
         if self.loss_is_normalized:
             # average the losses
             avg_loss = np.mean(list(loaded_vals.values()))
