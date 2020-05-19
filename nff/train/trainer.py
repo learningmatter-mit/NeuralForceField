@@ -81,6 +81,7 @@ class Trainer:
         self.global_rank = global_rank
         self.world_size = world_size
         self.par_folders = self.get_par_folders()
+        # whether this is the base process for parallel training
         self.base = global_rank == 0
 
         if os.path.exists(self.checkpoint_path):
@@ -90,6 +91,8 @@ class Trainer:
             self.step = 0
             self.best_loss = float("inf")
 
+            # only make the checkpoint and save to it
+            # if this is the base process
             if self.base:
                 os.makedirs(self.checkpoint_path)
                 self.store_checkpoint()
@@ -102,7 +105,8 @@ class Trainer:
 
     def _check_is_parallel(self):
         data_par = isinstance(self._model, torch.nn.DataParallel)
-        dist_dat_par = isinstance(self._model, torch.nn.parallel.DistributedDataParallel)
+        dist_dat_par = isinstance(self._model,
+                                  torch.nn.parallel.DistributedDataParallel)
         return any((data_par, dist_dat_par))
 
     def _load_model_state_dict(self, state_dict):
@@ -234,6 +238,10 @@ class Trainer:
                     if self._stop:
                         break
 
+                # store the checkpoint only if this is the base model,
+                # otherwise it will get stored unnecessarily from other
+                # gpus, which will cause IO issues
+
                 if (self.epoch % self.checkpoint_interval == 0
                         and self.base):
                     self.store_checkpoint()
@@ -263,47 +271,109 @@ class Trainer:
             raise e
 
     def get_par_folders(self):
+        """
+        Get the folders inside the model folder that contain information
+        about the other parallel training processes.
+        Args: 
+            None
+        Returns:
+            par_folders (list): paths to the folders of all parallel
+                training processes.
+
+        """
+
+        # each parallel folder just has the name of its global rank
 
         par_folders = [os.path.join(self.model_path, str(i))
                        for i in range(self.world_size)]
         self_folder = par_folders[self.global_rank]
-        if not os.path.isdir(self_folder): 
+
+        # if the folder of this global rank doesn't exist yet then
+        # create it
+
+        if not os.path.isdir(self_folder):
             os.makedirs(self_folder)
 
         return par_folders
 
     def save_val_loss(self, val_loss):
+        """
+        Save the validation loss from this trainer. Necessary for averaging
+        validation losses over all parallel trainers.
+        Args:
+            val_loss (torch.Tensor): validation loss from this trainer
+        Returns:
+            None
+        """
 
         self_folder = self.par_folders[self.global_rank]
+
+        # write the loss as a number to a file called "val_epoch_i"
+        # for epoch i.
+
         info_file = os.path.join(
             self_folder, "val_epoch_{}".format(self.epoch))
         with open(info_file, "w") as f:
             f.write(str(val_loss.item()))
 
     def load_val_loss(self):
+        """
+        Load the validation losses from the other parallel processes.
+        Args:
+            None
+        Returns:
+            avg_loss (float): validation loss averaged among all
+                processes if self.loss_is_normalized = True,
+                and added otherwise.
+        """
+
+        # Initialize a dictionary with the loss from each parallel
+        # process. We will know that all processes are done once
+        # `None` is no longer in this dictionary.
 
         loaded_vals = {folder: None for folder in self.par_folders}
 
         while None in list(loaded_vals.values()):
             for folder in self.par_folders:
+                # if the folder has a dictionary value already,
+                # then no need to load anything
                 if loaded_vals[folder] is not None:
                     continue
-                val_file = os.path.join(folder, "val_epoch_{}".format(self.epoch))
-                if not os.path.isfile(val_file):
+                val_file = os.path.join(
+                    folder, "val_epoch_{}".format(self.epoch))
+                # try opening the file and getting the value
+                try:
+                    with open(val_file, "r") as f:
+                        val_loss = float(f.read())
+                    break
+                except (ValueError, FileNotFoundError):
                     continue
-                # try loading until the float has been written
-                while True:
-                    try:
-                        with open(val_file, "r") as f:
-                            val_loss = float(f.read())
-                        break
-                    except ValueError:
-                        continue
                 loaded_vals[folder] = val_loss
 
-        avg_loss = np.mean(list(loaded_vals.values()))
+        if self.loss_is_normalized:
+            # average the losses
+            avg_loss = np.mean(list(loaded_vals.values()))
+        else:
+            # add the losses
+            avg_loss = np.sum(list(loaded_vals.values()))
 
         return avg_loss
+
+    def save_as_best(self):
+        """
+        Save model as the current best model.
+        """
+
+        # only save if you're the base process
+        if not self.base:
+            return
+
+        if self.parallel:
+            # need to save model.module, not model, in the
+            # parallel case
+            torch.save(self._model.module, self.best_model)
+        else:
+            torch.save(self._model, self.best_model)
 
     def validate(self, device):
         """Validate the current state of the model using the validation set
@@ -346,17 +416,16 @@ class Trainer:
         if self.loss_is_normalized:
             val_loss /= n_val
 
+        # if running in parallel, savee the validation loss
+        # and pick up the losses from the other processes too
+
         if self.parallel:
             self.save_val_loss(val_loss)
             val_loss = self.load_val_loss()
 
-
         if self.best_loss > val_loss:
             self.best_loss = val_loss
-            if self.base and self.parallel:
-                torch.save(self._model.module, self.best_model)
-            elif self.base and not self.parallel:
-                torch.save(self._model, self.best_model)
+            self.save_as_best()
 
         for h in self.hooks:
             h.on_validation_end(self, val_loss)
