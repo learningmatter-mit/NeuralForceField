@@ -7,8 +7,10 @@ import os
 import time
 import numpy as np
 import torch
+import json
 
 from nff.train.hooks import Hook
+from nff.train.metrics import RootMeanSquaredError
 
 
 class LoggingHook(Hook):
@@ -31,6 +33,8 @@ class LoggingHook(Hook):
         log_validation_loss=True,
         log_learning_rate=True,
         mini_batches=1,
+        global_rank=0,
+        world_size=1
     ):
         self.log_train_loss = log_train_loss
         self.log_validation_loss = log_validation_loss
@@ -41,7 +45,12 @@ class LoggingHook(Hook):
         self._counter = 0
         self.metrics = metrics
         self.mini_batches = mini_batches
-        
+
+        self.global_rank = global_rank
+        self.world_size = world_size
+        self.par_folders = self.get_par_folders()
+        self.parallel = world_size > 1
+
     def on_epoch_begin(self, trainer):
         """Log at the beginning of train epoch.
 
@@ -59,7 +68,8 @@ class LoggingHook(Hook):
     def on_batch_end(self, trainer, train_batch, result, loss):
         if self.log_train_loss:
             n_samples = self._batch_size(result)
-            self._train_loss += float(loss.data) * n_samples / self.mini_batches
+            self._train_loss += float(loss.data) * \
+                n_samples / self.mini_batches
             self._counter += n_samples
 
     def _batch_size(self, result):
@@ -78,6 +88,54 @@ class LoggingHook(Hook):
     def on_validation_batch_end(self, trainer, val_batch, val_result):
         for metric in self.metrics:
             metric.add_batch(val_batch, val_result)
+
+    def get_par_folders(self):
+        base_folder = os.path.join(*self.log_path.split(os.path.sep)[:-1])
+        folders = [os.path.join(base_folder, str(i))
+                   for i in range(self.world_size)]
+        return folders
+
+    def save_metrics(self, epoch):
+
+        par_folder = self.par_folders[self.global_rank]
+        json_file = os.path.join(par_folder, "epoch_{}.json".format(epoch))
+
+        if os.path.isfile(json_file):
+            with open(json_file, "r") as f:
+                dic = json.load(f)
+        else:
+            dic = {}
+        for metric in self.metrics:
+            m = metric.aggregate()
+            dic[metric.name] = m
+        with open(json_file, "w") as f:
+            json.dump(dic, indent=4, sort_keys=True)
+
+    def avg_parallel_metrics(self, epoch):
+
+        self.save_metrics(epoch)
+        metric_dic = {}
+
+        for metric in self.metrics:
+            par_dic = {folder: None for folder in self.par_folders}
+
+            while None in par_dic.values():
+                for folder in self.par_folders:
+                    path = os.path.join(folder, "epoch_{}.json".format(epoch))
+                    try:
+                        with open(path, "r") as f:
+                            path_dic = json.load(f)
+                        par_dic[folder] = path_dic[metric.name]
+                    except (json.JSONDecodeError, FileNotFoundError, KeyError):
+                        continue
+
+            if isinstance(metric, RootMeanSquaredError):
+                metric_val = np.mean(np.array(list(par_dic.values)) ** 2) ** 0.5
+            else:
+                metric_val = np.mean(list(par_dic.values()))
+            metric_dic[metric.name] = metric_val
+
+        return metric_dic
 
 
 class CSVHook(LoggingHook):
@@ -102,10 +160,13 @@ class CSVHook(LoggingHook):
         log_learning_rate=True,
         every_n_epochs=1,
         mini_batches=1,
+        global_rank=1,
+        world_size=1
     ):
         log_path = os.path.join(log_path, "log.csv")
         super().__init__(
-            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate, mini_batches
+            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate, mini_batches,
+            global_rank, world_size
         )
         self._offset = 0
         self._restart = False
@@ -177,7 +238,10 @@ class CSVHook(LoggingHook):
                 log += ","
 
             for i, metric in enumerate(self.metrics):
-                m = metric.aggregate()
+                if self.parallel:
+                    m = self.avg_parallel_metrics(epoch=trainer.epoch)
+                else:
+                    m = metric.aggregate()
                 if hasattr(m, "__iter__"):
                     log += ",".join([str(j) for j in m])
                 else:
@@ -214,12 +278,15 @@ class TensorboardHook(LoggingHook):
         every_n_epochs=1,
         img_every_n_epochs=10,
         log_histogram=False,
-        mini_batches=1
+        mini_batches=1,
+        global_rank=1,
+        world_size=1
     ):
         from tensorboardX import SummaryWriter
 
         super().__init__(
-            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate, mini_batches
+            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate, mini_batches,
+            global_rank, world_size
         )
         self.writer = SummaryWriter(self.log_path)
         self.every_n_epochs = every_n_epochs
@@ -273,7 +340,8 @@ class TensorboardHook(LoggingHook):
                         )
 
             if self.log_validation_loss:
-                self.writer.add_scalar("train/val_loss", float(val_loss), trainer.step)
+                self.writer.add_scalar(
+                    "train/val_loss", float(val_loss), trainer.step)
 
             if self.log_histogram:
                 for name, param in trainer._model.named_parameters():
@@ -315,11 +383,15 @@ class PrintingHook(LoggingHook):
         separator=' ',
         time_strf=r'%Y-%m-%d %H:%M:%S',
         str_format=r'{1:>{0}}',
-        mini_batches=1
+        mini_batches=1,
+        global_rank=1,
+        world_size=1
     ):
+
         log_path = os.path.join(log_path, "log_human_read.csv")
         super().__init__(
-            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate, mini_batches
+            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate, mini_batches,
+            global_rank, world_size
         )
 
         self.every_n_epochs = every_n_epochs
@@ -452,4 +524,3 @@ class PrintingHook(LoggingHook):
 
     def on_train_failed(self, trainer):
         self.print('the training has failed')
-
