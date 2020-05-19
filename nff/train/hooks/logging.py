@@ -168,6 +168,8 @@ class LoggingHook(Hook):
         """
 
         # save metrics from this process
+
+        raise Exception
         self.save_metrics(epoch)
         metric_dic = {}
 
