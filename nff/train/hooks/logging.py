@@ -137,8 +137,8 @@ class LoggingHook(Hook):
                         with open(path, "r") as f:
                             path_dic = json.load(f)
                         par_dic[folder] = path_dic[metric.name]
-                    except (json.JSONDecodeError, FileNotFoundError, KeyError):
-                        continue
+                    except (json.JSONDecodeError, FileNotFoundError, KeyError) as e:
+                        print(e)
 
             if isinstance(metric, RootMeanSquaredError):
                 metric_val = np.mean(np.array(list(par_dic.values)) ** 2) ** 0.5
