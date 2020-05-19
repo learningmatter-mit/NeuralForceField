@@ -90,7 +90,10 @@ class LoggingHook(Hook):
             metric.add_batch(val_batch, val_result)
 
     def get_par_folders(self):
-        base_folder = os.path.join(*self.log_path.split(os.path.sep)[:-1])
+        sep = os.path.sep
+        base_folder = os.path.join(*self.log_path.split(sep)[:-1])
+        if self.log_path.startswith(sep):
+            base_folder = sep + base_folder
         folders = [os.path.join(base_folder, str(i))
                    for i in range(self.world_size)]
         return folders
