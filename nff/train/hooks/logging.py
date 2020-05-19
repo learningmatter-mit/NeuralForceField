@@ -148,12 +148,15 @@ class LoggingHook(Hook):
 
         return metric_dic
 
-    def aggregate(self, metric, trainer):
+    def aggregate(self, trainer):
         if self.parallel:
-            m = self.avg_parallel_metrics(epoch=trainer.epoch)
+            metric_dic = self.avg_parallel_metrics(epoch=trainer.epoch)
         else:
-            m = metric.aggregate()
-        return m
+            metric_dic = {}
+            for metric in self.metrics:
+                m = metric.aggregate()
+                metric_dic[metric.name] = m
+        return metric_dic
 
 
 class CSVHook(LoggingHook):
@@ -255,8 +258,9 @@ class CSVHook(LoggingHook):
             if len(self.metrics) > 0:
                 log += ","
 
+            metric_dic = self.aggregate(trainer)
             for i, metric in enumerate(self.metrics):
-                m = self.aggregate(metric, trainer)
+                m = metric_dic[metric.name]
                 if hasattr(m, "__iter__"):
                     log += ",".join([str(j) for j in m])
                 else:
@@ -323,8 +327,9 @@ class TensorboardHook(LoggingHook):
 
     def on_validation_end(self, trainer, val_loss):
         if trainer.epoch % self.every_n_epochs == 0:
+            metric_dic = self.aggregate(trainer)
             for metric in self.metrics:
-                m = self.aggregate(metric, trainer)
+                m = metric_dic[metric.name]
 
                 if np.isscalar(m):
                     self.writer.add_scalar(
@@ -516,8 +521,9 @@ class PrintingHook(LoggingHook):
             if len(self.metrics) > 0:
                 log += self._separator
 
+            metric_dic = self.aggregate(trainer)
             for i, metric in enumerate(self.metrics):
-                m = self.aggregate(metric, trainer)
+                m = metric_dic[metric.name]
                 if hasattr(m, '__iter__'):
                     log += self._separator.join([str(j) for j in m])
                 else:
