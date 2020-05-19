@@ -262,7 +262,8 @@ class Trainer:
         par_folders = [os.path.join(self.model_path, str(i))
                        for i in range(self.world_size)]
         self_folder = par_folders[self.global_rank]
-        os.makedirs(self_folder)
+        if not os.path.isdir(self_folder): 
+            os.makedirs(self_folder)
 
         return par_folders
 
