@@ -77,7 +77,7 @@ class Trainer:
         self.loss_fn = loss_fn
         self.optimizer = optimizer
 
-        self.parallel = world_size > 1
+        self.parallel = self._check_is_parallel()
         self.global_rank = global_rank
         self.world_size = world_size
         self.par_folders = self.get_par_folders()
@@ -99,6 +99,9 @@ class Trainer:
         self._model.device = device
         self._model.to(device)
         self.optimizer.load_state_dict(self.optimizer.state_dict())
+
+    def _check_is_parallel(self):
+            return True if isinstance(self._model, torch.nn.DataParallel) else False
 
     def _load_model_state_dict(self, state_dict):
         if self.parallel:

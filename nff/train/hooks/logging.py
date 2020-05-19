@@ -137,6 +137,13 @@ class LoggingHook(Hook):
 
         return metric_dic
 
+    def aggregate(self, metric, trainer):
+        if self.parallel:
+            m = self.avg_parallel_metrics(epoch=trainer.epoch)
+        else:
+            m = metric.aggregate()
+        return m
+
 
 class CSVHook(LoggingHook):
     """Hook for logging training process to CSV files.
@@ -160,7 +167,7 @@ class CSVHook(LoggingHook):
         log_learning_rate=True,
         every_n_epochs=1,
         mini_batches=1,
-        global_rank=1,
+        global_rank=0,
         world_size=1
     ):
         log_path = os.path.join(log_path, "log.csv")
@@ -238,10 +245,7 @@ class CSVHook(LoggingHook):
                 log += ","
 
             for i, metric in enumerate(self.metrics):
-                if self.parallel:
-                    m = self.avg_parallel_metrics(epoch=trainer.epoch)
-                else:
-                    m = metric.aggregate()
+                m = self.aggregate(metric, trainer)
                 if hasattr(m, "__iter__"):
                     log += ",".join([str(j) for j in m])
                 else:
@@ -279,7 +283,7 @@ class TensorboardHook(LoggingHook):
         img_every_n_epochs=10,
         log_histogram=False,
         mini_batches=1,
-        global_rank=1,
+        global_rank=0,
         world_size=1
     ):
         from tensorboardX import SummaryWriter
@@ -309,7 +313,7 @@ class TensorboardHook(LoggingHook):
     def on_validation_end(self, trainer, val_loss):
         if trainer.epoch % self.every_n_epochs == 0:
             for metric in self.metrics:
-                m = metric.aggregate()
+                m = self.aggregate(metric, trainer)
 
                 if np.isscalar(m):
                     self.writer.add_scalar(
@@ -384,7 +388,7 @@ class PrintingHook(LoggingHook):
         time_strf=r'%Y-%m-%d %H:%M:%S',
         str_format=r'{1:>{0}}',
         mini_batches=1,
-        global_rank=1,
+        global_rank=0,
         world_size=1
     ):
 
@@ -502,7 +506,7 @@ class PrintingHook(LoggingHook):
                 log += self._separator
 
             for i, metric in enumerate(self.metrics):
-                m = metric.aggregate()
+                m = self.aggregate(metric, trainer)
                 if hasattr(m, '__iter__'):
                     log += self._separator.join([str(j) for j in m])
                 else:
