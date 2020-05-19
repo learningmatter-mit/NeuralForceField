@@ -348,7 +348,9 @@ class Trainer:
 
         if self.best_loss > val_loss:
             self.best_loss = val_loss
-            if self.base:
+            if self.base and self.parallel:
+                torch.save(self._model.module, self.best_model)
+            elif self.base and not self.parallel:
                 torch.save(self._model, self.best_model)
 
         for h in self.hooks:
