@@ -90,11 +90,11 @@ class LoggingHook(Hook):
             metric.add_batch(val_batch, val_result)
 
     def get_base_folder(self):
-        
+
         sep = os.path.sep
         base_folder = os.path.join(*self.log_path.split(sep)[:-1])
         if base_folder.endswith(str(self.global_rank)):
-            base_folder = os.path.join(*self.base_folder.split(sep)[:-1])
+            base_folder = os.path.join(*base_folder.split(sep)[:-1])
         if self.log_path.startswith(sep):
             base_folder = sep + base_folder
         return base_folder
