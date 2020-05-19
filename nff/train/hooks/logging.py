@@ -120,7 +120,7 @@ class LoggingHook(Hook):
             m = metric.aggregate()
             dic[metric.name] = m
         with open(json_file, "w") as f:
-            json.dump(dic, indent=4, sort_keys=True)
+            json.dump(dic, f, indent=4, sort_keys=True)
 
     def avg_parallel_metrics(self, epoch):
 
