@@ -347,7 +347,7 @@ class NeuralFF(Calculator):
         ).cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
 
         self.results = {
-            'energy': energy.reshape(-1),
+            'energy': energy.reshape(-1)
         }
 
         if 'forces' in properties:

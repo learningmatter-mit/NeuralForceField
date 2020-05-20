@@ -68,7 +68,7 @@ class Dynamics:
         atoms = []
         for step in range(epochs):
             self.integrator.run(self.mdparam['nbr_list_update_freq'])
-            atoms.append(copy.deepcopy(self.atomsbatch))
+            #atoms.append(copy.deepcopy(self.atomsbatch))
             self.atomsbatch.update_nbr_list()
 
         self.traj.close()

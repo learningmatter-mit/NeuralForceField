@@ -45,10 +45,11 @@ class NeuralMDLogger(MDLogger):
             print(self.fmt % dat)
 
         # TODO: remove debugging tools
-        self.atoms.results['epot'] = epot
-        self.atoms.results['ekin'] = ekin
-        self.atoms.results['temp'] = temp
-        self.atoms.results['t'] = t
+#        if hasattr(self.atoms, 'results'):
+#            self.atoms.results['epot'] = epot
+#            self.atoms.results['ekin'] = ekin
+#            self.atoms.results['temp'] = temp
+#            self.atoms.results['t'] = t
 
 
 
