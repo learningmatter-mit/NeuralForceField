@@ -531,7 +531,7 @@ def concatenate_dict(*dicts):
         elif get_length(value) == 1:
             return [value]
         
-        return value
+        return [value]
 
     # we have to see how many values the properties of each dictionary has.
     values_per_dict = [get_length_of_values(d) for d in dicts]
