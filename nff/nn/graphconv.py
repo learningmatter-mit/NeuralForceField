@@ -42,7 +42,7 @@ class MessagePassingModule(nn.Module):
 
     def forward(self, r, e, a, aggr_wgt=None):
 
-        pdb.set_trace()
+        # pdb.set_trace()
         
         graph_size = r.shape[0]
 

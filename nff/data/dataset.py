@@ -15,7 +15,9 @@ from nff.data.sparse import sparsify_tensor
 from nff.data.topology import update_props_topologies
 from nff.data.graphs import reconstruct_atoms, get_neighbor_list
 from nff.data.parallel import featurize_parallel, NUM_PROCS
-from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
+from nff.data.features import (ATOM_FEAT_TYPES, BOND_FEAT_TYPES,
+                               add_voxels, add_morgan, add_mol_soap)
+from nff.data.descriptors import featurize_hydrogenic, featurize_rdkit
 
 
 class Dataset(TorchDataset):
@@ -221,7 +223,11 @@ class Dataset(TorchDataset):
         """
         idx = list(range(len(self)))
         reindex = skshuffle(idx)
-        self.props = {key: val[reindex] for key, val in self.props.items()}
+        for key, val in self.props.items():
+            if isinstance(val, list):
+                self.props[key] = [val[i] for i in reindex]
+            else:
+                self.props[key] = val[reindex]
 
         return
 
@@ -233,6 +239,34 @@ class Dataset(TorchDataset):
                            num_procs=num_procs,
                            bond_feats=bond_feats,
                            atom_feats=atom_feats)
+
+    def featurize_hydrogenic(self, n_max, a0, device, batch_size, atom_types):
+        featurize_hydrogenic(self, n_max=n_max,
+                             a0=a0,
+                             device=device,
+                             batch_size=batch_size, 
+                             atom_types=atom_types)
+
+    def add_voxels(self, n_gaussians, start, stop, use_channels=True,
+                   use_weights=False):
+        add_voxels(self, n_gaussians=n_gaussians,
+                   start=start,
+                   stop=stop,
+                   use_channels=use_channels,
+                   use_weights=use_weights)
+
+    def add_morgan(self, vec_length):
+        add_morgan(self, vec_length)
+
+    def add_mol_soap(self, Lmax, resolution=1.0, channels=True):
+        add_mol_soap(self,
+                     Lmax=Lmax,
+                     resolution=resolution,
+                     channels=channels)
+
+    def featurize_rdkit(self, method):
+
+        featurize_rdkit(self, method=method)
 
     def unwrap_xyz(self, mol_dic):
         """
@@ -526,6 +560,7 @@ def split_train_validation_test(dataset, val_size=0.2, test_size=0.2, **kwargs):
         TYPE: Description
     """
     train, validation = split_train_test(dataset, test_size=val_size, **kwargs)
-    train, test = split_train_test(train, test_size=test_size / (1 - val_size), **kwargs)
+    train, test = split_train_test(
+        train, test_size=test_size / (1 - val_size), **kwargs)
 
     return train, validation, test

@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import copy
 from rdkit import Chem
+from rdkit.Chem import AllChem
 from nff.utils.xyz2mol import xyz2mol
 
 QUICK = True
@@ -260,6 +261,10 @@ def make_rd_mols(dataset, verbose=True):
                 verify_smiles(rd_mol=mol, smiles=smiles)
 
             except Exception as e:
+
+                # import pdb
+                # print(e)
+                # pdb.post_mortem()
 
                 print(("xyz2mol failed "
                        "with error '{}' ".format(e)))
@@ -595,3 +600,21 @@ def featurize_dataset(dataset,
     props.pop("rd_mols")
     props["bonded_nbr_list"] = copy.deepcopy(props["bond_list"])
     props.pop("bond_list")
+
+
+def add_morgan(dataset, vec_length):
+    dataset.props["morgan"] = []
+    for smiles in dataset.props['smiles']:
+        mol = Chem.MolFromSmiles(smiles)
+        if vec_length != 0:
+            morgan = AllChem.GetMorganFingerprintAsBitVect(
+                mol, radius=2, nBits=vec_length)
+        else:
+            morgan = []
+
+        # shouldn't be a long tensor if we're going
+        # to apply an NN to it
+
+        arr_morgan = np.array(list(morgan)).astype('float32')
+        morgan_tens = torch.tensor(arr_morgan)
+        dataset.props["morgan"].append(morgan_tens)

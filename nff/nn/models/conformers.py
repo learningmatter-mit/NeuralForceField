@@ -15,7 +15,8 @@ Model that uses a representation of a molecule in terms of different 3D
 conformers to predict properties.
 """
 
-FEAT_SCALING = 20
+# FEAT_SCALING = 20
+FEAT_SCALING = 1
 
 
 class WeightedConformers(nn.Module):
@@ -127,6 +128,9 @@ class WeightedConformers(nn.Module):
         # the readout acts on this final molceular fp
         self.readout = NodeMultiTaskReadOut(multitaskdict=readoutdict)
 
+        # whether to learn the embeddings or get them from the batch
+        self.batch_embeddings = modelparams.get("batch_embeddings", False)
+
     def make_extra_feats(self, modelparams):
         """
         Example:
@@ -148,12 +152,16 @@ class WeightedConformers(nn.Module):
         network = construct_sequential(layers)
         return network
 
-    def add_features(self, batch, num_mols, **kwargs):
+    def add_features(self, batch, **kwargs):
+
+        N = batch["num_atoms"].reshape(-1).tolist()
+        num_mols = len(N)
 
         if self.extra_feats is None:
             return [torch.tensor([]) for _ in range(num_mols)]
 
         assert all([feat in batch.keys() for feat in self.extra_feats])
+
         feats = []
         for feat_name in self.extra_feats:
             feat_len = len(batch[feat_name]) // num_mols
@@ -223,9 +231,7 @@ class WeightedConformers(nn.Module):
         boltzmann_weights = torch.split(batch["weights"], num_confs)
 
         # add extra features (e.g. from Morgan fingerprint or MPNN)
-        num_mols = len(fps_by_smiles)
-        extra_feats = self.add_features(batch=batch, num_mols=num_mols,
-                                        **kwargs)
+        extra_feats = self.add_features(batch=batch, **kwargs)
 
         # return everything in a dictionary
         outputs = dict(r=r,
@@ -238,7 +244,7 @@ class WeightedConformers(nn.Module):
 
         return outputs
 
-    def forward(self, batch, xyz=None, **kwargs):
+    def embedding_forward(self, batch, xyz=None, **kwargs):
         """
 
         Use the outputs of the convolutions to make a prediction.
@@ -291,5 +297,25 @@ class WeightedConformers(nn.Module):
 
         conf_fps = torch.stack(conf_fps)
         results = self.readout(conf_fps)
+
+        return results
+
+    def forward(self, batch, xyz=None, **kwargs):
+
+        if not self.batch_embeddings:
+            return self.embedding_forward(batch, xyz, **kwargs)
+
+        num_specs = len(batch["num_atoms"])
+        batch_fp = batch["fingerprint"]
+        conf_fps = batch_fp.reshape(num_specs, -1)
+
+        extra_feats = torch.stack(self.add_features(batch=batch, **kwargs))
+
+        if extra_feats.shape[-1] !=0 :
+            final_fp = torch.cat((conf_fps, extra_feats), axis=1)
+        else:
+            final_fp = conf_fps
+
+        results = self.readout(final_fp)
 
         return results

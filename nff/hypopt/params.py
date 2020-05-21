@@ -35,14 +35,15 @@ def make_layers(in_basis,
     for i in range(len(feature_nums)-1):
         in_features = feature_nums[i]
         out_features = feature_nums[i+1]
+        drop_layer = {'name': 'Dropout', 'param': {'p': dropout_rate}}
+
         lin_layer = {'name': 'linear', 'param': {'in_features': in_features,
                                                  'out_features': out_features}}
         act_layer = {'name': layer_act, 'param': {}}
-        drop_layer = {'name': 'Dropout', 'param': {'p': dropout_rate}}
 
-        layers += [lin_layer, act_layer, drop_layer]
+        layers += [drop_layer, lin_layer, act_layer]
     # remove the last activation layer
-    layers = layers[:-2]
+    layers = layers[:-1]
     # update with a final activation if needed
     if last_act is not None:
         layers.append({"name": last_act, "param": {}})
@@ -149,6 +150,63 @@ def get_wc_params(param_dic, num_extra_feats):
     return params
 
 
+def get_schnet_features_io_layers(param_dic):
+
+    n_mol_basis = param_dic["mol_basis"]
+    n_bond_hidden = param_dic["n_bond_hidden"]
+    n_atom_basis = param_dic["n_atom_basis"]
+    n_bond_features = param_dic["n_bond_features"]
+    n_edge_hidden = n_bond_hidden + param_dic["n_filters"]
+
+    input_layers = [{'name': 'linear', 'param': {'in_features': n_bond_features + n_atom_basis,
+                                                 'out_features': n_bond_hidden}},
+                    {'name': param_dic["activation"], 'param': {}}]
+
+    output_layers = [{'name': 'linear', 'param': {'in_features': n_atom_basis + n_edge_hidden,
+                                                  'out_features': n_mol_basis}},
+                     {'name': param_dic["activation"], 'param': {}}]
+
+    return input_layers, output_layers
+
+
+def get_schnet_features_params(param_dic, num_extra_feats):
+    """
+    Get params for a SchNetFeatures model
+    """
+
+    classifications = [True] * len(param_dic["readout_names"])
+
+    input_layers, output_layers = get_schnet_features_io_layers(param_dic)
+
+    num_basis = param_dic["mol_basis"] + num_extra_feats
+    readout = make_readout(names=param_dic["readout_names"],
+                           classifications=classifications,
+                           num_basis=num_basis,
+                           num_layers=param_dic["num_readout_layers"],
+                           layer_act=param_dic["activation"],
+                           dropout_rate=param_dic["readout_dropout"])
+
+    mol_fp_layers = []
+
+    params = {
+        'n_convolutions': param_dic.get("n_conv"),
+        'extra_features': param_dic.get('extra_features'),
+        'mol_fp_layers': mol_fp_layers,
+        'readoutdict': readout,
+        'dropout_rate': param_dic.get("schnet_dropout"),
+        "input_layers": input_layers,
+        "output_layers": output_layers
+    }
+
+    params.update(param_dic)
+
+    if param_dic.get("boltz_params") is not None:
+        boltz = make_boltz(**param_dic["boltz_params"])
+        params.update({'boltzmann_dict': boltz})
+
+    return params
+
+
 def get_cp_params(param_dic):
     """
     Example:
@@ -201,6 +259,19 @@ def make_wc_model(param_dic):
             continue
         for param in module.parameters():
             param.requires_grad = False
+
+    return model
+
+
+def make_schnet_features(param_dic):
+    """
+    Make a SchNetFeatures model
+    """
+
+    num_extra_feats = get_extra_wc_feats(param_dic)
+    schnet_feat_params = get_schnet_features_params(param_dic=param_dic,
+                                                    num_extra_feats=num_extra_feats)
+    model = get_model(schnet_feat_params, model_type="SchNetFeatures")
 
     return model
 

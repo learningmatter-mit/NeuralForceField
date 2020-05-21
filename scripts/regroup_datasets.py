@@ -6,12 +6,16 @@ from nff.data.dataset import Dataset
 from nff.data.parallel import rejoin_props
 
 
-
 JOB_DIR = "/home/saxelrod/engaging_nfs/jobs/completed"
 
-SAVE_PTH = ("/home/saxelrod/engaging_nfs/data_from_fock/data/"
-            "covid_data/covid_mmff94_1_50k_features.pth.tar")
+# SAVE_PTH = ("/home/saxelrod/engaging_nfs/data_from_fock/data/"
+#             "covid_data/covid_mmff94_1_50k_features.pth.tar")
 
+# SAVE_PTH = ("/home/saxelrod/engaging_nfs/data_from_fock/data/"
+#             "covid_data/covid_mmff94_10_50k_features.pth.tar")
+
+SAVE_PTH = ("/home/saxelrod/engaging_nfs/data_from_fock/data/"
+            "covid_data/crest_no_broad_10_conf_regression_features.pth.tar")
 
 def main(job_dir=JOB_DIR, save_pth=SAVE_PTH):
 
@@ -25,6 +29,7 @@ def main(job_dir=JOB_DIR, save_pth=SAVE_PTH):
             continue
         path = os.path.join(folder_path, "dataset.pth.tar")
         dataset = Dataset.from_file(path)
+
         datasets.append(dataset)
 
     print("Loaded datasets.")

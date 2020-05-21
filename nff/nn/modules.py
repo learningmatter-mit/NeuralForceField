@@ -9,6 +9,7 @@ from nff.nn.layers import Dense, GaussianSmearing
 from nff.utils.scatter import scatter_add
 from nff.nn.utils import chemprop_msg_update, chemprop_msg_to_node, remove_bias
 from nff.nn.activations import shifted_softplus
+from nff.utils.tools import layer_types
 from nff.nn.graphconv import (
     MessagePassingModule,
     EdgeUpdateModule,
@@ -940,18 +941,19 @@ class ChemPropConv(MessagePassingModule):
 
     def __init__(self,
                  n_edge_hidden,
-                 dropout_rate):
+                 dropout_rate,
+                 activation):
 
         MessagePassingModule.__init__(self)
 
         # As in the original ChemProp paper,
         # the features are added together linearly
-        # with no bias. This means that features 
+        # with no bias. This means that features
         # equal to 0 don't contribute to the output.
 
-        # This is important, for example, for 
+        # This is important, for example, for
         # CpSchNetConv, in which every non-
-        # bonded neighbour has zeros for its 
+        # bonded neighbour has zeros for its
         # ChemProp bond features. We don't want
         # these zeros contributing to the output.
 
@@ -961,7 +963,7 @@ class ChemPropConv(MessagePassingModule):
             dropout_rate=dropout_rate,
             bias=False
         )
-        self.activation = ReLU()
+        self.activation = layer_types[activation]()
 
     def message(self, h_new, nbrs):
 
@@ -998,13 +1000,15 @@ class CpSchNetConv(ChemPropConv):
         trainable_gauss,
         n_filters,
         schnet_dropout,
+        activation,
         **kwargs
 
     ):
 
         ChemPropConv.__init__(self,
                               n_edge_hidden=n_bond_hidden,
-                              dropout_rate=cp_dropout)
+                              dropout_rate=cp_dropout,
+                              activation=activation)
 
         self.n_bond_hidden = n_bond_hidden
         self.moduledict = ModuleDict({})
@@ -1024,7 +1028,7 @@ class CpSchNetConv(ChemPropConv):
                 out_features=n_filters,
                 dropout_rate=schnet_dropout,
             ),
-            ReLU())
+            layer_types[activation]())
 
         self.moduledict["edge_filter"] = edge_filter
 
@@ -1037,8 +1041,13 @@ class CpSchNetConv(ChemPropConv):
 
         return new_msg
 
-    def forward(self, h_0, h_new, all_nbrs, bond_nbrs,
-                bond_idx, e):
+    def forward(self,
+                h_0,
+                h_new,
+                all_nbrs,
+                bond_nbrs,
+                bond_idx,
+                e):
 
         cp_h = h_new[:, :self.n_bond_hidden][bond_idx]
         h0_bond = h_0[bond_idx]

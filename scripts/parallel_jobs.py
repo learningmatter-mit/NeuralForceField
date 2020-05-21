@@ -31,11 +31,11 @@ python  $featurize dataset.pth.tar
 """
 
 # JOB_DIR = "/home/saxelrod/local_jobs"
-# JOB_DIR = "/home/saxelrod//engaging_nfs/jobs"
-JOB_DIR = "/pool001/saxelrod/jobs"
+JOB_DIR = "/home/saxelrod//engaging_nfs/jobs"
+# JOB_DIR = "/pool001/saxelrod/jobs"
 
-# D_PATH = "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data/covid_mmff94_10.pth.tar"
-D_PATH = "/pool001/saxelrod/data_from_fock/data/covid_data/covid_mmff94_10.pth.tar"
+D_PATH = "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data/crest_no_broad_10_conf_regression.pth.tar"
+# D_PATH = "/pool001/saxelrod/data_from_fock/data/covid_data/crest_no_broad_10_conf_regression.pth.tar"
 
 # D_PATH = "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data/covid_mmff94_10_50k.pth.tar"
 # D_PATH = "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data/all_crest.pth.tar"

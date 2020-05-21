@@ -13,7 +13,8 @@ from nff.hypopt.io import (make_model_folder,
 from nff.hypopt.data import get_data_dic
 from nff.hypopt.params import (make_wc_model,
                                make_cp3d_model,
-                               make_cp2d_model)
+                               make_cp2d_model,
+                               make_schnet_features)
 from nff.hypopt.eval import evaluate_model
 from nff.hypopt.train import make_trainer
 
@@ -200,7 +201,8 @@ def get_init_func(model_kind):
 def get_model_builder(model_type):
     dic = {"WeightedConformers": make_wc_model,
            "ChemProp3D": make_cp3d_model,
-           "ChemProp2D": make_cp2d_model}
+           "ChemProp2D": make_cp2d_model,
+           "SchNetFeatures": make_schnet_features}
     return dic[model_type]
 
 
@@ -529,6 +531,8 @@ def run_loop(project_name,
             T.train(device=device, n_epochs=num_epochs)
         except Exception as e:
             print(e)
+            import pdb
+            pdb.post_mortem()
             experiment = conclude_round(conn=conn,
                                         experiment=experiment,
                                         suggestion=suggestion,

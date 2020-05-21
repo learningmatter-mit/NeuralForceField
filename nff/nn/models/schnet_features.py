@@ -8,7 +8,7 @@ from nff.utils.tools import make_directed
 
 
 class SchNetFeatures(WeightedConformers):
-    
+
     def __init__(self, modelparams):
 
         WeightedConformers.__init__(self, modelparams)
@@ -81,6 +81,8 @@ class SchNetFeatures(WeightedConformers):
             xyz.requires_grad = True
 
         a, _ = make_directed(batch["nbr_list"])
+        # a, _ = make_directed(batch["bonded_nbr_list"])
+
         r = batch["atom_features"]
         offsets = batch.get("offsets", 0)
         e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
