@@ -15,7 +15,6 @@ from nff.data.sparse import sparsify_tensor
 from nff.data.graphs import reconstruct_atoms, get_neighbor_list, generate_subgraphs, DISTANCETHRESHOLDICT_Z 
 
 
-
 class Dataset(TorchDataset):
     """Dataset to deal with NFF calculations. Can be expanded to retrieve calculations
          from the cluster later.
@@ -280,6 +279,7 @@ class Dataset(TorchDataset):
         return self.bond_len_dict
 
     def gen_bond_prior(self, cutoff, bond_len_dict=None):
+        from nff.io.ase import AtomsBatch
 
         from nff.io.ase import AtomsBatch
 

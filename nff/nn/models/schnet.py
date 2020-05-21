@@ -17,7 +17,6 @@ from nff.utils.scatter import compute_grad
 import numpy as np
 
 
-
 class SchNet(nn.Module):
 
     """SchNet implementation with continous filter.
