@@ -1,5 +1,3 @@
-"""Summary
-"""
 import torch
 import numbers
 import numpy as np
@@ -17,6 +15,7 @@ from nff.data.sparse import sparsify_tensor
 from nff.data.topology import update_props_topologies
 from nff.data.graphs import reconstruct_atoms, get_neighbor_list, generate_subgraphs, DISTANCETHRESHOLDICT_Z 
 from nff.io.ase import AtomsBatch
+
 
 
 class Dataset(TorchDataset):
@@ -234,6 +233,8 @@ class Dataset(TorchDataset):
         Args:
             mol_dic (dict): dictionary of nodes of each disconnected subgraphs
         """
+        from nff.io.ase import AtomsBatch
+
         for i in range(len(self.props['nxyz'])):
             # makes atoms object
             atoms = AtomsBatch(positions=self.props['nxyz'][i][:, 1:4],
@@ -248,19 +249,6 @@ class Dataset(TorchDataset):
                 atoms.set_positions(reconstruct_atoms(atoms, mol_idx))
                 nxyz = atoms.get_nxyz()
             self.props['nxyz'][i] = torch.Tensor(nxyz)
-
-    def generate_topologies(self, bond_dic, use_1_4_pairs=True):
-        """
-        Generate topology for each Geom in the dataset.
-
-        Args:
-            bond_dic (dict): dictionary of bond lists for each smiles
-            use_1_4_pairs (bool): consider 1-4 pairs when generating non-bonded neighbor list
-        """
-        # use the bond list to generate topologies for the props
-        new_props = update_props_topologies(
-            props=self.props, bond_dic=bond_dic, use_1_4_pairs=use_1_4_pairs)
-        self.props = new_props
 
     def save(self, path):
         """Summary

@@ -74,6 +74,8 @@ def get_default_readout(n_atom_basis):
 
     return DEFAULT_READOUT
 
+
+
 def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
     """Pytorch implementations of nbr_list for minimum image convention, the offsets are only limited to 0, 1, -1:
     it means that no pair interactions is allowed for more than 1 periodic box length. It is so much faster than 
