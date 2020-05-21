@@ -3,13 +3,23 @@ import torch.nn as nn
 import copy
 import torch.nn.functional as F
 
-from nff.nn.layers import Dense, GaussianSmearing
-from nff.nn.modules import SchNetConv, SchNetEdgeUpdate, NodeMultiTaskReadOut
+from nff.nn.layers import Dense, GaussianSmearing, DEFAULT_DROPOUT_RATE
+from nff.nn.modules import (
+    SchNetConv,
+    SchNetEdgeUpdate,
+    NodeMultiTaskReadOut,
+    AuTopologyReadOut,
+    DoubleNodeConv,
+    SingleNodeConv,
+)
+
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphop import batch_and_sum, get_atoms_inside_cell
 from nff.nn.utils import get_default_readout
 from nff.utils.scatter import compute_grad
 import numpy as np
+
+STRING_TO_MODULE = {"double_node": DoubleNodeConv, "single_node": SingleNodeConv}
 
 
 class SchNet(nn.Module):
@@ -59,8 +69,7 @@ class SchNet(nn.Module):
                 'cutoff': 5.0,
                 'trainable_gauss': True,
                 'readoutdict': readoutdict,    
-
-
+                'dropout_rate': 0.2
             }
 
             model = SchNet(modelparams)
@@ -69,34 +78,38 @@ class SchNet(nn.Module):
 
         nn.Module.__init__(self)
 
-        n_atom_basis = modelparams['n_atom_basis']
-        n_filters = modelparams['n_filters']
-        n_gaussians = modelparams['n_gaussians']
-        n_convolutions = modelparams['n_convolutions']
-        cutoff = modelparams['cutoff']
-        trainable_gauss = modelparams.get('trainable_gauss', False)
-
+        n_atom_basis = modelparams["n_atom_basis"]
+        n_filters = modelparams["n_filters"]
+        n_gaussians = modelparams["n_gaussians"]
+        n_convolutions = modelparams["n_convolutions"]
+        cutoff = modelparams["cutoff"]
+        trainable_gauss = modelparams.get("trainable_gauss", False)
+        dropout_rate = modelparams.get("dropout_rate", DEFAULT_DROPOUT_RATE)
 
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
 
-        readoutdict = modelparams.get(
-            'readoutdict', get_default_readout(n_atom_basis))
-        post_readout = modelparams.get('post_readout', None)
-
+        readoutdict = modelparams.get("readoutdict", get_default_readout(n_atom_basis))
+        post_readout = modelparams.get("post_readout", None)
 
         # convolutions
-        self.convolutions = nn.ModuleList([
-            SchNetConv(n_atom_basis=n_atom_basis,
-                       n_filters=n_filters,
-                       n_gaussians=n_gaussians,
-                       cutoff=cutoff,
-                       trainable_gauss=trainable_gauss)
-            for _ in range(n_convolutions)
-        ])
+        self.convolutions = nn.ModuleList(
+            [
+                SchNetConv(
+                    n_atom_basis=n_atom_basis,
+                    n_filters=n_filters,
+                    n_gaussians=n_gaussians,
+                    cutoff=cutoff,
+                    trainable_gauss=trainable_gauss,
+                    dropout_rate=dropout_rate,
+                )
+                for _ in range(n_convolutions)
+            ]
+        )
 
         # ReadOut
         self.atomwisereadout = NodeMultiTaskReadOut(
-            multitaskdict=readoutdict, post_readout=post_readout)
+            multitaskdict=readoutdict, post_readout=post_readout
+        )
         self.device = None
 
     def convolve(self, batch, xyz=None):
@@ -118,16 +131,16 @@ class SchNet(nn.Module):
         # you don't want to make a whole new one.
 
         if xyz is None:
-            xyz = batch['nxyz'][:, 1:4]
+            xyz = batch["nxyz"][:, 1:4]
             xyz.requires_grad = True
 
-        r = batch['nxyz'][:, 0]
-        N = batch['num_atoms'].reshape(-1).tolist()
-        a = batch['nbr_list']
+        r = batch["nxyz"][:, 0]
+        N = batch["num_atoms"].reshape(-1).tolist()
+        a = batch["nbr_list"]
 
         # offsets take care of periodic boundary conditions
-        offsets = batch.get('offsets', 0)
-        
+        offsets = batch.get("offsets", 0)
+
         e = (xyz[a[:, 0]] - xyz[a[:, 1]] - offsets).pow(2).sum(1).sqrt()[:, None]
 
         # ensuring image atoms have the same vectors of their corresponding

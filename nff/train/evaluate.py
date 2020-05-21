@@ -4,10 +4,11 @@ from nff.utils.cuda import batch_to, to_cpu, batch_detach
 from nff.utils.scatter import compute_grad
 from nff.data.dataset import concatenate_dict
 
-def evaluate(model, loader, loss_fn, device, loss_is_normalized=True, submodel=None):
+def evaluate(model, loader, loss_fn, device, return_results=True, loss_is_normalized=True, submodel=None):
     """Evaluate the current state of the model using a given dataloader
     """
 
+    model.eval()
     model.to(device)
 
     eval_loss = 0.0
@@ -18,7 +19,6 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True, submodel=N
 
     for batch in loader:
         # append batch_size
-
         batch = batch_to(batch, device)
 
         vsize = batch['nxyz'].size(0)
@@ -41,14 +41,19 @@ def evaluate(model, loader, loss_fn, device, loss_is_normalized=True, submodel=N
         all_results.append(batch_detach(results))
         all_batches.append(batch_detach(batch))
 
-        del results
-        del batch
+        # del results
+        # del batch
 
     # weighted average over batches
     if loss_is_normalized:
         eval_loss /= n_eval
 
-    all_results = concatenate_dict(*all_results)
-    all_batches = concatenate_dict(*all_batches)
+    if not return_results:
+        return {}, {}, eval_loss
 
-    return all_results, all_batches, eval_loss
+    else:
+        # this step can be slow,
+        all_results = concatenate_dict(*all_results)
+        all_batches = concatenate_dict(*all_batches)
+
+        return all_results, all_batches, eval_loss

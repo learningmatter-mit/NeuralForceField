@@ -7,7 +7,12 @@ from torch.nn import Sequential, Linear, ReLU, LeakyReLU, ModuleDict
 from nff.nn.layers import Dense, GaussianSmearing
 from nff.utils.scatter import scatter_add
 from nff.nn.activations import shifted_softplus
-from nff.nn.graphconv import MessagePassingModule, EdgeUpdateModule
+from nff.nn.graphconv import (
+    MessagePassingModule,
+    EdgeUpdateModule,
+    GeometricOperations,
+    TopologyOperations,
+)
 from nff.nn.utils import construct_sequential, construct_module_dict
 from nff.utils.scatter import compute_grad
 
@@ -16,8 +21,7 @@ import itertools
 import copy
 
 EPSILON = 1e-15
-
-DEFAULT_BONDPRIOR_PARAM = {'k': 20.0}
+DEFAULT_BONDPRIOR_PARAM = {"k": 20.0}
 
 
 class SchNetEdgeUpdate(EdgeUpdateModule):
@@ -36,11 +40,13 @@ class SchNetEdgeUpdate(EdgeUpdateModule):
             ReLU(),  # softplus in the original paper
             Linear(n_atom_basis, n_atom_basis),
             ReLU(),  # softplus in the original paper
-            Linear(n_atom_basis, 1)
+            Linear(n_atom_basis, 1),
         )
 
     def aggregate(self, message, neighborlist):
-        aggregated_edge_feature = torch.cat((message[neighborlist[:, 0]], message[neighborlist[:, 1]]), 1)
+        aggregated_edge_feature = torch.cat(
+            (message[neighborlist[:, 0]], message[neighborlist[:, 1]]), 1
+        )
         return aggregated_edge_feature
 
     def update(self, e):
@@ -55,33 +61,57 @@ class SchNetConv(MessagePassingModule):
         moduledict (TYPE): Description
     """
 
-    def __init__(self,
-                 n_atom_basis,
-                 n_filters,
-                 n_gaussians,
-                 cutoff,
-                 trainable_gauss,
-                 ):
+    def __init__(
+        self,
+        n_atom_basis,
+        n_filters,
+        n_gaussians,
+        cutoff,
+        trainable_gauss,
+        dropout_rate,
+    ):
         super(SchNetConv, self).__init__()
-        self.moduledict = ModuleDict({
-            'message_edge_filter': Sequential(
-                GaussianSmearing(
-                    start=0.0,
-                    stop=cutoff,
-                    n_gaussians=n_gaussians,
-                    trainable=trainable_gauss
+        self.moduledict = ModuleDict(
+            {
+                "message_edge_filter": Sequential(
+                    GaussianSmearing(
+                        start=0.0,
+                        stop=cutoff,
+                        n_gaussians=n_gaussians,
+                        trainable=trainable_gauss,
+                    ),
+                    Dense(
+                        in_features=n_gaussians,
+                        out_features=n_gaussians,
+                        dropout_rate=dropout_rate,
+                    ),
+                    shifted_softplus(),
+                    Dense(
+                        in_features=n_gaussians,
+                        out_features=n_filters,
+                        dropout_rate=dropout_rate,
+                    ),
                 ),
-                Dense(in_features=n_gaussians, out_features=n_gaussians),
-                shifted_softplus(),
-                Dense(in_features=n_gaussians, out_features=n_filters)
-            ),
-            'message_node_filter': Dense(in_features=n_atom_basis, out_features=n_filters),
-            'update_function': Sequential(
-                Dense(in_features=n_filters, out_features=n_atom_basis),
-                shifted_softplus(),
-                Dense(in_features=n_atom_basis, out_features=n_atom_basis)
-            )
-        })
+                "message_node_filter": Dense(
+                    in_features=n_atom_basis,
+                    out_features=n_filters,
+                    dropout_rate=dropout_rate,
+                ),
+                "update_function": Sequential(
+                    Dense(
+                        in_features=n_filters,
+                        out_features=n_atom_basis,
+                        dropout_rate=dropout_rate,
+                    ),
+                    shifted_softplus(),
+                    Dense(
+                        in_features=n_atom_basis,
+                        out_features=n_atom_basis,
+                        dropout_rate=dropout_rate,
+                    ),
+                ),
+            }
+        )
 
     def message(self, r, e, a, aggr_wgt=None):
         """The message function for SchNet convoltuions 
@@ -95,9 +125,9 @@ class SchNetConv(MessagePassingModule):
             TYPE: message should a pair of message and
         """
         # update edge feature
-        e = self.moduledict['message_edge_filter'](e)
+        e = self.moduledict["message_edge_filter"](e)
         # convection: update
-        r = self.moduledict['message_node_filter'](r)
+        r = self.moduledict["message_node_filter"](r)
 
         # soft aggr if aggr_wght is provided
         if aggr_wgt is not None:
@@ -108,7 +138,7 @@ class SchNetConv(MessagePassingModule):
         return message
 
     def update(self, r):
-        return self.moduledict['update_function'](r)
+        return self.moduledict["update_function"](r)
 
 
 class GraphAttention(MessagePassingModule):
@@ -137,25 +167,41 @@ class GraphAttention(MessagePassingModule):
             TYPE: Description
         """
         # i -> j
-        weight_ij = torch.exp(self.activation(torch.cat((r[a[:, 0]], r[a[:, 1]]), dim=1) * \
-                                              self.weight).sum(-1))
+        weight_ij = torch.exp(
+            self.activation(
+                torch.cat((r[a[:, 0]], r[a[:, 1]]), dim=1) * self.weight
+            ).sum(-1)
+        )
         # j -> i
-        weight_ji = torch.exp(self.activation(torch.cat((r[a[:, 1]], r[a[:, 0]]), dim=1) * \
-                                              self.weight).sum(-1))
+        weight_ji = torch.exp(
+            self.activation(
+                torch.cat((r[a[:, 1]], r[a[:, 0]]), dim=1) * self.weight
+            ).sum(-1)
+        )
 
-        weight_ii = torch.exp(self.activation(torch.cat((r, r), dim=1) * \
-                                              self.weight).sum(-1))
+        weight_ii = torch.exp(
+            self.activation(torch.cat((r, r), dim=1) * self.weight).sum(-1)
+        )
 
-        normalization = scatter_add(weight_ij, a[:, 0], dim_size=r.shape[0]) \
-                        + scatter_add(weight_ji, a[:, 1], dim_size=r.shape[0]) + weight_ii
+        normalization = (
+            scatter_add(weight_ij, a[:, 0], dim_size=r.shape[0])
+            + scatter_add(weight_ji, a[:, 1], dim_size=r.shape[0])
+            + weight_ii
+        )
 
-        a_ij = weight_ij / normalization[a[:, 0]]  # the importance of node j’s features to node i
-        a_ji = weight_ji / normalization[a[:, 1]]  # the importance of node i’s features to node j
+        a_ij = (
+            weight_ij / normalization[a[:, 0]]
+        )  # the importance of node j’s features to node i
+        a_ji = (
+            weight_ji / normalization[a[:, 1]]
+        )  # the importance of node i’s features to node j
         a_ii = weight_ii / normalization  # self-attention
 
-        message = r[a[:, 0]] * a_ij[:, None], \
-                  r[a[:, 1]] * a_ij[:, None], \
-                  r * a_ii[:, None]
+        message = (
+            r[a[:, 0]] * a_ij[:, None],
+            r[a[:, 1]] * a_ij[:, None],
+            r * a_ii[:, None],
+        )
 
         return message
 
@@ -227,39 +273,38 @@ class NodeMultiTaskReadOut(nn.Module):
 
 
 class BondPrior(torch.nn.Module):
-
     def __init__(self, modelparams=DEFAULT_BONDPRIOR_PARAM):
         torch.nn.Module.__init__(self)
-        self.k = modelparams['k']
-        
+        self.k = modelparams["k"]
+
     def forward(self, batch):
-        
+
         result = {}
-        
+
         num_bonds = batch["num_bonds"].tolist()
-        
-        xyz = batch['nxyz'][:, 1:4]
+
+        xyz = batch["nxyz"][:, 1:4]
         xyz.requires_grad = True
         bond_list = batch["bonds"]
-        
-        r_0 = batch['bond_len'].squeeze()
-        
+
+        r_0 = batch["bond_len"].squeeze()
+
         r = (xyz[bond_list[:, 0]] - xyz[bond_list[:, 1]]).pow(2).sum(-1).sqrt()
-        
-        e = self.k * ( r - r_0).pow(2)
-        
-        E = torch.stack([e.sum(0) for e in torch.split(e, num_bonds)])
-        
-        result['energy'] = E.sum()
-        result['energy_grad'] = compute_grad(inputs=xyz, output=E)
-        
+
+        e = self.k * (r - r_0).pow(2)
+
+        E = torch.stack([e.sum(0).reshape(1) for e in torch.split(e, num_bonds)])
+
+        result["energy"] = E
+        result["energy_grad"] = compute_grad(inputs=xyz, output=E)
+
         return result
 
 
 # Test
 
-class TestModules(unittest.TestCase):
 
+class TestModules(unittest.TestCase):
     def testBaseEdgeUpdate(self):
         # initialize basic graphs
 
@@ -268,7 +313,11 @@ class TestModules(unittest.TestCase):
         r_in = torch.rand(6, 10)
         model = MessagePassingModule()
         r_out = model(r_in, e, a)
-        self.assertEqual(r_in.shape, r_out.shape, "The node feature dimensions should be same for the base case")
+        self.assertEqual(
+            r_in.shape,
+            r_out.shape,
+            "The node feature dimensions should be same for the base case",
+        )
 
     def testBaseMessagePassing(self):
         # initialize basic graphs
@@ -277,7 +326,11 @@ class TestModules(unittest.TestCase):
         r = torch.rand(6, 10)
         model = EdgeUpdateModule()
         e_out = model(r, e_in, a)
-        self.assertEqual(e_in.shape, e_out.shape, "The edge feature dimensions should be same for the base case")
+        self.assertEqual(
+            e_in.shape,
+            e_out.shape,
+            "The edge feature dimensions should be same for the base case",
+        )
 
     def testSchNetMPNN(self):
         # contruct a graph
@@ -293,16 +346,14 @@ class TestModules(unittest.TestCase):
         r_in = torch.rand(num_nodes, n_atom_basis)
 
         model = SchNetConv(
-            n_atom_basis,
-            n_filters,
-            n_gaussians,
-            cutoff=2.0,
-            trainable_gauss=False,
+            n_atom_basis, n_filters, n_gaussians, cutoff=2.0, trainable_gauss=False,
         )
 
         r_out = model(r_in, e, a)
-        self.assertEqual(r_in.shape, r_out.shape,
-                         "The node feature dimensions should be same.")
+
+        self.assertEqual(
+            r_in.shape, r_out.shape, "The node feature dimensions should be same."
+        )
 
     def testDoubleNodeConv(self):
 
@@ -311,20 +362,29 @@ class TestModules(unittest.TestCase):
         num_nodes = 6
         num_features = 12
 
-        update_layers =  [{'name': 'linear', 'param' : {'in_features': 2*num_features,
-                                                        'out_features': num_features}},
-                          {'name': 'shifted_softplus', 'param': {}},
-                          {'name': 'linear', 'param' : {'in_features': num_features,
-                                                  'out_features': num_features}},
-                          {'name': 'shifted_softplus', 'param': {}}]
-
+        update_layers = [
+            {
+                "name": "linear",
+                "param": {
+                    "in_features": 2 * num_features,
+                    "out_features": num_features,
+                },
+            },
+            {"name": "shifted_softplus", "param": {}},
+            {
+                "name": "linear",
+                "param": {"in_features": num_features, "out_features": num_features},
+            },
+            {"name": "shifted_softplus", "param": {}},
+        ]
 
         r_in = torch.rand(num_nodes, num_features)
         model = DoubleNodeConv(update_layers)
         r_out = model(r=r_in, e=None, a=a)
 
-        self.assertEqual(r_in.shape, r_out.shape,
-                         "The node feature dimensions should be same.")
+        self.assertEqual(
+            r_in.shape, r_out.shape, "The node feature dimensions should be same."
+        )
 
     def testSingleNodeConv(self):
 
@@ -333,20 +393,28 @@ class TestModules(unittest.TestCase):
         num_nodes = 6
         num_features = 12
 
-        update_layers =  [{'name': 'linear', 'param' : {'in_features': num_features,
-                                                        'out_features': num_features}},
-                          {'name': 'shifted_softplus', 'param': {}},
-                          {'name': 'linear', 'param' : {'in_features': num_features,
-                                                  'out_features': num_features}},
-                          {'name': 'shifted_softplus', 'param': {}}]
-
+        update_layers = [
+            {
+                "name": "linear",
+                "param": {"in_features": num_features, "out_features": num_features},
+            },
+            {"name": "shifted_softplus", "param": {}},
+            {
+                "name": "linear",
+                "param": {"in_features": num_features, "out_features": num_features},
+            },
+            {"name": "shifted_softplus", "param": {}},
+        ]
 
         r_in = torch.rand(num_nodes, num_features)
         model = SingleNodeConv(update_layers)
         r_out = model(r=r_in, e=None, a=a)
 
-        self.assertEqual(r_in.shape, r_out.shape,
-                         "The node feature dimensions should be same for the SchNet Convolution case")
+        self.assertEqual(
+            r_in.shape,
+            r_out.shape,
+            "The node feature dimensions should be same for the SchNet Convolution case",
+        )
 
     def testSchNetEdgeUpdate(self):
         # contruct a graph
@@ -361,8 +429,11 @@ class TestModules(unittest.TestCase):
         model = SchNetEdgeUpdate(n_atom_basis=n_atom_basis)
         e_out = model(r, e_in, a)
 
-        self.assertEqual(e_in.shape, e_out.shape,
-                         "The edge feature dimensions should be same for the SchNet Edge Update case")
+        self.assertEqual(
+            e_in.shape,
+            e_out.shape,
+            "The edge feature dimensions should be same for the SchNet Edge Update case",
+        )
 
     def testGAT(self):
         n_atom_basis = 10
@@ -382,31 +453,24 @@ class TestModules(unittest.TestCase):
         r = torch.rand(n_atom, 5)
 
         multitaskdict = {
-            "myenergy0":
-                [
-                    {'name': 'Dense', 'param': {'in_features': 5, 'out_features': 20}},
-                    {'name': 'shifted_softplus', 'param': {}},
-                    {'name': 'Dense', 'param': {'in_features': 20, 'out_features': 1}}
-                ],
-
-            "myenergy1":
-                [
-                    {'name': 'linear', 'param': {'in_features': 5, 'out_features': 20}},
-                    {'name': 'Dense', 'param': {'in_features': 20, 'out_features': 1}}
-                ],
-            "Muliken charges":
-                [
-                    {'name': 'linear', 'param': {'in_features': 5, 'out_features': 20}},
-                    {'name': 'linear', 'param': {'in_features': 20, 'out_features': 1}}
-                ]
+            "myenergy0": [
+                {"name": "Dense", "param": {"in_features": 5, "out_features": 20}},
+                {"name": "shifted_softplus", "param": {}},
+                {"name": "Dense", "param": {"in_features": 20, "out_features": 1}},
+            ],
+            "myenergy1": [
+                {"name": "linear", "param": {"in_features": 5, "out_features": 20}},
+                {"name": "Dense", "param": {"in_features": 20, "out_features": 1}},
+            ],
+            "Muliken charges": [
+                {"name": "linear", "param": {"in_features": 5, "out_features": 20}},
+                {"name": "linear", "param": {"in_features": 20, "out_features": 1}},
+            ],
         }
 
         model = NodeMultiTaskReadOut(multitaskdict)
         output = model(r)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
-
-
-

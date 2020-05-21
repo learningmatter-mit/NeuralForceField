@@ -7,29 +7,31 @@ import torch
 from nff.nn.models.schnet import SchNet
 from nff.nn.models.hybridgraph import HybridGraphConv
 
-PARAMS_TYPE = {
-    "SchNet": {
-        "n_atom_basis": int,
-        "n_filters": int,
-        "n_gaussians": int,
-        "n_convolutions": int,
-        "cutoff": float,
-        "bond_par": float,
-        "trainable_gauss": bool,
-        "box_size": np.array,
-    },
-    "HybridGraphConv": {
-        "n_atom_basis": int,
-        "n_filters": int,
-        "n_gaussians": int,
-        "mol_n_convolutions": int,
-        "mol_n_cutoff": float,
-        "sys_n_convolutions": int,
-        "sys_n_cutoff": float,
-        "V_ex_power": int,
-        "V_ex_sigma": float,
-        "trainable_gauss": bool,
-    },
+PARAMS_TYPE = {"SchNet":
+               {
+                   'n_atom_basis': int,
+                   'n_filters': int,
+                   'n_gaussians': int,
+                   'n_convolutions': int,
+                   'cutoff': float,
+                   'bond_par': float,
+                   'trainable_gauss': bool,
+                   'box_size': np.array,
+                   'dropout_rate': float
+               },
+               "HybridGraphConv":
+               {
+                   'n_atom_basis': int,
+                   'n_filters': int,
+                   'n_gaussians': int,
+                   'mol_n_convolutions': int,
+                   'mol_n_cutoff': float,
+                   'sys_n_convolutions': int,
+                   'sys_n_cutoff': float,
+                   'V_ex_power': int,
+                   'V_ex_sigma': float,
+                   'trainable_gauss': bool
+               },
 }
 
 MODEL_DICT = {
