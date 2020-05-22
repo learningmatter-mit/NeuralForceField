@@ -12,7 +12,6 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 from torch.utils.data import Dataset as TorchDataset
 from nff.data.sparse import sparsify_tensor
-from nff.data.topology import update_props_topologies
 from nff.data.graphs import reconstruct_atoms, get_neighbor_list, generate_subgraphs, DISTANCETHRESHOLDICT_Z 
 from nff.io.ase import AtomsBatch
 
