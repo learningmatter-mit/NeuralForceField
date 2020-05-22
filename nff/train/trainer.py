@@ -84,7 +84,7 @@ class Trainer:
         # whether this is the base process for parallel training
         self.base = global_rank == 0
 
-        if os.path.exists(self.checkpoint_path):
+        if os.path.exists(self.checkpoint_path) and self.base:
             self.restore_checkpoint()
         else:
             self.epoch = 0
