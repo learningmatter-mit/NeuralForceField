@@ -13,7 +13,6 @@ from ase.neighborlist import neighbor_list
 from torch.utils.data import Dataset as TorchDataset
 from nff.data.sparse import sparsify_tensor
 from nff.data.graphs import reconstruct_atoms, get_neighbor_list, generate_subgraphs, DISTANCETHRESHOLDICT_Z 
-from nff.io.ase import AtomsBatch
 
 
 
@@ -281,6 +280,8 @@ class Dataset(TorchDataset):
         return self.bond_len_dict
 
     def gen_bond_prior(self, cutoff, bond_len_dict=None):
+
+        from nff.io.ase import AtomsBatch
 
         if not self.props:
             raise TypeError("the dataset has no data yet")
