@@ -8,9 +8,6 @@ from nff.nn.modules import (
     SchNetConv,
     SchNetEdgeUpdate,
     NodeMultiTaskReadOut,
-    AuTopologyReadOut,
-    DoubleNodeConv,
-    SingleNodeConv,
 )
 
 from nff.nn.activations import shifted_softplus
@@ -19,7 +16,6 @@ from nff.nn.utils import get_default_readout
 from nff.utils.scatter import compute_grad
 import numpy as np
 
-STRING_TO_MODULE = {"double_node": DoubleNodeConv, "single_node": SingleNodeConv}
 
 
 class SchNet(nn.Module):
