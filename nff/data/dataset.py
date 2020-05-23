@@ -1,5 +1,3 @@
-"""Summary
-"""
 import torch
 import numbers
 import numpy as np
@@ -10,10 +8,11 @@ from copy import deepcopy
 from collections.abc import Iterable
 from sklearn.utils import shuffle as skshuffle
 from sklearn.model_selection import train_test_split
+from ase import Atoms
+from ase.neighborlist import neighbor_list
 from torch.utils.data import Dataset as TorchDataset
 from nff.data.sparse import sparsify_tensor
-from nff.data.topology import update_props_topologies
-from nff.data.graphs import reconstruct_atoms, get_neighbor_list
+from nff.data.graphs import reconstruct_atoms, get_neighbor_list, generate_subgraphs, DISTANCETHRESHOLDICT_Z 
 
 
 class Dataset(TorchDataset):
@@ -273,19 +272,6 @@ class Dataset(TorchDataset):
                 nxyz = atoms.get_nxyz()
             self.props['nxyz'][i] = torch.Tensor(nxyz)
 
-    def generate_topologies(self, bond_dic, use_1_4_pairs=True):
-        """
-        Generate topology for each Geom in the dataset.
-
-        Args:
-            bond_dic (dict): dictionary of bond lists for each smiles
-            use_1_4_pairs (bool): consider 1-4 pairs when generating non-bonded neighbor list
-        """
-        # use the bond list to generate topologies for the props
-        new_props = update_props_topologies(
-            props=self.props, bond_dic=bond_dic, use_1_4_pairs=use_1_4_pairs)
-        self.props = new_props
-
     def save(self, path):
         """Summary
 
@@ -293,6 +279,115 @@ class Dataset(TorchDataset):
             path (TYPE): Description
         """
         torch.save(self, path)
+
+    def gen_bond_stats(self):
+
+        bond_len_dict = {}
+        # generate bond statistics
+        for i in range(len(self.props['nxyz'])):
+            z = self.props['nxyz'][i][:, 0]
+            xyz = self.props['nxyz'][i][:, 1:4]
+            bond_list = self.props['bonds'][i]
+            bond_len = (xyz[bond_list[:,0]] - xyz[bond_list[:,1]]).pow(2).sum(-1).sqrt()[:, None]
+            
+            bond_type_list = torch.stack( (z[ bond_list[:,0] ], z[ bond_list[:,1] ]) ).t()
+            for i, bond in enumerate(bond_type_list):
+                bond = tuple( torch.LongTensor(sorted( bond ) ).tolist() )
+                if bond not in bond_len_dict.keys():
+                    bond_len_dict[bond] = [bond_len[i]]
+                else:
+                    bond_len_dict[bond].append(bond_len[i])
+
+        # compute bond len averages   
+        self.bond_len_dict = {key: torch.stack(bond_len_dict[key]).mean(0) for key in bond_len_dict.keys()} 
+
+        return self.bond_len_dict
+
+    def gen_bond_prior(self, cutoff, bond_len_dict=None):
+        from nff.io.ase import AtomsBatch
+
+        from nff.io.ase import AtomsBatch
+
+        if not self.props:
+            raise TypeError("the dataset has no data yet")
+
+        bond_dict = {}
+        bond_count_dict = {}
+        mol_idx_dict = {}
+
+        #---------This part can be simplified---------#
+        for i in range(len(self.props['nxyz'])):
+            z = self.props['nxyz'][i][:, 0]
+            xyz = self.props['nxyz'][i][:, 1:4]
+            
+            # generate arguments for ase Atoms boject 
+            ase_param = {"numbers": z,
+                         "positions":xyz,
+                         "pbc": True, 
+                         "cell": self.props['cell'][i] if 'cell' in self.props.keys() else None }
+            
+            atoms = Atoms(**ase_param)
+            sys_name = self.props['smiles'][i]
+            if sys_name not in bond_dict.keys():
+                print(sys_name)
+                i, j = neighbor_list("ij", atoms, DISTANCETHRESHOLDICT_Z)
+                
+                bond_list = torch.LongTensor(np.stack((i, j) ,axis=1)).tolist()
+                bond_dict[sys_name] = bond_list
+
+                # generate molecular graph 
+                # TODO: there is redundant code in generate_subgraphs 
+                subgraph_index = generate_subgraphs(atoms)
+                mol_idx_dict[sys_name] =  subgraph_index
+                
+        # generate topologies 
+        # TODO: include options to only generate bond topology 
+        self.generate_topologies(bond_dic=bond_dict)
+        if 'cell' in self.props.keys():
+            self.unwrap_xyz(mol_idx_dict)
+        #---------This part can be simplified---------#
+
+        # generate bond length dictionary if not given 
+        if not bond_len_dict:
+            bond_len_dict = self.gen_bond_stats()
+
+        # update bond len and offsets
+        all_bond_len = []
+        all_offsets = []
+        all_nbr_list = []
+        for i in range(len(self.props['nxyz'])):
+            z = self.props['nxyz'][i][:, 0]
+            xyz = self.props['nxyz'][i][:, 1:4]
+
+            bond_list = self.props['bonds'][i] 
+            bond_type_list = torch.stack( (z[ bond_list[:,0] ], z[ bond_list[:,1] ]) ).t()
+            bond_len_list = []
+            for bond in bond_type_list:
+                bond_type = tuple( torch.LongTensor(sorted( bond ) ).tolist() )
+                bond_len_list.append(bond_len_dict[bond_type])        
+            all_bond_len.append(torch.Tensor(bond_len_list).reshape(-1, 1))
+
+            # update offsets 
+            ase_param = {"numbers": z,
+                         "positions":xyz,
+                         "pbc": True, 
+                         "cutoff": cutoff,
+                         "cell": self.props['cell'][i] if 'cell' in self.props.keys() else None, 
+                         "nbr_torch": False}
+
+            # the coordinates have been unwrapped and try to results offsets 
+            atoms = AtomsBatch(**ase_param)
+            atoms.update_nbr_list()
+            all_offsets.append(atoms.offsets)
+            all_nbr_list.append(atoms.nbr_list)
+
+        # update 
+        self.props['bond_len'] = all_bond_len
+        self.props['offsets'] = all_offsets
+        self.props['nbr_list'] = all_nbr_list
+        self._check_dictionary(deepcopy(self.props))
+
+
 
     @classmethod
     def from_file(cls, path):
@@ -443,7 +538,7 @@ def concatenate_dict(*dicts):
 
         elif isinstance(value, list):
             return len(value)
-
+          
         return 1
 
     def get_length_of_values(dict_):
@@ -459,6 +554,10 @@ def concatenate_dict(*dicts):
 
         elif isinstance(value, list):
             return value
+
+        elif isinstance(value, torch.Tensor):
+            if value.type() == 'torch.LongTensor':
+                return [item for item in value]
 
         elif get_length(value) == 1:
             return [value]
@@ -479,7 +578,6 @@ def concatenate_dict(*dicts):
                 [None] * num_values if num_values > 1 else None
             )
             values += flatten_val(val)
-
         joint_dict[key] = values
 
     return joint_dict

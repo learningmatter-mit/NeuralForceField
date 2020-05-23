@@ -76,9 +76,26 @@ class TestConcatenate(unittest.TestCase):
         a = concatenate_dict(self.dict_a_list)
         self.assertEqual(a, self.dict_a_list)
 
+
     def test_concat_list_lists(self):
         dd = concatenate_dict(self.dict_d, self.dict_d)
         self.assertEqual(dd, self.dict_dd)
+
+    def test_concat_tensors(self):
+        t = {
+            'a': torch.Tensor([1]),
+            'b': torch.Tensor([2, 3]),
+            'c': torch.Tensor([[1, 0], [0, 1]]),
+        }
+        tt = {
+            'a': [torch.Tensor([1])] * 2,
+            'b': [torch.Tensor([2, 3])] * 2,
+            'c': [torch.Tensor([[1, 0], [0, 1]])] * 2,
+        }
+        concat = concatenate_dict(t, t)
+        for key, val in concat.items():
+            for i, j in zip(val, tt[key]):
+                self.assertTrue((i == j).all().item())
 
 
 class TestStats(unittest.TestCase):

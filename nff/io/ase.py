@@ -5,7 +5,7 @@ import torch
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 from ase.calculators.calculator import Calculator, all_changes
-
+import nff
 import nff.utils.constants as const
 from nff.nn.utils import torch_nbr_list
 from nff.utils.cuda import batch_to
@@ -93,7 +93,7 @@ class AtomsBatch(Atoms):
         """
 
         if self.nbr_torch:
-            edge_from, edge_to, offsets = torch_nbr_list(self, self.cutoff, device=self.device)
+            edge_from, edge_to, offsets = torch_nbr_list(self, self.cutoff, device=self.device, directed=False)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         else:
             self.wrap()
@@ -218,7 +218,7 @@ class BulkPhaseMaterials(Atoms):
         else:
             edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]].numpy()
+            offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]]#.numpy()
             nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
         if exclude_atoms_nbr_list:
@@ -238,7 +238,7 @@ class BulkPhaseMaterials(Atoms):
             offsets = offsets_mat[nbr_list[:,0], nbr_list[:,1], :]
 
         self.nbr_list = nbr_list
-        self.offsets = sparsify_array(offsets.dot(self.get_cell()))
+        self.offsets = sparsify_array(offsets.matmul( torch.Tensor(self.get_cell())))
         
     def get_list_atoms(self):
 
@@ -360,7 +360,9 @@ class NeuralFF(Calculator):
         device='cuda',
         **kwargs
     ):
+
         model = load_model(model_path)
+
         return cls(model, device, **kwargs)
 
 
