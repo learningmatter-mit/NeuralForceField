@@ -7,6 +7,7 @@ django.setup()
 import json
 import argparse
 
+from nff.utils.cuda import batch_to
 from nff.train.builders.model import load_model
 from neuralnet.utils.nff import create_bind_dataset
 
@@ -45,18 +46,22 @@ def get_loader(spec_ids,
     return loader
 
 
-def get_batch_fps(model_path, loader):
+def get_batch_fps(model_path, loader, device=0):
 
     model = load_model(model_path)
     dic = {}
 
     for batch in loader:
-        conf_fps = model.embedding_forward(batch)
+
+        batch = batch_to(device)
+
+        conf_fps = model.embedding_forward(batch
+            ).detach().cpu().numpy().tolist()
         smiles_list = batch['smiles']
 
         assert len(smiles_list) == len(conf_fps)
 
-        dic.update({smiles: conf_fp.tolist()
+        dic.update({smiles: conf_fp
                     for smiles, conf_fp in zip(smiles_list, conf_fps)})
 
     return dic
@@ -84,7 +89,7 @@ def main(thread_number,
 
     with open(species_path, "r") as f:
         all_spec_ids = json.load(f)
-        
+
     spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids, num_threads=num_threads,
                                thread_number=thread_number)
     loader = get_loader(spec_ids)
