@@ -14,8 +14,10 @@ TEMPLATE = """#!/bin/bash
 #SBATCH --no-requeue
 #SBATCH --signal=B:2@300
 
+source $HOME/.bashrc
 source activate htvs_2
 make_bwfp=/home/saxelrod/repo/nff/covid/NeuralForceField/scripts/make_bwfp.py
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH
 python $make_bwfp {} 100
 
 
