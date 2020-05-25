@@ -1,4 +1,10 @@
 import os
+import sys
+
+sys.path.insert(0, "/home/saxelrod/repo/htvs/master/htvs")
+sys.path.insert(0, "/home/saxelrod/repo/htvs/master/htvs/djangochem")
+sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
+
 import django
 
 os.environ["DJANGO_SETTINGS_MODULE"]="djangochem.settings.orgel"
@@ -211,7 +217,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('thread_number', type=int, help='Thread number')
     parser.add_argument('num_threads', type=int, help='Number of threads')
-    parser.add_argument('fp_type', type=str, help='Fingerprint type',
+    parser.add_argument('--fp_type', type=str, help='Fingerprint type',
         default='e3fp')
     arguments = parser.parse_args()
 
