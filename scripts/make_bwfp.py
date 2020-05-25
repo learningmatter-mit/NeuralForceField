@@ -6,9 +6,14 @@ django.setup()
 
 import json
 import argparse
+import numpy as np
+from e3fp.pipeline import fprints_from_mol
+
 
 from nff.utils.cuda import batch_to
 from nff.train.builders.model import load_model
+from nff.data.parallel import (split_dataset, rd_parallel,
+                               summarize_rd, rejoin_props)
 from neuralnet.utils.nff import create_bind_dataset
 
 METHOD_NAME = 'gfn2-xtb'
@@ -22,16 +27,60 @@ MODEL_PATH = "/pool001/saxelrod/data_from_fock/energy_model/best_model"
 BASE_SAVE_PATH = "/pool001/saxelrod/data_from_fock/fingerprint_datasets"
 NUM_THREADS = 100
 
+
+def get_rd_dataset(dataset,
+                   num_procs=10):
+
+    print("Featurizing dataset with {} parallel processes.".format(
+        num_procs))
+    datasets = split_dataset(dataset=dataset, num=num_procs)
+
+    print("Converting xyz to RDKit mols...")
+    datasets = rd_parallel(datasets)
+    summarize_rd(new_sets=datasets, first_set=dataset)
+
+    new_props = rejoin_props(datasets)
+    dataset.props = new_props
+
+    return dataset
+
+
+def get_e3fp(rd_dataset):
+
+    bwfp_dic = {}
+
+    for batch in rd_dataset:
+
+        mols = batch["rd_mols"]
+        weights = batch["weights"]
+        smiles = batch["smiles"]
+        fps = []
+
+        for mol, weight in enumerate(mols, weights):
+
+            mol.SetProp("_Name", "methane")
+            fp = fprints_from_mol(mol)
+            fp_array = np.zeros(len(fp[0]))
+            indices = fp[0].indices
+            fp_array[indices] = 1
+
+            fps.append(fp_array * weight)
+
+        bwfp_dic[smiles] = np.mean(fps)
+
+    return bwfp_dic
+
+
 def get_loader(spec_ids,
+               batch_size=3,
                geoms_per_spec=GEOMS_PER_SPEC,
                method_name=METHOD_NAME,
                method_descrip=METHOD_DESCRIP,
                group_name=GROUP_NAME):
-    
+
     print("Creating loader...")
 
     nbrlist_cutoff = 5.0
-    batch_size = 3
     num_workers = 2
 
     dataset, loader = create_bind_dataset(group_name=group_name,
@@ -47,7 +96,36 @@ def get_loader(spec_ids,
 
     print("Loader created.")
 
-    return loader
+    return dataset, loader
+
+def main_e3fp(thread_number,
+         num_threads=NUM_THREADS,
+         base_path=BASE_SAVE_PATH,
+         species_path=SPECIES_PATH):
+
+    print("Loading species ids...")
+
+    with open(species_path, "r") as f:
+        all_spec_ids = json.load(f)
+
+    spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids, num_threads=num_threads,
+                               thread_number=thread_number)
+
+    print("Got species IDs.")
+
+    dataset, _ = get_loader(spec_ids)
+    rd_dataset = get_rd_dataset(dataset,
+                   num_procs=10)
+    e3fp_dic = get_e3fp(rd_dataset)
+
+    save_path = os.path.join(base_path, "e3fp_bwfp_{}.json".format(thread_number))
+
+    print("Saving fingerprints...")
+
+    with open(save_path, "w") as f:
+        json.dumps(e3fp_dic, f, indent=4, sort_keys=True)
+
+    print("Complete!")
 
 
 def get_batch_fps(model_path, loader, device=0):
@@ -63,7 +141,7 @@ def get_batch_fps(model_path, loader, device=0):
         batch = batch_to(device)
 
         conf_fps = model.embedding_forward(batch
-            ).detach().cpu().numpy().tolist()
+                                           ).detach().cpu().numpy().tolist()
         smiles_list = batch['smiles']
 
         assert len(smiles_list) == len(conf_fps)
@@ -92,13 +170,19 @@ def get_subspec_ids(all_spec_ids, num_threads, thread_number):
 
     return spec_ids
 
+# ef3p rdkit fp
+# try to predict all the properties: num_confs, ensemble free energy,
+# average conformer energy, etc.
+# Nature scientific data if neurips doesn't take us
+#
+
 
 def main(thread_number,
          num_threads=NUM_THREADS,
          model_path=MODEL_PATH,
          base_path=BASE_SAVE_PATH,
          species_path=SPECIES_PATH):
-    
+
     print("Loading species ids...")
 
     with open(species_path, "r") as f:
@@ -121,11 +205,22 @@ def main(thread_number,
 
     print("Complete!")
 
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('thread_number', type=int, help='Thread number')
+    parser.add_argument('num_threads', type=int, help='Number of threads')
+    parser.add_argument('fp_type', type=str, help='Fingerprint type',
+        default='e3fp')
     arguments = parser.parse_args()
 
-    main(thread_number=arguments.thread_number)
+    if arguments.fp_type == 'e3fp':
+        main_e3fp(thread_number=arguments.thread_number,
+            num_threads=arguments.num_threads)
+    else:
+        main(thread_number=arguments.thread_number,
+            num_threads=arguments.num_threads)
+
+
 
