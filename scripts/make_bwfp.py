@@ -13,13 +13,13 @@ from neuralnet.utils.nff import create_bind_dataset
 
 METHOD_NAME = 'gfn2-xtb'
 METHOD_DESCRIP = 'Crest GFN2-xTB'
-SPECIES_PATH = "/home/saxelrod/data_from_fock/data/covid_data/spec_ids.json"
+SPECIES_PATH = "/pool001/saxelrod/data_from_fock/data/covid_data/spec_ids.json"
 GEOMS_PER_SPEC = 10
 GROUP_NAME = 'covid'
 METHOD_NAME = 'molecular_mechanics_mmff94'
 METHOD_DESCRIP = 'MMFF conformer.'
-MODEL_PATH = "/home/saxelrod/data_from_fock/energy_model/best_model"
-BASE_SAVE_PATH = "/home/saxelrod/data_from_fock/fingerprint_datasets"
+MODEL_PATH = "/pool001/saxelrod/data_from_fock/energy_model/best_model"
+BASE_SAVE_PATH = "/pool001/saxelrod/data_from_fock/fingerprint_datasets"
 NUM_THREADS = 100
 
 def get_loader(spec_ids,
