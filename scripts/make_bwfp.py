@@ -35,10 +35,13 @@ METHOD_DESCRIP = 'MMFF conformer.'
 MODEL_PATH = "/pool001/saxelrod/data_from_fock/energy_model/best_model"
 BASE_SAVE_PATH = "/pool001/saxelrod/data_from_fock/fingerprint_datasets"
 NUM_THREADS = 100
+COVID_TAG = "sars_cov_one_cl_protease_active"
 
 
 def get_rd_dataset(dataset,
-                   num_procs=10):
+                   thread_number,
+                   num_procs=10, 
+                   base_save_path=BASE_SAVE_PATH):
 
     print("Featurizing dataset with {} parallel processes.".format(
         num_procs))
@@ -51,7 +54,8 @@ def get_rd_dataset(dataset,
     new_props = rejoin_props(datasets)
     dataset.props = new_props
 
-    dataset.save("/home/saxelrod/rd.pth.tar")
+    save_path = os.path.join(base_save_path, "crest_dset_{}.pth.tar".format(thread_number))
+    dataset.save(save_path)
 
     return dataset
 
@@ -104,7 +108,7 @@ def get_loader(spec_ids,
                                           molsets=None,
                                           exclude_molsets=None,
                                           spec_ids=spec_ids,
-                                          bind_tags=[])
+                                          bind_tags=[COVID_TAG])
 
     print("Loader created.")
     connections.close_all()
@@ -128,7 +132,8 @@ def main_e3fp(thread_number,
 
     dataset, _ = get_loader(spec_ids)
     rd_dataset = get_rd_dataset(dataset,
-                  num_procs=10)
+                  num_procs=10,
+                  thread_number=thread_number)
 
     e3fp_dic = get_e3fp(rd_dataset)
     save_path = os.path.join(base_path, "e3fp_bwfp_{}.json".format(thread_number))
