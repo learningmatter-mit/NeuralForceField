@@ -27,6 +27,8 @@ def get_loader(spec_ids,
                method_name=METHOD_NAME,
                method_descrip=METHOD_DESCRIP,
                group_name=GROUP_NAME):
+    
+    print("Creating loader...")
 
     nbrlist_cutoff = 5.0
     batch_size = 3
@@ -43,15 +45,20 @@ def get_loader(spec_ids,
                                           exclude_molsets=None,
                                           spec_ids=spec_ids)
 
+    print("Loader created.")
+
     return loader
 
 
 def get_batch_fps(model_path, loader, device=0):
 
+    print("Getting fingerprints...")
+
     model = load_model(model_path)
     dic = {}
+    loader_len = len(loader)
 
-    for batch in loader:
+    for i, batch in enumerate(loader):
 
         batch = batch_to(device)
 
@@ -63,6 +70,11 @@ def get_batch_fps(model_path, loader, device=0):
 
         dic.update({smiles: conf_fp
                     for smiles, conf_fp in zip(smiles_list, conf_fps)})
+
+        pct = int(i / loader_len) * 100
+        print("%d%% done" % pct)
+
+    print("Finished getting fingerprints.")
 
     return dic
 
@@ -86,18 +98,28 @@ def main(thread_number,
          model_path=MODEL_PATH,
          base_path=BASE_SAVE_PATH,
          species_path=SPECIES_PATH):
+    
+    print("Loading species ids...")
 
     with open(species_path, "r") as f:
         all_spec_ids = json.load(f)
 
     spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids, num_threads=num_threads,
                                thread_number=thread_number)
+
+    print("Got species IDs.")
+
     loader = get_loader(spec_ids)
     fp_dic = get_batch_fps(model_path, loader)
 
     save_path = os.path.join(base_path, "bwfp_{}.json".format(thread_number))
+
+    print("Saving fingerprints...")
+
     with open(save_path, "w") as f:
         json.dumps(fp_dic, f, indent=4, sort_keys=True)
+
+    print("Complete!")
 
 if __name__ == "__main__":
 
