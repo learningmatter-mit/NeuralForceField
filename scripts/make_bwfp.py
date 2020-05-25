@@ -10,6 +10,7 @@ import django
 os.environ["DJANGO_SETTINGS_MODULE"]="djangochem.settings.orgel"
 django.setup()
 
+from django.db import connections
 import json
 import argparse
 import numpy as np
@@ -20,7 +21,9 @@ from nff.utils.cuda import batch_to
 from nff.train.builders.model import load_model
 from nff.data.parallel import (split_dataset, rd_parallel,
                                summarize_rd, rejoin_props)
+from nff.data import Dataset
 from neuralnet.utils.nff import create_bind_dataset
+
 
 METHOD_NAME = 'gfn2-xtb'
 METHOD_DESCRIP = 'Crest GFN2-xTB'
@@ -48,6 +51,8 @@ def get_rd_dataset(dataset,
     new_props = rejoin_props(datasets)
     dataset.props = new_props
 
+    dataset.save("/home/saxelrod/rd.pth.tar")
+
     return dataset
 
 
@@ -62,17 +67,17 @@ def get_e3fp(rd_dataset):
         smiles = batch["smiles"]
         fps = []
 
-        for mol, weight in enumerate(mols, weights):
+        for mol, weight in zip(mols, weights):
 
-            mol.SetProp("_Name", "methane")
-            fp = fprints_from_mol(mol)
+            mol.SetProp("_Name", smiles)
+            fprint_params = {"bits": 1024}
+            fp = fprints_from_mol(mol, fprint_params=fprint_params)
             fp_array = np.zeros(len(fp[0]))
             indices = fp[0].indices
             fp_array[indices] = 1
 
-            fps.append(fp_array * weight)
-
-        bwfp_dic[smiles] = np.mean(fps)
+            fps.append(fp_array * weight.item())
+        bwfp_dic[smiles] = np.array(fps).mean(0).tolist()
 
     return bwfp_dic
 
@@ -98,9 +103,11 @@ def get_loader(spec_ids,
                                           num_workers=num_workers,
                                           molsets=None,
                                           exclude_molsets=None,
-                                          spec_ids=spec_ids)
+                                          spec_ids=spec_ids,
+                                          bind_tags=[])
 
     print("Loader created.")
+    connections.close_all()
 
     return dataset, loader
 
@@ -121,15 +128,15 @@ def main_e3fp(thread_number,
 
     dataset, _ = get_loader(spec_ids)
     rd_dataset = get_rd_dataset(dataset,
-                   num_procs=10)
-    e3fp_dic = get_e3fp(rd_dataset)
+                  num_procs=10)
 
+    e3fp_dic = get_e3fp(rd_dataset)
     save_path = os.path.join(base_path, "e3fp_bwfp_{}.json".format(thread_number))
 
     print("Saving fingerprints...")
 
     with open(save_path, "w") as f:
-        json.dumps(e3fp_dic, f, indent=4, sort_keys=True)
+        json.dump(e3fp_dic, f, indent=4, sort_keys=True)
 
     print("Complete!")
 
