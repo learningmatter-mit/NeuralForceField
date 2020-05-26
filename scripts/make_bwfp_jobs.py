@@ -18,7 +18,7 @@ source $HOME/.bashrc
 source activate htvs_2
 make_bwfp=/home/saxelrod/repo/nff/covid/NeuralForceField/scripts/make_bwfp.py
 export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH
-python $make_bwfp {} 100
+python $make_bwfp {} 100 --num_confs 10
 
 
 """

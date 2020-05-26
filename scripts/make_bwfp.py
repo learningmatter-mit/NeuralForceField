@@ -6,9 +6,7 @@ sys.path.insert(0, "/home/saxelrod/repo/htvs/master/htvs/djangochem")
 sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
 
 import django
-
 os.environ["DJANGO_SETTINGS_MODULE"]="djangochem.settings.orgel"
-django.setup()
 
 from django.db import connections
 import json
@@ -21,18 +19,15 @@ from nff.utils.cuda import batch_to
 from nff.train.builders.model import load_model
 from nff.data.parallel import (split_dataset, rd_parallel,
                                summarize_rd, rejoin_props)
-from neuralnet.utils.nff import create_bind_dataset
-
+from nff.data import Dataset
 
 METHOD_NAME = 'gfn2-xtb'
 METHOD_DESCRIP = 'Crest GFN2-xTB'
 SPECIES_PATH = "/pool001/saxelrod/data_from_fock/data/covid_data/spec_ids.json"
 GEOMS_PER_SPEC = 10
 GROUP_NAME = 'covid'
-METHOD_NAME = 'molecular_mechanics_mmff94'
-METHOD_DESCRIP = 'MMFF conformer.'
 MODEL_PATH = "/pool001/saxelrod/data_from_fock/energy_model/best_model"
-BASE_SAVE_PATH = "/pool001/saxelrod/data_from_fock/fingerprint_datasets"
+BASE_SAVE_PATH = "/pool001/saxelrod/data_from_fock/crest_fingerprint_datasets"
 NUM_THREADS = 100
 COVID_TAG = "sars_cov_one_cl_protease_active"
 
@@ -60,7 +55,7 @@ def get_rd_dataset(dataset,
     return dataset
 
 
-def get_e3fp(rd_dataset):
+def get_e3fp(rd_dataset, num_confs):
 
     bwfp_dic = {}
 
@@ -69,12 +64,16 @@ def get_e3fp(rd_dataset):
         mols = batch["rd_mols"]
         weights = batch["weights"]
         smiles = batch["smiles"]
+        sorted_idx = np.argsort(-weights.numpy()).reshape(-1)[:num_confs]
         fps = []
 
-        for mol, weight in zip(mols, weights):
+        for idx in sorted_idx:
+            
+            weight = weights[idx] / weights[sorted_idx].sum()
+            mol = mols[idx]
 
             mol.SetProp("_Name", smiles)
-            fprint_params = {"bits": 1024}
+            fprint_params = {"bits": 2048}
             fp = fprints_from_mol(mol, fprint_params=fprint_params)
             fp_array = np.zeros(len(fp[0]))
             indices = fp[0].indices
@@ -92,6 +91,9 @@ def get_loader(spec_ids,
                method_name=METHOD_NAME,
                method_descrip=METHOD_DESCRIP,
                group_name=GROUP_NAME):
+
+    django.setup()
+    from neuralnet.utils.nff import create_bind_dataset
 
     print("Creating loader...")
 
@@ -117,6 +119,7 @@ def get_loader(spec_ids,
 
 
 def main_e3fp(thread_number,
+              num_confs,
               num_threads=NUM_THREADS,
               base_path=BASE_SAVE_PATH,
               species_path=SPECIES_PATH):
@@ -126,20 +129,29 @@ def main_e3fp(thread_number,
     with open(species_path, "r") as f:
         all_spec_ids = json.load(f)
 
-    spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids,
-                               num_threads=num_threads,
-                               thread_number=thread_number)
+    data_path = os.path.join(
+        base_path, "crest_dset_{}.pth.tar".format(thread_number))
 
-    print("Got species IDs.")
+    if os.path.isfile(data_path):
+       	rd_dataset = Dataset.from_file(data_path)
+        # props = {key: val[:10] for key, val in rd_dataset.props.items()}
+        # rd_dataset.props = props
+    else:
+        spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids,
+                                   num_threads=num_threads,
+                                   thread_number=thread_number)
 
-    dataset, _ = get_loader(spec_ids)
-    rd_dataset = get_rd_dataset(dataset,
-                                num_procs=10,
-                                thread_number=thread_number)
+        print("Got species IDs.")
 
-    e3fp_dic = get_e3fp(rd_dataset)
+        dataset, _ = get_loader(spec_ids)
+        rd_dataset = get_rd_dataset(dataset,
+                                    num_procs=10,
+                                    thread_number=thread_number)
+
+    e3fp_dic = get_e3fp(rd_dataset, num_confs)
     save_path = os.path.join(
-        base_path, "e3fp_bwfp_{}.json".format(thread_number))
+        base_path, "e3fp_bwfp_{}_{}_confs.json".format(thread_number,
+       num_confs))
 
     print("Saving fingerprints...")
 
@@ -230,11 +242,14 @@ if __name__ == "__main__":
     parser.add_argument('num_threads', type=int, help='Number of threads')
     parser.add_argument('--fp_type', type=str, help='Fingerprint type',
                         default='e3fp')
+    parser.add_argument('--num_confs', type=int, help='Number of conformers',
+                        default=10)
     arguments = parser.parse_args()
 
     if arguments.fp_type == 'e3fp':
         main_e3fp(thread_number=arguments.thread_number,
-                  num_threads=arguments.num_threads)
+                  num_threads=arguments.num_threads,
+                  num_confs=arguments.num_confs)
     else:
         main(thread_number=arguments.thread_number,
              num_threads=arguments.num_threads)

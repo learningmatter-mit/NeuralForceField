@@ -364,14 +364,11 @@ def force_to_energy_grad(dataset):
 def to_tensor(x, stack=False):
     """
     Converts input `x` to torch.Tensor.
-
     Args:
         x (list of lists): input to be converted. Can be: number, string, list, array, tensor
         stack (bool): if True, concatenates torch.Tensors in the batching dimension
-
     Returns:
         torch.Tensor or list, depending on the type of x
-
     Raises:
         TypeError: Description
     """
@@ -428,7 +425,6 @@ def concatenate_dict(*dicts):
     """Concatenates dictionaries as long as they have the same keys.
         If one dictionary has one key that the others do not have,
         the dictionaries lacking the key will have that key replaced by None.
-
     Args:
         *dicts: Description
         *dicts (any number of dictionaries)
@@ -442,10 +438,8 @@ def concatenate_dict(*dicts):
                     'energy': [...]
                 }
                 dicts = [dict_1, dict_2]
-
     Returns:
         TYPE: Description
-
     """
 
     assert all([type(d) == dict for d in dicts]), \
@@ -453,13 +447,18 @@ def concatenate_dict(*dicts):
 
     keys = set(sum([list(d.keys()) for d in dicts], []))
 
-    def get_length(value):
+    def is_list_of_lists(value):
         if isinstance(value, list):
-            if isinstance(value[0], list):
-                return 1
-            else:
-                return len(value)
+            return isinstance(value[0], list)
+        return False
 
+    def get_length(value):
+        if is_list_of_lists(value):
+            return 1
+
+        elif isinstance(value, list):
+            return len(value)
+          
         return 1
 
     def get_length_of_values(dict_):
@@ -470,13 +469,20 @@ def concatenate_dict(*dicts):
             a torch.Tensor, return its flattened version
             to be appended to a list of values
         """
-        if isinstance(value, list):
+        if is_list_of_lists(value):
+            return [value]
+
+        elif isinstance(value, list):
             return value
+
+        elif isinstance(value, torch.Tensor):
+            if value.type() == 'torch.LongTensor':
+                return [item for item in value]
 
         elif get_length(value) == 1:
             return [value]
 
-        return value
+        return [value]
 
     # we have to see how many values the properties of each dictionary has.
     values_per_dict = [get_length_of_values(d) for d in dicts]
@@ -492,7 +498,6 @@ def concatenate_dict(*dicts):
                 [None] * num_values if num_values > 1 else None
             )
             values += flatten_val(val)
-
         joint_dict[key] = values
 
     return joint_dict
