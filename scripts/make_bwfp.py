@@ -13,13 +13,15 @@ import json
 import argparse
 import numpy as np
 from e3fp.pipeline import fprints_from_mol
-
+import copy
 
 from nff.utils.cuda import batch_to
 from nff.train.builders.model import load_model
 from nff.data.parallel import (split_dataset, rd_parallel,
                                summarize_rd, rejoin_props)
 from nff.data import Dataset
+from nff.data import Dataset, collate_dicts
+from torch.utils.data import DataLoader
 
 METHOD_NAME = 'gfn2-xtb'
 METHOD_DESCRIP = 'Crest GFN2-xTB'
@@ -117,6 +119,22 @@ def get_loader(spec_ids,
 
     return dataset, loader
 
+def dataset_getter(data_path, num_threads, thread_number, all_spec_ids):
+    if os.path.isfile(data_path):
+        rd_dataset = Dataset.from_file(data_path)
+    else:
+        spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids,
+                                   num_threads=num_threads,
+                                   thread_number=thread_number)
+
+        print("Got species IDs.")
+
+        dataset, _ = get_loader(spec_ids)
+        rd_dataset = get_rd_dataset(dataset,
+                                    num_procs=10,
+                                    thread_number=thread_number)
+    return rd_dataset
+
 
 def main_e3fp(thread_number,
               num_confs,
@@ -131,23 +149,8 @@ def main_e3fp(thread_number,
 
     data_path = os.path.join(
         base_path, "crest_dset_{}.pth.tar".format(thread_number))
-
-    if os.path.isfile(data_path):
-       	rd_dataset = Dataset.from_file(data_path)
-        # props = {key: val[:10] for key, val in rd_dataset.props.items()}
-        # rd_dataset.props = props
-    else:
-        spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids,
-                                   num_threads=num_threads,
-                                   thread_number=thread_number)
-
-        print("Got species IDs.")
-
-        dataset, _ = get_loader(spec_ids)
-        rd_dataset = get_rd_dataset(dataset,
-                                    num_procs=10,
-                                    thread_number=thread_number)
-
+    rd_dataset = dataset_getter(data_path, num_threads, thread_number,
+                                all_spec_ids)
     e3fp_dic = get_e3fp(rd_dataset, num_confs)
     save_path = os.path.join(
         base_path, "e3fp_bwfp_{}_{}_confs.json".format(thread_number,
@@ -165,30 +168,30 @@ def get_batch_fps(model_path, loader, device=0):
 
     print("Getting fingerprints...")
 
-    model = load_model(model_path)
+    model = load_model(model_path).to(device)
     dic = {}
     loader_len = len(loader)
 
     for i, batch in enumerate(loader):
 
-        batch = batch_to(device)
+        batch = batch_to(batch, device)
 
-        conf_fps, _ = model.embedding_forward(batch
-                                           ).detach().cpu().numpy().tolist()
         smiles_list = batch['smiles']
+
+        conf_fps, _ = model.embedding_forward(batch)
+        conf_fps = conf_fps.detach().cpu().numpy().tolist()
 
         assert len(smiles_list) == len(conf_fps)
 
         dic.update({smiles: conf_fp
                     for smiles, conf_fp in zip(smiles_list, conf_fps)})
 
-        pct = int(i / loader_len) * 100
+        pct = int(i / loader_len * 100)
         print("%d%% done" % pct)
 
     print("Finished getting fingerprints.")
 
     return dic
-
 
 def get_subspec_ids(all_spec_ids, num_threads, thread_number):
 
@@ -203,8 +206,8 @@ def get_subspec_ids(all_spec_ids, num_threads, thread_number):
 
     return spec_ids
 
-
 def main(thread_number,
+         num_confs=10,
          num_threads=NUM_THREADS,
          model_path=MODEL_PATH,
          base_path=BASE_SAVE_PATH,
@@ -215,22 +218,28 @@ def main(thread_number,
     with open(species_path, "r") as f:
         all_spec_ids = json.load(f)
 
-    spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids,
-                               num_threads=num_threads,
-                               thread_number=thread_number)
+    data_path = os.path.join(
+        base_path, "crest_dset_{}.pth.tar".format(thread_number))
 
-    print("Got species IDs.")
+    rd_dataset = dataset_getter(data_path, num_threads, thread_number,
+                                all_spec_ids)
 
-    loader = get_loader(spec_ids)
+    no_rdmol_prop = {key: val for key, val in rd_dataset.props.items()
+                     if 'rd_mol' not in key}
+    no_rdmol_dset = copy.deepcopy(rd_dataset)
+    no_rdmol_dset.props = no_rdmol_prop
+
+
+    loader = DataLoader(no_rdmol_dset, batch_size=50, collate_fn=collate_dicts)
     fp_dic = get_batch_fps(model_path, loader)
 
     save_path = os.path.join(
-        base_path, "bwfp_{}_schnet.json".format(thread_number))
+        base_path, "schnet_bwfp_{}_{}_confs.json".format(thread_number, num_confs))
 
     print("Saving fingerprints...")
 
     with open(save_path, "w") as f:
-        json.dumps(fp_dic, f, indent=4, sort_keys=True)
+        json.dump(fp_dic, f, indent=4, sort_keys=True)
 
     print("Complete!")
 
