@@ -21,7 +21,6 @@ from nff.utils.cuda import batch_to
 from nff.train.builders.model import load_model
 from nff.data.parallel import (split_dataset, rd_parallel,
                                summarize_rd, rejoin_props)
-from nff.data import Dataset
 from neuralnet.utils.nff import create_bind_dataset
 
 
@@ -40,7 +39,7 @@ COVID_TAG = "sars_cov_one_cl_protease_active"
 
 def get_rd_dataset(dataset,
                    thread_number,
-                   num_procs=10, 
+                   num_procs=10,
                    base_save_path=BASE_SAVE_PATH):
 
     print("Featurizing dataset with {} parallel processes.".format(
@@ -54,7 +53,8 @@ def get_rd_dataset(dataset,
     new_props = rejoin_props(datasets)
     dataset.props = new_props
 
-    save_path = os.path.join(base_save_path, "crest_dset_{}.pth.tar".format(thread_number))
+    save_path = os.path.join(
+        base_save_path, "crest_dset_{}.pth.tar".format(thread_number))
     dataset.save(save_path)
 
     return dataset
@@ -115,28 +115,31 @@ def get_loader(spec_ids,
 
     return dataset, loader
 
+
 def main_e3fp(thread_number,
-         num_threads=NUM_THREADS,
-         base_path=BASE_SAVE_PATH,
-         species_path=SPECIES_PATH):
+              num_threads=NUM_THREADS,
+              base_path=BASE_SAVE_PATH,
+              species_path=SPECIES_PATH):
 
     print("Loading species ids...")
 
     with open(species_path, "r") as f:
         all_spec_ids = json.load(f)
 
-    spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids, num_threads=num_threads,
+    spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids,
+                               num_threads=num_threads,
                                thread_number=thread_number)
 
     print("Got species IDs.")
 
     dataset, _ = get_loader(spec_ids)
     rd_dataset = get_rd_dataset(dataset,
-                  num_procs=10,
-                  thread_number=thread_number)
+                                num_procs=10,
+                                thread_number=thread_number)
 
     e3fp_dic = get_e3fp(rd_dataset)
-    save_path = os.path.join(base_path, "e3fp_bwfp_{}.json".format(thread_number))
+    save_path = os.path.join(
+        base_path, "e3fp_bwfp_{}.json".format(thread_number))
 
     print("Saving fingerprints...")
 
@@ -158,7 +161,7 @@ def get_batch_fps(model_path, loader, device=0):
 
         batch = batch_to(device)
 
-        conf_fps = model.embedding_forward(batch
+        conf_fps, _ = model.embedding_forward(batch
                                            ).detach().cpu().numpy().tolist()
         smiles_list = batch['smiles']
 
@@ -188,12 +191,6 @@ def get_subspec_ids(all_spec_ids, num_threads, thread_number):
 
     return spec_ids
 
-# ef3p rdkit fp
-# try to predict all the properties: num_confs, ensemble free energy,
-# average conformer energy, etc.
-# Nature scientific data if neurips doesn't take us
-#
-
 
 def main(thread_number,
          num_threads=NUM_THREADS,
@@ -206,7 +203,8 @@ def main(thread_number,
     with open(species_path, "r") as f:
         all_spec_ids = json.load(f)
 
-    spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids, num_threads=num_threads,
+    spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids,
+                               num_threads=num_threads,
                                thread_number=thread_number)
 
     print("Got species IDs.")
@@ -214,7 +212,8 @@ def main(thread_number,
     loader = get_loader(spec_ids)
     fp_dic = get_batch_fps(model_path, loader)
 
-    save_path = os.path.join(base_path, "bwfp_{}.json".format(thread_number))
+    save_path = os.path.join(
+        base_path, "bwfp_{}_schnet.json".format(thread_number))
 
     print("Saving fingerprints...")
 
@@ -230,15 +229,12 @@ if __name__ == "__main__":
     parser.add_argument('thread_number', type=int, help='Thread number')
     parser.add_argument('num_threads', type=int, help='Number of threads')
     parser.add_argument('--fp_type', type=str, help='Fingerprint type',
-        default='e3fp')
+                        default='e3fp')
     arguments = parser.parse_args()
 
     if arguments.fp_type == 'e3fp':
         main_e3fp(thread_number=arguments.thread_number,
-            num_threads=arguments.num_threads)
+                  num_threads=arguments.num_threads)
     else:
         main(thread_number=arguments.thread_number,
-            num_threads=arguments.num_threads)
-
-
-
+             num_threads=arguments.num_threads)
