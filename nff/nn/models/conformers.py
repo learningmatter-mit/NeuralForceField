@@ -8,7 +8,7 @@ from nff.nn.modules import (
 )
 from nff.nn.graphop import conf_pool
 from nff.nn.utils import construct_sequential
-
+from nff.utils.scatter import compute_grad
 
 """
 Model that uses a representation of a molecule in terms of different 3D
@@ -296,14 +296,31 @@ class WeightedConformers(nn.Module):
             conf_fps.append(conf_fp)
 
         conf_fps = torch.stack(conf_fps)
-        results = self.readout(conf_fps)
+        # results = self.readout(conf_fps)
+
+        return conf_fps, xyz
+
+    def add_grad(self, batch, results, xyz):
+
+        batch_keys = batch.keys()
+        result_grad_keys = [key + "_grad" for key in results.keys()]
+        for key in batch_keys:
+            if key in result_grad_keys:
+                base_result = results[key.replace("_grad", "")]
+                results[key] = compute_grad(inputs=xyz,
+                                            output=base_result)
 
         return results
 
     def forward(self, batch, xyz=None, **kwargs):
 
         if not self.batch_embeddings:
-            return self.embedding_forward(batch, xyz, **kwargs)
+            
+            conf_fps, xyz = self.embedding_forward(batch, xyz, **kwargs)
+            results = self.readout(conf_fps)
+            results = self.add_grad(batch=batch, results=results, xyz=xyz)
+
+            return results
 
         num_specs = len(batch["num_atoms"])
         batch_fp = batch["fingerprint"]
@@ -311,7 +328,7 @@ class WeightedConformers(nn.Module):
 
         extra_feats = torch.stack(self.add_features(batch=batch, **kwargs))
 
-        if extra_feats.shape[-1] !=0 :
+        if extra_feats.shape[-1] != 0:
             final_fp = torch.cat((conf_fps, extra_feats), axis=1)
         else:
             final_fp = conf_fps
