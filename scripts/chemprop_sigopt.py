@@ -4,7 +4,7 @@ import os
 import numpy as np
 import subprocess
 import json
-from threading import Thread
+from multiprocessing import Process
 
 TOKEN = "KTNMWLZQYQSNCHVHPGIWSAVXEWLEWABZAHIJOLXKWAHQDRQE"
 BASE_SAVE_PATH = ("/pool001/saxelrod/data_from_fock/"
@@ -143,6 +143,7 @@ def run_chemprop(csv_path,
 
     for cmd in cmds:
         outputs.append(subprocess.check_output([cmd], shell=True).decode())
+    	
 
     return outputs
 
@@ -212,7 +213,6 @@ def main(feats=FEATS,
          device=0,
          token=TOKEN):
 
-    threads = []
     for feat_name in feats:
         for prop_name in props:
             for features_only in [True, False]:
@@ -224,20 +224,14 @@ def main(feats=FEATS,
 
                 save_dir = os.path.join(base_chemprop_path, iter_name)
                 conn, experiment = make_expt(name=iter_name, token=token)
-                thread = Thread(target=run_expt(conn,
-                                                experiment,
-                                                feat_name=feat_name,
-                                                prop_name=prop_name,
-                                                resave_feats=resave_feats,
-                                                resave_csv=resave_csv,
-                                                base_save_path=base_save_path,
-                                                device=device,
-                                                save_dir=save_dir))
 
-                thread.start()
-                threads.append(thread)
-
-    for thread in threads:
-        thread.join()
-
-
+                p = Process(target=run_expt, args=(conn, experiment),
+                            kwargs={dict(feat_name=feat_name,
+                                         prop_name=prop_name,
+                                         resave_feats=resave_feats,
+                                         resave_csv=resave_csv,
+                                         base_save_path=base_save_path,
+                                         device=device,
+                                         save_dir=save_dir)})
+                p.start()
+                p.join()
