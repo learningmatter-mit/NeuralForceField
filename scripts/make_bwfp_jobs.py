@@ -9,8 +9,8 @@ TEMPLATE = """#!/bin/bash
 #SBATCH -n 10
 #SBATCH -N 1
 #SBATCH -t 4300
-#SBATCH -p sched_mit_rafagb
-#SBATCH --mem=40G
+#SBATCH -p sched_mit_rafagb,sched_opportunist
+#SBATCH --mem=1G
 #SBATCH --no-requeue
 #SBATCH --signal=B:2@300
 
@@ -18,7 +18,7 @@ source $HOME/.bashrc
 source activate htvs_4
 make_bwfp=/home/saxelrod/repo/nff/covid/NeuralForceField/scripts/make_bwfp.py
 export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH
-python $make_bwfp {} 100 --num_confs 10
+python $make_bwfp {} 500 --num_confs 10
 
 
 """

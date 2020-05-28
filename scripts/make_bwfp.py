@@ -33,7 +33,7 @@ BASE_SAVE_PATH = ("/pool001/saxelrod/data_from_fock"
 NUM_THREADS = 100
 NUM_CONFS = 10
 FP_LENGTH = 1024
-NUM_PROCS = 10
+NUM_PROCS = 5
 SAVE_FEATURES = ['mean_e3fp', 'morgan', 'model_fp']
 CSV_PROPS = ['sars_cov_one_pl_protease_active', 'ecoli_inhibitor',
              'pseudomonas_active', 'sars_cov_one_cl_protease_active',
