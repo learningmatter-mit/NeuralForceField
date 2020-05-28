@@ -27,7 +27,7 @@ METHOD_DESCRIP = 'Crest GFN2-xTB'
 SPECIES_PATH = "/pool001/saxelrod/data_from_fock/data/covid_data/spec_ids.json"
 GROUP_NAME = 'covid'
 MODEL_PATH = "/pool001/saxelrod/data_from_fock/energy_model/best_model"
-BASE_SAVE_PATH = "/pool001/saxelrod/data_from_fock/crest_fingerprint_datasets"
+BASE_SAVE_PATH = "/pool001/saxelrod/data_from_fock/combined_fingerprint_datasets"
 
 NUM_THREADS = 100
 NUM_CONFS = 10
