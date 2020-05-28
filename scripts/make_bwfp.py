@@ -27,14 +27,16 @@ METHOD_DESCRIP = 'Crest GFN2-xTB'
 SPECIES_PATH = "/pool001/saxelrod/data_from_fock/data/covid_data/spec_ids.json"
 GROUP_NAME = 'covid'
 MODEL_PATH = "/pool001/saxelrod/data_from_fock/energy_model/best_model"
-BASE_SAVE_PATH = "/pool001/saxelrod/data_from_fock/combined_fingerprint_datasets"
+BASE_SAVE_PATH = ("/pool001/saxelrod/data_from_fock"
+                  "/combined_fingerprint_datasets")
 
 NUM_THREADS = 100
 NUM_CONFS = 10
 FP_LENGTH = 1024
 SAVE_FEATURES = ['mean_e3fp', 'morgan', 'model_fp']
-CSV_PROPS = ['sars_cov_one_pl_protease_active', 'ecoli_inhibitor', 'pseudomonas_active',
-             'sars_cov_one_cl_protease_active', 'ensembleentropy', 'ensemblefreeenergy',
+CSV_PROPS = ['sars_cov_one_pl_protease_active', 'ecoli_inhibitor',
+             'pseudomonas_active', 'sars_cov_one_cl_protease_active',
+             'ensembleentropy', 'ensemblefreeenergy',
              'poplowestpct', 'totalconfs', 'ensembleenergy',
              'uniqueconfs', 'lowestenergy']
 
@@ -232,7 +234,8 @@ def save_features(rd_dataset, thread_number, base_path=BASE_SAVE_PATH):
         np_features = features.numpy()
 
         save_pth = "{}_{}.npz".format(feature_name, str(thread_number))
-        np.savez_compressed(save_pth, features=np_features)
+        np.savez_compressed(save_pth, features=np_features,
+                            smiles=rd_dataset.props["smiles"])
 
 
 def main(thread_number,
@@ -280,5 +283,3 @@ if __name__ == "__main__":
          num_threads=arguments.num_threads,
          prefix=arguments.prefix,
          get_model_fp=arguments.get_model_fp)
-
-
