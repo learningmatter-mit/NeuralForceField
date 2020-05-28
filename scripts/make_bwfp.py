@@ -100,7 +100,7 @@ def get_rd_dataset(dataset,
 
 def get_bind_dataset(spec_ids,
                      batch_size=3,
-                     geoms_per_spec=GEOMS_PER_SPEC,
+                     geoms_per_spec=NUM_CONFS,
                      method_name=METHOD_NAME,
                      method_descrip=METHOD_DESCRIP,
                      group_name=GROUP_NAME):
