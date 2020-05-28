@@ -43,7 +43,8 @@ def get_rd_dataset(dataset,
                    thread_number,
                    num_procs=10,
                    base_save_path=BASE_SAVE_PATH,
-                   model_path=None):
+                   model_path=None,
+                   get_model_fp=False):
 
     if 'rd_mols' not in dataset.props:
 
@@ -84,7 +85,7 @@ def get_rd_dataset(dataset,
         dataset.add_morgan(FP_LENGTH)
         print("Completed adding Morgan fingerprint.")
 
-    if 'model_fp' not in dataset.props:
+    if 'model_fp' not in dataset.props and get_model_fp:
 
         print("Getting fingerprints from trained model...")
         add_model_fps(dataset, model_path)
@@ -134,13 +135,15 @@ def dataset_getter(data_path,
                    num_threads,
                    thread_number,
                    all_spec_ids,
-                   model_path):
+                   model_path
+                   get_model_fp):
     if os.path.isfile(data_path):
         rd_dataset = Dataset.from_file(data_path)
         rd_dataset = get_rd_dataset(rd_dataset,
                                     num_procs=10,
                                     thread_number=thread_number,
-                                    model_path=model_path)
+                                    model_path=model_path,
+                                    get_model_fp=get_model_fp)
 
     else:
         spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids,
@@ -152,7 +155,8 @@ def dataset_getter(data_path,
         dataset, _ = get_bind_dataset(spec_ids)
         rd_dataset = get_rd_dataset(dataset,
                                     num_procs=10,
-                                    thread_number=thread_number)
+                                    thread_number=thread_number,
+                                    get_model_fp=get_model_fp)
     return rd_dataset
 
 
@@ -237,7 +241,8 @@ def main(thread_number,
          model_path=MODEL_PATH,
          base_path=BASE_SAVE_PATH,
          species_path=SPECIES_PATH,
-         prefix='combined'):
+         prefix='combined',
+         get_model_fp=False):
 
     print("Loading species ids...")
 
@@ -248,7 +253,7 @@ def main(thread_number,
         base_path, "{}_dset_{}.pth.tar".format(prefix, thread_number))
 
     rd_dataset = dataset_getter(data_path, num_threads, thread_number,
-                                all_spec_ids, model_path)
+                                all_spec_ids, model_path, get_model_fp)
 
     print("Saving save_properties...")
     save_properties(rd_dataset, thread_number, base_path)
@@ -268,10 +273,12 @@ if __name__ == "__main__":
                         default=NUM_CONFS)
     parser.add_argument('--prefix', type=str, help='Fingerprint type',
                         default='combined')
+    parser.add_argument('--get_model_fp', action='store_true', default=False)
     arguments = parser.parse_args()
 
     main(thread_number=arguments.thread_number,
          num_threads=arguments.num_threads,
-         prefix=arguments.prefix)
+         prefix=arguments.prefix,
+         get_model_fp=arguments.get_model_fp)
 
 
