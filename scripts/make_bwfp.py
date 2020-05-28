@@ -174,7 +174,11 @@ def write_csv(smiles_list, props, prop_name, csv_path):
 
     text = "smiles,{}\n".format(prop_name)
     for smiles, prop in zip(smiles_list, props):
-        text += "{},{}\n".format(smiles, prop)
+        if isinstance(prop, torch.Tensor):
+          str_prop = str(prop.item())
+        else:
+          str_prop = str(prop) 
+        text += "{},{}\n".format(smiles, str_prop)
     with open(csv_path, "w") as f:
         f.write(text)
 
