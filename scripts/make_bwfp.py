@@ -43,7 +43,6 @@ CSV_PROPS = ['sars_cov_one_pl_protease_active', 'ecoli_inhibitor',
 
 def get_rd_dataset(dataset,
                    thread_number,
-                   data_path,
                    num_procs=10,
                    base_save_path=BASE_SAVE_PATH,
                    model_path=None,
@@ -138,24 +137,19 @@ def dataset_getter(data_path,
                    get_model_fp):
 
     if os.path.isfile(data_path):
-        rd_dataset = Dataset.from_file(data_path)
-        rd_dataset = get_rd_dataset(rd_dataset,
-                                    num_procs=10,
-                                    thread_number=thread_number,
-                                    model_path=model_path,
-                                    get_model_fp=get_model_fp)
+        dataset = Dataset.from_file(data_path)
+
     else:
         spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids,
                                    num_threads=num_threads,
                                    thread_number=thread_number)
-
-        print("Got species IDs.")
-
         dataset, _ = get_bind_dataset(spec_ids)
-        rd_dataset = get_rd_dataset(dataset,
-                                    num_procs=10,
-                                    thread_number=thread_number,
-                                    get_model_fp=get_model_fp)
+
+    rd_dataset = get_rd_dataset(dataset=dataset,
+                                thread_number=thread_number,
+                                num_procs=10,
+                                model_path=model_path,
+                                get_model_fp=get_model_fp)
 
     rd_dataset.save(data_path)
 
@@ -255,8 +249,12 @@ def main(thread_number,
     data_path = os.path.join(
         base_path, "{}_dset_{}.pth.tar".format(prefix, thread_number))
 
-    rd_dataset = dataset_getter(data_path, num_threads, thread_number,
-                                all_spec_ids, model_path, get_model_fp)
+    rd_dataset = dataset_getter(data_path=data_path,
+                                num_threads=num_threads,
+                                thread_number=thread_number,
+                                all_spec_ids=all_spec_ids,
+                                model_path=model_path,
+                                get_model_fp=get_model_fp)
 
     print("Saving save_properties...")
     save_properties(rd_dataset, thread_number, base_path)
