@@ -193,26 +193,18 @@ def save_properties(rd_dataset, thread_number, base_path=BASE_SAVE_PATH):
         # loop over idx because 'nan' is a float and so LongTensors
         # can't be concatenated with nan's
 
-        good_idx = []
         props = []
         smiles_list = []
 
         for i, prop in enumerate(rd_dataset.props[prop_name]):
             if not torch.isnan(prop).item():
-                good_idx.append(i)
                 props.append(prop)
                 smiles_list.append(rd_dataset.props["smiles"][i])
 
         # save
 
         csv_name = "{}_{}.csv".format(prop_name, str(thread_number))
-        idx_name = "{}_{}_idx.json".format(prop_name, str(thread_number))
-
         csv_path = os.path.join(base_path, csv_name)
-        idx_path = os.path.join(base_path, idx_name)
-
-        with open(idx_path, "w") as f:
-            json.dump(good_idx, f)
 
         write_csv(smiles_list=smiles_list,
                   props=props,
