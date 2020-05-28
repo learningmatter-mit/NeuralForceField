@@ -41,6 +41,7 @@ CSV_PROPS = ['sars_cov_one_pl_protease_active', 'ecoli_inhibitor', 'pseudomonas_
 
 def get_rd_dataset(dataset,
                    thread_number,
+                   data_path,
                    num_procs=10,
                    base_save_path=BASE_SAVE_PATH,
                    model_path=None,
@@ -91,10 +92,6 @@ def get_rd_dataset(dataset,
         add_model_fps(dataset, model_path)
         print("Finished getting fingerprints.")
 
-    save_path = os.path.join(
-        base_save_path, "crest_dset_{}.pth.tar".format(thread_number))
-    dataset.save(save_path)
-
     return dataset
 
 
@@ -137,6 +134,7 @@ def dataset_getter(data_path,
                    all_spec_ids,
                    model_path,
                    get_model_fp):
+
     if os.path.isfile(data_path):
         rd_dataset = Dataset.from_file(data_path)
         rd_dataset = get_rd_dataset(rd_dataset,
@@ -144,7 +142,6 @@ def dataset_getter(data_path,
                                     thread_number=thread_number,
                                     model_path=model_path,
                                     get_model_fp=get_model_fp)
-
     else:
         spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids,
                                    num_threads=num_threads,
@@ -157,6 +154,9 @@ def dataset_getter(data_path,
                                     num_procs=10,
                                     thread_number=thread_number,
                                     get_model_fp=get_model_fp)
+
+    rd_dataset.save(data_path)
+
     return rd_dataset
 
 
