@@ -636,7 +636,7 @@ def add_e3fp(rd_dataset, fp_length):
         fps = []
         weighted_fps = []
 
-        for weight, mol in zip(weights, mols):
+        for weight, mol in zip(weights.reshape(-1), mols):
 
             mol.SetProp("_Name", smiles)
             fprint_params = {"bits": fp_length}
