@@ -231,7 +231,8 @@ def save_features(rd_dataset, thread_number, base_path=BASE_SAVE_PATH):
             features = torch.stack(features)
         np_features = features.numpy()
 
-        save_pth = "{}_{}.npz".format(feature_name, str(thread_number))
+        save_name = "{}_{}.npz".format(feature_name, str(thread_number))
+        save_pth = os.path.join(base_path, save_name)
         np.savez_compressed(save_pth, features=np_features,
                             smiles=rd_dataset.props["smiles"])
 
