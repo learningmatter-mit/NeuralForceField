@@ -16,7 +16,8 @@ from nff.data.topology import update_props_topologies
 from nff.data.graphs import reconstruct_atoms, get_neighbor_list
 from nff.data.parallel import featurize_parallel, NUM_PROCS
 from nff.data.features import (ATOM_FEAT_TYPES, BOND_FEAT_TYPES,
-                               add_voxels, add_morgan, add_mol_soap)
+                               add_voxels, add_morgan, add_mol_soap,
+                               add_e3fp)
 from nff.data.descriptors import featurize_hydrogenic, featurize_rdkit
 
 
@@ -258,6 +259,9 @@ class Dataset(TorchDataset):
     def add_morgan(self, vec_length):
         add_morgan(self, vec_length)
 
+    def add_e3fp(self, fp_length):
+        add_e3fp(self, fp_length)
+
     def add_mol_soap(self, Lmax, resolution=1.0, channels=True):
         add_mol_soap(self,
                      Lmax=Lmax,
@@ -359,7 +363,6 @@ def force_to_energy_grad(dataset):
             for x in dataset.props.pop('forces')
         ]
         return True
-
 
 def to_tensor(x, stack=False):
     """

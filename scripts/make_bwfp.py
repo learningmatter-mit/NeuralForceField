@@ -11,37 +11,42 @@ os.environ["DJANGO_SETTINGS_MODULE"]="djangochem.settings.orgel"
 from django.db import connections
 import json
 import argparse
-import numpy as np
-from e3fp.pipeline import fprints_from_mol
 import copy
+import torch
+import numpy as np
 
-from nff.utils.cuda import batch_to
-from nff.train.builders.model import load_model
 from nff.data.parallel import (split_dataset, rd_parallel,
                                summarize_rd, rejoin_props)
-from nff.data import Dataset, collate_dicts, to_tensor
+from nff.data import Dataset
 from nff.data.features import (featurize_bonds, featurize_atoms)
-from torch.utils.data import DataLoader
+from nff.data.features import add_model_fps
+
 
 METHOD_NAME = 'gfn2-xtb'
 METHOD_DESCRIP = 'Crest GFN2-xTB'
 SPECIES_PATH = "/pool001/saxelrod/data_from_fock/data/covid_data/spec_ids.json"
-GEOMS_PER_SPEC = 10
 GROUP_NAME = 'covid'
 MODEL_PATH = "/pool001/saxelrod/data_from_fock/energy_model/best_model"
 BASE_SAVE_PATH = "/pool001/saxelrod/data_from_fock/crest_fingerprint_datasets"
+
 NUM_THREADS = 100
-COVID_TAG = "sars_cov_one_cl_protease_active"
+NUM_CONFS = 10
+FP_LENGTH = 1024
+SAVE_FEATURES = ['mean_e3fp', 'morgan', 'model_fp']
+CSV_PROPS = ['sars_cov_one_pl_protease_active', 'ecoli_inhibitor', 'pseudomonas_active',
+             'sars_cov_one_cl_protease_active', 'ensembleentropy', 'ensemblefreeenergy',
+             'poplowestpct', 'totalconfs', 'ensembleenergy',
+             'uniqueconfs', 'lowestenergy']
 
 
 def get_rd_dataset(dataset,
                    thread_number,
                    num_procs=10,
                    base_save_path=BASE_SAVE_PATH,
-                   add_features=False,
-                   add_mols=True):
+                   model_path=None):
 
-    if add_mols:
+    if 'rd_mols' not in dataset.props:
+
         print("Featurizing dataset with {} parallel processes.".format(
             num_procs))
         datasets = split_dataset(dataset=dataset, num=num_procs)
@@ -53,7 +58,8 @@ def get_rd_dataset(dataset,
         new_props = rejoin_props(datasets)
         dataset.props = new_props
 
-    if add_features:
+    if 'atom_features' not in dataset.props:
+
         print("Featurizing bonds...")
         dataset = featurize_bonds(dataset)
         print("Completed featurizing bonds.")
@@ -62,8 +68,27 @@ def get_rd_dataset(dataset,
         dataset = featurize_atoms(dataset)
         print("Completed featurizing atoms.")
 
-        dataset.props["bonded_nbr_list"] = copy.deepcopy(dataset.props["bond_list"])
+        dataset.props["bonded_nbr_list"] = copy.deepcopy(
+            dataset.props["bond_list"])
         dataset.props.pop("bond_list")
+
+    if 'e3fp' not in dataset.props:
+
+        print("Adding E3FP fingerprint...")
+        dataset.add_e3fp(FP_LENGTH)
+        print("Completed adding E3FP fingerprint.")
+
+    if 'morgan' not in dataset.props:
+
+        print("Adding Morgan fingerprint...")
+        dataset.add_morgan(FP_LENGTH)
+        print("Completed adding Morgan fingerprint.")
+
+    if 'model_fp' not in dataset.props:
+
+        print("Getting fingerprints from trained model...")
+        add_model_fps(dataset, model_path)
+        print("Finished getting fingerprints.")
 
     save_path = os.path.join(
         base_save_path, "crest_dset_{}.pth.tar".format(thread_number))
@@ -72,42 +97,12 @@ def get_rd_dataset(dataset,
     return dataset
 
 
-def get_e3fp(rd_dataset, num_confs):
-
-    bwfp_dic = {}
-
-    for batch in rd_dataset:
-
-        mols = batch["rd_mols"]
-        weights = batch["weights"]
-        smiles = batch["smiles"]
-        sorted_idx = np.argsort(-weights.numpy()).reshape(-1)[:num_confs]
-        fps = []
-
-        for idx in sorted_idx:
-            
-            weight = weights[idx] / weights[sorted_idx].sum()
-            mol = mols[idx]
-
-            mol.SetProp("_Name", smiles)
-            fprint_params = {"bits": 2048}
-            fp = fprints_from_mol(mol, fprint_params=fprint_params)
-            fp_array = np.zeros(len(fp[0]))
-            indices = fp[0].indices
-            fp_array[indices] = 1
-
-            fps.append(fp_array * weight.item())
-        bwfp_dic[smiles] = np.array(fps).mean(0).tolist()
-
-    return bwfp_dic
-
-
-def get_loader(spec_ids,
-               batch_size=3,
-               geoms_per_spec=GEOMS_PER_SPEC,
-               method_name=METHOD_NAME,
-               method_descrip=METHOD_DESCRIP,
-               group_name=GROUP_NAME):
+def get_bind_dataset(spec_ids,
+                     batch_size=3,
+                     geoms_per_spec=GEOMS_PER_SPEC,
+                     method_name=METHOD_NAME,
+                     method_descrip=METHOD_DESCRIP,
+                     group_name=GROUP_NAME):
 
     django.setup()
     from neuralnet.utils.nff import create_bind_dataset
@@ -127,25 +122,26 @@ def get_loader(spec_ids,
                                           molsets=None,
                                           exclude_molsets=None,
                                           spec_ids=spec_ids,
-                                          bind_tags=[COVID_TAG])
+                                          bind_tags=[])
 
     print("Loader created.")
     connections.close_all()
 
     return dataset, loader
 
-def dataset_getter(data_path, num_threads, thread_number, all_spec_ids,
-                  featurize=False):
+
+def dataset_getter(data_path,
+                   num_threads,
+                   thread_number,
+                   all_spec_ids,
+                   model_path):
     if os.path.isfile(data_path):
         rd_dataset = Dataset.from_file(data_path)
-        if featurize and 'atom_features' not in rd_dataset.props:
-            rd_dataset = get_rd_dataset(rd_dataset,
-                                        num_procs=10,
-                                        thread_number=thread_number,
-                                        add_features=True,
-                                        add_mols=False)
-            rd_dataset.save(data_path)
-  
+        rd_dataset = get_rd_dataset(rd_dataset,
+                                    num_procs=10,
+                                    thread_number=thread_number,
+                                    model_path=model_path)
+
     else:
         spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids,
                                    num_threads=num_threads,
@@ -153,72 +149,12 @@ def dataset_getter(data_path, num_threads, thread_number, all_spec_ids,
 
         print("Got species IDs.")
 
-        dataset, _ = get_loader(spec_ids)
+        dataset, _ = get_bind_dataset(spec_ids)
         rd_dataset = get_rd_dataset(dataset,
                                     num_procs=10,
                                     thread_number=thread_number)
     return rd_dataset
 
-
-def main_e3fp(thread_number,
-              num_confs,
-              num_threads=NUM_THREADS,
-              base_path=BASE_SAVE_PATH,
-              species_path=SPECIES_PATH):
-
-    print("Loading species ids...")
-
-    with open(species_path, "r") as f:
-        all_spec_ids = json.load(f)
-
-    data_path = os.path.join(
-        base_path, "crest_dset_{}.pth.tar".format(thread_number))
-    rd_dataset = dataset_getter(data_path, num_threads, thread_number,
-                                all_spec_ids)
-    e3fp_dic = get_e3fp(rd_dataset, num_confs)
-    save_path = os.path.join(
-        base_path, "e3fp_bwfp_{}_{}_confs.json".format(thread_number,
-       num_confs))
-
-    print("Saving fingerprints...")
-
-    with open(save_path, "w") as f:
-        json.dump(e3fp_dic, f, indent=4, sort_keys=True)
-
-    print("Complete!")
-
-
-def get_batch_fps(model_path, loader, device=0):
-
-    print("Getting fingerprints...")
-
-    model = load_model(model_path).to(device)
-    dic = {}
-    loader_len = len(loader)
-
-    for i, batch in enumerate(loader):
-
-        batch = batch_to(batch, device)
-
-        smiles_list = batch['smiles']
-
-        conf_fps, xyz = model.embedding_forward(batch)
-        conf_fps = conf_fps.detach().cpu().numpy().tolist()
-
-        del xyz
-        del batch
-
-        assert len(smiles_list) == len(conf_fps)
-
-        dic.update({smiles: conf_fp
-                    for smiles, conf_fp in zip(smiles_list, conf_fps)})
-
-        pct = int(i / loader_len * 100)
-        print("%d%% done" % pct)
-
-    print("Finished getting fingerprints.")
-
-    return dic
 
 def get_subspec_ids(all_spec_ids, num_threads, thread_number):
 
@@ -233,13 +169,75 @@ def get_subspec_ids(all_spec_ids, num_threads, thread_number):
 
     return spec_ids
 
+
+def write_csv(smiles_list, props, prop_name, csv_path):
+
+    text = "smiles,{}\n".format(prop_name)
+    for smiles, prop in zip(smiles_list, props):
+        text += "{},{}\n".format(smiles, prop)
+    with open(csv_path, "w") as f:
+        f.write(text)
+
+
+def save_properties(rd_dataset, thread_number, base_path=BASE_SAVE_PATH):
+
+    for prop_name in CSV_PROPS:
+
+        if prop_name not in rd_dataset.props:
+            continue
+
+        # loop over idx because 'nan' is a float and so LongTensors
+        # can't be concatenated with nan's
+
+        good_idx = []
+        props = []
+        smiles_list = []
+
+        for i, prop in enumerate(rd_dataset.props[prop_name]):
+            if not torch.isnan(prop).item():
+                good_idx.append(i)
+                props.append(prop)
+                smiles_list.append(rd_dataset.props["smiles"][i])
+
+        # save
+
+        csv_name = "{}_{}.csv".format(prop_name, str(thread_number))
+        idx_name = "{}_{}_idx.json".format(prop_name, str(thread_number))
+
+        csv_path = os.path.join(base_path, csv_name)
+        idx_path = os.path.join(base_path, idx_name)
+
+        with open(idx_path, "w") as f:
+            json.dump(good_idx, f)
+
+        write_csv(smiles_list=smiles_list,
+                  props=props,
+                  prop_name=prop_name,
+                  csv_path=csv_path)
+
+
+def save_features(rd_dataset, thread_number, base_path=BASE_SAVE_PATH):
+
+    for feature_name in SAVE_FEATURES:
+        if feature_name not in rd_dataset.props:
+            continue
+
+        features = rd_dataset.props[feature_name]
+        if isinstance(features, list):
+            features = torch.stack(features)
+        np_features = features.numpy()
+
+        save_pth = "{}_{}.npz".format(feature_name, str(thread_number))
+        np.savez_compressed(save_pth, features=np_features)
+
+
 def main(thread_number,
-         num_confs=10,
+         num_confs=NUM_CONFS,
          num_threads=NUM_THREADS,
          model_path=MODEL_PATH,
          base_path=BASE_SAVE_PATH,
          species_path=SPECIES_PATH,
-         prefix='schnet'):
+         prefix='combined'):
 
     print("Loading species ids...")
 
@@ -247,28 +245,17 @@ def main(thread_number,
         all_spec_ids = json.load(f)
 
     data_path = os.path.join(
-        base_path, "crest_dset_{}.pth.tar".format(thread_number))
+        base_path, "{}_dset_{}.pth.tar".format(prefix, thread_number))
 
     rd_dataset = dataset_getter(data_path, num_threads, thread_number,
-                                all_spec_ids, featurize=True)
+                                all_spec_ids, model_path)
 
-    no_rdmol_prop = {key: val for key, val in rd_dataset.props.items()
-                     if 'rd_mol' not in key}
-    no_rdmol_dset = copy.deepcopy(rd_dataset)
-    no_rdmol_dset.props = {key: to_tensor(val) for key, val in no_rdmol_prop.items()}
-
-
-    loader = DataLoader(no_rdmol_dset, batch_size=1, collate_fn=collate_dicts)
-    fp_dic = get_batch_fps(model_path, loader)
-
-    save_path = os.path.join(
-        base_path, "{}_bwfp_{}_{}_confs.json".format(prefix, thread_number, num_confs))
+    print("Saving save_properties...")
+    save_properties(rd_dataset, thread_number, base_path)
+    print("Finished saving properties.")
 
     print("Saving fingerprints...")
-
-    with open(save_path, "w") as f:
-        json.dump(fp_dic, f, indent=4, sort_keys=True)
-
+    save_features(rd_dataset, thread_number, base_path)
     print("Complete!")
 
 
@@ -277,19 +264,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('thread_number', type=int, help='Thread number')
     parser.add_argument('num_threads', type=int, help='Number of threads')
-    parser.add_argument('--fp_type', type=str, help='Fingerprint type',
-                        default='e3fp')
     parser.add_argument('--num_confs', type=int, help='Number of conformers',
-                        default=10)
+                        default=NUM_CONFS)
     parser.add_argument('--prefix', type=str, help='Fingerprint type',
-                        default='schnet')
+                        default='combined')
     arguments = parser.parse_args()
 
-    if arguments.fp_type == 'e3fp':
-        main_e3fp(thread_number=arguments.thread_number,
-                  num_threads=arguments.num_threads,
-                  num_confs=arguments.num_confs)
-    else:
-        main(thread_number=arguments.thread_number,
-             num_threads=arguments.num_threads,
-             prefix=arguments.prefix)
+    main(thread_number=arguments.thread_number,
+         num_threads=arguments.num_threads,
+         prefix=arguments.prefix)
+
+
