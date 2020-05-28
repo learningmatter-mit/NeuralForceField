@@ -33,6 +33,7 @@ BASE_SAVE_PATH = ("/pool001/saxelrod/data_from_fock"
 NUM_THREADS = 100
 NUM_CONFS = 10
 FP_LENGTH = 1024
+NUM_PROCS = 10
 SAVE_FEATURES = ['mean_e3fp', 'morgan', 'model_fp']
 CSV_PROPS = ['sars_cov_one_pl_protease_active', 'ecoli_inhibitor',
              'pseudomonas_active', 'sars_cov_one_cl_protease_active',
@@ -43,7 +44,7 @@ CSV_PROPS = ['sars_cov_one_pl_protease_active', 'ecoli_inhibitor',
 
 def get_rd_dataset(dataset,
                    thread_number,
-                   num_procs=10,
+                   num_procs=NUM_PROCS,
                    base_save_path=BASE_SAVE_PATH,
                    model_path=None,
                    get_model_fp=False):
@@ -134,7 +135,8 @@ def dataset_getter(data_path,
                    thread_number,
                    all_spec_ids,
                    model_path,
-                   get_model_fp):
+                   get_model_fp,
+                   num_procs=NUM_PROCS):
 
     if os.path.isfile(data_path):
         dataset = Dataset.from_file(data_path)
@@ -147,7 +149,7 @@ def dataset_getter(data_path,
 
     rd_dataset = get_rd_dataset(dataset=dataset,
                                 thread_number=thread_number,
-                                num_procs=10,
+                                num_procs=num_procs,
                                 model_path=model_path,
                                 get_model_fp=get_model_fp)
 

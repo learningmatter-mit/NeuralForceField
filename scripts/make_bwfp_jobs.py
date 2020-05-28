@@ -9,8 +9,8 @@ TEMPLATE = """#!/bin/bash
 #SBATCH -n 10
 #SBATCH -N 1
 #SBATCH -t 4300
-#SBATCH -p sched_mit_rafagb,sched_opportunist
-#SBATCH --mem-per-cpu=4000
+#SBATCH -p sched_mit_rafagb
+#SBATCH --mem=40G
 #SBATCH --no-requeue
 #SBATCH --signal=B:2@300
 
