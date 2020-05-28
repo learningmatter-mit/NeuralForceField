@@ -19,8 +19,8 @@ from nff.utils.cuda import batch_to
 from nff.train.builders.model import load_model
 from nff.data.parallel import (split_dataset, rd_parallel,
                                summarize_rd, rejoin_props)
-from nff.data import Dataset
-from nff.data import Dataset, collate_dicts
+from nff.data import Dataset, collate_dicts, to_tensor
+from nff.data.features import (featurize_bonds, featurize_atoms)
 from torch.utils.data import DataLoader
 
 METHOD_NAME = 'gfn2-xtb'
@@ -37,18 +37,33 @@ COVID_TAG = "sars_cov_one_cl_protease_active"
 def get_rd_dataset(dataset,
                    thread_number,
                    num_procs=10,
-                   base_save_path=BASE_SAVE_PATH):
+                   base_save_path=BASE_SAVE_PATH,
+                   add_features=False,
+                   add_mols=True):
 
-    print("Featurizing dataset with {} parallel processes.".format(
-        num_procs))
-    datasets = split_dataset(dataset=dataset, num=num_procs)
+    if add_mols:
+        print("Featurizing dataset with {} parallel processes.".format(
+            num_procs))
+        datasets = split_dataset(dataset=dataset, num=num_procs)
 
-    print("Converting xyz to RDKit mols...")
-    datasets = rd_parallel(datasets)
-    summarize_rd(new_sets=datasets, first_set=dataset)
+        print("Converting xyz to RDKit mols...")
+        datasets = rd_parallel(datasets)
+        summarize_rd(new_sets=datasets, first_set=dataset)
 
-    new_props = rejoin_props(datasets)
-    dataset.props = new_props
+        new_props = rejoin_props(datasets)
+        dataset.props = new_props
+
+    if add_features:
+        print("Featurizing bonds...")
+        dataset = featurize_bonds(dataset)
+        print("Completed featurizing bonds.")
+
+        print("Featurizing atoms...")
+        dataset = featurize_atoms(dataset)
+        print("Completed featurizing atoms.")
+
+        dataset.props["bonded_nbr_list"] = copy.deepcopy(dataset.props["bond_list"])
+        dataset.props.pop("bond_list")
 
     save_path = os.path.join(
         base_save_path, "crest_dset_{}.pth.tar".format(thread_number))
@@ -119,9 +134,18 @@ def get_loader(spec_ids,
 
     return dataset, loader
 
-def dataset_getter(data_path, num_threads, thread_number, all_spec_ids):
+def dataset_getter(data_path, num_threads, thread_number, all_spec_ids,
+                  featurize=False):
     if os.path.isfile(data_path):
         rd_dataset = Dataset.from_file(data_path)
+        if featurize and 'atom_features' not in rd_dataset.props:
+            rd_dataset = get_rd_dataset(rd_dataset,
+                                        num_procs=10,
+                                        thread_number=thread_number,
+                                        add_features=True,
+                                        add_mols=False)
+            rd_dataset.save(data_path)
+  
     else:
         spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids,
                                    num_threads=num_threads,
@@ -178,8 +202,11 @@ def get_batch_fps(model_path, loader, device=0):
 
         smiles_list = batch['smiles']
 
-        conf_fps, _ = model.embedding_forward(batch)
+        conf_fps, xyz = model.embedding_forward(batch)
         conf_fps = conf_fps.detach().cpu().numpy().tolist()
+
+        del xyz
+        del batch
 
         assert len(smiles_list) == len(conf_fps)
 
@@ -211,7 +238,8 @@ def main(thread_number,
          num_threads=NUM_THREADS,
          model_path=MODEL_PATH,
          base_path=BASE_SAVE_PATH,
-         species_path=SPECIES_PATH):
+         species_path=SPECIES_PATH,
+         prefix='schnet'):
 
     print("Loading species ids...")
 
@@ -222,19 +250,19 @@ def main(thread_number,
         base_path, "crest_dset_{}.pth.tar".format(thread_number))
 
     rd_dataset = dataset_getter(data_path, num_threads, thread_number,
-                                all_spec_ids)
+                                all_spec_ids, featurize=True)
 
     no_rdmol_prop = {key: val for key, val in rd_dataset.props.items()
                      if 'rd_mol' not in key}
     no_rdmol_dset = copy.deepcopy(rd_dataset)
-    no_rdmol_dset.props = no_rdmol_prop
+    no_rdmol_dset.props = {key: to_tensor(val) for key, val in no_rdmol_prop.items()}
 
 
-    loader = DataLoader(no_rdmol_dset, batch_size=50, collate_fn=collate_dicts)
+    loader = DataLoader(no_rdmol_dset, batch_size=1, collate_fn=collate_dicts)
     fp_dic = get_batch_fps(model_path, loader)
 
     save_path = os.path.join(
-        base_path, "schnet_bwfp_{}_{}_confs.json".format(thread_number, num_confs))
+        base_path, "{}_bwfp_{}_{}_confs.json".format(prefix, thread_number, num_confs))
 
     print("Saving fingerprints...")
 
@@ -253,6 +281,8 @@ if __name__ == "__main__":
                         default='e3fp')
     parser.add_argument('--num_confs', type=int, help='Number of conformers',
                         default=10)
+    parser.add_argument('--prefix', type=str, help='Fingerprint type',
+                        default='schnet')
     arguments = parser.parse_args()
 
     if arguments.fp_type == 'e3fp':
@@ -261,4 +291,5 @@ if __name__ == "__main__":
                   num_confs=arguments.num_confs)
     else:
         main(thread_number=arguments.thread_number,
-             num_threads=arguments.num_threads)
+             num_threads=arguments.num_threads,
+             prefix=arguments.prefix)
