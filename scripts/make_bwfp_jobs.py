@@ -18,12 +18,12 @@ source $HOME/.bashrc
 source activate htvs_3
 make_bwfp=/home/saxelrod/repo/nff/covid/NeuralForceField/scripts/make_bwfp.py
 export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH
-python $make_bwfp {} 500 --num_confs 10
+python $make_bwfp {} {} --num_confs 10
 
 
 """
 
-def main(num_threads=100, job_dir=JOB_DIR):
+def main(num_threads=500, job_dir=JOB_DIR):
 
     for thread in range(num_threads):
 
@@ -32,7 +32,7 @@ def main(num_threads=100, job_dir=JOB_DIR):
         tmp_path = "/tmp/{}".format(folder_name)
         os.mkdir(tmp_path)
         with open(os.path.join(tmp_path, "job.sh"), "w") as f:
-            f.write(TEMPLATE.format(thread))
+            f.write(TEMPLATE.format(thread, num_threads))
 
         real_path = os.path.join(job_dir, "inbox", folder_name)
         shutil.move(tmp_path, real_path)
