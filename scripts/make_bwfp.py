@@ -135,7 +135,7 @@ def dataset_getter(data_path,
                    num_threads,
                    thread_number,
                    all_spec_ids,
-                   model_path
+                   model_path,
                    get_model_fp):
     if os.path.isfile(data_path):
         rd_dataset = Dataset.from_file(data_path)
