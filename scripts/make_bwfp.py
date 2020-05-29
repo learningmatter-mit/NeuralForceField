@@ -142,7 +142,8 @@ def dataset_getter(data_path,
                    get_model_fp,
                    no_features,
                    no_nbrs,
-                   num_procs=NUM_PROCS):
+                   num_procs=NUM_PROCS,
+                   num_confs=NUM_CONFS):
 
     if os.path.isfile(data_path):
         dataset = Dataset.from_file(data_path)
@@ -151,7 +152,8 @@ def dataset_getter(data_path,
         spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids,
                                    num_threads=num_threads,
                                    thread_number=thread_number)
-        dataset, _ = get_bind_dataset(spec_ids, no_nbrs=no_nbrs)
+        dataset, _ = get_bind_dataset(spec_ids, no_nbrs=no_nbrs,
+            geoms_per_spec=num_confs)
 
     rd_dataset = get_rd_dataset(dataset=dataset,
                                 thread_number=thread_number,
@@ -268,7 +270,8 @@ def main(thread_number,
                                 model_path=model_path,
                                 get_model_fp=get_model_fp,
                                 no_features=no_features,
-                                no_nbrs=no_nbrs)
+                                no_nbrs=no_nbrs,
+                                num_confs=num_confs)
 
     if not no_features:
 
@@ -311,4 +314,5 @@ if __name__ == "__main__":
          get_model_fp=arguments.get_model_fp,
          no_features=arguments.no_features,
          no_nbrs=arguments.no_nbrs,
-         base_path=arguments.base_path)
+         base_path=arguments.base_path,
+         num_confs=arguments.num_confs)
