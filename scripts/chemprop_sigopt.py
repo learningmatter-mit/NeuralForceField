@@ -91,6 +91,15 @@ def write_csv(path, dic):
         f.write(text)
 
 
+def is_recent(path):
+
+    filedate = datetime.utcfromtimestamp(os.path.getmtime(path))
+    delta = filedate - datetime.now()
+    seconds = abs((delta.days * 24 * 60 * 60 + delta.seconds))
+
+    return seconds < 60
+
+
 def collect_csvs(prop_name,
                  resave,
                  base_save_path=BASE_SAVE_PATH):
@@ -109,6 +118,8 @@ def collect_csvs(prop_name,
     overall_dict = {}
     for csv_name in csv_names:
         path = os.path.join(base_save_path, csv_name)
+        if is_recent(path):
+            continue
         this_dic, _ = read_csv(path)
         overall_dict.update(this_dic)
 
@@ -138,11 +149,7 @@ def collect_features(feat_name,
 
     for file in file_names:
         path = os.path.join(base_save_path, file)
-        filedate = datetime.utcfromtimestamp(os.path.getmtime(path))
-        delta = filedate - datetime.now()
-        seconds = abs((delta.days * 24 * 60 * 60 + delta.seconds))
-
-        if seconds < 60:
+        if is_recent(path):
             continue
         data = np.load(os.path.join(base_save_path, file))
 
