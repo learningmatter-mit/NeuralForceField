@@ -103,7 +103,8 @@ def get_bind_dataset(spec_ids,
                      geoms_per_spec=NUM_CONFS,
                      method_name=METHOD_NAME,
                      method_descrip=METHOD_DESCRIP,
-                     group_name=GROUP_NAME):
+                     group_name=GROUP_NAME,
+                     no_nbrs=False):
 
     django.setup()
     from neuralnet.utils.nff import create_bind_dataset
@@ -123,7 +124,8 @@ def get_bind_dataset(spec_ids,
                                           molsets=None,
                                           exclude_molsets=None,
                                           spec_ids=spec_ids,
-                                          bind_tags=[])
+                                          bind_tags=[],
+                                          gen_nbrs=(not no_nbrs))
 
     print("Loader created.")
     connections.close_all()
@@ -138,6 +140,7 @@ def dataset_getter(data_path,
                    model_path,
                    get_model_fp,
                    no_features,
+                   no_nbrs,
                    num_procs=NUM_PROCS):
 
     if os.path.isfile(data_path):
@@ -147,7 +150,7 @@ def dataset_getter(data_path,
         spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids,
                                    num_threads=num_threads,
                                    thread_number=thread_number)
-        dataset, _ = get_bind_dataset(spec_ids)
+        dataset, _ = get_bind_dataset(spec_ids, no_nbrs=no_nbrs)
 
     rd_dataset = get_rd_dataset(dataset=dataset,
                                 thread_number=thread_number,
@@ -242,7 +245,8 @@ def main(thread_number,
          species_path=SPECIES_PATH,
          prefix='combined',
          get_model_fp=False,
-         no_features=False):
+         no_features=False,
+         no_nbrs=False):
 
     print("Loading species ids...")
 
@@ -258,7 +262,8 @@ def main(thread_number,
                                 all_spec_ids=all_spec_ids,
                                 model_path=model_path,
                                 get_model_fp=get_model_fp,
-                                no_features=no_features)
+                                no_features=no_features,
+                                no_nbrs=no_nbrs)
 
     print("Saving save_properties...")
     save_properties(rd_dataset, thread_number, base_path)
@@ -280,6 +285,7 @@ if __name__ == "__main__":
                         default='combined')
     parser.add_argument('--get_model_fp', action='store_true', default=False)
     parser.add_argument('--no_features', action='store_true', default=False)
+    parser.add_argument('--no_nbrs', action='store_true', default=False)
 
     arguments = parser.parse_args()
 
@@ -287,5 +293,6 @@ if __name__ == "__main__":
          num_threads=arguments.num_threads,
          prefix=arguments.prefix,
          get_model_fp=arguments.get_model_fp,
-         no_features=arguments.no_features)
+         no_features=arguments.no_features,
+         no_nbrs=arguments.no_nbrs)
 
