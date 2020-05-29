@@ -28,7 +28,7 @@ SPECIES_PATH = "/pool001/saxelrod/data_from_fock/data/covid_data/spec_ids.json"
 GROUP_NAME = 'covid'
 MODEL_PATH = "/pool001/saxelrod/data_from_fock/energy_model/best_model"
 BASE_SAVE_PATH = ("/pool001/saxelrod/data_from_fock"
-                  "/combined_fingerprint_datasets")
+                  "/final_db_data")
 
 NUM_THREADS = 100
 NUM_CONFS = 10
@@ -47,9 +47,10 @@ def get_rd_dataset(dataset,
                    num_procs=NUM_PROCS,
                    base_save_path=BASE_SAVE_PATH,
                    model_path=None,
-                   get_model_fp=False):
+                   get_model_fp=False,
+                   no_features=False):
 
-    if 'rd_mols' not in dataset.props:
+    if 'rd_mols' not in dataset.props and not no_features:
 
         print("Featurizing dataset with {} parallel processes.".format(
             num_procs))
@@ -62,7 +63,7 @@ def get_rd_dataset(dataset,
         new_props = rejoin_props(datasets)
         dataset.props = new_props
 
-    if 'atom_features' not in dataset.props:
+    if 'atom_features' not in dataset.props and not no_features:
 
         print("Featurizing bonds...")
         dataset = featurize_bonds(dataset)
@@ -76,19 +77,19 @@ def get_rd_dataset(dataset,
             dataset.props["bond_list"])
         dataset.props.pop("bond_list")
 
-    if 'e3fp' not in dataset.props:
+    if 'e3fp' not in dataset.props and not no_features:
 
         print("Adding E3FP fingerprint...")
         dataset.add_e3fp(FP_LENGTH)
         print("Completed adding E3FP fingerprint.")
 
-    if 'morgan' not in dataset.props:
+    if 'morgan' not in dataset.props and not no_features:
 
         print("Adding Morgan fingerprint...")
         dataset.add_morgan(FP_LENGTH)
         print("Completed adding Morgan fingerprint.")
 
-    if 'model_fp' not in dataset.props and get_model_fp:
+    if 'model_fp' not in dataset.props and get_model_fp and not no_features:
 
         print("Getting fingerprints from trained model...")
         add_model_fps(dataset, model_path)
@@ -136,6 +137,7 @@ def dataset_getter(data_path,
                    all_spec_ids,
                    model_path,
                    get_model_fp,
+                   no_features,
                    num_procs=NUM_PROCS):
 
     if os.path.isfile(data_path):
@@ -151,7 +153,8 @@ def dataset_getter(data_path,
                                 thread_number=thread_number,
                                 num_procs=num_procs,
                                 model_path=model_path,
-                                get_model_fp=get_model_fp)
+                                get_model_fp=get_model_fp,
+                                no_features=no_features)
 
     rd_dataset.save(data_path)
 
@@ -238,7 +241,8 @@ def main(thread_number,
          base_path=BASE_SAVE_PATH,
          species_path=SPECIES_PATH,
          prefix='combined',
-         get_model_fp=False):
+         get_model_fp=False,
+         no_features=False):
 
     print("Loading species ids...")
 
@@ -253,7 +257,8 @@ def main(thread_number,
                                 thread_number=thread_number,
                                 all_spec_ids=all_spec_ids,
                                 model_path=model_path,
-                                get_model_fp=get_model_fp)
+                                get_model_fp=get_model_fp,
+                                no_features=no_features)
 
     print("Saving save_properties...")
     save_properties(rd_dataset, thread_number, base_path)
@@ -274,9 +279,13 @@ if __name__ == "__main__":
     parser.add_argument('--prefix', type=str, help='Fingerprint type',
                         default='combined')
     parser.add_argument('--get_model_fp', action='store_true', default=False)
+    parser.add_argument('--no_features', action='store_true', default=False)
+
     arguments = parser.parse_args()
 
     main(thread_number=arguments.thread_number,
          num_threads=arguments.num_threads,
          prefix=arguments.prefix,
-         get_model_fp=arguments.get_model_fp)
+         get_model_fp=arguments.get_model_fp,
+         no_features=arguments.no_features)
+
