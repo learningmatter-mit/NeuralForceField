@@ -163,8 +163,7 @@ def run_chemprop(csv_path,
            " --dataset_type regression --save_dir {1}"
            " --save_smiles_splits  --features_path {2} "
            " --no_features_scaling --quiet  --gpu {3} --num_folds 1 "
-           " --metric 'mae' --dropout {4} "
-           " --epochs 1").format(
+           " --metric 'mae' --dropout {4} ").format(
         csv_path, save_dir,
         features_path, device, dropout)
 
@@ -253,29 +252,33 @@ def main(feats=FEATS,
          device=0,
          token=TOKEN):
 
-    for feat_name in feats:
-        for prop_name in props:
-            for features_only in [True, False]:
+	procs = []
+	for feat_name in feats:
+	    for prop_name in props:
+	        for features_only in [True, False]:
 
-                iter_name = "{}_{}_mpnn_{}".format(prop_name,
-                                                   feat_name,
-                                                   json.dumps(
-                                                       (not features_only)))
+	            iter_name = "{}_{}_mpnn_{}".format(prop_name,
+	                                               feat_name,
+	                                               json.dumps(
+	                                                   (not features_only)))
 
-                save_dir = os.path.join(base_chemprop_path, iter_name)
-                conn, experiment = make_expt(name=iter_name, token=token)
+	            save_dir = os.path.join(base_chemprop_path, iter_name)
+	            conn, experiment = make_expt(name=iter_name, token=token)
 
-                p = Process(target=run_expt, args=(conn, experiment),
-                            kwargs=dict(feat_name=feat_name,
-                                        prop_name=prop_name,
-                                        resave_feats=resave_feats,
-                                        resave_csv=resave_csv,
-                                        base_save_path=base_save_path,
-                                        device=device,
-                                        save_dir=save_dir,
-                                        features_only=features_only))
-                p.start()
-                p.join()
+	            p = Process(target=run_expt, args=(conn, experiment),
+	                        kwargs=dict(feat_name=feat_name,
+	                                    prop_name=prop_name,
+	                                    resave_feats=resave_feats,
+	                                    resave_csv=resave_csv,
+	                                    base_save_path=base_save_path,
+	                                    device=device,
+	                                    save_dir=save_dir,
+	                                    features_only=features_only))
+	            p.start()
+	            procs.append(p)
+
+	for p in procs:
+	    p.join()
 
 # NEED TO USE THE SAME TRAIN  / VAL  / TEST SPLITS!!!!!!
 # AND ONLY TRAIN ON A SUBSET OF THE DATA!!
