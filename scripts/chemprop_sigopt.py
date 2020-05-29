@@ -161,11 +161,14 @@ def run_chemprop(csv_path,
 
     cmd = ("python $HOME/Repo/projects/chemprop/train.py --data_path {0}"
            " --dataset_type regression --save_dir {1}"
-           " --save_smiles_splits  --features_path {2} "
-           " --no_features_scaling --quiet  --gpu {3} --num_folds 1 "
-           " --metric 'mae' --dropout {4} ").format(
+           " --save_smiles_splits "
+           " --no_features_scaling --quiet  --gpu {2} --num_folds 1 "
+           " --metric 'mae' --dropout {3} ").format(
         csv_path, save_dir,
-        features_path, device, dropout)
+        device, dropout)
+
+    if features_path is not None:
+    	cmd += " --features_path {}".format(features_path)
 
     if features_only:
         cmd += " --features_only"
@@ -206,11 +209,14 @@ def evaluate_model(prop_name,
                             resave=resave_csv,
                             base_save_path=base_save_path)
 
-    feat_path = collect_features(feat_name=feat_name,
-                                 prop_name=prop_name,
-                                 prop_csv_path=csv_path,
-                                 resave=resave_feats,
-                                 base_save_path=base_save_path)
+    if feat_name is not None:
+    	feat_path = collect_features(feat_name=feat_name,
+	                                 prop_name=prop_name,
+	                                 prop_csv_path=csv_path,
+	                                 resave=resave_feats,
+	                                 base_save_path=base_save_path)
+    else:
+    	feat_path = None
 
     run_chemprop(csv_path=csv_path,
                            features_path=feat_path,
@@ -253,7 +259,9 @@ def main(feats=FEATS,
          token=TOKEN):
 
 	procs = []
-	for feat_name in feats:
+	all_feats = feats + [None]
+
+	for feat_name in all_feats:
 	    for prop_name in props:
 	        for features_only in [True, False]:
 
@@ -261,6 +269,12 @@ def main(feats=FEATS,
 	                                               feat_name,
 	                                               json.dumps(
 	                                                   (not features_only)))
+	            if feat_name is None:
+	            	if features_only:
+	            		continue
+	            	else:
+		            	iter_name = "{}_only_mpnn".format(prop_name)
+
 
 	            save_dir = os.path.join(base_chemprop_path, iter_name)
 	            conn, experiment = make_expt(name=iter_name, token=token)
