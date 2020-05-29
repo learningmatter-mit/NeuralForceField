@@ -143,7 +143,7 @@ def run_chemprop(csv_path,
 
     for cmd in cmds:
         outputs.append(subprocess.check_output([cmd], shell=True).decode())
-    	
+
 
     return outputs
 
@@ -235,3 +235,9 @@ def main(feats=FEATS,
                                          save_dir=save_dir)})
                 p.start()
                 p.join()
+
+# NEED TO USE THE SAME TRAIN  / VAL  / TEST SPLITS!!!!!!
+# AND ONLY TRAIN ON A SUBSET OF THE DATA!! 
+
+
+
