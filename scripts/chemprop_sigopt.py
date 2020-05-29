@@ -5,13 +5,30 @@ import numpy as np
 import subprocess
 import json
 from multiprocessing import Process
+import pdb
+import sys
 
 TOKEN = "KTNMWLZQYQSNCHVHPGIWSAVXEWLEWABZAHIJOLXKWAHQDRQE"
-BASE_SAVE_PATH = ("/pool001/saxelrod/data_from_fock/"
+BASE_SAVE_PATH = ("/home/saxelrod/engaging_nfs/data_from_fock/"
                   "combined_fingerprint_datasets")
 BASE_CHEMPROP_PATH = "/home/saxelrod/chemprop_sigopt"
 FEATS = ['mean_e3fp', 'morgan']
 PROPS = ["ensembleentropy"]
+
+
+class ForkedPdb(pdb.Pdb):
+    """A Pdb subclass that may be used
+    from a forked multiprocessing child
+
+    """
+
+    def interaction(self, *args, **kwargs):
+        _stdin = sys.stdin
+        try:
+            sys.stdin = open('/dev/stdin')
+            pdb.Pdb.interaction(self, *args, **kwargs)
+        finally:
+            sys.stdin = _stdin
 
 
 def make_expt(name, token=TOKEN):
@@ -20,7 +37,8 @@ def make_expt(name, token=TOKEN):
         name=name,
         metrics=[dict(name='mae', objective='minimize')],
         parameters=[
-            dict(name='log_dropout', type='float', bounds=dict(min=-5, max=0)),
+            dict(name='log_dropout',
+                 type='double', bounds=dict(min=-5, max=0)),
         ],
         observation_budget=20
     )
@@ -34,11 +52,22 @@ def read_csv(path):
     ordered_smiles = []
 
     with open(path, "r") as f:
-        lines = f.readlines()[1:]
-        for line in lines:
-            smiles = line.split(",")[0]
-            prop = line.split(",")[1]
-            dic[smiles] = prop
+        lines = f.readlines()
+        prop_names = [name.strip() for name in lines[0].split(",")[1:]]
+
+        for line in lines[1:]:
+            smiles = line.split(",")[0].strip()
+            props = [item.strip() for item in line.split(",")[1:]]
+            for i in range(len(props)):
+                prop = props[i]
+                try:
+                    prop = int(prop)
+                except ValueError:
+                    prop = float(prop)
+                    props[i] = prop
+
+            dic[smiles] = {prop_name: prop for prop_name, prop in
+                           zip(prop_names, props)}
             ordered_smiles.append(smiles)
 
     return dic, ordered_smiles
@@ -47,12 +76,13 @@ def read_csv(path):
 def write_csv(path, dic):
 
     smiles_keys = sorted(list(dic.keys()))
+
     sub_dic_0 = dic[smiles_keys[0]]
     prop_keys = sorted(list(sub_dic_0.keys()))
 
     text = "smiles," + ",".join(prop_keys) + "\n"
     for smiles in smiles_keys:
-        vals = [dic[smiles][prop_key] for prop_key in prop_keys]
+        vals = [str(dic[smiles][prop_key]) for prop_key in prop_keys]
         text += ",".join([smiles] + vals) + "\n"
 
     with open(path, "w") as f:
@@ -70,7 +100,7 @@ def collect_csvs(prop_name,
         return combined_path
 
     csv_names = []
-    re_str = "{}_\\d.csv".format(prop_name)
+    re_str = "{}_\\d+.csv".format(prop_name)
     for file in os.listdir(base_save_path):
         csv_names += re.findall(re_str, file)
 
@@ -91,14 +121,14 @@ def collect_features(feat_name,
                      resave,
                      base_save_path=BASE_SAVE_PATH):
 
-    combined_feat_name = "{}_{}.npz".format(feat_name, prop_name)
+    combined_feat_name = "{}_{}_combined.npz".format(feat_name, prop_name)
     combined_path = os.path.join(base_save_path, combined_feat_name)
 
     if os.path.isfile(combined_path) and not resave:
         return combined_path
 
     file_names = []
-    re_str = "{}_\\d.csv".format(feat_name)
+    re_str = "{}_\\d+.npz".format(feat_name)
     for file in os.listdir(base_save_path):
         file_names += re.findall(re_str, file)
 
@@ -106,12 +136,14 @@ def collect_features(feat_name,
 
     for file in file_names:
 
-        data = np.load(file)
-        overall_dict[data["smiles"]] = data["feats"]
+        data = np.load(os.path.join(base_save_path, file))
 
-        ordered_smiles, _ = read_csv(prop_csv_path)
-        ordered_feats = np.array([overall_dict[smiles]
-                                  for smiles in ordered_smiles])
+        for smiles, feats in zip(data["smiles"], data["features"]):
+            overall_dict[smiles] = feats
+
+    ordered_smiles, _ = read_csv(prop_csv_path)
+    ordered_feats = np.array([overall_dict[smiles]
+                              for smiles in ordered_smiles])
 
     np.savez_compressed(
         combined_path, features=ordered_feats, smiles=ordered_smiles)
@@ -127,38 +159,45 @@ def run_chemprop(csv_path,
                  base_save_path=BASE_SAVE_PATH,
                  device=0):
 
-    cmd = ("python train.py --data_path {0}"
+    cmd = ("python $HOME/Repo/projects/chemprop/train.py --data_path {0}"
            " --dataset_type regression --save_dir {1}"
            " --save_smiles_splits  --features_path {2} "
            " --no_features_scaling --quiet  --gpu {3} --num_folds 1 "
-           " --metric 'mae' --dropout {4} ").format(
+           " --metric 'mae' --dropout {4} "
+           " --epochs 1").format(
         csv_path, save_dir,
         features_path, device, dropout)
 
     if features_only:
         cmd += " --features_only"
 
-    cmds = ["conda deactivate", "conda activate chemprop", cmd]
-    outputs = []
+    cmds = ["source deactivate", "source activate chemprop",
+            cmd]
 
     for cmd in cmds:
-        outputs.append(subprocess.check_output([cmd], shell=True).decode())
+        try:
+            subprocess.check_output([cmd], shell=True).decode()
+        except Exception as e:
+            print(e)
+            continue
 
 
-    return outputs
+def get_best_val_score(save_dir):
 
-
-def get_best_val_score(text):
-    for line in reversed(text.split("\n")):
-        if "best validation" in line:
-            score = float(line.split("=")[1].split()[0])
-            return score
+    log_path = os.path.join(save_dir, "quiet.log")
+    with open(log_path, "r") as f:
+    	lines = f.readlines()
+    	for line in reversed(lines):
+	        if "best validation" in line:
+	            score = float(line.split("=")[1].split()[0])
+	            return score
 
 
 def evaluate_model(prop_name,
                    feat_name,
                    features_only,
                    save_dir,
+                   dropout,
                    resave_feats=False,
                    resave_csv=False,
                    base_save_path=BASE_SAVE_PATH,
@@ -174,14 +213,15 @@ def evaluate_model(prop_name,
                                  resave=resave_feats,
                                  base_save_path=base_save_path)
 
-    outputs = run_chemprop(csv_path=csv_path,
+    run_chemprop(csv_path=csv_path,
                            features_path=feat_path,
                            save_dir=save_dir,
                            features_only=features_only,
                            base_save_path=base_save_path,
-                           device=device)
+                           device=device,
+                           dropout=dropout)
 
-    score = get_best_val_score(outputs[-1])
+    score = get_best_val_score(save_dir)
 
     return score
 
@@ -206,8 +246,8 @@ def run_expt(conn, experiment, **kwargs):
 
 def main(feats=FEATS,
          props=PROPS,
-         resave_feats=False,
-         resave_csv=False,
+         resave_feats=True,
+         resave_csv=True,
          base_save_path=BASE_SAVE_PATH,
          base_chemprop_path=BASE_CHEMPROP_PATH,
          device=0,
@@ -226,18 +266,24 @@ def main(feats=FEATS,
                 conn, experiment = make_expt(name=iter_name, token=token)
 
                 p = Process(target=run_expt, args=(conn, experiment),
-                            kwargs={dict(feat_name=feat_name,
-                                         prop_name=prop_name,
-                                         resave_feats=resave_feats,
-                                         resave_csv=resave_csv,
-                                         base_save_path=base_save_path,
-                                         device=device,
-                                         save_dir=save_dir)})
+                            kwargs=dict(feat_name=feat_name,
+                                        prop_name=prop_name,
+                                        resave_feats=resave_feats,
+                                        resave_csv=resave_csv,
+                                        base_save_path=base_save_path,
+                                        device=device,
+                                        save_dir=save_dir,
+                                        features_only=features_only))
                 p.start()
                 p.join()
 
 # NEED TO USE THE SAME TRAIN  / VAL  / TEST SPLITS!!!!!!
-# AND ONLY TRAIN ON A SUBSET OF THE DATA!! 
+# AND ONLY TRAIN ON A SUBSET OF THE DATA!!
 
 
-
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print(e)
+        ForkedPdb().post_mortem()
