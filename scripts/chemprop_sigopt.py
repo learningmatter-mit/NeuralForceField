@@ -312,16 +312,10 @@ def main(feats=FEATS,
                               save_dir=save_dir,
                               features_only=features_only)
 
-                # run_expt(conn, experiment, **kwargs)
-
                 p = Process(target=run_expt, args=(conn, experiment),
                             kwargs=kwargs)
                 p.start()
                 procs.append(p)
-
-                # time.sleep(5)
-                # break
-        # break
 
     for p in procs:
         p.join()
