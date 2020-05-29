@@ -301,7 +301,7 @@ if __name__ == "__main__":
     parser.add_argument('--get_model_fp', action='store_true', default=False)
     parser.add_argument('--no_features', action='store_true', default=False)
     parser.add_argument('--no_nbrs', action='store_true', default=False)
-    parser.add_argument('--base_path', type='str', default=BASE_SAVE_PATH)
+    parser.add_argument('--base_path', type=str, default=BASE_SAVE_PATH)
 
     arguments = parser.parse_args()
 
