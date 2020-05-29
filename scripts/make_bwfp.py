@@ -1,26 +1,29 @@
-import os
-import sys
-
-sys.path.insert(0, "/home/saxelrod/repo/htvs/master/htvs")
-sys.path.insert(0, "/home/saxelrod/repo/htvs/master/htvs/djangochem")
-sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
-
-import django
-os.environ["DJANGO_SETTINGS_MODULE"]="djangochem.settings.orgel"
-
-from django.db import connections
-import json
-import argparse
-import copy
-import torch
-import numpy as np
-
-from nff.data.parallel import (split_dataset, rd_parallel,
-                               summarize_rd, rejoin_props)
-from nff.data import Dataset
-from nff.data.features import (featurize_bonds, featurize_atoms)
+from nff.utils import data_to_yml
 from nff.data.features import add_model_fps
+from nff.data.features import (featurize_bonds, featurize_atoms)
+from nff.data import Dataset
+from nff.data.parallel import (split_dataset, rd_parallel,
+                               import numpy as np
+                               import torch
+                               import copy
+                               import argparse
+                               import json
+                               from django.db import connections
+                               import django
+                               import os
+                               import sys
 
+                               sys.path.insert(
+                                   0, "/home/saxelrod/repo/htvs/master/htvs")
+                               sys.path.insert(
+                                   0, "/home/saxelrod/repo/htvs/master/htvs/djangochem")
+                               sys.path.insert(
+                                   0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
+
+                               os.environ["DJANGO_SETTINGS_MODULE"]="djangochem.settings.orgel"
+
+
+                               summarize_rd, rejoin_props)
 
 METHOD_NAME = 'gfn2-xtb'
 METHOD_DESCRIP = 'Crest GFN2-xTB'
@@ -183,9 +186,9 @@ def write_csv(smiles_list, props, prop_name, csv_path):
     text = "smiles,{}\n".format(prop_name)
     for smiles, prop in zip(smiles_list, props):
         if isinstance(prop, torch.Tensor):
-          str_prop = str(prop.item())
+            str_prop = str(prop.item())
         else:
-          str_prop = str(prop) 
+            str_prop = str(prop)
         text += "{},{}\n".format(smiles, str_prop)
     with open(csv_path, "w") as f:
         f.write(text)
@@ -237,6 +240,10 @@ def save_features(rd_dataset, thread_number, base_path=BASE_SAVE_PATH):
                             smiles=rd_dataset.props["smiles"])
 
 
+def to_json(dataset):
+    pass
+
+
 def main(thread_number,
          num_confs=NUM_CONFS,
          num_threads=NUM_THREADS,
@@ -265,12 +272,22 @@ def main(thread_number,
                                 no_features=no_features,
                                 no_nbrs=no_nbrs)
 
-    print("Saving save_properties...")
-    save_properties(rd_dataset, thread_number, base_path)
-    print("Finished saving properties.")
+    if not no_features:
 
-    print("Saving fingerprints...")
-    save_features(rd_dataset, thread_number, base_path)
+        print("Saving save_properties...")
+        save_properties(rd_dataset, thread_number, base_path)
+        print("Finished saving properties.")
+
+        print("Saving fingerprints...")
+        save_features(rd_dataset, thread_number, base_path)
+
+    print("Saving as yml...")
+    yml_path = os.path.join(
+        base_path, "{}_dset_{}.yml".format(prefix, thread_number))
+    data_to_yml.save_data(dataset=rd_dataset,
+                          use_features=(not no_features),
+                          save_path=yml_path)
+
     print("Complete!")
 
 
@@ -295,4 +312,3 @@ if __name__ == "__main__":
          get_model_fp=arguments.get_model_fp,
          no_features=arguments.no_features,
          no_nbrs=arguments.no_nbrs)
-
