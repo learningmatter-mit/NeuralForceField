@@ -7,6 +7,8 @@ import json
 from multiprocessing import Process
 import pdb
 import sys
+import time
+
 
 TOKEN = "KTNMWLZQYQSNCHVHPGIWSAVXEWLEWABZAHIJOLXKWAHQDRQE"
 BASE_SAVE_PATH = ("/home/saxelrod/engaging_nfs/data_from_fock/"
@@ -168,7 +170,7 @@ def run_chemprop(csv_path,
         device, dropout)
 
     if features_path is not None:
-    	cmd += " --features_path {}".format(features_path)
+        cmd += " --features_path {}".format(features_path)
 
     if features_only:
         cmd += " --features_only"
@@ -188,11 +190,13 @@ def get_best_val_score(save_dir):
 
     log_path = os.path.join(save_dir, "quiet.log")
     with open(log_path, "r") as f:
-    	lines = f.readlines()
-    	for line in reversed(lines):
-	        if "best validation" in line:
-	            score = float(line.split("=")[1].split()[0])
-	            return score
+        lines = f.readlines()
+        # must reverse because different training logs
+        # get appended to the same file
+        for line in reversed(lines):
+            if "Overall test" in line:
+                score = float(line.split("=")[1].split()[0])
+                return score
 
 
 def evaluate_model(prop_name,
@@ -210,21 +214,21 @@ def evaluate_model(prop_name,
                             base_save_path=base_save_path)
 
     if feat_name is not None:
-    	feat_path = collect_features(feat_name=feat_name,
-	                                 prop_name=prop_name,
-	                                 prop_csv_path=csv_path,
-	                                 resave=resave_feats,
-	                                 base_save_path=base_save_path)
+        feat_path = collect_features(feat_name=feat_name,
+                                     prop_name=prop_name,
+                                     prop_csv_path=csv_path,
+                                     resave=resave_feats,
+                                     base_save_path=base_save_path)
     else:
-    	feat_path = None
+        feat_path = None
 
     run_chemprop(csv_path=csv_path,
-                           features_path=feat_path,
-                           save_dir=save_dir,
-                           features_only=features_only,
-                           base_save_path=base_save_path,
-                           device=device,
-                           dropout=dropout)
+                 features_path=feat_path,
+                 save_dir=save_dir,
+                 features_only=features_only,
+                 base_save_path=base_save_path,
+                 device=device,
+                 dropout=dropout)
 
     score = get_best_val_score(save_dir)
 
@@ -232,75 +236,90 @@ def evaluate_model(prop_name,
 
 
 def run_expt(conn, experiment, **kwargs):
-
+    i = 0
     while (experiment.progress.observation_count
            < experiment.observation_budget):
 
-        suggestion = conn.experiments(experiment.id).suggestions().create()
+        suggestion = conn.experiments(experiment.id
+                                      ).suggestions().create()
         dropout = np.exp(suggestion.assignments["log_dropout"])
-        value = evaluate_model(dropout=dropout, **kwargs)
-        print(value)
+        if i > 0:
+            kwargs.update({"resave_feats": False,
+                           "resave_csv": False})
+        try:
+            value = evaluate_model(dropout=dropout, **kwargs)
+        except Exception as e:
+            ForkedPdb().post_mortem()
+            print(e)
+            conn.experiments(experiment.id).observations().create(
+                suggestion=suggestion.id,
+                failed=True)
 
-        conn.experiments(experiment.id).observations().create(
-            suggestion=suggestion.id,
-            value=value,
-        )
+            continue
 
-        experiment = conn.experiments(experiment.id).fetch()
+    print(value)
+
+    conn.experiments(experiment.id).observations().create(
+        suggestion=suggestion.id,
+        value=value,
+    )
+
+    experiment = conn.experiments(experiment.id).fetch()
+
+    i += 1
 
 
 def main(feats=FEATS,
          props=PROPS,
-         resave_feats=True,
-         resave_csv=True,
          base_save_path=BASE_SAVE_PATH,
          base_chemprop_path=BASE_CHEMPROP_PATH,
          device=0,
-         token=TOKEN):
+         token=TOKEN,
+         resave_feats=True,
+         resave_csv=True):
 
-	procs = []
-	all_feats = feats + [None]
+    procs = []
+    all_feats = feats + [None]
 
-	for feat_name in all_feats:
-	    for prop_name in props:
-	        for features_only in [True, False]:
+    for i, feat_name in enumerate(all_feats):
+        for j, prop_name in enumerate(props):
+            for features_only in [True, False]:
 
-	            iter_name = "{}_{}_mpnn_{}".format(prop_name,
-	                                               feat_name,
-	                                               json.dumps(
-	                                                   (not features_only)))
-	            if feat_name is None:
-	            	if features_only:
-	            		continue
-	            	else:
-		            	iter_name = "{}_only_mpnn".format(prop_name)
+                iter_name = "{}_{}_mpnn_{}".format(prop_name,
+                                                   feat_name,
+                                                   json.dumps(
+                                                       (not features_only)))
+                if feat_name is None:
+                    if features_only:
+                        continue
+                    else:
+                        iter_name = "{}_only_mpnn".format(prop_name)
 
+                save_dir = os.path.join(base_chemprop_path, iter_name)
+                conn, experiment = make_expt(name=iter_name, token=token)
 
-	            save_dir = os.path.join(base_chemprop_path, iter_name)
-	            conn, experiment = make_expt(name=iter_name, token=token)
+                p = Process(target=run_expt, args=(conn, experiment),
+                            kwargs=dict(feat_name=feat_name,
+                                        prop_name=prop_name,
+                                        resave_feats=resave_feats,
+                                        resave_csv=resave_csv,
+                                        base_save_path=base_save_path,
+                                        device=device,
+                                        save_dir=save_dir,
+                                        features_only=features_only))
+                p.start()
+                procs.append(p)
 
-	            p = Process(target=run_expt, args=(conn, experiment),
-	                        kwargs=dict(feat_name=feat_name,
-	                                    prop_name=prop_name,
-	                                    resave_feats=resave_feats,
-	                                    resave_csv=resave_csv,
-	                                    base_save_path=base_save_path,
-	                                    device=device,
-	                                    save_dir=save_dir,
-	                                    features_only=features_only))
-	            p.start()
-	            procs.append(p)
+                time.sleep(2)
+        time.sleep(2)
 
-	for p in procs:
-	    p.join()
+    for p in procs:
+        p.join()
 
 # NEED TO USE THE SAME TRAIN  / VAL  / TEST SPLITS!!!!!!
 # AND ONLY TRAIN ON A SUBSET OF THE DATA!!
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print(e)
-        ForkedPdb().post_mortem()
+
+    main()
