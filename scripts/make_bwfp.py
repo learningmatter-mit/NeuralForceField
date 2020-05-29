@@ -1,29 +1,26 @@
-from nff.utils import data_to_yml
-from nff.data.features import add_model_fps
-from nff.data.features import (featurize_bonds, featurize_atoms)
-from nff.data import Dataset
+import os
+import sys
+
+sys.path.insert(0, "/home/saxelrod/repo/htvs/master/htvs")
+sys.path.insert(0, "/home/saxelrod/repo/htvs/master/htvs/djangochem")
+sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
+
+import django
+os.environ["DJANGO_SETTINGS_MODULE"]="djangochem.settings.orgel"
+
+from django.db import connections
+import json
+import argparse
+import copy
+import torch
+import numpy as np
+
 from nff.data.parallel import (split_dataset, rd_parallel,
-                               import numpy as np
-                               import torch
-                               import copy
-                               import argparse
-                               import json
-                               from django.db import connections
-                               import django
-                               import os
-                               import sys
-
-                               sys.path.insert(
-                                   0, "/home/saxelrod/repo/htvs/master/htvs")
-                               sys.path.insert(
-                                   0, "/home/saxelrod/repo/htvs/master/htvs/djangochem")
-                               sys.path.insert(
-                                   0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
-
-                               os.environ["DJANGO_SETTINGS_MODULE"]="djangochem.settings.orgel"
-
-
                                summarize_rd, rejoin_props)
+from nff.data import Dataset
+from nff.data.features import (featurize_bonds, featurize_atoms)
+from nff.data.features import add_model_fps
+from nff.utils import data_to_yml
 
 METHOD_NAME = 'gfn2-xtb'
 METHOD_DESCRIP = 'Crest GFN2-xTB'
