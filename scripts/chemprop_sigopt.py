@@ -167,31 +167,29 @@ def run_chemprop(csv_path,
                  base_save_path=BASE_SAVE_PATH,
                  device=0):
 
-	cmd = ("python $HOME/Repo/projects/chemprop/train.py --data_path {0}"
-	       " --dataset_type regression --save_dir {1}"
-		   " --save_smiles_splits "
-	       " --no_features_scaling --quiet  --gpu {2} --num_folds 1 "
-	       " --metric 'mae' --dropout {3} "
-	       " --epochs 1 ").format(
-		csv_path, save_dir,
-		device, dropout)
+    cmd = ("python $HOME/Repo/projects/chemprop/train.py --data_path {0}"
+           " --dataset_type regression --save_dir {1}"
+           " --save_smiles_splits "
+           " --no_features_scaling --quiet  --gpu {2} --num_folds 1 "
+           " --metric 'mae' --dropout {3} ").format(
+        csv_path, save_dir,
+        device, dropout)
 
-	if features_path is not None:
-		cmd += " --features_path {}".format(features_path)
+    if features_path is not None:
+        cmd += " --features_path {}".format(features_path)
 
-	if features_only:
-		cmd += " --features_only"
+    if features_only:
+        cmd += " --features_only"
 
-	cmds = ["source deactivate", "source activate chemprop",
-			cmd]
+    cmds = ["source deactivate", "source activate chemprop",
+            cmd]
 
-	for cmd in cmds:
-		try:
-			subprocess.check_output([cmd], shell=True).decode()
-		except Exception as e:
-			print(e)
-			continue
-
+    for cmd in cmds:
+        try:
+            subprocess.check_output([cmd], shell=True).decode()
+        except Exception as e:
+            print(e)
+            continue
 
 
 def get_best_val_score(save_dir):
@@ -244,36 +242,36 @@ def evaluate_model(prop_name,
 
 
 def run_expt(conn, experiment, **kwargs):
-	i = 0
-	while (experiment.progress.observation_count
-		< experiment.observation_budget):
+    i = 0
+    while (experiment.progress.observation_count
+            < experiment.observation_budget):
 
-		suggestion = conn.experiments(experiment.id
-			).suggestions().create()
-		dropout = np.exp(suggestion.assignments["log_dropout"])
-		if i > 0:
-			kwargs.update({"resave_feats": False,
-					"resave_csv": False})
-		try:
-			value = evaluate_model(dropout=dropout, **kwargs)
-		except Exception as e:
-			print(e)
-			conn.experiments(experiment.id).observations().create(
-				suggestion=suggestion.id,
-				failed=True)
+        suggestion = conn.experiments(experiment.id
+                                      ).suggestions().create()
+        dropout = np.exp(suggestion.assignments["log_dropout"])
+        if i > 0:
+            kwargs.update({"resave_feats": False,
+                           "resave_csv": False})
+        try:
+            value = evaluate_model(dropout=dropout, **kwargs)
+        except Exception as e:
+            print(e)
+            conn.experiments(experiment.id).observations().create(
+                suggestion=suggestion.id,
+                failed=True)
 
-			continue	
+            continue
 
-	print(value)
+        print(value)
 
-	conn.experiments(experiment.id).observations().create(
-	    suggestion=suggestion.id,
-	    value=value,
-	)
+        conn.experiments(experiment.id).observations().create(
+            suggestion=suggestion.id,
+            value=value,
+        )
 
-	experiment = conn.experiments(experiment.id).fetch()
+        experiment = conn.experiments(experiment.id).fetch()
 
-	i += 1
+        i += 1
 
 
 def main(feats=FEATS,
@@ -325,8 +323,8 @@ def main(feats=FEATS,
                 # break
         # break
 
-    # for p in procs:
-    #     p.join()
+    for p in procs:
+        p.join()
 
 # NEED TO USE THE SAME TRAIN  / VAL  / TEST SPLITS!!!!!!
 # AND ONLY TRAIN ON A SUBSET OF THE DATA!!
