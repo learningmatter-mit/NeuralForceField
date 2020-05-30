@@ -11,9 +11,11 @@ from nff.data.parallel import (split_dataset, rd_parallel,
                                summarize_rd, rejoin_props)
 from nff.utils.data import (from_db_pickle, get_bond_list, split_confs)
 import pickle
-
+import time
 
 def main(pickle_path, save_path, num_procs=5, nbrlist_cutoff=5):
+
+    start = time.time()
 
     print("Loading dataset and generating non-bonded neighbour list...")
     dataset = from_db_pickle(pickle_path, nbrlist_cutoff)
@@ -50,6 +52,9 @@ def main(pickle_path, save_path, num_procs=5, nbrlist_cutoff=5):
     with open(save_path, "wb") as f:
         pickle.dump(combined_dic, f)
 
+    end = time.time()
+    hours = (end - start) / 3600
+    print("Finished in %.2f hours" % hours)
     print("Complete!")
 
 
