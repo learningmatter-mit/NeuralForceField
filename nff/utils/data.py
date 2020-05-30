@@ -79,8 +79,14 @@ def from_db_pickle(path, nbrlist_cutoff):
 
     for smiles, sub_dic in dic.items():
         concat_dic = concat_conformers(sub_dic, nbrlist_cutoff)
-        spec_dic = {key: val for key, val in sub_dic.items()
-                    if key != "conformers" and type(val[0]) != "str"}
+        spec_dic = {}
+        for key, val in sub_dic.items():
+            if key == "conformers":
+                continue
+            if hasattr(val, "__iter__") and type(val[0]) is str:
+                continue
+            spec_dic[key] = val
+
         props_list.append({"smiles": smiles, **spec_dic, **concat_dic})
 
     props = concatenate_dict(*props_list)
