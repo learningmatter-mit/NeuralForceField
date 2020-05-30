@@ -40,7 +40,7 @@ def main(base_path=BASE_PATH,
             files.append(file)
 
     for file in files:
-    	pickle_path = os.path.join(base_path, file)
+        pickle_path = os.path.join(base_path, file)
         save_path = pickle_path.replace(suffix, "_nbrs" + suffix)
         text = TEMPLATE.format(pickle_path=pickle_path,
                                save_path=save_path)
