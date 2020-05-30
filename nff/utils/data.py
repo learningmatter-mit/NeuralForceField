@@ -66,7 +66,7 @@ def concat_conformers(sub_dic, nbrlist_cutoff=5.0):
     new_dic.update({"mol_size": mol_size,
                     "nxyz": nxyz,
                     "num_atoms": [len(nxyz)],
-                    "nbr_list": new_nbrs.tolist()})
+                    "nbr_list": [new_nbrs]})
 
     return new_dic
 
