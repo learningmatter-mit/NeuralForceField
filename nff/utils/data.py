@@ -93,9 +93,6 @@ def from_db_pickle(path, nbrlist_cutoff):
     props = concatenate_dict(*props_list)
     dataset = Dataset(props=props, units='kcal/mol')
 
-    import pdb
-    pdb.set_trace()
-
     return dataset
 
 
