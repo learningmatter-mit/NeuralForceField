@@ -132,8 +132,10 @@ class MeanAbsoluteError(Metric):
 
     @staticmethod
     def loss_fn(y, yp):
-        # pdb.set_trace()
+
+        y = y.to(torch.float)
         diff = y - yp.view(y.shape)
+
         return torch.sum(torch.abs(diff).view(-1)).detach().cpu().data.numpy()
 
 
