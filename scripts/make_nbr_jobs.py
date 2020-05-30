@@ -17,7 +17,7 @@ TEMPLATE = """#!/bin/bash
 
 source $HOME/.bashrc
 source activate htvs_3
-script=/home/saxelrod/repo/nff/covid/NeuralForceField/scripts/save_bond_nbrs
+script=/home/saxelrod/repo/nff/covid/NeuralForceField/scripts/save_bond_nbrs.py
 export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH
 python $script --pickle_path {pickle_path} --save_path {save_path}
 
@@ -39,7 +39,8 @@ def main(base_path=BASE_PATH,
         if file.startswith(name_start) and file.endswith(suffix):
             files.append(file)
 
-    for pickle_path in files:
+    for file in files:
+    	pickle_path = os.path.join(base_path, file)
         save_path = pickle_path.replace(suffix, "_nbrs" + suffix)
         text = TEMPLATE.format(pickle_path=pickle_path,
                                save_path=save_path)
