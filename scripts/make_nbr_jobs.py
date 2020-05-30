@@ -23,7 +23,7 @@ python $script --pickle_path {pickle_path} --save_path {save_path}
 
 
 """
-BASE_PATH = "/pool001/saxelrod/engaging_nfs/data_from_fock/final_yaml"
+BASE_PATH = "/pool001/saxelrod/data_from_fock/final_yaml"
 NAME_START = "covid_fock_"
 SUFFIX = ".pickle"
 
