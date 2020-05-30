@@ -79,7 +79,8 @@ def from_db_pickle(path, nbrlist_cutoff):
 
     for smiles, sub_dic in dic.items():
         concat_dic = concat_conformers(sub_dic, nbrlist_cutoff)
-        props_list.append({"smiles": smiles, **concat_dic})
+        sub_dic.pop("conformers")
+        props_list.append({"smiles": smiles, **sub_dic, **concat_dic})
 
     props = concatenate_dict(*props_list)
     dataset = Dataset(props=props, units='kcal/mol')
@@ -105,28 +106,29 @@ def get_bond_list(mol):
 
     return bond_list
 
+
 def split_nxyz(dic):
-    
+
     mol_size = dic['mol_size'].item()
     nxyz = dic['nxyz']
     num_mols = len(nxyz) // mol_size
     split = torch.split(nxyz, [mol_size] * num_mols)
-    
+
     return split, num_mols
 
+
 def split_confs(dic):
-    
-    split, num_mols = split_nxyz(dic)   
+
+    split, num_mols = split_nxyz(dic)
     mol_size = dic['mol_size'].item()
-    
+
     working_nbrs = copy.deepcopy(dic['nbr_list'])
     split_nbrs = []
-    
+
     for conf in range(num_mols):
         nbr_mask = (working_nbrs[:, 0] < mol_size) * (working_nbrs[:, 1] < mol_size
-                    ) * (working_nbrs[:, 0] >= 0) * (working_nbrs[:, 1] >= 0)
+                                                      ) * (working_nbrs[:, 0] >= 0) * (working_nbrs[:, 1] >= 0)
         split_nbrs.append(working_nbrs[nbr_mask].tolist())
         working_nbrs -= mol_size
-      
-    return split_nbrs
 
+    return split_nbrs
