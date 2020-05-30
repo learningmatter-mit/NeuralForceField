@@ -43,7 +43,7 @@ def main(pickle_path, save_path, num_procs=5, nbrlist_cutoff=5):
         
         split_nbrs = split_confs(dic)
         nbr_name = "nbrs_%.dA" % nbrlist_cutoff
-        combined_dic["smiles"][nbr_name] = split_nbrs
+        combined_dic[smiles][nbr_name] = split_nbrs
 
     print("Saving...")
 
