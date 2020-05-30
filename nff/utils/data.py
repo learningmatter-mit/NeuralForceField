@@ -46,7 +46,7 @@ def concat_conformers(sub_dic, nbrlist_cutoff=5.0):
 
     # add to list of conglomerated neighbor lists
     new_nbrs = torch.cat(new_nbrs)
-    dataset.props.pop('nbr_list')
+    dataset.props["nbr_list"] = new_nbrs
 
     # concatenate the nxyz's
     nxyz = np.concatenate([np.array(item) for item in props["nxyz"]]
@@ -65,8 +65,7 @@ def concat_conformers(sub_dic, nbrlist_cutoff=5.0):
 
     new_dic.update({"mol_size": mol_size,
                     "nxyz": nxyz,
-                    "num_atoms": [len(nxyz)],
-                    "nbr_list": new_nbrs})
+                    "num_atoms": [len(nxyz)]})
 
     return new_dic
 
