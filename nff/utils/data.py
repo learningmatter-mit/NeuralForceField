@@ -59,9 +59,9 @@ def concat_conformers(sub_dic, nbrlist_cutoff=5.0):
         if isinstance(val, torch.Tensor):
             val = val.to(torch.float)
         try:
-            new_dic[key] = torch.Tensor(val).reshape(-1, 1)
+            new_dic[key] = torch.Tensor(val).reshape(-1, 1).tolist()
         except ValueError:
-            new_dic[key] = torch.cat(val).reshape(-1, 1)
+            new_dic[key] = torch.cat(val).reshape(-1, 1).tolist()
 
     new_dic.update({"mol_size": mol_size,
                     "nxyz": nxyz,
