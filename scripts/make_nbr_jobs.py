@@ -7,7 +7,7 @@ JOB_DIR = "testing"
 
 
 TEMPLATE = """#!/bin/bash
-#SBATCH -n 10
+#SBATCH -n 5
 #SBATCH -N 1
 #SBATCH -t 4300
 #SBATCH -p sched_mit_rafagb,sched_opportunist
