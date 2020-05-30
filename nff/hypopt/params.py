@@ -111,12 +111,21 @@ def get_extra_cp_feats(cp_params):
     return cp_feats
 
 
+def are_class(param_dic):
+
+    model_kind = param_dic["model_kind"]
+    if model_kind.lower() == "regression":
+        classifications = [False] * len(param_dic["readout_names"])
+    elif model_kind.lower() == "classification":
+        classifications = [True] * len(param_dic["readout_names"])
+    return classifications
+
+
 def get_wc_params(param_dic, num_extra_feats):
     """
     Get params for a WeightedConformer model
     """
-
-    classifications = [True] * len(param_dic["readout_names"])
+    classifications = are_class(param_dic)
     num_basis = param_dic["mol_basis"] + num_extra_feats
 
     readout = make_readout(names=param_dic["readout_names"],
@@ -174,7 +183,7 @@ def get_schnet_features_params(param_dic, num_extra_feats):
     Get params for a SchNetFeatures model
     """
 
-    classifications = [True] * len(param_dic["readout_names"])
+    classifications = are_class(param_dic)
 
     input_layers, output_layers = get_schnet_features_io_layers(param_dic)
 
@@ -301,7 +310,7 @@ def make_cp2d_model(param_dic):
 
     cp_params = get_cp_params(param_dic)
     num_extra_feats = get_extra_cp_feats(cp_params)
-    classifications = [True] * len(param_dic["readout_names"])
+    classifications = are_class(param_dic)
     num_basis = num_extra_feats
 
     readout = make_readout(names=param_dic["readout_names"],

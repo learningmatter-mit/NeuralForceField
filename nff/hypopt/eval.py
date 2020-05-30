@@ -65,5 +65,7 @@ def evaluate_model(model,
 
     metric = get_metric(metric_name)
     result = metric(y_true, probas_pred)
+    if type(result) is not float:
+        result = float(result)
 
     return result

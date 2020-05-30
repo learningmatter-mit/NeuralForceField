@@ -3,8 +3,7 @@ from sigopt import Connection
 import os
 import json
 import copy
-
-import pdb
+import numpy as np
 
 from nff.hypopt.io import (make_model_folder,
                            save_info,
@@ -86,7 +85,12 @@ def make_param_dic(set_params,
 
     for key in all_keys:
         if key in assignments.keys():
-            param_dic.update({key: assignments[key]})
+            if key.startswith("log_"):
+                actual_key = key.split("log_")[1]
+                val = np.exp(assignments[key])
+                param_dic.update({actual_key: val})
+            else:
+                param_dic.update({key: assignments[key]})
         else:
             param_dic.update({key: set_params[key]})
     add_features(param_dic)
@@ -194,7 +198,8 @@ def end_log(value, eval_metric, model_folder, project_name):
 
 
 def get_init_func(model_kind):
-    dic = {"classification": init_class_loop}
+    dic = {"classification": init_class_loop,
+            "regression": init_class_loop}
     return dic[model_kind]
 
 
