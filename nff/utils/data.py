@@ -61,7 +61,7 @@ def concat_conformers(sub_dic, nbrlist_cutoff=5.0):
         try:
             new_dic[key] = torch.Tensor(val).reshape(-1, 1)
         except ValueError:
-            new_dic[key] = val
+            new_dic[key] = torch.cat(val).reshape(-1, 1)
 
     new_dic.update({"mol_size": mol_size,
                     "nxyz": nxyz,
