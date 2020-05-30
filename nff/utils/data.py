@@ -68,9 +68,6 @@ def concat_conformers(sub_dic, nbrlist_cutoff=5.0):
                     "num_atoms": [len(nxyz)],
                     "nbr_list": new_nbrs})
 
-    import pdb
-    pdb.set_trace()
-
     return new_dic
 
 
@@ -95,6 +92,9 @@ def from_db_pickle(path, nbrlist_cutoff):
 
     props = concatenate_dict(*props_list)
     dataset = Dataset(props=props, units='kcal/mol')
+
+    import pdb
+    pdb.set_trace()
 
     return dataset
 
