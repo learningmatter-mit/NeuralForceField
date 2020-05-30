@@ -54,7 +54,7 @@ def concat_conformers(sub_dic, nbrlist_cutoff=5.0):
 
     new_dic = {}
     for key, val in dataset.props.items():
-        if key == "nxyz":
+        if key in ["nxyz", "nbr_list"]:
             continue
         if isinstance(val, torch.Tensor):
             val = val.to(torch.float)
@@ -65,7 +65,11 @@ def concat_conformers(sub_dic, nbrlist_cutoff=5.0):
 
     new_dic.update({"mol_size": mol_size,
                     "nxyz": nxyz,
-                    "num_atoms": [len(nxyz)]})
+                    "num_atoms": [len(nxyz)],
+                    "nbr_list": new_nbrs})
+
+    import pdb
+    pdb.set_trace()
 
     return new_dic
 
