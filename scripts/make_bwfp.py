@@ -1,26 +1,30 @@
-import os
-import sys
-
-sys.path.insert(0, "/home/saxelrod/repo/htvs/master/htvs")
-sys.path.insert(0, "/home/saxelrod/repo/htvs/master/htvs/djangochem")
-sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
-
-import django
-os.environ["DJANGO_SETTINGS_MODULE"]="djangochem.settings.orgel"
-
-from django.db import connections
-import json
-import argparse
-import copy
-import torch
-import numpy as np
-
-from nff.data.parallel import (split_dataset, rd_parallel,
-                               summarize_rd, rejoin_props)
-from nff.data import Dataset
-from nff.data.features import (featurize_bonds, featurize_atoms)
-from nff.data.features import add_model_fps
+from nff.uitls.data import from_db_pickle, get_bond_list
 from nff.utils import data_to_yml
+from nff.data.features import add_model_fps
+from nff.data.features import (featurize_bonds, featurize_atoms)
+from nff.data import Dataset
+from nff.data.parallel import (split_dataset, rd_parallel,
+                               import numpy as np
+                               import torch
+                               import copy
+                               import argparse
+                               import json
+                               from django.db import connections
+                               import django
+                               import os
+                               import sys
+
+                               sys.path.insert(
+                                   0, "/home/saxelrod/repo/htvs/master/htvs")
+                               sys.path.insert(
+                                   0, "/home/saxelrod/repo/htvs/master/htvs/djangochem")
+                               sys.path.insert(
+                                   0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
+
+                               os.environ["DJANGO_SETTINGS_MODULE"]="djangochem.settings.orgel"
+
+
+                               summarize_rd, rejoin_props)
 
 METHOD_NAME = 'gfn2-xtb'
 METHOD_DESCRIP = 'Crest GFN2-xTB'
@@ -28,7 +32,7 @@ SPECIES_PATH = "/pool001/saxelrod/data_from_fock/data/covid_data/spec_ids.json"
 GROUP_NAME = 'covid'
 MODEL_PATH = "/pool001/saxelrod/data_from_fock/energy_model/best_model"
 BASE_SAVE_PATH = ("/pool001/saxelrod/data_from_fock"
-                  "/combined_fingerprint_datasets")
+                  "/final_fingerprint_datasets")
 
 
 NUM_THREADS = 100
@@ -99,6 +103,30 @@ def get_rd_dataset(dataset,
     return dataset
 
 
+def make_bond_nbrs(dataset, num_procs=5):
+
+    print("Converting dataset xyz's to mols with {} parallel processes.".format(
+        num_procs))
+    datasets = split_dataset(dataset=dataset, num=num_procs)
+
+    print("Converting xyz to RDKit mols...")
+    datasets = rd_parallel(datasets)
+    summarize_rd(new_sets=datasets, first_set=dataset)
+
+    new_props = rejoin_props(datasets)
+    dataset.props = new_props
+
+    bond_dic = {}
+
+    for rd_mols, smiles in zip(dataset.props["rd_mols"],
+                           dataset.props["smiles"]):
+        bond_dic[smiles] = []
+        for mol in rd_mols:
+            bond_list = get_bond_list(mol)
+            bond_dic[smiles].append(bond_list)
+        
+
+
 def get_bind_dataset(spec_ids,
                      batch_size=3,
                      geoms_per_spec=NUM_CONFS,
@@ -142,18 +170,23 @@ def dataset_getter(data_path,
                    get_model_fp,
                    no_features,
                    no_nbrs,
+                   pickle_path=None,
+                   nbrlist_cutoff=5.0,
                    num_procs=NUM_PROCS,
                    num_confs=NUM_CONFS):
 
     if os.path.isfile(data_path):
         dataset = Dataset.from_file(data_path)
 
+    elif os.path.isfile(str(pickle_path)):
+        dataset = from_db_pickle(pickle_path, nbrlist_cutoff)
+
     else:
         spec_ids = get_subspec_ids(all_spec_ids=all_spec_ids,
                                    num_threads=num_threads,
                                    thread_number=thread_number)
         dataset, _ = get_bind_dataset(spec_ids, no_nbrs=no_nbrs,
-            geoms_per_spec=num_confs)
+                                      geoms_per_spec=num_confs)
 
     rd_dataset = get_rd_dataset(dataset=dataset,
                                 thread_number=thread_number,
@@ -240,10 +273,6 @@ def save_features(rd_dataset, thread_number, base_path=BASE_SAVE_PATH):
                             smiles=rd_dataset.props["smiles"])
 
 
-def to_json(dataset):
-    pass
-
-
 def main(thread_number,
          num_confs=NUM_CONFS,
          num_threads=NUM_THREADS,
@@ -253,7 +282,8 @@ def main(thread_number,
          prefix='combined',
          get_model_fp=False,
          no_features=False,
-         no_nbrs=False):
+         no_nbrs=False,
+         pickle_path=None):
 
     print("Loading species ids...")
 
@@ -271,7 +301,8 @@ def main(thread_number,
                                 get_model_fp=get_model_fp,
                                 no_features=no_features,
                                 no_nbrs=no_nbrs,
-                                num_confs=num_confs)
+                                num_confs=num_confs,
+                                pickle_path=pickle_path)
 
     if not no_features:
 
@@ -295,7 +326,7 @@ def main(thread_number,
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('thread_number', type=int, help='Thread number')
+    parser.add_argument('--thread_number', type=int, help='Thread number')
     parser.add_argument('num_threads', type=int, help='Number of threads')
     parser.add_argument('--num_confs', type=int, help='Number of conformers',
                         default=NUM_CONFS)
@@ -305,6 +336,7 @@ if __name__ == "__main__":
     parser.add_argument('--no_features', action='store_true', default=False)
     parser.add_argument('--no_nbrs', action='store_true', default=False)
     parser.add_argument('--base_path', type=str, default=BASE_SAVE_PATH)
+    parser.add_argument('--picke_path', type=str, default=None)
 
     arguments = parser.parse_args()
 
@@ -315,4 +347,5 @@ if __name__ == "__main__":
          no_features=arguments.no_features,
          no_nbrs=arguments.no_nbrs,
          base_path=arguments.base_path,
-         num_confs=arguments.num_confs)
+         num_confs=arguments.num_confs,
+         pickle_path=arguments.pickle_path)
