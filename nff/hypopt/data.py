@@ -127,9 +127,9 @@ def trim_confs(dataset, num_confs):
 
 def get_data_dic(base_train, base_val, base_test, params):
 
-    data_dic = {"train": {"dataset": base_train.copy()},
-                "val": {"dataset": base_val.copy()},
-                "test": {"dataset": base_test.copy()}}
+    data_dic = {"train": {"dataset": base_train},
+                "val": {"dataset": base_val},
+                "test": {"dataset": base_test}}
 
     for key, split in data_dic.items():
         this_set = split["dataset"]

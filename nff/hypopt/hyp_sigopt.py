@@ -536,8 +536,6 @@ def run_loop(project_name,
             T.train(device=device, n_epochs=num_epochs)
         except Exception as e:
             print(e)
-            import pdb
-            pdb.post_mortem()
             experiment = conclude_round(conn=conn,
                                         experiment=experiment,
                                         suggestion=suggestion,
