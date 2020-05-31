@@ -32,7 +32,9 @@
                 "gauss_embed": true,
                 "batch_embeddings": false,
                 "cp_dropout": 0,
-                "model_kind": "regression"
+                "model_kind": "regression",
+                "best_log_readout_dropout": -3.5868228329053236,
+                "best_log_schnet_dropout": -3.147642728953321
 
 	},
 
@@ -42,13 +44,13 @@
 	"loss_name": "mse",
 	"target_name": "ensembleentropy",
 	"client_token": "KTNMWLZQYQSNCHVHPGIWSAVXEWLEWABZAHIJOLXKWAHQDRQE",
-	"save_dir": "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data",
+        "save_dir": "/home/gridsan/saxelrod/data/covid_data",
 
-	"objective": "minimize",
+        "objective": "minimize",
 
-	"val_size": 0.2,
-	"test_size": 0.2,
-	"dataset_path": "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data/schnet_features_sigopt_entropy_big.pth.tar",
+        "val_size": 0.2,
+        "test_size": 0.2,
+        "dataset_path": "/home/gridsan/saxelrod/data/covid_data/schnet_features_sigopt_entropy_big.pth.tar",
 
 	"eval_metric": "mae",
 	"eval_on": "test",
