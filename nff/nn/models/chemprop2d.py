@@ -4,7 +4,7 @@ from nff.nn.modules import NodeMultiTaskReadOut
 
 from munch import Munch
 
-from chemprop.models import build_model as build_chemprop
+# from chemprop.models import build_model as build_chemprop
 from chemprop.data.data import MoleculeDataset
 
 

@@ -4,7 +4,7 @@ import copy
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from nff.utils.xyz2mol import xyz2mol
-from e3fp.pipeline import fprints_from_mol
+# from e3fp.pipeline import fprints_from_mol
 from nff.utils.cuda import batch_to
 from torch.utils.data import DataLoader
 
