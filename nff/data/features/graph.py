@@ -149,11 +149,26 @@ def get_undirected_bonds(mol):
 
     return bond_list
 
+def get_undirected_bond_idx(mol):
+
+    bond_list = []
+    bonds = mol.GetBonds()
+
+    for bond in bonds:
+
+        start = bond.GetBeginAtom().GetAtomicNum()
+        end = bond.GetEndAtom().GetAtomicNum()
+        lower = min((start, end))
+        upper = max((start, end))
+
+        bond_list.append([lower, upper])
+
+    return bond_list
 
 def check_connectivity(mol_0, mol_1):
 
-    bonds_0 = get_undirected_bonds(mol_0)
-    bonds_1 = get_undirected_bonds(mol_1)
+    bonds_0 = get_undirected_bond_idx(mol_0)
+    bonds_1 = get_undirected_bond_idx(mol_1)
 
     return bonds_0 == bonds_1
 
