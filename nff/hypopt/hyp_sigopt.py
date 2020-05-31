@@ -233,6 +233,13 @@ def get_expt_ids(project_name, save_dir):
 
     return expt_ids
 
+def make_best(set_params):
+    assignments = {key.replace("best_", ""): val for key, val
+                   in set_params.items()}
+    param_dic = make_param_dic(set_params=set_params,
+                               assignments=assignments)
+
+    return param_dic, 0
 
 def get_best_params(project_name,
                     save_dir,
@@ -242,6 +249,10 @@ def get_best_params(project_name,
 
     expt_ids = get_expt_ids(project_name=project_name,
                             save_dir=save_dir)
+
+    if not expt_ids:
+        return make_best(set_params)
+
     conn = Connection(client_token=client_token)
 
     comparison_dic = {"minimize": lambda old, new: new < old,
