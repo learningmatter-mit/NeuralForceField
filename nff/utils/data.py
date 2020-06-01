@@ -2,6 +2,8 @@ import torch
 import numpy as np
 import copy
 import pickle
+
+from rdkit.Chem.rdmolops import GetFormalCharge
 from nff.data import Dataset, concatenate_dict
 
 
@@ -99,20 +101,33 @@ def from_db_pickle(path, nbrlist_cutoff):
 def get_bond_list(mol):
 
     bond_list = []
-    bonds = mol.GetBonds()
 
-    for bond in bonds:
-
+    for bond in mol.GetBonds():
+        bond_type = bond.GetBondType().name.lower()
+        stereo = bond.GetStereo().name.lower().replace('stereo', '')
         start = bond.GetBeginAtomIdx()
         end = bond.GetEndAtomIdx()
         lower = min((start, end))
         upper = max((start, end))
-        bond_name = bond.GetBondType().name.lower()
+        bond_dic = {"indices": [lower, upper],
+                    "type": bond_type,
+                    "stereo": stereo}
 
-        bond_list.append({"indices": [lower, upper],
-                          "type": bond_name})
+        bond_list.append(bond_dic)
 
-    return bond_list
+
+def get_atom_list(mol):
+
+    atom_list = []
+
+    for atom in mol.GetAtoms():
+        atomic_num = atom.GetAtomicNum()
+        charge = atom.GetFormalCharge()
+        chiral_tag = atom.GetChiralTag().name.lower().replace('chi_', '')
+        dic = {"number": atomic_num,
+               "charge": charge,
+               "chiral_tag": chiral_tag}
+        atom_list.append(dic)
 
 
 def split_nxyz(dic):

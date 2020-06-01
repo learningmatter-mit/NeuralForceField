@@ -9,7 +9,7 @@ import argparse
 
 from nff.data.parallel import (split_dataset, rd_parallel,
                                summarize_rd, rejoin_props)
-from nff.utils.data import (from_db_pickle, get_bond_list, split_confs)
+from nff.utils.data import (from_db_pickle, get_bond_list, split_confs, get_atom_list)
 import pickle
 import time
 
@@ -37,11 +37,16 @@ def main(pickle_path, save_path, num_procs=5, nbrlist_cutoff=5):
 
         smiles = dic["smiles"]
         rd_mols = dic["rd_mols"]
-        combined_dic[smiles] = {"bonds": []}
+        combined_dic[smiles] = {"bonds": [], "atoms": [],
+                                "rd_mols": rd_mols}
 
         for mol in rd_mols:
             bond_list = get_bond_list(mol)
+            atom_list = get_atom_list(mol)
+
             combined_dic[smiles]["bonds"].append(bond_list)
+            combined_dic[smiles]["atoms"].append(atom_list)
+
         
         split_nbrs = split_confs(dic)
         nbr_name = "nbrs_%.dA" % nbrlist_cutoff
