@@ -235,7 +235,7 @@ def log_missing(missing_e):
             ", ".join(missing_e)))
 
 
-def make_rd_mols(dataset, verbose=True):
+def make_rd_mols(dataset, verbose=True, check_smiles=True):
 
     num_atoms = dataset.props['num_atoms']
     mol_size = dataset.props.get("mol_size", num_atoms).tolist()
@@ -276,7 +276,8 @@ def make_rd_mols(dataset, verbose=True):
                               allow_charged_fragments=CHARGED_FRAGMENTS,
                               embed_chiral=EMBED_CHIRAL,
                               use_huckel=USE_HUCKEL)
-                verify_smiles(rd_mol=mol, smiles=smiles)
+                if check_smiles:
+                    verify_smiles(rd_mol=mol, smiles=smiles)
 
             except Exception as e:
 

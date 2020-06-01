@@ -1,5 +1,5 @@
 {
-	"project_name": "unqiue_confs_schnet_features",
+	"project_name": "unique_confs_schnet_features",
 
 	"param_regime": [{"name": "log_readout_dropout", "type": "double", "bounds": {"min": -5, "max": 0}},
 		    {"name": "log_schnet_dropout", "type": "double", "bounds": {"min": -5, "max": 0}}
@@ -37,18 +37,18 @@
 	},
 
 	"budget": 20,
-	"device": 2,
+	"device": 0,
 	"num_epochs": 30,
 	"loss_name": "mse",
-	"target_name": "ensembleentropy",
+	"target_name": "uniqueconfs",
 	"client_token": "KTNMWLZQYQSNCHVHPGIWSAVXEWLEWABZAHIJOLXKWAHQDRQE",
-	"save_dir": "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data",
+	"save_dir": "/pool001/saxelrod/data_from_fock/data/covid_data",
 
 	"objective": "minimize",
 
 	"val_size": 0.2,
 	"test_size": 0.2,
-	"dataset_path": "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data/schnet_features_sigopt_entropy_big.pth.tar",
+	"dataset_path": "/pool001/saxelrod/data_from_fock/data/covid_data/schnet_features_sigopt_entropy_big.pth.tar",
 
 	"eval_metric": "mae",
 	"eval_on": "test",
@@ -56,7 +56,7 @@
 
 	"model_type": "SchNetFeatures",
 	"model_kind": "regression",
-	"loss_coef": {"ensembleentropy": 1.0}
+	"loss_coef": {"uniqueconfs": 1.0}
 
 
 }

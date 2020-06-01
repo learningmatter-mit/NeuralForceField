@@ -1,5 +1,5 @@
 {
-	"project_name": "unqiue_confs_schnet_features",
+	"project_name": "ensembleentropy_schnet_regular",
 
 	"param_regime": [{"name": "log_readout_dropout", "type": "double", "bounds": {"min": -5, "max": 0}},
 		    {"name": "log_schnet_dropout", "type": "double", "bounds": {"min": -5, "max": 0}}
@@ -8,10 +8,12 @@
 
 	"set_params": {
 				"boltz_params": {"boltz_type": "multiply"},
-				"readout_names": ["uniqueconfs"],
+				"readout_names": ["ensembleentropy"],
 				"trainable_gauss": false,
 				"activation": "ReLU",
+				"layer_act": "ReLU",
 				"n_filters": 64,
+				"n_atom_basis": 64,
 				"mol_basis": 300,
 				"n_gaussians": 50,
 				"n_bond_hidden": 300,
@@ -20,6 +22,8 @@
 				"mini_batches": 1,
 				"same_filters": false,
 				"num_readout_layers": 2,
+				"num_mol_layers": 1,
+				"mol_nn_dropout": 0,
 				"cutoff": 5.0,
 				"lr": 1e-4,
 				"min_lr": 1e-7,
@@ -27,8 +31,6 @@
 				"factor": 0.5,
 				"extra_features": null,
                 "num_confs": 1,
-                "n_atom_basis": 133,
-                "n_bond_features": 26,
                 "gauss_embed": true,
                 "batch_embeddings": false,
                 "cp_dropout": 0,
@@ -37,24 +39,24 @@
 	},
 
 	"budget": 20,
-	"device": 2,
+	"device": 0,
 	"num_epochs": 30,
 	"loss_name": "mse",
 	"target_name": "ensembleentropy",
 	"client_token": "KTNMWLZQYQSNCHVHPGIWSAVXEWLEWABZAHIJOLXKWAHQDRQE",
-	"save_dir": "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data",
+	"save_dir": "/pool001/saxelrod/data_from_fock/data/covid_data",
 
 	"objective": "minimize",
 
 	"val_size": 0.2,
 	"test_size": 0.2,
-	"dataset_path": "/home/saxelrod/engaging_nfs/data_from_fock/data/covid_data/schnet_features_sigopt_entropy_big.pth.tar",
+	"dataset_path": "/pool001/saxelrod/data_from_fock/data/covid_data/schnet_features_sigopt_entropy_big.pth.tar",
 
 	"eval_metric": "mae",
 	"eval_on": "test",
 	"monitor_metrics": ["MeanAbsoluteError"],
 
-	"model_type": "SchNetFeatures",
+	"model_type": "WeightedConformers",
 	"model_kind": "regression",
 	"loss_coef": {"ensembleentropy": 1.0}
 

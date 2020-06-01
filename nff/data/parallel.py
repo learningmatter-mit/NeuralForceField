@@ -65,9 +65,10 @@ def gen_parallel(func, kwargs_list):
     return result_dsets
 
 
-def rd_parallel(datasets):
+def rd_parallel(datasets, check_smiles=True):
 
-    kwargs_list = [{"dataset": dataset, "verbose": False}
+    kwargs_list = [{"dataset": dataset, "verbose": False,
+                    "check_smiles": check_smiles}
                    for dataset in datasets]
     result_dsets = gen_parallel(func=make_rd_mols,
                                 kwargs_list=kwargs_list)

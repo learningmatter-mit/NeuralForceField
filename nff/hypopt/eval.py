@@ -43,6 +43,13 @@ def get_eval_kwargs(model_type, param_dic):
 
     return eval_kwargs
 
+def cat_tensors(tensors):
+    try:
+        out = torch.cat(tensors).reshape(-1)
+    except RuntimeError:
+        out = torch.stack(tensors).reshape(-1)
+    return out
+
 def evaluate_model(model,
                    model_type,
                    target_name,
@@ -60,8 +67,8 @@ def evaluate_model(model,
                                                 device=device,
                                                 **eval_kwargs)
 
-    probas_pred = torch.cat(results[target_name]).reshape(-1)
-    y_true = torch.cat(targets[target_name]).reshape(-1)
+    probas_pred = cat_tensors(results[target_name])
+    y_true = cat_tensors(targets[target_name])
 
     metric = get_metric(metric_name)
     result = metric(y_true, probas_pred)
