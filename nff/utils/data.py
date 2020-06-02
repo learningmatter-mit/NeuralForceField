@@ -115,6 +115,8 @@ def get_bond_list(mol):
 
         bond_list.append(bond_dic)
 
+    return bond_list
+
 
 def get_atom_list(mol):
 
@@ -128,6 +130,8 @@ def get_atom_list(mol):
                "charge": charge,
                "chiral_tag": chiral_tag}
         atom_list.append(dic)
+
+    return atom_list
 
 
 def split_nxyz(dic):
