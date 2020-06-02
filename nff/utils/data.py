@@ -147,9 +147,9 @@ def get_atom_list(mol):
                "chirality": atom.GetChiralTag().name.lower(),
                "num_bonded_h": num_h,
                "hybridization": atom.GetHybridization().name.lower(),
-               "aromaticity": atom.GetIsAromatic(),
+               "aromatic": atom.GetIsAromatic(),
                "mass": atom.GetMass()}
-               
+
         atom_list.append(dic)
 
     return atom_list
