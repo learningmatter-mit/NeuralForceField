@@ -538,6 +538,8 @@ def concatenate_dict(*dicts):
 
     def get_length(value):
         if is_list_of_lists(value):
+            if is_list_of_lists(value[0]):
+                return len(value)
             return 1
 
         elif isinstance(value, list):
@@ -546,6 +548,8 @@ def concatenate_dict(*dicts):
         return 1
 
     def get_length_of_values(dict_):
+        if 'nxyz' in dict_:
+            return get_length(dict_['nxyz'])
         return min([get_length(v) for v in dict_.values()])
 
     def flatten_val(value):
