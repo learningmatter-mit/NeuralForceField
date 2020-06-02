@@ -9,11 +9,14 @@ import pdb
 import sys
 import time
 from datetime import datetime
+import argparse
+
 
 TOKEN = "KTNMWLZQYQSNCHVHPGIWSAVXEWLEWABZAHIJOLXKWAHQDRQE"
-BASE_SAVE_PATH = ("/home/saxelrod/engaging_nfs/data_from_fock/"
+BASE_SAVE_PATH = ("/pool001/saxelrod/data_from_fock/"
                   "combined_fingerprint_datasets")
-BASE_CHEMPROP_PATH = "/home/saxelrod/chemprop_sigopt"
+BASE_CHEMPROP_PATH = "/pool001/saxelrod/data_from_fock/data/covid_data/chemprop_sigopt"
+CHEMPROP_TRAIN = "/home/saxelrod/repo/chemprop/master/chemprop/train.py"
 FEATS = ['mean_e3fp', 'morgan']
 PROPS = ["ensembleentropy"]
 
@@ -101,10 +104,12 @@ def is_recent(path):
 
 
 def collect_csvs(prop_name,
+                 feat_name,
                  resave,
+                 max_num,
                  base_save_path=BASE_SAVE_PATH):
 
-    combined_csv_name = "{}_combined.csv".format(prop_name)
+    combined_csv_name = "{}_{}_combined.csv".format(prop_name, feat_name)
     combined_path = os.path.join(base_save_path, combined_csv_name)
 
     if os.path.isfile(combined_path) and not resave:
@@ -116,7 +121,7 @@ def collect_csvs(prop_name,
         csv_names += re.findall(re_str, file)
 
     overall_dict = {}
-    for csv_name in csv_names:
+    for csv_name in csv_names[:max_num]:
         path = os.path.join(base_save_path, csv_name)
         if is_recent(path):
             continue
@@ -128,10 +133,24 @@ def collect_csvs(prop_name,
     return combined_path
 
 
+def read_rewrite_csv(prop_csv_path, overall_dict):
+
+    csv_dic, ordered_smiles = read_csv(prop_csv_path)
+    new_smiles = [smiles for smiles in ordered_smiles
+                  if smiles in overall_dict]
+    new_csv_dic = {key: csv_dic[key] for key in new_smiles}
+    write_csv(prop_csv_path, new_csv_dic)
+
+    final_csv_dic, final_ordered_smiles = read_csv(prop_csv_path)
+
+    return final_csv_dic, final_ordered_smiles
+
+
 def collect_features(feat_name,
                      prop_name,
                      prop_csv_path,
                      resave,
+                     max_num,
                      base_save_path=BASE_SAVE_PATH):
 
     combined_feat_name = "{}_{}_combined.npz".format(feat_name, prop_name)
@@ -147,7 +166,7 @@ def collect_features(feat_name,
 
     overall_dict = {}
 
-    for file in file_names:
+    for file in file_names[:max_num]:
         path = os.path.join(base_save_path, file)
         if is_recent(path):
             continue
@@ -156,7 +175,7 @@ def collect_features(feat_name,
         for smiles, feats in zip(data["smiles"], data["features"]):
             overall_dict[smiles] = feats
 
-    ordered_smiles, _ = read_csv(prop_csv_path)
+    csv_dic, ordered_smiles = read_rewrite_csv(prop_csv_path, overall_dict)
     ordered_feats = np.array([overall_dict[smiles]
                               for smiles in ordered_smiles])
 
@@ -174,12 +193,12 @@ def run_chemprop(csv_path,
                  base_save_path=BASE_SAVE_PATH,
                  device=0):
 
-    cmd = ("python $HOME/Repo/projects/chemprop/train.py --data_path {0}"
-           " --dataset_type regression --save_dir {1}"
+    cmd = ("python {0} --data_path {1}"
+           " --dataset_type regression --save_dir {2}"
            " --save_smiles_splits "
-           " --no_features_scaling --quiet  --gpu {2} --num_folds 1 "
-           " --metric 'mae' --dropout {3} ").format(
-        csv_path, save_dir,
+           " --no_features_scaling --quiet  --gpu {3} --num_folds 1 "
+           " --metric 'mae' --dropout {4} ").format(
+        CHEMPROP_TRAIN, csv_path, save_dir,
         device, dropout)
 
     if features_path is not None:
@@ -217,6 +236,7 @@ def evaluate_model(prop_name,
                    features_only,
                    save_dir,
                    dropout,
+                   max_num,
                    resave_feats=False,
                    resave_csv=False,
                    base_save_path=BASE_SAVE_PATH,
@@ -224,16 +244,21 @@ def evaluate_model(prop_name,
 
     csv_path = collect_csvs(prop_name=prop_name,
                             resave=resave_csv,
-                            base_save_path=base_save_path)
+                            base_save_path=base_save_path,
+                            max_num=max_num,
+                            feat_name=feat_name)
 
     if feat_name is not None:
         feat_path = collect_features(feat_name=feat_name,
                                      prop_name=prop_name,
                                      prop_csv_path=csv_path,
                                      resave=resave_feats,
-                                     base_save_path=base_save_path)
+                                     base_save_path=base_save_path,
+                                     max_num=max_num)
     else:
         feat_path = None
+
+
 
     run_chemprop(csv_path=csv_path,
                  features_path=feat_path,
@@ -281,17 +306,23 @@ def run_expt(conn, experiment, **kwargs):
         i += 1
 
 
-def main(feats=FEATS,
-         props=PROPS,
+def main(props,
+         max_num,
+         feats=FEATS,
          base_save_path=BASE_SAVE_PATH,
          base_chemprop_path=BASE_CHEMPROP_PATH,
          device=0,
          token=TOKEN,
          resave_feats=True,
-         resave_csv=True):
+         resave_csv=True,
+         add_none=False):
 
     procs = []
-    all_feats = feats + [None]
+    if add_none:
+        all_feats = feats + [None]
+    else:
+        all_feats = feats
+
 
     for i, feat_name in enumerate(all_feats):
         for j, prop_name in enumerate(props):
@@ -317,20 +348,34 @@ def main(feats=FEATS,
                               base_save_path=base_save_path,
                               device=device,
                               save_dir=save_dir,
-                              features_only=features_only)
+                              features_only=features_only,
+                              max_num=max_num)
+
+                # run_expt(conn, experiment, **kwargs)
 
                 p = Process(target=run_expt, args=(conn, experiment),
                             kwargs=kwargs)
                 p.start()
                 procs.append(p)
 
+                # time.sleep(120)
+
     for p in procs:
         p.join()
 
-# NEED TO USE THE SAME TRAIN  / VAL  / TEST SPLITS!!!!!!
-# AND ONLY TRAIN ON A SUBSET OF THE DATA!!
-
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--props', type=str, nargs='+', help=('Props names '))
+    parser.add_argument('--max_num', type=int,
+                        help=('Max num of feature files '))
+    parser.add_argument('--feats', type=str, nargs='+',
+                        help=('Features to include '), default=FEATS)
+    parser.add_argument('--add_none', default=False, action='store_true',
+                        help=('Add just mpnn '))
 
-    main()
+    arguments = parser.parse_args()
+    main(props=arguments.props,
+         max_num=arguments.max_num,
+         feats=arguments.feats,
+         add_none=arguments.add_none)
