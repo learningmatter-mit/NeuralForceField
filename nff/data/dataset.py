@@ -165,8 +165,8 @@ class Dataset(TorchDataset):
                 for nxyz in self.props['nxyz']
             ]
             self.props['offsets'] = [
-                torch.sparse.FloatTensor(nxyz.shape[0], 3)
-                for nxyz in self.props['nxyz']
+                torch.sparse.FloatTensor(nbrlist.shape[0], 3)
+                for nbrlist in self.props['nbr_list']
             ]
         else:
             self._get_periodic_neighbor_list(cutoff, undirected)
