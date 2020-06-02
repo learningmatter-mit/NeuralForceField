@@ -76,6 +76,18 @@ class TestConcatenate(unittest.TestCase):
         a = concatenate_dict(self.dict_a_list)
         self.assertEqual(a, self.dict_a_list)
 
+    def test_tensors(self):
+        d1 = {'a': torch.tensor([1.])}
+        d2 = {'a': torch.tensor([2., 3.])}
+        dcat = concatenate_dict(d1, d2)
+        expected = {
+            'a': [
+                torch.tensor(1.),
+                torch.tensor(2.),
+                torch.tensor(3.),
+            ]
+        }
+        self.assertEqual(dcat, expected)
 
     def test_concat_list_lists(self):
         dd = concatenate_dict(self.dict_d, self.dict_d)
@@ -83,19 +95,40 @@ class TestConcatenate(unittest.TestCase):
 
     def test_concat_tensors(self):
         t = {
-            'a': torch.Tensor([1]),
-            'b': torch.Tensor([2, 3]),
-            'c': torch.Tensor([[1, 0], [0, 1]]),
+            'a': torch.tensor(1),
+            'b': [torch.tensor([2, 3])],
+            'c': torch.tensor([[1, 0], [0, 1]]),
         }
         tt = {
-            'a': [torch.Tensor([1])] * 2,
-            'b': [torch.Tensor([2, 3])] * 2,
-            'c': [torch.Tensor([[1, 0], [0, 1]])] * 2,
+            'a': [torch.tensor(1)] * 2,
+            'b': [torch.tensor([2, 3])] * 2,
+            'c': [torch.tensor([[1, 0], [0, 1]])] * 2,
         }
         concat = concatenate_dict(t, t)
         for key, val in concat.items():
             for i, j in zip(val, tt[key]):
                 self.assertTrue((i == j).all().item())
+
+    def test_inexistent_list_lists(self):
+        a = {
+            'a': [[[1, 2]], [[3, 4]]], 
+            'b': [5, 6]
+        }
+        
+        b = {
+            'b': [7, 8]
+        }
+        ab = concatenate_dict(a, b)
+        expected = {
+            'a': [
+                [[1, 2]],
+                [[3, 4]],
+                None,
+                None
+            ], 
+            'b': [5, 6, 7, 8]
+        }
+        self.assertEqual(ab, expected)
 
 
 class TestStats(unittest.TestCase):

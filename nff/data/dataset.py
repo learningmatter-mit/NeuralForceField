@@ -164,6 +164,10 @@ class Dataset(TorchDataset):
                 get_neighbor_list(nxyz[:, 1:4], cutoff, undirected)
                 for nxyz in self.props['nxyz']
             ]
+            self.props['offsets'] = [
+                torch.sparse.FloatTensor(nxyz.shape[0], 3)
+                for nxyz in self.props['nxyz']
+            ]
         else:
             self._get_periodic_neighbor_list(cutoff, undirected)
             return self.props['nbr_list'], self.props['offsets']
@@ -550,14 +554,21 @@ def concatenate_dict(*dicts):
             to be appended to a list of values
         """
         if is_list_of_lists(value):
-            return [value]
+            if is_list_of_lists(value[0]):
+                return value
+            else:
+                return [value]
 
         elif isinstance(value, list):
             return value
 
         elif isinstance(value, torch.Tensor):
-            if value.type() == 'torch.LongTensor':
+            if len(value.shape) == 0:
+                return [value]
+            elif len(value.shape) == 1:
                 return [item for item in value]
+            else:
+                return [value]
 
         elif get_length(value) == 1:
             return [value]
