@@ -6,6 +6,7 @@ import pickle
 from rdkit.Chem.rdmolops import GetFormalCharge
 from nff.data import Dataset, concatenate_dict
 
+RING_SIZE = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 def prepare_conf_list(sub_dic):
 
@@ -97,6 +98,15 @@ def from_db_pickle(path, nbrlist_cutoff):
 
     return dataset
 
+def get_ring_size(bond):
+    options = RING_SIZE
+    ring_size = -1
+    for option in options:
+        is_in_size = bond.IsInRingSize(option)
+        if is_in_size:
+            ring_size = option
+            break
+    return ring_size
 
 def get_bond_list(mol):
 
@@ -111,7 +121,10 @@ def get_bond_list(mol):
         upper = max((start, end))
         bond_dic = {"indices": [lower, upper],
                     "type": bond_type,
-                    "stereo": stereo}
+                    "stereo": stereo,
+                    "conjugated": bond.GetIsConjugated(),
+                    "in_ring": bond.IsInRing(),
+                    "ring_size": get_ring_size(bond)}
 
         bond_list.append(bond_dic)
 
@@ -123,12 +136,20 @@ def get_atom_list(mol):
     atom_list = []
 
     for atom in mol.GetAtoms():
-        atomic_num = atom.GetAtomicNum()
-        charge = atom.GetFormalCharge()
-        chiral_tag = atom.GetChiralTag().name.lower().replace('chi_', '')
-        dic = {"number": atomic_num,
-               "charge": charge,
-               "chiral_tag": chiral_tag}
+        neighbors = [at.GetAtomicNum() for at
+                     in atom.GetNeighbors()]
+        num_h = len([i for i in neighbors if
+                     i == 1])
+
+        dic = {"atom_type": atom.GetAtomicNum(),
+               "num_bonds": atom.GetTotalDegree(),
+               "formal_charge": atom.GetFormalCharge(),
+               "chirality": atom.GetChiralTag().name.lower(),
+               "num_bonded_h": num_h,
+               "hybridization": atom.GetHybridization().name.lower(),
+               "aromaticity": atom.GetIsAromatic(),
+               "mass": atom.GetMass()}
+               
         atom_list.append(dic)
 
     return atom_list
