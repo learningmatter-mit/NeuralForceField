@@ -21,7 +21,7 @@ setup(
     ],
     python_requires=">=3.5",
     install_requires=[
-        "torch>=0.4.1",
+        "pytorch>=1.4.0",
         "numpy",
         "ase>=3.16",
         "tensorboardX",
