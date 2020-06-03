@@ -13,7 +13,8 @@ from nff.utils.data import (from_db_pickle, get_bond_list, split_confs, get_atom
 import pickle
 import time
 
-def main(pickle_path, save_path, num_procs=5, nbrlist_cutoff=5):
+def main(pickle_path, save_path, num_procs=5, nbrlist_cutoff=5,
+         check_smiles=False):
 
     start = time.time()
 
@@ -25,7 +26,7 @@ def main(pickle_path, save_path, num_procs=5, nbrlist_cutoff=5):
     datasets = split_dataset(dataset=dataset, num=num_procs)
 
     print("Converting xyz to RDKit mols...")
-    datasets = rd_parallel(datasets)
+    datasets = rd_parallel(datasets, check_smiles=check_smiles)
     summarize_rd(new_sets=datasets, first_set=dataset)
 
     new_props = rejoin_props(datasets)
