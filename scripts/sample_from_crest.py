@@ -2,21 +2,22 @@ import msgpack
 import torch
 import numpy as np
 import argparse
+import pdb
 
 from nff.data import Dataset, concatenate_dict
 
-KEY_MAP = {"xyz": "nxyz", "boltzmannweight": "weights"}
-
+KEY_MAP = {"xyz": "nxyz", "boltzmannweight": "weights",
+            "relativeenergy": "energy"}
 
 def load_data(file, num_specs):
 
-    file = "drugs_ensembles.msgpack"
     unpacker = msgpack.Unpacker(open(file, "rb"))
     spec_count = 0
     overall_dic = {}
 
     for chunk in unpacker:
         spec_count += len(chunk)
+        print("Loaded {} species".format(spec_count))
         overall_dic.update(chunk)
         if spec_count >= num_specs:
             break
@@ -29,6 +30,14 @@ def map_key(key):
     else:
         return key
 
+def fix_iters(spec_dic, actual_confs):
+    new_spec_dic = {}
+    for key, val in spec_dic.items():
+        if type(val) in [int, float]:
+            new_spec_dic[key] = [val] * actual_confs
+        elif not(type(val) is list and type(val[0]) == str):
+            new_spec_dic[key] = val
+    return new_spec_dic
 
 def convert_data(overall_dic, num_confs):
 
@@ -36,8 +45,10 @@ def convert_data(overall_dic, num_confs):
     for key, sub_dic in overall_dic.items():
         spec_dic = {map_key(key): val for key, val in sub_dic.items()
                     if key != "conformers"}
+        actual_confs = min(num_confs, len(sub_dic["conformers"]))
+        spec_dic = fix_iters(spec_dic, actual_confs)
         spec_dic.update({map_key(key): [] for key
-                         in sub_dic["conformers"].keys()})
+                         in sub_dic["conformers"][0].keys()})
 
         for conf in sub_dic["conformers"][:num_confs]:
             for key in conf.keys():
@@ -88,11 +99,9 @@ def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
 
         # add properties as necessary
         new_dic = {"mol_size": mol_size,
-                   "nxyz": nxyz,
+                   "nxyz": [nxyz],
                    "weights": torch.Tensor(spec_dic["weights"]
                                            ).reshape(-1, 1),
-                   "geom_ids": torch.Tensor(spec_dic["geom_ids"]
-                                            ).reshape(-1, 1),
                    "degeneracy": torch.Tensor(spec_dic["degeneracy"]
                                               ).reshape(-1, 1),
                    "energy": torch.Tensor(spec_dic["energy"]
@@ -102,6 +111,8 @@ def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
         new_dic.update({key: val[:1] for key, val in dataset.props.items(
         ) if key not in new_dic.keys()})
         props_list.append(new_dic)
+
+        break
 
     props_dic = concatenate_dict(*props_list)
     # make a combined dataset where the species look like they're
@@ -132,5 +143,8 @@ if __name__ == "__main__":
     parser.add_argument('--num_confs', type=int)
     arguments = parser.parse_args()
 
-    main(**arguments.__dict__)
-
+    try:
+        main(**arguments.__dict__)
+    except Exception as e:
+        print(e)
+        pdb.post_mortem()
