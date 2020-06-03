@@ -376,7 +376,7 @@ def convert_nan(x):
 
     # if any are nan then they all have to be floats
     if has_nan:
-        new_x = [torch.Tensor(y) for y in x]
+        new_x = [y.double() for y in x]
     return new_x
 
 def to_tensor(x, stack=False):
