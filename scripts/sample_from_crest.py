@@ -112,8 +112,6 @@ def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
         ) if key not in new_dic.keys()})
         props_list.append(new_dic)
 
-        break
-
     props_dic = concatenate_dict(*props_list)
     # make a combined dataset where the species look like they're
     # one big molecule
