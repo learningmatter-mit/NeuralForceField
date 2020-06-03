@@ -67,7 +67,7 @@ def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
     props_list = []
     nbr_list = []
 
-    for spec_dic in spec_dics:
+    for i, spec_dic in enumerate(spec_dics):
         # treat each species' data like a regular dataset
         # and use it to generate neighbor lists
 
@@ -114,6 +114,9 @@ def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
         ) if key not in new_dic.keys()})
         props_list.append(new_dic)
 
+        print("{} of {} complete".format(i, len(spec_dics)))
+
+    print("Finalizing...")
     props_dic = concatenate_dict(*props_list)
     # make a combined dataset where the species look like they're
     # one big molecule
@@ -122,6 +125,8 @@ def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
     # give it the proper neighbor list
     if gen_nbrs:
         big_dataset.props['nbr_list'] = nbr_list
+
+    print("Complete!")
 
     return big_dataset
 
