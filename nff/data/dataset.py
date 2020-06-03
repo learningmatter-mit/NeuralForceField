@@ -366,11 +366,17 @@ def force_to_energy_grad(dataset):
 
 def convert_nan(x):
     new_x = []
+    has_nan = False
     for y in x:
-        if np.isnan(y):
+        if np.isnan(y).any():
             new_x.append(torch.tensor(y))
+            has_nan = True
         else:
             new_x.append(y)
+
+    # if any are nan then they all have to be floats
+    if has_nan:
+        new_x = [torch.Tensor(y) for y in x]
     return new_x
 
 def to_tensor(x, stack=False):
