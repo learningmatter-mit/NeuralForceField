@@ -405,20 +405,22 @@ def to_tensor(x, stack=False):
     # some objects are not tensors
     elif isinstance(x, list):
 
+        non_nan_x = [y for y in x if not np.isnan(y)]
+
         # list of strings
-        if all([isinstance(y, str) for y in x]):
+        if all([isinstance(y, str) for y in non_nan_x]):
             return x
 
         # list of ints
-        if all([isinstance(y, int) for y in x]):
+        if all([isinstance(y, int) for y in non_nan_x]):
             return torch.LongTensor(x)
 
         # list of floats
-        if all([isinstance(y, numbers.Number) for y in x]):
+        if all([isinstance(y, numbers.Number) for y in non_nan_x]):
             return torch.Tensor(x)
 
         # list of arrays or other formats
-        if any([isinstance(y, (list, np.ndarray)) for y in x]):
+        if any([isinstance(y, (list, np.ndarray)) for y in non_nan_x]):
             return [torch.Tensor(y) for y in x]
 
     raise TypeError('Data type not understood')
@@ -472,6 +474,8 @@ def concatenate_dict(*dicts):
             a torch.Tensor, return its flattened version
             to be appended to a list of values
         """
+
+
         if is_list_of_lists(value):
             return [value]
 
@@ -480,7 +484,10 @@ def concatenate_dict(*dicts):
 
         elif isinstance(value, torch.Tensor):
             if value.type() == 'torch.LongTensor':
-                return [item for item in value]
+                if len(value.shape) > 0:
+                    return [item for item in value]
+                else:
+                    return [value]
 
         elif get_length(value) == 1:
             return [value]
