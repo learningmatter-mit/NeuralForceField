@@ -9,6 +9,8 @@ from nff.data import Dataset, concatenate_dict
 KEY_MAP = {"xyz": "nxyz", "boltzmannweight": "weights",
             "relativeenergy": "energy"}
 
+EXCLUDE_KEYS = ["totalconfs"]
+
 def load_data(file, num_specs):
 
     unpacker = msgpack.Unpacker(open(file, "rb"))
@@ -35,7 +37,7 @@ def fix_iters(spec_dic, actual_confs):
     for key, val in spec_dic.items():
         if type(val) in [int, float]:
             new_spec_dic[key] = [val] * actual_confs
-        elif not(type(val) is list and type(val[0]) == str):
+        elif key not in EXCLUDE_KEYS:
             new_spec_dic[key] = val
     return new_spec_dic
 
