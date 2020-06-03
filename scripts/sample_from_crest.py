@@ -9,7 +9,7 @@ from nff.data import Dataset, concatenate_dict
 KEY_MAP = {"xyz": "nxyz", "boltzmannweight": "weights",
             "relativeenergy": "energy"}
 
-EXCLUDE_KEYS = ["totalconfs"]
+EXCLUDE_KEYS = ["totalconfs", "datasets"]
 
 def load_data(file, num_specs):
 
