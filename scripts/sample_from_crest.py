@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
+
 import msgpack
 import torch
 import numpy as np
@@ -43,7 +46,7 @@ def fix_iters(spec_dic, actual_confs):
             continue
         if type(val) in [int, float]:
             new_spec_dic[key] = [val] * actual_confs
-            
+
     return new_spec_dic
 
 def convert_data(overall_dic, num_confs):
