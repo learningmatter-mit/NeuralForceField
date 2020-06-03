@@ -1,9 +1,11 @@
 import msgpack
 import pickle
 import os
+from rdkit import Chem
 
-BASE_PATH = "/pool001/saxerod/data_from_fock/final_db_data"
-SAVE_FOLDER = "/home/saxelrod/fock/chemdata/notebooks/saxelrod"
+BASE_PATH = "/pool001/saxelrod/data_from_fock/final_db_data"
+SAVE_FOLDER = "/nobackup1/saxelrod/data"
+
 
 
 def to_list_of_dics(out):
@@ -14,13 +16,19 @@ def to_list_of_dics(out):
         num_confs = len(sub_dic[sub_dic_keys[0]])
         for sub_key in sub_dic_keys:
             assert num_confs == len(sub_dic[sub_key])
-
+            
         for i in range(num_confs):
-            new_dic = {key: sub_dic[key][i] for key in sub_dic_keys}
+            new_dic = {key: sub_dic[key][i] for key in sub_dic_keys
+                      if key != 'rd_mols'}
+            new_dic["xyz2mol_smiles"] = Chem.MolToSmiles(sub_dic['rd_mols'][i])
+            
+            can_mol = Chem.MolFromSmiles(new_dic["xyz2mol_smiles"])
+            can_smiles = Chem.MolToSmiles(can_mol)
+            new_dic["canon_smiles"] = can_smiles
             list_of_dics.append(new_dic)
-
+            
         out[key] = list_of_dics
-
+        
     return out
 
 
