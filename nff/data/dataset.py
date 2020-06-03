@@ -386,7 +386,7 @@ def to_tensor(x, stack=False):
     if isinstance(x, torch.Tensor):
         return x
 
-    non_nan_x = [y for y in x if not np.isnan(y)]
+    non_nan_x = [y for y in x if not np.isnan(y).any()]
 
     # all objects in x are tensors
     if isinstance(x, list) and all([isinstance(y, torch.Tensor) for y in non_nan_x]):
