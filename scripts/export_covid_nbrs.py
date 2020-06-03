@@ -67,8 +67,6 @@ def mp_save(group, nbrs, save_folder=SAVE_FOLDER, stop=None, remove_old=False,
                 out = pickle.load(f)
 
             if nbrs:
-                for key, sub_dic in out.items():
-                    sub_dic.pop("rd_mols")
                 list_of_dics = to_list_of_dics(out)
                 mp_form = msgpack.packb(list_of_dics, use_bin_type=True)
             else:
