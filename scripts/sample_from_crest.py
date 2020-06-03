@@ -22,17 +22,20 @@ def load_data(file, num_specs, max_atoms):
     overall_dic = {}
 
     for chunk in unpacker:
-        spec_count += len(chunk)
+        for key, val in chunk.items():
+
+            val = chunk[key]
+            num_atoms = len(val["conformers"][0]["xyz"])
+            if num_atoms > max_atoms:
+                continue
+            overall_dic.update({key: val})
+            spec_count += 1
+
+            if spec_count >= num_specs:
+                print("Loaded {} species".format(spec_count))
+                return overall_dic
+
         print("Loaded {} species".format(spec_count))
-        if spec_count >= num_specs:
-            delta = spec_count - num_specs
-        else:
-            delta = len(chunk)
-        overall_dic.update({key: chunk[key]
-            for key in list(chunk.keys())[:delta]
-            if len(chunk[key]["nxyz"] < max_atoms )})
-        if spec_count >= num_specs:
-            break
 
     return overall_dic
 
