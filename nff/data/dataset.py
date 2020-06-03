@@ -371,14 +371,12 @@ def convert_nan(x):
         if np.isnan(y).any():
             new_x.append(torch.tensor(y))
             has_nan = True
+        # if any are nan then they all have to be floats
         elif has_nan and type(y) in [int, float]:
             new_x.append(torch.Tensor(y))
         else:
             new_x.append(y)
 
-    # if any are nan then they all have to be floats
-    if has_nan:
-        new_x = [y.double() for y in x]
     return new_x
 
 def to_tensor(x, stack=False):
