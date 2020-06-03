@@ -364,6 +364,15 @@ def force_to_energy_grad(dataset):
         ]
         return True
 
+def convert_nan(x):
+    new_x = []
+    for y in x:
+        if np.isnan(y):
+            new_x.append(torch.tensor(y))
+        else:
+            new_x.append(y)
+    return new_x
+
 def to_tensor(x, stack=False):
     """
     Converts input `x` to torch.Tensor.
@@ -386,15 +395,16 @@ def to_tensor(x, stack=False):
     if isinstance(x, torch.Tensor):
         return x
 
-    non_nan_x = [y for y in x if not np.isnan(y).any()]
+    if type(x) is list:
+        x = convert_nan(x)
 
     # all objects in x are tensors
-    if isinstance(x, list) and all([isinstance(y, torch.Tensor) for y in non_nan_x]):
+    if isinstance(x, list) and all([isinstance(y, torch.Tensor) for y in x]):
 
         # list of tensors with zero or one effective dimension
         # flatten the tensor
 
-        if all([len(y.shape) < 1 for y in non_nan_x]):
+        if all([len(y.shape) < 1 for y in x]):
             return torch.cat([y.view(-1) for y in x], dim=0)
 
         elif stack:
@@ -408,19 +418,19 @@ def to_tensor(x, stack=False):
     elif isinstance(x, list):
 
         # list of strings
-        if all([isinstance(y, str) for y in non_nan_x]):
+        if all([isinstance(y, str) for y in x]):
             return x
 
         # list of ints
-        if all([isinstance(y, int) for y in non_nan_x]):
+        if all([isinstance(y, int) for y in x]):
             return torch.LongTensor(x)
 
         # list of floats
-        if all([isinstance(y, numbers.Number) for y in non_nan_x]):
+        if all([isinstance(y, numbers.Number) for y in x]):
             return torch.Tensor(x)
 
         # list of arrays or other formats
-        if any([isinstance(y, (list, np.ndarray)) for y in non_nan_x]):
+        if any([isinstance(y, (list, np.ndarray)) for y in x]):
             return [torch.Tensor(y) for y in x]
 
     raise TypeError('Data type not understood')
