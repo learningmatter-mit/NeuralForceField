@@ -386,13 +386,15 @@ def to_tensor(x, stack=False):
     if isinstance(x, torch.Tensor):
         return x
 
+    non_nan_x = [y for y in x if not np.isnan(y)]
+
     # all objects in x are tensors
-    if isinstance(x, list) and all([isinstance(y, torch.Tensor) for y in x]):
+    if isinstance(x, list) and all([isinstance(y, torch.Tensor) for y in non_nan_x]):
 
         # list of tensors with zero or one effective dimension
         # flatten the tensor
 
-        if all([len(y.shape) < 1 for y in x]):
+        if all([len(y.shape) < 1 for y in non_nan_x]):
             return torch.cat([y.view(-1) for y in x], dim=0)
 
         elif stack:
@@ -404,8 +406,6 @@ def to_tensor(x, stack=False):
 
     # some objects are not tensors
     elif isinstance(x, list):
-
-        non_nan_x = [y for y in x if not np.isnan(y)]
 
         # list of strings
         if all([isinstance(y, str) for y in non_nan_x]):
