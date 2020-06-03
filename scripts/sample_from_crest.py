@@ -13,8 +13,9 @@ KEY_MAP = {"xyz": "nxyz", "boltzmannweight": "weights",
             "relativeenergy": "energy"}
 
 EXCLUDE_KEYS = ["totalconfs", "datasets"]
+MAX_ATOMS = 60
 
-def load_data(file, num_specs):
+def load_data(file, num_specs, max_atoms):
 
     unpacker = msgpack.Unpacker(open(file, "rb"))
     spec_count = 0
@@ -25,10 +26,13 @@ def load_data(file, num_specs):
         print("Loaded {} species".format(spec_count))
         if spec_count >= num_specs:
             delta = spec_count - num_specs
-            overall_dic.update({key: chunk[key]
-                for key in list(chunk.keys())[:delta]})
+        else:
+            delta = len(chunk)
+        overall_dic.update({key: chunk[key]
+            for key in list(chunk.keys())[:delta]
+            if len(chunk[key]["nxyz"] < max_atoms )})
+        if spec_count >= num_specs:
             break
-        overall_dic.update(chunk)
 
     return overall_dic
 
@@ -141,8 +145,8 @@ def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
     return big_dataset
 
 
-def main(msg_file, dataset_path, num_specs, num_confs):
-    overall_dic = load_data(msg_file, num_specs)
+def main(msg_file, dataset_path, num_specs, num_confs, max_atoms):
+    overall_dic = load_data(msg_file, num_specs, max_atoms)
     spec_dics = convert_data(overall_dic, num_confs)
     dataset = make_nff_dataset(spec_dics=spec_dics,
                                gen_nbrs=True,
@@ -156,6 +160,7 @@ if __name__ == "__main__":
     parser.add_argument('--dataset_path', type=str)
     parser.add_argument('--num_specs', type=int)
     parser.add_argument('--num_confs', type=int)
+    parser.add_argument('--max_atoms', type=int, default=MAX_ATOMS)
     arguments = parser.parse_args()
 
     try:
