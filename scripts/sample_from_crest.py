@@ -20,9 +20,13 @@ def load_data(file, num_specs):
     for chunk in unpacker:
         spec_count += len(chunk)
         print("Loaded {} species".format(spec_count))
-        overall_dic.update(chunk)
         if spec_count >= num_specs:
+            delta = spec_count - num_specs
+            overall_dic.update({key: chunk[key]
+                for key in list(chunk.keys())[:delta]})
             break
+        overall_dic.update(chunk)
+
     return overall_dic
 
 
@@ -67,7 +71,7 @@ def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
     props_list = []
     nbr_list = []
 
-    for i, spec_dic in enumerate(spec_dics):
+    for j, spec_dic in enumerate(spec_dics):
         # treat each species' data like a regular dataset
         # and use it to generate neighbor lists
 
@@ -114,7 +118,7 @@ def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
         ) if key not in new_dic.keys()})
         props_list.append(new_dic)
 
-        print("{} of {} complete".format(i, len(spec_dics)))
+        print("{} of {} complete".format(j, len(spec_dics)))
 
     print("Finalizing...")
     props_dic = concatenate_dict(*props_list)
