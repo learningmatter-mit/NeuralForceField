@@ -39,10 +39,11 @@ def map_key(key):
 def fix_iters(spec_dic, actual_confs):
     new_spec_dic = {}
     for key, val in spec_dic.items():
+        if key in EXCLUDE_KEYS:
+            continue
         if type(val) in [int, float]:
             new_spec_dic[key] = [val] * actual_confs
-        elif key not in EXCLUDE_KEYS:
-            new_spec_dic[key] = val
+            
     return new_spec_dic
 
 def convert_data(overall_dic, num_confs):
