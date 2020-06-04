@@ -41,7 +41,7 @@ def load_data(file, num_specs, max_atoms, smiles_csv=None):
             if num_atoms > max_atoms:
                 continue
             if smiles_dic is not None and not smiles_dic.get(this_smiles):
-                print("Skipping smiles {}".format(smiles))
+                print("Skipping smiles {}".format(this_smiles))
                 continue
 
             overall_dic.update({key: val})
