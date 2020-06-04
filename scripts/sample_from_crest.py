@@ -35,7 +35,7 @@ def load_data(file, num_specs, max_atoms, smiles_csv=None):
 
             val = chunk[key]
             num_atoms = len(val["conformers"][0]["xyz"])
-            this_smiles = val["smiles"]
+            this_smiles = key
 
             if num_atoms > max_atoms:
                 continue
