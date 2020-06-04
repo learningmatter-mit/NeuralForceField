@@ -1,33 +1,48 @@
+from nff.data import Dataset, concatenate_dict
+import pdb
+import argparse
+import numpy as np
+import torch
+import msgpack
 import sys
 sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
 
-import msgpack
-import torch
-import numpy as np
-import argparse
-import pdb
-
-from nff.data import Dataset, concatenate_dict
 
 KEY_MAP = {"xyz": "nxyz", "boltzmannweight": "weights",
-            "relativeenergy": "energy"}
+           "relativeenergy": "energy"}
 
 EXCLUDE_KEYS = ["totalconfs", "datasets"]
 MAX_ATOMS = 60
 
-def load_data(file, num_specs, max_atoms):
+
+def load_data(file, num_specs, max_atoms, smiles_csv=None):
 
     unpacker = msgpack.Unpacker(open(file, "rb"))
     spec_count = 0
     overall_dic = {}
+
+    smiles_dic = None
+    if smiles_csv is not None:
+        smiles_dic = {}
+        with open(smiles_csv, "r") as f:
+            lines = f.readlines()
+        for i, line in enumerate(lines[1:]):
+            smiles = line.split(",")[0]
+            smiles_dic[smiles] = i        
 
     for chunk in unpacker:
         for key, val in chunk.items():
 
             val = chunk[key]
             num_atoms = len(val["conformers"][0]["xyz"])
+            this_smiles = val["smiles"]
+
             if num_atoms > max_atoms:
                 continue
+            if smiles_dic is not None and not smiles_dic.get(this_smiles):
+                print("Skipping smiles {}".format(smiles))
+                continue
+
             overall_dic.update({key: val})
             spec_count += 1
 
@@ -46,6 +61,7 @@ def map_key(key):
     else:
         return key
 
+
 def fix_iters(spec_dic, actual_confs):
     new_spec_dic = {}
     for key, val in spec_dic.items():
@@ -55,6 +71,7 @@ def fix_iters(spec_dic, actual_confs):
             new_spec_dic[key] = [val] * actual_confs
 
     return new_spec_dic
+
 
 def convert_data(overall_dic, num_confs):
 
@@ -120,7 +137,8 @@ def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
         new_dic = {"mol_size": mol_size,
                    "nxyz": [nxyz],
                    "weights": torch.Tensor(spec_dic["weights"]
-                                           ).reshape(-1, 1),
+                                           ).reshape(-1, 1) / sum(
+                       spec_dic["weights"]),
                    "degeneracy": torch.Tensor(spec_dic["degeneracy"]
                                               ).reshape(-1, 1),
                    "energy": torch.Tensor(spec_dic["energy"]
@@ -148,8 +166,8 @@ def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
     return big_dataset
 
 
-def main(msg_file, dataset_path, num_specs, num_confs, max_atoms):
-    overall_dic = load_data(msg_file, num_specs, max_atoms)
+def main(msg_file, dataset_path, num_specs, num_confs, max_atoms, smiles_csv):
+    overall_dic = load_data(msg_file, num_specs, max_atoms, smiles_csv)
     spec_dics = convert_data(overall_dic, num_confs)
     dataset = make_nff_dataset(spec_dics=spec_dics,
                                gen_nbrs=True,
@@ -162,6 +180,7 @@ if __name__ == "__main__":
     parser.add_argument('--msg_file', type=str)
     parser.add_argument('--dataset_path', type=str)
     parser.add_argument('--num_specs', type=int)
+    parser.add_argument('--smiles_csv', type=str)
     parser.add_argument('--num_confs', type=int)
     parser.add_argument('--max_atoms', type=int, default=MAX_ATOMS)
     arguments = parser.parse_args()
