@@ -80,7 +80,9 @@ def convert_data(overall_dic, num_confs):
     for key, sub_dic in overall_dic.items():
         spec_dic = {map_key(key): val for key, val in sub_dic.items()
                     if key != "conformers"}
-        if spec_dic["charge"] != 0:
+        charge = spec_dic["charge"]
+        if charge != 0:
+            print("Skipping smiles {} with charge {}".format(key, charge))
             continue
         actual_confs = min(num_confs, len(sub_dic["conformers"]))
         spec_dic = fix_iters(spec_dic, actual_confs)
