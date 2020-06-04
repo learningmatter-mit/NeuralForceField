@@ -28,7 +28,8 @@ def load_data(file, num_specs, max_atoms, smiles_csv=None):
             lines = f.readlines()
         for i, line in enumerate(lines[1:]):
             smiles = line.split(",")[0]
-            smiles_dic[smiles] = i        
+            smiles_dic[smiles] = i      
+        print("%d smiles in csv" % len(smiles_dic))   
 
     for chunk in unpacker:
         for key, val in chunk.items():
