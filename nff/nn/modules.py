@@ -835,7 +835,7 @@ class GraphAttention(MessagePassingModule):
 
         message = (
             r[a[:, 0]] * a_ij[:, None],
-            r[a[:, 1]] * a_ij[:, None],
+            r[a[:, 1]] * a_ji[:, None],
             r * a_ii[:, None],
         )
 
@@ -855,6 +855,30 @@ class GraphAttention(MessagePassingModule):
         r = self.update(r)
 
         return r
+
+
+class ConfAttention(nn.Module):
+    def __init__(self, mol_basis):
+        super(ConfAttention, self).__init__()
+        self.att_weight = torch.nn.Parameter(torch.rand(1, mol_basis))
+        self.activation = LeakyReLU()
+
+    def forward(self, conf_fps):
+
+        # exponentiate LeakyReLU(weight_mat * conf_fingerprints)
+        exp_confs = torch.exp(self.activation(self.att_weight * conf_fps))
+
+        # normalize to get relative weight alpha_in of the n^th feature of the
+        # i^th conformer
+
+        norm = exp_confs.sum(0)
+        alpha = exp_confs / norm
+
+        # multiply each feature of each conformer by its weight alpha_in and sum
+
+        final_fp = (alpha * conf_fps).sum(0)
+
+        return final_fp
 
 
 class NodeMultiTaskReadOut(nn.Module):
