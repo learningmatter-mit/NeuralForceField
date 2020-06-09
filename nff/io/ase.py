@@ -474,3 +474,20 @@ class EnsembleNFF(Calculator):
             for path in model_paths
         ]
         return cls(models, device, **kwargs)
+
+
+class NeuralOptimizer:
+    def __init__(
+        self,
+        optimizer,
+        nbrlist_update_freq=5
+    ):
+        self.optimizer = optimizer
+        self.update_freq = nbrlist_update_freq
+
+    def run(self, fmax=0.2, steps=1000):
+        epochs = steps // self.update_freq
+        
+        for step in range(epochs):
+            self.optimizer.run(fmax=fmax, steps=self.update_freq)
+            self.optimizer.atoms.update_nbr_list()
