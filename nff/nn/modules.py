@@ -858,9 +858,9 @@ class GraphAttention(MessagePassingModule):
 
 
 class ConfAttention(nn.Module):
-    def __init__(self, mol_basis):
+    def __init__(self, mol_basis, boltz_weight_basis):
         super(ConfAttention, self).__init__()
-        self.att_weight = torch.nn.Parameter(torch.rand(1, mol_basis))
+        self.att_weight = torch.nn.Parameter(torch.rand(1, mol_basis + boltz_weight_basis))
         self.activation = LeakyReLU()
 
     def forward(self, conf_fps):
