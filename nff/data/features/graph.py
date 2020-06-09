@@ -149,6 +149,7 @@ def get_undirected_bonds(mol):
 
     return bond_list
 
+
 def get_undirected_bond_idx(mol):
 
     bond_list = []
@@ -164,6 +165,7 @@ def get_undirected_bond_idx(mol):
         bond_list.append([lower, upper])
 
     return bond_list
+
 
 def check_connectivity(mol_0, mol_1):
 
@@ -323,17 +325,16 @@ def make_one_hot(options, result):
     return one_hot
 
 
-def get_bond_features(bond, feat_type):
+def bond_feat_to_vec(feat_type, feat):
 
     if feat_type == "conjugated":
-        conj = bond.GetIsConjugated()
+        conj = feat
         result = torch.Tensor([conj])
-
         return result
 
     elif feat_type == "bond_type":
-        bond_type = bond.GetBondType().name.lower()
         options = BOND_OPTIONS
+        bond_type = feat
         one_hot = make_one_hot(options=options,
                                result=bond_type)
         return one_hot
@@ -341,8 +342,7 @@ def get_bond_features(bond, feat_type):
     elif feat_type == "in_ring_size":
         options = RING_SIZE
         ring_size = - 1
-        for option in options:
-            is_in_size = bond.IsInRingSize(option)
+        for is_in_size, option in zip(feat, options):
             if is_in_size:
                 ring_size = option
                 break
@@ -352,87 +352,176 @@ def get_bond_features(bond, feat_type):
 
         return one_hot
 
-    if feat_type == "in_ring":
-        in_ring = bond.IsInRing()
+    elif feat_type == "in_ring":
+        in_ring = feat
         result = torch.Tensor([in_ring])
         return result
 
     elif feat_type == "stereo":
-        stereo = bond.GetStereo().name.lower()
+        stereo = feat
         options = STEREO_OPTIONS
         one_hot = make_one_hot(options=options,
                                result=stereo)
         return one_hot
 
 
-def get_atom_features(atom, feat_type):
+def get_bond_features(bond, feat_type):
+
+    if feat_type == "conjugated":
+        feat = bond.GetIsConjugated()
+
+    elif feat_type == "bond_type":
+        feat = bond.GetBondType().name.lower()
+
+    elif feat_type == "in_ring_size":
+        feat = [bond.IsInRingSize(option) for option in RING_SIZE]
+
+    elif feat_type == "in_ring":
+        feat = bond.IsInRing()
+
+    elif feat_type == "stereo":
+        feat = bond.GetStereo().name.lower()
+
+    return bond_feat_to_vec(feat_type, feat)
+
+
+def atom_feat_to_vec(feat_type, feat):
 
     if feat_type == "atom_type":
-        atom_num = atom.GetAtomicNum()
         options = AT_NUM
         one_hot = make_one_hot(options=options,
-                               result=atom_num)
+                               result=feat)
 
         return one_hot
 
     elif feat_type == "num_bonds":
-        num_bonds = atom.GetTotalDegree()
         options = BONDS
         one_hot = make_one_hot(options=options,
-                               result=num_bonds)
+                               result=feat)
 
         return one_hot
 
     elif feat_type == "formal_charge":
 
-        fc = atom.GetFormalCharge()
         options = FORMAL_CHARGES
         one_hot = make_one_hot(options=options,
-                               result=fc)
+                               result=feat)
 
         return one_hot
 
     elif feat_type == "chirality":
-        chirality = atom.GetChiralTag().name.lower()
         options = CHIRAL_OPTIONS
         one_hot = make_one_hot(options=options,
-                               result=chirality)
+                               result=feat)
 
         return one_hot
 
     elif feat_type == "num_bonded_h":
 
-        neighbors = [at.GetAtomicNum() for at
-                     in atom.GetNeighbors()]
-        num_h = len([i for i in neighbors if
-                     i == 1])
-
         options = NUM_H
         one_hot = make_one_hot(options=options,
-                               result=num_h)
+                               result=feat)
 
         return one_hot
 
     elif feat_type == "hybrid":
 
-        hybrid = atom.GetHybridization().name.lower()
         options = HYBRID_OPTIONS
         one_hot = make_one_hot(options=options,
-                               result=hybrid)
+                               result=feat)
 
         return one_hot
 
     elif feat_type == "aromaticity":
-        aromatic = atom.GetIsAromatic()
-        one_hot = torch.Tensor([aromatic])
+        one_hot = torch.Tensor([feat])
 
         return one_hot
 
     elif feat_type == "mass":
-        mass = atom.GetMass() / 100
-        result = torch.Tensor([mass])
+        result = torch.Tensor([feat / 100])
 
         return result
+
+
+def get_atom_features(atom, feat_type):
+
+    if feat_type == "atom_type":
+        feat = atom.GetAtomicNum()
+
+    elif feat_type == "num_bonds":
+        feat = atom.GetTotalDegree()
+
+    elif feat_type == "formal_charge":
+
+        feat = atom.GetFormalCharge()
+
+    elif feat_type == "chirality":
+        feat = atom.GetChiralTag().name.lower()
+
+    elif feat_type == "num_bonded_h":
+
+        neighbors = [at.GetAtomicNum() for at
+                     in atom.GetNeighbors()]
+        feat = len([i for i in neighbors if
+                    i == 1])
+
+    elif feat_type == "hybrid":
+
+        feat = atom.GetHybridization().name.lower()
+
+    elif feat_type == "aromaticity":
+        feat = atom.GetIsAromatic()
+
+    elif feat_type == "mass":
+        feat = atom.GetMass()
+
+    return atom_feat_to_vec(feat_type=feat_type,
+                            feat=feat)
+
+
+def bond_feats_from_dic(dic_list, feat_types=BOND_FEAT_TYPES):
+
+    key_map = {key: key for key in feat_types}
+    key_map.update({"bond_type": "type", "in_ring_size": "ring_size"})
+
+    bond_feats = []
+    for bond_dic in dic_list:
+        vec_list = []
+        for feat_type in feat_types:
+            if feat_type == "in_ring_size":
+                feat = [False] * len(RING_SIZE)
+                ring_size_idx = bond_dic[key_map[feat_type]]
+                if ring_size_idx != -1:
+                    feat[ring_size_idx] = True
+            else:
+                feat = bond_dic[key_map[feat_type]]
+            vec = bond_feat_to_vec(feat_type, feat)
+            vec_list.append(vec)
+
+        feats = torch.cat(vec_list)
+        bond_feats.append(feats)
+
+    return torch.stack(bond_feats)
+
+
+def atom_feats_from_dic(dic_list, feat_types=ATOM_FEAT_TYPES):
+
+    key_map = {key: key for key in feat_types}
+    key_map.update({"hybrid": "hybridization",
+                    "aromaticity": "aromatic"})
+
+    atom_feats = []
+    for atom_dic in dic_list:
+        vec_list = []
+        for feat_type in feat_types:
+            feat = atom_dic[key_map[feat_type]]
+            vec = atom_feat_to_vec(feat_type, feat)
+            vec_list.append(vec)
+
+        feats = torch.cat(vec_list)
+        atom_feats.append(feats)
+
+    return torch.stack(atom_feats)
 
 
 def get_all_bond_feats(bond, feat_types):
@@ -457,6 +546,44 @@ def get_all_atom_feats(atom, feat_types):
         feat_dic[feat_type] = feature
 
     return feat_dic
+
+
+def compress_feats(confs, atoms_or_bonds):
+
+    feat_dic = {}
+    atoms_or_bonds = atoms_or_bonds.lower()
+
+    for i, sub_dic in enumerate(confs):
+
+        dic_list = sub_dic[atoms_or_bonds]
+        if atoms_or_bonds == "atoms":
+            feats = atom_feats_from_dic(dic_list)
+        elif atoms_or_bonds == "bonds":
+            feats = bond_feats_from_dic(dic_list)
+
+        tuple_feats = tuple(feats.reshape(-1).tolist())
+
+        if tuple_feats in feat_dic:
+            feat_dic[tuple_feats].append(i)
+        else:
+            feat_dic[tuple_feats] = [i]
+
+    return feat_dic
+
+
+def compress_overall_dic(overall_dic):
+
+    compressed_dic = {}
+
+    for smiles, confs in overall_dic.items():
+        atom_dic = compress_feats(confs=confs,
+                                  atoms_or_bonds='atoms')
+        bond_dic = compress_feats(confs=confs,
+                                  atoms_or_bonds='bonds')
+        compressed_dic[smiles] = {"atoms": atom_dic,
+                                  "bonds": bond_dic}
+
+    return compressed_dic
 
 
 def featurize_bonds(dataset, feat_types=BOND_FEAT_TYPES):
@@ -638,6 +765,7 @@ def add_morgan(dataset, vec_length):
         morgan_tens = torch.tensor(arr_morgan)
         dataset.props["morgan"].append(morgan_tens)
 
+
 def add_e3fp(rd_dataset, fp_length):
 
     bwfp_list = []
@@ -664,12 +792,12 @@ def add_e3fp(rd_dataset, fp_length):
             weighted_fps.append(fp_array * weight.item())
             fps.append(torch.Tensor(fp_array))
 
-        bwfp_list.append(torch.Tensor(np.array(weighted_fps).mean(0)))
+        bwfp_list.append(torch.Tensor(np.array(weighted_fps).sum(0)))
         e3fp_list.append(torch.stack(fps))
-
 
     rd_dataset.props['e3fp'] = e3fp_list
     rd_dataset.props['mean_e3fp'] = bwfp_list
+
 
 def dset_without_rdmols(rd_dataset):
 
@@ -681,6 +809,7 @@ def dset_without_rdmols(rd_dataset):
     no_rdmol_dset.props = {key: to_tensor(val)
                            for key, val in no_rdmol_prop.items()}
     return no_rdmol_dset
+
 
 def add_model_fps(rd_dataset, model_path, device=0):
 
@@ -714,4 +843,5 @@ def add_model_fps(rd_dataset, model_path, device=0):
         pct = int(i / loader_len * 100)
         print("%d%% done" % pct)
 
-    rd_dataset.props["model_fp"] = [dic[smiles] for smiles in rd_dataset.props["smiles"]]
+    rd_dataset.props["model_fp"] = [dic[smiles]
+                                    for smiles in rd_dataset.props["smiles"]]
