@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import (Sequential, Linear, ReLU, LeakyReLU,
-                      ModuleDict, Dropout)
+                      ModuleDict, Dropout, Softmax)
 
 from nff.nn.layers import Dense, GaussianSmearing
 from nff.utils.scatter import scatter_add
@@ -856,17 +856,29 @@ class GraphAttention(MessagePassingModule):
 
         return r
 
-
 class ConfAttention(nn.Module):
-    def __init__(self, mol_basis, boltz_weight_basis):
+    def __init__(self, mol_basis, boltz_basis):
         super(ConfAttention, self).__init__()
-        self.att_weight = torch.nn.Parameter(torch.rand(1, mol_basis + boltz_weight_basis))
+
+        self.boltz_lin = torch.nn.Linear(1, boltz_basis)
+        self.boltz_act = Softmax(dim=1)
+
+        self.fp_linear = torch.nn.Linear(mol_basis + boltz_basis, mol_basis, bias=False)
+        self.att_weight = torch.nn.Parameter(torch.rand(1, mol_basis))
         self.activation = LeakyReLU()
 
-    def forward(self, conf_fps):
+    def forward(self, conf_fps, boltzmann_weights):
 
-        # exponentiate LeakyReLU(weight_mat * conf_fingerprints)
-        exp_confs = torch.exp(self.activation(self.att_weight * conf_fps))
+        # increase dimensionality of Boltzmann weight
+        boltz_vec = self.boltz_act(self.boltz_lin(boltzmann_weights))
+
+        # concatenate fingerprints with Boltzmann vector
+        # and apply linear layer to reduce back to size `mol_basis`
+        cat_fps = torch.cat([conf_fps, boltz_vec], dim=1)
+        new_fps = self.fp_linear(cat_fps)
+
+        # exponentiate LeakyReLU(weight_mat * new_fps)
+        exp_confs = torch.exp(self.activation(self.att_weight * new_fps))
 
         # normalize to get relative weight alpha_in of the n^th feature of the
         # i^th conformer
@@ -876,10 +888,9 @@ class ConfAttention(nn.Module):
 
         # multiply each feature of each conformer by its weight alpha_in and sum
 
-        final_fp = (alpha * conf_fps).sum(0)
+        final_fp = (alpha * new_fps).sum(0)
 
         return final_fp
-
 
 class NodeMultiTaskReadOut(nn.Module):
     """Stack Multi Task outputs
