@@ -533,6 +533,14 @@ def atom_feats_from_dic(dic_list, feat_types=ATOM_FEAT_TYPES):
     return torch.stack(atom_feats)
 
 
+def nbr_list_from_dic(dic_list):
+    nbr_list = []
+    for bond_dic in dic_list:
+        nbr_list.append(bond_dic["indices"])
+
+    return nbr_list
+
+
 def get_all_bond_feats(bond, feat_types):
 
     feat_dic = {}
@@ -557,21 +565,30 @@ def get_all_atom_feats(atom, feat_types):
     return feat_dic
 
 
-def compress_feats(confs, atoms_or_bonds):
+def compress_feats(confs, feat_type):
 
     feat_dic = {}
-    atoms_or_bonds = atoms_or_bonds.lower()
+    feat_type = feat_type.lower()
 
     for i, sub_dic in enumerate(confs):
 
-        dic_list = sub_dic[atoms_or_bonds]
-        if atoms_or_bonds == "atoms":
+        if feat_type == "bonded_nbr_list":
+            dic_list = sub_dic["bonds"]
+        else:
+            dic_list = sub_dic[feat_type]
+
+        if feat_type == "atoms":
             feats = atom_feats_from_dic(dic_list)
-        elif atoms_or_bonds == "bonds":
+            tuple_feats = tuple(feats.reshape(-1).tolist())
+
+        elif feat_type == "bonds":
             feats = bond_feats_from_dic(dic_list)
+            tuple_feats = tuple(feats.reshape(-1).tolist())
 
-        tuple_feats = tuple(feats.reshape(-1).tolist())
-
+        elif feat_type == "bonded_nbr_list":
+            feats = nbr_list_from_dic(dic_list)
+            tuple_feats = (tuple(i) for i in feats)
+        
         if tuple_feats in feat_dic:
             feat_dic[tuple_feats].append(i)
         else:
@@ -586,12 +603,15 @@ def compress_overall_dic(overall_dic):
 
     for smiles, confs in overall_dic.items():
         atom_dic = compress_feats(confs=confs,
-                                  atoms_or_bonds='atoms')
+                                  feat_type='atoms')
         bond_dic = compress_feats(confs=confs,
-                                  atoms_or_bonds='bonds')
-        compressed_dic[smiles] = {"atoms": atom_dic,
-                                  "bonds": bond_dic}
+                                  feat_type='bonds')
+        nbr_dic = compress_feats(confs=confs,
+                                 feat_type='bonded_nbr_list')
 
+        compressed_dic[smiles] = {"atoms": atom_dic,
+                                  "bonds": bond_dic,
+                                  "bonded_nbr_list": nbr_dic}
 
     return compressed_dic
 
@@ -607,20 +627,23 @@ def single_feats_from_dic(overall_dic,
 
     for key, sub_dic in compressed_dic.items():
         if any((len(sub_dic["atoms"]) != 1,
-                len(sub_dic["bonds"]) != 1)):
+                len(sub_dic["bonds"]) != 1,
+                len(sub_dic["bonded_nbr_list"]) != 1)):
             continue
 
         atom_feat_list = list(list(sub_dic["atoms"].keys())[0])
         bond_feat_list = list(list(sub_dic["bonds"].keys())[0])
+        bonded_nbr_list = list(list(sub_dic["bonded_nbr_list"].keys())[0])
 
         # convert to tensors and reshape
 
         atom_feats = torch.Tensor(atom_feat_list).reshape(-1, num_atom_feats)
         bond_feats = torch.Tensor(bond_feat_list).reshape(-1, num_bond_feats)
+        bonded_nbr_list = torch.LongTensor(bonded_nbr_list)
 
         single_feat_dic[key] = {"atom_features": atom_feats,
-                                "bond_features": bond_feats}
-
+                                "bond_features": bond_feats,
+                                "bonded_nbr_list": bonded_nbr_list}
 
     return single_feat_dic
 
@@ -636,7 +659,7 @@ def add_single_feats_to_dataset(dataset, single_feat_file):
         single_feat_dic.update(feat_dic)
 
     good_idx = [i for i, smiles in enumerate(dataset.props["smiles"])
-               if smiles in single_feat_dic]
+                if smiles in single_feat_dic]
 
     new_props = {}
     for key, val in dataset.props.items():
@@ -648,14 +671,15 @@ def add_single_feats_to_dataset(dataset, single_feat_file):
     dataset.props = new_props
 
     smiles_list = dataset.props["smiles"]
-    bond_feats = torch.stack([single_feat_dic[smiles]["bond_features"] for smiles in smiles_list])
-    atom_feats = torch.stack([single_feat_dic[smiles]["atom_features"] for smiles in smiles_list])
+    bond_feats = torch.stack(
+        [single_feat_dic[smiles]["bond_features"] for smiles in smiles_list])
+    atom_feats = torch.stack(
+        [single_feat_dic[smiles]["atom_features"] for smiles in smiles_list])
 
     dataset.props["atom_features"] = atom_feats
     dataset.props["bond_features"] = bond_feats
 
     return dataset
-
 
 
 def filter_changed_graphs(compressed_dic):
