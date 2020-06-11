@@ -592,7 +592,6 @@ def compress_overall_dic(overall_dic):
         compressed_dic[smiles] = {"atoms": atom_dic,
                                   "bonds": bond_dic}
 
-        break
 
     return compressed_dic
 
