@@ -2,12 +2,8 @@ import sys
 import os
 
 this_path = os.path.abspath(os.path.dirname(__file__))
-nff_dir = "/".join(this_path.split("/")[:-2])
+nff_dir = "/".join(this_path.split("/")[:-1])
 sys.path.insert(0, nff_dir)
-
-import pdb
-pdb.set_trace()
-
 
 import msgpack
 import os
