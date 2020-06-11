@@ -592,6 +592,8 @@ def compress_overall_dic(overall_dic):
         compressed_dic[smiles] = {"atoms": atom_dic,
                                   "bonds": bond_dic}
 
+        break
+
     return compressed_dic
 
 
@@ -620,7 +622,6 @@ def single_feats_from_dic(overall_dic,
         single_feat_dic[key] = {"atom_features": atom_feats,
                                 "bond_features": bond_feats}
 
-        break
 
     return single_feat_dic
 
