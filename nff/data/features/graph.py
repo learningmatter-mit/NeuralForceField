@@ -587,8 +587,8 @@ def compress_feats(confs, feat_type):
 
         elif feat_type == "bonded_nbr_list":
             feats = nbr_list_from_dic(dic_list)
-            tuple_feats = (tuple(i) for i in feats)
-        
+            tuple_feats = tuple([tuple(i) for i in feats])
+
         if tuple_feats in feat_dic:
             feat_dic[tuple_feats].append(i)
         else:
@@ -627,23 +627,26 @@ def single_feats_from_dic(overall_dic,
 
     for key, sub_dic in compressed_dic.items():
         if any((len(sub_dic["atoms"]) != 1,
-                len(sub_dic["bonds"]) != 1,
-                len(sub_dic["bonded_nbr_list"]) != 1)):
+                len(sub_dic["bonds"]) != 1)):
+                # len(sub_dic["bonded_nbr_list"]) != 1)):
             continue
 
         atom_feat_list = list(list(sub_dic["atoms"].keys())[0])
         bond_feat_list = list(list(sub_dic["bonds"].keys())[0])
-        bonded_nbr_list = list(list(sub_dic["bonded_nbr_list"].keys())[0])
+        # bonded_nbr_list = list(list(sub_dic["bonded_nbr_list"].keys())[0])
+
+        bonded_nbr_tuples = [(torch.LongTensor(nbr_list), idx) for
+                             nbr_list, idx in sub_dic["bonded_nbr_list"].items()]
 
         # convert to tensors and reshape
 
         atom_feats = torch.Tensor(atom_feat_list).reshape(-1, num_atom_feats)
         bond_feats = torch.Tensor(bond_feat_list).reshape(-1, num_bond_feats)
-        bonded_nbr_list = torch.LongTensor(bonded_nbr_list)
+        # bonded_nbr_list = torch.LongTensor(bonded_nbr_list)
 
         single_feat_dic[key] = {"atom_features": atom_feats,
                                 "bond_features": bond_feats,
-                                "bonded_nbr_list": bonded_nbr_list}
+                                "bonded_nbr_tuples": bonded_nbr_tuples}
 
     return single_feat_dic
 
