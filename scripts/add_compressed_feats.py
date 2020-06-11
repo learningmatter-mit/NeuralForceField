@@ -5,9 +5,11 @@ this_path = os.path.abspath(os.path.dirname(__file__))
 nff_dir = "/".join(this_path.split("/")[:-1])
 sys.path.insert(0, nff_dir)
 
+
 import msgpack
 import os
 import argparse
+import pickle
 
 from nff.data.features.graph import (
     single_feats_from_dic, add_single_feats_to_dataset)
@@ -15,7 +17,7 @@ from nff.data import Dataset
 
 NOBACKUP = "/nobackup1/saxelrod/data"
 MSG_FILE = os.path.join(NOBACKUP, "charge_cleandrugs_post_process.msgpack")
-SINGLE_FEAT_FILE = os.path.join(NOBACKUP, "drugs_single_feats.msgpack")
+SINGLE_FEAT_FILE = os.path.join(NOBACKUP, "single_feats/drugs.pickle")
 DATASET_FILE = os.path.join(NOBACKUP, "drugs_dataset_100_confs.pth.tar")
 
 
@@ -34,10 +36,10 @@ def save_single_feats(msg_file, save_file, remove_old):
                    i)))
 
         single_feat_dic = single_feats_from_dic(dic)
-        mp_form = msgpack.packb(single_feat_dic, use_bin_type=True)
-
-        with open(save_file, "ab") as f:
-            f.write(mp_form)
+        this_save_file = save_file.replace(".pickle",
+                                           "_{}.pickle".format(i))
+        with open(this_save_file, "wb") as f:
+            pickle.dump(single_feat_dic, f)
 
 
 def update_dataset(dataset_file, single_feat_file):
@@ -78,7 +80,7 @@ if __name__ == "__main__":
                               'messagepack file with features'))
     parser.add_argument('--single_feat_file',
                         type=str, default=SINGLE_FEAT_FILE,
-                        help=('Name of messagepack file that you '
+                        help=('Name of pickle file that you '
                               'want to save the single features to.'))
     parser.add_argument('--dataset_file', type=str, default=DATASET_FILE,
                         help=('Name of '

@@ -620,6 +620,8 @@ def single_feats_from_dic(overall_dic,
         single_feat_dic[key] = {"atom_features": atom_feats,
                                 "bond_features": bond_feats}
 
+        break
+
     return single_feat_dic
 
 
