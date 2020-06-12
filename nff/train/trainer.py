@@ -171,7 +171,7 @@ class Trainer:
         chkpt = os.path.join(
             self.checkpoint_path, "checkpoint-" + str(epoch) + ".pth.tar"
         )
-        self.state_dict = torch.load(chkpt)
+        self.state_dict = torch.load(chkpt, map_location='cpu')
 
     def train(self, device, n_epochs=MAX_EPOCHS):
         """Train the model for the given number of epochs on a specified 

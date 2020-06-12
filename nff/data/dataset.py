@@ -12,10 +12,7 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 from torch.utils.data import Dataset as TorchDataset
 from nff.data.sparse import sparsify_tensor
-from nff.data.topology import update_props_topologies
 from nff.data.graphs import reconstruct_atoms, get_neighbor_list, generate_subgraphs, DISTANCETHRESHOLDICT_Z 
-from nff.io.ase import AtomsBatch
-
 
 
 class Dataset(TorchDataset):
@@ -162,11 +159,40 @@ class Dataset(TorchDataset):
         Returns:
             TYPE: Description
         """
-        self.props['nbr_list'] = [
-            get_neighbor_list(nxyz[:, 1:4], cutoff, undirected)
-            for nxyz in self.props['nxyz']
-        ]
+        if 'lattice' not in self.props:
+            self.props['nbr_list'] = [
+                get_neighbor_list(nxyz[:, 1:4], cutoff, undirected)
+                for nxyz in self.props['nxyz']
+            ]
+            self.props['offsets'] = [
+                torch.sparse.FloatTensor(nbrlist.shape[0], 3)
+                for nbrlist in self.props['nbr_list']
+            ]
+        else:
+            self._get_periodic_neighbor_list(cutoff, undirected)
+            return self.props['nbr_list'], self.props['offsets']
 
+        return self.props['nbr_list']
+
+    def _get_periodic_neighbor_list(self, cutoff, undirected=False):
+        from nff.io.ase import AtomsBatch
+        
+        nbrlist = []
+        offsets = []
+        for nxyz, lattice in zip(self.props['nxyz'], self.props['lattice']):
+            atoms = AtomsBatch(
+                nxyz[:, 0].long(),
+                positions=nxyz[:, 1:],
+                cell=lattice,
+                pbc=True,
+                cutoff=cutoff
+            )
+            nbrs, offs = atoms.update_nbr_list()
+            nbrlist.append(nbrs)
+            offsets.append(offs)
+
+        self.props['nbr_list'] = nbrlist
+        self.props['offsets'] = offsets
         return
 
     def copy(self):
@@ -282,6 +308,9 @@ class Dataset(TorchDataset):
         return self.bond_len_dict
 
     def gen_bond_prior(self, cutoff, bond_len_dict=None):
+        from nff.io.ase import AtomsBatch
+
+        from nff.io.ase import AtomsBatch
 
         if not self.props:
             raise TypeError("the dataset has no data yet")
@@ -502,18 +531,25 @@ def concatenate_dict(*dicts):
 
     keys = set(sum([list(d.keys()) for d in dicts], []))
 
-    def get_length(value):
+    def is_list_of_lists(value):
         if isinstance(value, list):
-            if isinstance(value[0], list):
-                return 1
-            else:
-                return len(value)
-        if isinstance(value, torch.Tensor):
-            return value.shape[0]
+            return isinstance(value[0], list)
+        return False
 
+    def get_length(value):
+        if is_list_of_lists(value):
+            if is_list_of_lists(value[0]):
+                return len(value)
+            return 1
+
+        elif isinstance(value, list):
+            return len(value)
+          
         return 1
 
     def get_length_of_values(dict_):
+        if 'nxyz' in dict_:
+            return get_length(dict_['nxyz'])
         return min([get_length(v) for v in dict_.values()])
 
     def flatten_val(value):
@@ -521,16 +557,26 @@ def concatenate_dict(*dicts):
             a torch.Tensor, return its flattened version
             to be appended to a list of values
         """
-        if isinstance(value, list):
+        if is_list_of_lists(value):
+            if is_list_of_lists(value[0]):
+                return value
+            else:
+                return [value]
+
+        elif isinstance(value, list):
             return value
 
         elif isinstance(value, torch.Tensor):
-            if value.type() == 'torch.LongTensor':
+            if len(value.shape) == 0:
+                return [value]
+            elif len(value.shape) == 1:
                 return [item for item in value]
+            else:
+                return [value]
 
         elif get_length(value) == 1:
             return [value]
-        
+
         return [value]
 
     # we have to see how many values the properties of each dictionary has.

@@ -160,7 +160,7 @@ def add_subparsers(cmd_parser, defaults={}):
     schnet_parser.add_argument(
         "--dropout_rate",
         type=float,
-        default=0.0
+        default=0.0,
         help="Dropout rate for SchNet convolutions (default: %(default)s)",
     )
 
