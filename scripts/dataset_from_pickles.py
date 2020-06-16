@@ -12,6 +12,7 @@ import json
 import random
 import pickle
 
+
 RDKIT_FOLDER = "/home/saxelrod/Repo/projects/geom/tutorials/rdkit_folder"
 PICKLE_FOLDER = os.path.join(RDKIT_FOLDER, "drugs")
 SUMMARY_PATH = os.path.join(RDKIT_FOLDER, "summary_drugs.json")

@@ -178,7 +178,7 @@ class WeightedConformers(nn.Module):
 
         return common_feats
 
-    def convolve(self, batch, xyz=None, **kwargs):
+    def convolve(self, batch, xyz=None, xyz_grad=False, **kwargs):
         """
 
         Apply the convolutional layers to the batch.
@@ -189,7 +189,9 @@ class WeightedConformers(nn.Module):
         Returns:
             r: new feature vector after the convolutions
             N: list of the number of atoms for each molecule in the batch
+            xyz_grad (bool): whether we'll need the gradient wrt xyz
             xyz: xyz (with a "requires_grad") for the batch
+
         """
 
         # Note: we've given the option to input xyz from another source.
@@ -198,7 +200,7 @@ class WeightedConformers(nn.Module):
 
         if xyz is None:
             xyz = batch["nxyz"][:, 1:4]
-            xyz.requires_grad = True
+            xyz.requires_grad = xyz_grad
 
         r = batch["nxyz"][:, 0]
         a = batch["nbr_list"]

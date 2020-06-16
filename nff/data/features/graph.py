@@ -704,6 +704,27 @@ def add_compress_to_nff_dataset(dataset):
 
     pass
 
+# def featurize_rd_bonds(rd_mol, feat_types=BOND_FEAT_TYPES):
+
+#     bonds = rd_mol.GetBonds()
+#     bond_list = []
+#     all_props = [] 
+
+#     for bond in bonds:
+
+#         all_props.append(torch.tensor([]))
+
+#         start = bond.GetBeginAtomIdx()
+#         end = bond.GetEndAtomIdx()
+#         lower = min((start, end))
+#         upper = max((start, end))
+
+#         bond_list.append([lower, upper])
+#         feat_dic = get_all_bond_feats(bond=bond,
+#                                       feat_types=feat_types)
+
+#         for key, feat in feat_dic.items():
+#             all_props[-1] = torch.cat((all_props[-1], feat))
 
 def featurize_bonds(dataset, feat_types=BOND_FEAT_TYPES):
 

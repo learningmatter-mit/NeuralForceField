@@ -84,8 +84,16 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
         positive_idx = [i for i in range(data_length)
                         if i not in negative_idx]
 
-        negative_weight = 1 / len(negative_idx)
-        positive_weight = 1 / len(positive_idx)
+        num_neg = len(negative_idx)
+        num_pos = len(positive_idx)
+
+        if num_neg == 0:
+            num_neg = 1
+        if num_pos == 0:
+            num_pos = 1
+
+        negative_weight = num_neg
+        positive_weight = num_pos
 
         self.data_length = data_length
         self.weights = torch.zeros(data_length)

@@ -52,6 +52,10 @@ class SchNetFeatures(WeightedConformers):
 
         # initialize hidden bond features
 
+        # Need to change this if we're going to only use
+        # bonded_nbr_list for a single conformer and then applying them
+        # to everything. 
+
         h_0_bond = self.W_i(r=r,
                             bond_feats=bond_feats,
                             bond_nbrs=bond_nbrs)

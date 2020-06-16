@@ -365,6 +365,7 @@ def force_to_energy_grad(dataset):
         return True
 
 def convert_nan(x):
+
     new_x = []
     has_nan = any([np.isnan(y).any() for y in x])
     for y in x:
@@ -404,7 +405,7 @@ def to_tensor(x, stack=False):
     if isinstance(x, torch.Tensor):
         return x
 
-    if type(x) is list:
+    if type(x) is list and type(x[0]) != str:
         x = convert_nan(x)
 
     # all objects in x are tensors

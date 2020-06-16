@@ -857,6 +857,7 @@ class GraphAttention(MessagePassingModule):
         return r
 
 class ConfAttention(nn.Module):
+    
     def __init__(self, mol_basis, boltz_basis):
         super(ConfAttention, self).__init__()
 
