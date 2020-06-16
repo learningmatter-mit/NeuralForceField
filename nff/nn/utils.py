@@ -74,6 +74,7 @@ def get_default_readout(n_atom_basis):
 
     return DEFAULT_READOUT
 
+
 def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
     """Pytorch implementations of nbr_list for minimum image convention, the offsets are only limited to 0, 1, -1:
     it means that no pair interactions is allowed for more than 1 periodic box length. It is so much faster than 
@@ -92,10 +93,12 @@ def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
     """
     xyz = torch.Tensor(atomsobject.get_positions(wrap=True) ).to(device)
     dis_mat = xyz[None, :, :] - xyz[:, None, :]
-    cell_dim = torch.Tensor(atomsobject.get_cell()).diag().to(device)
 
-    offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + dis_mat.lt(-0.5 * cell_dim).to(torch.float)
-    dis_mat = dis_mat + offsets * cell_dim
+    if any(atomsobject.pbc):
+        cell_dim = torch.Tensor(atomsobject.get_cell()).diag().to(device)
+
+        offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + dis_mat.lt(-0.5 * cell_dim).to(torch.float)
+        dis_mat = dis_mat + offsets * cell_dim
 
     dis_sq = dis_mat.pow(2).sum(-1)
     mask = (dis_sq < cutoff ** 2) & (dis_sq != 0)
@@ -106,6 +109,9 @@ def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
 
     i, j  = nbr_list[:, 0].detach().to("cpu").numpy(), nbr_list[:, 1].detach().to("cpu").numpy()
 
-    offsets = offsets[nbr_list[:, 0], nbr_list[:, 1], :].detach().to("cpu").numpy()
+    if any(atomsobject.pbc):
+        offsets = offsets[nbr_list[:, 0], nbr_list[:, 1], :].detach().to("cpu").numpy()
+    else:
+        offsets = np.zeros((nbr_list.shape[0], 3))
 
     return i, j, offsets 

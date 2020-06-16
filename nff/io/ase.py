@@ -335,8 +335,7 @@ class NeuralFF(Calculator):
 
         # add keys so that the readout function can calculate these properties
         batch['energy'] = []
-        if 'forces' in properties:
-            batch['energy_grad'] = []
+        batch['energy_grad'] = []
 
         prediction = self.model(batch)
 
