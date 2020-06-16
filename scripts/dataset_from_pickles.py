@@ -112,7 +112,7 @@ def proportional_sample(summary_dic,
         sample_dic = get_thread_dic(sample_dic=sample_dic,
                                     thread=thread,
                                     num_threads=num_threads)
-            
+
     return sample_dic
 
 
@@ -193,6 +193,13 @@ def get_xyz(rd_mol):
     return xyz
 
 
+def renorm_weights(spec_dic):
+
+    new_weights = np.array(spec_dic["weights"]) / sum(spec_dic["weights"])
+    spec_dic["weights"] = new_weights.tolist()
+
+    return spec_dic
+
 def convert_data(overall_dic, num_confs, feature_dic):
 
     print("Adding features...")
@@ -223,6 +230,7 @@ def convert_data(overall_dic, num_confs, feature_dic):
                 else:
                     spec_dic[map_key(key)].append(conf[key])
 
+        spec_dic = renorm_weights(spec_dic)
         spec_dic = duplicate_features(spec_dic)
         spec_dics.append(spec_dic)
 
@@ -266,7 +274,7 @@ def duplicate_features(spec_dic):
     are all the same for every conformer.
     """
 
-    num_confs = len(spec_dic)
+    num_confs = len(spec_dic['weights'])
     for key in ["atom_features", "bond_features"]:
         spec_dic[key] = torch.cat([spec_dic[key]] * num_confs)
 
