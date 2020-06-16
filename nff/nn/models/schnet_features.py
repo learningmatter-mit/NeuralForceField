@@ -238,11 +238,13 @@ class SchNetFeatures(WeightedConformers):
         xyz_list = []
 
         for sub_batch in sub_batches:
-            new_node_feats, xyz = self.convolve_sub_batch(batch, xyz, xyz_grad)
+            new_node_feats, xyz = self.convolve_sub_batch(sub_batch, xyz, xyz_grad)
             new_node_feat_list.append(new_node_feats)
             xyz_list.append(xyz)
 
         new_node_feats = torch.cat(new_node_feat_list)
         xyz = torch.cat(xyz_list)
+
+        # may have to apply the readout layer serially too
 
         return new_node_feats, xyz
