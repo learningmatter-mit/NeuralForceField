@@ -163,7 +163,11 @@ class SchNetFeatures(WeightedConformers):
             if key in REINDEX_KEYS:
                 continue
             elif np.mod(val_len, num_confs) != 0:
-                sub_batch_dic[key] = [val] * num_splits
+                if key == "num_atoms":
+                    sub_batch_dic[key] = [int(val * num / num_confs)
+                                          for num in confs_per_split]
+                else:
+                    sub_batch_dic[key] = [val] * num_splits
                 continue
 
             inherent_val_len = val_len // num_confs
