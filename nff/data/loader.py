@@ -1,13 +1,10 @@
 import numpy as np
-from collections.abc import Iterable
 import torch
 from torch.utils.data import DistributedSampler
-from torch.utils.data import Dataset, Sampler
+from torch.utils.data import Dataset as TorchDataset
 from operator import itemgetter
 
 
-
-import pdb
 from nff.data.topology import ALL_TOPOLOGY_KEYS, RE_INDEX_TOPOLOGY_KEYS
 
 
@@ -117,7 +114,7 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
 
 
 
-class DatasetFromSampler(Dataset):
+class DatasetFromSampler(TorchDataset):
     """Dataset of indexes from `Sampler`."""
 
     def __init__(self, sampler):
@@ -185,7 +182,7 @@ class DistributedSamplerWrapper(DistributedSampler):
         self.sampler = sampler
 
     def __iter__(self):
-        """@TODO: Docs. Contribution is welcome."""
+
         self.dataset = DatasetFromSampler(self.sampler)
         indexes_of_indexes = super().__iter__()
         subsampler_indexes = self.dataset
