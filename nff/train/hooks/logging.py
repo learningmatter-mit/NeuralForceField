@@ -10,7 +10,7 @@ import torch
 import json
 
 from nff.train.hooks import Hook
-from nff.train.metrics import RootMeanSquaredError
+from nff.train.metrics import (RootMeanSquaredError, PrAuc, RocAuc)
 
 
 class LoggingHook(Hook):
@@ -141,7 +141,8 @@ class LoggingHook(Hook):
         par_folder = self.par_folders[self.global_rank]
         json_file = os.path.join(par_folder, "epoch_{}.json".format(epoch))
 
-        # if the json file you're saving to already exists, then load its contents
+        # if the json file you're saving to already exists,
+        # then load its contents
         if os.path.isfile(json_file):
             with open(json_file, "r") as f:
                 dic = json.load(f)
@@ -150,7 +151,11 @@ class LoggingHook(Hook):
 
         # update with metrics
         for metric in self.metrics:
-            m = metric.aggregate()
+            if type(metric) in [RocAuc, PrAuc]:
+                m = {"y_true": metric.actual,
+                     "y_pred": metric.pred}
+            else:
+                m = metric.aggregate()
             dic[metric.name] = m
 
         # save
@@ -194,6 +199,16 @@ class LoggingHook(Hook):
             if isinstance(metric, RootMeanSquaredError):
                 metric_val = np.mean(
                     np.array(list(par_dic.values)) ** 2) ** 0.5
+            elif type(metric) in [RocAuc, PrAuc]:
+                y_true = []
+                y_pred = []
+                for sub_dic in par_dic.values():
+                    y_true += sub_dic["y_true"]
+                    y_pred += sub_dic["y_pred"]
+                metric.actual = y_true
+                metric.pred = y_pred
+                metric_val = metric.aggregate()
+
             else:
                 metric_val = np.mean(list(par_dic.values()))
             metric_dic[metric.name] = metric_val
@@ -250,8 +265,8 @@ class CSVHook(LoggingHook):
     ):
         log_path = os.path.join(log_path, "log.csv")
         super().__init__(
-            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate, mini_batches,
-            global_rank, world_size
+            log_path, metrics, log_train_loss, log_validation_loss,
+            log_learning_rate, mini_batches, global_rank, world_size
         )
         self._offset = 0
         self._restart = False
@@ -368,8 +383,8 @@ class TensorboardHook(LoggingHook):
         from tensorboardX import SummaryWriter
 
         super().__init__(
-            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate, mini_batches,
-            global_rank, world_size
+            log_path, metrics, log_train_loss, log_validation_loss,
+            log_learning_rate, mini_batches, global_rank, world_size
         )
         self.writer = SummaryWriter(self.log_path)
         self.every_n_epochs = every_n_epochs
@@ -380,7 +395,8 @@ class TensorboardHook(LoggingHook):
         if trainer.epoch % self.every_n_epochs == 0:
             if self.log_train_loss:
                 self.writer.add_scalar(
-                    "train/loss", self._train_loss / self._counter, trainer.epoch
+                    "train/loss",
+                    self._train_loss / self._counter, trainer.epoch
                 )
             if self.log_learning_rate:
                 self.writer.add_scalar(
@@ -405,7 +421,8 @@ class TensorboardHook(LoggingHook):
 
                         # tensorboardX only accepts images as numpy arrays.
                         # we therefore convert plots in numpy array
-                        # see https://github.com/lanpa/tensorboard-pytorch/blob/master/examples/matplotlib_demo.py
+                        # see https://github.com/lanpa/tensorboard-
+                        # pytorch/blob/master/examples/matplotlib_demo.py
                         fig = plt.figure()
                         plt.colorbar(plt.pcolor(m))
                         fig.canvas.draw()
@@ -474,8 +491,8 @@ class PrintingHook(LoggingHook):
 
         log_path = os.path.join(log_path, "log_human_read.csv")
         super().__init__(
-            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate, mini_batches,
-            global_rank, world_size
+            log_path, metrics, log_train_loss, log_validation_loss,
+            log_learning_rate, mini_batches, global_rank, world_size
         )
 
         self.every_n_epochs = every_n_epochs

@@ -115,7 +115,13 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
 
 
 class DatasetFromSampler(TorchDataset):
-    """Dataset of indexes from `Sampler`."""
+    """
+
+    Source: https://github.com/catalyst-team/catalyst/blob/
+            f98c351dc8b35851040c8477d61ac633d6dd46c3/catalyst/
+            data/dataset.py
+
+    Dataset of indexes from `Sampler`."""
 
     def __init__(self, sampler):
         """
@@ -145,6 +151,10 @@ class DatasetFromSampler(TorchDataset):
 
 class DistributedSamplerWrapper(DistributedSampler):
     """
+
+    Source: https://github.com/catalyst-team/catalyst/
+            blob/master/catalyst/data/sampler.py
+
     Wrapper over `Sampler` for distributed training.
     Allows you to use any sampler in distributed mode.
     It is especially useful in conjunction with
