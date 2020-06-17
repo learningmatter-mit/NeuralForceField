@@ -231,7 +231,7 @@ class SchNetFeatures(WeightedConformers):
 
         return new_node_feats, xyz
 
-    def convolve(self, batch, sub_batch_size=10, xyz=None, xyz_grad=False):
+    def convolve(self, batch, sub_batch_size=15, xyz=None, xyz_grad=False):
 
         sub_batches = self.split_batch(batch, sub_batch_size)
         new_node_feat_list = []
