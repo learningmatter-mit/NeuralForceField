@@ -231,7 +231,7 @@ class SchNetFeatures(WeightedConformers):
 
         return new_node_feats, xyz
 
-    def convolve(self, batch, sub_batch_size=10, xyz=None, xyz_grad=False):
+    def convolve(self, batch, sub_batch_size=5, xyz=None, xyz_grad=False):
 
         sub_batches = self.split_batch(batch, sub_batch_size)
         new_node_feat_list = []
@@ -244,7 +244,5 @@ class SchNetFeatures(WeightedConformers):
 
         new_node_feats = torch.cat(new_node_feat_list)
         xyz = torch.cat(xyz_list)
-
-        # may have to apply the readout layer serially too
 
         return new_node_feats, xyz
