@@ -162,7 +162,7 @@ class SchNetFeatures(WeightedConformers):
             val_len = len(val)
             if key in REINDEX_KEYS:
                 continue
-            elif np.mod(val_len, num_confs) != 0:
+            elif np.mod(val_len, num_confs) != 0 or val_len == 1:
                 if key == "num_atoms":
                     sub_batch_dic[key] = [int(val * num / num_confs)
                                           for num in confs_per_split]
@@ -231,7 +231,7 @@ class SchNetFeatures(WeightedConformers):
 
         return new_node_feats, xyz
 
-    def convolve(self, batch, sub_batch_size=5, xyz=None, xyz_grad=False):
+    def convolve(self, batch, sub_batch_size=10, xyz=None, xyz_grad=False):
 
         sub_batches = self.split_batch(batch, sub_batch_size)
         new_node_feat_list = []
