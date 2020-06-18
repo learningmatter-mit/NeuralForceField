@@ -149,7 +149,7 @@ class WeightedConformers(nn.Module):
     def make_boltz_nn(self, boltzmann_dict):
         if boltzmann_dict["type"] == "multiply":
             return
-            
+
         elif boltzmann_dict["type"] == "layers":
             layers = boltzmann_dict["layers"]
             network = construct_sequential(layers)

@@ -872,16 +872,12 @@ class ConfAttention(nn.Module):
 
     def forward(self, conf_fps, boltzmann_weights):
 
-        # put weights onto GPU
-        boltzmann_weights = torch.Tensor(boltzmann_weights
-                                         ).to(conf_fps.device)
-
         # increase dimensionality of Boltzmann weight
         boltz_vec = self.boltz_act(self.boltz_lin(boltzmann_weights))
 
         # concatenate fingerprints with Boltzmann vector
         # and apply linear layer to reduce back to size `mol_basis`
-        cat_fps = torch.cat([torch.stack(conf_fps), boltz_vec], dim=1)
+        cat_fps = torch.cat([conf_fps, boltz_vec], dim=1)
         new_fps = self.fp_linear(cat_fps)
 
         # exponentiate LeakyReLU(weight_mat * new_fps)
@@ -893,7 +889,8 @@ class ConfAttention(nn.Module):
         norm = exp_confs.sum(0)
         alpha = exp_confs / norm
 
-        # multiply each feature of each conformer by its weight alpha_in and sum
+        # multiply each feature of each conformer by its
+        # weight alpha_in and sum
 
         final_fp = (alpha * new_fps).sum(0)
 
