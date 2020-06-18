@@ -870,6 +870,9 @@ class ConfAttention(nn.Module):
 
     def forward(self, conf_fps, boltzmann_weights):
 
+        # put weights onto GPU
+        boltzmann_weights = boltzmann_weights.to(conf_fps.device)
+
         # increase dimensionality of Boltzmann weight
         boltz_vec = self.boltz_act(self.boltz_lin(boltzmann_weights))
 
