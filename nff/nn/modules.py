@@ -856,29 +856,32 @@ class GraphAttention(MessagePassingModule):
 
         return r
 
+
 class ConfAttention(nn.Module):
-    
+
     def __init__(self, mol_basis, boltz_basis):
         super(ConfAttention, self).__init__()
 
         self.boltz_lin = torch.nn.Linear(1, boltz_basis)
         self.boltz_act = Softmax(dim=1)
 
-        self.fp_linear = torch.nn.Linear(mol_basis + boltz_basis, mol_basis, bias=False)
+        self.fp_linear = torch.nn.Linear(
+            mol_basis + boltz_basis, mol_basis, bias=False)
         self.att_weight = torch.nn.Parameter(torch.rand(1, mol_basis))
         self.activation = LeakyReLU()
 
     def forward(self, conf_fps, boltzmann_weights):
 
         # put weights onto GPU
-        boltzmann_weights = boltzmann_weights.to(conf_fps.device)
+        boltzmann_weights = torch.Tensor(boltzmann_weights
+                                         ).to(conf_fps.device)
 
         # increase dimensionality of Boltzmann weight
         boltz_vec = self.boltz_act(self.boltz_lin(boltzmann_weights))
 
         # concatenate fingerprints with Boltzmann vector
         # and apply linear layer to reduce back to size `mol_basis`
-        cat_fps = torch.cat([conf_fps, boltz_vec], dim=1)
+        cat_fps = torch.cat([torch.stack(conf_fps), boltz_vec], dim=1)
         new_fps = self.fp_linear(cat_fps)
 
         # exponentiate LeakyReLU(weight_mat * new_fps)
@@ -895,6 +898,7 @@ class ConfAttention(nn.Module):
         final_fp = (alpha * new_fps).sum(0)
 
         return final_fp
+
 
 class NodeMultiTaskReadOut(nn.Module):
     """Stack Multi Task outputs
