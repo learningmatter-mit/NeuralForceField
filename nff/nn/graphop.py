@@ -89,7 +89,7 @@ def conf_pool(smiles_fp,
     # the attention pooler and return
 
     if isinstance(boltz_nn, ConfAttention):
-        final_fp = boltz_nn(conf_fps=conf_fps,
+        final_fp = boltz_nn(conf_fps=torch.stack(conf_fps),
                             boltzmann_weights=boltzmann_weights)
         return final_fp
 
