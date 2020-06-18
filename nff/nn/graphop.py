@@ -1,6 +1,6 @@
 import torch
 from nff.utils.scatter import compute_grad
-
+from nff.nn.modules import ConfAttention
 EPS = 1e-15
 
 
@@ -38,7 +38,12 @@ def update_boltz(conf_fp, weight, boltz_nn, extra_feats=None):
     return boltzmann_fp
 
 
-def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn, boltz_nn, extra_feats=None):
+def conf_pool(smiles_fp,
+              mol_size,
+              boltzmann_weights,
+              mol_fp_nn,
+              boltz_nn,
+              extra_feats=None):
     """
     Pool atomic representations of conformers into molecular fingerprint,
     and then add those fingerprints together with Boltzmann weights.
@@ -78,7 +83,19 @@ def conf_pool(smiles_fp, mol_size, boltzmann_weights, mol_fp_nn, boltz_nn, extra
         # add to the list of conformer fp's
         conf_fps.append(mol_fp)
 
-    # get a new fingerprint for each conformer based on its Boltzmann weight
+
+    # if boltz_nn is an instance of ConfAttention,
+    # put all the conformers and their weights into
+    # the attention pooler and return
+
+    if isinstance(boltz_nn, ConfAttention):
+        final_fp = boltz_nn(conf_fps=conf_fps,
+                            boltzmann_weights=boltzmann_weights)
+        return final_fp
+
+    # otherwise get a new fingerprint for each conformer 
+    # based on its Boltzmann weight
+
     boltzmann_fps = []
     for i, conf_fp in enumerate(conf_fps):
         weight = boltzmann_weights[i]

@@ -5,6 +5,7 @@ from nff.nn.layers import DEFAULT_DROPOUT_RATE
 from nff.nn.modules import (
     SchNetConv,
     NodeMultiTaskReadOut,
+    ConfAttention
 )
 from nff.nn.graphop import conf_pool
 from nff.nn.utils import construct_sequential
@@ -148,8 +149,19 @@ class WeightedConformers(nn.Module):
     def make_boltz_nn(self, boltzmann_dict):
         if boltzmann_dict["type"] == "multiply":
             return
-        layers = boltzmann_dict["layers"]
-        network = construct_sequential(layers)
+            
+        elif boltzmann_dict["type"] == "layers":
+            layers = boltzmann_dict["layers"]
+            network = construct_sequential(layers)
+
+        elif boltzmann_dict["type"] == "attention":
+
+            mol_basis = boltzmann_dict["mol_basis"]
+            boltz_basis = boltzmann_dict["boltz_basis"]
+
+            network = ConfAttention(mol_basis=mol_basis,
+                                    boltz_basis=boltz_basis)
+
         return network
 
     def add_features(self, batch, **kwargs):
@@ -317,7 +329,7 @@ class WeightedConformers(nn.Module):
     def forward(self, batch, xyz=None, **kwargs):
 
         if not self.batch_embeddings:
-            
+
             conf_fps, xyz = self.embedding_forward(batch, xyz, **kwargs)
             results = self.readout(conf_fps)
             results = self.add_grad(batch=batch, results=results, xyz=xyz)
