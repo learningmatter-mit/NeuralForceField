@@ -254,6 +254,7 @@ class Trainer:
                         if batch_stop:
                             break
 
+                    print("Batch {} of {} complete".format(j, self.max_batch_iters))
                     if self._stop:
                         break
 
