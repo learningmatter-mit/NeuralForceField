@@ -63,6 +63,10 @@ def collate_dicts(dicts):
 
 class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
     """
+
+    Source: https://github.com/ufoym/imbalanced-dataset-sampler/
+            blob/master/torchsampler/imbalanced.py
+            
     Sampling class to make sure positive and negative labels
     are represented equally during training. 
     Attributes:
@@ -101,13 +105,19 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
 
         self.data_length = data_length
         self.weights = torch.zeros(data_length)
-        self.weights[negative_idx] = negative_weight
-        self.weights[positive_idx] = positive_weight
+        self.weights[negative_idx] = 1 / negative_weight
+        self.weights[positive_idx] = 1 / positive_weight
+        self.current = 0
 
     def __iter__(self):
 
         return (i for i in torch.multinomial(
             self.weights, self.data_length, replacement=True))
+
+    def __next__(self):
+        self.current += 1
+        if self.current >= self.data_length:
+            raise StopIteration
 
     def __len__(self):
         return self.data_length
