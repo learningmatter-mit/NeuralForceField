@@ -107,17 +107,11 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
         self.weights = torch.zeros(data_length)
         self.weights[negative_idx] = 1 / negative_weight
         self.weights[positive_idx] = 1 / positive_weight
-        self.current = 0
 
     def __iter__(self):
 
         return (i for i in torch.multinomial(
             self.weights, self.data_length, replacement=True))
-
-    def __next__(self):
-        self.current += 1
-        if self.current >= self.data_length:
-            raise StopIteration
 
     def __len__(self):
         return self.data_length
