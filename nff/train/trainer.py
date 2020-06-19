@@ -58,7 +58,8 @@ class Trainer:
         loss_is_normalized=True,
         global_rank=0,
         world_size=1,
-        max_batch_iters=None
+        max_batch_iters=None,
+        model_kwargs=None
     ):
         self.model_path = model_path
         self.checkpoint_path = os.path.join(self.model_path, "checkpoints")
@@ -89,6 +90,8 @@ class Trainer:
         # maximum number of batches to iterate through
         self.max_batch_iters = max_batch_iters if (
             max_batch_iters is not None) else len(self.train_loader)
+        self.model_kwargs = model_kwargs if (model_kwargs is not None
+                                             ) else {}
 
         if os.path.exists(self.checkpoint_path) and self.base:
             self.restore_checkpoint()
@@ -123,6 +126,9 @@ class Trainer:
 
     def get_best_model(self):
         return torch.load(self.best_model)
+
+    def call_model(self, batch):
+        return self._model(batch, **self.model_kwargs)
 
     @property
     def state_dict(self):
@@ -231,7 +237,7 @@ class Trainer:
                     for h in self.hooks:
                         h.on_batch_begin(self, batch)
 
-                    results = self._model(batch)
+                    results = self.call_model(batch)
                     loss += self.loss_fn(batch, results)
                     self.step += 1
 
@@ -260,7 +266,8 @@ class Trainer:
                         if batch_stop:
                             break
 
-                    print("Batch {} of {} complete".format(j, self.max_batch_iters))
+                    print("Batch {} of {} complete".format(
+                        j, self.max_batch_iters))
                     if self._stop:
                         break
 
@@ -424,7 +431,7 @@ class Trainer:
                 h.on_validation_batch_begin(self)
 
             # move input to gpu, if needed
-            results = self._model(val_batch)
+            results = self.call_model(val_batch)
 
             val_batch_loss = self.loss_fn(
                 val_batch, results).data.cpu().numpy()
