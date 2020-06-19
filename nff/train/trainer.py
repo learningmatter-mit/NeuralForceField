@@ -36,7 +36,7 @@ class Trainer:
        loss_is_normalized (bool, optional): if True, the loss per data point will be
            reported. Otherwise, the accumulated loss is reported.
        global_rank (int, optional): overall rank of the current gpu for parallel
-            training (e.g. for the second gpu on the third node, with four
+            training (e.g. for the second gpu on the third node, with three
             gpus per node, the global rank is 7).
        world_size (int, optional): the total number of gpus over which training is
             parallelized.
@@ -57,7 +57,8 @@ class Trainer:
         hooks=None,
         loss_is_normalized=True,
         global_rank=0,
-        world_size=1
+        world_size=1,
+        max_batch_iters=None
     ):
         self.model_path = model_path
         self.checkpoint_path = os.path.join(self.model_path, "checkpoints")
@@ -83,6 +84,11 @@ class Trainer:
         self.par_folders = self.get_par_folders()
         # whether this is the base process for parallel training
         self.base = global_rank == 0
+        # how many times you've called loss.backward()
+        self.back_count = 0
+        # maximum number of batches to iterate through
+        self.max_batch_iters = max_batch_iters if (
+            max_batch_iters is not None) else len(self.train_loader)
 
         if os.path.exists(self.checkpoint_path) and self.base:
             self.restore_checkpoint()
@@ -173,6 +179,13 @@ class Trainer:
         )
         self.state_dict = torch.load(chkpt, map_location='cpu')
 
+    def loss_backward(self, loss):
+        loss.backward()
+        self.back_count += 1
+        batch_stop = self.back_count == (self.max_batch_iters - 1)
+
+        return loss, batch_stop
+
     def train(self, device, n_epochs=MAX_EPOCHS):
         """Train the model for the given number of epochs on a specified 
         device.
@@ -224,7 +237,8 @@ class Trainer:
                     # of times before taking a step
                     num_batches += 1
                     if num_batches == self.mini_batches:
-                        loss.backward()
+
+                        loss, batch_stop = self.loss_backward(loss)
                         self.optimizer.step()
 
                         for h in self.hooks:
@@ -234,6 +248,9 @@ class Trainer:
                         loss = torch.tensor(0.0).to(device)
                         num_batches = 0
                         self.optimizer.zero_grad()
+
+                        if batch_stop:
+                            break
 
                     if self._stop:
                         break
@@ -348,7 +365,7 @@ class Trainer:
                     loaded_vals[folder] = val_loss
                 except (ValueError, FileNotFoundError):
                     continue
-                
+
         if self.loss_is_normalized:
             # average the losses
             avg_loss = np.mean(list(loaded_vals.values()))
