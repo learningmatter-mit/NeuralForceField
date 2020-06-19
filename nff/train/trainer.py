@@ -182,7 +182,9 @@ class Trainer:
     def loss_backward(self, loss):
         loss.backward()
         self.back_count += 1
-        batch_stop = self.back_count == (self.max_batch_iters - 1)
+        batch_stop = self.back_count == self.max_batch_iters - 1
+        if batch_stop:
+            self.back_count = 0
 
         return loss, batch_stop
 
