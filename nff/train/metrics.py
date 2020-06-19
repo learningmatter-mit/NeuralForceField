@@ -164,6 +164,14 @@ class Classifier(Metric):
         self.n_entries += num_pred
         self.loss += loss
 
+    def non_nan(self, pred, actual):
+
+        non_nan_idx = torch.bitwise_not(torch.isnan(torch.Tensor(pred)))
+        pred = torch.Tensor(pred)[non_nan_idx].numpy().tolist()
+        actual = torch.Tensor(actual)[non_nan_idx].numpy().tolist()
+        return pred, actual
+
+
     def aggregate(self):
         """Aggregate metric over all previously added batches."""
         if self.n_entries == 0:
@@ -346,6 +354,8 @@ class RocAuc(Classifier):
         actual = y.detach().cpu().numpy().reshape(-1).tolist()
         pred = yp.detach().cpu().numpy().reshape(-1).tolist()
 
+        actual, pred = self.non_nan(actual, pred)
+
         return actual, pred
 
     def add_batch(self, batch, results):
@@ -361,6 +371,7 @@ class RocAuc(Classifier):
 
     def aggregate(self):
         """Calculate the auc score from all the data."""
+
         auc = roc_auc_score(y_true=self.actual, y_score=self.pred)
         return auc
 
@@ -399,6 +410,8 @@ class PrAuc(Classifier):
 
         actual = y.detach().cpu().numpy().reshape(-1).tolist()
         pred = yp.detach().cpu().numpy().reshape(-1).tolist()
+
+        actual, pred = self.non_nan(actual, pred)
 
         return actual, pred
 

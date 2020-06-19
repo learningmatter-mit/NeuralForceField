@@ -241,6 +241,12 @@ class Trainer:
                     if num_batches == self.mini_batches:
 
                         loss, batch_stop = self.loss_backward(loss)
+                        if torch.isnan(loss):
+                            loss = torch.tensor(0.0).to(device)
+                            num_batches = 0
+                            self.optimizer.zero_grad()
+                            continue
+
                         self.optimizer.step()
 
                         for h in self.hooks:
