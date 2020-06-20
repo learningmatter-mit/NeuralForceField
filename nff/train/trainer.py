@@ -6,6 +6,7 @@ Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/s
 import os
 import numpy as np
 import torch
+import sys
 
 from nff.utils.cuda import batch_to
 from nff.train.evaluate import evaluate
@@ -273,6 +274,8 @@ class Trainer:
 
                     print("Batch {} of {} complete".format(
                         j, self.max_batch_iters))
+                    sys.stdout.flush()
+                    
                     if self._stop:
                         break
 
