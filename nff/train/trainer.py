@@ -127,8 +127,13 @@ class Trainer:
     def get_best_model(self):
         return torch.load(self.best_model)
 
-    def call_model(self, batch):
-        return self._model(batch, **self.model_kwargs)
+    def call_model(self, batch, train):
+        if train:
+            model = self._model
+        else:
+            model = self._model.module
+
+        return model(batch, **self.model_kwargs)
 
     @property
     def state_dict(self):
@@ -237,7 +242,7 @@ class Trainer:
                     for h in self.hooks:
                         h.on_batch_begin(self, batch)
 
-                    results = self.call_model(batch)
+                    results = self.call_model(batch, train=True)
                     loss += self.loss_fn(batch, results)
                     self.step += 1
 
@@ -431,7 +436,7 @@ class Trainer:
                 h.on_validation_batch_begin(self)
 
             # move input to gpu, if needed
-            results = self.call_model(val_batch)
+            results = self.call_model(val_batch, train=False)
 
             val_batch_loss = self.loss_fn(
                 val_batch, results).data.cpu().numpy()
