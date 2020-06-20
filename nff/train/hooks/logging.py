@@ -8,6 +8,7 @@ import time
 import numpy as np
 import torch
 import json
+import sys
 
 from nff.train.hooks import Hook
 from nff.train.metrics import (RootMeanSquaredError, PrAuc, RocAuc)
@@ -515,6 +516,7 @@ class PrintingHook(LoggingHook):
         print(log)
         with open(self.log_path, "a+") as f:
             f.write(log + os.linesep)
+        sys.stdout.flush()
 
     def on_train_begin(self, trainer):
 
