@@ -434,6 +434,7 @@ class Trainer:
 
         for val_batch in self.validation_loader:
 
+            torch.cuda.synchronize()
             val_batch = batch_to(val_batch, device)
 
             # append batch_size
