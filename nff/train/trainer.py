@@ -240,8 +240,10 @@ class Trainer:
 
                     torch.cuda.synchronize()
                     print("Putting batch onto device...")
+                    sys.stdout.flush()
                     batch = batch_to(batch, device)
                     print("Batch on device.")
+                    sys.stdout.flush()
 
                     for h in self.hooks:
                         h.on_batch_begin(self, batch)
