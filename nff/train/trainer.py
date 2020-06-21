@@ -238,7 +238,10 @@ class Trainer:
 
                 for j, batch in enumerate(self.train_loader):
 
+                    torch.cuda.synchronize()
+                    print("Putting batch onto device...")
                     batch = batch_to(batch, device)
+                    print("Batch on device.")
 
                     for h in self.hooks:
                         h.on_batch_begin(self, batch)
@@ -275,7 +278,7 @@ class Trainer:
                     print("Batch {} of {} complete".format(
                         j, self.max_batch_iters))
                     sys.stdout.flush()
-                    
+
                     if self._stop:
                         break
 
