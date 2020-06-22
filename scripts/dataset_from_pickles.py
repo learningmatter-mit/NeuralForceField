@@ -141,10 +141,10 @@ def load_data_from_pickle(sample_dic, max_atoms, rdkit_folder):
         overall_dic.update({smiles: dic})
 
         if np.mod(i, 1000) == 0:
-            print(("Completed loading {} of {} "
+            fprint(("Completed loading {} of {} "
                    "dataset pickles".format(i, total_num)))
 
-    print("Completed dataset pickles")
+    fprint("Completed dataset pickles")
 
     return overall_dic
 
@@ -209,9 +209,9 @@ def renorm_weights(spec_dic):
 
 def convert_data(overall_dic, num_confs, feature_dic):
 
-    print("Adding features...")
+    fprint("Adding features...")
     overall_dic = add_features(overall_dic, feature_dic)
-    print("Finished adding features")
+    fprint("Finished adding features")
     spec_dics = []
 
     for key, sub_dic in overall_dic.items():
@@ -264,12 +264,12 @@ def add_features(overall_dic, feature_path_dic):
         overall_dic[key].update(feature_dic)
 
         if np.mod(i, 1000) == 0:
-            print(("Completed loading {} of {} "
+            fprint(("Completed loading {} of {} "
                    "dataset feature pickles".format(i, total_num)))
 
         i += 1
 
-    print("Completed loading features")
+    fprint("Completed loading features")
 
     for key in bad_keys:
         overall_dic.pop(key)
@@ -302,10 +302,13 @@ def duplicate_features(spec_dic):
 
     return spec_dic
 
+def fprint(msg):
+    print(msg)
+    sys.stdout.flush()
 
 def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
 
-    print("Making dataset with %d species" % (len(spec_dics)))
+    fprint("Making dataset with %d species" % (len(spec_dics)))
 
     props_list = []
     nbr_list = []
@@ -365,9 +368,9 @@ def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
         new_dic.update({key: [spec_dic[key]] for key in FEATURE_KEYS})
         props_list.append(new_dic)
 
-        print("{} of {} complete".format(j + 1, len(spec_dics)))
+        fprint("{} of {} complete".format(j + 1, len(spec_dics)))
 
-    print("Finalizing...")
+    fprint("Finalizing...")
     props_dic = concatenate_dict(*props_list)
     # make a combined dataset where the species look like they're
     # one big molecule
@@ -377,7 +380,7 @@ def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
     if gen_nbrs:
         big_dataset.props['nbr_list'] = nbr_list
 
-    print("Complete!")
+    fprint("Complete!")
 
     return big_dataset
 
@@ -399,7 +402,7 @@ def save_splits(dataset,
     train, val, test = split_train_validation_test(
         dataset, binary=True, targ_name=targ_name)
 
-    print("Saving...")
+    fprint("Saving...")
     data_folder = get_data_folder(dataset_path, thread)
     names = ["train", "val", "test"]
 
@@ -427,7 +430,7 @@ def main(num_specs,
     with open(feat_dic_path, "r") as f:
         feature_path_dic = json.load(f)
 
-    print("Generating proportional sample...")
+    fprint("Generating proportional sample...")
     sample_dic = proportional_sample(summary_dic=summary_dic,
                                      prop=prop,
                                      num_specs=num_specs,
@@ -437,23 +440,23 @@ def main(num_specs,
     if only_samples:
         return
 
-    print("Loading data from pickle files...")
+    fprint("Loading data from pickle files...")
     overall_dic = load_data_from_pickle(sample_dic, max_atoms, rdkit_folder)
 
-    print("Converting data...")
+    fprint("Converting data...")
     spec_dics = convert_data(overall_dic, num_confs, feature_path_dic)
 
-    print("Combining to make NFF dataset...")
+    fprint("Combining to make NFF dataset...")
     dataset = make_nff_dataset(spec_dics=spec_dics,
                                gen_nbrs=True,
                                nbrlist_cutoff=5.0)
-    print("Creating test/train/val splits...")
+    fprint("Creating test/train/val splits...")
     save_splits(dataset=dataset,
                 targ_name=prop,
                 dataset_path=dataset_path,
                 thread=thread)
 
-    print("Complete!")
+    fprint("Complete!")
 
 
 if __name__ == "__main__":
@@ -477,5 +480,5 @@ if __name__ == "__main__":
     try:
         main(**arguments.__dict__)
     except Exception as e:
-        print(e)
+        fprint(e)
         pdb.post_mortem()
