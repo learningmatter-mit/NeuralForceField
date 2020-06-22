@@ -228,6 +228,7 @@ class Trainer:
         loss = torch.tensor(0.0).to(device)
         num_batches = 0
         self.optimizer.zero_grad()
+        self.save_as_best()
 
         for h in self.hooks:
             h.on_train_begin(self)
