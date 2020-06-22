@@ -292,6 +292,10 @@ class Trainer:
                         and self.base):
                     self.store_checkpoint()
 
+                print("Epoch {} complete; skipping validation".format(self.epoch))
+                sys.stdout.flush()
+                continue
+
                 # validation
                 if (self.epoch % self.validation_interval == 0 or self._stop):
                     self.validate(device)
