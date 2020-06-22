@@ -7,6 +7,7 @@ import os
 import numpy as np
 import torch
 import sys
+import copy
 
 from nff.utils.cuda import batch_to
 from nff.train.evaluate import evaluate
@@ -132,7 +133,7 @@ class Trainer:
         if train:
             model = self._model
         else:
-            model = self._model.module
+            model = copy.deepcopy(self._model.module)
 
         return model(batch, **self.model_kwargs)
 
