@@ -1,8 +1,9 @@
-import sys
-# # sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
-sys.path.insert(0, "/home/saxelrod/Repo/projects/covid_nff/NeuralForceField")
+# import sys
+# # # sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
+# # sys.path.insert(0, "/home/saxelrod/Repo/projects/covid_nff/NeuralForceField")
+# sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
 
-from nff.data import Dataset, concatenate_dict
+from nff.data import Dataset, concatenate_dict, split_train_validation_test
 import pdb
 import argparse
 import numpy as np
@@ -205,6 +206,7 @@ def renorm_weights(spec_dic):
 
     return spec_dic
 
+
 def convert_data(overall_dic, num_confs, feature_dic):
 
     print("Adding features...")
@@ -273,7 +275,6 @@ def add_features(overall_dic, feature_path_dic):
 
 
 def duplicate_features(spec_dic):
-
     """
     Only applies when the bond and atom features
     are all the same for every conformer.
@@ -295,7 +296,6 @@ def duplicate_features(spec_dic):
 
     bonded_nbr_list = torch.cat(new_nbrs)
     spec_dic["bonded_nbr_list"] = bonded_nbr_list
-
 
     return spec_dic
 
@@ -379,12 +379,30 @@ def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
     return big_dataset
 
 
-def get_data_path(dataset_path, thread):
+def get_data_folder(dataset_path, thread):
     if thread is None:
         return dataset_path
-    new_path = dataset_path.replace(".pth.tar", "")
-    new_path += "_{}".format(thread) + ".pth.tar"
+    new_path = os.path.join(dataset_path, str(thread))
+    if not os.path.isdir(new_path):
+        os.makedirs(new_path)
     return new_path
+
+
+def save_splits(dataset,
+                targ_name,
+                dataset_path,
+                thread):
+
+    train, val, test = split_train_validation_test(
+        dataset, binary=True, targ_name=targ_name)
+
+    print("Saving...")
+    data_folder = get_data_folder(dataset_path, thread)
+    names = ["train", "val", "test"]
+
+    for name, dset in zip(names, [train, val, test]):
+        dset_path = os.path.join(data_folder, name + ".pth.tar")
+        dset.save(dset_path)
 
 
 def main(num_specs,
@@ -426,10 +444,12 @@ def main(num_specs,
     dataset = make_nff_dataset(spec_dics=spec_dics,
                                gen_nbrs=True,
                                nbrlist_cutoff=5.0)
-
-    print("Saving...")
-    new_data_path = get_data_path(dataset_path, thread)
-    dataset.save(new_data_path)
+    print("Creating test/train/val splits...")
+    save_splits(dataset=dataset,
+                targ_name=prop,
+                dataset_path=dataset_path,
+                thread=thread)
+    
     print("Complete!")
 
 
