@@ -200,6 +200,16 @@ class Trainer:
 
         return loss, batch_stop
 
+    def grad_is_nan(self):
+        model = self._model.module
+        params = filter(lambda x: x.requires_grad, model.parameters())
+        is_nan = False
+        for p in params:
+            if torch.isnan(p.grad).any():
+                is_nan = True
+                break
+        return is_nan
+
     def train(self, device, n_epochs=MAX_EPOCHS):
         """Train the model for the given number of epochs on a specified 
         device.
@@ -257,7 +267,7 @@ class Trainer:
                     if num_batches == self.mini_batches:
 
                         loss, batch_stop = self.loss_backward(loss)
-                        if torch.isnan(loss):
+                        if self.grad_is_nan():
                             loss = torch.tensor(0.0).to(device)
                             num_batches = 0
                             self.optimizer.zero_grad()
@@ -291,7 +301,8 @@ class Trainer:
                         and self.base):
                     self.store_checkpoint()
 
-                print("Epoch {} complete; skipping validation".format(self.epoch))
+                print("Epoch {} complete; skipping validation".format(
+                    self.epoch))
                 sys.stdout.flush()
                 continue
 
