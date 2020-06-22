@@ -1,7 +1,7 @@
-# import sys
-# # # sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
-# # sys.path.insert(0, "/home/saxelrod/Repo/projects/covid_nff/NeuralForceField")
-# sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
+import sys
+# # sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
+# sys.path.insert(0, "/home/saxelrod/Repo/projects/covid_nff/NeuralForceField")
+sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
 
 from nff.data import Dataset, concatenate_dict, split_train_validation_test
 import pdb
@@ -256,6 +256,9 @@ def add_features(overall_dic, feature_path_dic):
         if feature_path is None:
             bad_keys.append(key)
             continue
+        if feature_path.startswith("/home/saxelrod/Repo"):
+            feature_path = feature_path.replace("Repo",
+                                                "fock/Repo")
         with open(feature_path, "rb") as f:
             feature_dic = pickle.load(f)
         overall_dic[key].update(feature_dic)
@@ -449,7 +452,7 @@ def main(num_specs,
                 targ_name=prop,
                 dataset_path=dataset_path,
                 thread=thread)
-    
+
     print("Complete!")
 
 
