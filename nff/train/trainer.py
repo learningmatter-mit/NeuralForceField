@@ -238,7 +238,6 @@ class Trainer:
 
                 for j, batch in enumerate(self.train_loader):
 
-                    torch.cuda.synchronize()
                     print("Putting batch onto device...")
                     sys.stdout.flush()
                     batch = batch_to(batch, device)
@@ -434,7 +433,6 @@ class Trainer:
 
         for val_batch in self.validation_loader:
 
-            torch.cuda.synchronize()
             val_batch = batch_to(val_batch, device)
 
             # append batch_size
