@@ -94,6 +94,7 @@ class Trainer:
             max_batch_iters is not None) else len(self.train_loader)
         self.model_kwargs = model_kwargs if (model_kwargs is not None
                                              ) else {}
+        self.batch_stop = False
 
         if os.path.exists(self.checkpoint_path) and self.base:
             self.restore_checkpoint()
@@ -198,8 +199,10 @@ class Trainer:
         batch_stop = self.back_count == self.max_batch_iters
         if batch_stop:
             self.back_count = 0
+            self.batch_stop = True
+        else:
+            self.batch_stop = False
 
-        return loss, batch_stop
 
     def grad_is_nan(self):
         model = self._model.module
@@ -260,18 +263,19 @@ class Trainer:
                         h.on_batch_begin(self, batch)
 
                     results = self.call_model(batch, train=True)
-                    loss += self.loss_fn(batch, results)
-                    self.step += 1
+                    loss = self.loss_fn(batch, results)
+                    self.loss_backward(loss)
+                    loss = torch.tensor(0.0).to(device)
 
+                    self.step += 1
                     # update the loss self.minibatches number
                     # of times before taking a step
                     num_batches += 1
+
                     if num_batches == self.mini_batches:
 
-                        loss, batch_stop = self.loss_backward(loss)
+                        num_batches = 0
                         if self.grad_is_nan():
-                            loss = torch.tensor(0.0).to(device)
-                            num_batches = 0
                             self.optimizer.zero_grad()
                             continue
 
@@ -281,12 +285,11 @@ class Trainer:
                             h.on_batch_end(self, batch, results, loss)
 
                         # reset loss, num_batches, and the optimizer grad
-                        loss = torch.tensor(0.0).to(device)
-                        num_batches = 0
+                    
                         self.optimizer.zero_grad()
 
-                        if batch_stop:
-                            break
+                    if self.batch_stop:
+                        break
 
                     print("Batch {} of {} complete".format(
                         j, self.max_batch_iters))
