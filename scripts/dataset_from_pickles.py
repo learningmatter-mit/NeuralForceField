@@ -13,13 +13,17 @@ import random
 import pickle
 
 
-RDKIT_FOLDER = "/home/saxelrod/Repo/projects/geom/tutorials/rdkit_folder"
+# RDKIT_FOLDER = "/home/saxelrod/Repo/projects/geom/tutorials/rdkit_folder"
+RDKIT_FOLDER = "/home/saxelrod/fock/Repo/projects/geom/tutorials/rdkit_folder"
+
 PICKLE_FOLDER = os.path.join(RDKIT_FOLDER, "drugs")
 SUMMARY_PATH = os.path.join(RDKIT_FOLDER, "summary_drugs.json")
-DATASET_PATH = "/home/saxelrod/final_covid_train/d_for_sigopt.pth.tar"
-FEAT_DIC_PATH = ("/home/saxelrod/Repo/projects/geom/tutorials"
+# DATASET_PATH = "/home/saxelrod/final_covid_train/d_for_sigopt.pth.tar"
+DATASET_PATH = "/nobackup1/saxelrod/models/1057"
+
+FEAT_DIC_PATH = ("/home/saxelrod/fock/Repo/projects/geom/tutorials"
                  "/features/file_dic.json")
-PROP_SAMPLE_PATH = "/home/saxelrod/final_covid_train/prop_sample.json"
+PROP_SAMPLE_PATH = "/home/saxelrod/fock/final_covid_train/prop_sample.json"
 
 
 PROP = "sars_cov_one_cl_protease_active"
