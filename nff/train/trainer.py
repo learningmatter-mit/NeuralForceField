@@ -317,7 +317,8 @@ class Trainer:
                     results = self.call_model(batch, train=True)
                     mini_loss = self.get_loss(batch, results)
                     self.loss_backward(mini_loss)
-                    loss += mini_loss.cpu().detach().to(device)
+                    if not torch.isnan(mini_loss): 
+                        loss += mini_loss.cpu().detach().to(device)
 
                     self.step += 1
                     # update the loss self.minibatches number
