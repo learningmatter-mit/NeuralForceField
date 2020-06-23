@@ -209,10 +209,12 @@ class Trainer:
             self.back_count = 0
 
     def grad_is_nan(self):
+        
         if self.torch_parallel:
             model = self._model.module
         else:
             model = self._model
+
         params = filter(lambda x: x.requires_grad, model.parameters())
         is_nan = False
         for p in params:
@@ -254,7 +256,8 @@ class Trainer:
                                           epoch=self.epoch,
                                           del_interval=self.del_grad_interval,
                                           device=device)
-            self.optimizer.step()
+            if not self.grad_is_nan():
+                self.optimizer.step()
             self.nloss = 0
 
             return
@@ -265,7 +268,8 @@ class Trainer:
                     param.grad /= self.nloss
             self.nloss = 0
 
-        self.optimizer.step()
+        if not self.grad_is_nan():
+            self.optimizer.step()
 
     def fprint(self, msg):
         if self.base:
@@ -330,12 +334,8 @@ class Trainer:
                     if num_batches == self.mini_batches:
 
                         num_batches = 0
-                        if self.grad_is_nan():
-                            loss = torch.tensor(0.0).to(device)
-                            self.optimizer.zero_grad()
-                            continue
-
                         eff_batches = int((j + 1) / self.mini_batches)
+
                         self.optim_step(batch_num=eff_batches,
                                         device=device)
 
