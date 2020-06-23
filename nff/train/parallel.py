@@ -61,7 +61,6 @@ def add_grads(optimizer,
                       grad_dic in loaded_grads.values()])
 
     for grad_dic in loaded_grads.values():
-        total_size += grad_dic["loss_size"]
         for i, group in enumerate(optimizer.param_groups):
             for j, param in enumerate(group['params']):
                 param.grad += grad_dic["grad"][i][j].to(device) / total_size
