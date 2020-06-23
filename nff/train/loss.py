@@ -98,12 +98,18 @@ def cross_entropy(targ, pred):
         diff (torch.Tensor): cross-entropy.
     """
 
-    # if 1 in targ and 0 in targ:
-    #     pdb.set_trace()
-
     targ = targ.to(torch.float)
-    diff = -(targ * torch.log(pred + EPS) +
-             (1-targ) * torch.log(1 - pred + EPS))
+    fn = torch.nn.BCELoss(reduction='none')
+    diff = fn(pred, targ)
+
+    return diff
+
+def logits_cross_entropy(targ, pred):
+    
+    targ = targ.to(torch.float)
+    fn = torch.nn.BCEWithLogitsLoss(reduction='none')    
+    diff = fn(pred, targ)
+
     return diff
 
 
@@ -135,3 +141,18 @@ def build_cross_entropy_loss(loss_coef, correspondence_keys=None):
                                  operation=cross_entropy,
                                  correspondence_keys=correspondence_keys)
     return loss_fn
+
+def build_logits_cross_entropy_loss(loss_coef, correspondence_keys=None):
+    """
+    Build logits cross-entropy loss from loss_coef.
+    Args:
+        loss_coef, correspondence_keys: see `build_general_loss`.
+    Returns:
+        loss_fn (function): loss function
+    """
+
+    loss_fn = build_general_loss(loss_coef=loss_coef,
+                                 operation=logits_cross_entropy,
+                                 correspondence_keys=correspondence_keys)
+    return loss_fn
+

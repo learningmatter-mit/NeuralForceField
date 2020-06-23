@@ -138,11 +138,12 @@ class Trainer:
         return torch.load(self.best_model)
 
     def call_model(self, batch, train):
+
         if (self.torch_parallel and self.parallel) and not train:
             model = copy.deepcopy(self._model.module)
         else:
             model = self._model
-
+        
         return model(batch, **self.model_kwargs)
 
     @property
