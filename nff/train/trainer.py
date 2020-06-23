@@ -209,7 +209,10 @@ class Trainer:
             self.back_count = 0
 
     def grad_is_nan(self):
-        model = self._model.module
+        if self.torch_parallel:
+            model = self._model.module
+        else:
+            model = self._model
         params = filter(lambda x: x.requires_grad, model.parameters())
         is_nan = False
         for p in params:
@@ -331,7 +334,7 @@ class Trainer:
                             self.optimizer.zero_grad()
                             continue
 
-                        self.optim_step(batch_num=j)
+                        self.optim_step(batch_num=j / self.mini_batches)
 
                         for h in self.hooks:
                             h.on_batch_end(self, batch, results, loss)
