@@ -307,6 +307,8 @@ class Trainer:
 
                 for j, batch in enumerate(self.train_loader):
 
+                    self.fprint(self.epoch)
+
                     # self.fprint("Putting batch onto device...")
                     batch = batch_to(batch, device)
                     # self.fprint("Batch on device.")
