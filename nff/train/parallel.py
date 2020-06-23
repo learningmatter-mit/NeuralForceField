@@ -53,7 +53,7 @@ def add_grads(optimizer,
             try:
                 with open(path, "rb") as f:
                     loaded_grads[path] = pickle.load(f)
-            except (ValueError, FileNotFoundError):
+            except (EOFError, FileNotFoundError):
                 continue
 
     total_size = sum([grad_dic["loss_size"] for
