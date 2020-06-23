@@ -507,7 +507,12 @@ class Trainer:
             val_batch = batch_to(val_batch, device)
 
             # append batch_size
-            vsize = val_batch['nxyz'].size(0)
+            if self.mol_loss_norm:
+                vsize = len(val_batch["num_atoms"])
+
+            elif self.loss_is_normalized:
+                vsize = val_batch['nxyz'].size(0)
+
             n_val += vsize
 
             for h in self.hooks:
@@ -519,8 +524,9 @@ class Trainer:
             val_batch_loss = self.loss_fn(
                 val_batch, results).data.cpu().numpy()
 
-            if self.loss_is_normalized:
+            if self.loss_is_normalized or self.mol_loss_norm:
                 val_loss += val_batch_loss * vsize
+
             else:
                 val_loss += val_batch_loss
 
@@ -528,10 +534,10 @@ class Trainer:
                 h.on_validation_batch_end(self, val_batch, results)
 
         # weighted average over batches
-        if self.loss_is_normalized:
+        if self.loss_is_normalized or self.mol_loss_norm:
             val_loss /= n_val
 
-        # if running in parallel, savee the validation loss
+        # if running in parallel, save the validation loss
         # and pick up the losses from the other processes too
 
         if self.parallel:
