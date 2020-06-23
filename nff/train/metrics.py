@@ -355,8 +355,8 @@ class RocAuc(Classifier):
         but just returns actual and predicted values to add to the total.
         The AUC is calculated in the aggregate step."""
 
-        actual = y.detach().cpu().reshape(-1)
-        pred = yp.detach().cpu().reshape(-1)
+        actual = y.detach().cpu().reshape(-1).numpy()tolist()
+        pred = yp.detach().cpu().reshape(-1).numpy()tolist()
 
         return actual, pred
 
@@ -415,8 +415,8 @@ class PrAuc(Classifier):
         but just returns actual and predicted values to add to the total.
         The AUC is calculated in the aggregate step."""
 
-        actual = y.detach().cpu().reshape(-1)
-        pred = yp.detach().cpu().reshape(-1)
+        actual = y.detach().cpu().reshape(-1).numpy()tolist()
+        pred = yp.detach().cpu().reshape(-1).numpy()tolist()
 
         return actual, pred
 
