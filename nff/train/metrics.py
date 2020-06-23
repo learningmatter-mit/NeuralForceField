@@ -166,9 +166,9 @@ class Classifier(Metric):
 
     def non_nan(self, pred, actual):
 
-        non_nan_idx = torch.bitwise_not(torch.isnan(torch.Tensor(pred)))
-        pred = torch.Tensor(pred)[non_nan_idx].numpy().tolist()
-        actual = torch.Tensor(actual)[non_nan_idx].numpy().tolist()
+        non_nan_idx = torch.bitwise_not(torch.isnan(pred))
+        pred = pred[non_nan_idx].numpy().tolist()
+        actual = actual[non_nan_idx].numpy().tolist()
         return pred, actual
 
 
@@ -351,8 +351,8 @@ class RocAuc(Classifier):
         but just returns actual and predicted values to add to the total.
         The AUC is calculated in the aggregate step."""
 
-        actual = y.detach().cpu().numpy().reshape(-1).tolist()
-        pred = yp.detach().cpu().numpy().reshape(-1).tolist()
+        actual = y.detach().cpu().reshape(-1)
+        pred = yp.detach().cpu().reshape(-1)
 
         actual, pred = self.non_nan(actual, pred)
 
@@ -408,8 +408,8 @@ class PrAuc(Classifier):
         but just returns actual and predicted values to add to the total.
         The AUC is calculated in the aggregate step."""
 
-        actual = y.detach().cpu().numpy().reshape(-1).tolist()
-        pred = yp.detach().cpu().numpy().reshape(-1).tolist()
+        actual = y.detach().cpu().reshape(-1)
+        pred = yp.detach().cpu().reshape(-1)
 
         actual, pred = self.non_nan(actual, pred)
 
