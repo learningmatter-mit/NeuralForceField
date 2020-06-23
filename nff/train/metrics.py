@@ -164,11 +164,15 @@ class Classifier(Metric):
         self.n_entries += num_pred
         self.loss += loss
 
-    def non_nan(self, pred, actual):
+    def non_nan(self):
+
+        actual = torch.Tensor(self.actual)
+        pred = torch.Tensor(self.pred)
 
         non_nan_idx = torch.bitwise_not(torch.isnan(pred))
         pred = pred[non_nan_idx].numpy().tolist()
         actual = actual[non_nan_idx].numpy().tolist()
+
         return pred, actual
 
 
@@ -354,8 +358,6 @@ class RocAuc(Classifier):
         actual = y.detach().cpu().reshape(-1)
         pred = yp.detach().cpu().reshape(-1)
 
-        actual, pred = self.non_nan(actual, pred)
-
         return actual, pred
 
     def add_batch(self, batch, results):
@@ -372,7 +374,12 @@ class RocAuc(Classifier):
     def aggregate(self):
         """Calculate the auc score from all the data."""
 
-        auc = roc_auc_score(y_true=self.actual, y_score=self.pred)
+        pred, actual = self.non_nan()
+
+        try:
+            auc = roc_auc_score(y_true=actual, y_score=pred)
+        except ValueError:
+            auc = float("nan")
         return auc
 
 
@@ -411,8 +418,6 @@ class PrAuc(Classifier):
         actual = y.detach().cpu().reshape(-1)
         pred = yp.detach().cpu().reshape(-1)
 
-        actual, pred = self.non_nan(actual, pred)
-
         return actual, pred
 
     def add_batch(self, batch, results):
@@ -428,9 +433,18 @@ class PrAuc(Classifier):
 
     def aggregate(self):
         """Calculate the auc score from all the data."""
-        precision, recall, thresholds = precision_recall_curve(
-            y_true=self.actual, probas_pred=self.pred)
-        pr_auc = auc(recall, precision)
+
+        pred, actual = self.non_nan()
+
+        try:
+            precision, recall, thresholds = precision_recall_curve(
+                y_true=actual, probas_pred=pred)
+            pr_auc = auc(recall, precision)
+
+        except ValueError:
+            pr_auc = float("nan")
+
+
         return pr_auc
 
 
