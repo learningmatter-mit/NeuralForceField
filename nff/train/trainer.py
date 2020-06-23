@@ -275,7 +275,7 @@ class Trainer:
 
         try:
             for _ in range(n_epochs):
-                
+
                 self._model.train()
                 self.epoch += 1
 
@@ -321,6 +321,7 @@ class Trainer:
 
                         loss = torch.tensor(0.0).to(device)
                         self.optimizer.zero_grad()
+                        self.fprint("Took a step at batch {}".format(j))
 
                     if self.batch_stop:
                         break
