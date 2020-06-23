@@ -42,9 +42,12 @@ def add_grads(optimizer,
               epoch,
               device):
 
+    # paths to all pickle files but this one
+
     paths = [os.path.join(weight_path, str(index),
                           "grad_{}_{}.pickle".format(epoch, batch_num))
              for index in range(world_size) if index != rank]
+
     loaded_grads = {path: None for path in paths}
 
     while None in loaded_grads.values():
@@ -57,6 +60,7 @@ def add_grads(optimizer,
             except (EOFError, FileNotFoundError):
                 continue
 
+    # total size is this size + all other sizes
     total_size = sum([grad_dic["loss_size"] for
                       grad_dic in loaded_grads.values()]
                       ) + loss_size
@@ -65,6 +69,10 @@ def add_grads(optimizer,
         for i, group in enumerate(optimizer.param_groups):
             for j, param in enumerate(group['params']):
                 param.grad += grad_dic["grad"][i][j].to(device)
+
+                # if you're at the last grad_dic, divide 
+                # by the total size
+                
                 if k == len(loaded_grads.values()) - 1:
                     param.grad /= total_size
 
