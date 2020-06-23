@@ -309,9 +309,9 @@ class Trainer:
 
                 for j, batch in enumerate(self.train_loader):
 
-                    self.fprint("Putting batch onto device...")
+                    # self.fprint("Putting batch onto device...")
                     batch = batch_to(batch, device)
-                    self.fprint("Batch on device.")
+                    # self.fprint("Batch on device.")
 
                     for h in self.hooks:
                         h.on_batch_begin(self, batch)
@@ -345,7 +345,7 @@ class Trainer:
 
                         loss = torch.tensor(0.0).to(device)
                         self.optimizer.zero_grad()
-                        self.fprint("Took a step at batch {}".format(j))
+                        # self.fprint("Took a step at batch {}".format(j))
 
                     if self.batch_stop:
                         break
@@ -364,9 +364,9 @@ class Trainer:
                         and self.base):
                     self.store_checkpoint()
 
-                self.fprint("Epoch {} complete; skipping validation".format(
-                    self.epoch))
-                continue
+                # self.fprint("Epoch {} complete; skipping validation".format(
+                #     self.epoch))
+                # continue
 
                 # validation
                 if (self.epoch % self.validation_interval == 0 or self._stop):
