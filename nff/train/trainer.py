@@ -61,7 +61,8 @@ class Trainer:
         global_rank=0,
         world_size=1,
         max_batch_iters=None,
-        model_kwargs=None
+        model_kwargs=None,
+        mol_loss_norm=False
     ):
         self.model_path = model_path
         self.checkpoint_path = os.path.join(self.model_path, "checkpoints")
@@ -72,6 +73,7 @@ class Trainer:
         self.checkpoints_to_keep = checkpoints_to_keep
         self.hooks = [] if hooks is None else hooks
         self.loss_is_normalized = loss_is_normalized
+        self.mol_loss_norm = mol_loss_norm
         self.mini_batches = mini_batches
 
         self._model = model
@@ -95,6 +97,7 @@ class Trainer:
         self.model_kwargs = model_kwargs if (model_kwargs is not None
                                              ) else {}
         self.batch_stop = False
+        self.nloss_val = 0
 
         if os.path.exists(self.checkpoint_path) and self.base:
             self.restore_checkpoint()
@@ -196,13 +199,10 @@ class Trainer:
     def loss_backward(self, loss):
         loss.backward()
         self.back_count += 1
-        batch_stop = self.back_count == self.max_batch_iters
-        if batch_stop:
-            self.back_count = 0
-            self.batch_stop = True
-        else:
-            self.batch_stop = False
+        self.batch_stop = self.back_count == self.max_batch_iters
 
+        if self.batch_stop:
+            self.back_count = 0
 
     def grad_is_nan(self):
         model = self._model.module
@@ -213,6 +213,41 @@ class Trainer:
                 is_nan = True
                 break
         return is_nan
+
+    def get_loss(self, batch, results):
+
+        if not any((self.mol_loss_norm,
+                    self.loss_is_normalized)):
+
+            loss = self.loss_fn(batch, results)
+            return loss
+
+        if self.mol_loss_norm:
+            vsize = len(batch["num_atoms"])
+
+        elif self.loss_is_normalized:
+            vsize = batch['nxyz'].size(0)
+
+        self.nloss_val += vsize
+        loss = self.loss_fn(batch, results) * vsize
+
+        return loss
+
+    def optim_step(self):
+
+        # normalize gradients
+
+        if self.nloss_val != 0:
+            for group in self.optimizer.param_groups:
+                for param in group['params']:
+                    param.grad /= self.nloss_val
+            self.nloss_val = 0
+
+        self.optimizer.step()
+
+    def fprint(self, msg):
+        print(msg)
+        sys.stdout.flush()
 
     def train(self, device, n_epochs=MAX_EPOCHS):
         """Train the model for the given number of epochs on a specified 
@@ -226,7 +261,6 @@ class Trainer:
 
         """
         self.to(device)
-
         self._stop = False
         # initialize loss, num_batches, and optimizer grad to 0
         loss = torch.tensor(0.0).to(device)
@@ -241,8 +275,8 @@ class Trainer:
 
         try:
             for _ in range(n_epochs):
+                
                 self._model.train()
-
                 self.epoch += 1
 
                 for h in self.hooks:
@@ -253,19 +287,17 @@ class Trainer:
 
                 for j, batch in enumerate(self.train_loader):
 
-                    print("Putting batch onto device...")
-                    sys.stdout.flush()
+                    self.fprint("Putting batch onto device...")
                     batch = batch_to(batch, device)
-                    print("Batch on device.")
-                    sys.stdout.flush()
+                    self.fprint("Batch on device.")
 
                     for h in self.hooks:
                         h.on_batch_begin(self, batch)
 
                     results = self.call_model(batch, train=True)
-                    loss = self.loss_fn(batch, results)
-                    self.loss_backward(loss)
-                    loss = torch.tensor(0.0).to(device)
+                    mini_loss = self.loss_fn(batch, results)
+                    self.loss_backward(mini_loss)
+                    loss += mini_loss.cpu().detach().to(device)
 
                     self.step += 1
                     # update the loss self.minibatches number
@@ -276,24 +308,25 @@ class Trainer:
 
                         num_batches = 0
                         if self.grad_is_nan():
+                            loss = torch.tensor(0.0).to(device)
                             self.optimizer.zero_grad()
                             continue
 
-                        self.optimizer.step()
+                        self.optim_step()
 
                         for h in self.hooks:
                             h.on_batch_end(self, batch, results, loss)
 
-                        # reset loss, num_batches, and the optimizer grad
-                    
+                        # reset loss and the optimizer grad
+
+                        loss = torch.tensor(0.0).to(device)
                         self.optimizer.zero_grad()
 
                     if self.batch_stop:
                         break
 
-                    print("Batch {} of {} complete".format(
+                    self.fprint("Batch {} of {} complete".format(
                         j, self.max_batch_iters))
-                    sys.stdout.flush()
 
                     if self._stop:
                         break
@@ -306,9 +339,8 @@ class Trainer:
                         and self.base):
                     self.store_checkpoint()
 
-                print("Epoch {} complete; skipping validation".format(
+                self.fprint("Epoch {} complete; skipping validation".format(
                     self.epoch))
-                sys.stdout.flush()
                 continue
 
                 # validation
