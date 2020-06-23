@@ -72,7 +72,7 @@ def add_grads(optimizer,
 
                 # if you're at the last grad_dic, divide 
                 # by the total size
-                
+
                 if k == len(loaded_grads.values()) - 1:
                     param.grad /= total_size
 
@@ -86,7 +86,7 @@ def del_grad(rank,
              del_interval):
 
     num = epoch * batch_num + 1
-    if num % del_interval == 0:
+    if num >= del_interval:
         folder = os.path.join(weight_path, str(rank))
         for file in os.listdir(folder):
             if file.startswith("grad") and file.endswith("pickle"):
