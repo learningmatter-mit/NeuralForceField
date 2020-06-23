@@ -209,19 +209,12 @@ class Trainer:
             self.back_count = 0
 
     def grad_is_nan(self):
-        
-        if self.torch_parallel:
-            model = self._model.module
-        else:
-            model = self._model
 
-        params = filter(lambda x: x.requires_grad, model.parameters())
-        is_nan = False
-        for p in params:
-            if torch.isnan(p.grad).any():
-                is_nan = True
-                break
-        return is_nan
+        for group in self.optimizer.param_groups:
+            for param in group['params']:
+                if torch.isnan(param.grad).any():
+                    return True
+        return False
 
     def get_loss(self, batch, results):
 
