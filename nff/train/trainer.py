@@ -11,6 +11,7 @@ import copy
 
 from nff.utils.cuda import batch_to
 from nff.train.evaluate import evaluate
+from nff.train.parallel import update_optim
 
 MAX_EPOCHS = 100
 PAR_INFO_FILE = "info.json"
@@ -62,7 +63,8 @@ class Trainer:
         world_size=1,
         max_batch_iters=None,
         model_kwargs=None,
-        mol_loss_norm=False
+        mol_loss_norm=False,
+        del_grad_interval=10
     ):
         self.model_path = model_path
         self.checkpoint_path = os.path.join(self.model_path, "checkpoints")
@@ -83,7 +85,8 @@ class Trainer:
         self.loss_fn = loss_fn
         self.optimizer = optimizer
 
-        self.parallel = self._check_is_parallel()
+        self.torch_parallel = self._check_is_parallel()
+        self.parallel = world_size > 1
         self.global_rank = global_rank
         self.world_size = world_size
         self.par_folders = self.get_par_folders()
@@ -97,7 +100,8 @@ class Trainer:
         self.model_kwargs = model_kwargs if (model_kwargs is not None
                                              ) else {}
         self.batch_stop = False
-        self.nloss_val = 0
+        self.nloss = 0
+        self.del_grad_interval = del_grad_interval
 
         if os.path.exists(self.checkpoint_path) and self.base:
             self.restore_checkpoint()
@@ -125,7 +129,7 @@ class Trainer:
         return any((data_par, dist_dat_par))
 
     def _load_model_state_dict(self, state_dict):
-        if self.parallel:
+        if self.torch_parallel:
             self._model.module.load_state_dict(state_dict)
         else:
             self._model.load_state_dict(state_dict)
@@ -150,7 +154,7 @@ class Trainer:
             "optimizer": self.optimizer.state_dict(),
             "hooks": [h.state_dict for h in self.hooks],
         }
-        if self.parallel:
+        if self.torch_parallel:
             state_dict["model"] = self._model.module.state_dict()
         else:
             state_dict["model"] = self._model.state_dict()
@@ -228,22 +232,37 @@ class Trainer:
         elif self.loss_is_normalized:
             vsize = batch['nxyz'].size(0)
 
-        self.nloss_val += vsize
+        self.nloss += vsize
         loss = self.loss_fn(batch, results) * vsize
 
         return loss
 
-    def optim_step(self):
+    def optim_step(self, batch_num):
 
         # normalize gradients
 
-        if self.nloss_val != 0:
-            for group in self.optimizer.param_groups:
-                for param in group['params']:
-                    param.grad /= self.nloss_val
-            self.nloss_val = 0
+        if self.parallel and not self.torch_parallel:
+            self.optimizer = update_optim(optimizer=self.optimizer,
+                                          loss_size=self.nloss,
+                                          rank=self.global_rank,
+                                          world_size=self.world_size,
+                                          weight_path=self.model_path,
+                                          batch_num=batch_num,
+                                          epoch=self.epoch,
+                                          del_interval=self.del_grad_interval)
+            self.optimizer.step()
+            self.nloss = 0
+
+            return
+
+        if self.nloss != 0:
+                for group in self.optimizer.param_groups:
+                    for param in group['params']:
+                        param.grad /= self.nloss
+                self.nloss = 0
 
         self.optimizer.step()
+
 
     def fprint(self, msg):
         print(msg)
@@ -295,7 +314,7 @@ class Trainer:
                         h.on_batch_begin(self, batch)
 
                     results = self.call_model(batch, train=True)
-                    mini_loss = self.loss_fn(batch, results)
+                    mini_loss = self.get_loss(batch, results)
                     self.loss_backward(mini_loss)
                     loss += mini_loss.cpu().detach().to(device)
 
@@ -312,7 +331,7 @@ class Trainer:
                             self.optimizer.zero_grad()
                             continue
 
-                        self.optim_step()
+                        self.optim_step(batch_num=j)
 
                         for h in self.hooks:
                             h.on_batch_end(self, batch, results, loss)
@@ -465,7 +484,7 @@ class Trainer:
         if not self.base:
             return
 
-        if self.parallel:
+        if self.torch_parallel:
             # need to save model.module, not model, in the
             # parallel case
             torch.save(self._model.module, self.best_model)
