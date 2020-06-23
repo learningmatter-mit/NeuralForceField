@@ -13,7 +13,7 @@ def get_grad(optimizer):
     for group in optimizer.param_groups:
         grad_list.append([])
         for param in group['params']:
-            grad_list[-1].append(param.grad)
+            grad_list[-1].append(param.grad.detatch().cpu())
     return grad_list
 
 
@@ -39,7 +39,8 @@ def add_grads(optimizer,
               rank,
               world_size,
               batch_num,
-              epoch):
+              epoch,
+              device):
 
     paths = [os.path.join(weight_path, str(index),
                           "grad_{}_{}.pickle".format(epoch, batch_num))
@@ -63,7 +64,7 @@ def add_grads(optimizer,
         total_size += grad_dic["loss_size"]
         for i, group in enumerate(optimizer.param_groups):
             for j, param in enumerate(group['params']):
-                param.grad += grad_dic["grad"][i][j] / total_size
+                param.grad += grad_dic["grad"][i][j].to(device) / total_size
 
     return optimizer
 
@@ -89,7 +90,8 @@ def update_optim(optimizer,
                  weight_path,
                  batch_num,
                  epoch,
-                 del_interval):
+                 del_interval,
+                 device):
 
     save_grad(optimizer=optimizer,
               loss_size=loss_size,
@@ -104,13 +106,14 @@ def update_optim(optimizer,
                           rank=rank,
                           world_size=world_size,
                           batch_num=batch_num,
-                          epoch=epoch)
+                          epoch=epoch,
+                          device=device)
     del_grad(rank=rank,
              epoch=epoch,
              batch_num=batch_num,
              weight_path=weight_path,
              del_interval=del_interval)
-    
+
     return optimizer
 
 

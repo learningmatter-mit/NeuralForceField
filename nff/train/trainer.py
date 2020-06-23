@@ -240,7 +240,7 @@ class Trainer:
 
         return loss
 
-    def optim_step(self, batch_num):
+    def optim_step(self, batch_num, device):
 
         # normalize gradients
 
@@ -252,20 +252,20 @@ class Trainer:
                                           weight_path=self.model_path,
                                           batch_num=batch_num,
                                           epoch=self.epoch,
-                                          del_interval=self.del_grad_interval)
+                                          del_interval=self.del_grad_interval,
+                                          device=device)
             self.optimizer.step()
             self.nloss = 0
 
             return
 
         if self.nloss != 0:
-                for group in self.optimizer.param_groups:
-                    for param in group['params']:
-                        param.grad /= self.nloss
-                self.nloss = 0
+            for group in self.optimizer.param_groups:
+                for param in group['params']:
+                    param.grad /= self.nloss
+            self.nloss = 0
 
         self.optimizer.step()
-
 
     def fprint(self, msg):
         print(msg)
@@ -334,7 +334,9 @@ class Trainer:
                             self.optimizer.zero_grad()
                             continue
 
-                        self.optim_step(batch_num=j / self.mini_batches)
+                        eff_batches = int((j + 1) / self.mini_batches)
+                        self.optim_step(batch_num=eff_batches,
+                                        device=device)
 
                         for h in self.hooks:
                             h.on_batch_end(self, batch, results, loss)
