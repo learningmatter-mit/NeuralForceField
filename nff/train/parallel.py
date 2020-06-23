@@ -13,7 +13,7 @@ def get_grad(optimizer):
     for group in optimizer.param_groups:
         grad_list.append([])
         for param in group['params']:
-            grad_list[-1].append(param.grad.detatch().cpu())
+            grad_list[-1].append(param.grad.detach().cpu())
     return grad_list
 
 
