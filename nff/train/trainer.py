@@ -268,8 +268,9 @@ class Trainer:
         self.optimizer.step()
 
     def fprint(self, msg):
-        print(msg)
-        sys.stdout.flush()
+        if self.base:
+            print(msg)
+            sys.stdout.flush()
 
     def train(self, device, n_epochs=MAX_EPOCHS):
         """Train the model for the given number of epochs on a specified 
