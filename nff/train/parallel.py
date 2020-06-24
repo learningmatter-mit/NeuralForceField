@@ -86,7 +86,7 @@ def del_grad(rank,
              del_interval):
 
     num = epoch * batch_num + 1
-    if num >= del_interval:
+    if num % del_interval == 0:
         folder = os.path.join(weight_path, str(rank))
         for file in os.listdir(folder):
             if file.startswith("grad") and file.endswith("pickle"):
