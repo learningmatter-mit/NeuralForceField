@@ -348,6 +348,7 @@ class Trainer:
                         j + 1, self.max_batch_iters))
 
                     if self.batch_stop:
+                        del mini_loss
                         num_batches = 0
                         loss = torch.tensor(0.0).to(device)
                         self.optimizer.zero_grad()
