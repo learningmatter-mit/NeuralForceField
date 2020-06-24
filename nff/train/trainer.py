@@ -249,7 +249,8 @@ class Trainer:
                                           batch_num=batch_num,
                                           epoch=self.epoch,
                                           del_interval=self.del_grad_interval,
-                                          device=device)
+                                          device=device,
+                                          max_batch_iters=self.max_batch_iters)
             if not self.grad_is_nan():
                 self.optimizer.step()
             self.nloss = 0
