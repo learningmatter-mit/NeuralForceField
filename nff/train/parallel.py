@@ -83,9 +83,13 @@ def del_grad(rank,
              epoch,
              batch_num,
              weight_path,
-             del_interval):
+             del_interval,
+             max_batch_iters):
 
-    num = epoch * batch_num + 1
+    # epoch starts counting from 1 and batch_num starts
+    # counting from 0
+    
+    num = (epoch - 1) * max_batch_iters + batch_num + 1
     if num % del_interval == 0:
         folder = os.path.join(weight_path, str(rank))
         for file in os.listdir(folder):
