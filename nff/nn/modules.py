@@ -859,7 +859,7 @@ class GraphAttention(MessagePassingModule):
 
 class ConfAttention(nn.Module):
 
-    def __init__(self, mol_basis, boltz_basis):
+    def __init__(self, mol_basis, boltz_basis, final_act):
         super(ConfAttention, self).__init__()
 
         self.boltz_lin = torch.nn.Linear(1, boltz_basis)
@@ -867,8 +867,11 @@ class ConfAttention(nn.Module):
 
         self.fp_linear = torch.nn.Linear(
             mol_basis + boltz_basis, mol_basis, bias=False)
-        self.att_weight = torch.nn.Parameter(torch.rand(1, mol_basis))
+        self.att_weight = torch.nn.Parameter(torch.rand(1, 2 * mol_basis))
         self.activation = LeakyReLU()
+        self.W = torch.nn.Linear(in_features=mol_basis,
+                                 out_features=mol_basis)
+        self.final_act = layer_types[final_act]()
 
     def forward(self, conf_fps, boltzmann_weights):
 
@@ -880,21 +883,48 @@ class ConfAttention(nn.Module):
         cat_fps = torch.cat([conf_fps, boltz_vec], dim=1)
         new_fps = self.fp_linear(cat_fps)
 
-        # exponentiate LeakyReLU(weight_mat * new_fps)
-        exp_confs = torch.exp(self.activation(self.att_weight * new_fps))
+        # directed "neighbor list" that links every fingerprint to each other
+        a = torch.LongTensor([[i, j] for i in range(new_fps.shape[0])
+                              for j in range(new_fps.shape[0])])
 
-        # normalize to get relative weight alpha_in of the n^th feature of the
-        # i^th conformer
+        # make cat(h_i, h_j)
+        cat_ij = torch.cat((self.W(new_fps[a[:, 0]]),
+                            self.W(new_fps[a[:, 1]])), dim=1)
 
-        norm = exp_confs.sum(0)
-        alpha = exp_confs / norm
+        # compute non-normalized weights
+        weight_ij = torch.exp(
+            self.activation(
+                torch.matmul(
+                    self.att_weight, cat_ij.transpose(0, 1)
+                )
+            )
+        )
 
-        # multiply each feature of each conformer by its
-        # weight alpha_in and sum
+        ## some variables
+        # number of fingerprints
+        n_confs = new_fps.shape[0]
+        # number of neighbor pairs
+        n_neigh = len(a)
 
-        final_fp = (alpha * new_fps).sum(0)
+        # compute normalization
+        norm = scatter_add(weight_ij, a[:, 0])
 
-        return final_fp
+        # expand norm so it norm_i gets repeated j times for each of the neighbors of i
+        norm = norm.expand(n_confs, n_confs).transpose(0, 1).reshape(-1)
+
+        # normalize alpha
+        alpha_ij = (weight_ij / norm).reshape(n_neigh, -1)
+
+        # multiply by weights
+        prod = cat_ij * alpha_ij
+        # sum over neighbors
+        weight_sum = scatter_add(
+            prod.transpose(0, 1), a[:, 0]).transpose(0, 1)
+
+        # final output
+        output = self.final_act(weight_sum)
+
+        return output
 
 
 class NodeMultiTaskReadOut(nn.Module):
