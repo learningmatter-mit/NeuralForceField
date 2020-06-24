@@ -88,7 +88,7 @@ def del_grad(rank,
 
     # epoch starts counting from 1 and batch_num starts
     # counting from 0
-    
+
     num = (epoch - 1) * max_batch_iters + batch_num + 1
     if num % del_interval == 0:
         folder = os.path.join(weight_path, str(rank))
@@ -96,12 +96,11 @@ def del_grad(rank,
             if file.startswith("grad") and file.endswith("pickle"):
                 this_batch = int(file.split("_")[2].split(".pickle")[0])
                 this_epoch = int(file.split("_")[1][0])
+                overall_idx = (this_epoch - 1) * max_batch_iters + this_batch + 1
                 # remove things that are more than 10 batches old
-                # and from the current epoch
-                if this_epoch == epoch and batch_num - this_batch <= 10:
-                    continue
-                file_path = os.path.join(folder, file)
-                os.remove(file_path)
+                if num - overall_idx >= 10:
+                    file_path = os.path.join(folder, file)
+                    os.remove(file_path)
 
 
 def update_optim(optimizer,
