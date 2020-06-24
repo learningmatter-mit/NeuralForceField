@@ -111,7 +111,8 @@ def update_optim(optimizer,
                  batch_num,
                  epoch,
                  del_interval,
-                 device):
+                 device,
+                 max_batch_iters):
 
     save_grad(optimizer=optimizer,
               loss_size=loss_size,
@@ -132,6 +133,7 @@ def update_optim(optimizer,
              epoch=epoch,
              batch_num=batch_num,
              weight_path=weight_path,
-             del_interval=del_interval)
+             del_interval=del_interval,
+             max_batch_iters=max_batch_iters)
 
     return optimizer
