@@ -344,14 +344,14 @@ class Trainer:
                         self.optimizer.zero_grad()
                         # self.fprint("Took a step at batch {}".format(j))
 
+                    self.fprint("Batch {} of {} complete".format(
+                        j + 1, self.max_batch_iters))
+
                     if self.batch_stop:
                         num_batches = 0
                         loss = torch.tensor(0.0).to(device)
                         self.optimizer.zero_grad()
                         break
-
-                    self.fprint("Batch {} of {} complete".format(
-                        j, self.max_batch_iters))
 
                     if self._stop:
                         break
