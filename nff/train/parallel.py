@@ -63,14 +63,14 @@ def add_grads(optimizer,
     # total size is this size + all other sizes
     total_size = sum([grad_dic["loss_size"] for
                       grad_dic in loaded_grads.values()]
-                      ) + loss_size
+                     ) + loss_size
 
     for k, grad_dic in enumerate(loaded_grads.values()):
         for i, group in enumerate(optimizer.param_groups):
             for j, param in enumerate(group['params']):
                 param.grad += grad_dic["grad"][i][j].to(device)
 
-                # if you're at the last grad_dic, divide 
+                # if you're at the last grad_dic, divide
                 # by the total size
 
                 if k == len(loaded_grads.values()) - 1:
@@ -91,10 +91,13 @@ def del_grad(rank,
         for file in os.listdir(folder):
             if file.startswith("grad") and file.endswith("pickle"):
                 this_batch = int(file.split("_")[2].split(".pickle")[0])
+                this_epoch = int(file.split("_")[1][0])
                 # remove things that are more than 10 batches old
-                if batch_num - this_batch >= 10:
-                    file_path = os.path.join(folder, file)
-                    os.remove(file_path)
+                # and from the current epoch
+                if this_epoch == epoch and batch_num - this_batch <= 10:
+                    continue
+                file_path = os.path.join(folder, file)
+                os.remove(file_path)
 
 
 def update_optim(optimizer,
@@ -129,5 +132,3 @@ def update_optim(optimizer,
              del_interval=del_interval)
 
     return optimizer
-
-
