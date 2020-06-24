@@ -345,6 +345,9 @@ class Trainer:
                         # self.fprint("Took a step at batch {}".format(j))
 
                     if self.batch_stop:
+                        num_batches = 0
+                        loss = torch.tensor(0.0).to(device)
+                        self.optimizer.zero_grad()
                         break
 
                     self.fprint("Batch {} of {} complete".format(
@@ -466,7 +469,8 @@ class Trainer:
                 except (ValueError, FileNotFoundError):
                     continue
 
-        if self.loss_is_normalized:
+        # this isn't quite right for mol_loss_norm
+        if self.loss_is_normalized or self.mol_loss_norm:
             # average the losses
             avg_loss = np.mean(list(loaded_vals.values()))
         else:
