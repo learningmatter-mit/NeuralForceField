@@ -53,6 +53,7 @@ class LoggingHook(Hook):
         self.world_size = world_size
         self.par_folders = self.get_par_folders()
         self.parallel = world_size > 1
+        self.metric_dic = None
 
     def on_epoch_begin(self, trainer):
         """Log at the beginning of train epoch.
@@ -236,6 +237,9 @@ class LoggingHook(Hook):
             for metric in self.metrics:
                 m = metric.aggregate()
                 metric_dic[metric.name] = m
+        
+        self.metric_dic = metric_dic
+
         return metric_dic
 
 
@@ -272,7 +276,7 @@ class CSVHook(LoggingHook):
         self._offset = 0
         self._restart = False
         self.every_n_epochs = every_n_epochs
-        self.metric_dic = None
+        
 
     def on_train_begin(self, trainer):
 
@@ -340,7 +344,6 @@ class CSVHook(LoggingHook):
                 log += ","
 
             metric_dic = self.aggregate(trainer)
-            self.metric_dic = metric_dic
 
             for i, metric in enumerate(self.metrics):
                 m = metric_dic[metric.name]
@@ -353,8 +356,6 @@ class CSVHook(LoggingHook):
 
             with open(self.log_path, "a") as f:
                 f.write(log + os.linesep)
-
-            return metric_dic
 
 
 class TensorboardHook(LoggingHook):
