@@ -158,9 +158,11 @@ class WeightedConformers(nn.Module):
 
             mol_basis = boltzmann_dict["mol_basis"]
             boltz_basis = boltzmann_dict["boltz_basis"]
+            final_act = boltzmann_dict["final_act"]
 
             network = ConfAttention(mol_basis=mol_basis,
-                                    boltz_basis=boltz_basis)
+                                    boltz_basis=boltz_basis,
+                                    final_act=final_act)
 
         return network
 
