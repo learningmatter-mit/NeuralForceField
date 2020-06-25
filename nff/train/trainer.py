@@ -566,7 +566,7 @@ class Trainer:
                 if self.metric_objective.lower() == "maximize":
                     val_loss *= -1
 
-        elif self.best_loss > val_loss:
+        if self.best_loss > val_loss:
             self.best_loss = val_loss
             self.save_as_best()
 
