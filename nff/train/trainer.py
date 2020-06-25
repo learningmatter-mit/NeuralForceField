@@ -103,7 +103,7 @@ class Trainer:
         self.nloss = 0
         self.del_grad_interval = del_grad_interval
 
-        if os.path.exists(self.checkpoint_path) and self.base:
+        if os.path.exists(self.checkpoint_path):
             self.restore_checkpoint()
         else:
             self.epoch = 0
