@@ -885,7 +885,7 @@ class ConfAttention(nn.Module):
 
         # directed "neighbor list" that links every fingerprint to each other
         a = torch.LongTensor([[i, j] for i in range(new_fps.shape[0])
-                              for j in range(new_fps.shape[0])])
+                              for j in range(new_fps.shape[0])]).to(conf_fps.device)
 
         # make cat(h_i, h_j)
         cat_ij = torch.cat((self.W(new_fps[a[:, 0]]),
