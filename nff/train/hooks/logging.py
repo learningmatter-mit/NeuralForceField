@@ -108,7 +108,7 @@ class LoggingHook(Hook):
         # to main_folder/global_rank, then remove the second last
         # part of the path
         base_folder = os.path.join(*self.log_path.split(sep)[:-1])
-        if base_folder.endswith(str(self.global_rank)):
+        if base_folder.endswith(sep + str(self.global_rank)):
             base_folder = os.path.join(*base_folder.split(sep)[:-1])
         # if the original path began with "/", then add it back
         if self.log_path.startswith(sep):
@@ -341,7 +341,7 @@ class CSVHook(LoggingHook):
 
             metric_dic = self.aggregate(trainer)
             self.metric_dic = metric_dic
-            
+
             for i, metric in enumerate(self.metrics):
                 m = metric_dic[metric.name]
                 if hasattr(m, "__iter__"):
