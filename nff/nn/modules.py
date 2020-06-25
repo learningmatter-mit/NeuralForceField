@@ -900,7 +900,7 @@ class ConfAttention(nn.Module):
             )
         )
 
-        ## some variables
+        # some variables
         # number of fingerprints
         n_confs = new_fps.shape[0]
         # number of neighbor pairs
@@ -915,14 +915,16 @@ class ConfAttention(nn.Module):
         # normalize alpha
         alpha_ij = (weight_ij / norm).reshape(n_neigh, -1)
 
-        # multiply by weights
-        prod = cat_ij * alpha_ij
-        # sum over neighbors
-        weight_sum = scatter_add(
-            prod.transpose(0, 1), a[:, 0]).transpose(0, 1)
+        # multiply alpha_ij by W.fp_j for each neighbor j
+        
+        fp_j = new_fps[a[:, 1]]
+        prod = alpha_ij * self.W(fp_j)
 
-        # final output
-        output = self.final_act(weight_sum)
+        # sum over neighbors and over fingerprints
+        summed_fps = prod.sum(0)
+
+        # put through nonlinearity
+        output = self.final_act(summed_fps)
 
         return output
 
