@@ -64,7 +64,9 @@ class Trainer:
         max_batch_iters=None,
         model_kwargs=None,
         mol_loss_norm=False,
-        del_grad_interval=10
+        del_grad_interval=10,
+        metric_as_loss=None,
+        metric_objective=None
     ):
         self.model_path = model_path
         self.checkpoint_path = os.path.join(self.model_path, "checkpoints")
@@ -102,6 +104,8 @@ class Trainer:
         self.batch_stop = False
         self.nloss = 0
         self.del_grad_interval = del_grad_interval
+        self.metric_as_loss = metric_as_loss
+        self.metric_objective = metric_objective
 
         if os.path.exists(self.checkpoint_path):
             self.restore_checkpoint()
@@ -143,7 +147,7 @@ class Trainer:
             model = copy.deepcopy(self._model.module)
         else:
             model = self._model
-        
+
         return model(batch, **self.model_kwargs)
 
     @property
@@ -319,7 +323,7 @@ class Trainer:
                     results = self.call_model(batch, train=True)
                     mini_loss = self.get_loss(batch, results)
                     self.loss_backward(mini_loss)
-                    if not torch.isnan(mini_loss): 
+                    if not torch.isnan(mini_loss):
                         loss += mini_loss.cpu().detach().to(device)
 
                     self.step += 1
@@ -354,7 +358,7 @@ class Trainer:
                         break
 
                 # reset for next epoch
-                
+
                 del mini_loss
                 num_batches = 0
                 loss = torch.tensor(0.0).to(device)
@@ -386,7 +390,6 @@ class Trainer:
             # run hooks & store checkpoint
             for h in self.hooks:
                 h.on_train_ends(self)
-
 
         except Exception as e:
             for h in self.hooks:
@@ -553,12 +556,19 @@ class Trainer:
             self.save_val_loss(val_loss)
             val_loss = self.load_val_loss()
 
-        if self.best_loss > val_loss:
-            self.best_loss = val_loss
-            self.save_as_best()
-
         for h in self.hooks:
             h.on_validation_end(self, val_loss)
+            metric_dic = getattr(h, "metric_dic", None)
+            if metric_dic is None:
+                continue
+            if self.metric_as_loss in metric_dic:
+                val_loss = metric_dic[self.metric_as_loss]
+                if self.metric_objective.lower() == "maximize":
+                    val_loss *= -1
+
+        elif self.best_loss > val_loss:
+            self.best_loss = val_loss
+            self.save_as_best()
 
     def evaluate(self, device):
         """Evaluate the current state of the model using the validation loader

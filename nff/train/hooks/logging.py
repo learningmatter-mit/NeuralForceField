@@ -272,6 +272,7 @@ class CSVHook(LoggingHook):
         self._offset = 0
         self._restart = False
         self.every_n_epochs = every_n_epochs
+        self.metric_dic = None
 
     def on_train_begin(self, trainer):
 
@@ -339,6 +340,8 @@ class CSVHook(LoggingHook):
                 log += ","
 
             metric_dic = self.aggregate(trainer)
+            self.metric_dic = metric_dic
+            
             for i, metric in enumerate(self.metrics):
                 m = metric_dic[metric.name]
                 if hasattr(m, "__iter__"):
@@ -350,6 +353,8 @@ class CSVHook(LoggingHook):
 
             with open(self.log_path, "a") as f:
                 f.write(log + os.linesep)
+
+            return metric_dic
 
 
 class TensorboardHook(LoggingHook):
