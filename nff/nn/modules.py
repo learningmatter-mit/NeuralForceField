@@ -862,15 +862,25 @@ class ConfAttention(nn.Module):
     def __init__(self, mol_basis, boltz_basis, final_act):
         super(ConfAttention, self).__init__()
 
+        """
+        Xavier initializations from 
+        https://github.com/Diego999/pyGAT/blob/master/layers.py
+        """
+
         self.boltz_lin = torch.nn.Linear(1, boltz_basis)
         self.boltz_act = Softmax(dim=1)
 
         self.fp_linear = torch.nn.Linear(
             mol_basis + boltz_basis, mol_basis, bias=False)
         self.att_weight = torch.nn.Parameter(torch.rand(1, 2 * mol_basis))
+        nn.init.xavier_uniform_(self.att_weight, gain=1.414)
+
+
         self.activation = LeakyReLU()
         self.W = torch.nn.Linear(in_features=mol_basis,
                                  out_features=mol_basis)
+        nn.init.xavier_uniform_(self.W.weight, gain=1.414)
+
         self.final_act = layer_types[final_act]()
 
     def forward(self, conf_fps, boltzmann_weights):
