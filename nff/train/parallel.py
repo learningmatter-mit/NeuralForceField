@@ -94,11 +94,9 @@ def del_grad(rank,
         folder = os.path.join(weight_path, str(rank))
         for file in os.listdir(folder):
             if file.startswith("grad") and file.endswith("pickle"):
-                this_batch = int(file.split("_")[2].split(".pickle")[0])
                 this_epoch = int(file.split("_")[1][0])
-                overall_idx = (this_epoch - 1) * max_batch_iters + this_batch + 1
-                # remove things that are more than 10 batches old
-                if num - overall_idx >= 10:
+                # remove things not from this epoch
+                if this_epoch != epoch:
                     file_path = os.path.join(folder, file)
                     os.remove(file_path)
 
