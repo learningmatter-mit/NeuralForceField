@@ -107,9 +107,14 @@ class Trainer:
         self.metric_as_loss = metric_as_loss
         self.metric_objective = metric_objective
 
+        restore = False
         if os.path.exists(self.checkpoint_path):
-            self.restore_checkpoint()
-        else:
+            try:
+                self.restore_checkpoint()
+                restore = True
+            except:
+                pass
+        if not restore:
             self.epoch = 0
             self.step = 0
             self.best_loss = float("inf")
