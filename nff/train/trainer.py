@@ -571,9 +571,12 @@ class Trainer:
                 if self.metric_objective.lower() == "maximize":
                     val_loss *= -1
 
+        print("Validation loss is {}".format(val_loss))
         if self.best_loss > val_loss:
             self.best_loss = val_loss
             self.save_as_best()
+        print(self.best_loss)
+        print("Best loss is {}".format(self.best_loss))
 
     def evaluate(self, device):
         """Evaluate the current state of the model using the validation loader
