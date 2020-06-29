@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 from nff.nn.modules.dimenet import (EmbeddingBlock, InteractionBlock,
-    OutputBlock, ResidualBlock)
+                                    OutputBlock, ResidualBlock)
 from nff.nn.layers import DimeNetRadialBasis as RadialBasis
 from nff.nn.layers import DimeNetSphericalBasis as SphericalBasis
 from nff.utils.scatter import compute_grad
@@ -18,6 +18,7 @@ def compute_angle(xyz, angle_list):
     angle = torch.acos(cos_angle)
 
     return angle
+
 
 def m_idx_of_angles(angle_list,
                     nbr_list,
@@ -116,7 +117,6 @@ class DimeNet(nn.Module):
                                  angle_start=2,
                                  angle_end=1)
 
-        
         d = torch.norm(xyz[nbr_list[:, 0]] - xyz[nbr_list[:, 1]],
                        dim=-1).reshape(-1, 1)
 
@@ -124,8 +124,6 @@ class DimeNet(nn.Module):
 
         e_rbf = self.radial_basis(d)
         a_sbf = self.spherical_basis(d, alpha, kj_idx)
-
-
 
         return (xyz, e_rbf, a_sbf, nbr_list, angle_list, num_atoms,
                 z, kj_idx)
@@ -145,8 +143,8 @@ class DimeNet(nn.Module):
                                                num_atoms=num_atoms)
                for key in self.out_keys}
 
-        for int_block, out_block in zip(self.interaction_blocks,
-                                        self.out_blocks[1:]):
+        for i, int_block in enumerate(self.interaction_blocks):
+
             m_ji = int_block(m_ji=m_ji,
                              nbr_list=nbr_list,
                              angle_list=angle_list,
@@ -155,10 +153,11 @@ class DimeNet(nn.Module):
                              kj_idx=kj_idx)
 
             for key in self.out_keys:
-                out[key] += out_block[key](m_ji=m_ji,
-                                           e_rbf=e_rbf,
-                                           nbr_list=nbr_list,
-                                           num_atoms=num_atoms)
+                out_block = self.output_blocks[key][i + 1]
+                out[key] += out_block(m_ji=m_ji,
+                                      e_rbf=e_rbf,
+                                      nbr_list=nbr_list,
+                                      num_atoms=num_atoms)
 
         return out, xyz
 
@@ -173,8 +172,9 @@ class DimeNet(nn.Module):
             results[key] = torch.stack([i.sum() for i in split_val])
 
         for key in self.grad_keys:
-            grad = compute_grad(output=results[key], 
-                inputs=xyz)
-            results[key + "_grad"] = grad
+            output = out[key.replace("_grad", "")]
+            grad = compute_grad(output=output,
+                                inputs=xyz)
+            results[key] = grad
 
         return results

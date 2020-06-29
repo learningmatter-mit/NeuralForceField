@@ -19,7 +19,8 @@ class EdgeEmbedding(nn.Module):
     def __init__(self, atom_embed_dim, n_rbf, activation):
         super().__init__()
         cat_dim = get_cat_dim(atom_embed_dim, n_rbf)
-        self.dense = get_dense(cat_dim, cat_dim, activation=activation, bias=True)
+        self.dense = get_dense(
+            cat_dim, cat_dim, activation=activation, bias=True)
 
     def forward(self, h, e, nbr_list):
         cat = torch.cat((h[nbr_list[:, 0]], h[nbr_list[:, 1]], e), dim=-1)
@@ -68,7 +69,7 @@ class ResidualBlock(nn.Module):
 
         out = m_ji.clone()
         for layer in self.dense_layers:
-            out = self.dense_layers(out)
+            out = layer(out)
 
         return out + m_ji
 
@@ -93,7 +94,7 @@ class DirectedMessage(nn.Module):
         self.e_rbf_linear = nn.Linear(n_rbf, cat_dim, bias=False)
 
         self.a_sbf_linear = nn.Linear(a_dim, n_bilinear, bias=False)
-        self.final_w = nn.Parameter(torch.empty(n_rbf, cat_dim))
+        self.final_w = nn.Parameter(torch.empty(cat_dim, n_bilinear))
         nn.init.xavier_uniform_(self.final_w)
 
     def nbr_m_block(self, m_ji, kj_idx):
@@ -110,7 +111,11 @@ class DirectedMessage(nn.Module):
 
         return out
 
-    def nbr_m_and_e(self, m_ji, nbr_list, angle_list, e_rbf,
+    def nbr_m_and_e(self,
+                    m_ji,
+                    nbr_list,
+                    angle_list,
+                    e_rbf,
                     kj_idx):
 
         transf_nbr_m = self.nbr_m_block(m_ji, kj_idx)
@@ -118,22 +123,31 @@ class DirectedMessage(nn.Module):
 
         out = transf_nbr_m * transf_e_rbf
 
-        return out, kj_idx
+        return out
 
-    def forward(self, m_ji, nbr_list, angle_list, e_rbf, a_sbf,
+    def forward(self,
+                m_ji,
+                nbr_list,
+                angle_list,
+                e_rbf,
+                a_sbf,
                 kj_idx):
+
         m_and_e = self.nbr_m_and_e(m_ji=m_ji,
                                    nbr_list=nbr_list,
                                    angle_list=angle_list,
-                                   e_rbf=e_rbf)
+                                   e_rbf=e_rbf,
+                                   kj_idx=kj_idx)
         transf_a = self.a_sbf_linear(a_sbf)
-        # check this
-        out = (transf_a * torch.matmul(self.final_w,
-                                       m_and_e)) * sum(-1)
+
+        # is this right?
+        out = (torch.matmul(m_and_e, self.final_w) * transf_a).sum(-1
+            ).reshape(-1, 1)
 
         # sum over k
-
-        final = scatter_add(out, kj_idx, m_ji.shape[0])
+        # is this right?
+        final = scatter_add(out.transpose(0, 1),
+                            kj_idx, dim_size=m_ji.shape[0]).transpose(0, 1)
 
         return final
 
@@ -205,7 +219,12 @@ class OutputBlock(nn.Module):
 
     def forward(self, m_ji, e_rbf, nbr_list, num_atoms):
         prod = self.edge_linear(e_rbf) * m_ji
-        node_feats = scatter_add(prod, nbr_list[:, 0], num_atoms)
+        # node_feats = scatter_add(prod, nbr_list[:, 0], num_atoms)
+
+        # is this right?
+        node_feats = scatter_add(prod.transpose(0, 1),
+                                 nbr_list[:, 0], dim_size=num_atoms).transpose(0, 1)
+
         for dense in self.dense_layers:
             node_feats = dense(node_feats)
         node_feats = self.final_linear(node_feats)
