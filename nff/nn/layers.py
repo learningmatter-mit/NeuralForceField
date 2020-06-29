@@ -1,12 +1,11 @@
 import numpy as np
 from functools import partial
-
+import sympy as sym
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn import Parameter
 from torch.nn.init import xavier_uniform_, constant_
 
+from nff.utils import bessel_basis, real_sph_harm
 
 zeros_initializer = partial(constant_, val=0.0)
 DEFAULT_DROPOUT_RATE = 0.0
@@ -55,7 +54,8 @@ class GaussianSmearing(nn.Module):
     def __init__(self, start, stop, n_gaussians, centered=False, trainable=False):
         super().__init__()
         offset = torch.linspace(start, stop, n_gaussians)
-        widths = torch.FloatTensor((offset[1] - offset[0]) * torch.ones_like(offset))
+        widths = torch.FloatTensor(
+            (offset[1] - offset[0]) * torch.ones_like(offset))
         if trainable:
             self.width = nn.Parameter(widths)
             self.offsets = nn.Parameter(offset)
@@ -105,9 +105,10 @@ class Dense(nn.Linear):
 
         self.weight_init = weight_init
         self.bias_init = bias_init
-        self.activation = activation
 
         super().__init__(in_features, out_features, bias)
+
+        self.activation = activation
         self.dropout = nn.Dropout(p=dropout_rate)
 
     def reset_parameters(self):
@@ -136,3 +137,94 @@ class Dense(nn.Linear):
             y = self.activation(y)
 
         return y
+
+
+class Envelope(nn.Module):
+    def __init__(self, p):
+        super().__init__()
+        self.p = p
+
+    def forward(self, d):
+        p = self.p
+        u = 1 - (p + 1) * (p + 2) / 2 * d ** p \
+            + p * (p + 2) * d ** (p + 1) \
+            - p * (p + 1) / 2 * d ** (p + 2)
+        return u
+
+
+class DimeNetSphericalBasis(nn.Module):
+    def __init__(self,
+                 l_spher,
+                 n_spher,
+                 cutoff,
+                 envelope_p):
+
+        super().__init__()
+
+        assert n_spher <= 64
+
+        self.n_spher = n_spher
+        self.l_spher = l_spher
+        self.cutoff = cutoff
+        self.envelope = Envelope(envelope_p)
+
+        # retrieve formulas
+        self.bessel_formulas = bessel_basis(l_spher, n_spher)
+        self.sph_harm_formulas = real_sph_harm(l_spher)
+        self.sph_funcs = []
+        self.bessel_funcs = []
+
+        x = sym.symbols('x')
+        theta = sym.symbols('theta')
+        modules = {'sin': torch.sin, 'cos': torch.cos}
+        for i in range(l_spher):
+            if i == 0:
+                first_sph = sym.lambdify(
+                    [theta], self.sph_harm_formulas[i][0], modules)(0)
+                self.sph_funcs.append(
+                    lambda tensor: torch.zeros_like(tensor) + first_sph)
+            else:
+                self.sph_funcs.append(sym.lambdify(
+                    [theta], self.sph_harm_formulas[i][0], modules))
+            for j in range(n_spher):
+                self.bessel_funcs.append(sym.lambdify(
+                    [x], self.bessel_formulas[i][j], modules))
+
+    def forward(self, d, angles, kj_idx):
+
+        # what about the prefactors?
+
+        d_scaled = d / self.cutoff
+        rbf = [f(d_scaled) for f in self.bessel_funcs]
+        rbf = torch.stack(rbf, dim=1)
+
+        u = self.envelope(d_scaled)
+        rbf_env = u[:, None] * rbf
+        rbf_env = rbf_env[kj_idx.long()]
+        rbf_env = rbf_env.reshape(*torch.tensor(
+            rbf_env.shape[:2]).tolist())
+
+        cbf = [f(angles) for f in self.sph_funcs]
+        cbf = torch.stack(cbf, dim=1)
+        cbf = cbf.repeat_interleave(self.n_spher, dim=1)
+
+        return rbf_env * cbf
+
+
+class DimeNetRadialBasis(nn.Module):
+    def __init__(self,
+                 n_rbf,
+                 cutoff,
+                 envelope_p):
+        super().__init__()
+        n = torch.arange(1, n_rbf + 1).float()
+        self.k_n = nn.Parameter(n * np.pi / cutoff)
+        self.envelope = Envelope(envelope_p)
+        self.cutoff = cutoff
+
+    def forward(self, d):
+        pref = (2 / self.cutoff) ** 0.5
+        arg = torch.sin(self.k_n * d) / d
+        u = self.envelope(d / self.cutoff)
+
+        return pref * arg * u

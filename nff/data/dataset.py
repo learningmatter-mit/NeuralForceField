@@ -12,7 +12,8 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 from torch.utils.data import Dataset as TorchDataset
 from nff.data.sparse import sparsify_tensor
-from nff.data.graphs import reconstruct_atoms, get_neighbor_list, generate_subgraphs, DISTANCETHRESHOLDICT_Z 
+from nff.data.graphs import (reconstruct_atoms, get_neighbor_list, generate_subgraphs, 
+    DISTANCETHRESHOLDICT_Z, get_angle_list)
 
 
 class Dataset(TorchDataset):
@@ -173,6 +174,13 @@ class Dataset(TorchDataset):
             return self.props['nbr_list'], self.props['offsets']
 
         return self.props['nbr_list']
+
+    def generate_angle_list(self):
+        angles, nbrs = get_angle_list(self.props['nbr_list'])
+        self.props['nbr_list'] = nbrs
+        self.props['angle_list'] = angles
+        
+        return angles
 
     def _get_periodic_neighbor_list(self, cutoff, undirected=False):
         from nff.io.ase import AtomsBatch

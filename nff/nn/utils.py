@@ -1,6 +1,5 @@
 """Tools to build layers"""
 import collections
-from argparse import Namespace
 
 import numpy as np
 import torch
