@@ -227,14 +227,16 @@ class Trainer:
                         h.on_batch_begin(self, batch)
 
                     results = self._model(batch)
-                    loss += self.loss_fn(batch, results)
+                    mini_loss = self.loss_fn(batch, results)
+                    mini_loss.backward()
+                    loss += mini_loss.cpu().detach().to(device)
+
                     self.step += 1
 
                     # update the loss self.minibatches number
                     # of times before taking a step
                     num_batches += 1
                     if num_batches == self.mini_batches:
-                        loss.backward()
                         self.optimizer.step()
 
                         for h in self.hooks:
