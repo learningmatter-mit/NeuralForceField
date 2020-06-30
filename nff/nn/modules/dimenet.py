@@ -7,29 +7,30 @@ from nff.nn.layers import Dense
 
 
 def get_dense(inp_dim, out_dim, activation, bias):
-    activation = layer_types[activation]()
+    if activation is not None:
+        activation = layer_types[activation]()
     return Dense(inp_dim, out_dim, activation=activation, bias=bias)
 
 
 class EdgeEmbedding(nn.Module):
-    def __init__(self, atom_embed_dim, n_rbf, activation):
+    def __init__(self, embed_dim, n_rbf, activation):
         super().__init__()
         self.dense = get_dense(
-            3 * atom_embed_dim,
-            atom_embed_dim,
+            3 * embed_dim,
+            embed_dim,
             activation=activation,
             bias=True)
 
     def forward(self, h, e, nbr_list):
-        cat = torch.cat((h[nbr_list[:, 0]], h[nbr_list[:, 1]], e), dim=-1)
-        m_ji = self.dense(cat)
+        m_ji = torch.cat((h[nbr_list[:, 0]], h[nbr_list[:, 1]], e), dim=-1)
+        m_ji = self.dense(m_ji)
         return m_ji
 
 
 class NodeEmbedding(nn.Module):
-    def __init__(self, atom_embed_dim):
+    def __init__(self, embed_dim):
         super().__init__()
-        self.embedding = nn.Embedding(100, atom_embed_dim, padding_idx=0)
+        self.embedding = nn.Embedding(100, embed_dim, padding_idx=0)
 
     def forward(self, z):
         out = self.embedding(z)
@@ -37,29 +38,32 @@ class NodeEmbedding(nn.Module):
 
 
 class EmbeddingBlock(nn.Module):
-    def __init__(self, n_rbf, atom_embed_dim, activation):
+    def __init__(self, n_rbf, embed_dim, activation):
         super().__init__()
-        self.edge_linear = nn.Linear(n_rbf, atom_embed_dim, bias=False)
-        self.node_embedding = NodeEmbedding(atom_embed_dim)
-        self.cat_embedding = EdgeEmbedding(atom_embed_dim,
-                                           n_rbf,
-                                           activation)
+        self.edge_dense = get_dense(n_rbf,
+                                    embed_dim,
+                                    activation=None,
+                                    bias=False)
+        self.node_embedding = NodeEmbedding(embed_dim)
+        self.edge_embedding = EdgeEmbedding(embed_dim,
+                                            n_rbf,
+                                            activation)
 
     def forward(self, e_rbf, z, nbr_list):
-        e = self.edge_linear(e_rbf)
+        e = self.edge_dense(e_rbf)
         h = self.node_embedding(z)
-        out = self.cat_embedding(h=h,
-                                 e=e,
-                                 nbr_list=nbr_list)
-        return out
+        m_ji = self.edge_embedding(h=h,
+                                   e=e,
+                                   nbr_list=nbr_list)
+        return m_ji
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, atom_embed_dim, n_rbf, activation):
+    def __init__(self, embed_dim, n_rbf, activation):
         super().__init__()
         self.dense_layers = nn.ModuleList(
-            [get_dense(atom_embed_dim,
-                       atom_embed_dim,
+            [get_dense(embed_dim,
+                       embed_dim,
                        activation=activation,
                        bias=True)
                 for _ in range(2)]
@@ -67,17 +71,17 @@ class ResidualBlock(nn.Module):
 
     def forward(self, m_ji):
 
-        out = m_ji.clone()
+        residual = m_ji.clone()
         for layer in self.dense_layers:
-            out = layer(out)
+            residual = layer(residual)
 
-        return out + m_ji
+        return residual + m_ji
 
 
 class DirectedMessage(nn.Module):
     def __init__(self,
                  activation,
-                 atom_embed_dim,
+                 embed_dim,
                  n_rbf,
                  n_spher,
                  l_spher,
@@ -85,76 +89,60 @@ class DirectedMessage(nn.Module):
 
         super().__init__()
 
-        a_dim = n_spher * l_spher
+        self.m_kj_dense = get_dense(embed_dim,
+                                    embed_dim,
+                                    activation=activation,
+                                    bias=True)
+        self.e_dense = get_dense(n_rbf,
+                                 embed_dim,
+                                 activation=None,
+                                 bias=False)
+        self.a_dense = get_dense(n_spher * l_spher,
+                                 n_bilinear,
+                                 activation=None,
+                                 bias=False)
+        self.w = nn.Parameter(torch.empty(
+            embed_dim, n_bilinear, embed_dim))
 
-        self.sigma = layer_types[activation]()
-        self.nbr_m_linear = nn.Linear(
-            atom_embed_dim, atom_embed_dim, bias=True)
-        self.e_rbf_linear = nn.Linear(n_rbf, atom_embed_dim, bias=False)
-        self.a_sbf_linear = nn.Linear(a_dim, n_bilinear, bias=False)
-        self.final_w = nn.Parameter(torch.empty(
-            atom_embed_dim, n_bilinear, atom_embed_dim))
-
-        nn.init.xavier_uniform_(self.final_w)
-
-    def nbr_m_block(self, m_ji, kj_idx):
-
-        m_kj = m_ji[kj_idx]
-        out = self.sigma(self.nbr_m_linear(m_kj))
-
-        return out
-
-    def e_block(self, e_rbf, kj_idx):
-
-        repeated_e = e_rbf[kj_idx]
-        out = self.e_rbf_linear(repeated_e)
-
-        return out
-
-    def nbr_m_and_e(self,
-                    m_ji,
-                    nbr_list,
-                    angle_list,
-                    e_rbf,
-                    kj_idx):
-
-        transf_nbr_m = self.nbr_m_block(m_ji, kj_idx)
-        transf_e_rbf = self.e_block(e_rbf, kj_idx)
-
-        out = transf_nbr_m * transf_e_rbf
-
-        return out
+        nn.init.xavier_uniform_(self.w)
 
     def forward(self,
                 m_ji,
-                nbr_list,
-                angle_list,
                 e_rbf,
                 a_sbf,
-                kj_idx):
+                kj_idx,
+                ji_idx):
 
-        m_and_e = self.nbr_m_and_e(m_ji=m_ji,
-                                   nbr_list=nbr_list,
-                                   angle_list=angle_list,
-                                   e_rbf=e_rbf,
-                                   kj_idx=kj_idx)
-        transf_a = self.a_sbf_linear(a_sbf)
+        e_kj = self.e_dense(e_rbf[kj_idx])
+        m_kj = self.m_kj_dense(m_ji[kj_idx])
+        a = self.a_dense(a_sbf)
 
-        # is this right?
+        # Is this right? Here's where we really have to
+        # be careful about kj, jk, ij, etc.
 
-        out = torch.einsum("wj,wl,ijl->wi", transf_a, m_and_e, self.final_w)
+        aggr = torch.einsum("wj,wl,ijl->wi", a, m_kj * e_kj, self.w)
 
-        # sum over k
-        # is this right?
-        final = scatter_add(out.transpose(0, 1),
-                            kj_idx, dim_size=m_ji.shape[0]).transpose(0, 1)
+        # For example, aggr = {aggr_kj,ji} = [aggr_{0,1,2}, aggr_{0,1,3}].
+        # = [aggr_{21,10}, aggr_{31,10}].
+        # What we want is to sum out all k's that correspond to the same
+        # {j, i}, i.e. those for which indices 0 and 1 are the same.
+        # We want the sum to be in an array at index l, where l is the
+        # index at which nbr_list[l][0] = j and nbr_list[l][1] = i.
+        # Say nbr_list = [[0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1]].
+        # Then the 1,0 index is equal to 2, and so we want to sum these
+        # at index 2. This is precisely what we get from "ji_idx".
 
-        return final
+        out = scatter_add(aggr.transpose(0, 1),
+                          ji_idx,
+                          dim_size=m_ji.shape[0]
+                          ).transpose(0, 1)
+
+        return out
 
 
 class InteractionBlock(nn.Module):
     def __init__(self,
-                 atom_embed_dim,
+                 embed_dim,
                  n_rbf,
                  activation,
                  n_spher,
@@ -164,36 +152,40 @@ class InteractionBlock(nn.Module):
 
         self.residual_blocks = nn.ModuleList(
             [ResidualBlock(
-                atom_embed_dim=atom_embed_dim,
+                embed_dim=embed_dim,
                 n_rbf=n_rbf,
                 activation=activation) for _ in range(3)]
         )
 
         self.directed_block = DirectedMessage(
             activation=activation,
-            atom_embed_dim=atom_embed_dim,
+            embed_dim=embed_dim,
             n_rbf=n_rbf,
             n_spher=n_spher,
             l_spher=l_spher,
             n_bilinear=n_bilinear)
 
-        self.m_ji_dense = get_dense(
-            atom_embed_dim, atom_embed_dim, activation=activation, bias=True)
-        self.post_res_dense = get_dense(
-            atom_embed_dim, atom_embed_dim, activation=activation, bias=True)
+        self.m_ji_dense = get_dense(embed_dim,
+                                    embed_dim,
+                                    activation=activation,
+                                    bias=True)
+
+        self.post_res_dense = get_dense(embed_dim,
+                                        embed_dim,
+                                        activation=activation,
+                                        bias=True)
 
     def forward(self, m_ji, nbr_list, angle_list, e_rbf, a_sbf,
-                kj_idx):
+                kj_idx, ji_idx):
         directed_out = self.directed_block(m_ji=m_ji,
-                                           nbr_list=nbr_list,
-                                           angle_list=angle_list,
                                            e_rbf=e_rbf,
                                            a_sbf=a_sbf,
-                                           kj_idx=kj_idx)
-        transf_m_ji = self.m_ji_dense(m_ji)
-        output = directed_out + transf_m_ji
+                                           kj_idx=kj_idx,
+                                           ji_idx=ji_idx)
+        dense_m_ji = self.m_ji_dense(m_ji)
+        output = directed_out + dense_m_ji
         output = self.post_res_dense(
-            self.residual_blocks[0](output)) + transf_m_ji
+            self.residual_blocks[0](output)) + m_ji
         for res_block in self.residual_blocks[1:]:
             output = res_block(output)
 
@@ -202,30 +194,44 @@ class InteractionBlock(nn.Module):
 
 class OutputBlock(nn.Module):
     def __init__(self,
-                 atom_embed_dim,
+                 embed_dim,
                  n_rbf,
                  activation):
         super().__init__()
 
-        self.edge_linear = nn.Linear(n_rbf, atom_embed_dim, bias=False)
+        self.edge_dense = get_dense(n_rbf,
+                                    embed_dim,
+                                    activation=None,
+                                    bias=False)
+
         self.dense_layers = nn.ModuleList(
             [
-                get_dense(atom_embed_dim, atom_embed_dim,
-                          activation=activation, bias=True)
+                get_dense(embed_dim,
+                          embed_dim,
+                          activation=activation,
+                          bias=True)
                 for _ in range(3)
             ])
-        self.final_linear = nn.Linear(
-            atom_embed_dim, atom_embed_dim, bias=False)
+        self.dense_layers.append(get_dense(embed_dim,
+                                           embed_dim,
+                                           activation=None,
+                                           bias=False))
 
     def forward(self, m_ji, e_rbf, nbr_list, num_atoms):
-        prod = self.edge_linear(e_rbf) * m_ji
+        prod = self.edge_dense(e_rbf) * m_ji
 
-        # is this right?
+        # the messages are m = {m_ji} =, for example, 
+        # [m_{0,1}, m_{0,2}], with nbr_list = [[0, 1], [0, 2]]. 
+        # To sum over the j index we would have the first of
+        # these messages add to index 1 and the second to index 2.
+        # That means we use
+        # nbr_list[:, 1] in the scatter addition.
+
         node_feats = scatter_add(prod.transpose(0, 1),
-                                 nbr_list[:, 0], dim_size=num_atoms).transpose(0, 1)
+                                 nbr_list[:, 1],
+                                 dim_size=num_atoms).transpose(0, 1)
 
         for dense in self.dense_layers:
             node_feats = dense(node_feats)
-        node_feats = self.final_linear(node_feats)
 
         return node_feats
