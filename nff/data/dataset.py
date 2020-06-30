@@ -180,10 +180,10 @@ class Dataset(TorchDataset):
         self.props['nbr_list'] = nbrs
         self.props['angle_list'] = angles
 
-        ji_idx, kj_idx = add_ji_kj(angles, nbrs)
+        # ji_idx, kj_idx = add_ji_kj(angles, nbrs)
 
-        self.props['ji_idx'] = ji_idx
-        self.props['kj_idx'] = kj_idx
+        # self.props['ji_idx'] = ji_idx
+        # self.props['kj_idx'] = kj_idx
         
         return angles
 
