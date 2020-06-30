@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from nff.nn.models.schnet import SchNet
 from nff.nn.models.hybridgraph import HybridGraphConv
+from nff.nn.models.dimenet import DimeNet
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -32,11 +33,28 @@ PARAMS_TYPE = {"SchNet":
                    'V_ex_sigma': float,
                    'trainable_gauss': bool
                },
-}
+
+               "DimeNet":
+               {
+                   "n_rbf": int,
+                   "cutoff": float,
+                   "envelope_p": int,
+                   "n_spher": int,
+                   "l_spher": int,
+                   "atom_embed_dim": int,
+                   "n_bilinear": int,
+                   "activation": str,
+                   "n_convolutions": int,
+                   "output_keys": list,
+                   "grad_keys": list
+               }
+
+               }
 
 MODEL_DICT = {
     "SchNet": SchNet,
     "HybridGraphConv": HybridGraphConv,
+    "DimeNet": DimeNet
 }
 
 

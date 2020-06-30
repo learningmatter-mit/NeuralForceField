@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 from torch.nn import ModuleDict, Sequential
-from nff.nn.activations import shifted_softplus
+from nff.nn.activations import shifted_softplus, Swish
 from nff.nn.layers import Dense
 
 
@@ -27,7 +27,8 @@ layer_types = {
                 "Tanh": torch.nn.Tanh,
                 "ReLU": torch.nn.ReLU,
                 "Dense": Dense,
-                "shifted_softplus": shifted_softplus
+                "shifted_softplus": shifted_softplus,
+                "swish": Swish
               }
 
 

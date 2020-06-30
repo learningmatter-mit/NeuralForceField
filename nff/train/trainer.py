@@ -6,6 +6,7 @@ Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/s
 import os
 import numpy as np
 import torch
+import copy
 
 from nff.utils.cuda import batch_to
 from nff.train.evaluate import evaluate
@@ -116,7 +117,16 @@ class Trainer:
             self._model.load_state_dict(state_dict)
 
     def get_best_model(self):
-        return torch.load(self.best_model)
+        try:
+            return torch.load(self.best_model)
+        except EOFError:
+            state_path = self.best_model + ".pth.tar"
+            state_dict = torch.load(state_path)
+            model = copy.deepcopy(self._model)
+            model.load_state_dict(state_dict["model"])
+
+            return model
+
 
     @property
     def state_dict(self):
@@ -358,6 +368,13 @@ class Trainer:
 
         return avg_loss
 
+    def save(self, model):
+        try:
+            torch.save(model, self.best_model)
+        except AttributeError:
+            state_path = self.best_model + ".pth.tar"
+            torch.save(self.state_dict, state_path)
+
     def save_as_best(self):
         """
         Save model as the current best model.
@@ -370,9 +387,9 @@ class Trainer:
         if self.parallel:
             # need to save model.module, not model, in the
             # parallel case
-            torch.save(self._model.module, self.best_model)
+            self.save(self._model.module)
         else:
-            torch.save(self._model, self.best_model)
+            self.save(self._model)
 
     def validate(self, device):
         """Validate the current state of the model using the validation set

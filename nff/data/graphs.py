@@ -236,4 +236,98 @@ def list2adj(bond_list, size=None):
         adjacency[sink][source] = 1
     return adjacency
 
+
+def make_directed(nbr_list):
+
+    """
+    Check if a neighbor list is directed, and make it
+    directed if it isn't.
+    Args:
+        nbr_list (torch.LongTensor): neighbor list
+    Returns:
+        new_nbrs (torch.LongTensor): directed neighbor
+            list
+        directed (bool): whether the old one was directed
+            or not  
+    """
+
+    gtr_ij = (nbr_list[:, 0] > nbr_list[:, 1]).any().item()
+    gtr_ji = (nbr_list[:, 1] > nbr_list[:, 0]).any().item()
+    directed = gtr_ij and gtr_ji
+
+    if directed:
+        return nbr_list, directed
+
+    new_nbrs = torch.cat([nbr_list, nbr_list.flip(1)], dim=0)
+    return new_nbrs, directed
+
+
+def get_angle_list(nbr_lists):
+
+    """
+    Get angle lists from neighbor lists.
+    Args:
+        nbr_lists (list): list of neighbor
+            lists.
+    Returns:
+        angles (list): list of angle lists
+        new_nbrs (list): list of new neighbor
+            lists (directed if they weren't
+            already).
+    """
+
+    new_nbrs = []
+    angles = []
+    for nbr_list in nbr_lists:
+        nbr_list, _ = make_directed(nbr_list)
+
+        # Condition that the second index of a nbr
+        # list item is equal to the first index of
+        # another item.  Tthe exception is if the
+        # second item is just the first
+        # item reversed (e.g. [0, 1] and [1, 0])
+
+        # e.g. nbr_list = tensor([[0, 1],
+        # [0, 2],
+        # [1, 0],
+        # [1, 2],
+        # [2, 0],
+        # [2, 1]])
+        # then mask  = tensor([[False, False, False,  True, False, False],
+        # [False, False, False, False, False,  True],
+        # [False,  True, False, False, False, False],
+        # [False, False, False, False,  True, False],
+        # [True, False, False, False, False, False],
+        # [False, False,  True, False, False, False]])
+
+        mask = (nbr_list[:, 1, None] == nbr_list[:, 0]) * (
+            nbr_list[:, 0, None] != nbr_list[:, 1])
+
+        # The index of the third atom in each angle.
+        # In this case it would be tensor([2, 1, 2, 0, 1, 0])
+        third_atoms = nbr_list[:, 1].repeat(nbr_list.shape[0], 1)[mask]
+
+        # number of angles for each item in the nbr_list
+        # In this case it would be tensor([1, 1, 1, 1, 1, 1])
+        num_angles = mask.sum(-1)
+
+        # idx = np.arange(nbr_len)
+        # scatter_idx = torch.LongTensor(np.repeat(idx, num_angles.tolist(), axis=0))
+
+        # the nbr list, but with each item repeated num_angle times
+        nbr_repeats = torch.LongTensor(
+            np.repeat(nbr_list.numpy(), num_angles.tolist(), axis=0))
+
+        # the concatenation of `nbr_repeats` with `third_atoms` is the angle list
+        angle_list = torch.cat((nbr_repeats, third_atoms.reshape(-1, 1)), dim=1)
+
+        new_nbrs.append(nbr_list)
+        angles.append(angle_list)
+
+    return angles, new_nbrs
+
+
+
+
+
     
