@@ -123,7 +123,7 @@ class Trainer:
             state_path = self.best_model + ".pth.tar"
             state_dict = torch.load(state_path)
             model = copy.deepcopy(self._model)
-            model.state_dict = state_dict
+            model.load_state_dict(state_dict["model"])
 
             return model
 
