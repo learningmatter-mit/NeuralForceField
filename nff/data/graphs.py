@@ -99,7 +99,8 @@ DISTANCETHRESHOLDICT_Z = {
     (8., 9.): 1.50,
     (8., 14.): 1.85,
     (8., 35.): 1.70,
-    (9., 12.): 1.35 }
+    (9., 12.): 1.35}
+
 
 def get_neighbor_list(xyz, cutoff=5, undirected=True):
     """Get neighbor list from xyz positions of atoms.
@@ -119,7 +120,8 @@ def get_neighbor_list(xyz, cutoff=5, undirected=True):
     n = xyz.size(0)
 
     # calculating distances
-    dist = (xyz.expand(n, n, 3) - xyz.expand(n, n, 3).transpose(0, 1)).pow(2).sum(dim=2).sqrt()
+    dist = (xyz.expand(n, n, 3) - xyz.expand(n, n,
+                                             3).transpose(0, 1)).pow(2).sum(dim=2).sqrt()
 
     # neighbor list
     mask = (dist <= cutoff)
@@ -131,10 +133,11 @@ def get_neighbor_list(xyz, cutoff=5, undirected=True):
 
     return nbr_list
 
+
 def get_dist_mat(xyz, box_len, unwrap=True):
     dis_mat = (xyz[:, None, :] - xyz[None, ...])
 
-    # build minimum image convention 
+    # build minimum image convention
     mask_pos = dis_mat.ge(0.5*box_len).type(torch.FloatTensor)
     mask_neg = dis_mat.lt(-0.5*box_len).type(torch.FloatTensor)
 
@@ -145,25 +148,27 @@ def get_dist_mat(xyz, box_len, unwrap=True):
         dis_mat = dis_mat + dis_add - dis_sub
 
     # create cutoff mask
-    dis_sq = dis_mat.pow(2).sum(-1)                  # compute squared distance of dim (B, N, N)
-    #mask = (dis_sq <= cutoff ** 2) & (dis_sq != 0)                 # byte tensor of dim (B, N, N)
-    #A = mask.unsqueeze(3).type(torch.FloatTensor).to(self.device) #         
+    # compute squared distance of dim (B, N, N)
+    dis_sq = dis_mat.pow(2).sum(-1)
+    # mask = (dis_sq <= cutoff ** 2) & (dis_sq != 0)                 # byte tensor of dim (B, N, N)
+    #A = mask.unsqueeze(3).type(torch.FloatTensor).to(self.device) #
 
-    # 1) PBC 2) # gradient of zero distance 
+    # 1) PBC 2) # gradient of zero distance
     dis_sq = dis_sq.unsqueeze(-1)
-    #dis_sq = (dis_sq * A) + 1e-8# to make sure the distance is not zero, otherwise there will be inf gradient 
+    # dis_sq = (dis_sq * A) + 1e-8# to make sure the distance is not zero, otherwise there will be inf gradient
     dis_mat = dis_sq.sqrt().squeeze()
-    
+
     return dis_mat
+
 
 def adjdistmat(atoms, threshold=DISTANCETHRESHOLDICT_Z, unwrap=True):
     #dmat = (xyz[:, None, :] - xyz[None, ...]).pow(2).sum(-1).numpy()
-    xyz= torch.Tensor(atoms.get_positions(wrap=True))
+    xyz = torch.Tensor(atoms.get_positions(wrap=True))
     atomicnums = atoms.get_atomic_numbers().tolist()
-    box_len = torch.Tensor( np.diag(atoms.get_cell()) )
-    
+    box_len = torch.Tensor(np.diag(atoms.get_cell()))
+
     dmat = get_dist_mat(xyz, box_len, unwrap=unwrap).numpy()
-    
+
     thresholdmat = np.array([[threshold.get(tuple(
         sorted((i, j))), 2.0) for i in atomicnums] for j in atomicnums])
     adjmat = (dmat < thresholdmat).astype(int)
@@ -171,57 +176,60 @@ def adjdistmat(atoms, threshold=DISTANCETHRESHOLDICT_Z, unwrap=True):
     np.fill_diagonal(adjmat, 0)
     return np.array(atomicnums), np.array(adjmat), np.array(dmat), thresholdmat
 
+
 def generate_mol_atoms(atomic_nums, xyz, cell):
     return Atoms(numbers=atomic_nums, positions=xyz, cell=cell, pbc=True)
 
+
 def generate_subgraphs(atomsobject, unwrap=True, get_edge=False):
-    
+
     atoms = nff.io.ase.AtomsBatch(atomsobject)
     z, adj, dmat,  threshold = adjdistmat(atoms, unwrap=unwrap)
-    box_len = torch.Tensor( np.diag(atoms.get_cell()) )
-    G=nx.from_numpy_matrix(adj)
+    box_len = torch.Tensor(np.diag(atoms.get_cell()))
+    G = nx.from_numpy_matrix(adj)
 
     for i, item in enumerate(z):
         G.nodes[i]['z'] = item
 
     sub_graphs = nx.connected_component_subgraphs(G)
-    
+
     edge_list = []
     partitions = []
-    
+
     for i, sg in enumerate(sub_graphs):
         partitions.append(list(sg.nodes))
         if get_edge:
             edge_list.append(list(sg.edges))
-        
+
     if len(edge_list) != 0:
         return partitions, edge_list
     else:
         return partitions
 
 
-def get_single_molecule(atomsobject, mol_idx, single_mol_id):    
+def get_single_molecule(atomsobject, mol_idx, single_mol_id):
     z = atomsobject.get_atomic_numbers()[mol_idx[single_mol_id]]
     pos = atomsobject.get_positions()[mol_idx[single_mol_id]]
-    return Atoms(numbers = z, positions=pos, 
+    return Atoms(numbers=z, positions=pos,
                  cell=atomsobject.cell, pbc=True)
 
+
 def reconstruct_atoms(atomsobject, mol_idx):
-    sys_xyz = torch.Tensor(atomsobject.get_positions(wrap=True) ) 
-    box_len = torch.Tensor( atomsobject.get_cell_lengths_and_angles()[:3] )
-    
+    sys_xyz = torch.Tensor(atomsobject.get_positions(wrap=True))
+    box_len = torch.Tensor(atomsobject.get_cell_lengths_and_angles()[:3])
+
     print(box_len)
     for idx in mol_idx:
-        mol_xyz = sys_xyz[idx] 
+        mol_xyz = sys_xyz[idx]
         center = mol_xyz.shape[0]//2
-        intra_dmat = (mol_xyz[None, ...]  - mol_xyz[:, None, ...])[center]
+        intra_dmat = (mol_xyz[None, ...] - mol_xyz[:, None, ...])[center]
         sub = (intra_dmat > 0.5 * box_len).to(torch.float) * box_len
         add = (intra_dmat <= -0.5 * box_len).to(torch.float) * box_len
         traj_unwrap = mol_xyz + add - sub
         sys_xyz[idx] = traj_unwrap
 
     new_pos = sys_xyz.numpy()
-    
+
     return new_pos
 
 
@@ -229,7 +237,7 @@ def list2adj(bond_list, size=None):
     E = bond_list
     if size is None:
         size = max(set([n for e in E for n in e])) + 1
-    # make an empty adjacency list  
+    # make an empty adjacency list
     adjacency = [[0]*size for _ in range(size)]
     # populate the list for each edge
     for sink, source in E:
@@ -238,7 +246,6 @@ def list2adj(bond_list, size=None):
 
 
 def make_directed(nbr_list):
-
     """
     Check if a neighbor list is directed, and make it
     directed if it isn't.
@@ -263,7 +270,6 @@ def make_directed(nbr_list):
 
 
 def get_angle_list(nbr_lists):
-
     """
     Get angle lists from neighbor lists.
     Args:
@@ -318,8 +324,10 @@ def get_angle_list(nbr_lists):
         nbr_repeats = torch.LongTensor(
             np.repeat(nbr_list.numpy(), num_angles.tolist(), axis=0))
 
-        # the concatenation of `nbr_repeats` with `third_atoms` is the angle list
-        angle_list = torch.cat((nbr_repeats, third_atoms.reshape(-1, 1)), dim=1)
+        # the concatenation of `nbr_repeats` with
+        # `third_atoms` is the angle list
+        angle_list = torch.cat(
+            (nbr_repeats, third_atoms.reshape(-1, 1)), dim=1)
 
         new_nbrs.append(nbr_list)
         angles.append(angle_list)
@@ -399,7 +407,29 @@ def m_idx_of_angles(angle_list,
 
     return idx
 
+
 def add_ji_kj(angle_lists, nbr_lists):
+    """
+    Get ji and kj idx (explained more below):
+    Args:
+        angle_list (list[torch.LongTensor]): list of angle
+            lists
+        nbr_list (list[torch.LongTensor]): list of directed neighbor
+            lists
+    Returns:
+        ji_idx_list (list[torch.LongTensor]): ji_idx for each geom
+        kj_idx_list (list[torch.LongTensor]): kj_idx for each geom
+
+    """
+
+    # given an angle a_{ijk}, we want
+    # ji_idx, which is the array index of m_ji.
+    # We also want kj_idx, which is the array index
+    # of m_kj. For example, if i,j,k = 0,1,2,
+    # and our neighbor list is [[0, 1], [0, 2],
+    # [1, 0], [1, 2], [2, 0], [2, 1]], then m_10 occurs
+    # at index 2, and m_21 occurs at index 5. So
+    # ji_idx = 2 and kj_idx = 5.
 
     ji_idx_list = []
     kj_idx_list = []
@@ -417,6 +447,3 @@ def add_ji_kj(angle_lists, nbr_lists):
         kj_idx_list.append(kj_idx)
 
     return ji_idx_list, kj_idx_list
-
-
-    
