@@ -127,7 +127,6 @@ class Trainer:
 
             return model
 
-
     @property
     def state_dict(self):
         state_dict = {
@@ -227,7 +226,8 @@ class Trainer:
                         h.on_batch_begin(self, batch)
 
                     results = self._model(batch)
-                    mini_loss = self.loss_fn(batch, results)
+                    mini_loss = self.loss_fn(
+                        batch, results) / self.mini_batches
                     mini_loss.backward()
                     loss += mini_loss.cpu().detach().to(device)
 
@@ -360,7 +360,7 @@ class Trainer:
                     loaded_vals[folder] = val_loss
                 except (ValueError, FileNotFoundError):
                     continue
-                
+
         if self.loss_is_normalized:
             # average the losses
             avg_loss = np.mean(list(loaded_vals.values()))
