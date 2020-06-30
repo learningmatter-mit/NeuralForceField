@@ -237,39 +237,19 @@ def list2adj(bond_list, size=None):
     return adjacency
 
 
-
-def get_neighbor_list(xyz, cutoff=5, undirected=True):
-    """Get neighbor list from xyz positions of atoms.
-
-    Args:
-        xyz (torch.Tensor or np.array): (N, 3) array with positions
-            of the atoms.
-        cutoff (float): maximum distance to consider atoms as
-            connected.
-
-    Returns:
-        nbr_list (torch.Tensor): (num_edges, 2) array with the
-            indices of connected atoms.
-    """
-
-    xyz = torch.Tensor(xyz)
-    n = xyz.size(0)
-
-    # calculating distances
-    dist = (xyz.expand(n, n, 3) - xyz.expand(n, n,
-                                             3).transpose(0, 1)).pow(2).sum(dim=2).sqrt()
-
-    # neighbor list
-    mask = (dist <= cutoff)
-    mask[np.diag_indices(n)] = 0
-    nbr_list = mask.nonzero()
-
-    if undirected:
-        nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
-
-    return nbr_list
-
 def make_directed(nbr_list):
+
+    """
+    Check if a neighbor list is directed, and make it
+    directed if it isn't.
+    Args:
+        nbr_list (torch.LongTensor): neighbor list
+    Returns:
+        new_nbrs (torch.LongTensor): directed neighbor
+            list
+        directed (bool): whether the old one was directed
+            or not  
+    """
 
     gtr_ij = (nbr_list[:, 0] > nbr_list[:, 1]).any().item()
     gtr_ji = (nbr_list[:, 1] > nbr_list[:, 0]).any().item()
@@ -283,6 +263,18 @@ def make_directed(nbr_list):
 
 
 def get_angle_list(nbr_lists):
+
+    """
+    Get angle lists from neighbor lists.
+    Args:
+        nbr_lists (list): list of neighbor
+            lists.
+    Returns:
+        angles (list): list of angle lists
+        new_nbrs (list): list of new neighbor
+            lists (directed if they weren't
+            already).
+    """
 
     new_nbrs = []
     angles = []
