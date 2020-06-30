@@ -6,10 +6,6 @@ from nff.utils.tools import layer_types
 from nff.nn.layers import Dense
 
 
-def get_cat_dim(atom_embed_dim, n_rbf):
-    return 2 * atom_embed_dim + n_rbf
-
-
 def get_dense(inp_dim, out_dim, activation, bias):
     activation = layer_types[activation]()
     return Dense(inp_dim, out_dim, activation=activation, bias=bias)
@@ -18,9 +14,11 @@ def get_dense(inp_dim, out_dim, activation, bias):
 class EdgeEmbedding(nn.Module):
     def __init__(self, atom_embed_dim, n_rbf, activation):
         super().__init__()
-        cat_dim = get_cat_dim(atom_embed_dim, n_rbf)
         self.dense = get_dense(
-            cat_dim, cat_dim, activation=activation, bias=True)
+            3 * atom_embed_dim,
+            atom_embed_dim,
+            activation=activation,
+            bias=True)
 
     def forward(self, h, e, nbr_list):
         cat = torch.cat((h[nbr_list[:, 0]], h[nbr_list[:, 1]], e), dim=-1)
@@ -41,7 +39,7 @@ class NodeEmbedding(nn.Module):
 class EmbeddingBlock(nn.Module):
     def __init__(self, n_rbf, atom_embed_dim, activation):
         super().__init__()
-        self.edge_linear = nn.Linear(n_rbf, n_rbf, bias=False)
+        self.edge_linear = nn.Linear(n_rbf, atom_embed_dim, bias=False)
         self.node_embedding = NodeEmbedding(atom_embed_dim)
         self.cat_embedding = EdgeEmbedding(atom_embed_dim,
                                            n_rbf,
@@ -59,9 +57,11 @@ class EmbeddingBlock(nn.Module):
 class ResidualBlock(nn.Module):
     def __init__(self, atom_embed_dim, n_rbf, activation):
         super().__init__()
-        cat_dim = get_cat_dim(atom_embed_dim, n_rbf)
         self.dense_layers = nn.ModuleList(
-            [get_dense(cat_dim, cat_dim, activation=activation, bias=True)
+            [get_dense(atom_embed_dim,
+                       atom_embed_dim,
+                       activation=activation,
+                       bias=True)
                 for _ in range(2)]
         )
 
@@ -85,16 +85,16 @@ class DirectedMessage(nn.Module):
 
         super().__init__()
 
-        cat_dim = get_cat_dim(atom_embed_dim, n_rbf)
         a_dim = n_spher * l_spher
 
         self.sigma = layer_types[activation]()
-        self.nbr_m_linear = nn.Linear(cat_dim, cat_dim, bias=True)
-        # is this the right dimensionality?
-        self.e_rbf_linear = nn.Linear(n_rbf, cat_dim, bias=False)
-
+        self.nbr_m_linear = nn.Linear(
+            atom_embed_dim, atom_embed_dim, bias=True)
+        self.e_rbf_linear = nn.Linear(n_rbf, atom_embed_dim, bias=False)
         self.a_sbf_linear = nn.Linear(a_dim, n_bilinear, bias=False)
-        self.final_w = nn.Parameter(torch.empty(cat_dim, n_bilinear))
+        self.final_w = nn.Parameter(torch.empty(
+            atom_embed_dim, n_bilinear, atom_embed_dim))
+
         nn.init.xavier_uniform_(self.final_w)
 
     def nbr_m_block(self, m_ji, kj_idx):
@@ -140,11 +140,9 @@ class DirectedMessage(nn.Module):
                                    kj_idx=kj_idx)
         transf_a = self.a_sbf_linear(a_sbf)
 
-        # is this right? We really just add a single number
-        # from each neighbor?
-        
-        out = (torch.matmul(m_and_e, self.final_w) * transf_a).sum(-1
-            ).reshape(-1, 1)
+        # is this right?
+
+        out = torch.einsum("wj,wl,ijl->wi", transf_a, m_and_e, self.final_w)
 
         # sum over k
         # is this right?
@@ -179,11 +177,10 @@ class InteractionBlock(nn.Module):
             l_spher=l_spher,
             n_bilinear=n_bilinear)
 
-        cat_dim = get_cat_dim(atom_embed_dim, n_rbf)
         self.m_ji_dense = get_dense(
-            cat_dim, cat_dim, activation=activation, bias=True)
+            atom_embed_dim, atom_embed_dim, activation=activation, bias=True)
         self.post_res_dense = get_dense(
-            cat_dim, cat_dim, activation=activation, bias=True)
+            atom_embed_dim, atom_embed_dim, activation=activation, bias=True)
 
     def forward(self, m_ji, nbr_list, angle_list, e_rbf, a_sbf,
                 kj_idx):
@@ -210,18 +207,18 @@ class OutputBlock(nn.Module):
                  activation):
         super().__init__()
 
-        cat_dim = get_cat_dim(atom_embed_dim, n_rbf)
-        self.edge_linear = nn.Linear(n_rbf, cat_dim, bias=False)
+        self.edge_linear = nn.Linear(n_rbf, atom_embed_dim, bias=False)
         self.dense_layers = nn.ModuleList(
             [
-                get_dense(cat_dim, cat_dim, activation=activation, bias=True)
+                get_dense(atom_embed_dim, atom_embed_dim,
+                          activation=activation, bias=True)
                 for _ in range(3)
             ])
-        self.final_linear = nn.Linear(cat_dim, cat_dim, bias=False)
+        self.final_linear = nn.Linear(
+            atom_embed_dim, atom_embed_dim, bias=False)
 
     def forward(self, m_ji, e_rbf, nbr_list, num_atoms):
         prod = self.edge_linear(e_rbf) * m_ji
-        # node_feats = scatter_add(prod, nbr_list[:, 0], num_atoms)
 
         # is this right?
         node_feats = scatter_add(prod.transpose(0, 1),

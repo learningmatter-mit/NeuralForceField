@@ -6,6 +6,7 @@ Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/s
 import os
 import numpy as np
 import torch
+import copy
 
 from nff.utils.cuda import batch_to
 from nff.train.evaluate import evaluate
@@ -116,7 +117,16 @@ class Trainer:
             self._model.load_state_dict(state_dict)
 
     def get_best_model(self):
-        return torch.load(self.best_model)
+        try:
+            return torch.load(self.best_model)
+        except EOFError:
+            state_path = self.best_model + ".pth.tar"
+            state_dict = torch.load(state_path)
+            model = copy.deepcopy(self._model)
+            model.state_dict = state_dict
+
+            return model
+
 
     @property
     def state_dict(self):
