@@ -227,29 +227,13 @@ class DimeNet(nn.Module):
         angle_list = batch["angle_list"]
         nxyz = batch["nxyz"]
         num_atoms = batch["num_atoms"].sum()
+        ji_idx = batch["ji_idx"]
+        kj_idx = batch["kj_idx"]
 
         xyz = nxyz[:, 1:]
         z = nxyz[:, 0].long()
         xyz.requires_grad = True
 
-        # given an angle a_{ijk}, we want
-        # ji_idx, which is the array index of m_ji.
-        # We also want kj_idx, which is the array index
-        # of m_kj. For example, if i,j,k = 0,1,2,
-        # and our neighbor list is [[0, 1], [0, 2],
-        # [1, 0], [1, 2], [2, 0], [2, 1]], then m_10 occurs
-        # at index 2, and m_21 occurs at index 5. So
-        # ji_idx = 2 and kj_idx = 5.
-
-        ji_idx = m_idx_of_angles(angle_list=angle_list,
-                                 nbr_list=nbr_list,
-                                 angle_start=1,
-                                 angle_end=0)
-
-        kj_idx = m_idx_of_angles(angle_list=angle_list,
-                                 nbr_list=nbr_list,
-                                 angle_start=2,
-                                 angle_end=1)
 
         # compute distances
         d = torch.norm(xyz[nbr_list[:, 0]] - xyz[nbr_list[:, 1]],

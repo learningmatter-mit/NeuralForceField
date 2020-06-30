@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'angle_list']
+REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'angle_list', 'ji_idx', 'kj_idx']
 
 TYPE_KEYS = {
     'atoms_nbr_list': torch.long,

@@ -13,7 +13,7 @@ from ase.neighborlist import neighbor_list
 from torch.utils.data import Dataset as TorchDataset
 from nff.data.sparse import sparsify_tensor
 from nff.data.graphs import (reconstruct_atoms, get_neighbor_list, generate_subgraphs, 
-    DISTANCETHRESHOLDICT_Z, get_angle_list)
+    DISTANCETHRESHOLDICT_Z, get_angle_list, add_ji_kj)
 
 
 class Dataset(TorchDataset):
@@ -179,6 +179,11 @@ class Dataset(TorchDataset):
         angles, nbrs = get_angle_list(self.props['nbr_list'])
         self.props['nbr_list'] = nbrs
         self.props['angle_list'] = angles
+
+        ji_idx, kj_idx = add_ji_kj(angles, nbrs)
+
+        self.props['ji_idx'] = ji_idx
+        self.props['kj_idx'] = kj_idx
         
         return angles
 
