@@ -1,3 +1,10 @@
+"""
+Special functions for DimeNet.
+Taken directly from https://github.com/klicperajo/
+                    dimenet/blob/master/dimenet/model/
+                    layers/basis_utils.py 
+"""
+
 import numpy as np
 from scipy.optimize import brentq
 from scipy import special as sp
