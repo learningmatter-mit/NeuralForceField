@@ -8,13 +8,20 @@ from nff.nn.layers import DimeNetSphericalBasis as SphericalBasis
 from nff.utils.scatter import compute_grad
 
 
+# TO-DO: figure out if the angles are being computed properly
+# and if we have the kj / jk indices right
+
+
 def compute_angle(xyz, angle_list):
     r_ij = xyz[angle_list[:, 0]] - xyz[angle_list[:, 1]]
     r_jk = xyz[angle_list[:, 1]] - xyz[angle_list[:, 2]]
+    r_kj = -r_jk
 
-    dot_prod = (r_ij * r_jk).sum(-1)
-    cos_angle = dot_prod / (torch.norm(r_ij) *
-                            torch.norm(r_jk))
+    # is this right?
+    # dot_prod = (r_ij * r_jk).sum(-1)
+    dot_prod = (r_ij * r_kj).sum(-1)
+    cos_angle = dot_prod / (torch.norm(r_ij, dim=1) *
+                            torch.norm(r_jk, dim=1))
     angle = torch.acos(cos_angle)
 
     return angle
@@ -114,13 +121,18 @@ class DimeNet(nn.Module):
 
         kj_idx = m_idx_of_angles(angle_list=angle_list,
                                  nbr_list=nbr_list,
-                                 angle_start=2,
-                                 angle_end=1)
+                                 # angle_start=2,
+                                 # angle_end=1)
+                                 angle_start=1,
+                                 angle_end=2)
 
         d = torch.norm(xyz[nbr_list[:, 0]] - xyz[nbr_list[:, 1]],
                        dim=-1).reshape(-1, 1)
 
         alpha = compute_angle(xyz, angle_list)
+
+        # import pdb
+        # pdb.set_trace()
 
         e_rbf = self.radial_basis(d)
         a_sbf = self.spherical_basis(d, alpha, kj_idx)

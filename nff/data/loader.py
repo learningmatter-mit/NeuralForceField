@@ -1,14 +1,13 @@
 import numpy as np
-from collections.abc import Iterable
 import torch
-import pdb
 
-REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list']
+REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'angle_list']
 
 TYPE_KEYS = {
     'atoms_nbr_list': torch.long,
     'nbr_list': torch.long,
     'num_atoms': torch.long,
+    'angle_list': torch.long,
 }
 
 def collate_dicts(dicts):

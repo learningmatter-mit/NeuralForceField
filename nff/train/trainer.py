@@ -358,6 +358,13 @@ class Trainer:
 
         return avg_loss
 
+    def save(self, model):
+        try:
+            torch.save(model, self.best_model)
+        except AttributeError:
+            state_path = self.best_model + ".pth.tar"
+            torch.save(self.state_dict, state_path)
+
     def save_as_best(self):
         """
         Save model as the current best model.
@@ -370,9 +377,9 @@ class Trainer:
         if self.parallel:
             # need to save model.module, not model, in the
             # parallel case
-            torch.save(self._model.module, self.best_model)
+            self.save(self._model.module)
         else:
-            torch.save(self._model, self.best_model)
+            self.save(self._model)
 
     def validate(self, device):
         """Validate the current state of the model using the validation set

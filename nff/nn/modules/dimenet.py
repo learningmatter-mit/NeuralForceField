@@ -140,7 +140,9 @@ class DirectedMessage(nn.Module):
                                    kj_idx=kj_idx)
         transf_a = self.a_sbf_linear(a_sbf)
 
-        # is this right?
+        # is this right? We really just add a single number
+        # from each neighbor?
+        
         out = (torch.matmul(m_and_e, self.final_w) * transf_a).sum(-1
             ).reshape(-1, 1)
 
