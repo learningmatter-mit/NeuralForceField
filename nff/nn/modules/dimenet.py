@@ -268,11 +268,11 @@ class DirectedMessage(nn.Module):
         # apply the dense layers to e and m (ordered according to the kj
         # indices) and to a
 
-        e_kj = self.e_dense(e_rbf[kj_idx])
+        e_ji = self.e_dense(e_rbf[ji_idx])
         m_kj = self.m_kj_dense(m_ji[kj_idx])
         a = self.a_dense(a_sbf)
 
-        # Defining e_m_kj = e_kj * m_kj and angle_len = len(angle_list),
+        # Defining e_m_kj = e_ji * m_kj and angle_len = len(angle_list),
         # this is equivalent to  torch.stack([torch.matmul(torch.matmul(
         # w, e_m_kj[i]), a[i]) for i in range(angle_len)]). So what we're
         # doing is multiplying a matrix w of dimension (embed x bilin x embed)
@@ -283,7 +283,7 @@ class DirectedMessage(nn.Module):
         # dimension (angle_len x embed), i.e. a vector of dimension (embed)
         # for each angle.
 
-        aggr = torch.einsum("wj,wl,ijl->wi", a, m_kj * e_kj, self.w)
+        aggr = torch.einsum("wj,wl,ijl->wi", a, m_kj * e_ji, self.w)
 
         # Now we want to sum each fingerprint aggr_ijk
         # over k. Say aggr = [aggr[angle_list[0]], aggr[angle_list[1]]]
