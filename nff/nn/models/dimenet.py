@@ -35,79 +35,6 @@ def compute_angle(xyz, angle_list):
     return angle
 
 
-def m_idx_of_angles(angle_list,
-                    nbr_list,
-                    angle_start,
-                    angle_end):
-    """
-    Get the array index of elements of an angle list.
-    Args:
-        angle_list (torch.LongTensor): directed indices
-            of sets of three atoms that are all in each
-            other's neighborhood.
-        nbr_list (torch.LongTensor): directed indices
-            of pairs of atoms that are in each other's
-            neighborhood.
-        angle_start (int): the first index in the angle
-            list you want.
-        angle_end (int): the last index in the angle list
-            you want.
-    Returns:
-        idx (torch.LongTensor): `m` indices.
-    Example:
-        angle_list = torch.LongTensor([[0, 1, 2],
-                                       [0, 1, 3]])
-        nbr_list = torch.LongTensor([[0, 1],
-                                    [0, 2],
-                                    [0, 3],
-                                    [1, 0],
-                                    [1, 2],
-                                    [1, 3],
-                                    [2, 0],
-                                    [2, 1],
-                                    [2, 3],
-                                    [3, 0],
-                                    [3, 1],
-                                    [3, 2]])
-
-        # This means that message vectors m_ij are ordered
-        # according to m = {m_01, m_01, m_03, m_10,
-        # m_12, m_13, m_30, m_31, m_32}. Say we are interested
-        # in indices 2 and 1 for each element in the angle list.
-        # If we want to know what the corresponding indices
-        # in m (or the nbr list) are, we would call `m_idx_of_angles`
-        # with angle_start = 2, angle_end = 1 (if we want the
-        # {2,1} and {3,1} indices), or angle_start = 1,
-        # angle_end = 0 (if we want the {1,2} and {1,3} indices).
-        # Say we choose angle_start = 2 and angle_end = 1. Then
-        # we get the indices of {m_21, m_31}, which we can see
-        # from the nbr list are [7, 10].
-
-
-    """
-
-    # expand nbr_list[:, 0] so it's repeated once
-    # for every element of `angle_list`.
-    repeated_nbr = nbr_list[:, 0].repeat(angle_list.shape[0], 1)
-    reshaped_angle = angle_list[:, angle_start].reshape(-1, 1)
-    # gives you a matrix that shows you where each angle is equal
-    # to nbr_list[:, 0]
-    mask = repeated_nbr == reshaped_angle
-
-    # same idea, but with nbr_list[:, 1] and angle_list[:, angle_end]
-
-    repeated_nbr = nbr_list[:, 1].repeat(angle_list.shape[0], 1)
-    reshaped_angle = angle_list[:, angle_end].reshape(-1, 1)
-
-    # the full mask is the product of both
-    mask *= (repeated_nbr == reshaped_angle)
-
-    # get the indices where everything is true
-    idx = mask.nonzero()[:, 1]
-
-    return idx
-
-
 class DimeNet(nn.Module):
 
     """DimeNet implementation.
@@ -269,7 +196,7 @@ class DimeNet(nn.Module):
                                     z=z,
                                     nbr_list=nbr_list)
 
-        # initialiez the output dictionary with the first
+        # initialize the output dictionary with the first
         # of the output blocks acting on m_ji
         out = {key: self.output_blocks[key][0](m_ji=m_ji,
                                                e_rbf=e_rbf,
@@ -320,7 +247,7 @@ class DimeNet(nn.Module):
         # compute gradients
 
         for key in self.grad_keys:
-            output = out[key.replace("_grad", "")]
+            output = results[key.replace("_grad", "")]
             grad = compute_grad(output=output,
                                 inputs=xyz)
             results[key] = grad
