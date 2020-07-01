@@ -1,14 +1,18 @@
 import numpy as np
 import torch
 
-REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'angle_list', 'ji_idx', 'kj_idx']
+REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'angle_list']
+NBR_LIST_KEYS = ['kj_idx', 'ji_idx']
 
 TYPE_KEYS = {
     'atoms_nbr_list': torch.long,
     'nbr_list': torch.long,
     'num_atoms': torch.long,
     'angle_list': torch.long,
+    'ji_idx': torch.long,
+    'kj_idx': torch.long,
 }
+
 
 def collate_dicts(dicts):
     """Collates dictionaries within a single batch. Automatically reindexes neighbor lists
@@ -25,8 +29,17 @@ def collate_dicts(dicts):
 
     cumulative_atoms = np.cumsum([0] + [d['num_atoms'] for d in dicts])[:-1]
 
+    # same idea, but for quantities whose maximum value is the length of the nbr
+    # list in each batch
+    cumulative_nbrs = np.cumsum([0] + [len(d['nbr_list']) for d in dicts])[:-1]
+
     for n, d in zip(cumulative_atoms, dicts):
         for key in REINDEX_KEYS:
+            if key in d:
+                d[key] = d[key] + int(n)
+
+    for n, d in zip(cumulative_nbrs, dicts):
+        for key in NBR_LIST_KEYS:
             if key in d:
                 d[key] = d[key] + int(n)
 
@@ -52,6 +65,7 @@ def collate_dicts(dicts):
             batch[key] = batch[key].to(dtype)
 
     return batch
+
 
 class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
     """
@@ -95,4 +109,3 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
 
     def __len__(self):
         return self.data_length
-
