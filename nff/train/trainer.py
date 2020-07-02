@@ -12,7 +12,6 @@ from nff.utils.cuda import batch_to
 from nff.train.evaluate import evaluate
 
 MAX_EPOCHS = 100
-PAR_INFO_FILE = "info.json"
 
 
 class Trainer:
@@ -120,6 +119,9 @@ class Trainer:
         try:
             return torch.load(self.best_model)
         except EOFError:
+            # if we had tried to save a model and the
+            # pickling failed (e.g. dimenet), then
+            # load the best state_dict instead
             state_path = self.best_model + ".pth.tar"
             state_dict = torch.load(state_path)
             model = copy.deepcopy(self._model)
@@ -226,16 +228,17 @@ class Trainer:
                         h.on_batch_begin(self, batch)
 
                     results = self._model(batch)
+                    # add gradients from each mini-batch
                     mini_loss = self.loss_fn(
                         batch, results) / self.mini_batches
                     mini_loss.backward()
                     loss += mini_loss.cpu().detach().to(device)
 
                     self.step += 1
-
-                    # update the loss self.minibatches number
-                    # of times before taking a step
                     num_batches += 1
+
+                    # take an optimizer step
+
                     if num_batches == self.mini_batches:
                         self.optimizer.step()
 
@@ -371,8 +374,19 @@ class Trainer:
         return avg_loss
 
     def save(self, model):
+        """
+        Save the model
+        Args:
+            model (str): path of best model
+        Returns:
+            None
+        """
+        # try to save the model
         try:
             torch.save(model, self.best_model)
+        # Sometimes you can't pickle the model (e.g. dimenet)
+        # In that case just save the state dict, which can
+        # be pickled
         except AttributeError:
             state_path = self.best_model + ".pth.tar"
             torch.save(self.state_dict, state_path)
