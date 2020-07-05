@@ -91,6 +91,7 @@ class Trainer:
         self.checkpoints_to_keep = checkpoints_to_keep
         self.hooks = [] if hooks is None else hooks
         self.loss_is_normalized = loss_is_normalized
+        self.mol_loss_norm = mol_loss_norm
         self.mini_batches = mini_batches
 
         self._model = model
