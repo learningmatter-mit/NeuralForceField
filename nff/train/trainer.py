@@ -10,6 +10,7 @@ import copy
 
 from nff.utils.cuda import batch_to
 from nff.train.evaluate import evaluate
+from nff.train.parallel import update_optim
 
 MAX_EPOCHS = 100
 
@@ -40,6 +41,22 @@ class Trainer:
             gpus per node, the global rank is 7).
        world_size (int, optional): the total number of gpus over which training is
             parallelized.
+       max_batch_iters (int, optional): if you're training in parallel and have pre-split
+            the datasets that will be loaded on different nodes, the batch sizes per epoch
+            may be different in each dataset. max_batch_iters is the smallest number of
+            batches contained in an epoch among the split datasets.
+       model_kwargs (dict, optional): any kwargs that may be needed when calling the model
+       mol_loss_norm (bool, optional): whether to normalize the loss by the number of molecules
+            in a batch
+       del_grad_interval (int, optional): if training in parallel and writing gradients to disk,
+            this is the number of batches that must pass before deleting old gradients.
+       metric_as_loss (str, optional): if specified, use this metric to determine which validation
+            epoch was the best, rather than the validation loss.
+       metric_objective (str, optional): if metric_as_loss is specified, metric_objective indicates
+            whether the goal is to maximize or minimize `metric_as_loss`.
+
+
+
    """
 
     def __init__(
@@ -57,7 +74,13 @@ class Trainer:
         hooks=None,
         loss_is_normalized=True,
         global_rank=0,
-        world_size=1
+        world_size=1,
+        max_batch_iters=None,
+        model_kwargs=None,
+        mol_loss_norm=False,
+        del_grad_interval=10,
+        metric_as_loss=None,
+        metric_objective=None
     ):
         self.model_path = model_path
         self.checkpoint_path = os.path.join(self.model_path, "checkpoints")
@@ -77,22 +100,40 @@ class Trainer:
         self.loss_fn = loss_fn
         self.optimizer = optimizer
 
-        self.parallel = self._check_is_parallel()
+        self.torch_parallel = self._check_is_parallel()
+        self.parallel = world_size > 1
         self.global_rank = global_rank
         self.world_size = world_size
         self.par_folders = self.get_par_folders()
         # whether this is the base process for parallel training
         self.base = global_rank == 0
+        # how many times you've called loss.backward()
+        self.back_count = 0
+        self.max_batch_iters = max_batch_iters if (
+            max_batch_iters is not None) else len(self.train_loader)
+        self.model_kwargs = model_kwargs if (model_kwargs is not None
+                                             ) else {}
+        self.batch_stop = False
+        self.nloss = 0
+        self.del_grad_interval = del_grad_interval
+        self.metric_as_loss = metric_as_loss
+        self.metric_objective = metric_objective
 
-        if os.path.exists(self.checkpoint_path) and self.base:
-            self.restore_checkpoint()
-        else:
+        restore = False
+        if os.path.exists(self.checkpoint_path):
+            try:
+                self.restore_checkpoint()
+                restore = True
+            except:
+                pass
+        if not restore:
             self.epoch = 0
             self.step = 0
             self.best_loss = float("inf")
 
             # only make the checkpoint and save to it
             # if this is the base process
+
             if self.base:
                 os.makedirs(self.checkpoint_path)
                 self.store_checkpoint()
@@ -129,6 +170,15 @@ class Trainer:
 
             return model
 
+    def call_model(self, batch, train):
+
+        if (self.torch_parallel and self.parallel) and not train:
+            model = self._model.module
+        else:
+            model = self._model
+
+        return model(batch, **self.model_kwargs)
+
     @property
     def state_dict(self):
         state_dict = {
@@ -138,7 +188,7 @@ class Trainer:
             "optimizer": self.optimizer.state_dict(),
             "hooks": [h.state_dict for h in self.hooks],
         }
-        if self.parallel:
+        if self.torch_parallel:
             state_dict["model"] = self._model.module.state_dict()
         else:
             state_dict["model"] = self._model.state_dict()
@@ -184,6 +234,69 @@ class Trainer:
         )
         self.state_dict = torch.load(chkpt, map_location='cpu')
 
+    def loss_backward(self, loss):
+        loss.backward()
+        self.back_count += 1
+        self.batch_stop = self.back_count == self.max_batch_iters
+
+        if self.batch_stop:
+            self.back_count = 0
+
+    def grad_is_nan(self):
+
+        for group in self.optimizer.param_groups:
+            for param in group['params']:
+                if torch.isnan(param.grad).any():
+                    return True
+        return False
+
+    def get_loss(self, batch, results):
+
+        if not any((self.mol_loss_norm,
+                    self.loss_is_normalized)):
+
+            loss = self.loss_fn(batch, results)
+            return loss
+
+        if self.mol_loss_norm:
+            vsize = len(batch["num_atoms"])
+
+        elif self.loss_is_normalized:
+            vsize = batch['nxyz'].size(0)
+
+        self.nloss += vsize
+        loss = self.loss_fn(batch, results) * vsize
+
+        return loss
+
+    def optim_step(self, batch_num, device):
+
+        if self.parallel and not self.torch_parallel:
+            self.optimizer = update_optim(optimizer=self.optimizer,
+                                          loss_size=self.nloss,
+                                          rank=self.global_rank,
+                                          world_size=self.world_size,
+                                          weight_path=self.model_path,
+                                          batch_num=batch_num,
+                                          epoch=self.epoch,
+                                          del_interval=self.del_grad_interval,
+                                          device=device,
+                                          max_batch_iters=self.max_batch_iters)
+            if not self.grad_is_nan():
+                self.optimizer.step()
+            self.nloss = 0
+
+            return
+
+        if self.nloss != 0:
+            for group in self.optimizer.param_groups:
+                for param in group['params']:
+                    param.grad /= self.nloss
+            self.nloss = 0
+
+        if not self.grad_is_nan():
+            self.optimizer.step()
+
     def train(self, device, n_epochs=MAX_EPOCHS):
         """Train the model for the given number of epochs on a specified 
         device.
@@ -227,31 +340,46 @@ class Trainer:
                     for h in self.hooks:
                         h.on_batch_begin(self, batch)
 
-                    results = self._model(batch)
-                    # add gradients from each mini-batch
-                    mini_loss = self.loss_fn(
-                        batch, results) / self.mini_batches
-                    mini_loss.backward()
-                    loss += mini_loss.cpu().detach().to(device)
+                    results = self.call_model(batch, train=True)
+                    mini_loss = self.get_loss(batch, results)
+                    self.loss_backward(mini_loss)
+                    if not torch.isnan(mini_loss):
+                        loss += mini_loss.cpu().detach().to(device)
 
                     self.step += 1
+                    # update the loss self.minibatches number
+                    # of times before taking a step
                     num_batches += 1
 
-                    # take an optimizer step
-
                     if num_batches == self.mini_batches:
-                        self.optimizer.step()
+
+                        num_batches = 0
+                        # effective number of batches so far
+                        eff_batches = int((j + 1) / self.mini_batches)
+
+                        self.optim_step(batch_num=eff_batches,
+                                        device=device)
 
                         for h in self.hooks:
                             h.on_batch_end(self, batch, results, loss)
 
-                        # reset loss, num_batches, and the optimizer grad
+                        # reset loss and the optimizer grad
+
                         loss = torch.tensor(0.0).to(device)
-                        num_batches = 0
                         self.optimizer.zero_grad()
+
+                    if self.batch_stop:
+                        break
 
                     if self._stop:
                         break
+
+                # reset for next epoch
+
+                del mini_loss
+                num_batches = 0
+                loss = torch.tensor(0.0).to(device)
+                self.optimizer.zero_grad()
 
                 # store the checkpoint only if this is the base model,
                 # otherwise it will get stored unnecessarily from other
@@ -364,7 +492,8 @@ class Trainer:
                 except (ValueError, FileNotFoundError):
                     continue
 
-        if self.loss_is_normalized:
+        # this isn't quite right for mol_loss_norm
+        if self.loss_is_normalized or self.mol_loss_norm:
             # average the losses
             avg_loss = np.mean(list(loaded_vals.values()))
         else:
@@ -400,7 +529,7 @@ class Trainer:
         if not self.base:
             return
 
-        if self.parallel:
+        if self.torch_parallel:
             # need to save model.module, not model, in the
             # parallel case
             self.save(self._model.module)
@@ -424,19 +553,23 @@ class Trainer:
             val_batch = batch_to(val_batch, device)
 
             # append batch_size
-            vsize = val_batch['nxyz'].size(0)
+            if self.mol_loss_norm:
+                vsize = len(val_batch["num_atoms"])
+
+            elif self.loss_is_normalized:
+                vsize = val_batch['nxyz'].size(0)
+
             n_val += vsize
 
             for h in self.hooks:
                 h.on_validation_batch_begin(self)
 
-            # move input to gpu, if needed
-            results = self._model(val_batch)
+            results = self.call_model(val_batch, train=False)
 
             val_batch_loss = self.loss_fn(
                 val_batch, results).data.cpu().numpy()
 
-            if self.loss_is_normalized:
+            if self.loss_is_normalized or self.mol_loss_norm:
                 val_loss += val_batch_loss * vsize
             else:
                 val_loss += val_batch_loss
@@ -445,7 +578,7 @@ class Trainer:
                 h.on_validation_batch_end(self, val_batch, results)
 
         # weighted average over batches
-        if self.loss_is_normalized:
+        if self.loss_is_normalized or self.mol_loss_norm:
             val_loss /= n_val
 
         # if running in parallel, savee the validation loss
@@ -455,12 +588,19 @@ class Trainer:
             self.save_val_loss(val_loss)
             val_loss = self.load_val_loss()
 
+        for h in self.hooks:
+            h.on_validation_end(self, val_loss)
+            metric_dic = getattr(h, "metric_dic", None)
+            if metric_dic is None:
+                continue
+            if self.metric_as_loss in metric_dic:
+                val_loss = metric_dic[self.metric_as_loss]
+                if self.metric_objective.lower() == "maximize":
+                    val_loss *= -1
+
         if self.best_loss > val_loss:
             self.best_loss = val_loss
             self.save_as_best()
-
-        for h in self.hooks:
-            h.on_validation_end(self, val_loss)
 
     def evaluate(self, device):
         """Evaluate the current state of the model using the validation loader
