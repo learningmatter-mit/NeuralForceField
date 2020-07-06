@@ -1,6 +1,6 @@
 # Neural Force Field
 
-The Neural Force Field (NFF) code is an API based on SchNet [1-4]. It provides an interface to train and evaluate neural networks for force fields. 
+The Neural Force Field (NFF) code is an API based on SchNet [1-4] and DimeNet [5]. It provides an interface to train and evaluate neural networks for force fields. 
 
 This code repository is developed at Learning Matter Lab (lead by prof. Rafael Gomez-Bombarelli) at MIT. Please do not distribute.
 
@@ -69,3 +69,5 @@ The Journal of Chemical Physics 148(24), 241722 (2018) [10.1063/1.5019779](https
 * [4] K.T. Schütt, P. Kessel, M. Gastegger, K. Nicoli, A. Tkatchenko, K.-R. Müller.
 *SchNetPack: A Deep Learning Toolbox For Atomistic Systems.*
 J. Chem. Theory Comput. **15**(1), 448-455 (2019). [10.1021/acs.jctc.8b00908](https://doi.org/10.1021/acs.jctc.8b00908)
+
+* [5] J. Klicpera, G. Janek, S. Günnemann. *Directional message passing for molecular graphs.* ICLR (2020). [URL](https://openreview.net/attachment?id=B1eWbxStPH&name=original_pdf).
