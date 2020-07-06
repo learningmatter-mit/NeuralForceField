@@ -7,6 +7,7 @@ import os
 import numpy as np
 import torch
 import copy
+import pickle
 
 from nff.utils.cuda import batch_to
 from nff.train.evaluate import evaluate
@@ -517,7 +518,7 @@ class Trainer:
         # Sometimes you can't pickle the model (e.g. dimenet)
         # In that case just save the state dict, which can
         # be pickled
-        except AttributeError:
+        except (AttributeError, pickle.PicklingError):
             state_path = self.best_model + ".pth.tar"
             torch.save(self.state_dict, state_path)
 
