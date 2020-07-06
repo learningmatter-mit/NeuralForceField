@@ -8,16 +8,19 @@ This code repository is developed at Learning Matter Lab (lead by prof. Rafael G
 
 This software requires the following packages:
 
-- [PyTorch=1.4](http://pytorch.org)
 - [scikit-learn](http://scikit-learn.org/stable/)
-- [ase=3.18](https://wiki.fysik.dtu.dk/ase/)
-- [networkx=2.3](https://networkx.github.io/)
+- [PyTorch=1.4](http://pytorch.org)
+- [ase=3.19.1](https://wiki.fysik.dtu.dk/ase/)
+- [pandas=1.0.5](https://pandas.pydata.org/)
+- [networkx=2.4](https://networkx.github.io/)
+- [pymatgen=2020.7.3](https://pymatgen.org/)
+- [sympy=1.6.1](https://www.sympy.org/)
 
 We highly recommend to create a `conda` environment to run the code. To do that, use the following commands:
 
 ```bash
 conda upgrade conda
-conda create -n nff python=3.7 scikit-learn pytorch>=1.2.0 cudatoolkit=10.0 ase pandas pymatgen -c pytorch -c conda-forge
+conda create -n nff python=3.7 scikit-learn pytorch\>=1.2.0 cudatoolkit=10.0 ase pandas pymatgen sympy -c pytorch -c conda-forge
 ```
 
 You need to activate the `nff` environment to install the NFF package:
