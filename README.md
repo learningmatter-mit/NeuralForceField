@@ -8,7 +8,7 @@ This code repository is developed at Learning Matter Lab (lead by prof. Rafael G
 
 This software requires the following packages:
 
-- [scikit-learn](http://scikit-learn.org/stable/)
+- [scikit-learn=0.23.1](http://scikit-learn.org/stable/)
 - [PyTorch=1.4](http://pytorch.org)
 - [ase=3.19.1](https://wiki.fysik.dtu.dk/ase/)
 - [pandas=1.0.5](https://pandas.pydata.org/)
