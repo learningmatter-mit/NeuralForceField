@@ -29,7 +29,7 @@ PROP_SAMPLE_PATH = "/home/saxelrod/fock/final_covid_train/prop_sample.json"
 
 
 PROP = "sars_cov_one_cl_protease_active"
-NUM_SPECS = 25000
+NUM_SPECS = 400000
 # NUM_SPECS = 300
 
 KEY_MAP = {"rd_mol": "nxyz", "boltzmannweight": "weights",
