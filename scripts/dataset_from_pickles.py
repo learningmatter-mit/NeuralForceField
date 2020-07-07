@@ -10,6 +10,7 @@ from nff.data import Dataset, concatenate_dict  # , split_train_validation_test
 import sys
 import copy
 
+
 # # sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
 # sys.path.insert(0, "/home/saxelrod/Repo/projects/covid_nff/NeuralForceField")
 sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
@@ -29,6 +30,7 @@ PROP_SAMPLE_PATH = "/home/saxelrod/fock/final_covid_train/prop_sample.json"
 
 
 PROP = "sars_cov_one_cl_protease_active"
+
 NUM_SPECS = 400000
 # NUM_SPECS = 300
 
@@ -67,10 +69,10 @@ def gen_splits(sample_dic, pos_per_val, prop, test_val_size):
 
     pos_smiles = [smiles for smiles, sub_dic
                   in sample_dic.items() if
-                  sample_dic[prop] == 1]
+                  sample_dic.get(prop) == 1]
     neg_smiles = [smiles for smiles, sub_dic
                   in sample_dic.items() if
-                  sample_dic[prop] == 0]
+                  sample_dic.get(prop) == 0]
 
     random.shuffle(pos_smiles)
     random.shuffle(neg_smiles)
@@ -155,7 +157,7 @@ def proportional_sample(summary_dic,
     all_samples = [*neg_sample, *pos_sample]
     sample_dic = {key: summary_dic[key]  # ["pickle_path"]
                   for key in all_samples if "pickle_path"
-                  in summary_dic[key]}
+                  in summary_dic[key] and prop in summary_dic[key]}
 
     # generate train/val/test labels
 
@@ -448,7 +450,7 @@ def get_data_folder(dataset_path, thread):
 def split_dataset(dataset, idx):
     new_dataset = copy.deepcopy(dataset)
     new_props = {}
-    for key, val in dataset.props:
+    for key, val in dataset.props.items():
         if type(val) is list:
             new_props[key] = [val[i] for i in idx]
         else:
@@ -469,7 +471,7 @@ def save_splits(dataset,
 
     for i, smiles in enumerate(dataset.props['smiles']):
         split_name = sample_dic[smiles]["split"]
-        split_idx[split_name].append(smiles)
+        split_idx[split_name].append(i)
 
     for name in split_names:
         split_dic[name] = split_dataset(dataset, split_idx[name])
