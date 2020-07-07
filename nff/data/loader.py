@@ -48,7 +48,7 @@ def collate_dicts(dicts):
     for key, val in dicts[0].items():
         if type(val) == str:
             batch[key] = [data[key] for data in dicts]
-        elif len(val.shape) > 0:
+        elif hasattr(val, 'shape') and len(val.shape) > 0:
             batch[key] = torch.cat([
                 data[key]
                 for data in dicts
