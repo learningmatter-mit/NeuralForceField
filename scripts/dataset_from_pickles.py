@@ -1,17 +1,18 @@
+import pickle
+import random
+import json
+import os
+import torch
+import numpy as np
+import argparse
+import pdb
+from nff.data import Dataset, concatenate_dict  # , split_train_validation_test
 import sys
+import copy
+
 # # sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
 # sys.path.insert(0, "/home/saxelrod/Repo/projects/covid_nff/NeuralForceField")
 sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
-
-from nff.data import Dataset, concatenate_dict, split_train_validation_test
-import pdb
-import argparse
-import numpy as np
-import torch
-import os
-import json
-import random
-import pickle
 
 
 # RDKIT_FOLDER = "/home/saxelrod/Repo/projects/geom/tutorials/rdkit_folder"
@@ -38,6 +39,13 @@ EXCLUDE_KEYS = ["totalconfs", "datasets"]
 FEATURE_KEYS = ["bonded_nbr_list", "atom_features", "bond_features"]
 MAX_ATOMS = 100
 NUM_CONFS = 100
+POS_PER_VAL = 8
+TEST_VAL_SIZE = 5000
+
+
+def fprint(msg):
+    print(msg)
+    sys.stdout.flush()
 
 
 def get_thread_dic(sample_dic, thread, num_threads):
@@ -46,8 +54,44 @@ def get_thread_dic(sample_dic, thread, num_threads):
         sample_dic.keys())))
     split_keys = np.array_split(keys, num_threads)
     thread_keys = split_keys[thread]
+
     sample_dic = {key: sample_dic[key]
                   for key in thread_keys}
+
+    # should add the train/test split info here
+
+    return sample_dic
+
+
+def gen_splits(sample_dic, pos_per_val, prop, test_val_size):
+
+    pos_smiles = [smiles for smiles, sub_dic
+                  in sample_dic.items() if
+                  sample_dic[prop] == 1]
+    neg_smiles = [smiles for smiles, sub_dic
+                  in sample_dic.items() if
+                  sample_dic[prop] == 0]
+
+    random.shuffle(pos_smiles)
+    random.shuffle(neg_smiles)
+
+    val_pos = pos_smiles[:pos_per_val]
+    test_pos = pos_smiles[pos_per_val: 2 * pos_per_val]
+
+    neg_per_val = test_val_size - pos_per_val
+    val_neg = neg_smiles[:neg_per_val]
+    test_neg = neg_smiles[neg_per_val: 2 * neg_per_val]
+
+    val_all = val_pos + val_neg
+    test_all = test_pos + test_neg
+
+    for smiles in sample_dic.keys():
+        if smiles in val_all:
+            sample_dic[smiles].update({"split": "val"})
+        elif smiles in test_all:
+            sample_dic[smiles].update({"split": "test"})
+        else:
+            sample_dic[smiles].update({"split": "train"})
 
     return sample_dic
 
@@ -56,6 +100,8 @@ def proportional_sample(summary_dic,
                         prop,
                         num_specs,
                         prop_sample_path,
+                        pos_per_val,
+                        test_val_size,
                         thread=None,
                         num_threads=None):
     """
@@ -107,9 +153,16 @@ def proportional_sample(summary_dic,
     pos_sample = positives[:num_pos_sample]
 
     all_samples = [*neg_sample, *pos_sample]
-    sample_dic = {key: summary_dic[key]["pickle_path"]
+    sample_dic = {key: summary_dic[key]  # ["pickle_path"]
                   for key in all_samples if "pickle_path"
                   in summary_dic[key]}
+
+    # generate train/val/test labels
+
+    sample_dic = gen_splits(sample_dic=sample_dic,
+                            pos_per_val=pos_per_val,
+                            prop=prop,
+                            test_val_size=test_val_size)
 
     with open(prop_sample_path, "w") as f:
         json.dump(sample_dic, f, indent=4, sort_keys=True)
@@ -128,10 +181,11 @@ def load_data_from_pickle(sample_dic, max_atoms, rdkit_folder):
     i = 0
     total_num = len(sample_dic)
 
-    for smiles, pickle_path in sample_dic.items():
+    for smiles, sub_dic in sample_dic.items():
 
         i += 1
 
+        pickle_path = sub_dic["pickle_path"]
         full_path = os.path.join(rdkit_folder, pickle_path)
         with open(full_path, "rb") as f:
             dic = pickle.load(f)
@@ -142,7 +196,7 @@ def load_data_from_pickle(sample_dic, max_atoms, rdkit_folder):
 
         if np.mod(i, 1000) == 0:
             fprint(("Completed loading {} of {} "
-                   "dataset pickles".format(i, total_num)))
+                    "dataset pickles".format(i, total_num)))
 
     fprint("Completed dataset pickles")
 
@@ -265,7 +319,7 @@ def add_features(overall_dic, feature_path_dic):
 
         if np.mod(i, 1000) == 0:
             fprint(("Completed loading {} of {} "
-                   "dataset feature pickles".format(i, total_num)))
+                    "dataset feature pickles".format(i, total_num)))
 
         i += 1
 
@@ -302,9 +356,6 @@ def duplicate_features(spec_dic):
 
     return spec_dic
 
-def fprint(msg):
-    print(msg)
-    sys.stdout.flush()
 
 def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
 
@@ -394,13 +445,41 @@ def get_data_folder(dataset_path, thread):
     return new_path
 
 
+def split_dataset(dataset, idx):
+    new_dataset = copy.deepcopy(dataset)
+    new_props = {}
+    for key, val in dataset.props:
+        if type(val) is list:
+            new_props[key] = [val[i] for i in idx]
+        else:
+            new_props[key] = val[idx]
+    new_dataset.props = new_props
+    return new_dataset
+
+
 def save_splits(dataset,
                 targ_name,
                 dataset_path,
-                thread):
+                thread,
+                sample_dic):
 
-    train, val, test = split_train_validation_test(
-        dataset, binary=True, targ_name=targ_name)
+    split_names = ["train", "val", "test"]
+    split_idx = {name: [] for name in split_names}
+    split_dic = {name: [] for name in split_names}
+
+    for i, smiles in enumerate(dataset.props['smiles']):
+        split_name = sample_dic[smiles]["split"]
+        split_idx[split_name].append(smiles)
+
+    for name in split_names:
+        split_dic[name] = split_dataset(dataset, split_idx[name])
+
+    train = split_dic["train"]
+    val = split_dic["val"]
+    test = split_dic["test"]
+
+    # train, val, test = split_train_validation_test(
+    #     dataset, binary=True, targ_name=targ_name)
 
     fprint("Saving...")
     data_folder = get_data_folder(dataset_path, thread)
@@ -422,7 +501,9 @@ def main(num_specs,
          prop_sample_path,
          only_samples,
          num_threads,
-         thread):
+         thread,
+         pos_per_val,
+         test_val_size):
 
     with open(summary_path, "r") as f:
         summary_dic = json.load(f)
@@ -436,7 +517,9 @@ def main(num_specs,
                                      num_specs=num_specs,
                                      prop_sample_path=prop_sample_path,
                                      thread=thread,
-                                     num_threads=num_threads)
+                                     num_threads=num_threads,
+                                     pos_per_val=pos_per_val,
+                                     test_val_size=test_val_size)
     if only_samples:
         return
 
@@ -454,7 +537,8 @@ def main(num_specs,
     save_splits(dataset=dataset,
                 targ_name=prop,
                 dataset_path=dataset_path,
-                thread=thread)
+                thread=thread,
+                sample_dic=sample_dic)
 
     fprint("Complete!")
 
@@ -474,6 +558,8 @@ if __name__ == "__main__":
     parser.add_argument('--only_samples', action='store_true')
     parser.add_argument('--num_threads', type=int, default=None)
     parser.add_argument('--thread', type=int, default=None)
+    parser.add_argument('--pos_per_val', type=int, default=POS_PER_VAL)
+    parser.add_argument('--test_val_size', type=int, default=TEST_VAL_SIZE)
 
     arguments = parser.parse_args()
 
