@@ -375,7 +375,7 @@ def convert_nan(x):
         # if any are nan then they all have to be floats
         elif has_nan:
             if type(y) in [int, float]:
-                new_x.append(torch.Tensor(y))
+                new_x.append(torch.Tensor([y]))
             elif isinstance(y, torch.Tensor):
                 new_x.append(y.float())
         else:
