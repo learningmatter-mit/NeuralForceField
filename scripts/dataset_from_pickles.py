@@ -18,9 +18,7 @@ from nff.data.features.graph import (bond_feats_from_dic, atom_feats_from_dic,
                                      nbr_list_from_dic)
 
 import copy
-
-
-
+from rdkit import Chem
 
 
 # RDKIT_FOLDER = "/home/saxelrod/Repo/projects/geom/tutorials/rdkit_folder"
@@ -59,27 +57,44 @@ def fprint(msg):
     sys.stdout.flush()
 
 
-def featurize_sub_dic(sub_dic):
+def get_smiles(rd_mol):
 
-    dic_list = sub_dic["rd_mols"]
+    smiles = Chem.MolToSmiles(rd_mol)
+    mol = Chem.MolFromSmiles(smiles)
+    smiles = Chem.MolToSmiles(mol)
 
-    bond_feats = bond_feats_from_dic(dic_list)
-    atom_feats = atom_feats_from_dic(dic_list)
-    bonded_nbr_list = nbr_list_from_dic(dic_list)
-
-    sub_dic.update({"bond_features": bond_feats,
-                    "atom_features": atom_feats,
-                    "bonded_nbr_list": bonded_nbr_list})
-
-    return sub_dic
+    return smiles
 
 
-# need to write a function to featurize from rdkit mol,
-# and to go mol-by-mol pickle file to do so
+def all_same_smiles(sub_dic):
+
+    rd_mols = sub_dic["rd_mols"]
+    smiles_list = []
+    for mol in rd_mols:
+        smiles_list.append(get_smiles(mol))
+
+    return all([i == smiles_list[0] for i in smiles_list])
 
 
-def pickles_to_dataset(pickle_path):
-    pass
+def get_feature_vecs(sub_dic):
+
+    # dic_list = sub_dic["rd_mols"]
+
+    # bond_feats = []
+    # atom_feats = []
+    # bonded_nbr_list = []
+
+    if not all_same_smiles(sub_dic):
+        return {}
+
+    bond_feats = bond_feats_from_dic(sub_dic["bonds"][0])
+    atom_feats = atom_feats_from_dic(sub_dic["atoms"][0])
+    bonded_nbr_list = torch.LongTensor(
+        nbr_list_from_dic(sub_dic["bonds"][0]))
+
+    return {"bond_features": bond_feats,
+            "atom_features": atom_feats,
+            "bonded_nbr_list": bonded_nbr_list}
 
 
 def get_thread_dic(sample_dic, thread, num_threads):
@@ -296,9 +311,9 @@ def renorm_weights(spec_dic):
 
 
 def convert_data(overall_dic, num_confs, feature_dic):
-
+# 
     # fprint("Adding features...")
-    # 
+    
     # overall_dic = add_features(overall_dic, feature_dic)
     # fprint("Finished adding features")
     spec_dics = []
@@ -307,7 +322,11 @@ def convert_data(overall_dic, num_confs, feature_dic):
 
         spec_dic = {map_key(key): val for key, val in sub_dic.items()
                     if key != "conformers"}
+        feature_vecs = get_feature_vecs(sub_dic)
+        if not feature_vecs:
+            continue
 
+        spec_dic.update(feature_vecs)
         actual_confs = min(num_confs, len(sub_dic["conformers"]))
         spec_dic = fix_iters(spec_dic, actual_confs)
         spec_dic.update({map_key(key): [] for key
@@ -333,37 +352,38 @@ def convert_data(overall_dic, num_confs, feature_dic):
     return spec_dics
 
 
-def add_features(overall_dic, feature_path_dic):
 
-    bad_keys = []
-    i = 0
-    total_num = len(overall_dic)
+# def add_features(overall_dic, feature_path_dic):
 
-    for key, sub_dic in overall_dic.items():
+#     bad_keys = []
+#     i = 0
+#     total_num = len(overall_dic)
 
-        feature_path = feature_path_dic.get(key)
-        if feature_path is None:
-            bad_keys.append(key)
-            continue
-        if feature_path.startswith("/home/saxelrod/Repo"):
-            feature_path = feature_path.replace("Repo",
-                                                "fock/Repo")
-        with open(feature_path, "rb") as f:
-            feature_dic = pickle.load(f)
-        overall_dic[key].update(feature_dic)
+#     for key, sub_dic in overall_dic.items():
 
-        if np.mod(i, 1000) == 0:
-            fprint(("Completed loading {} of {} "
-                    "dataset feature pickles".format(i, total_num)))
+#         feature_path = feature_path_dic.get(key)
+#         if feature_path is None:
+#             bad_keys.append(key)
+#             continue
+#         if feature_path.startswith("/home/saxelrod/Repo"):
+#             feature_path = feature_path.replace("Repo",
+#                                                 "fock/Repo")
+#         with open(feature_path, "rb") as f:
+#             feature_dic = pickle.load(f)
+#         overall_dic[key].update(feature_dic)
 
-        i += 1
+#         if np.mod(i, 1000) == 0:
+#             fprint(("Completed loading {} of {} "
+#                     "dataset feature pickles".format(i, total_num)))
 
-    fprint("Completed loading features")
+#         i += 1
 
-    for key in bad_keys:
-        overall_dic.pop(key)
+#     fprint("Completed loading features")
 
-    return overall_dic
+#     for key in bad_keys:
+#         overall_dic.pop(key)
+
+#     return overall_dic
 
 
 def duplicate_features(spec_dic):
