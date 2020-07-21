@@ -2,16 +2,13 @@ import uuid
 import os
 import shutil
 
-# JOB_DIR = "/pool001/saxelrod/jobs"
-JOB_DIR = "testing"
-
 
 TEMPLATE = """#!/bin/bash
-#SBATCH -n 5
+#SBATCH -n 10
 #SBATCH -N 1
-#SBATCH -t 4300
-#SBATCH -p sched_mit_rafagb,sched_opportunist
-#SBATCH --mem-per-cpu=1G
+#SBATCH -t 7200
+#SBATCH -p sched_mit_rafagb,sched_mit_rafagb_amd
+#SBATCH --mem-per-cpu=5G
 #SBATCH --no-requeue
 #SBATCH --signal=B:2@300
 
@@ -23,7 +20,10 @@ python $script --pickle_path {pickle_path} --save_path {save_path}
 
 
 """
-BASE_PATH = "/pool001/saxelrod/data_from_fock/final_yaml"
+JOB_DIR = "/pool001/saxelrod/jobs"
+# JOB_DIR = "testing"
+
+BASE_PATH = "/pool001/saxelrod/data_from_fock//final_db_data"
 NAME_START = "covid_fock_"
 SUFFIX = ".pickle"
 
@@ -36,7 +36,7 @@ def main(base_path=BASE_PATH,
     files = []
 
     for file in os.listdir(base_path):
-        if file.startswith(name_start) and file.endswith(suffix):
+        if file.startswith(name_start) and file.endswith(suffix) and "nbrs" not in file:
             files.append(file)
 
     for file in files:

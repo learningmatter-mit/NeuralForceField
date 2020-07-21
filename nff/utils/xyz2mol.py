@@ -87,8 +87,8 @@ atomic_valence_electrons[53] = 7
 atomic_valence_electrons[83] = 5
 
 DEFAULT_SAVE = "mol.pickle"
-# give up after 5 minutes
-MAX_TIME = 300
+# give up after 20 minutes
+MAX_TIME = 1200
 
 class TimeoutError(Exception):
     pass
