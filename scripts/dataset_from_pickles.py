@@ -6,18 +6,27 @@ import torch
 import numpy as np
 import argparse
 import pdb
-from nff.data import Dataset, concatenate_dict  # , split_train_validation_test
 import sys
-import copy
-
 
 # # sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
 # sys.path.insert(0, "/home/saxelrod/Repo/projects/covid_nff/NeuralForceField")
 sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
 
 
+from nff.data import Dataset, concatenate_dict  # , split_train_validation_test
+from nff.data.features.graph import (bond_feats_from_dic, atom_feats_from_dic,
+                                     nbr_list_from_dic)
+
+import copy
+
+
+
+
+
 # RDKIT_FOLDER = "/home/saxelrod/Repo/projects/geom/tutorials/rdkit_folder"
-RDKIT_FOLDER = "/home/saxelrod/fock/Repo/projects/geom/tutorials/rdkit_folder"
+# RDKIT_FOLDER = "/home/saxelrod/fock/Repo/projects/geom/tutorials/rdkit_folder"
+RDKIT_FOLDER = "/home/saxelrod/engaging_nfs/data_from_fock/rd_separate_pickles"
+
 
 PICKLE_FOLDER = os.path.join(RDKIT_FOLDER, "drugs")
 SUMMARY_PATH = os.path.join(RDKIT_FOLDER, "summary_drugs.json")
@@ -48,6 +57,29 @@ TEST_VAL_SIZE = 5000
 def fprint(msg):
     print(msg)
     sys.stdout.flush()
+
+
+def featurize_sub_dic(sub_dic):
+
+    dic_list = sub_dic["rd_mols"]
+
+    bond_feats = bond_feats_from_dic(dic_list)
+    atom_feats = atom_feats_from_dic(dic_list)
+    bonded_nbr_list = nbr_list_from_dic(dic_list)
+
+    sub_dic.update({"bond_features": bond_feats,
+                    "atom_features": atom_feats,
+                    "bonded_nbr_list": bonded_nbr_list})
+
+    return sub_dic
+
+
+# need to write a function to featurize from rdkit mol,
+# and to go mol-by-mol pickle file to do so
+
+
+def pickles_to_dataset(pickle_path):
+    pass
 
 
 def get_thread_dic(sample_dic, thread, num_threads):
@@ -265,9 +297,10 @@ def renorm_weights(spec_dic):
 
 def convert_data(overall_dic, num_confs, feature_dic):
 
-    fprint("Adding features...")
-    overall_dic = add_features(overall_dic, feature_dic)
-    fprint("Finished adding features")
+    # fprint("Adding features...")
+    # 
+    # overall_dic = add_features(overall_dic, feature_dic)
+    # fprint("Finished adding features")
     spec_dics = []
 
     for key, sub_dic in overall_dic.items():
@@ -341,7 +374,13 @@ def duplicate_features(spec_dic):
 
     num_confs = len(spec_dic['weights'])
     for key in ["atom_features", "bond_features"]:
+        if not isinstance(spec_dic[key], torch.Tensor):
+            spec_dic[key] = torch.Tensor(spec_dic[key])
         spec_dic[key] = torch.cat([spec_dic[key]] * num_confs)
+
+    if not isinstance(spec_dic['bonded_nbr_list'], torch.Tensor):
+        spec_dic['bonded_nbr_list'] = torch.LongTensor(
+            spec_dic['bonded_nbr_list'])
 
     nbrs = [spec_dic['bonded_nbr_list']] * num_confs
     mol_size = len(spec_dic["nxyz"][0])

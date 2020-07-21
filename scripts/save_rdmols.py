@@ -2,8 +2,9 @@ import sys
 sys.path.insert(0, "/home/saxelrod/Repo/projects/covid_nff/NeuralForceField")
 
 
-from nff.data.features.graph import (bond_feats_from_dic, atom_feats_from_dic,
-    nbr_list_from_dic)
+from nff.data.features.graph import (bond_feats_from_dic,
+                                     atom_feats_from_dic,
+                                     nbr_list_from_dic)
 from rdkit import Chem
 import os
 import pickle
@@ -34,24 +35,43 @@ import copy
 #                     "tutorials/rd_folder/summary_qm9_all.json")
 
 
-def get_smiles(mol):
-    smiles = Chem.MolToSmiles(Chem.MolFromSmiles(Chem.MolToSmiles(mol)))
+def get_smiles(rd_mol):
+
+    smiles = Chem.MolToSmiles(rd_mol)
+    mol = Chem.MolFromSmiles(smiles)
+    smiles = Chem.MolToSmiles(mol)
+
     return smiles
 
 
-def featurize_sub_dic(sub_dic):
+def all_same_smiles(sub_dic):
 
-    dic_list = sub_dic["rd_mols"]
+    rd_mols = sub_dic["rd_mols"]
+    smiles_list = []
+    for mol in rd_mols:
+        smiles_list.append(get_smiles(mol))
 
-    bond_feats = bond_feats_from_dic(dic_list)
-    atom_feats = atom_feats_from_dic(dic_list)
-    bonded_nbr_list = nbr_list_from_dic(dic_list)
+    return all([i == smiles_list[0] for i in smiles_list])
 
-    sub_dic.update({"bond_features": bond_feats,
-                    "atom_features": atom_feats,
-                    "bonded_nbr_list": bonded_nbr_list})
 
-    return sub_dic
+def get_feature_vecs(sub_dic):
+
+    # dic_list = sub_dic["rd_mols"]
+
+    # bond_feats = []
+    # atom_feats = []
+    # bonded_nbr_list = []
+
+    if not all_same_smiles(sub_dic):
+        return {}
+
+    bond_feats = bond_feats_from_dic(sub_dic["bonds"][0]).tolist()
+    atom_feats = atom_feats_from_dic(sub_dic["atoms"][0]).tolist()
+    bonded_nbr_list = nbr_list_from_dic(sub_dic["bonds"][0])
+
+    return {"bond_features": bond_feats,
+            "atom_features": atom_feats,
+            "bonded_nbr_list": bonded_nbr_list}
 
 
 # class PickleIter(list):
@@ -109,7 +129,17 @@ def make_pickle_dic(file_dic,
                     confs):
 
     pickle_dic = copy.deepcopy(file_dic[smiles])
-    rd_mols = nbr_dic[smiles]["rd_mols"]
+    sub_dic = nbr_dic[smiles]
+
+    try:
+        feature_dic = get_feature_vecs(sub_dic)
+    except Exception as e:
+        print(e)
+        import pdb
+        pdb.post_mortem()
+
+    rd_mols = sub_dic["rd_mols"]
+    pickle_dic.update(feature_dic)
 
     assert len(rd_mols) == len(confs)
 
@@ -220,7 +250,8 @@ def save_rdmols_as_singles(direc,
         #####
 
     print("Saving summary file...")
-    file_dic_path = os.path.join(direc, "summary_{}.json".format(project))
+    file_dic_path = os.path.join(
+        save_folder, "summary_{}.json".format(project))
     with open(file_dic_path, "w") as f:
         json.dump(file_dic, f, indent=4, sort_keys=True)
     print("Saved. Done!")
@@ -239,7 +270,8 @@ def save_rdmols_as_singles(direc,
     #         save_name = key.replace("/", "_") + ".pickle"
     #         dic = {key: val[key] for key in ['atom_features', 'bond_features']}
     #         dic.update(
-    #             {"smiles": key, 'bonded_nbr_list': val['bonded_nbr_tuples'][0][0]})
+    #             {"smiles": key,
+    # 'bonded_nbr_list': val['bonded_nbr_tuples'][0][0]})
 
     #         while True:
     #             try:
