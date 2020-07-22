@@ -453,10 +453,10 @@ def save_rdmols_as_singles(direc,
 
 if __name__ == "__main__":
     # main()
-    save_folder = "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/rdkit_folder"
+    save_folder = "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/rdkit_folder"
     # project = "drugs"
     project = "covid"
-    direc = "/home/saxelrod/engaging_nfs/data_from_fock/final_db_data"
+    direc = "/pool001/saxelrod/data_from_fock/final_db_data"
 
     save_rdmols_as_singles(direc=direc,
                            project=project,
