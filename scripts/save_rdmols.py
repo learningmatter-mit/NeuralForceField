@@ -205,7 +205,8 @@ def save_rdmols_as_singles(direc,
     pattern = get_pattern(project, use_msgpack=False, nbrs=False)
     crude_files = [os.path.join(direc, i) for i in os.listdir(direc)
                    if re.findall(pattern, i)]
-
+    missing_files = []
+    missing_json = "missing_nbrs.json"
     for crude_file in crude_files:
 
         nbr_file = crude_file.replace(".pickle", "_nbrs.pickle")
@@ -214,6 +215,9 @@ def save_rdmols_as_singles(direc,
 
         ####
         if not os.path.isfile(nbr_file):
+            missing_files.append(nbr_file)
+            with open(missing_json, "w") as f:
+                json.dump(missing_files, f, indent=4, sort_keys=True)
             continue
         ####
 
@@ -246,7 +250,7 @@ def save_rdmols_as_singles(direc,
         print("{} smiles in file_dic".format(len(file_dic)))
 
         #####
-        break
+        # break
         #####
 
     print("Saving summary file...")
@@ -450,6 +454,7 @@ def save_rdmols_as_singles(direc,
 if __name__ == "__main__":
     # main()
     save_folder = "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/rdkit_folder"
+    # project = "drugs"
     project = "covid"
     direc = "/home/saxelrod/engaging_nfs/data_from_fock/final_db_data"
 
