@@ -23,7 +23,7 @@ from rdkit import Chem
 
 # RDKIT_FOLDER = "/home/saxelrod/Repo/projects/geom/tutorials/rdkit_folder"
 # RDKIT_FOLDER = "/home/saxelrod/fock/Repo/projects/geom/tutorials/rdkit_folder"
-RDKIT_FOLDER = "/home/saxelrod/engaging_nfs/data_from_fock/rd_separate_pickles"
+RDKIT_FOLDER = "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/rdkit_folder"
 
 
 PICKLE_FOLDER = os.path.join(RDKIT_FOLDER, "drugs")
@@ -398,7 +398,7 @@ def duplicate_features(spec_dic):
             spec_dic[key] = torch.Tensor(spec_dic[key])
         spec_dic[key] = torch.cat([spec_dic[key]] * num_confs)
 
-    if not isinstance(spec_dic['bonded_nbr_list'], torch.Tensor):
+    if not isinstance(spec_dic['bonded_nbr_list'], torch.LongTensor):
         spec_dic['bonded_nbr_list'] = torch.LongTensor(
             spec_dic['bonded_nbr_list'])
 
