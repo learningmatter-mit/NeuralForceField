@@ -924,6 +924,8 @@ class ConfAttention(nn.Module):
 
         # normalize alpha
         alpha_ij = (weight_ij / norm).reshape(n_neigh, -1)
+        # make sure the alpha's add to 1
+        alpha_ij /= alpha_ij.sum()
 
         # multiply alpha_ij by W.fp_j for each neighbor j
         
