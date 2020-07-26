@@ -70,7 +70,7 @@ class Trainer:
         del_grad_interval=10,
         metric_as_loss=None,
         metric_objective=None,
-        epoch_cutoff=None
+        epoch_cutoff=float("inf")
     ):
         self.model_path = model_path
         self.checkpoint_path = os.path.join(self.model_path, "checkpoints")
@@ -83,8 +83,7 @@ class Trainer:
         self.loss_is_normalized = loss_is_normalized
         self.mol_loss_norm = mol_loss_norm
         self.mini_batches = mini_batches
-        self.epoch_cutoff = epoch_cutoff if (epoch_cutoff is not None
-                                             ) else float("inf")
+        self.epoch_cutoff = epoch_cutoff
 
         self._model = model
         self._stop = False
