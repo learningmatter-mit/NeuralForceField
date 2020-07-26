@@ -43,6 +43,9 @@ class Trainer:
             gpus per node, the global rank is 7).
        world_size (int, optional): the total number of gpus over which training is
             parallelized.
+       epoch_cutoff (int, optional): cut off an epoch after `epoch_cutoff` batches.
+            This is useful if you want to validate the model more often than after 
+            going through all data points once.
    """
 
     def __init__(
@@ -66,7 +69,8 @@ class Trainer:
         mol_loss_norm=False,
         del_grad_interval=10,
         metric_as_loss=None,
-        metric_objective=None
+        metric_objective=None,
+        epoch_cutoff=float("inf")
     ):
         self.model_path = model_path
         self.checkpoint_path = os.path.join(self.model_path, "checkpoints")
@@ -79,6 +83,7 @@ class Trainer:
         self.loss_is_normalized = loss_is_normalized
         self.mol_loss_norm = mol_loss_norm
         self.mini_batches = mini_batches
+        self.epoch_cutoff = epoch_cutoff
 
         self._model = model
         self._stop = False
@@ -356,10 +361,7 @@ class Trainer:
                     self.fprint("Batch {} of {} complete".format(
                         j + 1, self.max_batch_iters))
 
-                    if self.batch_stop:
-                        break
-
-                    if self._stop:
+                    if any((self.batch_stop, self._stop, j == self.epoch_cutoff)):
                         break
 
                 # reset for next epoch

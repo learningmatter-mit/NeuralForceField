@@ -78,16 +78,15 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
 
     def __init__(self,
                  target_name,
-                 props,
-                 data_length=None):
+                 props):
         """
         Args:
             target_name (str): name of the property being classified
             props (dict): property dictionary  
         """
 
-        if data_length is None:
-            data_length = len(props[target_name])
+
+        data_length = len(props[target_name])
 
         negative_idx = [i for i, target in enumerate(
             props[target_name]) if round(target.item()) == 0]
