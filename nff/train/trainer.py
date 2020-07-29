@@ -9,7 +9,7 @@ import torch
 import sys
 import copy
 
-from nff.utils.cuda import batch_to
+from nff.utils.cuda import batch_to, batch_detach
 from nff.train.evaluate import evaluate
 from nff.train.parallel import update_optim
 
@@ -363,6 +363,7 @@ class Trainer:
 
                     if any((self.batch_stop, self._stop, j == self.epoch_cutoff)):
                         break
+                    break
 
                 # reset for next epoch
 
@@ -537,8 +538,9 @@ class Trainer:
             for h in self.hooks:
                 h.on_validation_batch_begin(self)
 
-            # move input to gpu, if needed
             results = self.call_model(val_batch, train=False)
+            # detach from the graph
+            results = batch_to(batch_detach(results), device)
 
             val_batch_loss = self.loss_fn(
                 val_batch, results).data.cpu().numpy()
