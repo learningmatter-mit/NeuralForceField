@@ -23,6 +23,8 @@ import unittest
 import itertools
 import copy
 import pdb
+from torch.nn.functional import softmax
+
 
 EPSILON = 1e-15
 TOPS = ["bond", "angle", "dihedral", "improper", "pair"]
@@ -863,18 +865,22 @@ class ConfAttention(nn.Module):
         super(ConfAttention, self).__init__()
 
         """
-        Xavier initializations from 
+        Xavier initializations from
         https://github.com/Diego999/pyGAT/blob/master/layers.py
         """
 
-        self.boltz_lin = torch.nn.Linear(1, boltz_basis)
-        self.boltz_act = Softmax(dim=1)
+        if boltz_basis is None:
+            self.embed_boltz = False
+        else:
+            self.embed_boltz = True
+            self.boltz_lin = torch.nn.Linear(1, boltz_basis)
+            self.boltz_act = Softmax(dim=1)
 
-        self.fp_linear = torch.nn.Linear(
-            mol_basis + boltz_basis, mol_basis, bias=False)
+            self.fp_linear = torch.nn.Linear(
+               mol_basis + boltz_basis, mol_basis, bias=False)
+
         self.att_weight = torch.nn.Parameter(torch.rand(1, 2 * mol_basis))
         nn.init.xavier_uniform_(self.att_weight, gain=1.414)
-
 
         self.activation = LeakyReLU()
         self.W = torch.nn.Linear(in_features=mol_basis,
@@ -885,13 +891,20 @@ class ConfAttention(nn.Module):
 
     def forward(self, conf_fps, boltzmann_weights):
 
-        # increase dimensionality of Boltzmann weight
-        boltz_vec = self.boltz_act(self.boltz_lin(boltzmann_weights))
+        # for backwards compatibility
+        if not hasattr(self, "embed_boltz"):
+           self.embed_boltz = True
 
-        # concatenate fingerprints with Boltzmann vector
-        # and apply linear layer to reduce back to size `mol_basis`
-        cat_fps = torch.cat([conf_fps, boltz_vec], dim=1)
-        new_fps = self.fp_linear(cat_fps)
+        if self.embed_boltz:
+            # increase dimensionality of Boltzmann weight
+            boltz_vec = self.boltz_act(self.boltz_lin(boltzmann_weights))
+
+            # concatenate fingerprints with Boltzmann vector
+            # and apply linear layer to reduce back to size `mol_basis`
+            cat_fps = torch.cat([conf_fps, boltz_vec], dim=1)
+            new_fps = self.fp_linear(cat_fps)
+        else:
+            new_fps = conf_fps
 
         # directed "neighbor list" that links every fingerprint to each other
         a = torch.LongTensor([[i, j] for i in range(new_fps.shape[0])
@@ -901,34 +914,42 @@ class ConfAttention(nn.Module):
         cat_ij = torch.cat((self.W(new_fps[a[:, 0]]),
                             self.W(new_fps[a[:, 1]])), dim=1)
 
-        # compute non-normalized weights
-        weight_ij = torch.exp(
-            self.activation(
-                torch.matmul(
-                    self.att_weight, cat_ij.transpose(0, 1)
-                )
-            )
-        )
+        ## compute non-normalized weights
+        # weight_ij = torch.exp(
+        #    self.activation(
+        #        torch.matmul(
+        #            self.att_weight, cat_ij.transpose(0, 1)
+        #        )
+        #    )
+        # )
+        output = self.activation(
+                        torch.matmul(
+                            self.att_weight, cat_ij.transpose(0, 1)
+                      )
+                  )
 
-        # some variables
         # number of fingerprints
         n_confs = new_fps.shape[0]
+        alpha_ij = softmax(output.reshape(n_confs, n_confs), dim=1).reshape(-1, 1)
+
+        # some variables
         # number of neighbor pairs
         n_neigh = len(a)
 
-        # compute normalization
-        norm = scatter_add(weight_ij, a[:, 0])
+        ## compute normalization
+        # norm = scatter_add(weight_ij, a[:, 0])
 
-        # expand norm so it norm_i gets repeated j times for each of the neighbors of i
-        norm = norm.expand(n_confs, n_confs).transpose(0, 1).reshape(-1)
+        ## expand norm so it norm_i gets repeated j times for each of the neighbors of i
+        # norm = norm.expand(n_confs, n_confs).transpose(0, 1).reshape(-1)
 
-        # normalize alpha
-        alpha_ij = (weight_ij / norm).reshape(n_neigh, -1)
+        ## normalize alpha
+        # alpha_ij = (weight_ij / norm).reshape(n_neigh, -1)
         # divide by number of conformers
-        alpha_ij /= conf_fps.shape[0]
+
+        alpha_ij /= n_confs
 
         # multiply alpha_ij by W.fp_j for each neighbor j
-        
+
         fp_j = new_fps[a[:, 1]]
         prod = alpha_ij * self.W(fp_j)
 

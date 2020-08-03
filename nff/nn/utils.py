@@ -16,7 +16,9 @@ layer_types = {
     "Dense": Dense,
     "shifted_softplus": shifted_softplus,
     "sigmoid": torch.nn.Sigmoid,
-    "Dropout": torch.nn.Dropout
+    "Dropout": torch.nn.Dropout,
+    "LeakyReLU": torch.nn.LeakyReLU,
+    "ELU": torch.nn.ELU
 }
 
 
