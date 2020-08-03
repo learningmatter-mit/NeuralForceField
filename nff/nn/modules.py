@@ -881,7 +881,7 @@ class ConfAttention(nn.Module):
         self.att_weight = torch.nn.Parameter(torch.rand(1, 2 * mol_basis))
         nn.init.xavier_uniform_(self.att_weight, gain=1.414)
 
-        self.activation = LeakyReLU()
+        self.activation = LeakyReLU(inplace=False)
         self.W = torch.nn.Linear(in_features=mol_basis,
                                  out_features=mol_basis)
         nn.init.xavier_uniform_(self.W.weight, gain=1.414)
@@ -930,12 +930,12 @@ class ConfAttention(nn.Module):
         # subtract the max for numerical stability. Allowed since
         # softmax(x + c) = softmax(x) for any constant c
 
-        output -= output.max()
-        weight_ij = torch.exp(output)
-
-
-        # number of fingerprints
         n_confs = new_fps.shape[0]
+
+        mx, _ = output.reshape(n_confs, n_confs).max(dim=1)
+        mx = mx.expand(n_confs, n_confs).reshape(-1)
+        output -= mx
+        weight_ij = torch.exp(output)
 
         # number of neighbor pairs
         n_neigh = len(a)
