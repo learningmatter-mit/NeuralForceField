@@ -23,7 +23,6 @@ import unittest
 import itertools
 import copy
 import pdb
-from torch.nn.functional import softmax
 
 
 EPSILON = 1e-15
@@ -928,22 +927,28 @@ class ConfAttention(nn.Module):
                       )
                   )
 
+        # subtract the max for numerical stability. Allowed since
+        # softmax(x + c) = softmax(x) for any constant c
+
+        output -= output.max()
+        weight_ij = torch.exp(output)
+
+
         # number of fingerprints
         n_confs = new_fps.shape[0]
-        alpha_ij = softmax(output.reshape(n_confs, n_confs), dim=1).reshape(-1, 1)
 
-        # some variables
         # number of neighbor pairs
         n_neigh = len(a)
 
-        ## compute normalization
-        # norm = scatter_add(weight_ij, a[:, 0])
+        # compute normalization
+        norm = scatter_add(weight_ij, a[:, 0])
 
-        ## expand norm so it norm_i gets repeated j times for each of the neighbors of i
-        # norm = norm.expand(n_confs, n_confs).transpose(0, 1).reshape(-1)
+        # expand norm so it norm_i gets repeated j times for each of the neighbors of i
+        norm = norm.expand(n_confs, n_confs).transpose(0, 1).reshape(-1)
 
-        ## normalize alpha
-        # alpha_ij = (weight_ij / norm).reshape(n_neigh, -1)
+        # normalize alpha
+        alpha_ij = (weight_ij / norm).reshape(n_neigh, -1)
+
         # divide by number of conformers
 
         alpha_ij /= n_confs
