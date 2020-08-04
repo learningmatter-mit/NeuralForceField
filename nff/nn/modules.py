@@ -5,6 +5,8 @@ import torch.nn as nn
 from torch.nn import (Sequential, Linear, ReLU, LeakyReLU,
                       ModuleDict, Dropout, Softmax)
 
+from torch.nn.functional import softmax
+
 from nff.nn.layers import Dense, GaussianSmearing
 from nff.utils.scatter import scatter_add
 from nff.nn.utils import chemprop_msg_update, chemprop_msg_to_node, remove_bias
@@ -876,7 +878,7 @@ class ConfAttention(nn.Module):
             self.boltz_act = Softmax(dim=1)
 
             self.fp_linear = torch.nn.Linear(
-               mol_basis + boltz_basis, mol_basis, bias=False)
+                mol_basis + boltz_basis, mol_basis, bias=False)
 
         self.att_weight = torch.nn.Parameter(torch.rand(1, 2 * mol_basis))
         nn.init.xavier_uniform_(self.att_weight, gain=1.414)
@@ -892,7 +894,7 @@ class ConfAttention(nn.Module):
 
         # for backwards compatibility
         if not hasattr(self, "embed_boltz"):
-           self.embed_boltz = True
+            self.embed_boltz = True
 
         if self.embed_boltz:
             # increase dimensionality of Boltzmann weight
@@ -913,47 +915,15 @@ class ConfAttention(nn.Module):
         cat_ij = torch.cat((self.W(new_fps[a[:, 0]]),
                             self.W(new_fps[a[:, 1]])), dim=1)
 
-        ## compute non-normalized weights
-        # weight_ij = torch.exp(
-        #    self.activation(
-        #        torch.matmul(
-        #            self.att_weight, cat_ij.transpose(0, 1)
-        #        )
-        #    )
-        # )
         output = self.activation(
-                        torch.matmul(
-                            self.att_weight, cat_ij.transpose(0, 1)
-                      )
-                  )
-
-        # subtract the max for numerical stability. Allowed since
-        # softmax(x + c) = softmax(x) for any constant c
+            torch.matmul(
+                self.att_weight, cat_ij.transpose(0, 1)
+            )
+        )
 
         n_confs = new_fps.shape[0]
-
-        mx, _ = output.reshape(n_confs, n_confs).max(dim=1)
-        mx = mx.expand(n_confs, n_confs).reshape(-1)
-        output -= mx
-        weight_ij = torch.exp(output)
-
-        # number of neighbor pairs
-        n_neigh = len(a)
-
-        # compute normalization
-        norm = scatter_add(weight_ij, a[:, 0])
-
-        # expand norm so it norm_i gets repeated j times for each of the neighbors of i
-        norm = norm.expand(n_confs, n_confs).transpose(0, 1).reshape(-1)
-
-        # normalize alpha
-        alpha_ij = (weight_ij / norm).reshape(n_neigh, -1)
-
-        # divide by number of conformers
-
-        alpha_ij /= n_confs
-
-        # multiply alpha_ij by W.fp_j for each neighbor j
+        alpha_ij = softmax(output.reshape(dim, dim),
+                           dim=1).reshape(-1) / n_confs
 
         fp_j = new_fps[a[:, 1]]
         prod = alpha_ij * self.W(fp_j)
