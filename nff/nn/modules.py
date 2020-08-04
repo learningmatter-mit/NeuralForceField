@@ -923,7 +923,7 @@ class ConfAttention(nn.Module):
 
         n_confs = new_fps.shape[0]
         alpha_ij = softmax(output.reshape(n_confs, n_confs),
-                           dim=1).reshape(-1) / n_confs
+                           dim=1).reshape(-1, 1) / n_confs
 
         fp_j = new_fps[a[:, 1]]
         prod = alpha_ij * self.W(fp_j)
