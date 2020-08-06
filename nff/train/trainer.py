@@ -363,7 +363,6 @@ class Trainer:
 
                     if any((self.batch_stop, self._stop, j == self.epoch_cutoff)):
                         break
-                    break
 
                 # reset for next epoch
 
