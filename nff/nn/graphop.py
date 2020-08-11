@@ -42,8 +42,9 @@ def conf_pool(smiles_fp,
               mol_size,
               boltzmann_weights,
               mol_fp_nn,
-              boltz_nn,
-              extra_feats=None):
+              boltz_nns,
+              extra_feats=None,
+              head_pool="concatenate"):
     """
     Pool atomic representations of conformers into molecular fingerprint,
     and then add those fingerprints together with Boltzmann weights.
@@ -83,32 +84,41 @@ def conf_pool(smiles_fp,
         # add to the list of conformer fp's
         conf_fps.append(mol_fp)
 
+    final_fps = []
+    for boltz_nn in boltz_nns:
+        # if boltz_nn is an instance of ConfAttention,
+        # put all the conformers and their weights into
+        # the attention pooler and return
 
-    # if boltz_nn is an instance of ConfAttention,
-    # put all the conformers and their weights into
-    # the attention pooler and return
+        if isinstance(boltz_nn, ConfAttention):
+            final_fp = boltz_nn(conf_fps=torch.stack(conf_fps),
+                                boltzmann_weights=boltzmann_weights)
+        else:
+            # otherwise get a new fingerprint for each conformer
+            # based on its Boltzmann weight
 
-    if isinstance(boltz_nn, ConfAttention):
-        final_fp = boltz_nn(conf_fps=torch.stack(conf_fps),
-                            boltzmann_weights=boltzmann_weights)
-        return final_fp
+            boltzmann_fps = []
+            for i, conf_fp in enumerate(conf_fps):
+                weight = boltzmann_weights[i]
+                boltzmann_fp = update_boltz(conf_fp=conf_fp,
+                                            weight=weight,
+                                            boltz_nn=boltz_nn,
+                                            extra_feats=extra_feats)
+                boltzmann_fps.append(boltzmann_fp)
 
-    # otherwise get a new fingerprint for each conformer 
-    # based on its Boltzmann weight
+            boltzmann_fps = torch.stack(boltzmann_fps)
 
-    boltzmann_fps = []
-    for i, conf_fp in enumerate(conf_fps):
-        weight = boltzmann_weights[i]
-        boltzmann_fp = update_boltz(conf_fp=conf_fp,
-                                    weight=weight,
-                                    boltz_nn=boltz_nn,
-                                    extra_feats=extra_feats)
-        boltzmann_fps.append(boltzmann_fp)
+            # sum all the conformer fingerprints
+            final_fp = boltzmann_fps.sum(dim=0)
 
-    boltzmann_fps = torch.stack(boltzmann_fps)
+        final_fps.append(final_fp)
 
-    # sum all the conformer fingerprints
-    final_fp = boltzmann_fps.sum(dim=0)
+    if head_pool == "concatenate":
+        final_fp = torch.cat(final_fps, dim=-1)
+    elif head_pool == "sum":
+        final_fp = torch.stack(final_fps).sum(dim=0)
+    else:
+        raise NotImplementedError
 
     return final_fp
 

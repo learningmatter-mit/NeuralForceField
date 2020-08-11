@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import sys
 
 from nff.nn.layers import DEFAULT_DROPOUT_RATE
 from nff.nn.modules import (
@@ -75,7 +76,7 @@ class WeightedConformers(nn.Module):
                 'n_convolutions': 4,
                 'cutoff': 5.0,
                 'trainable_gauss': True,
-                'readoutdict': readoutdict,    
+                'readoutdict': readoutdict,
                 'mol_fp_layers': mol_fp_layers,
                 'boltzmann_dict': boltzmann_dict
                 'dropout_rate': 0.2
@@ -124,7 +125,8 @@ class WeightedConformers(nn.Module):
 
         # create a module that lets a molecular fp interact with the
         # conformer's boltzmann weight to give a final molecular fp
-        self.boltz_nn = self.make_boltz_nn(boltzmann_dict)
+        self.boltz_nns = self.make_boltz_nn(boltzmann_dict)
+        self.head_pool = boltzmann_dict.get("head_pool", "concatenate")
 
         # the readout acts on this final molceular fp
         self.readout = NodeMultiTaskReadOut(multitaskdict=readoutdict)
@@ -147,24 +149,31 @@ class WeightedConformers(nn.Module):
         return feat_names
 
     def make_boltz_nn(self, boltzmann_dict):
+
+        networks = nn.ModuleList([])
+
         if boltzmann_dict["type"] == "multiply":
             return
 
         elif boltzmann_dict["type"] == "layers":
             layers = boltzmann_dict["layers"]
-            network = construct_sequential(layers)
+            networks.append(construct_sequential(layers))
 
         elif boltzmann_dict["type"] == "attention":
 
-            mol_basis = boltzmann_dict["mol_basis"]
-            boltz_basis = boltzmann_dict["boltz_basis"]
-            final_act = boltzmann_dict["final_act"]
+            num_heads = boltzmann_dict.get("num_heads", 1)
 
-            network = ConfAttention(mol_basis=mol_basis,
-                                    boltz_basis=boltz_basis,
-                                    final_act=final_act)
+            for _ in range(num_heads):
 
-        return network
+                mol_basis = boltzmann_dict["mol_basis"]
+                boltz_basis = boltzmann_dict["boltz_basis"]
+                final_act = boltzmann_dict["final_act"]
+
+                networks.append(ConfAttention(mol_basis=mol_basis,
+                                              boltz_basis=boltz_basis,
+                                              final_act=final_act))
+
+        return networks
 
     def add_features(self, batch, **kwargs):
 
@@ -301,13 +310,20 @@ class WeightedConformers(nn.Module):
             mol_size = mol_sizes[i]
             extra_feats = extra_feat_fps[i]
 
+            # for backward compatibility
+            if not hasattr(self, "boltz_nns"):
+                self.boltz_nns = nn.ModuleList([self.boltz_nn])
+            if not hasattr(self, "head_pool"):
+                self.head_pool = "concatenate"
+
             # pool the atomic fingerprints as described above
             conf_fp = conf_pool(smiles_fp=smiles_fp,
                                 mol_size=mol_size,
                                 boltzmann_weights=boltzmann_weights,
                                 mol_fp_nn=self.mol_fp_nn,
-                                boltz_nn=self.boltz_nn,
-                                extra_feats=extra_feats)
+                                boltz_nns=self.boltz_nns,
+                                extra_feats=extra_feats,
+                                head_pool=self.head_pool)
 
             conf_fps.append(conf_fp)
 

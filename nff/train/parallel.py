@@ -49,12 +49,11 @@ def add_grads(optimizer,
     
     optimizer.zero_grad()
 
-
     # paths to all pickle files
 
     paths = [os.path.join(weight_path, str(index),
                           "grad_{}_{}.pickle".format(epoch, batch_num))
-             for index in range(world_size)] 
+             for index in range(world_size)]
 
     loaded_grads = {path: None for path in paths}
 
@@ -65,13 +64,13 @@ def add_grads(optimizer,
             try:
                 with open(path, "rb") as f:
                     loaded_grads[path] = pickle.load(f)
-            except (EOFError, FileNotFoundError):
+            except (EOFError, FileNotFoundError, pickle.UnpicklingError):
                 continue
 
     # total size is the sum of all sizes from each process
     total_size = sum([grad_dic["loss_size"] for
                       grad_dic in loaded_grads.values()]
-                     ) 
+                     )
 
     for k, grad_dic in enumerate(loaded_grads.values()):
         for i, group in enumerate(optimizer.param_groups):
