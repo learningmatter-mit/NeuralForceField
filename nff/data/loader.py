@@ -9,11 +9,14 @@ from nff.data.topology import ALL_TOPOLOGY_KEYS, RE_INDEX_TOPOLOGY_KEYS
 
 
 REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', *RE_INDEX_TOPOLOGY_KEYS]
+NBR_LIST_KEYS = ['bond_idx']
+
 
 TYPE_KEYS = {
     'atoms_nbr_list': torch.long,
     'nbr_list': torch.long,
     'num_atoms': torch.long,
+    'bond_idx': torch.long,
     **{key: torch.long for key in ALL_TOPOLOGY_KEYS}}
 
 
@@ -31,11 +34,19 @@ def collate_dicts(dicts):
     # new indices for the batch: the first one is zero and the last does not matter
 
     cumulative_atoms = np.cumsum([0] + [d['num_atoms'] for d in dicts])[:-1]
-
     for n, d in zip(cumulative_atoms, dicts):
         for key in REINDEX_KEYS:
             if key in d:
                 d[key] = d[key] + int(n)
+
+    if all(['nbr_list' in d for d in dicts]):
+        # same idea, but for quantities whose maximum value is the length of the nbr
+        # list in each batch
+        cumulative_nbrs = np.cumsum([0] + [len(d['nbr_list']) for d in dicts])[:-1]
+        for n, d in zip(cumulative_nbrs, dicts):
+            for key in NBR_LIST_KEYS:
+                if key in d:
+                    d[key] = d[key] + int(n)
 
     # batching the data
     batch = {}
@@ -66,9 +77,9 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
 
     Source: https://github.com/ufoym/imbalanced-dataset-sampler/
             blob/master/torchsampler/imbalanced.py
-            
+
     Sampling class to make sure positive and negative labels
-    are represented equally during training. 
+    are represented equally during training.
     Attributes:
         data_length (int): length of dataset
         weights (torch.Tensor): weights of each index in the
@@ -82,7 +93,7 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
         """
         Args:
             target_name (str): name of the property being classified
-            props (dict): property dictionary  
+            props (dict): property dictionary
         """
 
 

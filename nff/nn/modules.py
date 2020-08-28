@@ -862,7 +862,7 @@ class GraphAttention(MessagePassingModule):
 
 class ConfAttention(nn.Module):
 
-    def __init__(self, mol_basis, boltz_basis, final_act):
+    def __init__(self, mol_basis, boltz_basis, final_act, equal_weights=False):
         super(ConfAttention, self).__init__()
 
         """
@@ -880,21 +880,25 @@ class ConfAttention(nn.Module):
             self.fp_linear = torch.nn.Linear(
                 mol_basis + boltz_basis, mol_basis, bias=False)
 
-        self.att_weight = torch.nn.Parameter(torch.rand(1, 2 * mol_basis))
-        nn.init.xavier_uniform_(self.att_weight, gain=1.414)
+        self.equal_weights = equal_weights
+        if not self.equal_weights:
+            self.att_weight = torch.nn.Parameter(torch.rand(1, 2 * mol_basis))
+            nn.init.xavier_uniform_(self.att_weight, gain=1.414)
 
-        self.activation = LeakyReLU(inplace=False)
         self.W = torch.nn.Linear(in_features=mol_basis,
-                                 out_features=mol_basis)
+                             out_features=mol_basis)
         nn.init.xavier_uniform_(self.W.weight, gain=1.414)
 
         self.final_act = layer_types[final_act]()
+        self.activation = LeakyReLU(inplace=False)
 
     def forward(self, conf_fps, boltzmann_weights):
 
         # for backwards compatibility
         if not hasattr(self, "embed_boltz"):
             self.embed_boltz = True
+        if not hasattr(self, "equal_weights"):
+            self.equal_weights = False
 
         if self.embed_boltz:
             # increase dimensionality of Boltzmann weight
@@ -915,15 +919,21 @@ class ConfAttention(nn.Module):
         cat_ij = torch.cat((self.W(new_fps[a[:, 0]]),
                             self.W(new_fps[a[:, 1]])), dim=1)
 
-        output = self.activation(
-            torch.matmul(
-                self.att_weight, cat_ij.transpose(0, 1)
-            )
-        )
-
         n_confs = new_fps.shape[0]
-        alpha_ij = softmax(output.reshape(n_confs, n_confs),
-                           dim=1).reshape(-1, 1) / n_confs
+
+        if self.equal_weights:
+            alpha_ij = torch.ones(n_confs * n_confs, 1).to(new_fps.device)
+            alpha_ij /= alpha_ij.sum()
+
+        else:
+            output = self.activation(
+                torch.matmul(
+                    self.att_weight, cat_ij.transpose(0, 1)
+                )
+            )
+
+            alpha_ij = softmax(output.reshape(n_confs, n_confs),
+                               dim=1).reshape(-1, 1) / n_confs
 
         fp_j = new_fps[a[:, 1]]
         prod = alpha_ij * self.W(fp_j)

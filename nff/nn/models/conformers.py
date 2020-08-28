@@ -162,6 +162,7 @@ class WeightedConformers(nn.Module):
         elif boltzmann_dict["type"] == "attention":
 
             num_heads = boltzmann_dict.get("num_heads", 1)
+            equal_weights = boltzmann_dict.get("equal_weights", False)
 
             for _ in range(num_heads):
 
@@ -171,7 +172,8 @@ class WeightedConformers(nn.Module):
 
                 networks.append(ConfAttention(mol_basis=mol_basis,
                                               boltz_basis=boltz_basis,
-                                              final_act=final_act))
+                                              final_act=final_act,
+                                              equal_weights=equal_weights))
 
         return networks
 
@@ -245,6 +247,27 @@ class WeightedConformers(nn.Module):
 
         return r, xyz
 
+    def get_conf_fps(self, smiles_fp, mol_size):
+
+        # total number of atoms
+        num_atoms = smiles_fp.shape[0]
+        # unmber of conformers
+        num_confs = num_atoms // mol_size
+        N = [mol_size] * num_confs
+        conf_fps = []
+
+        # split the atomic fingerprints up by conformer
+        for atomic_fps in torch.split(smiles_fp, N):
+            # sum them and then convert to molecular fp
+            summed_atomic_fps = atomic_fps.sum(dim=0)
+            mol_fp = self.mol_fp_nn(summed_atomic_fps)
+            # add to the list of conformer fp's
+            conf_fps.append(mol_fp)
+
+        conf_fps = torch.stack(conf_fps)
+
+        return conf_fps
+
     def post_process(self, batch, r, xyz, **kwargs):
 
         mol_sizes = batch["mol_size"].reshape(-1).tolist()
@@ -252,6 +275,12 @@ class WeightedConformers(nn.Module):
         num_confs = (torch.tensor(N) / torch.tensor(mol_sizes)).tolist()
         # split the fingerprints by species
         fps_by_smiles = torch.split(r, N)
+        conf_fps_by_smiles = []
+
+        for mol_size, smiles_fp in zip(mol_sizes, fps_by_smiles):
+            conf_fps = self.get_conf_fps(smiles_fp, mol_size)
+            conf_fps_by_smiles.append(conf_fps)
+
         # split the boltzmann weights by species
         boltzmann_weights = torch.split(batch["weights"], num_confs)
 
@@ -262,14 +291,42 @@ class WeightedConformers(nn.Module):
         outputs = dict(r=r,
                        N=N,
                        xyz=xyz,
-                       fps_by_smiles=fps_by_smiles,
+                       conf_fps_by_smiles=conf_fps_by_smiles,
                        boltzmann_weights=boltzmann_weights,
                        mol_sizes=mol_sizes,
                        extra_feats=extra_feats)
 
         return outputs
 
-    def embedding_forward(self, batch, xyz=None, **kwargs):
+    def make_embeddings(self, batch, xyz=None, **kwargs):
+
+        r, xyz = self.convolve(batch=batch,
+                               xyz=xyz,
+                               **kwargs)
+        outputs = self.post_process(batch=batch,
+                                    r=r,
+                                    xyz=xyz, **kwargs)
+
+        return outputs, xyz
+
+    def get_embeddings(self, batch, **kwargs):
+
+        mol_sizes = batch["mol_size"].reshape(-1).tolist()
+        N = batch["num_atoms"].reshape(-1).tolist()
+        num_confs = (torch.tensor(N) / torch.tensor(mol_sizes)).tolist()
+
+        conf_fps_by_smiles = list(torch.split(batch["fingerprint"], num_confs))
+        extra_feats = self.add_features(batch=batch, **kwargs)
+        boltzmann_weights = torch.split(batch["weights"], num_confs)
+
+        outputs = {"conf_fps_by_smiles": conf_fps_by_smiles,
+                   "boltzmann_weights": boltzmann_weights,
+                   "mol_sizes": mol_sizes,
+                   "extra_feats": extra_feats}
+
+        return outputs, None
+
+    def pool(self, outputs):
         """
 
         Use the outputs of the convolutions to make a prediction.
@@ -290,23 +347,16 @@ class WeightedConformers(nn.Module):
 
         """
 
-        r, xyz = self.convolve(batch=batch,
-                               xyz=xyz,
-                               **kwargs)
-        outputs = self.post_process(batch=batch,
-                                    r=r,
-                                    xyz=xyz, **kwargs)
-
-        fps_by_smiles = outputs["fps_by_smiles"]
+        conf_fps_by_smiles = outputs["conf_fps_by_smiles"]
         batched_weights = outputs["boltzmann_weights"]
         mol_sizes = outputs["mol_sizes"]
         extra_feat_fps = outputs["extra_feats"]
 
-        conf_fps = []
+        final_fps = []
         # go through each species
-        for i in range(len(fps_by_smiles)):
+        for i in range(len(conf_fps_by_smiles)):
             boltzmann_weights = batched_weights[i]
-            smiles_fp = fps_by_smiles[i]
+            conf_fps = conf_fps_by_smiles[i]
             mol_size = mol_sizes[i]
             extra_feats = extra_feat_fps[i]
 
@@ -316,21 +366,20 @@ class WeightedConformers(nn.Module):
             if not hasattr(self, "head_pool"):
                 self.head_pool = "concatenate"
 
-            # pool the atomic fingerprints as described above
-            conf_fp = conf_pool(smiles_fp=smiles_fp,
-                                mol_size=mol_size,
-                                boltzmann_weights=boltzmann_weights,
-                                mol_fp_nn=self.mol_fp_nn,
-                                boltz_nns=self.boltz_nns,
-                                extra_feats=extra_feats,
-                                head_pool=self.head_pool)
+            # pool the atomic fingerprints
+            final_fp = conf_pool(mol_size=mol_size,
+                                 boltzmann_weights=boltzmann_weights,
+                                 mol_fp_nn=self.mol_fp_nn,
+                                 boltz_nns=self.boltz_nns,
+                                 conf_fps=conf_fps,
+                                 extra_feats=extra_feats,
+                                 head_pool=self.head_pool)
 
-            conf_fps.append(conf_fp)
+            final_fps.append(final_fp)
 
-        conf_fps = torch.stack(conf_fps)
-        # results = self.readout(conf_fps)
+        final_fps = torch.stack(final_fps)
 
-        return conf_fps, xyz
+        return final_fps
 
     def add_grad(self, batch, results, xyz):
 
@@ -346,25 +395,13 @@ class WeightedConformers(nn.Module):
 
     def forward(self, batch, xyz=None, **kwargs):
 
-        if not self.batch_embeddings:
-
-            conf_fps, xyz = self.embedding_forward(batch, xyz, **kwargs)
-            results = self.readout(conf_fps)
-            results = self.add_grad(batch=batch, results=results, xyz=xyz)
-
-            return results
-
-        num_specs = len(batch["num_atoms"])
-        batch_fp = batch["fingerprint"]
-        conf_fps = batch_fp.reshape(num_specs, -1)
-
-        extra_feats = torch.stack(self.add_features(batch=batch, **kwargs))
-
-        if extra_feats.shape[-1] != 0:
-            final_fp = torch.cat((conf_fps, extra_feats), axis=1)
+        if self.batch_embeddings:
+            outputs, xyz = self.get_embeddings(batch, **kwargs)
         else:
-            final_fp = conf_fps
+            outputs, xyz = self.make_embeddings(batch, xyz, **kwargs)
 
-        results = self.readout(final_fp)
+        pooled_fp = self.pool(outputs)
+        results = self.readout(pooled_fp)
+        results = self.add_grad(batch=batch, results=results, xyz=xyz)
 
         return results

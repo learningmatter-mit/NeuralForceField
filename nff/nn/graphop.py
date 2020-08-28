@@ -38,21 +38,17 @@ def update_boltz(conf_fp, weight, boltz_nn, extra_feats=None):
     return boltzmann_fp
 
 
-def conf_pool(smiles_fp,
-              mol_size,
+def conf_pool(mol_size,
               boltzmann_weights,
               mol_fp_nn,
               boltz_nns,
+              conf_fps,
               extra_feats=None,
               head_pool="concatenate"):
     """
     Pool atomic representations of conformers into molecular fingerprint,
     and then add those fingerprints together with Boltzmann weights.
     Args:
-        smiles_fp (torch.Tensor): (mol_size * num_conf) x M fingerprint,
-            where mol_size is the number of atoms per molecle, num_conf
-            is the number of conformers for the species, and M is the
-            number of features in the fingerprint.
         mol_size (int): number of atoms per molecle
         boltzmann_weights (torch.Tensor): tensor of length num_conf
             with boltzmann weights of each fonroerm.
@@ -60,7 +56,7 @@ def conf_pool(smiles_fp,
             of atomic fingerprints into a molecular fingerprint.
         boltz_nn (torch.nn.Module): nn that takes a molecular
             fingerprint and boltzmann weight as input and returns
-            a new fingerprint. 
+            a new fingerprint.
         extra_feats (torch.Tensor): extra fingerprint that
             gets tacked on to the end of the SchNet-generated
             fingerprint.
@@ -69,21 +65,6 @@ def conf_pool(smiles_fp,
             H is the number of features in the molecular fingerprint.
     """
 
-    # total number of atoms
-    num_atoms = smiles_fp.shape[0]
-    # unmber of conformers
-    num_confs = num_atoms // mol_size
-    N = [mol_size] * num_confs
-    conf_fps = []
-
-    # split the atomic fingerprints up by conformer
-    for atomic_fps in torch.split(smiles_fp, N):
-        # sum them and then convert to molecular fp
-        summed_atomic_fps = atomic_fps.sum(dim=0)
-        mol_fp = mol_fp_nn(summed_atomic_fps)
-        # add to the list of conformer fp's
-        conf_fps.append(mol_fp)
-
     final_fps = []
     for boltz_nn in boltz_nns:
         # if boltz_nn is an instance of ConfAttention,
@@ -91,7 +72,7 @@ def conf_pool(smiles_fp,
         # the attention pooler and return
 
         if isinstance(boltz_nn, ConfAttention):
-            final_fp = boltz_nn(conf_fps=torch.stack(conf_fps),
+            final_fp = boltz_nn(conf_fps=conf_fps,
                                 boltzmann_weights=boltzmann_weights)
         else:
             # otherwise get a new fingerprint for each conformer

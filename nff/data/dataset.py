@@ -13,7 +13,8 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset as TorchDataset
 from nff.data.sparse import sparsify_tensor
 from nff.data.topology import update_props_topologies
-from nff.data.graphs import reconstruct_atoms, get_neighbor_list
+from nff.data.graphs import (reconstruct_atoms, get_neighbor_list,
+                             get_bond_idx)
 from nff.data.parallel import featurize_parallel, NUM_PROCS
 from nff.data.features import (ATOM_FEAT_TYPES, BOND_FEAT_TYPES,
                                add_voxels, add_morgan, add_mol_soap,
@@ -103,9 +104,22 @@ class Dataset(TorchDataset):
         if other.units != self.units:
             other = other.copy().to_units(self.units)
 
-        props = concatenate_dict(self.props, other.props)
+        new_props = self.props
+        keys = list(new_props.keys())
+        for key in keys:
+            if key not in other.props:
+                new_props.pop(key)
+                continue
+            val = other.props[key]
+            if type(val) is list:
+                new_props[key] += val
+            else:
+                old_val = new_props[key]
+                new_props.props[key] = torch.cat([old_val,
+                                                val.to(old_val.dtype)])
+        self.props = new_props
 
-        return Dataset(props, units=self.units)
+        return copy.deepcopy(self)
 
     def _check_dictionary(self, props):
         """Check the dictionary or properties to see if it has the
@@ -171,6 +185,21 @@ class Dataset(TorchDataset):
         ]
 
         return
+
+    def generate_bond_idx(self, device="cpu"):
+
+        self.props["bond_idx"] = []
+
+        for i in range(len(self)):
+
+            bonded_nbr_list = self.props["bonded_nbr_list"][i]
+            nbr_list = self.props["nbr_list"][i]
+
+            nbr_list, bond_nbrs, bond_idx = get_bond_idx(
+                bonded_nbr_list, nbr_list, device)
+            self.props["nbr_list"][i] = nbr_list
+            self.props["bonded_nbr_list"][i] = bond_nbrs
+            self.props["bond_idx"].append(bond_idx)
 
     def copy(self):
         """Copies the current dataset
@@ -245,7 +274,7 @@ class Dataset(TorchDataset):
         featurize_hydrogenic(self, n_max=n_max,
                              a0=a0,
                              device=device,
-                             batch_size=batch_size, 
+                             batch_size=batch_size,
                              atom_types=atom_types)
 
     def add_voxels(self, n_gaussians, start, stop, use_channels=True,
@@ -364,6 +393,7 @@ def force_to_energy_grad(dataset):
         ]
         return True
 
+
 def convert_nan(x):
 
     new_x = []
@@ -382,6 +412,7 @@ def convert_nan(x):
             new_x.append(y)
 
     return new_x
+
 
 def to_tensor(x, stack=False):
     """
@@ -483,7 +514,7 @@ def concatenate_dict(*dicts):
 
         elif isinstance(value, list):
             return len(value)
-          
+
         return 1
 
     def get_length_of_values(dict_):
@@ -494,7 +525,6 @@ def concatenate_dict(*dicts):
             a torch.Tensor, return its flattened version
             to be appended to a list of values
         """
-
 
         if is_list_of_lists(value):
             return [value]

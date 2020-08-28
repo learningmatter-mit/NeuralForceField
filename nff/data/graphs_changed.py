@@ -2,9 +2,8 @@ import numpy as np
 import networkx as nx
 import torch
 from ase import io
+import numpy as np
 import nff
-# from nff.utils.tools import make_directed
-
 
 DISTANCETHRESHOLDICT_SYMBOL = {
     ("H", "H"): 1.00,
@@ -100,21 +99,7 @@ DISTANCETHRESHOLDICT_Z = {
     (8., 9.): 1.50,
     (8., 14.): 1.85,
     (8., 35.): 1.70,
-    (9., 12.): 1.35}
-
-
-def make_directed(nbr_list):
-
-    gtr_ij = (nbr_list[:, 0] > nbr_list[:, 1]).any().item()
-    gtr_ji = (nbr_list[:, 1] > nbr_list[:, 0]).any().item()
-    directed = gtr_ij and gtr_ji
-
-    if directed:
-        return nbr_list, directed
-
-    new_nbrs = torch.cat([nbr_list, nbr_list.flip(1)], dim=0)
-    return new_nbrs, directed
-
+    (9., 12.): 1.35 }
 
 def get_neighbor_list(xyz, cutoff=5, undirected=True):
     """Get neighbor list from xyz positions of atoms.
@@ -134,8 +119,7 @@ def get_neighbor_list(xyz, cutoff=5, undirected=True):
     n = xyz.size(0)
 
     # calculating distances
-    dist = (xyz.expand(n, n, 3) - xyz.expand(n, n,
-                                             3).transpose(0, 1)).pow(2).sum(dim=2).sqrt()
+    dist = (xyz.expand(n, n, 3) - xyz.expand(n, n, 3).transpose(0, 1)).pow(2).sum(dim=2).sqrt()
 
     # neighbor list
     mask = (dist <= cutoff)
@@ -147,76 +131,10 @@ def get_neighbor_list(xyz, cutoff=5, undirected=True):
 
     return nbr_list
 
-
-def get_bond_idx(bonded_nbr_list, nbr_list, device):
-
-    bond_nbrs, _ = make_directed(bonded_nbr_list)
-    nbr_list, _ = make_directed(nbr_list)
-
-    bond_nbrs = bond_nbrs.to(device)
-    nbr_list = nbr_list.to(device)
-    
-    bond_idx = (bond_nbrs[:, None] == nbr_list
-                ).prod(-1).nonzero()[:, 1]
-
-    bond_nbrs = bond_nbrs.detach().cpu()
-    nbr_list = nbr_list.detach().cpu()
-    bond_idx = bond_idx.detach().cpu()
-
-    return nbr_list, bond_nbrs, bond_idx
-
-
-def get_angle_list(nbr_list):
-
-    nbr_list, _ = make_directed(nbr_list)
-
-    # Condition that the second index of a nbr
-    # list item is equal to the first index of
-    # another item.  Tthe exception is if the
-    # second item is just the first
-    # item reversed (e.g. [0, 1] and [1, 0])
-
-    # e.g. nbr_list = tensor([[0, 1],
-    # [0, 2],
-    # [1, 0],
-    # [1, 2],
-    # [2, 0],
-    # [2, 1]])
-    # then mask  = tensor([[False, False, False,  True, False, False],
-    # [False, False, False, False, False,  True],
-    # [False,  True, False, False, False, False],
-    # [False, False, False, False,  True, False],
-    # [True, False, False, False, False, False],
-    # [False, False,  True, False, False, False]])
-
-    mask = (nbr_list[:, 1, None] == nbr_list[:, 0]) * (
-        nbr_list[:, 0, None] != nbr_list[:, 1])
-
-    # The index of the third atom in each angle.
-    # In this case it would be tensor([2, 1, 2, 0, 1, 0])
-    third_atoms = nbr_list[:, 1].repeat(nbr_list.shape[0], 1)[mask]
-
-    # number of angles for each item in the nbr_list
-    # In this case it would be tensor([1, 1, 1, 1, 1, 1])
-    num_angles = mask.sum(-1)
-
-    # idx = np.arange(nbr_len)
-    # scatter_idx = torch.LongTensor(np.repeat(idx, num_angles.tolist(), axis=0))
-
-    # the nbr list, but with each item repeated num_angle times
-    nbr_repeats = torch.LongTensor(
-        np.repeat(nbr_list.numpy(), num_angles.tolist(), axis=0))
-
-    # the concatenation of `nbr_repeats` with `third_atoms` is the angle list
-    angle_list = torch.cat((nbr_repeats, third_atoms.reshape(-1, 1)), dim=1)
-
-    return angle_list
-
-
 def get_dist_mat(xyz, box_len, unwrap=True):
     dis_mat = (xyz[:, None, :] - xyz[None, ...])
 
-    # build minimum image convention
+    # build minimum image convention 
     mask_pos = dis_mat.ge(0.5*box_len).type(torch.FloatTensor)
     mask_neg = dis_mat.lt(-0.5*box_len).type(torch.FloatTensor)
 
@@ -227,27 +145,25 @@ def get_dist_mat(xyz, box_len, unwrap=True):
         dis_mat = dis_mat + dis_add - dis_sub
 
     # create cutoff mask
-    # compute squared distance of dim (B, N, N)
-    dis_sq = dis_mat.pow(2).sum(-1)
-    # mask = (dis_sq <= cutoff ** 2) & (dis_sq != 0)                 # byte tensor of dim (B, N, N)
-    #A = mask.unsqueeze(3).type(torch.FloatTensor).to(self.device) #
+    dis_sq = dis_mat.pow(2).sum(-1)                  # compute squared distance of dim (B, N, N)
+    #mask = (dis_sq <= cutoff ** 2) & (dis_sq != 0)                 # byte tensor of dim (B, N, N)
+    #A = mask.unsqueeze(3).type(torch.FloatTensor).to(self.device) #         
 
-    # 1) PBC 2) # gradient of zero distance
+    # 1) PBC 2) # gradient of zero distance 
     dis_sq = dis_sq.unsqueeze(-1)
-    # dis_sq = (dis_sq * A) + 1e-8# to make sure the distance is not zero, otherwise there will be inf gradient
+    #dis_sq = (dis_sq * A) + 1e-8# to make sure the distance is not zero, otherwise there will be inf gradient 
     dis_mat = dis_sq.sqrt().squeeze()
-
+    
     return dis_mat
-
 
 def adjdistmat(atoms, threshold=DISTANCETHRESHOLDICT_Z, unwrap=True):
     #dmat = (xyz[:, None, :] - xyz[None, ...]).pow(2).sum(-1).numpy()
-    xyz = torch.Tensor(atoms.get_positions(wrap=True))
+    xyz= torch.Tensor(atoms.get_positions(wrap=True))
     atomicnums = atoms.get_atomic_numbers().tolist()
-    box_len = torch.Tensor(np.diag(atoms.get_cell()))
-
+    box_len = torch.Tensor( np.diag(atoms.get_cell()) )
+    
     dmat = get_dist_mat(xyz, box_len, unwrap=unwrap).numpy()
-
+    
     thresholdmat = np.array([[threshold.get(tuple(
         sorted((i, j))), 2.0) for i in atomicnums] for j in atomicnums])
     adjmat = (dmat < thresholdmat).astype(int)
@@ -255,62 +171,58 @@ def adjdistmat(atoms, threshold=DISTANCETHRESHOLDICT_Z, unwrap=True):
     np.fill_diagonal(adjmat, 0)
     return np.array(atomicnums), np.array(adjmat), np.array(dmat), thresholdmat
 
-
 def generate_mol_atoms(atomic_nums, xyz, cell):
     return Atoms(numbers=atomic_nums, positions=xyz, cell=cell, pbc=True)
 
-
 def generate_subgraphs(atomsobject, unwrap=True, get_edge=False):
-
+    
     atoms = AtomsBatch(atomsobject)
     z, adj, dmat,  threshold = adjdistmat(atoms, unwrap=unwrap)
-    box_len = torch.Tensor(np.diag(atoms.get_cell()))
-    G = nx.from_numpy_matrix(adj)
+    box_len = torch.Tensor( np.diag(atoms.get_cell()) )
+    G=nx.from_numpy_matrix(adj)
 
     for i, item in enumerate(z):
         G.nodes[i]['z'] = item
 
     sub_graphs = nx.connected_component_subgraphs(G)
-
+    
     edge_list = []
     partitions = []
-
+    
     for i, sg in enumerate(sub_graphs):
         partitions.append(list(sg.nodes))
         if get_edge:
             edge_list.append(list(sg.edges))
-
+        
     #print("found {} molecules".format(len(partitions)))
-
+    
     if len(edge_list) != 0:
         return partitions, edge_list
     else:
         return partitions
 
-
-def get_single_molecule(atomsobject, mol_idx, single_mol_id):
+def get_single_molecule(atomsobject, mol_idx, single_mol_id):    
     z = atomsobject.get_atomic_numbers()[mol_idx[single_mol_id]]
     pos = atomsobject.get_positions()[mol_idx[single_mol_id]]
-    return Atoms(numbers=z, positions=pos,
+    return Atoms(numbers = z, positions=pos, 
                  cell=atomsobject.cell, pbc=True)
 
-
 def reconstruct_atoms(atomsobject, mol_idx):
-    sys_xyz = torch.Tensor(atomsobject.get_positions(wrap=True))
-    box_len = torch.Tensor(atomsobject.get_cell_lengths_and_angles()[:3])
-
+    sys_xyz = torch.Tensor(atomsobject.get_positions(wrap=True) ) 
+    box_len = torch.Tensor( atomsobject.get_cell_lengths_and_angles()[:3] )
+    
     print(box_len)
     for idx in mol_idx:
-        mol_xyz = sys_xyz[idx]
+        mol_xyz = sys_xyz[idx] 
         center = mol_xyz.shape[0]//2
-        intra_dmat = (mol_xyz[None, ...] - mol_xyz[:, None, ...])[center]
+        intra_dmat = (mol_xyz[None, ...]  - mol_xyz[:, None, ...])[center]
         sub = (intra_dmat > 0.5 * box_len).to(torch.float) * box_len
         add = (intra_dmat <= -0.5 * box_len).to(torch.float) * box_len
         traj_unwrap = mol_xyz + add - sub
         sys_xyz[idx] = traj_unwrap
 
     new_pos = sys_xyz.numpy()
-
+    
     return new_pos
 
 
@@ -318,9 +230,11 @@ def list2adj(bond_list, size=None):
     E = bond_list
     if size is None:
         size = max(set([n for e in E for n in e])) + 1
-    # make an empty adjacency list
+    # make an empty adjacency list  
     adjacency = [[0]*size for _ in range(size)]
     # populate the list for each edge
     for sink, source in E:
         adjacency[sink][source] = 1
     return adjacency
+
+    

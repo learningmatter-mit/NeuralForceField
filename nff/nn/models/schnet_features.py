@@ -55,10 +55,6 @@ class SchNetFeatures(WeightedConformers):
 
         # initialize hidden bond features
 
-        # Need to change this if we're going to only use
-        # bonded_nbr_list for a single conformer and then applying them
-        # to everything.
-
         h_0_bond = self.W_i(r=r,
                             bond_feats=bond_feats,
                             bond_nbrs=bond_nbrs)
@@ -73,8 +69,11 @@ class SchNetFeatures(WeightedConformers):
         # set the features of bonded edges equal to the bond
         # features
 
-        bond_idx = (bond_nbrs[:, None] == nbr_list
-                    ).prod(-1).nonzero()[:, 1]
+        if "bond_idx" in batch:
+            bond_idx = batch["bond_idx"]
+        else:
+            bond_idx = (bond_nbrs[:, None] == nbr_list
+                        ).prod(-1).nonzero()[:, 1]
         h_0[bond_idx] = h_0_bond
 
         return h_0, bond_nbrs, bond_idx
@@ -231,14 +230,19 @@ class SchNetFeatures(WeightedConformers):
 
         return new_node_feats, xyz
 
-    def convolve(self, batch, sub_batch_size, xyz=None, xyz_grad=False):
+    def convolve(self, batch, sub_batch_size=None, xyz=None, xyz_grad=False):
 
-        sub_batches = self.split_batch(batch, sub_batch_size)
+        if sub_batch_size is None:
+            sub_batches = [batch]
+        else:
+            sub_batches = self.split_batch(batch, sub_batch_size)
+
         new_node_feat_list = []
         xyz_list = []
 
         for sub_batch in sub_batches:
-            new_node_feats, xyz = self.convolve_sub_batch(sub_batch, xyz, xyz_grad)
+            new_node_feats, xyz = self.convolve_sub_batch(
+                sub_batch, xyz, xyz_grad)
             new_node_feat_list.append(new_node_feats)
             xyz_list.append(xyz)
 

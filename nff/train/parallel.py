@@ -13,7 +13,10 @@ def get_grad(optimizer):
     for group in optimizer.param_groups:
         grad_list.append([])
         for param in group['params']:
-            grad_list[-1].append(param.grad.detach().cpu())
+            if param.grad is None:
+                grad_list[-1].append(param.grad)
+            else:
+                grad_list[-1].append(param.grad.detach().cpu())
     return grad_list
 
 
@@ -75,6 +78,8 @@ def add_grads(optimizer,
     for k, grad_dic in enumerate(loaded_grads.values()):
         for i, group in enumerate(optimizer.param_groups):
             for j, param in enumerate(group['params']):
+                if param.grad is None:
+                    continue
                 param.grad += grad_dic["grad"][i][j].to(device)
 
                 # if you're at the last grad_dic, divide
