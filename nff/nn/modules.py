@@ -886,7 +886,7 @@ class ConfAttention(nn.Module):
             nn.init.xavier_uniform_(self.att_weight, gain=1.414)
 
         self.W = torch.nn.Linear(in_features=mol_basis,
-                             out_features=mol_basis)
+                                 out_features=mol_basis)
         nn.init.xavier_uniform_(self.W.weight, gain=1.414)
 
         self.final_act = layer_types[final_act]()
@@ -945,6 +945,55 @@ class ConfAttention(nn.Module):
         output = self.final_act(summed_fps)
 
         return output
+
+
+class LinearConfAttention(ConfAttention):
+
+    def __init__(self, mol_basis, boltz_basis, final_act, equal_weights=False):
+        super(LinearConfAttention, self).__init__(mol_basis,
+                                                  boltz_basis,
+                                                  final_act,
+                                                  equal_weights)
+
+        if not self.equal_weights:
+            self.att_weight = torch.nn.Parameter(torch.rand(1, mol_basis))
+            nn.init.xavier_uniform_(self.att_weight, gain=1.414)
+
+    def forward(self, conf_fps, boltzmann_weights):
+
+        # for backwards compatibility
+        if not hasattr(self, "embed_boltz"):
+            self.embed_boltz = True
+        if not hasattr(self, "equal_weights"):
+            self.equal_weights = False
+
+        if self.embed_boltz:
+            # increase dimensionality of Boltzmann weight
+            boltz_vec = self.boltz_act(self.boltz_lin(boltzmann_weights))
+
+            # concatenate fingerprints with Boltzmann vector
+            # and apply linear layer to reduce back to size `mol_basis`
+            cat_fps = torch.cat([conf_fps, boltz_vec], dim=1)
+            new_fps = self.fp_linear(cat_fps)
+        else:
+            new_fps = conf_fps
+
+        n_confs = new_fps.shape[0]
+
+        if self.equal_weights:
+            alpha_i = torch.ones(n_confs).to(new_fps.device)
+            alpha_i /= alpha_i.sum()
+
+        else:
+            output = self.activation(
+                torch.matmul(
+                    self.att_weight, self.W(new_fps).transpose(0, 1)
+                )
+            )
+
+            alpha_i = softmax(output, dim=1).reshape(-1)
+
+        return alpha_i
 
 
 class NodeMultiTaskReadOut(nn.Module):
