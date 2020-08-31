@@ -120,6 +120,7 @@ class ConfDataset(TorchDataset):
                 '{} is not an instance from {}'.format(path, type(cls))
             )
 
+
 def dset_from_idx(dset, idx):
     new_props = {}
     for key, val in dset.props.items():
@@ -132,6 +133,7 @@ def dset_from_idx(dset, idx):
     new_dset.props = new_props
 
     return new_dset
+
 
 def sample(other_dset, batch_size):
 
@@ -177,9 +179,6 @@ def get_loss_change(loss_mat,
     new_sim = dataset.compare(spec_idx, func_name, other_dset)
     denom = len(dataset) * len(other_dset)
 
-    # import pdb
-    # pdb.set_trace()
-
     if max_sim:
         add_loss = - new_sim.sum() / denom
     else:
@@ -218,9 +217,6 @@ def init_loss(dataset,
         else:
             # loss_mat[:, spec_idx] = sim
             loss_mat[spec_idx, :] = sim
-
-    import pdb
-    # pdb.set_trace()
 
     loss = loss_mat.mean().item()
 
@@ -323,7 +319,7 @@ def run_mc(dataset,
            other_batch_size=None):
 
     if other_batch_size is not None:
-            sampled_other = sample(other_dset, other_batch_size)
+        sampled_other = sample(other_dset, other_batch_size)
     else:
         sampled_other = other_dset
 
@@ -335,14 +331,9 @@ def run_mc(dataset,
 
     if update_other is not None:
 
-
         sampled_other = update_other(sampled_other, dataset)
         loss_mat, loss = init_loss(dataset, func_name, sampled_other, max_sim)
         fprint(f"Starting loss after equilibration is %.6e." % loss, verbose)
-
-    # import pdb
-    # pdb.set_trace()
-
 
     for i, temp in enumerate(temps):
 
@@ -372,8 +363,6 @@ def run_mc(dataset,
             if update_other is not None:
                 sampled_other = update_other(sampled_other, dataset)
 
-
-
             # dic = {}
             # for key in old_dset.props.keys():
             #     val_0 = old_dset.props[key]
@@ -387,9 +376,6 @@ def run_mc(dataset,
             # print(dic)
             # import pdb
             # pdb.set_trace()
-
-            # this doesn't work anymore because all the conformers of other_dset
-            # have changed. Hence we just need to calculate the loss anew.
 
             if update_other is None:
                 delta_loss, new_sim = get_loss_change(loss_mat,
@@ -496,9 +482,6 @@ def dual_mc(dsets,
     # we want to minimize the similarity between 0s and 1s
     max_sim = False
 
-    import pdb
-    # pdb.set_trace()
-
     final_dset, other_dset, loss_mat, loss = run_mc(
         dataset=dsets[1],
         func_name=func_name,
@@ -514,18 +497,18 @@ def dual_mc(dsets,
     return final_dset, other_dset, loss_mat, loss
 
 
-def to_single_prop(nff_dset, prop, val):
-    idx = [i for i, value in enumerate(nff_dset.props[prop])
-           if value == val]
-    new_props = {}
-    for key, val in nff_dset.props.items():
-        if type(val) is list:
-            new_props[key] = [val[i] for i in idx]
-        else:
-            new_props[key] = val[idx]
-    nff_dset.props = new_props
+# def to_single_prop(nff_dset, prop, val):
+#     idx = [i for i, value in enumerate(nff_dset.props[prop])
+#            if value == val]
+#     new_props = {}
+#     for key, val in nff_dset.props.items():
+#         if type(val) is list:
+#             new_props[key] = [val[i] for i in idx]
+#         else:
+#             new_props[key] = val[idx]
+#     nff_dset.props = new_props
 
-    return nff_dset
+#     return nff_dset
 
 
 def dsets_from_smiles(nff_dset, smiles_dic):
@@ -542,6 +525,7 @@ def dsets_from_smiles(nff_dset, smiles_dic):
                 new_props[key] = [val[i] for i in idx]
             else:
                 new_props[key] = val[idx]
+
         new_dset = copy.deepcopy(nff_dset)
         new_dset.props = new_props
 
@@ -777,10 +761,3 @@ def main():
     except Exception as e:
         fprint(e)
         pdb.post_mortem()
-
-# TO-DO: 1. Sample dset_0 from full dataset in batches         X
-#        2. Run this on the cluster with 5 sweeps each (will take ~2 days. Wait for
-#           single geom fp's to come back.)                   [Wait for fp's to come back]
-#        3. Extract the chosen conformers and visualize them. 
-#                                                             X
-
