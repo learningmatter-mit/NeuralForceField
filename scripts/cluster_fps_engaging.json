@@ -21,7 +21,7 @@
   "nff_dset_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/clustering/train.pth.tar",
   "conf_dset_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/clustering/conf_train.pth.tar",
   "summary_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/clustering/summary_conf_train.pth.tar",
-  "smiles_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/mc_smiles.json",
+  "smiles_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/clustering/mc_smiles.json",
   "num_trials": 1,
   "func_names": ["cosine_similarity", "cosine_similarity"],
   "batch_size": 200
