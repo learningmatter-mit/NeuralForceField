@@ -6,7 +6,7 @@
 #SBATCH --mem-per-cpu 5G
 
 source $HOME/.bashrc
-export PYTHONPATH="/home/saxelrod/Repo/projects/covid_nff/NeuralForceField:${PYTHONPATH}"
+export PYTHONPATH="/home/saxelrod/repo/nff/covid/NeuralForceField:${PYTHONPATH}"
 
 source deactivate
 source activate /home/saxelrod/anaconda3/envs/htvs
