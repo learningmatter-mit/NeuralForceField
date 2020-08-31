@@ -526,9 +526,7 @@ def dsets_from_smiles(nff_dset, smiles_dic):
             else:
                 new_props[key] = val[idx]
 
-        new_dset = copy.deepcopy(nff_dset)
-        new_dset.props = new_props
-
+        new_dset = NffDataset(new_props)
         dsets.append(new_dset)
 
     return dsets
