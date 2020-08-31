@@ -9,6 +9,7 @@ import json
 import sys
 import pdb
 import copy
+from tqdm import tqdm
 
 from nff.data import Dataset as NffDataset
 
@@ -267,6 +268,17 @@ def fprint(msg, verbose=True):
         print(msg)
         sys.stdout.flush()
 
+def tqdm_enumerate(iter):
+    i = 0
+    for y in tqdm(iter):
+        yield i, y
+        i += 1
+
+def apply_tdqm(lst, track_prog):
+    if track_prog:
+        return (tqdm_enumerate(lst))
+    else:
+        return enumerate(lst)
 
 def run_mc(dataset,
            func_name,
@@ -275,7 +287,8 @@ def run_mc(dataset,
            max_sim,
            other_dset=None,
            update_other=None,
-           verbose=False):
+           verbose=False,
+           track_prog=False):
 
     loss_mat, loss = init_loss(dataset, func_name, other_dset, max_sim)
     temps = temp_func()
@@ -292,7 +305,7 @@ def run_mc(dataset,
                 "temperature %.3e... " % temp), verbose)
 
         num_iters = int(len(dataset) * num_sweeps)
-        for it in range(num_iters):
+        for it in apply_tdqm(range(num_iters), track_prog):
 
             #######
             # actual_loss_mat, actual_loss = init_loss(dataset, func_name)
@@ -304,7 +317,7 @@ def run_mc(dataset,
 
             # old_dset = copy.deepcopy(dataset)
 
-            old_other_dset = copy.deepcopy(other_dset)
+            # old_other_dset = copy.deepcopy(other_dset)
 
             if update_other is not None:
                 other_dset = update_other(other_dset, dataset)
@@ -384,13 +397,13 @@ def run_mc(dataset,
         # #######
         # ** this isn't working for the outer 1 loop
 
-        if not max_sim:
-            new_actual_loss_mat, new_actual_loss = init_loss(
-                dataset, func_name, other_dset, max_sim)
-            # real_delta = new_actual_loss - actual_loss
+        # if not max_sim:
+        #     new_actual_loss_mat, new_actual_loss = init_loss(
+        #         dataset, func_name, other_dset, max_sim)
+        #     # real_delta = new_actual_loss - actual_loss
 
-            fprint("Supposed loss: %.6e" % loss)
-            fprint("Real loss: %.6e" % new_actual_loss)
+        #     fprint("Supposed loss: %.6e" % loss)
+        #     fprint("Real loss: %.6e" % new_actual_loss)
 
         # ########
 
@@ -423,7 +436,8 @@ def dual_mc(dsets,
                                  temp_func=temp_func,
                                  max_sim=max_sim,
                                  other_dset=dset_1,
-                                 verbose=False)
+                                 verbose=False,
+                                 track_prog=False)
 
         return dset_0
 
@@ -444,7 +458,8 @@ def dual_mc(dsets,
         max_sim=max_sim,
         other_dset=dsets[0],
         update_other=update_other,
-        verbose=True)
+        verbose=True,
+        track_prog=True)
 
     return final_dset, other_dset, loss_mat, loss
 
