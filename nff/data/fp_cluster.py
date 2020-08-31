@@ -304,6 +304,8 @@ def run_mc(dataset,
 
             # old_dset = copy.deepcopy(dataset)
 
+            old_other_dset = copy.deepcopy(other_dset)
+
             if update_other is not None:
                 other_dset = update_other(other_dset, dataset)
 
@@ -356,16 +358,25 @@ def run_mc(dataset,
                 if criterion:
                     loss_mat = new_loss_mat
                     loss = new_loss
+
+                    # new_actual_loss_mat, new_actual_loss = init_loss(
+                        # dataset, func_name, other_dset, max_sim)
+
                 else:
+
                     dataset.flip_fp(spec_idx, old_conf_idx)
 
-                if not max_sim:
-                    new_actual_loss_mat, new_actual_loss = init_loss(
-                        dataset, func_name, other_dset, max_sim)
-                    # real_delta = new_actual_loss - actual_loss
+                    # new_actual_loss_mat, new_actual_loss = init_loss(
+                    #     dataset, func_name, old_other_dset, max_sim)
 
-                    fprint("Supposed loss: %.6e" % loss)
-                    fprint("Real loss: %.6e" % new_actual_loss)
+
+                # if not max_sim:
+
+                #     fprint("\n")
+                #     fprint("Supposed loss: %.6e" % loss)
+                #     fprint("Real loss: %.6e" % new_actual_loss)
+                #     fprint("\n")
+
 
 
             # fprint(f"Completed iteration {it+1} of {num_iters}", verbose)

@@ -17,7 +17,7 @@
       }
     }
   ],
-  "num_sweeps": [0.01, 0.01],
+  "num_sweeps": [1, 1],
   "nff_dset_path": "/home/saxelrod/supercloud2/models/4053/0_combined/train.pth.tar",
   "conf_dset_path": "/home/saxelrod/supercloud2/models/4053/0_combined/conf_train.pth.tar",
   "summary_path": "/home/saxelrod/supercloud2/models/4053/0_combined/summary_conf_train.pth.tar",
