@@ -3,7 +3,7 @@
     {
       "name": "exponential",
       "params": {
-        "start_temp": 1e-5,
+        "start_temp": 0.1,
         "end_temp": 1e-10,
         "num_temps": 5
       }
@@ -17,11 +17,12 @@
       }
     }
   ],
-  "num_sweeps": [1, 1],
-  "nff_dset_path": "/home/saxelrod/supercloud2/models/4053/0_combined/train.pth.tar",
-  "conf_dset_path": "/home/saxelrod/supercloud2/models/4053/0_combined/conf_train.pth.tar",
-  "summary_path": "/home/saxelrod/supercloud2/models/4053/0_combined/summary_conf_train.pth.tar",
+  "num_sweeps": [5, 5],
+  "nff_dset_path": "/home/saxelrod/supercloud2/models/4053/0_combined_from_equal_weights/train.pth.tar",
+  "conf_dset_path": "/home/saxelrod/supercloud2/models/4053/0_combined_from_equal_weights/conf_train.pth.tar",
+  "summary_path": "/home/saxelrod/supercloud2/models/4053/0_combined_from_equal_weights/summary_conf_train.pth.tar",
   "smiles_path": "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/mc_smiles.json",
   "num_trials": 1,
-  "func_names": ["cosine_similarity", "cosine_similarity"]
+  "func_names": ["cosine_similarity", "cosine_similarity"],
+  "batch_size": 200
 }

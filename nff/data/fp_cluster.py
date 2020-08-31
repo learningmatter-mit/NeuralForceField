@@ -11,6 +11,7 @@ import pdb
 import copy
 from tqdm import tqdm
 
+
 from nff.data import Dataset as NffDataset
 
 SIM_FUNCS = {"cosine_similarity": F.cosine_similarity}
@@ -20,8 +21,11 @@ SMILES_PATH = "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/mc_smiles.json"
 
 class ConfDataset(TorchDataset):
 
-    def __init__(self, nff_dset, seed=None):
-        self.props = self.make_props(nff_dset, seed)
+    def __init__(self, nff_dset=None, props=None, seed=None):
+        if nff_dset is not None:
+            self.props = self.make_props(nff_dset, seed)
+        elif props is not None:
+            self.props = props
 
     def get_conf_idx(self, seed, num_confs):
 
@@ -60,12 +64,14 @@ class ConfDataset(TorchDataset):
         all_fps = nff_dset.props["fingerprint"]
         single_fps = [fp[idx] for fp, idx in zip(all_fps, conf_idx)]
         att_weights = self.get_att_weights(conf_idx, num_confs)
+        smiles = nff_dset.props["smiles"]
 
         props = {"num_confs": num_confs,
                  "conf_idx": conf_idx,
                  "att_weights": att_weights,
                  "all_fps": all_fps,
-                 "single_fps": single_fps}
+                 "single_fps": single_fps,
+                 "smiles": smiles}
 
         return props
 
@@ -113,6 +119,28 @@ class ConfDataset(TorchDataset):
             raise TypeError(
                 '{} is not an instance from {}'.format(path, type(cls))
             )
+
+def dset_from_idx(dset, idx):
+    new_props = {}
+    for key, val in dset.props.items():
+        if type(val) is list:
+            new_props[key] = [val[i] for i in idx]
+        else:
+            new_props[key] = val[idx]
+
+    new_dset = ConfDataset(props=new_props)
+    new_dset.props = new_props
+
+    return new_dset
+
+def sample(other_dset, batch_size):
+
+    length = len(other_dset)
+    pop = list(range(length - 1))
+    sample_idx = random.sample(pop, k=batch_size)
+    dset = dset_from_idx(other_dset, sample_idx)
+
+    return dset
 
 
 def choose_flip(dataset):
@@ -268,17 +296,20 @@ def fprint(msg, verbose=True):
         print(msg)
         sys.stdout.flush()
 
+
 def tqdm_enumerate(iter):
     i = 0
     for y in tqdm(iter):
         yield i, y
         i += 1
 
+
 def apply_tdqm(lst, track_prog):
     if track_prog:
         return (tqdm_enumerate(lst))
     else:
         return enumerate(lst)
+
 
 def run_mc(dataset,
            func_name,
@@ -288,16 +319,30 @@ def run_mc(dataset,
            other_dset=None,
            update_other=None,
            verbose=False,
-           track_prog=False):
+           track_prog=False,
+           other_batch_size=None):
 
-    loss_mat, loss = init_loss(dataset, func_name, other_dset, max_sim)
+    if other_batch_size is not None:
+            sampled_other = sample(other_dset, other_batch_size)
+    else:
+        sampled_other = other_dset
+
+    loss_mat, loss = init_loss(dataset, func_name, sampled_other, max_sim)
     temps = temp_func()
     num_temps = len(temps)
 
     fprint(f"Starting loss is %.6e." % loss, verbose)
 
+    if update_other is not None:
+
+
+        sampled_other = update_other(sampled_other, dataset)
+        loss_mat, loss = init_loss(dataset, func_name, sampled_other, max_sim)
+        fprint(f"Starting loss after equilibration is %.6e." % loss, verbose)
+
     # import pdb
     # pdb.set_trace()
+
 
     for i, temp in enumerate(temps):
 
@@ -317,10 +362,17 @@ def run_mc(dataset,
 
             # old_dset = copy.deepcopy(dataset)
 
-            # old_other_dset = copy.deepcopy(other_dset)
+            # old_other_dset = copy.deepcopy(sampled_other)
+
+            if other_batch_size is not None:
+                sampled_other = sample(other_dset, other_batch_size)
+            else:
+                sampled_other = other_dset
 
             if update_other is not None:
-                other_dset = update_other(other_dset, dataset)
+                sampled_other = update_other(sampled_other, dataset)
+
+
 
             # dic = {}
             # for key in old_dset.props.keys():
@@ -344,7 +396,7 @@ def run_mc(dataset,
                                                       spec_idx,
                                                       func_name,
                                                       dataset,
-                                                      other_dset,
+                                                      sampled_other,
                                                       max_sim)
                 criterion = get_criterion(delta_loss, temp)
 
@@ -360,10 +412,9 @@ def run_mc(dataset,
                     dataset.flip_fp(spec_idx, old_conf_idx)
 
             else:
-                # this should be working now...?
 
                 new_loss_mat, new_loss = init_loss(
-                    dataset, func_name, other_dset, max_sim)
+                    dataset, func_name, sampled_other, max_sim)
 
                 delta_loss = torch.Tensor([new_loss - loss]).squeeze()
                 criterion = get_criterion(delta_loss, temp)
@@ -373,7 +424,7 @@ def run_mc(dataset,
                     loss = new_loss
 
                     # new_actual_loss_mat, new_actual_loss = init_loss(
-                        # dataset, func_name, other_dset, max_sim)
+                    # dataset, func_name, sampled_other, max_sim)
 
                 else:
 
@@ -382,15 +433,12 @@ def run_mc(dataset,
                     # new_actual_loss_mat, new_actual_loss = init_loss(
                     #     dataset, func_name, old_other_dset, max_sim)
 
-
                 # if not max_sim:
 
                 #     fprint("\n")
                 #     fprint("Supposed loss: %.6e" % loss)
                 #     fprint("Real loss: %.6e" % new_actual_loss)
                 #     fprint("\n")
-
-
 
             # fprint(f"Completed iteration {it+1} of {num_iters}", verbose)
 
@@ -416,7 +464,8 @@ def run_mc(dataset,
 def dual_mc(dsets,
             func_names,
             num_sweeps_list,
-            temp_funcs):
+            temp_funcs,
+            batch_size):
 
     def update_other(other_dset, dset):
 
@@ -459,7 +508,8 @@ def dual_mc(dsets,
         other_dset=dsets[0],
         update_other=update_other,
         verbose=True,
-        track_prog=True)
+        track_prog=True,
+        other_batch_size=batch_size)
 
     return final_dset, other_dset, loss_mat, loss
 
@@ -534,9 +584,9 @@ def get_dsets(nff_dset_path,
             nff_dset = nff_dsets[i]
             new_path = new_paths[i]
 
-            fprint(f"Dataset {i+1} has size {len(nff_dset)}")
+            fprint(f"Dataset {i} has size {len(nff_dset)}")
             dataset = ConfDataset(nff_dset, seed)
-            fprint(f"Saving conformer dataset {i+1} to {new_path}...")
+            fprint(f"Saving conformer dataset {i} to {new_path}...")
 
             dataset.save(new_path)
             datasets.append(dataset)
@@ -585,6 +635,8 @@ def parse_args():
                         help=("Path to SMILES strings you want to "
                               "use in clustering"),
                         default=SMILES_PATH)
+    parser.add_argument("--batch_size", type=int,
+                        help="Batch size for the 0 dataset")
 
     args = parser.parse_args()
 
@@ -691,6 +743,7 @@ def main():
         temp_funcs.append(temp_func)
     func_names = arg_dic["func_names"]
     num_sweeps_list = arg_dic["num_sweeps"]
+    batch_size = arg_dic["batch_size"]
 
     try:
 
@@ -700,17 +753,18 @@ def main():
         dset_list = []
 
         for seed in range(num_trials):
-            print(f"Starting trial {seed + 1} of {num_trials}")
+            fprint(f"Starting trial {seed + 1} of {num_trials}")
             dset_0.randomize_conf_fps(seed)
             dset_1.randomize_conf_fps(seed)
 
             dset_1, dset_0, loss_mat, loss = dual_mc(dsets,
                                                      func_names,
                                                      num_sweeps_list,
-                                                     temp_funcs)
+                                                     temp_funcs,
+                                                     batch_size)
 
             dset_list.append([copy.deepcopy(dset_0), copy.deepcopy(dset_1)])
-            print(f"Completed trial {seed + 1} of {num_trials}.")
+            fprint(f"Completed trial {seed + 1} of {num_trials}.")
 
         final_dsets = []
         for i in range(2):
@@ -721,7 +775,12 @@ def main():
         save(final_dsets, loss_mat, loss, arg_dic)
 
     except Exception as e:
-        print(e)
+        fprint(e)
         pdb.post_mortem()
 
-# TO-DO: sample dset_0 from full dataset in batches
+# TO-DO: 1. Sample dset_0 from full dataset in batches         X
+#        2. Run this on the cluster with 5 sweeps each (will take ~2 days. Wait for
+#           single geom fp's to come back.)                   [Wait for fp's to come back]
+#        3. Extract the chosen conformers and visualize them. 
+#                                                             X
+
