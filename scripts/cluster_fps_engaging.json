@@ -1,28 +1,34 @@
 {
-  "temp_dics": [
-    {
-      "name": "exponential",
-      "params": {
-        "start_temp": 0.1,
-        "end_temp": 1e-15,
-        "num_temps": 5
-      }
-    },
-    {
-      "name": "exponential",
-      "params": {
-        "start_temp": 0.1,
-        "end_temp": 1e-15,
-        "num_temps": 10
-      }
+  "inner_temp_dic": {
+    "name": "exponential",
+    "params": {
+      "start_temp": 1e-2,
+      "end_temp": 1e-10,
+      "num_temps": 5
     }
-  ],
-  "num_sweeps": [5, 5],
+  },
+  "outer_temp_dic": {
+    "name": "exponential",
+    "params": {
+      "start_temp": 1e-2,
+      "end_temp": 1e-10,
+      "num_temps": 10
+    }
+  },
+
+  "inner_num_sweeps": 1,
+  "outer_num_sweeps": 1,
+
+  "inner_func_name": "cosine_similarity",
+  "outer_func_name": "cosine_similarity",
+
+  "batch_size_0": 200,
+  "num_trials": 1,
+
   "nff_dset_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/clustering/train.pth.tar",
   "conf_dset_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/clustering/conf_train.pth.tar",
   "summary_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/clustering/summary_conf_train.pth.tar",
-  "smiles_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/clustering/mc_smiles.json",
-  "num_trials": 1,
-  "func_names": ["cosine_similarity", "cosine_similarity"],
-  "batch_size": 200
+  "smiles_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/clustering/mc_smiles.json"
+
+
 }

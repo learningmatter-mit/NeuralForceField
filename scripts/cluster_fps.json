@@ -2,16 +2,16 @@
   "inner_temp_dic": {
     "name": "exponential",
     "params": {
-      "start_temp": 0.1,
-      "end_temp": 1E-10,
+      "start_temp": 1e-2,
+      "end_temp": 1e-10,
       "num_temps": 5
     }
   },
   "outer_temp_dic": {
     "name": "exponential",
     "params": {
-      "start_temp": 0.1,
-      "end_temp": 1E-10,
+      "start_temp": 1e-2,
+      "end_temp": 1e-10,
       "num_temps": 10
     }
   },

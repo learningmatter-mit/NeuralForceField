@@ -84,15 +84,10 @@ class ConfDataset(TorchDataset):
         self.props["att_weights"][spec_idx] *= 0
         self.props["att_weights"][spec_idx][conf_idx] = 1
 
-    def compare(self, spec_idx, func_name, other_dset=None):
+    def compare(self, spec_idx, func_name, other_dset):
 
-        if other_dset is not None:
-            other_fps = torch.stack(other_dset.props["single_fps"])
-            length = len(other_dset)
-        else:
-            other_fps = torch.stack(self.props["single_fps"])
-            length = len(self)
-
+        other_fps = torch.stack(other_dset.props["single_fps"])
+        length = len(other_dset)
         repeat_fp = self.props["single_fps"][spec_idx].repeat(length, 1)
 
         sim_func = SIM_FUNCS[func_name]
@@ -301,7 +296,8 @@ def inner_mc(dset_0,
              func_name,
              num_sweeps,
              temp_func,
-             verbose=False):
+             verbose=False,
+             debug=False):
 
     loss_mat, loss = init_inner_loss(dset_0=dset_0,
                                      func_name=func_name,
@@ -339,6 +335,14 @@ def inner_mc(dset_0,
 
             else:
                 dset_0.flip_fp(spec_idx, old_conf_idx)
+
+            if debug:
+                real_loss_mat, real_loss = init_inner_loss(dset_0=dset_0,
+                                                           func_name=func_name,
+                                                           dset_1=dset_1)
+                print("Supposed loss is %.6e" % loss)
+                print("Real loss is %.6e" % real_loss)
+                print("Change in loss is %.2e" % delta_loss)
 
         fprint(f"Finished iteration {i+1} of {num_temps}.", verbose)
         fprint(f"Current loss is %.6e." % loss, verbose)
@@ -402,6 +406,9 @@ def outer_mc(dset_0,
                                       func_name=func_name,
                                       dset_1=dset_1)
 
+            # delta_loss = new_loss - loss
+            # print("Change in loss is %.2e" % delta_loss)
+
             delta_loss = torch.Tensor([new_loss - loss]).squeeze()
             criterion = get_criterion(delta_loss, temp)
 
@@ -428,7 +435,8 @@ def dual_mc(dset_0,
             outer_func_name,
             outer_num_sweeps,
             outer_temp_dic,
-            batch_size_0):
+            batch_size_0,
+            debug=False):
 
     def update_0_fn(dset_0, dset_1):
 
@@ -440,7 +448,8 @@ def dual_mc(dset_0,
                           func_name=inner_func_name,
                           num_sweeps=inner_num_sweeps,
                           temp_func=inner_temp_func,
-                          verbose=False)
+                          verbose=False,
+                          debug=debug)
 
         return dset_0
 
@@ -619,7 +628,7 @@ def average_dsets(dsets):
     return final_dset
 
 
-def main():
+def main(debug=False):
 
     arg_dic = parse_args()
 
@@ -650,7 +659,8 @@ def main():
                 outer_func_name=arg_dic["outer_func_name"],
                 outer_num_sweeps=arg_dic["outer_num_sweeps"],
                 outer_temp_dic=arg_dic["outer_temp_dic"],
-                batch_size_0=arg_dic["batch_size_0"])
+                batch_size_0=arg_dic["batch_size_0"],
+                debug=debug)
 
             dset_1_list.append(copy.deepcopy(dset_1))
             fprint(f"Completed trial {seed + 1} of {num_trials}.")
