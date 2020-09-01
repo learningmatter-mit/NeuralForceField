@@ -1,28 +1,34 @@
 {
-  "temp_dics": [
-    {
-      "name": "exponential",
-      "params": {
-        "start_temp": 0.1,
-        "end_temp": 1e-10,
-        "num_temps": 5
-      }
-    },
-    {
-      "name": "exponential",
-      "params": {
-        "start_temp": 0.1,
-        "end_temp": 1e-10,
-        "num_temps": 10
-      }
+  "inner_temp_dic": {
+    "name": "exponential",
+    "params": {
+      "start_temp": 0.1,
+      "end_temp": 1E-10,
+      "num_temps": 5
     }
-  ],
-  "num_sweeps": [5, 5],
-  "nff_dset_path": "/home/saxelrod/supercloud2/models/4053/0_combined_from_equal_weights/train.pth.tar",
-  "conf_dset_path": "/home/saxelrod/supercloud2/models/4053/0_combined_from_equal_weights/conf_train.pth.tar",
-  "summary_path": "/home/saxelrod/supercloud2/models/4053/0_combined_from_equal_weights/summary_conf_train.pth.tar",
-  "smiles_path": "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/mc_smiles.json",
+  },
+  "outer_temp_dic": {
+    "name": "exponential",
+    "params": {
+      "start_temp": 0.1,
+      "end_temp": 1E-10,
+      "num_temps": 10
+    }
+  },
+
+  "inner_num_sweeps": 1,
+  "outer_num_sweeps": 1,
+
+  "inner_func_name": "cosine_similarity",
+  "outer_func_name": "cosine_similarity",
+
+  "batch_size_0": 200,
   "num_trials": 1,
-  "func_names": ["cosine_similarity", "cosine_similarity"],
-  "batch_size": 200
+
+  "nff_dset_path": "/home/saxelrod/supercloud2/models/4053/0_combined/train.pth.tar",
+  "conf_dset_path": "/home/saxelrod/supercloud2/models/4053/0_combined/conf_train.pth.tar",
+  "summary_path": "/home/saxelrod/supercloud2/models/4053/0_combined/summary_conf_train.pth.tar",
+  "smiles_path": "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/mc_smiles.json"
+  
+
 }

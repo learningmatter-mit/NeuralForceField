@@ -166,77 +166,66 @@ def choose_flip(dataset):
     return spec_idx, conf_idx
 
 
-def get_loss_change(loss_mat,
-                    spec_idx,
-                    func_name,
-                    dataset,
-                    other_dset,
-                    max_sim):
+def inner_loss_change(loss_mat,
+                      spec_idx,
+                      func_name,
+                      dset_0,
+                      dset_1):
 
-    # the new similarity between the species of interest
-    # and all other species' fingeprints
-
-    new_sim = dataset.compare(spec_idx, func_name, other_dset)
-    denom = len(dataset) * len(other_dset)
-
-    if max_sim:
-        add_loss = - new_sim.sum() / denom
-    else:
-        add_loss = new_sim.sum() / denom
-
+    new_sim = dset_0.compare(spec_idx, func_name, dset_1)
+    denom = len(dset_0) * len(dset_1)
+    # wnat to maximize the similarity
+    add_loss = -new_sim.sum() / denom
     subtract_loss = loss_mat[spec_idx, :].sum() / denom
-
     delta_loss = add_loss - subtract_loss
 
     return delta_loss, new_sim
 
 
-def init_loss(dataset,
-              func_name,
-              other_dset,
-              max_sim):
-    """
+def get_outer_loss(dset_0,
+                   func_name,
+                   dset_1):
+
+    sim_other_mat = torch.zeros((len(dset_1), len(dset_0)))
+    sim_self_mat = torch.zeros((len(dset_1), len(dset_1)))
+
+    for spec_idx in range(len(dset_1)):
+
+        sim_other = dset_1.compare(spec_idx, func_name, dset_0)
+        sim_other_mat[spec_idx, :] = sim_other
+
+        sim_self = dset_1.compare(spec_idx, func_name, dset_1)
+        sim_self_mat[spec_idx, :] = sim_self
+
+    loss = (sim_other_mat.mean() - sim_self_mat.mean()).item()
+
+    return loss
 
 
-    Args:
-        max_sim (bool): if True, minimizing the loss maximizes 
-            the similarity. If False, minimizing the loss minimizes
-            the similarity.
-    """
+def init_inner_loss(dset_0,
+                    func_name,
+                    dset_1):
 
-    len_0 = len(dataset)
-    len_1 = len(other_dset)
-    loss_mat = torch.zeros((len_0, len_1))
+    loss_mat = torch.zeros((len(dset_0), len(dset_1)))
 
-    for spec_idx in range(len_0):
+    for spec_idx in range(len(dset_0)):
 
-        sim = dataset.compare(spec_idx, func_name, other_dset)
-        if max_sim:
-            # loss_mat[:, spec_idx] = -sim
-            loss_mat[spec_idx, :] = -sim
-        else:
-            # loss_mat[:, spec_idx] = sim
-            loss_mat[spec_idx, :] = sim
+        sim_other = dset_0.compare(spec_idx, func_name, dset_1)
+        # minimizing loss maximizes similarity to other dataset
+        loss_mat[spec_idx, :] = - sim_other
 
     loss = loss_mat.mean().item()
 
     return loss_mat, loss
 
 
-def update_loss(loss,
-                loss_mat,
-                spec_idx,
-                delta_loss,
-                new_sim,
-                max_sim):
+def update_inner_loss(loss,
+                      loss_mat,
+                      spec_idx,
+                      delta_loss,
+                      sim_other):
 
-    if max_sim:
-        # loss_mat[:, spec_idx] = -new_sim
-        loss_mat[spec_idx, :] = -new_sim
-    else:
-        # loss_mat[:, spec_idx] = new_sim
-        loss_mat[spec_idx, :] = new_sim
-
+    loss_mat[spec_idx, :] = -sim_other
     loss += delta_loss
 
     return loss_mat, loss
@@ -307,208 +296,167 @@ def apply_tdqm(lst, track_prog):
         return enumerate(lst)
 
 
-def run_mc(dataset,
-           func_name,
-           num_sweeps,
-           temp_func,
-           max_sim,
-           other_dset=None,
-           update_other=None,
-           verbose=False,
-           track_prog=False,
-           other_batch_size=None):
+def inner_mc(dset_0,
+             dset_1,
+             func_name,
+             num_sweeps,
+             temp_func,
+             verbose=False):
 
-    if other_batch_size is not None:
-        sampled_other = sample(other_dset, other_batch_size)
-    else:
-        sampled_other = other_dset
-
-    loss_mat, loss = init_loss(dataset, func_name, sampled_other, max_sim)
+    loss_mat, loss = init_inner_loss(dset_0=dset_0,
+                                     func_name=func_name,
+                                     dset_1=dset_1)
     temps = temp_func()
     num_temps = len(temps)
-
-    fprint(f"Starting loss is %.6e." % loss, verbose)
-
-    if update_other is not None:
-
-        sampled_other = update_other(sampled_other, dataset)
-        loss_mat, loss = init_loss(dataset, func_name, sampled_other, max_sim)
-        fprint(f"Starting loss after equilibration is %.6e." % loss, verbose)
 
     for i, temp in enumerate(temps):
 
         fprint((f"Starting iteration {i+1} of {num_temps} at "
                 "temperature %.3e... " % temp), verbose)
 
-        num_iters = int(len(dataset) * num_sweeps)
-        for it in apply_tdqm(range(num_iters), track_prog):
+        num_iters = int(len(dset_0) * num_sweeps)
 
-            #######
-            # actual_loss_mat, actual_loss = init_loss(dataset, func_name)
-            #######
+        for it in apply_tdqm(range(num_iters), verbose):
 
-            spec_idx, conf_idx = choose_flip(dataset)
-            old_conf_idx = dataset.props["conf_idx"][spec_idx]
-            dataset.flip_fp(spec_idx, conf_idx)
+            spec_idx, conf_idx = choose_flip(dset_0)
+            old_conf_idx = dset_0.props["conf_idx"][spec_idx]
+            dset_0.flip_fp(spec_idx, conf_idx)
 
-            # old_dset = copy.deepcopy(dataset)
+            delta_loss, sim_other = inner_loss_change(loss_mat=loss_mat,
+                                                      spec_idx=spec_idx,
+                                                      func_name=func_name,
+                                                      dset_0=dset_0,
+                                                      dset_1=dset_1)
 
-            # old_other_dset = copy.deepcopy(sampled_other)
+            criterion = get_criterion(delta_loss, temp)
 
-            if other_batch_size is not None:
-                sampled_other = sample(other_dset, other_batch_size)
-            else:
-                sampled_other = other_dset
-
-            if update_other is not None:
-                sampled_other = update_other(sampled_other, dataset)
-
-            # dic = {}
-            # for key in old_dset.props.keys():
-            #     val_0 = old_dset.props[key]
-            #     val_1 = dataset.props[key]
-            #     if isinstance(val_0[0], torch.Tensor):
-            #         results = all([(i == j).all() for i, j in zip(val_0, val_1)])
-            #     else:
-            #         results = all([(i == j) for i, j in zip(val_0, val_1)])
-            #     dic[key] = results
-
-            # print(dic)
-            # import pdb
-            # pdb.set_trace()
-
-            if update_other is None:
-                delta_loss, new_sim = get_loss_change(loss_mat,
-                                                      spec_idx,
-                                                      func_name,
-                                                      dataset,
-                                                      sampled_other,
-                                                      max_sim)
-                criterion = get_criterion(delta_loss, temp)
-
-                if criterion:
-                    loss_mat, loss = update_loss(loss,
-                                                 loss_mat,
-                                                 spec_idx,
-                                                 delta_loss,
-                                                 new_sim,
-                                                 max_sim)
-
-                else:
-                    dataset.flip_fp(spec_idx, old_conf_idx)
+            if criterion:
+                loss_mat, loss = update_inner_loss(loss=loss,
+                                                   loss_mat=loss_mat,
+                                                   spec_idx=spec_idx,
+                                                   delta_loss=delta_loss,
+                                                   sim_other=sim_other)
 
             else:
-
-                new_loss_mat, new_loss = init_loss(
-                    dataset, func_name, sampled_other, max_sim)
-
-                delta_loss = torch.Tensor([new_loss - loss]).squeeze()
-                criterion = get_criterion(delta_loss, temp)
-
-                if criterion:
-                    loss_mat = new_loss_mat
-                    loss = new_loss
-
-                    # new_actual_loss_mat, new_actual_loss = init_loss(
-                    # dataset, func_name, sampled_other, max_sim)
-
-                else:
-
-                    dataset.flip_fp(spec_idx, old_conf_idx)
-
-                    # new_actual_loss_mat, new_actual_loss = init_loss(
-                    #     dataset, func_name, old_other_dset, max_sim)
-
-                # if not max_sim:
-
-                #     fprint("\n")
-                #     fprint("Supposed loss: %.6e" % loss)
-                #     fprint("Real loss: %.6e" % new_actual_loss)
-                #     fprint("\n")
-
-            # fprint(f"Completed iteration {it+1} of {num_iters}", verbose)
-
-        # #######
-        # ** this isn't working for the outer 1 loop
-
-        # if not max_sim:
-        #     new_actual_loss_mat, new_actual_loss = init_loss(
-        #         dataset, func_name, other_dset, max_sim)
-        #     # real_delta = new_actual_loss - actual_loss
-
-        #     fprint("Supposed loss: %.6e" % loss)
-        #     fprint("Real loss: %.6e" % new_actual_loss)
-
-        # ########
+                dset_0.flip_fp(spec_idx, old_conf_idx)
 
         fprint(f"Finished iteration {i+1} of {num_temps}.", verbose)
         fprint(f"Current loss is %.6e." % loss, verbose)
 
-    return dataset, other_dset, loss_mat, loss
+    return dset_0
 
 
-def dual_mc(dsets,
-            func_names,
-            num_sweeps_list,
-            temp_funcs,
-            batch_size):
+def get_sample_0(dset_0, batch_size_0):
+    if batch_size_0 is not None:
+        sampled_0 = sample(dset_0, batch_size_0)
+    else:
+        sampled_0 = dset_0
+    return sampled_0
 
-    def update_other(other_dset, dset):
 
-        func_name = func_names[0]
-        num_sweeps = num_sweeps_list[0]
-        temp_func = temp_funcs[0]
-        # we want to maximize the similarity between 0s and 1s
-        max_sim = True
-        # here the main dataset is `other_dset`, i.e. the dataset
-        # of 0's.
-        dset_1 = dset
-        dset_0 = other_dset
+def outer_mc(dset_0,
+             dset_1,
+             func_name,
+             num_sweeps,
+             temp_func,
+             update_0_fn,
+             verbose=False,
+             batch_size_0=None):
 
-        dset_0, _, _, _ = run_mc(dataset=dset_0,
-                                 func_name=func_name,
-                                 num_sweeps=num_sweeps,
-                                 temp_func=temp_func,
-                                 max_sim=max_sim,
-                                 other_dset=dset_1,
-                                 verbose=False,
-                                 track_prog=False)
+    sample_0 = get_sample_0(dset_0, batch_size_0)
+    loss = get_outer_loss(dset_0=sample_0,
+                          func_name=func_name,
+                          dset_1=dset_1)
+
+    temps = temp_func()
+    num_temps = len(temps)
+
+    fprint(f"Starting loss without equilibration is %.6e." % loss, verbose)
+
+    sample_0 = update_0_fn(sample_0, dset_1)
+    loss = get_outer_loss(dset_0=sample_0,
+                          func_name=func_name,
+                          dset_1=dset_1)
+
+    fprint(f"Starting loss after equilibration is %.6e." % loss, verbose)
+
+    tracked_loss = []
+
+    for i, temp in enumerate(temps):
+
+        fprint((f"Starting iteration {i+1} of {num_temps} at "
+                "temperature %.3e... " % temp), verbose)
+
+        num_iters = int(len(dset_1) * num_sweeps)
+
+        for it in apply_tdqm(range(num_iters), verbose):
+
+            spec_idx, conf_idx = choose_flip(dset_1)
+            old_conf_idx = dset_1.props["conf_idx"][spec_idx]
+            dset_1.flip_fp(spec_idx, conf_idx)
+
+            sample_0 = get_sample_0(dset_0, batch_size_0)
+            sample_0 = update_0_fn(sample_0, dset_1)
+
+            new_loss = get_outer_loss(dset_0=sample_0,
+                                      func_name=func_name,
+                                      dset_1=dset_1)
+
+            delta_loss = torch.Tensor([new_loss - loss]).squeeze()
+            criterion = get_criterion(delta_loss, temp)
+
+            if criterion:
+                loss = new_loss
+
+            else:
+
+                dset_1.flip_fp(spec_idx, old_conf_idx)
+
+            tracked_loss.append(loss)
+
+        fprint(f"Finished iteration {i+1} of {num_temps}.", verbose)
+        fprint(f"Current loss is %.6e." % loss, verbose)
+
+    return dset_1, tracked_loss
+
+
+def dual_mc(dset_0,
+            dset_1,
+            inner_func_name,
+            inner_num_sweeps,
+            inner_temp_dic,
+            outer_func_name,
+            outer_num_sweeps,
+            outer_temp_dic,
+            batch_size_0):
+
+    def update_0_fn(dset_0, dset_1):
+
+        inner_temp_func = make_temp_func(temp_dic=inner_temp_dic,
+                                         dset_len=len(dset_0))
+
+        dset_0 = inner_mc(dset_0=dset_0,
+                          dset_1=dset_1,
+                          func_name=inner_func_name,
+                          num_sweeps=inner_num_sweeps,
+                          temp_func=inner_temp_func,
+                          verbose=False)
 
         return dset_0
 
-    func_name = func_names[1]
-    num_sweeps = num_sweeps_list[1]
-    temp_func = temp_funcs[1]
-    # we want to minimize the similarity between 0s and 1s
-    max_sim = False
+    outer_temp_func = make_temp_func(temp_dic=outer_temp_dic,
+                                     dset_len=len(dset_1))
 
-    final_dset, other_dset, loss_mat, loss = run_mc(
-        dataset=dsets[1],
-        func_name=func_name,
-        num_sweeps=num_sweeps,
-        temp_func=temp_func,
-        max_sim=max_sim,
-        other_dset=dsets[0],
-        update_other=update_other,
-        verbose=True,
-        track_prog=True,
-        other_batch_size=batch_size)
+    dset_1, tracked_loss = outer_mc(dset_0=dset_0,
+                                    dset_1=dset_1,
+                                    func_name=outer_func_name,
+                                    num_sweeps=outer_num_sweeps,
+                                    temp_func=outer_temp_func,
+                                    update_0_fn=update_0_fn,
+                                    verbose=True,
+                                    batch_size_0=batch_size_0)
 
-    return final_dset, other_dset, loss_mat, loss
-
-
-# def to_single_prop(nff_dset, prop, val):
-#     idx = [i for i, value in enumerate(nff_dset.props[prop])
-#            if value == val]
-#     new_props = {}
-#     for key, val in nff_dset.props.items():
-#         if type(val) is list:
-#             new_props[key] = [val[i] for i in idx]
-#         else:
-#             new_props[key] = val[idx]
-#     nff_dset.props = new_props
-
-#     return nff_dset
+    return dset_1, tracked_loss
 
 
 def dsets_from_smiles(nff_dset, smiles_dic):
@@ -559,8 +507,6 @@ def get_dsets(nff_dset_path,
 
         nff_dsets = dsets_from_smiles(nff_dset, smiles_dic)
 
-        # nff_dset = to_single_prop(nff_dset, prop, val)
-
         for i in range(2):
 
             nff_dset = nff_dsets[i]
@@ -588,11 +534,16 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--arg_path", type=str,
                         help="Path to JSON that overrides args")
-    parser.add_argument("--temp_dics", type=str,
-                        help="Dictionary for temperature scheduler",
+    parser.add_argument("--inner_temp_dic", type=str,
+                        help="Dictionary for inner temperature scheduler",
                         nargs="+")
-    parser.add_argument("--num_sweeps", type=list,
-                        help="Number of sweeps per temperature")
+    parser.add_argument("--outer_temp_dic", type=str,
+                        help="Dictionary for outer temperature scheduler",
+                        nargs="+")
+    parser.add_argument("--inner_num_sweeps", type=list,
+                        help="Inner number of sweeps per temperature")
+    parser.add_argument("--outer_num_sweeps", type=list,
+                        help="Outer number of sweeps per temperature")
     parser.add_argument("--summary_path", type=str,
                         help="Where to save summary")
     parser.add_argument("--num_trials", type=int,
@@ -603,21 +554,19 @@ def parse_args():
     parser.add_argument("--conf_path", type=str,
                         help="Path to NFF conformer dataset", default=None,
                         dest="conf_dset_path")
-    parser.add_argument("--func_names", type=str,
-                        help="Name of similarity function",
+    parser.add_argument("--inner_func_name", type=str,
+                        help="Name of inner similarity function",
                         default="cosine_similarity",
                         nargs="+")
-    # parser.add_argument("--prop", type=str,
-    #                     help="Property to cluster",
-    #                     default=PROP)
-    # parser.add_argument("--prop_val", type=int,
-    #                     help="Desired value of property to cluster",
-    #                     default=1)
+    parser.add_argument("--outer_func_name", type=str,
+                        help="Name of outer similarity function",
+                        default="cosine_similarity",
+                        nargs="+")
     parser.add_argument("--smiles_path", type=str,
                         help=("Path to SMILES strings you want to "
                               "use in clustering"),
                         default=SMILES_PATH)
-    parser.add_argument("--batch_size", type=int,
+    parser.add_argument("--batch_size_0", type=int,
                         help="Batch size for the 0 dataset")
 
     args = parser.parse_args()
@@ -627,23 +576,22 @@ def parse_args():
             arg_dic = json.load(f)
     else:
         arg_dic = args.__dict__
-        for key in ["temp_dics"]:
-            arg_dic[key] = [json.loads([i]) for i in arg_dic[key]]
+        for key in ["inner_temp_dic", "outer_temp_dic"]:
+            arg_dic[key] = json.loads(arg_dic[key])
 
     return arg_dic
 
 
-def save(final_dsets, loss_mat, loss, arg_dic):
+def save(dset_1, tracked_loss, arg_dic):
 
-    for i, dataset in enumerate(final_dsets):
-        dset_path = arg_dic["conf_dset_path"].replace(".pth.tar",
-                                                      f"_{i}_convgd.pth.tar")
+    dset_path = arg_dic["conf_dset_path"].replace(".pth.tar",
+                                                  "_{1}_convgd.pth.tar")
 
-        fprint(f"Saving new dataset {i} to {dset_path}...")
-        dataset.save(dset_path)
+    fprint(f"Saving new dataset 1 to {dset_path}...")
+    dset_1.save(dset_path)
 
     summary_path = arg_dic["summary_path"]
-    summ_dic = {"loss_mat": loss_mat, "loss": loss}
+    summ_dic = {"tracked_loss": tracked_loss}
     fprint(f"Saving summary to {summary_path}...")
     torch.save(summ_dic, summary_path)
 
@@ -671,44 +619,6 @@ def average_dsets(dsets):
     return final_dset
 
 
-# def main():
-
-#     arg_dic = parse_args()
-
-#     dataset = get_dset(nff_dset_path=arg_dic["nff_dset_path"],
-#                        conf_dset_path=arg_dic["conf_dset_path"],
-#                        smiles_path=arg_dic["smiles_path"],
-#                        seed=0)
-
-#     temp_func = make_temp_func(temp_dic=arg_dic["temp_dic"],
-#                                dset_len=len(dataset))
-
-#     try:
-
-#         dsets = []
-#         num_trials = arg_dic["num_trials"]
-#         for seed in range(num_trials):
-#             print(f"Starting trial {seed + 1} of {num_trials}")
-#             dataset.randomize_conf_fps(seed)
-
-#             # fprint(dataset.props["conf_idx"])
-#             # fprint(dataset.props["single_fps"][0])
-
-#             dataset, loss_mat, loss = run_mc(dataset=dataset,
-#                                              func_name=arg_dic["func_name"],
-#                                              num_sweeps=arg_dic["num_sweeps"],
-#                                              temp_func=temp_func)
-#             dsets.append(copy.deepcopy(dataset))
-#             print(f"Completed trial {seed + 1} of {num_trials}.")
-
-#         dataset = average_dsets(dsets)
-#         save(dataset, loss_mat, loss, arg_dic)
-
-#     except Exception as e:
-#         print(e)
-#         pdb.post_mortem()
-
-
 def main():
 
     arg_dic = parse_args()
@@ -718,43 +628,35 @@ def main():
                       smiles_path=arg_dic["smiles_path"],
                       seed=0)
 
-    temp_funcs = []
-    for i, dset in enumerate(dsets):
-        temp_func = make_temp_func(temp_dic=arg_dic["temp_dics"][i],
-                                   dset_len=len(dset))
-        temp_funcs.append(temp_func)
-    func_names = arg_dic["func_names"]
-    num_sweeps_list = arg_dic["num_sweeps"]
-    batch_size = arg_dic["batch_size"]
-
     try:
 
         num_trials = arg_dic["num_trials"]
         dset_0 = dsets[0]
         dset_1 = dsets[1]
-        dset_list = []
+        dset_1_list = []
 
         for seed in range(num_trials):
+
             fprint(f"Starting trial {seed + 1} of {num_trials}")
             dset_0.randomize_conf_fps(seed)
             dset_1.randomize_conf_fps(seed)
 
-            dset_1, dset_0, loss_mat, loss = dual_mc(dsets,
-                                                     func_names,
-                                                     num_sweeps_list,
-                                                     temp_funcs,
-                                                     batch_size)
+            dset_1, tracked_loss = dual_mc(
+                dset_0=dset_0,
+                dset_1=dset_1,
+                inner_func_name=arg_dic["inner_func_name"],
+                inner_num_sweeps=arg_dic["inner_num_sweeps"],
+                inner_temp_dic=arg_dic["inner_temp_dic"],
+                outer_func_name=arg_dic["outer_func_name"],
+                outer_num_sweeps=arg_dic["outer_num_sweeps"],
+                outer_temp_dic=arg_dic["outer_temp_dic"],
+                batch_size_0=arg_dic["batch_size_0"])
 
-            dset_list.append([copy.deepcopy(dset_0), copy.deepcopy(dset_1)])
+            dset_1_list.append(copy.deepcopy(dset_1))
             fprint(f"Completed trial {seed + 1} of {num_trials}.")
 
-        final_dsets = []
-        for i in range(2):
-            dsets_i = [dsets[i] for dsets in dset_list]
-            dset_i = average_dsets(dsets_i)
-            final_dsets.append(dset_i)
-
-        save(final_dsets, loss_mat, loss, arg_dic)
+        dset_1 = average_dsets(dset_1_list)
+        save(dset_1, tracked_loss, arg_dic)
 
     except Exception as e:
         fprint(e)
