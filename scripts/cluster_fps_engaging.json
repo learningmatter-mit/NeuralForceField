@@ -3,21 +3,21 @@
     "name": "exponential",
     "params": {
       "start_temp": 1e-2,
-      "end_temp": 1e-10,
-      "num_temps": 10
+      "end_temp": 1e-7,
+      "num_temps": 5
     }
   },
   "outer_temp_dic": {
     "name": "exponential",
     "params": {
       "start_temp": 1e-2,
-      "end_temp": 1e-10,
-      "num_temps": 10
+      "end_temp": 1e-7,
+      "num_temps": 5
     }
   },
 
-  "inner_num_sweeps": 5,
-  "outer_num_sweeps": 5,
+  "inner_num_sweeps": 10,
+  "outer_num_sweeps": 10,
 
   "inner_func_name": "cosine_similarity",
   "outer_func_name": "cosine_similarity",
