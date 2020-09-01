@@ -4,7 +4,7 @@
     "params": {
       "start_temp": 1e-2,
       "end_temp": 1e-10,
-      "num_temps": 5
+      "num_temps": 10
     }
   },
   "outer_temp_dic": {
