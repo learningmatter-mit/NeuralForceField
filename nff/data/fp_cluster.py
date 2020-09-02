@@ -270,14 +270,32 @@ def inner_opt(dset_0,
 
     sim_func = SIM_FUNCS[func_name]
     sim = sim_func(repeat_fps_0, repeat_fps_1, dim=2).mean(1)
+
+    if debug:
+
+        fprint(("Checking that the inner opt is working."))
+        check_sim = []
+        for spec_idx in range(len(dset_0)):
+            sims = []
+            for fp in dset_0.props["all_fps"][spec_idx]:
+                sim_mean = 0
+                for other_fp in dset_1.props["single_fps"]:
+                    sim_mean += sim_func(fp, other_fp, dim=0)
+                sim_mean /= len(dset_1)
+                sims.append(sim_mean)
+            check_sim += sims
+        check_sim = torch.Tensor(check_sim)
+
+        print("Difference is %.2e" % abs((check_sim - sim).mean()))
+        sys.exit()
+
     split = torch.split(sim, num_fps_0)
     conf_idx = torch.stack([i.argmax() for i in split])
+
     for spec_idx, conf_idx in enumerate(conf_idx):
         dset_0.flip_fp(spec_idx, conf_idx)
 
     return dset_0
-
-    #
 
 
 def get_sample_0(dset_0, batch_size_0):
