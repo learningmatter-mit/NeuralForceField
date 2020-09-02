@@ -8,12 +8,12 @@
     }
   },
 
-  "outer_num_sweeps": 1,
+  "outer_num_sweeps": 5,
 
   "inner_func_name": "cosine_similarity",
   "outer_func_name": "cosine_similarity",
 
-  "batch_size_0": 3,
+  "batch_size_0": 20,
   "num_trials": 1,
 
   "nff_dset_path": "/home/saxelrod/supercloud2/models/4053/0_combined/train.pth.tar",
