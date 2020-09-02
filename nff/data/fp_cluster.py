@@ -573,10 +573,6 @@ def main(debug=False):
                       smiles_path=arg_dic["smiles_path"],
                       seed=0)
 
-    # make sure torch uses available cores for computations
-    num_cpus = multiprocessing.cpu_count()
-    torch.set_num_threads(num_cpus)
-
     try:
 
         num_trials = arg_dic["num_trials"]
