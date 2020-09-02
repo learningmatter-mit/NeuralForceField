@@ -1,12 +1,4 @@
 {
-  "inner_temp_dic": {
-    "name": "exponential",
-    "params": {
-      "start_temp": 1e-2,
-      "end_temp": 1e-7,
-      "num_temps": 5
-    }
-  },
   "outer_temp_dic": {
     "name": "exponential",
     "params": {
@@ -16,13 +8,12 @@
     }
   },
 
-  "inner_num_sweeps": 2,
   "outer_num_sweeps": 2,
 
   "inner_func_name": "cosine_similarity",
   "outer_func_name": "cosine_similarity",
 
-  "batch_size_0": 200,
+  "batch_size_0": 50,
   "num_trials": 1,
 
   "nff_dset_path": "/home/saxelrod/supercloud2/models/4053/0_combined/train.pth.tar",
