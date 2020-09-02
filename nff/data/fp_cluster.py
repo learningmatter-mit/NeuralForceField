@@ -10,7 +10,6 @@ import sys
 import pdb
 import copy
 from tqdm import tqdm
-import multiprocessing
 
 
 from nff.data import Dataset as NffDataset
