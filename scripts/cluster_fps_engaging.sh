@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -p sched_mit_rafagb,sched_mit_rafagb_amd,sched_opportunist
 #SBATCH -t 10080
-#SBATCH -n 12
+#SBATCH -n 32
 #SBATCH -N 1
 #SBATCH --mem-per-cpu 5G
 

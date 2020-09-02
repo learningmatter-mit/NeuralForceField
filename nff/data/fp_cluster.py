@@ -9,7 +9,6 @@ import json
 import sys
 import pdb
 import copy
-import time
 from tqdm import tqdm
 
 
@@ -162,22 +161,6 @@ def choose_flip(dataset):
     return spec_idx, conf_idx
 
 
-def inner_loss_change(loss_mat,
-                      spec_idx,
-                      func_name,
-                      dset_0,
-                      dset_1):
-
-    new_sim = dset_0.compare(spec_idx, func_name, dset_1)
-    denom = len(dset_0) * len(dset_1)
-    # wnat to maximize the similarity
-    add_loss = -new_sim.sum() / denom
-    subtract_loss = loss_mat[spec_idx, :].sum() / denom
-    delta_loss = add_loss - subtract_loss
-
-    return delta_loss, new_sim
-
-
 def get_outer_loss(dset_0,
                    func_name,
                    dset_1):
@@ -198,35 +181,6 @@ def get_outer_loss(dset_0,
     loss = (sim_other_mat.mean() - sim_self_mat.mean()).item()
 
     return loss
-
-
-def init_inner_loss(dset_0,
-                    func_name,
-                    dset_1):
-
-    loss_mat = torch.zeros((len(dset_0), len(dset_1)))
-
-    for spec_idx in range(len(dset_0)):
-
-        sim_other = dset_0.compare(spec_idx, func_name, dset_1)
-        # minimizing loss maximizes similarity to other dataset
-        loss_mat[spec_idx, :] = - sim_other
-
-    loss = loss_mat.mean().item()
-
-    return loss_mat, loss
-
-
-def update_inner_loss(loss,
-                      loss_mat,
-                      spec_idx,
-                      delta_loss,
-                      sim_other):
-
-    loss_mat[spec_idx, :] = -sim_other
-    loss += delta_loss
-
-    return loss_mat, loss
 
 
 def get_criterion(delta_loss, temp):
@@ -294,30 +248,27 @@ def apply_tdqm(lst, track_prog):
         return enumerate(lst)
 
 
-def inner_mc(dset_0,
-             dset_1,
-             func_name,
-             verbose=False,
-             debug=False):
-
-
-
+def inner_opt(dset_0,
+              dset_1,
+              func_name,
+              verbose=False,
+              debug=False):
 
     all_fps_0 = dset_0.props["all_fps"]
     num_fps_0 = [len(i) for i in all_fps_0]
-    cat_fps_0 = torch.cat(all_fps_0) # shape 15989 x 300
+    cat_fps_0 = torch.cat(all_fps_0)  # shape 15989 x 300
     # repeat it as [conf_0, conf_0, ..., conf_1, conf_1, ...]
 
     len_1 = len(dset_1)
     reshape_fps_0 = cat_fps_0.reshape(-1, cat_fps_0.shape[1], 1)
-    repeat_fps_0 = torch.repeat_interleave(reshape_fps_0, len_1, 2).transpose(1, 2)
-
+    repeat_fps_0 = torch.repeat_interleave(
+        reshape_fps_0, len_1, 2).transpose(1, 2)
 
     best_fps_1 = torch.stack(dset_1.props["single_fps"])
     len_0 = cat_fps_0.shape[0]
     repeat_fps_1 = best_fps_1.repeat(len_0, 1, 1)
 
-    sim_func  = SIM_FUNCS[func_name]
+    sim_func = SIM_FUNCS[func_name]
     sim = sim_func(repeat_fps_0, repeat_fps_1, dim=2).mean(1)
     split = torch.split(sim, num_fps_0)
     conf_idx = torch.stack([i.argmax() for i in split])
@@ -326,58 +277,7 @@ def inner_mc(dset_0,
 
     return dset_0
 
-
-
-    # loss_mat, loss = init_inner_loss(dset_0=dset_0,
-    #                                  func_name=func_name,
-    #                                  dset_1=dset_1)
-
-    # temps = temp_func()
-    # num_temps = len(temps)
-
-    # for i, temp in enumerate(temps):
-
-    #     fprint((f"Starting iteration {i+1} of {num_temps} at "
-    #             "temperature %.3e... " % temp), verbose)
-
-    #     num_iters = int(len(dset_0) * num_sweeps)
-
-    #     for it in apply_tdqm(range(num_iters), verbose):
-
-    #         spec_idx, conf_idx = choose_flip(dset_0)
-    #         old_conf_idx = dset_0.props["conf_idx"][spec_idx]
-    #         dset_0.flip_fp(spec_idx, conf_idx)
-
-    #         delta_loss, sim_other = inner_loss_change(loss_mat=loss_mat,
-    #                                                   spec_idx=spec_idx,
-    #                                                   func_name=func_name,
-    #                                                   dset_0=dset_0,
-    #                                                   dset_1=dset_1)
-
-    #         criterion = get_criterion(delta_loss, temp)
-
-    #         if criterion:
-    #             loss_mat, loss = update_inner_loss(loss=loss,
-    #                                                loss_mat=loss_mat,
-    #                                                spec_idx=spec_idx,
-    #                                                delta_loss=delta_loss,
-    #                                                sim_other=sim_other)
-
-    #         else:
-    #             dset_0.flip_fp(spec_idx, old_conf_idx)
-
-    #         if debug:
-    #             real_loss_mat, real_loss = init_inner_loss(dset_0=dset_0,
-    #                                                        func_name=func_name,
-    #                                                        dset_1=dset_1)
-    #             print("Supposed loss is %.6e" % loss)
-    #             print("Real loss is %.6e" % real_loss)
-    #             print("Change in loss is %.2e" % delta_loss)
-
-    #     fprint(f"Finished iteration {i+1} of {num_temps}.", verbose)
-    #     fprint(f"Current loss is %.6e." % loss, verbose)
-
-    # return dset_0
+    #
 
 
 def get_sample_0(dset_0, batch_size_0):
@@ -430,13 +330,7 @@ def outer_mc(dset_0,
             dset_1.flip_fp(spec_idx, conf_idx)
 
             sample_0 = get_sample_0(dset_0, batch_size_0)
-
-
-            # start = time.time()
             sample_0 = update_0_fn(sample_0, dset_1)
-            # end = time.time()
-            # print("Took %.2f seconds" % (end - start))
-
             new_loss = get_outer_loss(dset_0=sample_0,
                                       func_name=func_name,
                                       dset_1=dset_1)
@@ -473,12 +367,11 @@ def dual_mc(dset_0,
 
     def update_0_fn(dset_0, dset_1):
 
-
-        dset_0 = inner_mc(dset_0=dset_0,
-                          dset_1=dset_1,
-                          func_name=inner_func_name,
-                          verbose=False,
-                          debug=debug)
+        dset_0 = inner_opt(dset_0=dset_0,
+                           dset_1=dset_1,
+                           func_name=inner_func_name,
+                           verbose=False,
+                           debug=debug)
 
         return dset_0
 
@@ -693,6 +586,3 @@ def main(debug=False):
     except Exception as e:
         fprint(e)
         pdb.post_mortem()
-
-
-

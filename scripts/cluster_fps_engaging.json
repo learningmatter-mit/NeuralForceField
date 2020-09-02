@@ -1,12 +1,4 @@
 {
-  "inner_temp_dic": {
-    "name": "exponential",
-    "params": {
-      "start_temp": 1e-2,
-      "end_temp": 1e-7,
-      "num_temps": 5
-    }
-  },
   "outer_temp_dic": {
     "name": "exponential",
     "params": {
@@ -16,15 +8,14 @@
     }
   },
 
-  "inner_num_sweeps": 10,
-  "outer_num_sweeps": 10,
+  "outer_num_sweeps": 100,
 
   "inner_func_name": "cosine_similarity",
   "outer_func_name": "cosine_similarity",
 
-  "batch_size_0": 200,
+  "batch_size_0": 50,
   "num_trials": 1,
-
+  
   "nff_dset_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/clustering/train.pth.tar",
   "conf_dset_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/clustering/conf_train.pth.tar",
   "summary_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/clustering/summary_conf_train.pth.tar",
