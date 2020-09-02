@@ -343,21 +343,18 @@ def outer_mc(dset_0,
 
         for it in tqdm(range(num_iters)):
 
+            sample_0 = get_sample_0(dset_0, batch_size_0)
+
             # We first need to re-calculate the loss
             # for the new batch before flipping, because
             # the loss changes stochastically by batch.
 
-            sample_0 = get_sample_0(dset_0, batch_size_0)
-
-            # if np.mod(it, recalc_freq) == 0:
-            # print("Supposed loss: %.6e" % loss)
-            
             sample_0 = update_0_fn(sample_0, dset_1)
             loss = get_outer_loss(dset_0=sample_0,
                                   func_name=func_name,
                                   dset_1=dset_1)
-            # print("Actual loss: %.6e" % loss)
 
+            # Now calculate the loss with a flip
 
             spec_idx, conf_idx = choose_flip(dset_1)
             old_conf_idx = dset_1.props["conf_idx"][spec_idx]
@@ -368,17 +365,14 @@ def outer_mc(dset_0,
                                       func_name=func_name,
                                       dset_1=dset_1)
 
-            # delta_loss = new_loss - loss
-            # print("Change in loss is %.2e" % delta_loss)
+            # compute the change in loss
 
             delta_loss = torch.Tensor([new_loss - loss]).squeeze()
             criterion = get_criterion(delta_loss, temp)
 
             if criterion:
                 loss = new_loss
-
             else:
-
                 dset_1.flip_fp(spec_idx, old_conf_idx)
 
             tracked_loss.append(loss)

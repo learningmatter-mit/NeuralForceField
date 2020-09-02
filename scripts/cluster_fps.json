@@ -2,8 +2,8 @@
   "outer_temp_dic": {
     "name": "exponential",
     "params": {
-      "start_temp": 1e-2,
-      "end_temp": 1e-7,
+      "start_temp": 1e-4,
+      "end_temp": 1e-10,
       "num_temps": 5
     }
   },
