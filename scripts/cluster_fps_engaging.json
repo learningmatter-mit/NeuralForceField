@@ -13,7 +13,7 @@
   "inner_func_name": "cosine_similarity",
   "outer_func_name": "cosine_similarity",
 
-  "batch_size_0": 50,
+  "batch_size_0": 25,
   "num_trials": 1,
 
   "nff_dset_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/clustering/train.pth.tar",
