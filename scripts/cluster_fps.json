@@ -8,7 +8,7 @@
     }
   },
 
-  "outer_num_sweeps": 5,
+  "outer_num_sweeps": 1,
 
   "inner_func_name": "cosine_similarity",
   "outer_func_name": "cosine_similarity",

@@ -341,13 +341,28 @@ def outer_mc(dset_0,
 
         num_iters = int(len(dset_1) * num_sweeps)
 
-        for it in apply_tdqm(range(num_iters), verbose):
+        for it in tqdm(range(num_iters)):
+
+            # We first need to re-calculate the loss
+            # for the new batch before flipping, because
+            # the loss changes stochastically by batch.
+
+            sample_0 = get_sample_0(dset_0, batch_size_0)
+
+            # if np.mod(it, recalc_freq) == 0:
+            # print("Supposed loss: %.6e" % loss)
+            
+            sample_0 = update_0_fn(sample_0, dset_1)
+            loss = get_outer_loss(dset_0=sample_0,
+                                  func_name=func_name,
+                                  dset_1=dset_1)
+            # print("Actual loss: %.6e" % loss)
+
 
             spec_idx, conf_idx = choose_flip(dset_1)
             old_conf_idx = dset_1.props["conf_idx"][spec_idx]
             dset_1.flip_fp(spec_idx, conf_idx)
 
-            sample_0 = get_sample_0(dset_0, batch_size_0)
             sample_0 = update_0_fn(sample_0, dset_1)
             new_loss = get_outer_loss(dset_0=sample_0,
                                       func_name=func_name,
