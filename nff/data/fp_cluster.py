@@ -133,7 +133,7 @@ def dset_from_idx(dset, idx):
 def sample(other_dset, batch_size):
 
     length = len(other_dset)
-    pop = list(range(length - 1))
+    pop = list(range(length))
     sample_idx = random.sample(pop, k=batch_size)
     dset = dset_from_idx(other_dset, sample_idx)
 
@@ -254,19 +254,39 @@ def inner_opt(dset_0,
               verbose=False,
               debug=False):
 
+    # The entire set of dset_0 fingerprints
     all_fps_0 = dset_0.props["all_fps"]
+    # number of fingerprints per species
     num_fps_0 = [len(i) for i in all_fps_0]
-    cat_fps_0 = torch.cat(all_fps_0)  # shape 15989 x 300
-    # repeat it as [conf_0, conf_0, ..., conf_1, conf_1, ...]
+    # the concatenation of all of them
+    cat_fps_0 = torch.cat(all_fps_0)
+
+    # repeat the entire set of dset_0 fingerprints as
+    # [[fp_0, fp_0, ...], [fp_1, fp_1, ...], ...]. So
+    # the shape of `repeat_fps_0` is (num_0, num_1, fp_dim),
+    # where `num_0` is the total number of fingerprints in
+    # dset_0, `num_1` is the total number of species in
+    # dset_1, and `fp_dim` is the length of each fingerprint.
 
     len_1 = len(dset_1)
     reshape_fps_0 = cat_fps_0.reshape(-1, cat_fps_0.shape[1], 1)
     repeat_fps_0 = torch.repeat_interleave(
         reshape_fps_0, len_1, 2).transpose(1, 2)
 
+    # repeat the current best fingerprints from dset_1 as
+    # [[fp_0, fp_1, ..., fp_N], [fp_0, fp_1, ..., fp_N] ...].
+    # The shape is also (num_0, num_1, fp_dim).
+
     best_fps_1 = torch.stack(dset_1.props["single_fps"])
     len_0 = cat_fps_0.shape[0]
     repeat_fps_1 = best_fps_1.repeat(len_0, 1, 1)
+
+    # now compute the similarity between every combination
+    # of the set of dset_0 fingerprints and the best
+    # dset_1 fingerprints. We apply the function along dim=2
+    # (the fingerprint dimension) and take the mean along dim=1
+    # (the dset_1 dimension) to get a similarity tensor of length
+    # `num_0`.
 
     sim_func = SIM_FUNCS[func_name]
     sim = sim_func(repeat_fps_0, repeat_fps_1, dim=2).mean(1)
@@ -289,8 +309,13 @@ def inner_opt(dset_0,
         print("Difference is %.2e" % abs((check_sim - sim).mean()))
         sys.exit()
 
+    # Split the results back up by dset_0 species. For each species
+    # find the index corresponding to the highest similarity.
+
     split = torch.split(sim, num_fps_0)
     conf_idx = torch.stack([i.argmax() for i in split])
+
+    # Assign each of these indices to the species in dset_0
 
     for spec_idx, conf_idx in enumerate(conf_idx):
         dset_0.flip_fp(spec_idx, conf_idx)
@@ -312,6 +337,7 @@ def outer_mc(dset_0,
              num_sweeps,
              temp_func,
              update_0_fn,
+             resample_freq,
              verbose=False,
              batch_size_0=None):
 
@@ -343,16 +369,20 @@ def outer_mc(dset_0,
 
         for it in tqdm(range(num_iters)):
 
-            sample_0 = get_sample_0(dset_0, batch_size_0)
+            # resample every now and again
 
-            # We first need to re-calculate the loss
-            # for the new batch before flipping, because
-            # the loss changes stochastically by batch.
+            if np.mod(it, resample_freq) == 0:
 
-            sample_0 = update_0_fn(sample_0, dset_1)
-            loss = get_outer_loss(dset_0=sample_0,
-                                  func_name=func_name,
-                                  dset_1=dset_1)
+                sample_0 = get_sample_0(dset_0, batch_size_0)
+
+                # If resampling, we first need to re-calculate the
+                # loss for the new batch before flipping, because
+                # the loss changes stochastically by batch.
+
+                sample_0 = update_0_fn(sample_0, dset_1)
+                loss = get_outer_loss(dset_0=sample_0,
+                                      func_name=func_name,
+                                      dset_1=dset_1)
 
             # Now calculate the loss with a flip
 
@@ -385,32 +415,33 @@ def outer_mc(dset_0,
 
 def dual_mc(dset_0,
             dset_1,
-            inner_func_name,
-            outer_func_name,
-            outer_num_sweeps,
-            outer_temp_dic,
+            func_name,
+            num_sweeps,
+            temp_dic,
             batch_size_0,
+            resample_freq,
             debug=False):
 
     def update_0_fn(dset_0, dset_1):
 
         dset_0 = inner_opt(dset_0=dset_0,
                            dset_1=dset_1,
-                           func_name=inner_func_name,
+                           func_name=func_name,
                            verbose=False,
                            debug=debug)
 
         return dset_0
 
-    outer_temp_func = make_temp_func(temp_dic=outer_temp_dic,
+    outer_temp_func = make_temp_func(temp_dic=temp_dic,
                                      dset_len=len(dset_1))
 
     dset_1, tracked_loss = outer_mc(dset_0=dset_0,
                                     dset_1=dset_1,
-                                    func_name=outer_func_name,
-                                    num_sweeps=outer_num_sweeps,
+                                    func_name=func_name,
+                                    num_sweeps=num_sweeps,
                                     temp_func=outer_temp_func,
                                     update_0_fn=update_0_fn,
+                                    resample_freq=resample_freq,
                                     verbose=True,
                                     batch_size_0=batch_size_0)
 
@@ -492,10 +523,10 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--arg_path", type=str,
                         help="Path to JSON that overrides args")
-    parser.add_argument("--outer_temp_dic", type=str,
+    parser.add_argument("--temp_dic", type=str,
                         help="Dictionary for outer temperature scheduler",
                         nargs="+")
-    parser.add_argument("--outer_num_sweeps", type=list,
+    parser.add_argument("--num_sweeps", type=list,
                         help="Outer number of sweeps per temperature")
     parser.add_argument("--summary_path", type=str,
                         help="Where to save summary")
@@ -507,14 +538,11 @@ def parse_args():
     parser.add_argument("--conf_path", type=str,
                         help="Path to NFF conformer dataset", default=None,
                         dest="conf_dset_path")
-    parser.add_argument("--inner_func_name", type=str,
+    parser.add_argument("--resample_freq", type=int,
+                        help="How often to generate a new 0 sample")
+    parser.add_argument("--sim_func", type=str,
                         help="Name of inner similarity function",
-                        default="cosine_similarity",
-                        nargs="+")
-    parser.add_argument("--outer_func_name", type=str,
-                        help="Name of outer similarity function",
-                        default="cosine_similarity",
-                        nargs="+")
+                        default="cosine_similarity")
     parser.add_argument("--smiles_path", type=str,
                         help=("Path to SMILES strings you want to "
                               "use in clustering"),
@@ -529,7 +557,7 @@ def parse_args():
             arg_dic = json.load(f)
     else:
         arg_dic = args.__dict__
-        for key in ["outer_temp_dic"]:
+        for key in ["temp_dic"]:
             arg_dic[key] = json.loads(arg_dic[key])
 
     return arg_dic
@@ -597,11 +625,11 @@ def main(debug=False):
             dset_1, tracked_loss = dual_mc(
                 dset_0=dset_0,
                 dset_1=dset_1,
-                inner_func_name=arg_dic["inner_func_name"],
-                outer_func_name=arg_dic["outer_func_name"],
-                outer_num_sweeps=arg_dic["outer_num_sweeps"],
-                outer_temp_dic=arg_dic["outer_temp_dic"],
+                func_name=arg_dic["sim_func"],
+                num_sweeps=arg_dic["num_sweeps"],
+                temp_dic=arg_dic["temp_dic"],
                 batch_size_0=arg_dic["batch_size_0"],
+                resample_freq=arg_dic["resample_freq"],
                 debug=debug)
 
             dset_1_list.append(copy.deepcopy(dset_1))

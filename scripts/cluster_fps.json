@@ -1,25 +1,25 @@
 {
-  "outer_temp_dic": {
+  "temp_dic": {
     "name": "exponential",
     "params": {
-      "start_temp": 1e-4,
-      "end_temp": 1e-10,
+      "start_temp": 1e-10,
+      "end_temp": 1e-11,
       "num_temps": 5
     }
   },
 
-  "outer_num_sweeps": 1,
+  "num_sweeps": 1,
+  "resample_freq": 20,
 
-  "inner_func_name": "cosine_similarity",
-  "outer_func_name": "cosine_similarity",
+  "sim_func": "cosine_similarity",
 
   "batch_size_0": 20,
   "num_trials": 1,
 
   "nff_dset_path": "/home/saxelrod/supercloud2/models/4053/0_combined/train.pth.tar",
-  "conf_dset_path": "/home/saxelrod/supercloud2/models/4053/0_combined/conf_train.pth.tar",
-  "summary_path": "/home/saxelrod/supercloud2/models/4053/0_combined/summary_conf_train.pth.tar",
-  "smiles_path": "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/clustering/mc_smiles.json"
+  "conf_dset_path": "/home/saxelrod/supercloud2/models/4053/0_combined/conf_train_small.pth.tar",
+  "summary_path": "/home/saxelrod/supercloud2/models/4053/0_combined/summary_conf_train_200_neg.pth.tar",
+  "smiles_path": "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/clustering/mc_smiles_small.json"
   
 
 }
