@@ -10,7 +10,7 @@
 
   "num_sweeps": 100,
   "sim_func": "cosine_similarity",
-  "batch_size_0": 25,
+  "batch_size_0": 50,
   "num_trials": 1,
   "resample_freq": 20,
 
