@@ -153,7 +153,7 @@ class WeightedConformers(nn.Module):
         networks = nn.ModuleList([])
 
         if boltzmann_dict["type"] == "multiply":
-            return
+            return [None]
 
         elif boltzmann_dict["type"] == "layers":
             layers = boltzmann_dict["layers"]

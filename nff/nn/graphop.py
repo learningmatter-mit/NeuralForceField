@@ -106,19 +106,19 @@ def conf_pool(mol_size,
 
 def split_and_sum(tensor, N):
     """spliting a torch Tensor into a list of uneven sized tensors,
-    and sum each tensor and stack 
+    and sum each tensor and stack
 
-    Example: 
+    Example:
         A = torch.rand(10, 10)
         N = [4,6]
-        split_and_sum(A, N).shape # (2, 10) 
+        split_and_sum(A, N).shape # (2, 10)
 
     Args:
         tensor (torch.Tensor): tensors to be split and summed
-        N (list): list of number of atoms 
+        N (list): list of number of atoms
 
     Returns:
-        torch.Tensor: stacked tensor of summed smaller tensor 
+        torch.Tensor: stacked tensor of summed smaller tensor
     """
     batched_prop = list(torch.split(tensor, N))
 
@@ -140,7 +140,7 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
         xyz (tensor): xyz of the molecule
 
     Returns:
-        dict: batched and pooled results 
+        dict: batched and pooled results
     """
 
     results = dict()
@@ -168,12 +168,12 @@ def get_atoms_inside_cell(r, N, pbc):
         all atoms beyond N which are not in the reindexing mapping `pbc`.
 
     Args:
-        r (torch.float): atomic embeddings 
+        r (torch.float): atomic embeddings
         N (torch.long): number of atoms inside each graph
         pbc (troch.long): atomic embeddings
 
     Returns:
-        torch.float: atomnic embedding tensors inside the cell 
+        torch.float: atomnic embedding tensors inside the cell
     """
     N = N.to(torch.long).tolist()
 
