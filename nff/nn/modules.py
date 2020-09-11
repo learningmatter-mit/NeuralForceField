@@ -981,7 +981,7 @@ class LinearConfAttention(ConfAttention):
         n_confs = new_fps.shape[0]
 
         if self.equal_weights:
-            alpha_i = torch.ones(n_confs).to(new_fps.device)
+            alpha_i = torch.ones(n_confs).to(new_fps.device).reshape(-1, 1)
             alpha_i /= alpha_i.sum()
 
         else:
@@ -991,7 +991,7 @@ class LinearConfAttention(ConfAttention):
                 )
             )
 
-            alpha_i = softmax(output, dim=1).reshape(-1)
+            alpha_i = softmax(output, dim=1)
 
         prod = alpha_i * self.W(new_fps)
 
