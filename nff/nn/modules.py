@@ -991,7 +991,7 @@ class LinearConfAttention(ConfAttention):
                 )
             )
 
-            alpha_i = softmax(output, dim=1)
+            alpha_i = softmax(output, dim=1).reshape(-1, 1)
 
         prod = alpha_i * self.W(new_fps)
 
