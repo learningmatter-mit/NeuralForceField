@@ -993,7 +993,15 @@ class LinearConfAttention(ConfAttention):
 
             alpha_i = softmax(output, dim=1).reshape(-1)
 
-        return alpha_i
+        prod = alpha_i * self.W(new_fps)
+
+        # sum over neighbors and over fingerprints
+        summed_fps = prod.sum(0)
+
+        # put through nonlinearity
+        output = self.final_act(summed_fps)
+
+        return output
 
 
 class NodeMultiTaskReadOut(nn.Module):

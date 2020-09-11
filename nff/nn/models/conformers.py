@@ -6,7 +6,8 @@ from nff.nn.layers import DEFAULT_DROPOUT_RATE
 from nff.nn.modules import (
     SchNetConv,
     NodeMultiTaskReadOut,
-    ConfAttention
+    ConfAttention,
+    LinearConfAttention
 )
 from nff.nn.graphop import conf_pool
 from nff.nn.utils import construct_sequential
@@ -159,7 +160,14 @@ class WeightedConformers(nn.Module):
             layers = boltzmann_dict["layers"]
             networks.append(construct_sequential(layers))
 
-        elif boltzmann_dict["type"] == "attention":
+        elif "attention" in boltzmann_dict["type"]:
+
+            if boltzmann_dict["type"] == "attention":
+                module = ConfAttention
+            elif boltzmann_dict["type"] == "linear_attention":
+                module = LinearConfAttention
+            else:
+                raise NotImplementedError
 
             num_heads = boltzmann_dict.get("num_heads", 1)
             equal_weights = boltzmann_dict.get("equal_weights", False)
@@ -170,10 +178,10 @@ class WeightedConformers(nn.Module):
                 boltz_basis = boltzmann_dict["boltz_basis"]
                 final_act = boltzmann_dict["final_act"]
 
-                networks.append(ConfAttention(mol_basis=mol_basis,
-                                              boltz_basis=boltz_basis,
-                                              final_act=final_act,
-                                              equal_weights=equal_weights))
+                networks.append(module(mol_basis=mol_basis,
+                                       boltz_basis=boltz_basis,
+                                       final_act=final_act,
+                                       equal_weights=equal_weights))
 
         return networks
 
