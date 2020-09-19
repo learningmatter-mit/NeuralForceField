@@ -27,6 +27,7 @@ class AtomsBatch(Atoms):
         props={},
         cutoff=DEFAULT_CUTOFF,
         nbr_torch=False,
+        directed=False,
         **kwargs
     ):
         """
@@ -44,6 +45,7 @@ class AtomsBatch(Atoms):
         self.nbr_list = props.get('nbr_list', None)
         self.offsets = props.get('offsets', None)
         self.nbr_torch = nbr_torch
+        self.directed = directed
         self.num_atoms = props.get('num_atoms', len(self))
         self.cutoff = cutoff
         self.device = 0
@@ -93,7 +95,7 @@ class AtomsBatch(Atoms):
         """
 
         if self.nbr_torch:
-            edge_from, edge_to, offsets = torch_nbr_list(self, self.cutoff, device=self.device, directed=False)
+            edge_from, edge_to, offsets = torch_nbr_list(self, self.cutoff, device=self.device, directed=self.directed)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         else:
             self.wrap()
