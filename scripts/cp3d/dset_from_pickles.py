@@ -8,92 +8,21 @@ import argparse
 import pdb
 import sys
 
-# # # sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
-# # sys.path.insert(0, "/home/saxelrod/Repo/projects/covid_nff/NeuralForceField")
-# sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
 
-
-from nff.data import Dataset, concatenate_dict  # , split_train_validation_test
-from nff.data.features.graph import (bond_feats_from_dic, atom_feats_from_dic,
-                                     nbr_list_from_dic)
-
+from nff.data import Dataset, concatenate_dict
 import copy
-from rdkit import Chem
 
 
-# RDKIT_FOLDER = "/home/saxelrod/Repo/projects/geom/tutorials/rdkit_folder"
-# RDKIT_FOLDER = "/home/saxelrod/fock/Repo/projects/geom/tutorials/rdkit_folder"
-RDKIT_FOLDER = "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/rdkit_folder"
-
-
-PICKLE_FOLDER = os.path.join(RDKIT_FOLDER, "drugs")
-SUMMARY_PATH = os.path.join(RDKIT_FOLDER, "summary_drugs.json")
-# DATASET_PATH = "/home/saxelrod/final_covid_train/d_for_sigopt.pth.tar"
-DATASET_PATH = "/nobackup1/saxelrod/models/1057"
-
-FEAT_DIC_PATH = ("/home/saxelrod/fock/Repo/projects/geom/tutorials"
-                 "/features/file_dic.json")
-PROP_SAMPLE_PATH = "/home/saxelrod/fock/final_covid_train/prop_sample.json"
-
-
-PROP = "sars_cov_one_cl_protease_active"
-
-NUM_SPECS = 400000
-# NUM_SPECS = 300
-
-KEY_MAP = {"rd_mol": "nxyz", "boltzmannweight": "weights",
+KEY_MAP = {"rd_mol": "nxyz",
+           "boltzmannweight": "weights",
            "relativeenergy": "energy"}
 
 EXCLUDE_KEYS = ["totalconfs", "datasets"]
-MAX_ATOMS = 100
-NUM_CONFS = 100
-POS_PER_VAL = 8
-TEST_VAL_SIZE = 5000
 
 
 def fprint(msg):
     print(msg)
     sys.stdout.flush()
-
-
-def get_smiles(rd_mol):
-
-    smiles = Chem.MolToSmiles(rd_mol)
-    mol = Chem.MolFromSmiles(smiles)
-    smiles = Chem.MolToSmiles(mol)
-
-    return smiles
-
-
-def all_same_smiles(sub_dic):
-
-    rd_mols = sub_dic["rd_mols"]
-    smiles_list = []
-    for mol in rd_mols:
-        smiles_list.append(get_smiles(mol))
-
-    return all([i == smiles_list[0] for i in smiles_list])
-
-
-def get_feature_vecs(sub_dic):
-
-    # dic_list = sub_dic["rd_mols"]
-
-    # bond_feats = []
-    # atom_feats = []
-    # bonded_nbr_list = []
-
-    if not all_same_smiles(sub_dic):
-        return {}
-
-    bond_feats = bond_feats_from_dic(sub_dic["bonds"][0])
-    atom_feats = atom_feats_from_dic(sub_dic["atoms"][0])
-    bonded_nbr_list = torch.LongTensor(
-        nbr_list_from_dic(sub_dic["bonds"][0]))
-
-    return {"bond_features": bond_feats,
-            "atom_features": atom_feats,
-            "bonded_nbr_list": bonded_nbr_list}
 
 
 def get_thread_dic(sample_dic, thread, num_threads):
@@ -105,8 +34,6 @@ def get_thread_dic(sample_dic, thread, num_threads):
 
     sample_dic = {key: sample_dic[key]
                   for key in thread_keys}
-
-    # should add the train/test split info here
 
     return sample_dic
 
@@ -146,7 +73,7 @@ def gen_splits(sample_dic, pos_per_val, prop, test_val_size):
 
 def proportional_sample(summary_dic,
                         prop,
-                        num_specs,
+                        max_specs,
                         prop_sample_path,
                         pos_per_val,
                         test_val_size,
@@ -185,11 +112,14 @@ def proportional_sample(summary_dic,
     num_neg = len(negatives)
     num_pos = len(positives)
 
+    if max_specs is None:
+        max_specs = num_neg + num_pos
+
     # get the number of desired negatives and positives to
     # get the right proportional sampling
 
-    num_neg_sample = int(num_neg / (num_neg + num_pos) * num_specs)
-    num_pos_sample = int(num_pos / (num_neg + num_pos) * num_specs)
+    num_neg_sample = int(num_neg / (num_neg + num_pos) * max_specs)
+    num_pos_sample = int(num_pos / (num_neg + num_pos) * max_specs)
 
     # shuffle negatives and positives and extract the appropriate
     # number of each
@@ -228,6 +158,8 @@ def load_data_from_pickle(sample_dic, max_atoms, rdkit_folder):
     overall_dic = {}
     i = 0
     total_num = len(sample_dic)
+    if max_atoms is None:
+        max_atoms = float("inf")
 
     for smiles, sub_dic in sample_dic.items():
 
@@ -309,23 +241,17 @@ def renorm_weights(spec_dic):
     return spec_dic
 
 
-def convert_data(overall_dic, num_confs, feature_dic):
-    #
-    # fprint("Adding features...")
+def convert_data(overall_dic, num_confs):
 
-    # overall_dic = add_features(overall_dic, feature_dic)
-    # fprint("Finished adding features")
     spec_dics = []
+    if num_confs is None:
+        num_confs = float("inf")
 
     for key, sub_dic in overall_dic.items():
 
         spec_dic = {map_key(key): val for key, val in sub_dic.items()
                     if key != "conformers"}
-        feature_vecs = get_feature_vecs(sub_dic)
-        if not feature_vecs:
-            continue
 
-        spec_dic.update(feature_vecs)
         actual_confs = min(num_confs, len(sub_dic["conformers"]))
         spec_dic = fix_iters(spec_dic, actual_confs)
         spec_dic.update({map_key(key): [] for key
@@ -335,7 +261,7 @@ def convert_data(overall_dic, num_confs, feature_dic):
         sorted_idx = get_sorted_idx(sub_dic)
         confs = sub_dic["conformers"]
 
-        for idx in sorted_idx[:num_confs]:
+        for idx in sorted_idx[:actual_confs]:
             conf = confs[idx]
             for key in conf.keys():
                 if key == "rd_mol":
@@ -348,42 +274,9 @@ def convert_data(overall_dic, num_confs, feature_dic):
                     spec_dic[map_key(key)].append(conf[key])
 
         spec_dic = renorm_weights(spec_dic)
-        spec_dic = duplicate_features(spec_dic)
         spec_dics.append(spec_dic)
 
     return spec_dics
-
-
-def duplicate_features(spec_dic):
-    """
-    Only applies when the bond and atom features
-    are all the same for every conformer.
-    """
-
-    num_confs = len(spec_dic['weights'])
-    for key in ["atom_features", "bond_features"]:
-        if not isinstance(spec_dic[key], torch.Tensor):
-            spec_dic[key] = torch.Tensor(spec_dic[key])
-        spec_dic[key] = torch.cat([spec_dic[key]] * num_confs)
-
-    if not isinstance(spec_dic['bonded_nbr_list'], torch.LongTensor):
-        spec_dic['bonded_nbr_list'] = torch.LongTensor(
-            spec_dic['bonded_nbr_list'])
-
-    nbrs = [spec_dic['bonded_nbr_list']] * num_confs
-    mol_size = len(spec_dic["nxyz"][0])
-
-    # number of atoms in the molecule
-    new_nbrs = []
-
-    # shift by i * mol_size for each conformer
-    for i in range(len(nbrs)):
-        new_nbrs.append(nbrs[i] + i * mol_size)
-
-    bonded_nbr_list = torch.cat(new_nbrs)
-    spec_dic["bonded_nbr_list"] = bonded_nbr_list
-
-    return spec_dic
 
 
 def make_nff_dataset(spec_dics, nbrlist_cutoff=5.0):
@@ -521,12 +414,11 @@ def save_splits(dataset,
         dset.save(dset_path)
 
 
-def main(num_specs,
+def main(max_specs,
          max_atoms,
          num_confs,
          prop,
          summary_path,
-         feat_dic_path,
          dataset_path,
          rdkit_folder,
          prop_sample_path,
@@ -539,13 +431,11 @@ def main(num_specs,
     with open(summary_path, "r") as f:
         summary_dic = json.load(f)
 
-    with open(feat_dic_path, "r") as f:
-        feature_path_dic = json.load(f)
-
     fprint("Generating proportional sample...")
+
     sample_dic = proportional_sample(summary_dic=summary_dic,
                                      prop=prop,
-                                     num_specs=num_specs,
+                                     max_specs=max_specs,
                                      prop_sample_path=prop_sample_path,
                                      thread=thread,
                                      num_threads=num_threads,
@@ -558,7 +448,7 @@ def main(num_specs,
     overall_dic = load_data_from_pickle(sample_dic, max_atoms, rdkit_folder)
 
     fprint("Converting data...")
-    spec_dics = convert_data(overall_dic, num_confs, feature_path_dic)
+    spec_dics = convert_data(overall_dic, num_confs)
 
     fprint("Combining to make NFF dataset...")
     dataset = make_nff_dataset(spec_dics=spec_dics,
@@ -575,22 +465,30 @@ def main(num_specs,
 
 
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_specs', type=int, default=NUM_SPECS)
-    parser.add_argument('--max_atoms', type=int, default=MAX_ATOMS)
-    parser.add_argument('--num_confs', type=int, default=NUM_CONFS)
-    parser.add_argument('--prop', type=str, default=PROP)
-    parser.add_argument('--summary_path', type=str, default=SUMMARY_PATH)
-    parser.add_argument('--feat_dic_path', type=str, default=FEAT_DIC_PATH)
-    parser.add_argument('--dataset_path', type=str, default=DATASET_PATH)
-    parser.add_argument('--rdkit_folder', type=str, default=RDKIT_FOLDER)
-    parser.add_argument('--prop_sample_path', type=str,
-                        default=PROP_SAMPLE_PATH)
+    parser.add_argument('--max_specs', type=int, default=None,
+                        help=("Maximum number of species to use in your "
+                              "dataset. No limit if max_specs isn't "
+                              "specified."))
+    parser.add_argument('--max_atoms', type=int, default=None,
+                        help=("Maximum number of atoms to allow in any "
+                              "species in your dataset. No limit if "
+                              "max_atoms isn't specified."))
+    parser.add_argument('--num_confs', type=int, default=None,
+                        help=("Maximum number of conformers to allow in any "
+                              "species in your dataset. No limit if "
+                              "num_confs isn't specified."))
+    parser.add_argument('--prop', type=str)
+    parser.add_argument('--summary_path', type=str)
+    parser.add_argument('--dataset_path', type=str)
+    parser.add_argument('--rdkit_folder', type=str)
+    parser.add_argument('--prop_sample_path', type=str)
     parser.add_argument('--only_samples', action='store_true')
     parser.add_argument('--num_threads', type=int, default=None)
     parser.add_argument('--thread', type=int, default=None)
-    parser.add_argument('--pos_per_val', type=int, default=POS_PER_VAL)
-    parser.add_argument('--test_val_size', type=int, default=TEST_VAL_SIZE)
+    parser.add_argument('--pos_per_val', type=int)
+    parser.add_argument('--test_val_size', type=int)
 
     arguments = parser.parse_args()
 
