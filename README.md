@@ -1,46 +1,31 @@
 # Neural Force Field
 
-The Neural Force Field (NFF) code is an API based on SchNet [1-4]. It provides an interface to train and evaluate neural networks for force fields.
+The Neural Force Field (NFF) code is an API based on SchNet [1-4]. It provides an interface to train and evaluate neural networks for force fields. It can also be used as a property predictor that incorporates 3D geometries into and graph-based predictors [5].
 
 ## Installation from source
 
 This software requires the following packages:
 
-- [PyTorch](http://pytorch.org)
-- [scikit-learn](http://scikit-learn.org/stable/)
-- [ase](https://wiki.fysik.dtu.dk/ase/)
-- [networkx](https://networkx.github.io/)
-- [sigopt](https://sigopt.com/)
+- [scikit-learn=0.23.1](http://scikit-learn.org/stable/)
+- [PyTorch=1.4](http://pytorch.org)
+- [ase=3.19.1](https://wiki.fysik.dtu.dk/ase/)
+- [pandas=1.0.5](https://pandas.pydata.org/)
+- [networkx=2.4](https://networkx.github.io/)
+- [pymatgen=2020.7.3](https://pymatgen.org/)
+- [sympy=1.6.1](https://www.sympy.org/)
+- [rdkit=2020.03.3](https://www.rdkit.org/)
 
-For interfacing NFF with [ChemProp](https://github.com/chemprop/chemprop) [5], a module for property prediction based on 2D molecular graphs, the following additional packages are required:
-- [gunicorn](https://gunicorn.org/)
-- [RDKit](https://www.rdkit.org/)
-- [torchvision](https://pytorch.org/docs/stable/torchvision/index.html)
-- [flask](https://flask.palletsprojects.com/en/1.1.x/)
-- [hyperopt](https://github.com/hyperopt/hyperopt)
-- [numpy](https://numpy.org/)
-- [scipy](https://www.scipy.org/)
-- [tensorflow](https://www.tensorflow.org/)
-- [tensorboardX](https://github.com/lanpa/tensorboardX)
-- [tqdm](https://github.com/tqdm/tqdm)
-- [munch](https://github.com/Infinidat/munch)
-- [descriptasorus](https://github.com/bp-kelley/descriptastorus)
-- [chemprop](https://github.com/chemprop/chemprop)
-
-We highly recommend creating a `conda` environment to run the code. To do that, use the following commands:
+We highly recommend to create a `conda` environment to run the code. To do that, use the following commands:
 
 ```bash
 conda upgrade conda
-conda create -n nff python=3.7 scikit-learn pytorch=1.2.0 cudatoolkit=10.0 ase pandas \
-pymatgen gunicorn rdkit torchvision flask hyperopt numpy scipy tensorflow tensorboardX \
-tqdm -c pytorch -c conda-forge -c rdkit
+conda create -n nff python=3.7 scikit-learn pytorch\>=1.2.0 cudatoolkit=10.0 ase pandas pymatgen sympy rdkit -c pytorch -c conda-forge -c rdkit
 ```
 
 Next install remaining pip requirements:
 
 ```bash
-pip install munch sigopt git+https://github.com/bp-kelley/descriptastorus \ 
-git+https://github.com/simonaxelrod/chemprop
+pip install munch sigopt git+https://github.com/bp-kelley/descriptastorus
 ```
 
 You need to activate the `nff` environment to install the NFF package:
