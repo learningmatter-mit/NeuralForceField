@@ -3,10 +3,8 @@ import numpy as np
 import copy
 from rdkit import Chem
 from rdkit.Chem import AllChem
-import msgpack
 
 from nff.utils.xyz2mol import xyz2mol
-# from e3fp.pipeline import fprints_from_mol
 from nff.utils.cuda import batch_to
 from torch.utils.data import DataLoader
 
@@ -565,126 +563,6 @@ def get_all_atom_feats(atom, feat_types):
     return feat_dic
 
 
-def compress_feats(confs, feat_type):
-
-    feat_dic = {}
-    feat_type = feat_type.lower()
-
-    for i, sub_dic in enumerate(confs):
-
-        if feat_type == "bonded_nbr_list":
-            dic_list = sub_dic["bonds"]
-        else:
-            dic_list = sub_dic[feat_type]
-
-        if feat_type == "atoms":
-            feats = atom_feats_from_dic(dic_list)
-            tuple_feats = tuple(feats.reshape(-1).tolist())
-
-        elif feat_type == "bonds":
-            feats = bond_feats_from_dic(dic_list)
-            tuple_feats = tuple(feats.reshape(-1).tolist())
-
-        elif feat_type == "bonded_nbr_list":
-            feats = nbr_list_from_dic(dic_list)
-            tuple_feats = tuple([tuple(i) for i in feats])
-
-        if tuple_feats in feat_dic:
-            feat_dic[tuple_feats].append(i)
-        else:
-            feat_dic[tuple_feats] = [i]
-
-    return feat_dic
-
-
-def compress_overall_dic(overall_dic):
-
-    compressed_dic = {}
-
-    for smiles, confs in overall_dic.items():
-        atom_dic = compress_feats(confs=confs,
-                                  feat_type='atoms')
-        bond_dic = compress_feats(confs=confs,
-                                  feat_type='bonds')
-        nbr_dic = compress_feats(confs=confs,
-                                 feat_type='bonded_nbr_list')
-
-        compressed_dic[smiles] = {"atoms": atom_dic,
-                                  "bonds": bond_dic,
-                                  "bonded_nbr_list": nbr_dic}
-
-    return compressed_dic
-
-
-def single_feats_from_dic(overall_dic,
-                          num_atom_feats=NUM_ATOM_FEATS,
-                          num_bond_feats=NUM_BOND_FEATS):
-    """Allow only species that have the same graph for every conformer.
-    Assign one set of atom features and bond features for the whole species."""
-
-    compressed_dic = compress_overall_dic(overall_dic)
-    single_feat_dic = {}
-
-    for key, sub_dic in compressed_dic.items():
-        if any((len(sub_dic["atoms"]) != 1,
-                len(sub_dic["bonds"]) != 1)):
-                # len(sub_dic["bonded_nbr_list"]) != 1)):
-            continue
-
-        atom_feat_list = list(list(sub_dic["atoms"].keys())[0])
-        bond_feat_list = list(list(sub_dic["bonds"].keys())[0])
-        # bonded_nbr_list = list(list(sub_dic["bonded_nbr_list"].keys())[0])
-
-        bonded_nbr_tuples = [(torch.LongTensor(nbr_list), idx) for
-                             nbr_list, idx in sub_dic["bonded_nbr_list"].items()]
-
-        # convert to tensors and reshape
-
-        atom_feats = torch.Tensor(atom_feat_list).reshape(-1, num_atom_feats)
-        bond_feats = torch.Tensor(bond_feat_list).reshape(-1, num_bond_feats)
-        # bonded_nbr_list = torch.LongTensor(bonded_nbr_list)
-
-        single_feat_dic[key] = {"atom_features": atom_feats,
-                                "bond_features": bond_feats,
-                                "bonded_nbr_tuples": bonded_nbr_tuples}
-
-    return single_feat_dic
-
-
-def add_single_feats_to_dataset(dataset, single_feat_file):
-
-    # should probably append these new dictionaries one-by-one
-    # to a new msgpack file so they can be easily loaded
-
-    single_feat_dic = {}
-    unpacker = msgpack.Unpacker(open(single_feat_file, "rb"))
-    for feat_dic in unpacker:
-        single_feat_dic.update(feat_dic)
-
-    good_idx = [i for i, smiles in enumerate(dataset.props["smiles"])
-                if smiles in single_feat_dic]
-
-    new_props = {}
-    for key, val in dataset.props.items():
-        if type(val) is list:
-            new_props[key] = [val[i] for i in good_idx]
-        else:
-            new_props[key] = val[good_idx]
-
-    dataset.props = new_props
-
-    smiles_list = dataset.props["smiles"]
-    bond_feats = torch.stack(
-        [single_feat_dic[smiles]["bond_features"] for smiles in smiles_list])
-    atom_feats = torch.stack(
-        [single_feat_dic[smiles]["atom_features"] for smiles in smiles_list])
-
-    dataset.props["atom_features"] = atom_feats
-    dataset.props["bond_features"] = bond_feats
-
-    return dataset
-
-
 def filter_changed_graphs(compressed_dic):
     # get rid of species whose conformers don't all have the same graph
     good_keys = [key for key, sub_dic in compressed_dic.items()
@@ -699,32 +577,6 @@ def filter_changed_graphs(compressed_dic):
 
     pass
 
-
-def add_compress_to_nff_dataset(dataset):
-
-    pass
-
-# def featurize_rd_bonds(rd_mol, feat_types=BOND_FEAT_TYPES):
-
-#     bonds = rd_mol.GetBonds()
-#     bond_list = []
-#     all_props = [] 
-
-#     for bond in bonds:
-
-#         all_props.append(torch.tensor([]))
-
-#         start = bond.GetBeginAtomIdx()
-#         end = bond.GetEndAtomIdx()
-#         lower = min((start, end))
-#         upper = max((start, end))
-
-#         bond_list.append([lower, upper])
-#         feat_dic = get_all_bond_feats(bond=bond,
-#                                       feat_types=feat_types)
-
-#         for key, feat in feat_dic.items():
-#             all_props[-1] = torch.cat((all_props[-1], feat))
 
 def featurize_bonds(dataset, feat_types=BOND_FEAT_TYPES):
 
