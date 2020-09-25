@@ -1,2 +1,2 @@
 from .graph import *
-from .shape import *
+from .xyz import *

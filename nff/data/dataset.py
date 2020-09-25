@@ -4,27 +4,20 @@ import torch
 import numbers
 import numpy as np
 import copy
-import itertools
 import nff.utils.constants as const
 from copy import deepcopy
-from collections.abc import Iterable
 from sklearn.utils import shuffle as skshuffle
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset as TorchDataset
-from nff.data.sparse import sparsify_tensor
-from nff.data.topology import update_props_topologies
 from nff.data.graphs import (reconstruct_atoms, get_neighbor_list,
                              get_bond_idx)
 from nff.data.parallel import featurize_parallel, NUM_PROCS
 from nff.data.features import (ATOM_FEAT_TYPES, BOND_FEAT_TYPES,
-                               add_voxels, add_morgan, add_mol_soap,
-                               add_e3fp)
-from nff.data.descriptors import featurize_hydrogenic, featurize_rdkit
+                               add_morgan, add_e3fp, featurize_rdkit)
 
 
 class Dataset(TorchDataset):
-    """Dataset to deal with NFF calculations. Can be expanded to retrieve calculations
-         from the cluster later.
+    """Dataset to deal with NFF calculations.
 
     Attributes:
         props (list of dicts): list of dictionaries containing all properties of the system.
@@ -116,7 +109,7 @@ class Dataset(TorchDataset):
             else:
                 old_val = new_props[key]
                 new_props.props[key] = torch.cat([old_val,
-                                                val.to(old_val.dtype)])
+                                                  val.to(old_val.dtype)])
         self.props = new_props
 
         return copy.deepcopy(self)
@@ -270,32 +263,11 @@ class Dataset(TorchDataset):
                            bond_feats=bond_feats,
                            atom_feats=atom_feats)
 
-    def featurize_hydrogenic(self, n_max, a0, device, batch_size, atom_types):
-        featurize_hydrogenic(self, n_max=n_max,
-                             a0=a0,
-                             device=device,
-                             batch_size=batch_size,
-                             atom_types=atom_types)
-
-    def add_voxels(self, n_gaussians, start, stop, use_channels=True,
-                   use_weights=False):
-        add_voxels(self, n_gaussians=n_gaussians,
-                   start=start,
-                   stop=stop,
-                   use_channels=use_channels,
-                   use_weights=use_weights)
-
     def add_morgan(self, vec_length):
         add_morgan(self, vec_length)
 
     def add_e3fp(self, fp_length):
         add_e3fp(self, fp_length)
-
-    def add_mol_soap(self, Lmax, resolution=1.0, channels=True):
-        add_mol_soap(self,
-                     Lmax=Lmax,
-                     resolution=resolution,
-                     channels=channels)
 
     def featurize_rdkit(self, method):
 
@@ -326,19 +298,6 @@ class Dataset(TorchDataset):
                 atoms.set_positions(reconstruct_atoms(atoms, mol_idx))
                 nxyz = atoms.get_nxyz()
             self.props['nxyz'][i] = torch.Tensor(nxyz)
-
-    def generate_topologies(self, bond_dic, use_1_4_pairs=True):
-        """
-        Generate topology for each Geom in the dataset.
-
-        Args:
-            bond_dic (dict): dictionary of bond lists for each smiles
-            use_1_4_pairs (bool): consider 1-4 pairs when generating non-bonded neighbor list
-        """
-        # use the bond list to generate topologies for the props
-        new_props = update_props_topologies(
-            props=self.props, bond_dic=bond_dic, use_1_4_pairs=use_1_4_pairs)
-        self.props = new_props
 
     def save(self, path):
         """Summary
