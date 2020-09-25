@@ -1,8 +1,3 @@
-
-"""
-*** need to clean this up and deal with `duplicate_features` being kind of a hack!
-"""
-
 import pickle
 import random
 import json
@@ -13,9 +8,9 @@ import argparse
 import pdb
 import sys
 
-# # sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
-# sys.path.insert(0, "/home/saxelrod/Repo/projects/covid_nff/NeuralForceField")
-sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
+# # # sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
+# # sys.path.insert(0, "/home/saxelrod/Repo/projects/covid_nff/NeuralForceField")
+# sys.path.insert(0, "/home/saxelrod/repo/nff/covid/NeuralForceField")
 
 
 from nff.data import Dataset, concatenate_dict  # , split_train_validation_test
@@ -50,7 +45,6 @@ KEY_MAP = {"rd_mol": "nxyz", "boltzmannweight": "weights",
            "relativeenergy": "energy"}
 
 EXCLUDE_KEYS = ["totalconfs", "datasets"]
-FEATURE_KEYS = ["bonded_nbr_list", "atom_features", "bond_features"]
 MAX_ATOMS = 100
 NUM_CONFS = 100
 POS_PER_VAL = 8
@@ -316,9 +310,9 @@ def renorm_weights(spec_dic):
 
 
 def convert_data(overall_dic, num_confs, feature_dic):
-# 
+    #
     # fprint("Adding features...")
-    
+
     # overall_dic = add_features(overall_dic, feature_dic)
     # fprint("Finished adding features")
     spec_dics = []
@@ -345,8 +339,11 @@ def convert_data(overall_dic, num_confs, feature_dic):
             conf = confs[idx]
             for key in conf.keys():
                 if key == "rd_mol":
+
                     nxyz = get_xyz(conf[key])
                     spec_dic["nxyz"].append(nxyz)
+                    spec_dic["rd_mols"] = conf[key]
+
                 else:
                     spec_dic[map_key(key)].append(conf[key])
 
@@ -355,40 +352,6 @@ def convert_data(overall_dic, num_confs, feature_dic):
         spec_dics.append(spec_dic)
 
     return spec_dics
-
-
-
-# def add_features(overall_dic, feature_path_dic):
-
-#     bad_keys = []
-#     i = 0
-#     total_num = len(overall_dic)
-
-#     for key, sub_dic in overall_dic.items():
-
-#         feature_path = feature_path_dic.get(key)
-#         if feature_path is None:
-#             bad_keys.append(key)
-#             continue
-#         if feature_path.startswith("/home/saxelrod/Repo"):
-#             feature_path = feature_path.replace("Repo",
-#                                                 "fock/Repo")
-#         with open(feature_path, "rb") as f:
-#             feature_dic = pickle.load(f)
-#         overall_dic[key].update(feature_dic)
-
-#         if np.mod(i, 1000) == 0:
-#             fprint(("Completed loading {} of {} "
-#                     "dataset feature pickles".format(i, total_num)))
-
-#         i += 1
-
-#     fprint("Completed loading features")
-
-#     for key in bad_keys:
-#         overall_dic.pop(key)
-
-#     return overall_dic
 
 
 def duplicate_features(spec_dic):
@@ -423,12 +386,13 @@ def duplicate_features(spec_dic):
     return spec_dic
 
 
-def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
+def make_nff_dataset(spec_dics, nbrlist_cutoff=5.0):
 
     fprint("Making dataset with %d species" % (len(spec_dics)))
 
     props_list = []
     nbr_list = []
+    rd_mols_list = []
 
     for j, spec_dic in enumerate(spec_dics):
 
@@ -438,28 +402,27 @@ def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
         # per species right now.
 
         small_spec_dic = {key: val for key, val in spec_dic.items()
-                          if key not in FEATURE_KEYS}
+                          if key != "rd_mol"}
 
         dataset = Dataset(small_spec_dic, units='kcal/mol')
         mol_size = len(dataset.props["nxyz"][0])
 
-        if gen_nbrs:
-            dataset.generate_neighbor_list(cutoff=nbrlist_cutoff)
+        dataset.generate_neighbor_list(cutoff=nbrlist_cutoff)
 
-            # now combine the neighbor lists so that this set
-            # of nxyz's can be treated like one big molecule
+        # now combine the neighbor lists so that this set
+        # of nxyz's can be treated like one big molecule
 
-            nbrs = dataset.props['nbr_list']
-            # number of atoms in the molecule
-            new_nbrs = []
+        nbrs = dataset.props['nbr_list']
+        # number of atoms in the molecule
+        new_nbrs = []
 
-            # shift by i * mol_size for each conformer
-            for i in range(len(nbrs)):
-                new_nbrs.append(nbrs[i] + i * mol_size)
+        # shift by i * mol_size for each conformer
+        for i in range(len(nbrs)):
+            new_nbrs.append(nbrs[i] + i * mol_size)
 
-            # add to list of conglomerated neighbor lists
-            nbr_list.append(torch.cat(new_nbrs))
-            dataset.props.pop('nbr_list')
+        # add to list of conglomerated neighbor lists
+        nbr_list.append(torch.cat(new_nbrs))
+        dataset.props.pop('nbr_list')
 
         # concatenate the nxyz's
         nxyz = np.concatenate([np.array(item) for item in spec_dic["nxyz"]]
@@ -480,22 +443,24 @@ def make_nff_dataset(spec_dics, gen_nbrs=True, nbrlist_cutoff=5.0):
         new_dic.update({key: val[:1] for key, val in dataset.props.items(
         ) if key not in new_dic.keys()})
 
-        # add back the features
-
-        new_dic.update({key: [spec_dic[key]] for key in FEATURE_KEYS})
         props_list.append(new_dic)
+        rd_mols_list.append(spec_dic["rd_mols"])
 
         fprint("{} of {} complete".format(j + 1, len(spec_dics)))
 
     fprint("Finalizing...")
+
     props_dic = concatenate_dict(*props_list)
     # make a combined dataset where the species look like they're
     # one big molecule
     big_dataset = Dataset(props_dic.copy(), units='kcal/mol')
 
     # give it the proper neighbor list
-    if gen_nbrs:
-        big_dataset.props['nbr_list'] = nbr_list
+    big_dataset.props['nbr_list'] = nbr_list
+
+    # generate features
+    big_dataset.props["rd_mols"] = rd_mols_list
+    big_dataset.generate_features()
 
     fprint("Complete!")
 
