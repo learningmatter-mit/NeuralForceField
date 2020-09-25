@@ -1,3 +1,9 @@
+"""
+Script to copy a reference dataset into a new dataset
+with fewer conformers per species.
+"""
+
+
 import torch
 import os
 import sys
@@ -237,8 +243,6 @@ def main(from_model_path,
             save_path = os.path.join(save_folder, name)
             dataset.save(save_path)
 
-            # fprint(f"Saved to {save_path}")
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -251,7 +255,11 @@ if __name__ == "__main__":
                         default=1)
     parser.add_argument('--conf_file', type=str,
                         help=("Path to json that says which conformer "
-                              "to use for each species"),
+                              "to use for each species. This is optional. "
+                              "If you don't specify the conformers, the "
+                              "script will default to taking the `num_confs` "
+                              "lowest conformers, ordered by statistical "
+                              "weight."),
                         default=None)
 
     args = parser.parse_args()

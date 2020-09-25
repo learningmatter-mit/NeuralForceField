@@ -14,4 +14,4 @@
 
 source deactivate
 source activate nff
-python convert_data.py
+python trim_confs.py
