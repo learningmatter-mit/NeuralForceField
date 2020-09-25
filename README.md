@@ -14,6 +14,8 @@ This software requires the following packages:
 - [pymatgen=2020.7.3](https://pymatgen.org/)
 - [sympy=1.6.1](https://www.sympy.org/)
 - [rdkit=2020.03.3](https://www.rdkit.org/)
+- [sigopt=5.3.1](https://sigopt.com/)
+- [munch=2.5.0](https://pypi.org/project/munch/)
 
 We highly recommend to create a `conda` environment to run the code. To do that, use the following commands:
 
