@@ -1,0 +1,125 @@
+{
+    "uuid": "3ff0002c-9efd-4c26-891a-63c22cfdf4d0",
+    "project_name": "fluodye",
+    "details": {
+        "partitions": [
+            "sched_mit_rafagb"
+        ],
+        "git_commit": "",
+        "T": 6,
+        "method_description": "Orca bp86/def2-SVP D3 DFT RI",
+        "ngpus": 2,
+        "scheduler": true,
+        "n_epochs": 15000,
+        "logger": "csv",
+        "split": [
+            0.2,
+            0.2
+        ],
+        "workers": 2,
+        "method_name": "dft_d3_gga_bp86",
+        "Comments": "Modified copy of NN 145 for parallelization testing",
+        "eps": 0.0001,
+        "rho": 0.1,
+        "nnodes": 1,
+        "nprocs": 12,
+        "max_epoch": 15000,
+        "weightpath": "/home/gridsan/saxelrod/models",
+        "train_percentage": 0.8,
+        "cutoff": 5.5,
+        "mode": "train",
+        "model": "SchNetFeatures",
+        "lr": 0.0003,
+        "lr_min": 1e-06,
+        "nodes": [
+            "node1034",
+            "node1035"
+        ],
+        "log_every_n_epochs": 1,
+        "lr_decay": 0.5,
+        "loss_coef": "{\"sars_cov_one_cl_protease_active\": 1}",
+        "max_epochs": 15000,
+        "model_type": "SchNetFeatures",
+        "optim": 0.000125,
+        "device": "cuda",
+        "lr_patience": 10,
+        "trainable_gauss": false,
+        "n_gaussians": 32,
+
+
+      "mol_fp_layers": [],
+      "boltzmann_dict": {"type": "linear_attention",
+                         "mol_basis": 300,
+                         "boltz_basis": 10,
+                         "final_act": "ELU",
+                         "head_pool": "concatenate",
+                         "num_heads": 3,
+                         "dropout_rate": 0.1},
+
+      "readoutdict": {"sars_cov_one_cl_protease_active": [
+                  {"name": "linear", "param": {"in_features": 900, "out_features": 450}},
+                  {"name": "Dropout", "param": {"p": 0.2}},
+                  {"name": "ELU", "param": {}},
+                  {"name": "linear", "param": {"in_features": 450, "out_features": 1}},
+                  {"name": "Dropout", "param": {"p": 0.2}}
+            ]
+      },
+
+
+      "input_layers": [{"name": "linear", "param": {"in_features": 159, "out_features": 300}}, {"name": "ELU", "param": {}}],
+      "output_layers": [{"name": "linear", "param": {"in_features": 497, "out_features": 300}}, {"name": "ELU", "param": {}}],
+
+      "loss": "logits_cross_entropy",
+      "sampler": {"name": "ImbalancedDatasetSampler",
+                 "target_name": "sars_cov_one_cl_protease_active"},
+
+      "trainable_gauss": false,
+      "activation": "ELU",
+      "n_filters": 64,
+      "mol_basis": 300,
+      "n_gaussians": 10,
+      "n_bond_hidden": 300,
+      "n_convolutions": 2,
+      "batch_size": 16,
+      "mini_batches": 4,
+      "same_filters": true,
+      "num_readout_layers": 2,
+      "cutoff": 5.0,
+      "lr": 1e-4,
+      "min_lr": 1e-8,
+      "patience": 10,
+      "factor": 0.5,
+      "extra_features": null,
+      "n_atom_basis": 133,
+      "n_bond_features": 26,
+      "gauss_embed": true,
+      "batch_embeddings": false,
+      "cp_dropout": 0.02,
+      "model_kind": "classification",
+      "readout_dropout": 0.02,
+      "schnet_dropout": 0.3,
+
+
+      "metrics": ["RocAuc", "PrAuc"],
+      "stat_metric": "PrAuc",
+      "base_keys": ["sars_cov_one_cl_protease_active"],
+      "grad_keys": [],
+      "model_kwargs": {"sub_batch_size": 7},
+      "torch_par": false,
+      "mol_loss_norm": true,
+      "del_grad_interval": 100,
+      "metric_as_loss": "PrAuc_sars_cov_one_cl_protease_active",
+      "metric_objective": "maximize",
+      "checkpoints_to_keep": 10000,
+      "seed": 1
+    },
+
+
+    "job_key": 37086290,
+    "worker_name": "trainpotential",
+    "nnid": "reduced_size",
+    "priority": 5,
+    "family": "parallel_test",
+    "weightpath": null,
+    "parent_class": "NnPotential"
+}
