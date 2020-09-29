@@ -1,14 +1,5 @@
 {
-    "uuid": "3ff0002c-9efd-4c26-891a-63c22cfdf4d0",
-    "project_name": "fluodye",
     "details": {
-        "partitions": [
-            "sched_mit_rafagb"
-        ],
-        "git_commit": "",
-        "T": 6,
-        "method_description": "Orca bp86/def2-SVP D3 DFT RI",
-        "ngpus": 2,
         "scheduler": true,
         "n_epochs": 15000,
         "logger": "csv",
@@ -17,12 +8,6 @@
             0.2
         ],
         "workers": 2,
-        "method_name": "dft_d3_gga_bp86",
-        "Comments": "Modified copy of NN 145 for parallelization testing",
-        "eps": 0.0001,
-        "rho": 0.1,
-        "nnodes": 1,
-        "nprocs": 12,
         "max_epoch": 15000,
         "weightpath": "/home/gridsan/saxelrod/models",
         "train_percentage": 0.8,
@@ -41,7 +26,6 @@
         "max_epochs": 15000,
         "model_type": "SchNetFeatures",
         "optim": 0.000125,
-        "device": "cuda",
         "lr_patience": 10,
         "trainable_gauss": false,
         "n_gaussians": 32,
