@@ -7,6 +7,7 @@ import numpy as np
 import argparse
 import pdb
 import sys
+from tqdm import tqdm
 
 
 from nff.data import Dataset, concatenate_dict
@@ -17,7 +18,9 @@ KEY_MAP = {"rd_mol": "nxyz",
            "boltzmannweight": "weights",
            "relativeenergy": "energy"}
 
-EXCLUDE_KEYS = ["totalconfs", "datasets"]
+# these are keys that confuse the dataset
+EXCLUDE_KEYS = ["totalconfs", "datasets", "conformerweights",
+                "uncleaned_smiles"]
 
 
 def fprint(msg):
@@ -40,6 +43,7 @@ def get_thread_dic(sample_dic, thread, num_threads):
 
 def gen_splits(sample_dic,
                pos_per_val,
+               pos_per_test,
                prop,
                test_size,
                val_size):
@@ -83,6 +87,7 @@ def proportional_sample(summary_dic,
                         test_size=None,
                         val_size=None,
                         pos_per_val=None,
+                        pos_per_test=None,
                         prop=None,
                         thread=None,
                         num_threads=None,
@@ -159,6 +164,7 @@ def proportional_sample(summary_dic,
 
     sample_dic = gen_splits(sample_dic=sample_dic,
                             pos_per_val=pos_per_val,
+                            pos_per_test=pos_per_test,
                             prop=prop,
                             test_size=test_size,
                             val_size=val_size)
@@ -276,11 +282,13 @@ def convert_data(overall_dic, max_confs):
         actual_confs = min(max_confs, len(sub_dic["conformers"]))
         spec_dic = fix_iters(spec_dic, actual_confs)
         spec_dic.update({map_key(key): [] for key
-                         in sub_dic["conformers"][0].keys()})
+                         in sub_dic["conformers"][0].keys()
+                         if key not in EXCLUDE_KEYS})
 
         # conformers not always ordered by weight
         sorted_idx = get_sorted_idx(sub_dic)
         confs = sub_dic["conformers"]
+        spec_dic["rd_mols"] = []
 
         for idx in sorted_idx[:actual_confs]:
             conf = confs[idx]
@@ -289,10 +297,13 @@ def convert_data(overall_dic, max_confs):
 
                     nxyz = get_xyz(conf[key])
                     spec_dic["nxyz"].append(nxyz)
-                    spec_dic["rd_mols"] = conf[key]
+                    spec_dic["rd_mols"].append(conf[key])
 
                 else:
-                    spec_dic[map_key(key)].append(conf[key])
+                    new_key = map_key(key)
+                    if new_key not in spec_dic:
+                        continue
+                    spec_dic[new_key].append(conf[key])
 
         spec_dic = renorm_weights(spec_dic)
         spec_dics.append(spec_dic)
@@ -300,7 +311,62 @@ def convert_data(overall_dic, max_confs):
     return spec_dics
 
 
-def make_nff_dataset(spec_dics, nbrlist_cutoff=5.0):
+def add_missing(props_list):
+
+    key_list = [list(props.keys()) for props in props_list]
+    # dictionary of the props that have each set of keys
+    key_dic = {}
+    for i, keys in enumerate(key_list):
+        for key in keys:
+            if key not in key_dic:
+                key_dic[key] = []
+            key_dic[key].append(i)
+
+    # all the possible keys
+    all_keys = []
+    for keys in key_list:
+        all_keys += keys
+    all_keys = list(set(all_keys))
+
+    # dictionary of which props dicts are missing certain keys
+
+    missing_dic = {}
+    prop_idx = list(range(len(props_list)))
+    for key in all_keys:
+        missing_dic[key] = [i for i in prop_idx if
+                            i not in key_dic[key]]
+
+    for key, missing_idx in missing_dic.items():
+        for i in missing_idx:
+
+            props = props_list[i]
+            given_idx = key_dic[key][0]
+            given_props = props_list[given_idx]
+            given_val = given_props[key]
+
+            if type(given_val) is list:
+                props[key] = [None]
+            elif type(given_val) is torch.Tensor:
+                props[key] = torch.Tensor([np.nan])
+                # in this case we need to change the
+                # other props to have type float
+                for good_idx in key_dic[key]:
+                    other_props = props_list[good_idx]
+                    other_props[key] = other_props[key].to(torch.float)
+                    props_list[good_idx] = other_props
+
+            props_list[i] = props
+
+    return props_list
+
+def tqdm_enum(iter):
+    i = 0
+    for y in tqdm(iter):
+        yield i, y
+        i += 1
+
+
+def make_nff_dataset(spec_dics, nbrlist_cutoff):
 
     fprint("Making dataset with %d species" % (len(spec_dics)))
 
@@ -308,15 +374,23 @@ def make_nff_dataset(spec_dics, nbrlist_cutoff=5.0):
     nbr_list = []
     rd_mols_list = []
 
-    for j, spec_dic in enumerate(spec_dics):
+    for j, spec_dic in tqdm_enum(spec_dics):
 
         # Treat each species' data like a regular dataset
         # and use it to generate neighbor lists
         # Ignore the graph features because there's only one
         # per species right now.
 
+        conf_keys = ["rd_mols", "bonded_nbr_list", "bond_features",
+                     "atom_features"]
+
+        # Exclude keys related to individual conformers. These
+        # include conformer features, in case you've already put
+        # those in your pickle files. If not we'll generate them
+        # below
+
         small_spec_dic = {key: val for key, val in spec_dic.items()
-                          if key != "rd_mol"}
+                          if key not in conf_keys}
 
         dataset = Dataset(small_spec_dic, units='kcal/mol')
         mol_size = len(dataset.props["nxyz"][0])
@@ -360,10 +434,10 @@ def make_nff_dataset(spec_dics, nbrlist_cutoff=5.0):
         props_list.append(new_dic)
         rd_mols_list.append(spec_dic["rd_mols"])
 
-        fprint("{} of {} complete".format(j + 1, len(spec_dics)))
-
     fprint("Finalizing...")
 
+    # Add props that are in some datasets but not others
+    props_list = add_missing(props_list)
     props_dic = concatenate_dict(*props_list)
     # make a combined dataset where the species look like they're
     # one big molecule
@@ -373,8 +447,9 @@ def make_nff_dataset(spec_dics, nbrlist_cutoff=5.0):
     big_dataset.props['nbr_list'] = nbr_list
 
     # generate features
+
     big_dataset.props["rd_mols"] = rd_mols_list
-    big_dataset.generate_features()
+    big_dataset.featurize()
 
     fprint("Complete!")
 
@@ -446,9 +521,11 @@ def main(max_specs,
          num_threads,
          thread,
          pos_per_val,
+         pos_per_test,
          test_size,
          val_size,
          sample_type,
+         nbrlist_cutoff,
          **kwargs):
 
     with open(summary_path, "r") as f:
@@ -463,6 +540,7 @@ def main(max_specs,
                                      thread=thread,
                                      num_threads=num_threads,
                                      pos_per_val=pos_per_val,
+                                     pos_per_test=pos_per_test,
                                      test_size=test_size,
                                      val_size=val_size,
                                      sample_type=sample_type)
@@ -475,8 +553,7 @@ def main(max_specs,
 
     fprint("Combining to make NFF dataset...")
     dataset = make_nff_dataset(spec_dics=spec_dics,
-                               gen_nbrs=True,
-                               nbrlist_cutoff=5.0)
+                               nbrlist_cutoff=nbrlist_cutoff)
     fprint("Creating test/train/val splits...")
     save_splits(dataset=dataset,
                 targ_name=prop,
@@ -503,6 +580,10 @@ if __name__ == "__main__":
                         help=("Maximum number of conformers to allow in any "
                               "species in your dataset. No limit if "
                               "max_confs isn't specified."))
+
+    parser.add_argument('--nbrlist_cutoff', type=float, default=5,
+                        help=("Cutoff for 3D neighbor list"))
+
     parser.add_argument('--summary_path', type=str)
     parser.add_argument('--dataset_folder', type=str)
     parser.add_argument('--pickle_folder', type=str)
@@ -511,10 +592,11 @@ if __name__ == "__main__":
     parser.add_argument('--thread', type=int, default=None)
 
     parser.add_argument('--sample_type', type=str, default='random',
+                        choices=['random', 'class_proportional'],
                         help=("Strategy of sampling species to make dataset. "
                               "Current options are random and "
-                              "class_proportional. Random samples "
-                              "andomly, and class_proportional generates "
+                              "class_proportional. `random` samples "
+                              "randomly, and `class_proportional` generates "
                               "a new dataset with the same proportion of "
                               "positive and negative classes as in the "
                               "set we're sampling form."))

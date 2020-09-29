@@ -4,11 +4,7 @@ from torch.utils.data import DistributedSampler
 from torch.utils.data import Dataset as TorchDataset
 from operator import itemgetter
 
-
-from nff.data.topology import ALL_TOPOLOGY_KEYS, RE_INDEX_TOPOLOGY_KEYS
-
-
-REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', *RE_INDEX_TOPOLOGY_KEYS]
+REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list']
 NBR_LIST_KEYS = ['bond_idx']
 
 
@@ -16,8 +12,7 @@ TYPE_KEYS = {
     'atoms_nbr_list': torch.long,
     'nbr_list': torch.long,
     'num_atoms': torch.long,
-    'bond_idx': torch.long,
-    **{key: torch.long for key in ALL_TOPOLOGY_KEYS}}
+    'bond_idx': torch.long}
 
 
 def collate_dicts(dicts):

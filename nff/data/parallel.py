@@ -20,12 +20,14 @@ def split_dataset(dataset, num):
 
     for split in splits:
 
+        if len(split) == 0:
+            continue
         min_split = split[0]
         max_split = split[-1] + 1
         new_props = {key: val[min_split: max_split] for key, val
                      in dataset.props.items()}
 
-        new_dataset = dataset.copy()
+        new_dataset = copy.deepcopy(dataset)
         new_dataset.props = new_props
         datasets.append(new_dataset)
 
@@ -113,9 +115,11 @@ def featurize_parallel(dataset,
         num_procs))
     datasets = split_dataset(dataset=dataset, num=num_procs)
 
-    print("Converting xyz to RDKit mols...")
-    datasets = rd_parallel(datasets)
-    summarize_rd(new_sets=datasets, first_set=dataset)
+    has_rdmols = all(['rd_mols' in dset.props for dset in datasets])
+    if not has_rdmols:
+        print("Converting xyz to RDKit mols...")
+        datasets = rd_parallel(datasets)
+        summarize_rd(new_sets=datasets, first_set=dataset)
 
     print("Featurizing bonds...")
     datasets = bonds_parallel(datasets, feat_types=bond_feats)

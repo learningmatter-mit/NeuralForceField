@@ -359,7 +359,7 @@ def convert_nan(x):
     has_nan = any([np.isnan(y).any() for y in x])
     for y in x:
         if np.isnan(y).any():
-            new_x.append(torch.tensor(y))
+            new_x.append(y.clone())
             has_nan = True
         # if any are nan then they all have to be floats
         elif has_nan:
