@@ -13,6 +13,8 @@
 #SBATCH --constraint=xeon-g6
 
 source deactivate
+source ~/.bashrc
 source activate nff
+export PYTHONPATH="$HOME/Repo/projects/covid_clean/NeuralForceField:${PYTHONPATH}"
 
-python trim_confs.py --from_model_path $HOME/models/all_confs --to_model_path $HOME/models/one_conf --num_confs 1 
+python trim_confs.py --from_model_path $HOME/rgb_nfs/models/cov_1_combined --to_model_path $HOME/rgb_nfs/models/cov_1_single_conf --num_confs 1

@@ -24,7 +24,7 @@ def fprint(msg):
 def assert_ordered(batch):
 
     # make sure the conformers are ordered by weight
-    weights = batch["weights"].tolist()
+    weights = batch["weights"].reshape(-1).tolist()
     sort_weights = sorted(weights,
                           key=lambda x: -x)
     assert weights == sort_weights
