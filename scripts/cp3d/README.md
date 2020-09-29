@@ -1,4 +1,9 @@
-# Making a dataset
+# Running CP3D scripts
+
+This folder contains scripts for doing ChemProp3D tasks. These include making a dataset out of pickle files with species information, and training a CP3D model using this dataset. Below are some details about how to use the different folders.
+
+
+## Making a dataset
 To make a CP3D dataset, we run the script `scripts/cp3d/make_dset/dset_from_pickles.sh`. This script can be used when you have a pickle file for each species. The pickle file should contain the following keys:
 
 - `smiles`: The SMILES string of the species
@@ -32,10 +37,7 @@ If you want to generate the splits yourself (e.g. with a ChemProp scaffold split
 - `val_size` (int): absolute size of test set (i.e. number of species, not a proportion of the total dataset size)
 - `test_size` (int): same, but for the test set
 
-
-
-
-# Reducing the number of conformers
+## Reducing the number of conformers
 
 If you've already made a dataset and you want to reduce the number of conformers, you can do that by running the script `scripts/cp3d/trim_confs/trim_confs.sh`. The only arguments you need are:
 - `from_model_path` (str): The old path to the model and dataset. The script assumes your datasets are in the folders `from_model_path/0`, `from_model_path/1`, ..., etc., as they would be if generated using the `dset_from_pickles.sh`.
@@ -43,3 +45,5 @@ If you've already made a dataset and you want to reduce the number of conformers
 - `num_confs` (int): Number of conformers that you want in the new dataset
 
 Of course you can always just run `dset_from_pickles.sh` again, but using fewer conformers. But running `trim_confs.sh` might save some time if your pickle files don't contain `rdmols`. In this case you'd have to generate `rdmols` from `xyz`'s all over again, which would not be worth it! 
+
+
