@@ -23,7 +23,7 @@ export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH
 export NFFDIR="$HOME/Repo/projects/covid_clean/NeuralForceField"
 export PYTHONPATH="$NFFDIR:$PYTHONPATH"
 
-python $NFFDIR/scripts/cp3d/train/run_parallel.py job_info.json  & pid=$!
+python $NFFDIR/scripts/cp3d/train/train_parallel.py job_info.json  & pid=$!
 wait
 
 

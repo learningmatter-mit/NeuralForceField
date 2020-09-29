@@ -74,7 +74,7 @@ def submit_job(node, node_index, num_gpus, num_nodes, cpus_per_task,
     """
 
     cmd = ("srun -N1 --nodelist {} --ntasks 1 --cpus-per-task {} "
-           "python $NFFDIR/scripts/cp3d/train/train_nn.py "
+           "python $NFFDIR/scripts/cp3d/train/train_single.py "
            "{} -nr {} --gpus {} --nodes {}".format(
                node, cpus_per_task, params_file, node_index, num_gpus,
                num_nodes))
