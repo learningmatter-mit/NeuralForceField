@@ -14,4 +14,5 @@
 
 source deactivate
 source activate nff
-python trim_confs.py
+
+python trim_confs.py --from_model_path $HOME/models/all_confs --to_model_path $HOME/models/one_conf --num_confs 1 

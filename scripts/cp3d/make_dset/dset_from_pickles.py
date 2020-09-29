@@ -38,7 +38,11 @@ def get_thread_dic(sample_dic, thread, num_threads):
     return sample_dic
 
 
-def gen_splits(sample_dic, pos_per_val, prop, test_val_size):
+def gen_splits(sample_dic,
+               pos_per_val,
+               prop,
+               test_size,
+               val_size):
 
     pos_smiles = [smiles for smiles, sub_dic
                   in sample_dic.items() if
@@ -51,11 +55,13 @@ def gen_splits(sample_dic, pos_per_val, prop, test_val_size):
     random.shuffle(neg_smiles)
 
     val_pos = pos_smiles[:pos_per_val]
-    test_pos = pos_smiles[pos_per_val: 2 * pos_per_val]
+    test_pos = pos_smiles[pos_per_val: pos_per_val + pos_per_test]
 
-    neg_per_val = test_val_size - pos_per_val
+    neg_per_val = val_size - pos_per_val
     val_neg = neg_smiles[:neg_per_val]
-    test_neg = neg_smiles[neg_per_val: 2 * neg_per_val]
+
+    neg_per_test = test_size - pos_per_test
+    test_neg = neg_smiles[neg_per_val: neg_per_val + neg_per_test]
 
     val_all = val_pos + val_neg
     test_all = test_pos + test_neg
@@ -72,13 +78,15 @@ def gen_splits(sample_dic, pos_per_val, prop, test_val_size):
 
 
 def proportional_sample(summary_dic,
-                        prop,
                         max_specs,
                         prop_sample_path,
-                        pos_per_val,
-                        test_val_size,
+                        test_size=None,
+                        val_size=None,
+                        pos_per_val=None,
+                        prop=None,
                         thread=None,
-                        num_threads=None):
+                        num_threads=None,
+                        sample_type='random'):
     """
     Sample species for a dataset so that the number of positives
     and negatives is the same proportion as in the overall
@@ -95,43 +103,55 @@ def proportional_sample(summary_dic,
                                         num_threads=num_threads)
         return sample_dic
 
-    positives = []
-    negatives = []
+    if sample_type == 'random':
 
-    for smiles, sub_dic in summary_dic.items():
-        value = sub_dic.get(prop)
-        if value is None:
-            continue
-        if sub_dic.get("pickle_path") is None:
-            continue
-        if value == 0:
-            negatives.append(smiles)
-        elif value == 1:
-            positives.append(smiles)
+        smiles_list = [key for key, val in summary_dic.items()
+                       if val.get("pickle_path") is not None]
+        random.shuffle(smiles_list)
+        if max_specs is None:
+            max_specs = len(smiles_list)
+        all_samples = smiles_list[:max_specs]
 
-    num_neg = len(negatives)
-    num_pos = len(positives)
+    elif sample_type == 'class_proportional':
 
-    if max_specs is None:
-        max_specs = num_neg + num_pos
+        positives = []
+        negatives = []
 
-    # get the number of desired negatives and positives to
-    # get the right proportional sampling
+        for smiles, sub_dic in summary_dic.items():
+            value = sub_dic.get(prop)
+            if value is None:
+                continue
+            if sub_dic.get("pickle_path") is None:
+                continue
+            if value == 0:
+                negatives.append(smiles)
+            elif value == 1:
+                positives.append(smiles)
 
-    num_neg_sample = int(num_neg / (num_neg + num_pos) * max_specs)
-    num_pos_sample = int(num_pos / (num_neg + num_pos) * max_specs)
+        num_neg = len(negatives)
+        num_pos = len(positives)
 
-    # shuffle negatives and positives and extract the appropriate
-    # number of each
+        if max_specs is None:
+            max_specs = num_neg + num_pos
 
-    random.shuffle(negatives)
-    random.shuffle(positives)
+        # get the number of desired negatives and positives to
+        # get the right proportional sampling
 
-    neg_sample = negatives[:num_neg_sample]
-    pos_sample = positives[:num_pos_sample]
+        num_neg_sample = int(num_neg / (num_neg + num_pos) * max_specs)
+        num_pos_sample = int(num_pos / (num_neg + num_pos) * max_specs)
 
-    all_samples = [*neg_sample, *pos_sample]
-    sample_dic = {key: summary_dic[key]  # ["pickle_path"]
+        # shuffle negatives and positives and extract the appropriate
+        # number of each
+
+        random.shuffle(negatives)
+        random.shuffle(positives)
+
+        neg_sample = negatives[:num_neg_sample]
+        pos_sample = positives[:num_pos_sample]
+
+        all_samples = [*neg_sample, *pos_sample]
+
+    sample_dic = {key: summary_dic[key]
                   for key in all_samples if "pickle_path"
                   in summary_dic[key] and prop in summary_dic[key]}
 
@@ -140,7 +160,8 @@ def proportional_sample(summary_dic,
     sample_dic = gen_splits(sample_dic=sample_dic,
                             pos_per_val=pos_per_val,
                             prop=prop,
-                            test_val_size=test_val_size)
+                            test_size=test_size,
+                            val_size=val_size)
 
     with open(prop_sample_path, "w") as f:
         json.dump(sample_dic, f, indent=4, sort_keys=True)
@@ -153,7 +174,7 @@ def proportional_sample(summary_dic,
     return sample_dic
 
 
-def load_data_from_pickle(sample_dic, max_atoms, rdkit_folder):
+def load_data_from_pickle(sample_dic, max_atoms, pickle_folder):
 
     overall_dic = {}
     i = 0
@@ -166,7 +187,7 @@ def load_data_from_pickle(sample_dic, max_atoms, rdkit_folder):
         i += 1
 
         pickle_path = sub_dic["pickle_path"]
-        full_path = os.path.join(rdkit_folder, pickle_path)
+        full_path = os.path.join(pickle_folder, pickle_path)
         with open(full_path, "rb") as f:
             dic = pickle.load(f)
         num_atoms = dic["conformers"][0]["rd_mol"].GetNumAtoms()
@@ -241,18 +262,18 @@ def renorm_weights(spec_dic):
     return spec_dic
 
 
-def convert_data(overall_dic, num_confs):
+def convert_data(overall_dic, max_confs):
 
     spec_dics = []
-    if num_confs is None:
-        num_confs = float("inf")
+    if max_confs is None:
+        max_confs = float("inf")
 
     for key, sub_dic in overall_dic.items():
 
         spec_dic = {map_key(key): val for key, val in sub_dic.items()
                     if key != "conformers"}
 
-        actual_confs = min(num_confs, len(sub_dic["conformers"]))
+        actual_confs = min(max_confs, len(sub_dic["conformers"]))
         spec_dic = fix_iters(spec_dic, actual_confs)
         spec_dic.update({map_key(key): [] for key
                          in sub_dic["conformers"][0].keys()})
@@ -360,10 +381,10 @@ def make_nff_dataset(spec_dics, nbrlist_cutoff=5.0):
     return big_dataset
 
 
-def get_data_folder(dataset_path, thread):
+def get_data_folder(dataset_folder, thread):
     if thread is None:
-        return dataset_path
-    new_path = os.path.join(dataset_path, str(thread))
+        return dataset_folder
+    new_path = os.path.join(dataset_folder, str(thread))
     if not os.path.isdir(new_path):
         os.makedirs(new_path)
     return new_path
@@ -383,7 +404,7 @@ def split_dataset(dataset, idx):
 
 def save_splits(dataset,
                 targ_name,
-                dataset_path,
+                dataset_folder,
                 thread,
                 sample_dic):
 
@@ -406,7 +427,7 @@ def save_splits(dataset,
     #     dataset, binary=True, targ_name=targ_name)
 
     fprint("Saving...")
-    data_folder = get_data_folder(dataset_path, thread)
+    data_folder = get_data_folder(dataset_folder, thread)
     names = ["train", "val", "test"]
 
     for name, dset in zip(names, [train, val, test]):
@@ -416,17 +437,19 @@ def save_splits(dataset,
 
 def main(max_specs,
          max_atoms,
-         num_confs,
+         max_confs,
          prop,
          summary_path,
-         dataset_path,
-         rdkit_folder,
+         dataset_folder,
+         pickle_folder,
          prop_sample_path,
-         only_samples,
          num_threads,
          thread,
          pos_per_val,
-         test_val_size):
+         test_size,
+         val_size,
+         sample_type,
+         **kwargs):
 
     with open(summary_path, "r") as f:
         summary_dic = json.load(f)
@@ -440,15 +463,15 @@ def main(max_specs,
                                      thread=thread,
                                      num_threads=num_threads,
                                      pos_per_val=pos_per_val,
-                                     test_val_size=test_val_size)
-    if only_samples:
-        return
+                                     test_size=test_size,
+                                     val_size=val_size,
+                                     sample_type=sample_type)
 
     fprint("Loading data from pickle files...")
-    overall_dic = load_data_from_pickle(sample_dic, max_atoms, rdkit_folder)
+    overall_dic = load_data_from_pickle(sample_dic, max_atoms, pickle_folder)
 
     fprint("Converting data...")
-    spec_dics = convert_data(overall_dic, num_confs)
+    spec_dics = convert_data(overall_dic, max_confs)
 
     fprint("Combining to make NFF dataset...")
     dataset = make_nff_dataset(spec_dics=spec_dics,
@@ -457,7 +480,7 @@ def main(max_specs,
     fprint("Creating test/train/val splits...")
     save_splits(dataset=dataset,
                 targ_name=prop,
-                dataset_path=dataset_path,
+                dataset_folder=dataset_folder,
                 thread=thread,
                 sample_dic=sample_dic)
 
@@ -471,29 +494,57 @@ if __name__ == "__main__":
                         help=("Maximum number of species to use in your "
                               "dataset. No limit if max_specs isn't "
                               "specified."))
+
     parser.add_argument('--max_atoms', type=int, default=None,
                         help=("Maximum number of atoms to allow in any "
                               "species in your dataset. No limit if "
                               "max_atoms isn't specified."))
-    parser.add_argument('--num_confs', type=int, default=None,
+    parser.add_argument('--max_confs', type=int, default=None,
                         help=("Maximum number of conformers to allow in any "
                               "species in your dataset. No limit if "
-                              "num_confs isn't specified."))
-    parser.add_argument('--prop', type=str)
+                              "max_confs isn't specified."))
     parser.add_argument('--summary_path', type=str)
-    parser.add_argument('--dataset_path', type=str)
-    parser.add_argument('--rdkit_folder', type=str)
+    parser.add_argument('--dataset_folder', type=str)
+    parser.add_argument('--pickle_folder', type=str)
     parser.add_argument('--prop_sample_path', type=str)
-    parser.add_argument('--only_samples', action='store_true')
     parser.add_argument('--num_threads', type=int, default=None)
     parser.add_argument('--thread', type=int, default=None)
-    parser.add_argument('--pos_per_val', type=int)
-    parser.add_argument('--test_val_size', type=int)
 
-    arguments = parser.parse_args()
+    parser.add_argument('--sample_type', type=str, default='random',
+                        help=("Strategy of sampling species to make dataset. "
+                              "Current options are random and "
+                              "class_proportional. Random samples "
+                              "andomly, and class_proportional generates "
+                              "a new dataset with the same proportion of "
+                              "positive and negative classes as in the "
+                              "set we're sampling form."))
+    parser.add_argument('--prop', type=str, default=None,
+                        help=("Name of property for which to generate "
+                              "a proportional classification sample"))
+    parser.add_argument('--pos_per_val', type=int, default=None)
+    parser.add_argument('--pos_per_test', type=int, default=None)
+
+    parser.add_argument('--test_size', type=int, default=None,
+                        help=("Absolute size of test set (number of species) "))
+    parser.add_argument('--val_size', type=int, default=None,
+                        help=("Absolute size of validation set (number of species) "))
+
+    parser.add_argument('--config_file', type=str,
+                        help=("Path to JSON file with arguments. If given, "
+                              "any arguments in the file override the command "
+                              "line arguments."))
+
+    args = parser.parse_args()
+
+    if args.config_file is not None:
+        with open(args.config_file, "r") as f:
+            config_args = json.load(f)
+        for key, val in config_args.items():
+            if hasattr(args, key):
+                setattr(args, key, val)
 
     try:
-        main(**arguments.__dict__)
+        main(**args.__dict__)
     except Exception as e:
         fprint(e)
         pdb.post_mortem()

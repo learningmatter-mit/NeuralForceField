@@ -1,0 +1,15 @@
+{"max_specs": null,
+"max_atoms": 100,
+"max_confs": 200,
+"prop": "sars_cov_one_cl_protease_active",
+"summary_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/rdkit_folder/summary_drugs.json",
+"dataset_folder": "/nfs/rafagblab001/saxelrod/models/cov_1_combined",
+"pickle_folder": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/rdkit_folder",
+"prop_sample_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/prop_sample_cov_2_all.json",
+"sample_type": "classification",
+"pos_per_val": 70,
+"pos_per_test": 70,
+"test_size": 5000,
+"val_size": 5000,
+"num_threads": 32
+}
