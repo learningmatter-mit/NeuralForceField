@@ -19,6 +19,7 @@ from nff.train import Trainer, get_model, loss, hooks
 from nff.data.loader import ImbalancedDatasetSampler
 
 DEFAULTPARAMSFILE = 'job_info.json'
+DEFAULT_METRIC = "MeanAbsoluteError"
 
 def init_parallel(node_rank,
                   gpu,
@@ -945,9 +946,4 @@ def main():
                        *extra_args))
 
 if __name__ == "__main__":
-    import pdb
-    try:
-        main()
-    except Exception as e:
-        print(e)
-        pdb.post_mortem()
+    main()
