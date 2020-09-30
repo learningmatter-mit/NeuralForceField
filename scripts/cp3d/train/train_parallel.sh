@@ -21,8 +21,11 @@ export MASTER_PORT=8888
 # change to the number of GPUs you're using per node
 export SLURM_GPUS_PER_NODE=2
 export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH
-export NFFDIR="$HOME/Repo/projects/covid_clean/NeuralForceField"
-export PYTHONPATH="$NFFDIR:$PYTHONPATH"
+export NFFDIR="$HOME/repo/nff/covid_clean/NeuralForceField"
+
+# this is the problem: something's going wrong in this branch of covid_clean
+# export PYTHONPATH=$NFFDIR:$PYTHON_PATH
+export PYTHONPATH="$PYTHONPATH:$DJANGOCHEMDIR:$HTVSDIR"
 
 python $NFFDIR/scripts/cp3d/train/train_parallel.py job_info.json  & pid=$!
 wait
