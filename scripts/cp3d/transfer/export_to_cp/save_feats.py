@@ -22,7 +22,7 @@ def get_smiles(smiles_folder, name):
 
 
 def save_smiles(smiles_folder, smiles_list, name):
-    
+
     file_names = [f"{name}_smiles.csv", f"{name}_full.csv"]
     paths = [os.path.join(smiles_folder, name) for name in
              file_names]
@@ -39,8 +39,8 @@ def save_smiles(smiles_folder, smiles_list, name):
             f.write(text)
 
 
-def get_name(model_folder):
-    splits = model_folder.split("/")
+def get_name(feat_folder):
+    splits = feat_folder.split("/")
     if splits[-1] == "":
         name = splits[-2]
     else:
@@ -48,33 +48,32 @@ def get_name(model_folder):
     return name
 
 
-def summarize(save_paths, model_folder):
+def summarize(save_paths, feat_folder):
 
     base_dir = "/".join(save_paths[0].split("/")[:-1])
     save_names = [get_name(path) for path in save_paths]
     num_files = len(save_paths)
     string = "\n".join(save_names)
     summary = (f"Saved {num_files} files with features \n"
-               f"Used model in {model_folder} \n\n"
+               f"Used model in {feat_folder} \n\n"
                f"Save folder: \n{base_dir}\n\n"
                f"Save names: \n{string}")
     fprint(summary)
 
 
-def main(model_folder,
-         feat_dir,
+def main(feat_folder,
          metrics,
          smiles_folder,
+         cp_save_folder,
          **kwargs):
 
-    model_name = get_name(model_folder)
     save_paths = []
     for metric in metrics:
         names = ["train", "val", "test"]
 
         for name in names:
             file_name = f"pred_{metric}_{name}.pickle"
-            file_path = os.path.join(model_folder, file_name)
+            file_path = os.path.join(feat_folder, file_name)
             with open(file_path, "rb") as f:
                 dic = pickle.load(f)
 
@@ -89,34 +88,34 @@ def main(model_folder,
             ordered_feats = np.stack([dic[smiles]["fp"]
                                       for smiles in smiles_list])
 
-            save_folder = os.path.join(feat_dir, model_name)
-            if not os.path.isdir(save_folder):
-                os.makedirs(save_folder)
+            if not os.path.isdir(cp_save_folder):
+                os.makedirs(cp_save_folder)
 
-            np_save_path = os.path.join(save_folder,
+            np_save_path = os.path.join(cp_save_folder,
                                         f"{name}_{metric}.npz")
 
-            np.savez(np_save_path, features=ordered_feats)
+            np.savez_compressed(np_save_path, features=ordered_feats)
             save_paths.append(np_save_path)
 
-    summarize(save_paths, model_folder)
+    summarize(save_paths, feat_folder)
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--model_folder', type=str,
+    parser.add_argument('--feat_folder', type=str,
                         help=("Path to model folder where fingerprint "
                               "pickles are saved"))
+    parser.add_argument('--cp_save_folder', type=str,
+                        help=("Path in which you'll save the ChemProp-"
+                              "readable fingerprints"))
     parser.add_argument('--smiles_folder', type=str,
                         help=("Path to model folder where SMILES strings "
                               "are saved. These should be called "
                               "train_smiles.csv, val_smiles.csv, and "
                               "test_smiles.csv, as they are if generated "
                               "by a ChemProp split."))
-    parser.add_argument('--feat_dir', type=str,
-                        help=("Where to save the features"))
     parser.add_argument('--metrics', type=str, nargs='+',
                         help=("Generate features from 3D models "
                               "whose best model is chosen according to "

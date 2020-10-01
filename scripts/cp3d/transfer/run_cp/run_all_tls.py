@@ -21,16 +21,20 @@ METRIC_CHOICES = ["auc",
 
 
 def get_train_folder(model_folder_cp,
-                     model_name_3d,
+                     feature_folder,
                      metric,
                      feat,
                      mpnn):
+
+    model_name_3d = feature_folder.split("/")[-1]
+    if model_name_3d == "":
+        model_name_3d = feature_folder.split("/")[-2]
 
     name = f"{model_name_3d}"
     if feat and not mpnn:
         name += "_feats_no_mpnn"
     elif feat and mpnn:
-        name += "feats_mpnn"
+        name += "_feats_mpnn"
     elif mpnn:
         name += "_just_mpnn"
     name += f"_from_{metric}"
@@ -58,16 +62,14 @@ def get_msg(feat, mpnn, metric, train_folder):
 def main(base_config_path,
          cp_folder,
          feature_folder,
-         model_name_3d,
          model_folder_cp,
          metrics,
          feat_options,
          mpnn_options,
          **kwargs):
 
-    cwd = os.path.abs_path(".")
+    cwd = os.path.abspath(".")
     script = os.path.join(cwd, "cp_tl.py")
-    script_config = os.path.join(cwd, "cp_tl_config.json")
 
     for feat in feat_options:
         for mpnn in mpnn_options:
@@ -77,14 +79,14 @@ def main(base_config_path,
 
                 paths = []
                 for split in ['train', 'val', 'test']:
-                    paths.append([os.path.join(feature_folder,
-                                               model_name_3d,
-                                               f"{split}_{metric}.npz")])
+                    paths.append(os.path.join(feature_folder,
+                                              f"{split}_{metric}.npz"))
 
                 train_feat_path, val_feat_path, test_feat_path = paths
+
                 train_folder = get_train_folder(
                     model_folder_cp=model_folder_cp,
-                    model_name_3d=model_name_3d,
+                    feature_folder=feature_folder,
                     metric=metric,
                     feat=feat,
                     mpnn=mpnn)
@@ -97,12 +99,12 @@ def main(base_config_path,
                        f"--metric {metric} "
                        f"--train_feat_path {train_feat_path} "
                        f"--val_feat_path {val_feat_path} "
-                       f"--test_feat_path {test_feat_path}"
-                       f"--train_folder {train_folder}"
-                       f"--cp_folder {cp_folder}"
-                       f"--this_config_file {script_config}")
+                       f"--test_feat_path {test_feat_path} "
+                       f"--train_folder {train_folder} "
+                       f"--cp_folder {cp_folder} ")
 
-                bash_command(cmd)
+                p = bash_command(cmd)
+                p.wait()
 
 
 if __name__ == "__main__":
@@ -116,21 +118,13 @@ if __name__ == "__main__":
     parser.add_argument("--cp_folder", type=str,
                         help=("Path to ChemProp folder."))
     parser.add_argument("--feature_folder", type=str,
-                        help=("Folder where features are stored. "
-                              "This folder contains sub-folders, "
-                              "each with features from a different "
-                              "3D model."))
-    parser.add_argument("--model_name_3d", type=str,
-                        help=("Name of the 3D model being used "
-                              "for transfer learning. The feature "
-                              "files should be located in "
-                              "`feature_folder/model_name_3d`."))
+                        help=("Folder where features are stored."))
     parser.add_argument("--model_folder_cp", type=str,
                         help=("Folder in which you will train your "
                               "ChemProp model. Models with different "
                               "parameters will get their own folders, "
                               "each located in `model_folder_cp`."))
-    parser.add_argument("--metric", type=str,
+    parser.add_argument("--metrics", type=str,
                         nargs='+',
                         choices=METRIC_CHOICES,
                         help=("Metrics for which to evaluate "

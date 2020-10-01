@@ -25,9 +25,18 @@ def train(cp_folder,
 
     train_script = os.path.join(cp_folder, "train.py")
     config_path = os.path.join(train_folder, "config.json")
-    cmd = f"{train_script} --config_path {config_path} "
 
-    bash_command(cmd)
+    with open(config_path, "r") as f:
+        config = json.load(f)
+
+    data_path = config["data_path"]
+    dataset_type = config["dataset_type"]
+    cmd = (f"python {train_script} --config_path {config_path} "
+           f" --data_path {data_path} "
+           f" --dataset_type {dataset_type}")
+
+    p = bash_command(cmd)
+    p.communicate()
 
 
 def modify_config(base_config_path,
@@ -42,9 +51,9 @@ def modify_config(base_config_path,
         config = json.load(f)
 
     dic = {"metric": metric,
-           "features_path": train_feat_path,
-           "separate_val_features_path": val_feat_path,
-           "separate_test_features_path": test_feat_path,
+           "features_path": [train_feat_path],
+           "separate_val_features_path": [val_feat_path],
+           "separate_test_features_path": [test_feat_path],
            "save_dir": train_folder,
            "features_only": features_only}
 
@@ -56,7 +65,7 @@ def modify_config(base_config_path,
         os.makedirs(train_folder)
 
     with open(new_config_path, "w") as f:
-        json.dump(config, f)
+        json.dump(config, f, indent=4, sort_keys=True)
 
 
 def main(base_config_path,
@@ -65,9 +74,9 @@ def main(base_config_path,
          train_feat_path,
          val_feat_path,
          test_feat_path,
-         cp_folder
+         cp_folder,
          features_only,
-         ** kwargs):
+         **kwargs):
 
     modify_config(base_config_path=base_config_path,
                   metric=metric,

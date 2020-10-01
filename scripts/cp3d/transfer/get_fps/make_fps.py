@@ -22,7 +22,7 @@ METRIC_DIC = {"pr_auc": "maximize",
 
 def save(results,
          targets,
-         save_path,
+         feat_save_folder,
          prop,
          add_sigmoid):
 
@@ -56,7 +56,7 @@ def save(results,
                        "energy": energy[i].reshape(-1).numpy(),
                        "boltz_weights": boltz_weights[i].reshape(-1).numpy()}
 
-    with open(save_path, "wb") as f:
+    with open(feat_save_folder, "wb") as f:
         pickle.dump(dic, f)
 
 
@@ -188,7 +188,7 @@ def main(dset_folder,
          batch_size,
          prop,
          sub_batch_size,
-         save_path,
+         feat_save_folder,
          add_sigmoid,
          metric=None,
          test_only=False,
@@ -214,14 +214,16 @@ def main(dset_folder,
                                     sub_batch_size=sub_batch_size)
 
         save_name = f"pred_{metric}_{name}.pickle"
-        if save_path is None:
-            save_path = dset_folder
+        if feat_save_folder is None:
+            feat_save_folder = dset_folder
+        if not os.path.isdir(feat_save_folder):
+            os.makedirs(feat_save_folder)
 
-        pickle_path = os.path.join(save_path, save_name)
+        pickle_path = os.path.join(feat_save_folder, save_name)
 
         save(results=results,
              targets=targets,
-             save_path=pickle_path,
+             feat_save_folder=pickle_path,
              prop=prop,
              add_sigmoid=add_sigmoid)
 
@@ -236,6 +238,8 @@ if __name__ == "__main__":
                         help=("Name of the folder with the "
                               "datasets you want to add "
                               "fingerprints to"))
+    parser.add_argument('--feat_save_folder', type=str,
+                        help="Path to save pickles")
     parser.add_argument('--device', type=str,
                         help="Name of device to use")
     parser.add_argument('--batch_size', type=int,
@@ -252,8 +256,6 @@ if __name__ == "__main__":
                               "is given, the metric used in the training "
                               "process will be used."),
                         default=None)
-    parser.add_argument('--save_path', type=str,
-                        help="Path to save pickles")
     parser.add_argument('--test_only', action='store_true',
                         help=("Only evaluate model "
                               "and generate fingerprints for "

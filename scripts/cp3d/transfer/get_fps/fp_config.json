@@ -1,10 +1,9 @@
 {
-  "model_folder": "/home/saxelrod/supercloud2/models/saved_models/single_geom",
+  "model_folder": "/home/saxelrod/supercloud2/models/saved_models/attention_k_1_yes_prob_cov_cl_protease",
   "dset_folder": "/home/saxelrod/supercloud2/models/cov_2_protease",
-  "device": 0,
+  "feat_save_folder": "/home/saxelrod/supercloud2/models/cov_2_protease/fps_from_att_k1_yes_prob",
+  "device": "cpu",
   "batch_size": 1,
-  "path": "/home/saxelrod/supercloud2/models/cov_2_protease",
-  "save_path": "/home/gridsan/saxelrod/models/single_geom",
   "test_only": false,
   "add_sigmoid": true,
   "metrics": [
