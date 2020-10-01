@@ -1,6 +1,6 @@
 {
     "details": {
-        "activation": "ELU",
+        "activation": "ReLU",
         "base_keys": [
             "sars_cov_one_cl_protease_active"
         ],
@@ -9,7 +9,7 @@
         "boltzmann_dict": {
             "boltz_basis": 10,
             "dropout_rate": 0.1,
-            "final_act": "ELU",
+            "final_act": "ReLU",
             "head_pool": "concatenate",
             "mol_basis": 300,
             "num_heads": 3,
@@ -32,7 +32,7 @@
                 }
             },
             {
-                "name": "ELU",
+                "name": "ReLU",
                 "param": {}
             }
         ],
@@ -86,7 +86,7 @@
                 }
             },
             {
-                "name": "ELU",
+                "name": "ReLU",
                 "param": {}
             }
         ],
@@ -108,7 +108,7 @@
                     }
                 },
                 {
-                    "name": "ELU",
+                    "name": "ReLU",
                     "param": {}
                 },
                 {
