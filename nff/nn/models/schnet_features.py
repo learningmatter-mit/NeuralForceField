@@ -7,7 +7,8 @@ from nff.nn.models.conformers import WeightedConformers
 from nff.nn.modules import (CpSchNetConv, ChemPropMsgToNode,
                             ChemPropInit, LinearConfAttention)
 from nff.utils.tools import make_directed
-from nff.data.loader import REINDEX_KEYS
+
+REINDEX_KEYS = ["nbr_list", "bonded_nbr_list"]
 
 
 class SchNetFeatures(WeightedConformers):

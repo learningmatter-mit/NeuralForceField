@@ -183,7 +183,7 @@ def get_dsets(full_path, test_only):
 
 
 def main(dset_folder,
-         gpu,
+         device,
          model_folder,
          batch_size,
          prop,
@@ -210,7 +210,7 @@ def main(dset_folder,
 
         results, targets = evaluate(model,
                                     loader,
-                                    device=gpu,
+                                    device=device,
                                     sub_batch_size=sub_batch_size)
 
         save_name = f"pred_{metric}_{name}.pickle"
@@ -236,8 +236,8 @@ if __name__ == "__main__":
                         help=("Name of the folder with the "
                               "datasets you want to add "
                               "fingerprints to"))
-    parser.add_argument('--gpu', type=int,
-                        help="Name of gpu to use")
+    parser.add_argument('--device', type=str,
+                        help="Name of device to use")
     parser.add_argument('--batch_size', type=int,
                         help="Batch size")
     parser.add_argument('--prop', type=str,

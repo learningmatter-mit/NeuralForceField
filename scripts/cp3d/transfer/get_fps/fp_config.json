@@ -1,7 +1,7 @@
 {
   "model_folder": "/home/saxelrod/supercloud2/models/saved_models/single_geom",
   "dset_folder": "/home/saxelrod/supercloud2/models/cov_2_protease",
-  "gpu": 0,
+  "device": 0,
   "batch_size": 1,
   "path": "/home/saxelrod/supercloud2/models/cov_2_protease",
   "save_path": "/home/gridsan/saxelrod/models/single_geom",
