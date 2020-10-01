@@ -5,13 +5,14 @@ from torch.utils.data import DataLoader
 from torch.nn import Sigmoid
 import pickle
 import sys
-import copy
+from tqdm import tqdm
 
 from nff.data import Dataset
 from nff.train import load_model
 from nff.data import collate_dicts
 from nff.utils.cuda import batch_to, batch_detach
 from nff.data.dataset import concatenate_dict
+from nff.utils import tqdm_enum, parse_args
 
 PROP = "sars_cov_one_cl_protease_active"
 METRIC_DIC = {"pr_auc": "maximize",
@@ -19,17 +20,27 @@ METRIC_DIC = {"pr_auc": "maximize",
               "loss": "minimize"}
 
 
-def loss_fn(x, y):
-    return torch.Tensor(0)
+def save(results,
+         targets,
+         save_path,
+         prop,
+         add_sigmoid):
 
-
-def save(results, targets, save_path, prop):
-    sigmoid = Sigmoid()
     y_true = torch.stack(targets[prop]).numpy()
-    probas_pred = sigmoid(torch.cat(results[prop])
-                          ).reshape(-1).numpy()
+
+    if add_sigmoid:
+        sigmoid = Sigmoid()
+        probas_pred = sigmoid(torch.cat(results[prop])
+                              ).reshape(-1).numpy()
+    else:
+        probas_pred = (torch.cat(results[prop])
+                       .reshape(-1).numpy())
+
     fps = torch.stack(results["fp"]).numpy()
     all_conf_fps = results["conf_fps"]
+    learned_weights = results["learned_weights"]
+    energy = results["energy"]
+    boltz_weights = results["boltz_weights"]
 
     smiles_list = targets["smiles"]
     dic = {}
@@ -40,7 +51,10 @@ def save(results, targets, save_path, prop):
         dic[smiles] = {"true": y_true[i],
                        "pred": probas_pred[i],
                        "fp": fps[i].reshape(-1),
-                       "conf_fps": conf_fps}
+                       "conf_fps": conf_fps,
+                       "learned_weights": learned_weights[i].numpy(),
+                       "energy": energy[i].reshape(-1).numpy(),
+                       "boltz_weights": boltz_weights[i].reshape(-1).numpy()}
 
     with open(save_path, "wb") as f:
         pickle.dump(dic, f)
@@ -48,8 +62,10 @@ def save(results, targets, save_path, prop):
 
 def prepare_metric(lines, metric):
     header_items = [i.strip() for i in lines[0].split("|")]
-    if metric == "prc_auc":
+    if metric in ["prc_auc", "prc-auc"]:
         metric = "pr_auc"
+    elif metric in ["auc", "roc-auc"]:
+        metric = "roc_auc"
     if metric == "loss":
         idx = header_items.index("Validation loss")
     else:
@@ -71,9 +87,9 @@ def prepare_metric(lines, metric):
     return idx, best_score, best_epoch, optim
 
 
-def model_from_metric(model, model_path, metric):
+def model_from_metric(model, model_folder, metric):
 
-    log_path = os.path.join(model_path, "log_human_read.csv")
+    log_path = os.path.join(model_folder, "log_human_read.csv")
     with open(log_path, "r") as f:
         lines = f.readlines()
 
@@ -91,7 +107,7 @@ def model_from_metric(model, model_path, metric):
                 (optim == "maximize" and score > best_score)]):
             best_score = score
             best_epoch = splits[1]
-    check_path = os.path.join(model_path, "checkpoints",
+    check_path = os.path.join(model_folder, "checkpoints",
                               f"checkpoint-{best_epoch}.pth.tar")
 
     state_dict = torch.load(check_path, map_location="cpu"
@@ -100,14 +116,6 @@ def model_from_metric(model, model_path, metric):
     model.eval()
 
     return model
-
-
-def name_from_metric(metric):
-    if metric is None:
-        save_name = "test_pred_def_metric.pickle"
-    else:
-        save_name = f"test_pred_{metric}.pickle"
-    return save_name
 
 
 def fprint(msg):
@@ -119,14 +127,19 @@ def fprint(msg):
 def fps_and_pred(model, batch, **kwargs):
 
     outputs, xyz = model.make_embeddings(batch, xyz=None, **kwargs)
-    pooled_fp = model.pool(outputs)
+    pooled_fp, learned_weights = model.pool(outputs)
     results = model.readout(pooled_fp)
     results = model.add_grad(batch=batch, results=results, xyz=xyz)
 
     conf_fps = [i.cpu().detach() for i in outputs["conf_fps_by_smiles"]]
-    results.update({"fp": pooled_fp,
-                    "conf_fps": conf_fps})
+    energy = batch["energy"]
+    boltz_weights = batch["weights"]
 
+    results.update({"fp": pooled_fp,
+                    "conf_fps": conf_fps,
+                    "learned_weights": learned_weights,
+                    "energy": energy,
+                    "boltz_weights": boltz_weights})
     return results
 
 
@@ -141,14 +154,7 @@ def evaluate(model,
     all_results = []
     all_batches = []
 
-    old_pct = 0
-
-    for i, batch in enumerate(loader):
-
-        new_pct = int((i + 1) / len(loader) * 100 )
-        if new_pct - old_pct >= 10:
-            fprint("%d%% complete" % new_pct)
-            old_pct = new_pct
+    for i, batch in tqdm_enum(loader):
 
         batch = batch_to(batch, device)
         results = fps_and_pred(model, batch, **kwargs)
@@ -156,100 +162,80 @@ def evaluate(model,
         all_results.append(batch_detach(results))
         all_batches.append(batch_detach(batch))
 
-        del results
-        del batch
-
-        # if i == 4:
-        #     break
-
     all_results = concatenate_dict(*all_results)
     all_batches = concatenate_dict(*all_batches)
 
     return all_results, all_batches
 
 
-def combine_dsets(dsets):
+def get_dsets(full_path, test_only):
+    if test_only:
+        dset_names = ['test']
+    else:
+        dset_names = ["train", "val", "test"]
 
-    new_dset = copy.deepcopy(dsets[0])
-    for dset in dsets[1:]:
-        for key, val in dset.props.items():
-            if type(val) is list:
-                new_dset.props[key] += val
-            else:
-                new_dset.props[key] = torch.cat([new_dset.props[key], val])
-    return new_dset
-
-
-def add_train_val(path):
     dsets = []
-    for name in ["train", "val"]:
-        print(f"Loading {name} set...")
-        new_path = os.path.join(path, "{}.pth.tar".format(name))
+    for name in tqdm(dset_names):
+        new_path = os.path.join(full_path, "{}.pth.tar".format(name))
         dsets.append(Dataset.from_file(new_path))
-    # dataset = combine_dsets(dsets)
-    return dsets
+
+    return dsets, dset_names
 
 
-def main(path,
-         device,
-         model_path,
+def main(dset_folder,
+         gpu,
+         model_folder,
          batch_size,
          prop,
          sub_batch_size,
-         all_splits,
          save_path,
-         metric=None):
+         add_sigmoid,
+         metric=None,
+         test_only=False,
+         **kwargs):
 
-    model = load_model(model_path)
+    model = load_model(model_folder)
     if metric is not None:
         model = model_from_metric(model=model,
-                                  model_path=model_path,
+                                  model_folder=model_folder,
                                   metric=metric)
-    fprint("Loading test set...")
-    dataset = Dataset.from_file(os.path.join(path, "test.pth.tar"))
-    datasets = [dataset]
-    dset_names = ["test"]
-    if all_splits:
-        datasets += add_train_val(path)
-        dset_names += ["train", "val"]
+    datasets, dset_names = get_dsets(dset_folder, test_only)
 
-    for name, dataset in zip(dset_names, datasets):
+    for i in tqdm(range(len(dset_names))):
+        dataset = datasets[i]
+        name = dset_names[i]
         loader = DataLoader(dataset,
                             batch_size=batch_size,
                             collate_fn=collate_dicts)
 
-        fprint("Evaluating...")
         results, targets = evaluate(model,
                                     loader,
-                                    device=device,
+                                    device=gpu,
                                     sub_batch_size=sub_batch_size)
 
-        fprint("Saving...")
-
-        save_name = name_from_metric(metric)
-        if all_splits:
-            save_name = save_name.replace("test_", "")
-            save_name = save_name.replace(".pickle",
-                                          "_{}.pickle".format(name))
+        save_name = f"pred_{metric}_{name}.pickle"
         if save_path is None:
-            save_path = path
+            save_path = dset_folder
 
         pickle_path = os.path.join(save_path, save_name)
 
         save(results=results,
              targets=targets,
              save_path=pickle_path,
-             prop=prop)
+             prop=prop,
+             add_sigmoid=add_sigmoid)
 
     fprint("Complete!")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_path', type=str,
+    parser.add_argument('--model_folder', type=str,
                         help="Name of model path")
-    parser.add_argument('--path', type=str,
-                        help="Name of sub-folder path")
+    parser.add_argument('--dset_folder', type=str,
+                        help=("Name of the folder with the "
+                              "datasets you want to add "
+                              "fingerprints to"))
     parser.add_argument('--gpu', type=int,
                         help="Name of gpu to use")
     parser.add_argument('--batch_size', type=int,
@@ -261,26 +247,25 @@ if __name__ == "__main__":
                         help="Sub batch size",
                         default=7)
     parser.add_argument('--metric', type=str,
-                        help="Metric to optimize",
+                        help=("Select the model with the best validation "
+                              "score on this metric. If no metric "
+                              "is given, the metric used in the training "
+                              "process will be used."),
                         default=None)
-    parser.add_argument('--all_splits', action='store_true',
-                        help="Get results for train, val in addition to test")
     parser.add_argument('--save_path', type=str,
                         help="Path to save pickles")
+    parser.add_argument('--test_only', action='store_true',
+                        help=("Only evaluate model "
+                              "and generate fingerprints for "
+                              "the test set"))
+    parser.add_argument('--add_sigmoid', action='store_true',
+                        help=("Add a sigmoid layer to predictions. "
+                              "This should be done if your model is a "
+                              "classifier trained with a BCELogits loss. "))
+    parser.add_argument('--config_file', type=str,
+                        help=("Path to JSON file with arguments. If given, "
+                              "any arguments in the file override the command "
+                              "line arguments."))
+    args = parse_args(parser)
 
-    args = parser.parse_args()
-
-    try:
-        main(path=args.path,
-             device=args.gpu,
-             model_path=args.model_path,
-             batch_size=args.batch_size,
-             prop=args.prop,
-             sub_batch_size=args.sub_batch_size,
-             metric=args.metric,
-             all_splits=args.all_splits,
-             save_path=args.save_path)
-    except Exception as e:
-        import pdb
-        print(e)
-        pdb.post_mortem()
+    main(**args.__dict__)

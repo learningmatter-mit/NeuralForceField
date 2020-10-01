@@ -12,7 +12,8 @@
 #SBATCH -p normal
 #SBATCH --constraint=xeon-g6
 
-source $HOME/.bashrc
+source deactivate
+source ~/.bashrc
 source activate nff
 
 export MASTER_ADDR=$(srun -l bash -c 'hostname' | sort | head -1 | awk '{print $2}')
@@ -20,7 +21,7 @@ export MASTER_IP=$(getent hosts `hostname` | cut -d ' ' -f1)
 export MASTER_PORT=8888
 # change to the number of GPUs you're using per node
 export SLURM_GPUS_PER_NODE=2
-export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=lib/$CONDA_PREFIX/:$LD_LIBRARY_PATH
 export NFFDIR="$HOME/repo/nff/covid_clean/NeuralForceField"
 
 # this is the problem: something's going wrong in this branch of covid_clean

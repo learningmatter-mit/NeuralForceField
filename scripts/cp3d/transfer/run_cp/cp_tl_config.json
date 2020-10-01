@@ -1,0 +1,6 @@
+{
+  "metric": "prc-auc",
+  "train_feat_path": "/home/saxelrod/chemprop_cov_2/features/attention_k_1_yes_prob_cov_cl_protease/train_prc_auc.npz",
+  "val_feat_path": "/home/saxelrod/chemprop_cov_2/features/attention_k_1_yes_prob_cov_cl_protease/val_prc_auc.npz",
+  "test_feat_path": "/home/saxelrod/chemprop_cov_2/features/attention_k_1_yes_prob_cov_cl_protease/test_prc_auc.npz"
+}

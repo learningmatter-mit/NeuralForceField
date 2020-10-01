@@ -862,7 +862,13 @@ class GraphAttention(MessagePassingModule):
 
 class ConfAttention(nn.Module):
 
-    def __init__(self, mol_basis, boltz_basis, final_act, equal_weights=False):
+    def __init__(self,
+                 mol_basis,
+                 boltz_basis,
+                 final_act,
+                 equal_weights=False,
+                 prob_func='softmax'):
+
         super(ConfAttention, self).__init__()
 
         """
@@ -891,6 +897,7 @@ class ConfAttention(nn.Module):
 
         self.final_act = layer_types[final_act]()
         self.activation = LeakyReLU(inplace=False)
+        self.prob_func = prob_func
 
     def forward(self, conf_fps, boltzmann_weights):
 
@@ -899,6 +906,8 @@ class ConfAttention(nn.Module):
             self.embed_boltz = True
         if not hasattr(self, "equal_weights"):
             self.equal_weights = False
+        if not hasattr(self, "prob_func"):
+            self.prob_func = 'softmax'
 
         if self.embed_boltz:
             # increase dimensionality of Boltzmann weight
@@ -932,8 +941,14 @@ class ConfAttention(nn.Module):
                 )
             )
 
-            alpha_ij = softmax(output.reshape(n_confs, n_confs),
-                               dim=1).reshape(-1, 1) / n_confs
+            if self.prob_func == 'softmax':
+                alpha_ij = softmax(output.reshape(n_confs, n_confs),
+                                   dim=1).reshape(-1, 1) / n_confs
+            elif self.prob_func == 'square':
+                out_reshape = (output ** 2).reshape(n_confs, n_confs)
+                norm = out_reshape.sum(dim=1).reshape(-1, 1)
+                non_norm_prob = out_reshape / norm
+                alpha_ij = non_norm_prob.reshape(-1, 1) / n_confs
 
         fp_j = new_fps[a[:, 1]]
         prod = alpha_ij * self.W(fp_j)
@@ -944,12 +959,18 @@ class ConfAttention(nn.Module):
         # put through nonlinearity
         output = self.final_act(summed_fps)
 
-        return output
+        return output, alpha_ij
 
 
 class LinearConfAttention(ConfAttention):
 
-    def __init__(self, mol_basis, boltz_basis, final_act, equal_weights=False):
+    def __init__(self,
+                 mol_basis,
+                 boltz_basis,
+                 final_act,
+                 equal_weights=False,
+                 prob_func='softmax'):
+
         super(LinearConfAttention, self).__init__(mol_basis,
                                                   boltz_basis,
                                                   final_act,
@@ -959,13 +980,19 @@ class LinearConfAttention(ConfAttention):
             self.att_weight = torch.nn.Parameter(torch.rand(1, mol_basis))
             nn.init.xavier_uniform_(self.att_weight, gain=1.414)
 
-    def forward(self, conf_fps, boltzmann_weights):
+        self.prob_func = prob_func
+
+    def forward(self,
+                conf_fps,
+                boltzmann_weights):
 
         # for backwards compatibility
         if not hasattr(self, "embed_boltz"):
             self.embed_boltz = True
         if not hasattr(self, "equal_weights"):
             self.equal_weights = False
+        if not hasattr(self, "prob_func"):
+            self.prob_func = 'softmax'
 
         if self.embed_boltz:
             # increase dimensionality of Boltzmann weight
@@ -991,7 +1018,10 @@ class LinearConfAttention(ConfAttention):
                 )
             )
 
-            alpha_i = softmax(output, dim=1).reshape(-1, 1)
+            if self.prob_func == 'softmax':
+                alpha_i = softmax(output, dim=1).reshape(-1, 1)
+            elif self.prob_func == 'square':
+                alpha_i = (output ** 2 / (output ** 2).sum()).reshape(-1, 1)
 
         prod = alpha_i * self.W(new_fps)
 
@@ -1001,7 +1031,7 @@ class LinearConfAttention(ConfAttention):
         # put through nonlinearity
         output = self.final_act(summed_fps)
 
-        return output
+        return output, alpha_i
 
 
 class NodeMultiTaskReadOut(nn.Module):

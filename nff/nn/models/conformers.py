@@ -171,6 +171,7 @@ class WeightedConformers(nn.Module):
 
             num_heads = boltzmann_dict.get("num_heads", 1)
             equal_weights = boltzmann_dict.get("equal_weights", False)
+            prob_func = boltzmann_dict.get("prob_func", 'softmax')
 
             for _ in range(num_heads):
 
@@ -181,7 +182,8 @@ class WeightedConformers(nn.Module):
                 networks.append(module(mol_basis=mol_basis,
                                        boltz_basis=boltz_basis,
                                        final_act=final_act,
-                                       equal_weights=equal_weights))
+                                       equal_weights=equal_weights,
+                                       prob_func=prob_func))
 
         return networks
 
@@ -361,6 +363,7 @@ class WeightedConformers(nn.Module):
         extra_feat_fps = outputs["extra_feats"]
 
         final_fps = []
+        final_weights = []
         # go through each species
         for i in range(len(conf_fps_by_smiles)):
             boltzmann_weights = batched_weights[i]
@@ -375,19 +378,22 @@ class WeightedConformers(nn.Module):
                 self.head_pool = "concatenate"
 
             # pool the atomic fingerprints
-            final_fp = conf_pool(mol_size=mol_size,
-                                 boltzmann_weights=boltzmann_weights,
-                                 mol_fp_nn=self.mol_fp_nn,
-                                 boltz_nns=self.boltz_nns,
-                                 conf_fps=conf_fps,
-                                 extra_feats=extra_feats,
-                                 head_pool=self.head_pool)
+            final_fp, learned_weights = conf_pool(
+                mol_size=mol_size,
+                boltzmann_weights=boltzmann_weights,
+                mol_fp_nn=self.mol_fp_nn,
+                boltz_nns=self.boltz_nns,
+                conf_fps=conf_fps,
+                extra_feats=extra_feats,
+                head_pool=self.head_pool)
 
             final_fps.append(final_fp)
+            final_weights.append(learned_weights)
 
         final_fps = torch.stack(final_fps)
+        final_weights = torch.stack(final_weights)
 
-        return final_fps
+        return final_fps, final_weights
 
     def add_grad(self, batch, results, xyz):
 
@@ -408,8 +414,9 @@ class WeightedConformers(nn.Module):
         else:
             outputs, xyz = self.make_embeddings(batch, xyz, **kwargs)
 
-        pooled_fp = self.pool(outputs)
+        pooled_fp, final_weights = self.pool(outputs)
         results = self.readout(pooled_fp)
         results = self.add_grad(batch=batch, results=results, xyz=xyz)
+        results.update({"learned_weights": final_weights})
 
         return results

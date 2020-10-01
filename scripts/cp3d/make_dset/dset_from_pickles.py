@@ -5,12 +5,11 @@ import os
 import torch
 import numpy as np
 import argparse
-import pdb
 import sys
-from tqdm import tqdm
 
 
 from nff.data import Dataset, concatenate_dict
+from nff.utils import tqdm_enum, parse_args, fprint
 import copy
 
 
@@ -21,12 +20,6 @@ KEY_MAP = {"rd_mol": "nxyz",
 # these are keys that confuse the dataset
 EXCLUDE_KEYS = ["totalconfs", "datasets", "conformerweights",
                 "uncleaned_smiles"]
-
-
-def fprint(msg):
-    print(msg)
-    sys.stdout.flush()
-
 
 def get_thread_dic(sample_dic, thread, num_threads):
 
@@ -359,12 +352,6 @@ def add_missing(props_list):
 
     return props_list
 
-def tqdm_enum(iter):
-    i = 0
-    for y in tqdm(iter):
-        yield i, y
-        i += 1
-
 
 def make_nff_dataset(spec_dics, nbrlist_cutoff):
 
@@ -616,17 +603,5 @@ if __name__ == "__main__":
                               "any arguments in the file override the command "
                               "line arguments."))
 
-    args = parser.parse_args()
-
-    if args.config_file is not None:
-        with open(args.config_file, "r") as f:
-            config_args = json.load(f)
-        for key, val in config_args.items():
-            if hasattr(args, key):
-                setattr(args, key, val)
-
-    try:
-        main(**args.__dict__)
-    except Exception as e:
-        fprint(e)
-        pdb.post_mortem()
+    args = parse_args(parser)
+    main(**args.__dict__)

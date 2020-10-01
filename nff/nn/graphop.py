@@ -66,14 +66,16 @@ def conf_pool(mol_size,
     """
 
     final_fps = []
+    final_weights = []
     for boltz_nn in boltz_nns:
         # if boltz_nn is an instance of ConfAttention,
         # put all the conformers and their weights into
         # the attention pooler and return
 
         if isinstance(boltz_nn, ConfAttention):
-            final_fp = boltz_nn(conf_fps=conf_fps,
-                                boltzmann_weights=boltzmann_weights)
+            final_fp, learned_weights = boltz_nn(
+                conf_fps=conf_fps,
+                boltzmann_weights=boltzmann_weights)
         else:
             # otherwise get a new fingerprint for each conformer
             # based on its Boltzmann weight
@@ -81,18 +83,21 @@ def conf_pool(mol_size,
             boltzmann_fps = []
             for i, conf_fp in enumerate(conf_fps):
                 weight = boltzmann_weights[i]
-                boltzmann_fp = update_boltz(conf_fp=conf_fp,
-                                            weight=weight,
-                                            boltz_nn=boltz_nn,
-                                            extra_feats=extra_feats)
+                boltzmann_fp = update_boltz(
+                    conf_fp=conf_fp,
+                    weight=weight,
+                    boltz_nn=boltz_nn,
+                    extra_feats=extra_feats)
                 boltzmann_fps.append(boltzmann_fp)
 
             boltzmann_fps = torch.stack(boltzmann_fps)
+            learned_weights = boltzmann_weights
 
             # sum all the conformer fingerprints
             final_fp = boltzmann_fps.sum(dim=0)
 
         final_fps.append(final_fp)
+        final_weights.append(learned_weights)
 
     if head_pool == "concatenate":
         final_fp = torch.cat(final_fps, dim=-1)
@@ -101,7 +106,8 @@ def conf_pool(mol_size,
     else:
         raise NotImplementedError
 
-    return final_fp
+    final_weights = torch.stack(final_weights)
+    return final_fp, final_weights
 
 
 def split_and_sum(tensor, N):

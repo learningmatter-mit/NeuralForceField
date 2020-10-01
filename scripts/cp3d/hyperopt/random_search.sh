@@ -6,8 +6,8 @@
 #SBATCH --mem 350G
 
 source deactivate
+source ~/.bashrc
 source activate nff
-
 
 cmd="python random_search.py --config_file search_config.json"
 echo $cmd

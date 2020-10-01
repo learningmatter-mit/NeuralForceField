@@ -1,0 +1,19 @@
+{
+  "base_config_path": "/home/saxelrod/chemprop_cov_2/models/base_config.json",
+  "cp_folder": "/home/saxelrod/Repo/projects/chemprop",
+  "feature_folder": "/home/saxelrod/chemprop_cov_2/features",
+  "model_name_3d": "attention_k_1_yes_prob_cov_cl_protease",
+  "model_folder_cp": "/home/saxelrod/chemprop_cov_2/models",
+  "metric": [
+    "auc",
+    "prc-auc"
+  ],
+  "feat_options": [
+    true,
+    false
+  ],
+  "mpnn_options": [
+    true,
+    false
+  ]
+}
