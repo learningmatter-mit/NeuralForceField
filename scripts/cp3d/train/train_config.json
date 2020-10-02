@@ -104,6 +104,7 @@
 
     "train_params": {
 
+        "use_slurm": true,
         "seed": 1,
 
         "batch_size": 16,

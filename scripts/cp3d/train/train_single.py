@@ -457,12 +457,12 @@ def get_datasets(weight_path):
     return datasets
 
 
-def make_model(params, gpu, world_size, weight_path):
+def make_model(params, device, world_size, weight_path):
     """
     Create a model and wrap it in DistributedDataParallel.
     Args:
         params (dict):   training/network parameters
-        gpu (int): local rank of the current gpu
+        device (int): local rank of the current gpu
         world_size (int): total number number of gpus altogether
 
     Returns:
@@ -481,13 +481,13 @@ def make_model(params, gpu, world_size, weight_path):
          model = get_model(params=params,
                            model_type=params.get("model_type", "SchNet"))
 
-    torch.cuda.set_device(gpu)
-    model.cuda(gpu)
+    torch.cuda.set_device(device)
+    model.to(device)
 
     torch_par = params.get("torch_par", True)
     if torch_par:
         model = nn.parallel.DistributedDataParallel(model,
-                                                    device_ids=[gpu])
+                                                    device_ids=[device])
     return model
 
 
@@ -588,7 +588,7 @@ def make_stats(T,
                global_rank,
                base,
                world_size,
-               gpu,
+               device,
                base_keys,
                grad_keys,
                stat_metric_name,
@@ -626,7 +626,7 @@ def make_stats(T,
         best_model,
         test_loader,
         loss_fn,
-        device=gpu,
+        device=device,
         **model_kwargs
     )
 
@@ -839,8 +839,16 @@ def train(gpu,
     log_train("Created loaders.")
     log_train("Setting up training...")
 
+    # if the world size is 1, then allow the option of `device` being
+    # something other than `gpu` (e.g. if you want to train on a cpu)
+
+    if world_size == 1 and all_params["device"] == "cpu":
+        device = "cpu"
+    else:
+        device = gpu
+
     model = make_model(params=params,
-                       gpu=gpu,
+                       device=device,
                        world_size=world_size,
                        weight_path=weight_path)
 
@@ -880,7 +888,7 @@ def train(gpu,
     save_path = os.path.join(weight_path, str(node_rank * gpus + gpu),
                              "init_model.pth.tar")
     torch.save(model, save_path)
-    T.train(device=gpu, n_epochs=params['max_epochs'])
+    T.train(device=device, n_epochs=params['max_epochs'])
 
     log_train('model saved in ' + weight_path)
 
@@ -892,7 +900,7 @@ def train(gpu,
                global_rank=rank,
                base=base,
                world_size=world_size,
-               gpu=gpu,
+               device=device,
                stat_metric_name=stat_metric_name,
                base_keys=base_keys,
                grad_keys=grad_keys,

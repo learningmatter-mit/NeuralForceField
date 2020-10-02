@@ -1,10 +1,10 @@
 import subprocess
 import os
 import argparse
+import json
 
 
 def get_nodes():
-
     """
     Get the nodes that the job is being run on.
     Args:
@@ -24,8 +24,8 @@ def get_nodes():
 
     return node_list
 
-def get_cpus():
 
+def get_cpus():
     """
     Get the number of cpus per task.
     Args:
@@ -39,8 +39,8 @@ def get_cpus():
 
     return num_cpus
 
-def get_gpus():
 
+def get_gpus():
     """
     Get the number of gpus per node.
     Args:
@@ -55,9 +55,12 @@ def get_gpus():
     return num_gpus
 
 
-def submit_job(node, node_index, num_gpus, num_nodes, cpus_per_task,
-               params_file):
-
+def submit_slurm_job(node,
+                     node_index,
+                     num_gpus,
+                     num_nodes,
+                     cpus_per_task,
+                     params_file):
     """
     Submit a job to a node using all of its available gpus.
     Args:
@@ -73,11 +76,28 @@ def submit_job(node, node_index, num_gpus, num_nodes, cpus_per_task,
 
     """
 
-    cmd = ("srun -N1 --nodelist {} --ntasks 1 --cpus-per-task {} "
-           "python $NFFDIR/scripts/cp3d/train/train_single.py "
-           "{} -nr {} --gpus {} --nodes {}".format(
-               node, cpus_per_task, params_file, node_index, num_gpus,
-               num_nodes))
+    cmd = (f"srun -N1 --nodelist {node} --ntasks 1  "
+           f"--cpus-per-task {cpus_per_task} "
+           f"python $NFFDIR/scripts/cp3d/train/train_single.py "
+           f"{params_file} -nr {node_index} "
+           f"--gpus {num_gpus} --nodes {num_nodes}")
+
+    p = subprocess.Popen([cmd],
+                         shell=True,
+                         stdin=None,
+                         stdout=None,
+                         stderr=None,
+                         close_fds=True)
+
+    return p
+
+
+def run_local_job(params_file,
+                  num_gpus):
+
+    cmd = (f"python $NFFDIR/scripts/cp3d/train/train_single.py "
+           f"{params_file} -nr 0 "
+           f"--gpus {num_gpus} --nodes 1")
 
     p = subprocess.Popen([cmd],
                          shell=True,
@@ -90,7 +110,6 @@ def submit_job(node, node_index, num_gpus, num_nodes, cpus_per_task,
 
 
 def submit_to_nodes(params_file):
-
     """
     Submit jobs to all the nodes.
     Args:
@@ -100,28 +119,44 @@ def submit_to_nodes(params_file):
         None
     """
 
-    # get the number of nodes, cpus per task, and gpus per task
+    with open(params_file, "r") as f:
+        params = json.load(f)
 
-    node_list = get_nodes()
-    cpus_per_task = get_cpus()
-    num_gpus = get_gpus()
+    all_params = {**params["train_params"],
+                  **params["model_params"]}
+    use_slurm = all_params["use_slurm"]
 
-    num_nodes = len(node_list)
-    procs = []
+    if use_slurm:
 
-    # submit each node job
+        # get the number of nodes, cpus per task, and gpus per task
 
-    for i, node in enumerate(node_list):
-        p = submit_job(node=node, num_gpus=num_gpus,
-                       num_nodes=num_nodes, node_index=i,
-                       cpus_per_task=cpus_per_task,
-                       params_file=params_file)
-        procs.append(p)
+        node_list = get_nodes()
+        cpus_per_task = get_cpus()
+        num_gpus = get_gpus()
 
-    # wait for them all to finish
+        num_nodes = len(node_list)
+        procs = []
 
-    for p in procs:
-        p.wait()
+        # submit each node job
+
+        for i, node in enumerate(node_list):
+            p = submit_slurm_job(node=node,
+                                 num_gpus=num_gpus,
+                                 num_nodes=num_nodes,
+                                 node_index=i,
+                                 cpus_per_task=cpus_per_task,
+                                 params_file=params_file)
+            procs.append(p)
+
+        # wait for them all to finish
+
+        for p in procs:
+            p.wait()
+
+    else:
+        num_gpus = all_params["num_gpus"]
+        run_local_job(params_file=params_file,
+                      num_gpus=num_gpus)
 
 
 if __name__ == "__main__":
