@@ -128,7 +128,7 @@ In the example given in `schnet_config.json`, a vector of size 900 (3x `mol_basi
 - `trainable_gauss` (bool): Whether the width and spacings of the Gaussian functions are learnable parameters.
 - `extra_features` (list[dict]): a list of dictionaries specifying the names of any extra features to concatenate with the learned features. Each dictionary only needs the key `name`, which tells you the name of the feature in the dataset. 
 
-For example, if you have Morgan fingerprints in your dataset and you want to concatenate these with the learned finerprints, you can set `extra_features=["morgan"]`.
+For example, if you have Morgan fingerprints in your dataset and you want to concatenate these with the learned finerprints, you can set `extra_features=[{"name": "morgan"}]`.
 
 - `base_keys` (list[str]): names of the values that your model is predicting
 - `grad_keys` (list[str]): any values for which you also want the gradient with respect to nuclear coordinates. For example, if you are predicting energies then you may also want the gradients, as the negative gradients are the nuclear forces.
