@@ -55,7 +55,7 @@ If you want to generate the splits yourself (e.g. with a ChemProp scaffold split
 - `pos_per_val` (int): number of positives that you want in the validation set
 - `pos_per_test` (int): number of positives that you want in the test set
 
-### Reducing the number of conformers
+#### Reducing the number of conformers
 
 If you've already made a dataset and you want to reduce the number of conformers, you can do that by running the script `scripts/cp3d/make_dset/trim_confs.sh`. The only arguments you need are:
 - `from_model_path` (str): The old path to the model and dataset. The script assumes your datasets are in the folders `from_model_path/0`, `from_model_path/1`, ..., etc., as they would be if generated using the `dset_from_pickles.sh`.
@@ -144,7 +144,7 @@ An example of a `ChemProp3D` config file is `train_config.json` (this is the def
 - `same_filters` (bool): Whether to use the same learned SchNet filters for every convolution. This was false in the original SchNet paper.
 
         
-### Training parameters
+#### Training parameters
 
 - `train_params` (dict): A dictionary with information about the training process. The required keys are the same for all model types. They are:
 
@@ -197,39 +197,44 @@ There may be cases in which there are two similar regression/classification task
 
 As detailed in our paper, we have found that using this transfer learning technique with CP3D yields significantly better results for SARS-CoV-2 binding than any 2D methods. 
 
-Scripts are available for transfer learning `scripts/cp3d/transfer`. The main script is `transfer.sh`, which runs the following three scripts in order. Note that you can run any of the scripts on their own if you want (for example, if you've already made fingerprints, you can run scripts 2-3 below and skip 1).
+Scripts are available for transfer learning `scripts/cp3d/transfer`. The main script is `transfer.sh`, which runs the following three scripts in order. Note that you can run any of the scripts on their own if you want (for example, if you've already made fingerprints, you can skip the first script below).
 
-1. The script `get_fps/make_fps.sh` takes the model and adds fingerprints to species in other datasets.
+### Making fingerprints
+The script `get_fps/make_fps.sh` takes the model and adds fingerprints to species in other datasets.
 
-    - Details for the script are found in the file `get_fps/fp_config.json `. This is where you should change the values for your project. The keys in the file are:
-        - `model_folder` (str): Folder in which the model is saved
-        - `dset_folder` (str): Folder in which the dataset is saved. The dataset contains the data for which you want to add fingerprints.
-        - `feat_save_folder` (str): Folder in which you want to save pickle files with the fingerprints.
-        - `prop` (str): Name of the property that the model predicts, and that you want to save. If you just want to make fingerprints and don't want to the model predictions you can leave this unspecified.
-        - `device` (str): Device you want to use when calling the model. Can be "cpu" or any integer from 0 to the number of GPUs you have available, if you want to use a GPU.
-        - `batch_size` (int): Batch size when evaluating the model
-        - `sub_batch_size` (int): Number of sub-batches you want to divide each batch into. For more than about 10 conformers per species, most GPUs won't be able to calculate fingerprints in parallel for all conformers of a species. 7 is usually a good choice for a typical GPU.
-        - `test_only` (bool): Only create fingerprints and evaluate the model on the test set. This is useful if you just want the model predictions on the test set and aren't interested in transfer learning.
-        - `add_sigmoid` (bool): Add a sigmoid layer at the end of the model. This should be done if you are doing classification and training with the BCELogits loss.
-        - `metrics` (list[str]): The script will loop through each metric and use the model with the best validation score according to that metric. It will create fingerprints and predictions for all of the different models. Any metrics recorded during training can be used here, such as `auc`, `prc-auc`, `loss`, and `mae`.
+- Details for the script are found in the file `get_fps/fp_config.json `. This is where you should change the values for your project. The keys in the file are:
+    - `model_folder` (str): Folder in which the model is saved
+    - `dset_folder` (str): Folder in which the dataset is saved. The dataset contains the data for which you want to add fingerprints.
+    - `feat_save_folder` (str): Folder in which you want to save pickle files with the fingerprints.
+    - `prop` (str): Name of the property that the model predicts, and that you want to save. If you just want to make fingerprints and don't want to the model predictions you can leave this unspecified.
+    - `device` (str): Device you want to use when calling the model. Can be "cpu" or any integer from 0 to the number of GPUs you have available, if you want to use a GPU.
+    - `batch_size` (int): Batch size when evaluating the model
+    - `sub_batch_size` (int): Number of sub-batches you want to divide each batch into. For more than about 10 conformers per species, most GPUs won't be able to calculate fingerprints in parallel for all conformers of a species. 7 is usually a good choice for a typical GPU.
+    - `test_only` (bool): Only create fingerprints and evaluate the model on the test set. This is useful if you just want the model predictions on the test set and aren't interested in transfer learning.
+    - `add_sigmoid` (bool): Add a sigmoid layer at the end of the model. This should be done if you are doing classification and training with the BCELogits loss.
+    - `metrics` (list[str]): The script will loop through each metric and use the model with the best validation score according to that metric. It will create fingerprints and predictions for all of the different models. Any metrics recorded during training can be used here, such as `auc`, `prc-auc`, `loss`, and `mae`.
+
         
+### Exporting fingerprints to ChemProp
+
+The script `export_to_cp/save_feats.sh` exports the pickle files generated by `make_fps.sh` to a form readable by ChemProp.
+- Details for the script are in `export_to_cp/feat_config.json`. The keys are:
+    - `feat_folder` (str): Folder in which you saved the pickle files from the model. Should be the same as `feat_save_folder` above.
+    - `cp_save_folder` (str): Folder in which you want to save the exported ChemProp features.
+    - `smiles_folder` (str): Folder in which the train, validation and test SMILES strings are saved. The files should be named `train_smiles.csv`, `val_smiles.csv`, and `test_smiles.csv`.
+    - `metrics` (list[str]): Subset of the `metrics` above for which you want to export features to ChemProp.
         
-2. The script `export_to_cp/save_feats.sh` exports the pickle files generated by `make_fps.sh` to a form readable by ChemProp.
-    - Details for the script are in `export_to_cp/feat_config.json`. The keys are:
-        - `feat_folder` (str): Folder in which you saved the pickle files from the model. Should be the same as `feat_save_folder` above.
-        - `cp_save_folder` (str): Folder in which you want to save the exported ChemProp features.
-        - `smiles_folder` (str): Folder in which the train, validation and test SMILES strings are saved. The files should be named `train_smiles.csv`, `val_smiles.csv`, and `test_smiles.csv`.
-        - `metrics` (list[str]): Subset of the `metrics` above for which you want to export features to ChemProp.
-        
-3. The script `run_cp/run_all_tls.sh` runs ChemProp using the features generated above. It can loop through all CP3D models from which you generated features (e.g. model with the best `auc`, model with the best `prc`, etc.), and through combinations of training with features + MPNN and training with features alone. 
-    - Details for the script are in `run_cp/all_tls_config.json`. The keys are:
-        - `base_config_path` (str): Path to the config file for the ChemProp. All of these parameters will be used for the ChemProp runs, except if you specify `metrics`, `features_path` or `features_only`, as these will change as you loop through the combinations of `metrics`, `feat_options`, and `mpnn_options` below. 
-        - `cp_folder` (str): Path to the ChemProp folder on your computer.
-        - `feature_folder` (str): Folder in which the features you geneated above for ChemProp are saved. 
-        - `model_folder_cp` (str): Folder in which you will make sub-folders for all your ChemProp models.
-        - `metrics` (list[str]): Subset of the metrics above. For every metric there exists a corresponding best CP3D model and associated CP3D features. A new ChemProp model will be trained for every different set of these features. The associated ChemProp model will also be scored on that metric. 
-        - `feat_options` (list[bool]): Whether to use the CP3D features in the ChemProp model. If you specify [True, False], then separate models will be trained, one in which they are used and one in which they aren't. This might be useful if you want to compare performance with and without 3D features.
-        - `mpnn_options` (list[bool]):  Whether to use an MPNN in conjunction with the CP3D features in the ChemProp model. If you specify [True, False], then separate models will be trained, one in which an MPNN is used and one in which it isn't. 
+### Training ChemProp models with the fingerprints
+
+The script `run_cp/run_all_tls.sh` runs ChemProp using the features generated above. It can loop through all CP3D models from which you generated features (e.g. model with the best `auc`, model with the best `prc`, etc.), and through combinations of training with features + MPNN and training with features alone. 
+- Details for the script are in `run_cp/all_tls_config.json`. The keys are:
+    - `base_config_path` (str): Path to the config file for the ChemProp. All of these parameters will be used for the ChemProp runs, except if you specify `metrics`, `features_path` or `features_only`, as these will change as you loop through the combinations of `metrics`, `feat_options`, and `mpnn_options` below. 
+    - `cp_folder` (str): Path to the ChemProp folder on your computer.
+    - `feature_folder` (str): Folder in which the features you geneated above for ChemProp are saved. 
+    - `model_folder_cp` (str): Folder in which you will make sub-folders for all your ChemProp models.
+    - `metrics` (list[str]): Subset of the metrics above. For every metric there exists a corresponding best CP3D model and associated CP3D features. A new ChemProp model will be trained for every different set of these features. The associated ChemProp model will also be scored on that metric. 
+    - `feat_options` (list[bool]): Whether to use the CP3D features in the ChemProp model. If you specify [True, False], then separate models will be trained, one in which they are used and one in which they aren't. This might be useful if you want to compare performance with and without 3D features.
+    - `mpnn_options` (list[bool]):  Whether to use an MPNN in conjunction with the CP3D features in the ChemProp model. If you specify [True, False], then separate models will be trained, one in which an MPNN is used and one in which it isn't. 
 
 
 
