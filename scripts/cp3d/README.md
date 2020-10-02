@@ -5,7 +5,8 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
 ## Table of Contents
 
 - [Making a dataset](#making-a-dataset)
-    * [From pickle files](#from-pickle-files)
+    * [Splitting the data](#splitting-the-data)
+    * [Generating the dataset from splits and pickles](#generating-the-dataset-from-splits-and-pickles)
     * [Reducing the number of conformers](#reducing-the-number-of-conformers)
     * [Adding custom features](#adding-custom-features)
 - [Training](#training)
@@ -24,7 +25,27 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
 
 ## Making a dataset
 
-### From pickle files
+The scripts for making a dataset assume that you have a set of pickle files in a folder, one for each species, each of which contains all the 3D information about the conformers. It also assumes that you have one summary `JSON` file, which tells you all the properties of each species (except for its 3D information), and the path to the pickle file. This follows the organization of the GEOM dataset. More information about this organization can be found [here](https://github.com/learningmatter-mit/geom/blob/master/tutorials/02_loading_rdkit_mols.ipynb). 
+
+The script `scripts/cp3d/make_dset/make_dset.sh` first generates training, validation and test splits from your summary file. It interfaces with ChemProp to do so, so that you can use functionality like ChemProp's scaffold split. It then uses the splits you've generated, together with the pickle files, to create train, validation, and test datasets complete with all the 3D information. The following two sections discuss the two functions that `make_dset.sh` calls. You can run `make_dset.sh` or you can run the individual scripts themselves.
+
+### Splitting the data
+The script `scripts/cp3d/make_dset/splits/split.sh` uses your summary file to get information about the data, generates a CSV of the data for ChemProp to read, and uses ChemProp to split the data. Details for the script are in `scripts/cp3d/make_dset/splits/split.sh/split_config.json`, which you should modify for your project. The keys are:
+
+- `summary_path` (str): The path to the `JSON` file that contains a summary of the superset (the species from which you will sample to make your dataset). It has all the information about the species, excluding conformer/structural information. It also has the path to the corresponding pickle file, which has the structural information.
+- `csv_folder` (str): The folder in which you want to save your CSV files with the train, test, and split species.
+- `cp_folder` (str): The path to the ChemProp folder on your computer
+- `props` (list[str]): a list of the properites that you want your model to predict. We currently support one-class classification or multi-class regression.
+- `split_sizes` (list[float]): train, validation, and split proportions for the dataset
+- `split_type` (str): The method for splitting the data. This option gets used in ChemProp, and so it can be any of the methods supported by ChemProp (currently `random` and `scaffold_balanced`).
+- `max_specs` (int): Maximum number of species to include in your dataset. No maximum is imposed if `max_specs` is None
+- `max_atoms` (int): Maximum number of atoms for a species that you will allow in your dataset. If you don't want a limit, set this value to None. 
+- `dataset_type` (str): Type of model you're training. Currently `classification` and `regression` are supported.
+
+Running the script will generate CSV files, save them in `csv_folder`, and print a summary for you.
+
+
+### Generating the dataset from splits and pickles
 To make a CP3D dataset from a set of pickle files, we run the script `scripts/cp3d/make_dset/dset_from_pickles.sh`. This script can be used when you have a pickle file for each species. The pickle file should contain the following keys:
 
 - `smiles`: The SMILES string of the species
@@ -34,31 +55,14 @@ To make a CP3D dataset from a set of pickle files, we run the script `scripts/cp
     - If you are using the RDKit pickles from the GEOM dataset, then a more in-depth discussion of the structure of the pickle files can be found [here](https://github.com/learningmatter-mit/geom/blob/master/tutorials/02_loading_rdkit_mols.ipynb).
     
 Details for the script are found in the file `dset_config.json`. This is where you should change the values for your project. The keys in the file are:
-- `max_specs` (int): Maximum number of species to include in your dataset.
-- `max_atoms` (int): Maximum number of atoms for a species that you will allow in your dataset. If you don't want a limit, set this value to None. 
-- `max_confs` (int): Similar to `max_atoms`, but for the maximum number of conformers in a species.
-- `nbrlist_cutoff` (float): cutoff for generating the 3D neighbor list
+- `max_confs` (int): Maximum number of conformers for a species that you will allow in your dataset. If you don't want a limit, set this value to None.
 - `summary_path` (str): The path to the `JSON` file that contains a summary of the superset (the species from which you will sample to make your dataset). It has all the information about the species, excluding conformer/structural information. It also has the path to the corresponding pickle file, which has the structural information.
 - `dataset_folder` (str): The path to the folder you want to save your dataset in.
 - `pickle_folder` (str): The path to the folder that contains the pickle files.
-- `prop_sample_path`: Path to the `JSON` file that contains all the info of `summary_path`, but also whether a species is in the train/val/test sets, or is not being used in the current dataset. 
 - `num_threads` (int): How many files you want to divide your total dataset into. Conformer datasets can get quite large, so you may not want a single huge dataset that can't be loaded into memory. Instead you may want `num_threads` datasets. For example, if you perform parallel training with `N` GPUs, then you'll want to set `num_threads` to `N`. During train time, each parallel GPU thread will only read in one of these `N` datasets. For `m` GPUs per node, the node will only have to hold `m / N` of the total dataset in memory.
-- `val_size` (int): absolute size of test set (i.e. number of species, not a proportion of the total dataset size)
-- `test_size` (int): same, but for the test set
+- `csv_folder` (str): The folder in which you've saved your CSV files with the train, test, and split species.
+- `parallel_feat_threads` (int): Number of parallel threads to use when featurizing the dataset
 
-
-
-
-If you want to generate the splits yourself (e.g. with a ChemProp scaffold split), you can do so, and save to `prop_sample_path`. The script will then read the file. If you want the script to generate the splits itself, then the script can generate a split according to `sample_type`. 
-
-
-- `sample_type` (str): Options are `random` and `classification`.
-    -  If you want a random sample, then set `sample_type` to `random`. In this case you don't have to specify the keys below.
-    - If you're doing a classification problem, you may want to generate a dataset whose proportion of positives is equal to the proportion of positives in the superset. To do this set `sample_type` to `classification`. In this case you'll also have to specify the keys below.
-
-- `prop` (str): The name of the binary property that your model is predicting
-- `pos_per_val` (int): number of positives that you want in the validation set
-- `pos_per_test` (int): number of positives that you want in the test set
 
 ### Reducing the number of conformers
 
