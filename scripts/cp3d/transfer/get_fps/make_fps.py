@@ -4,7 +4,6 @@ import torch
 from torch.utils.data import DataLoader
 from torch.nn import Sigmoid
 import pickle
-import sys
 from tqdm import tqdm
 import numpy as np
 
@@ -13,7 +12,7 @@ from nff.train import load_model
 from nff.data import collate_dicts
 from nff.utils.cuda import batch_to, batch_detach
 from nff.data.dataset import concatenate_dict
-from nff.utils import tqdm_enum, parse_args
+from nff.utils import tqdm_enum, parse_args, fprint
 
 
 METRIC_DIC = {"pr_auc": "maximize",
@@ -32,7 +31,6 @@ def save(results,
         probas_pred = None
 
     else:
-
         if add_sigmoid:
             sigmoid = Sigmoid()
             probas_pred = sigmoid(torch.cat(results[prop])
@@ -56,12 +54,23 @@ def save(results,
     smiles_list = targets["smiles"]
     dic = {}
 
+    # for alpha_ij attention
+    alpha_ij_att = all([w.reshape(-1).shape[0] == conf_fp.shape[0] ** 2
+                        for w, conf_fp in zip(learned_weights, all_conf_fps)])
+
     for i, smiles in enumerate(smiles_list):
 
         conf_fps = all_conf_fps[i].numpy()
+        these_weights = learned_weights[i].numpy().reshape(-1)
+        num_fps = conf_fps.shape[0]
+
+        if alpha_ij_att:
+            these_weights = these_weights.reshape(num_fps,
+                                                  num_fps)
+
         dic[smiles] = {"fp": fps[i].reshape(-1),
                        "conf_fps": conf_fps,
-                       "learned_weights": learned_weights[i].numpy(),
+                       "learned_weights": these_weights,
                        "energy": energy[i].reshape(-1).numpy(),
                        "boltz_weights": boltz_weights[i].reshape(-1).numpy()}
 
@@ -131,12 +140,6 @@ def model_from_metric(model, model_folder, metric):
     return model
 
 
-def fprint(msg):
-
-    print(msg)
-    sys.stdout.flush()
-
-
 def fps_and_pred(model, batch, **kwargs):
 
     outputs, xyz = model.make_embeddings(batch, xyz=None, **kwargs)
@@ -145,8 +148,8 @@ def fps_and_pred(model, batch, **kwargs):
     results = model.add_grad(batch=batch, results=results, xyz=xyz)
 
     conf_fps = [i.cpu().detach() for i in outputs["conf_fps_by_smiles"]]
-    energy = batch["energy"]
-    boltz_weights = batch["weights"]
+    energy = batch.get("energy")
+    boltz_weights = batch.get("weights")
 
     results.update({"fp": pooled_fp,
                     "conf_fps": conf_fps,
