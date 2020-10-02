@@ -1,0 +1,143 @@
+{
+    "model_params": {
+
+        "model_type": "SchNetFeatures",
+
+        "mol_basis": 300,
+        "cp_dropout": 0.02,
+        "schnet_dropout": 0.3,
+        "activation": "ReLU",
+        "n_atom_basis": 133,
+        "n_bond_features": 26,
+        "n_bond_hidden": 300,
+        "n_convolutions": 2,
+        "n_filters": 64,
+        "n_gaussians": 10,
+
+        "input_layers": [
+            {
+                "name": "linear",
+                "param": {
+                    "in_features": 159,
+                    "out_features": 300
+                }
+            },
+            {
+                "name": "ReLU",
+                "param": {}
+            }
+        ],
+
+        "output_layers": [
+            {
+                "name": "linear",
+                "param": {
+                    "in_features": 497,
+                    "out_features": 300
+                }
+            },
+            {
+                "name": "ReLU",
+                "param": {}
+            }
+        ],
+
+        "mol_fp_layers": [],
+
+        "boltzmann_dict": {
+            "boltz_basis": 10,
+            "dropout_rate": 0.1,
+            "final_act": "ReLU",
+            "head_pool": "concatenate",
+            "mol_basis": 300,
+            "num_heads": 3,
+            "type": "linear_attention"
+        },
+
+
+        "readoutdict": {
+            "sars_cov_one_cl_protease_active": [
+                {
+                    "name": "linear",
+                    "param": {
+                        "in_features": 900,
+                        "out_features": 450
+                    }
+                },
+                {
+                    "name": "Dropout",
+                    "param": {
+                        "p": 0.2
+                    }
+                },
+                {
+                    "name": "ReLU",
+                    "param": {}
+                },
+                {
+                    "name": "linear",
+                    "param": {
+                        "in_features": 450,
+                        "out_features": 1
+                    }
+                },
+                {
+                    "name": "Dropout",
+                    "param": {
+                        "p": 0.2
+                    }
+                }
+            ]
+        },
+
+        "gauss_embed": true,
+        "batch_embeddings": false,
+        "same_filters": true,
+        "trainable_gauss": false,
+        "extra_features": null,
+
+        "base_keys": ["sars_cov_one_cl_protease_active"],
+        "grad_keys": []
+
+    },
+
+
+    "train_params": {
+
+        "seed": 1,
+
+        "batch_size": 16,
+        "mini_batches": 4,
+        "model_kwargs": {"sub_batch_size": 7},
+        "sampler": {
+            "name": "ImbalancedDatasetSampler",
+            "target_name": "sars_cov_one_cl_protease_active"
+        },
+
+        "loss_coef": {"sars_cov_one_cl_protease_active": 1},
+        "loss": "logits_cross_entropy",
+        "mol_loss_norm": true,
+        "metrics": ["RocAuc", "PrAuc"],
+        "metric_as_loss": "PrAuc_sars_cov_one_cl_protease_active",
+        "metric_objective": "maximize",
+
+
+        "lr_patience": 10,
+        "lr": 1e-4,
+        "lr_decay": 0.5,
+        "lr_min": 1e-06,
+        "max_epochs": 100,
+
+
+        "logger": "csv",
+        "log_every_n_epochs": 1,
+        "checkpoints_to_keep": 10000,
+        "del_grad_interval": 100,
+
+        "torch_par": false,
+        "weightpath": "/home/gridsan/saxelrod/models",
+        "model_name": "attention_k_1_yes_prob_cov_cl_protease"
+
+    }
+
+}
