@@ -7,6 +7,7 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
 - [Making a dataset](#making-a-dataset)
     * [From pickle files](#from-pickle-files)
     * [Reducing the number of conformers](#reducing-the-number-of-conformers)
+    * [Adding custom features](#adding-custom-features)
 - [Training](#training)
     * [Running the script](#running-the-script)
     * [The config file](#the-config-file)
@@ -15,7 +16,7 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
         * [Training parameters](#training-parameters)
 - [Hyperparameter optimization](#hyperparameter-optimization)
 - [Transfer learning](#transfer-learning)
-    * [Getting fingerprints, predictions, and learned weights](#getting-fingerprints-predictions-and-learned-weights)
+    * [Getting fingerprints, predictions, and learned weights](#gett-fingerprints,-predictions,-and-learned-weights)
     * [Exporting fingerprints to ChemProp](#exporting-fingerprints-to-chemprop)
     * [Training ChemProp models with the fingerprints](#training-chemprop-models-with-the-fingerprints)
 
@@ -68,6 +69,13 @@ If you've already made a dataset and you want to reduce the number of conformers
 
 Of course you can always just run `dset_from_pickles.sh` again, but using fewer conformers. But running `trim_confs.sh` might save some time if your pickle files don't contain `rdmols`. In this case you'd have to generate `rdmols` from `xyz`'s all over again, which would not be worth it! 
 
+### Adding custom features 
+The script automatically generates atom and bond features, but you can add other features to the dataset too:
+- Morgan fingerprint. The Morgan fingerprint is a classic 2D bit vector fingerprint. Given a dataset called `dset` and a desired fingerprint length `vec_length`, call `dset.add_morgan(vec_length)`
+- E3FP. The E3FP fingerprint is a 3D version of the Morgan fingerprint. To generate E3FP fingerprints call `dset.add_e3fp(vec_length)`. (Note, however, that creating a conda environment with the latest versions of both RDKit and E3FP leads to clashes, and so the `nff` environment does not automatically contain E3FP functionality. If you want to generate an E3FP fingerprint, you will have to create a new environment with E3FP and an older version of RDKit).
+- RDKit descriptors. RDKit has a variety of 3D descriptors, such as `autocorrelation_3d`, `rdf`, `morse`, `whim` and `getaway`. To generate features with any of these methods, call `dset.featurize_rdkit(method)`.
+
+If you are interested in adding other types of features then you can write your own class methods to generate them!
 
 
 ## Training
@@ -126,9 +134,9 @@ In the example given in `schnet_config.json`, a vector of size 900 (3x `mol_basi
 
 - `batch_embeddings` (bool): Whether to use fingerprints already present in the dataset instead of learning the fingerprints. In this case the dataset properties must contain fingerprints under the key `fingerprints`.
 - `trainable_gauss` (bool): Whether the width and spacings of the Gaussian functions are learnable parameters.
-- `extra_features` (list[dict]): a list of dictionaries specifying the names of any extra features to concatenate with the learned features. Each dictionary only needs the key `name`, which tells you the name of the feature in the dataset. 
+- `extra_features` (list]): a list of names of any extra features to concatenate with the learned features. Each dictionary only needs the key `name`, which tells you the name of the feature in the dataset. 
 
-For example, if you have Morgan fingerprints in your dataset and you want to concatenate these with the learned finerprints, you can set `extra_features=[{"name": "morgan"}]`.
+For example, if you have Morgan fingerprints in your dataset and you want to concatenate these with the learned fingerprints, you can set `extra_features=["morgan"]`.
 
 - `base_keys` (list[str]): names of the values that your model is predicting
 - `grad_keys` (list[str]): any values for which you also want the gradient with respect to nuclear coordinates. For example, if you are predicting energies then you may also want the gradients, as the negative gradients are the nuclear forces.
@@ -188,7 +196,13 @@ An example of a `ChemProp3D` config file is `train_config.json` (this is the def
     - `del_grad_interval` (int): If using disk parallelization, you should delete the saved gradients after you are sure they have been loaded by the paralell processes. `del_grad_interval` tells you that you can delete all saved files from >= `del_grad_interval` batches earlier.
 
     - `weight_path` (str): path to the folder that contains all the models
-    - `model_name` (str): name of the model you're training. The model will be saved and logged in `weight_path/model_name`. If you are using disk parallelization over `N=n_gpus x n_nodes` different GPUs, then the dataset should broken up into `N` different folders and saved in `weight_path/model_name`. For example, if you are training with 2 GPUs and 3 nodes, then you should have 6 folders in `weight_path/model_name`, called 0, 1, 2, 3, 4, and 5. Each folder should contain `train.pth.tar`, `val.pth.tar`, and `test.pth.tar`. If you generated a dataset using `scripts/cp3d/make_dset/dset_from_pickles.sh`, then you should set `num_threads` to `N`, and this will be done automatically for you.
+    - `model_name` (str): name of the model you're training. The model will be saved and logged in `weight_path/model_name`. 
+    
+    Conformer datasets can get quiet large, so it is often useful to save chunks of the dataset separately. If you are using disk parallelization over `N=n_gpus x n_nodes` different GPUs, and you want to save separate chunks, then the dataset should broken up into `N` different folders and saved in `weight_path/model_name`. For example, if you are training with 2 GPUs and 3 nodes, then you should have 6 folders in `weight_path/model_name`, called 0, 1, 2, 3, 4, and 5. Each folder should contain `train.pth.tar`, `val.pth.tar`, and `test.pth.tar` (i.e. `weight_path/model_name/0/train.pth.tar`, `weight_path/model_name/0/val.pth.tar`, `weight_path/model_name/0/test.pth.tar`, `weight_path/model_name/1/train.pth.tar`, etc.) . If you generated a dataset using `scripts/cp3d/make_dset/dset_from_pickles.sh`, then you should set `num_threads` to `N`, and this will be done automatically for you. 
+    
+    This is not required, however; you can save the entire dataset centrally (`weight_path/model_name/train.pth.tar`, `weight_path/model_name/val.pth.tar`, `weight_path/model_name/test.pth.tar`). In this case the script will use PyTorch distributed sampling to sample parts of the dataset on each different GPU. However, the distributed sampler hasn't been combined with the option of using a custom sampler such as `ImbalancedDataSampler`. Therefore, you cannot use `ImbalancedDataSampler` and also save the dataset in one location.
+    
+    If you are using PyTorch parallelization then you must save the entire dataset centrally.
 
 
 ## Hyperparameter optimization
