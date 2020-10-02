@@ -9,9 +9,9 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
 - [Training](#training)
     * [Running the script](#running-the-script)
     * [The config file](#the-config-file)
-        *[SchNet pooled conformer model parameters](#schnet-pooled-conformer-model-parameters)
-        *[ChemProp3D model parameters](#chemprop3d-model-parameters)
-        *[Training parameters](#training-parameters)
+        * [SchNet pooled conformer model parameters](#schnet-pooled-conformer-model-parameters)
+        * [ChemProp3D model parameters](#chemprop3d-model-parameters)
+        * [Training parameters](#training-parameters)
 - [Hyperparameter optimization](#hyperparameter-optimization)
 - [Transfer learning](#transfer-learning)
 
