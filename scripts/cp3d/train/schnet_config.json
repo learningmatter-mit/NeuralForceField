@@ -104,9 +104,9 @@
         "logger": "csv",
         "log_every_n_epochs": 1,
         "checkpoints_to_keep": 10000,
+        "torch_par": false,
         "del_grad_interval": 100,
 
-        "torch_par": false,
         "weightpath": "/home/gridsan/saxelrod/models",
         "model_name": "attention_k_1_yes_prob_cov_cl_protease"
 

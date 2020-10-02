@@ -3,7 +3,7 @@
 
         "model_type": "SchNetFeatures",
 
-    "mol_basis": 300,
+        "mol_basis": 300,
         "cp_dropout": 0.02,
         "schnet_dropout": 0.3,
         "activation": "ReLU",
@@ -90,7 +90,6 @@
             ]
         },
 
-        "gauss_embed": true,
         "batch_embeddings": false,
         "same_filters": true,
         "trainable_gauss": false,
