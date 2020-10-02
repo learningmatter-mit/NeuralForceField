@@ -59,7 +59,7 @@ If you want to generate the splits yourself (e.g. with a ChemProp scaffold split
 - `pos_per_val` (int): number of positives that you want in the validation set
 - `pos_per_test` (int): number of positives that you want in the test set
 
-#### Reducing the number of conformers
+### Reducing the number of conformers
 
 If you've already made a dataset and you want to reduce the number of conformers, you can do that by running the script `scripts/cp3d/make_dset/trim_confs.sh`. The only arguments you need are:
 - `from_model_path` (str): The old path to the model and dataset. The script assumes your datasets are in the folders `from_model_path/0`, `from_model_path/1`, ..., etc., as they would be if generated using the `dset_from_pickles.sh`.
