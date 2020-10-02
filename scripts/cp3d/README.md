@@ -2,6 +2,14 @@
 
 This folder contains scripts for doing ChemProp3D tasks. These include making a dataset out of pickle files with species information, and training a CP3D model using this dataset. Below are some details about how to use the different folders.
 
+## Table of Contents
+
+- [Making a dataset](#making-a-dataset)
+    * [Reducing the number of conformers](#reducing-the-number-of-conformers)
+- [Training](#training)
+- [Hyperparameter optimization](#hyperparameter-optimization)
+- [Transfer learning](#transfer-learning)
+
 
 ## Making a dataset
 To make a CP3D dataset, we run the script `scripts/cp3d/make_dset/dset_from_pickles.sh`. This script can be used when you have a pickle file for each species. The pickle file should contain the following keys:
