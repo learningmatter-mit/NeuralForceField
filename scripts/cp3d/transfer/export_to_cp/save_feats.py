@@ -9,8 +9,6 @@ import numpy as np
 import argparse
 from nff.utils import parse_args, fprint
 
-METRICS = ["loss", "roc_auc", "prc_auc"]
-
 
 def get_smiles(smiles_folder, name):
 
@@ -119,8 +117,7 @@ if __name__ == "__main__":
     parser.add_argument('--metrics', type=str, nargs='+',
                         help=("Generate features from 3D models "
                               "whose best model is chosen according to "
-                              "these metrics."),
-                        default=METRICS)
+                              "these metrics."))
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "

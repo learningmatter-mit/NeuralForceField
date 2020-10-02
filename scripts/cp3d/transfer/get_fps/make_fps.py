@@ -6,6 +6,7 @@ from torch.nn import Sigmoid
 import pickle
 import sys
 from tqdm import tqdm
+import numpy as np
 
 from nff.data import Dataset
 from nff.train import load_model
@@ -14,7 +15,7 @@ from nff.utils.cuda import batch_to, batch_detach
 from nff.data.dataset import concatenate_dict
 from nff.utils import tqdm_enum, parse_args
 
-PROP = "sars_cov_one_cl_protease_active"
+
 METRIC_DIC = {"pr_auc": "maximize",
               "roc_auc": "maximize",
               "loss": "minimize"}
@@ -26,15 +27,25 @@ def save(results,
          prop,
          add_sigmoid):
 
-    y_true = torch.stack(targets[prop]).numpy()
+    if prop is None:
+        y_true = None
+        probas_pred = None
 
-    if add_sigmoid:
-        sigmoid = Sigmoid()
-        probas_pred = sigmoid(torch.cat(results[prop])
-                              ).reshape(-1).numpy()
     else:
-        probas_pred = (torch.cat(results[prop])
-                       .reshape(-1).numpy())
+
+        if add_sigmoid:
+            sigmoid = Sigmoid()
+            probas_pred = sigmoid(torch.cat(results[prop])
+                                  ).reshape(-1).numpy()
+        else:
+            probas_pred = (torch.cat(results[prop])
+                           .reshape(-1).numpy())
+
+        if prop in targets:
+            y_true = torch.stack(targets[prop]).numpy()
+
+        else:
+            y_true = np.ones_like(probas_pred) * float("nan")
 
     fps = torch.stack(results["fp"]).numpy()
     all_conf_fps = results["conf_fps"]
@@ -48,13 +59,15 @@ def save(results,
     for i, smiles in enumerate(smiles_list):
 
         conf_fps = all_conf_fps[i].numpy()
-        dic[smiles] = {"true": y_true[i],
-                       "pred": probas_pred[i],
-                       "fp": fps[i].reshape(-1),
+        dic[smiles] = {"fp": fps[i].reshape(-1),
                        "conf_fps": conf_fps,
                        "learned_weights": learned_weights[i].numpy(),
                        "energy": energy[i].reshape(-1).numpy(),
                        "boltz_weights": boltz_weights[i].reshape(-1).numpy()}
+
+        if y_true is not None and probas_pred is not None:
+            dic[smiles].update({"true": y_true[i],
+                                "pred": probas_pred[i]})
 
     with open(feat_save_folder, "wb") as f:
         pickle.dump(dic, f)
@@ -246,10 +259,10 @@ if __name__ == "__main__":
                         help="Batch size")
     parser.add_argument('--prop', type=str,
                         help="Property to predict",
-                        default=PROP)
+                        default=None)
     parser.add_argument('--sub_batch_size', type=int,
                         help="Sub batch size",
-                        default=7)
+                        default=None)
     parser.add_argument('--metric', type=str,
                         help=("Select the model with the best validation "
                               "score on this metric. If no metric "
