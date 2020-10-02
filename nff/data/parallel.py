@@ -132,18 +132,9 @@ def featurize_parallel(dataset,
 
     print("Featurizing bonds...")
     datasets = bonds_parallel(datasets, feat_types=bond_feats)
-    ########################################################################
-    # kwargs = {"dataset": dataset,
-    #           "feat_types": bond_feats,
-    #           "track": True}
-    # dataset = featurize_bonds(**kwargs)
-    ########################################################################
-
-    print("Completed featurizing bonds.")
 
     print("Featurizing atoms...")
     datasets = atoms_parallel(datasets, feat_types=atom_feats)
-    print("Completed featurizing atoms.")
 
     new_props = rejoin_props(datasets)
     dataset.props = new_props

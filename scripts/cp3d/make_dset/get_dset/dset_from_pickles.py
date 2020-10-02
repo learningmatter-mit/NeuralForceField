@@ -309,8 +309,6 @@ def make_nff_dataset(spec_dics,
         props_list.append(new_dic)
         rd_mols_list.append(spec_dic["rd_mols"])
 
-    fprint("Finalizing...")
-
     # Add props that are in some datasets but not others
     props_list = add_missing(props_list)
     props_dic = concatenate_dict(*props_list)
