@@ -6,6 +6,7 @@ from rdkit.Chem import AllChem
 
 from nff.utils.xyz2mol import xyz2mol
 from nff.utils.cuda import batch_to
+from nff.utils import tqdm_enum
 from torch.utils.data import DataLoader
 
 QUICK = True
@@ -244,7 +245,18 @@ def log_missing(missing_e):
             ", ".join(missing_e)))
 
 
-def make_rd_mols(dataset, verbose=True, check_smiles=True):
+def get_enum_func(track):
+
+    if track:
+        return tqdm_enum
+    else:
+        return enumerate
+
+
+def make_rd_mols(dataset,
+                 verbose=True,
+                 check_smiles=True,
+                 track=True):
 
     num_atoms = dataset.props['num_atoms']
     mol_size = dataset.props.get("mol_size", num_atoms).tolist()
@@ -258,7 +270,9 @@ def make_rd_mols(dataset, verbose=True, check_smiles=True):
 
     # for i, smiles in tqdm(enumerate(smiles_list)):
 
-    for i, smiles in enumerate(smiles_list):
+    enum = get_enum_func(track)
+
+    for i, smiles in enum(smiles_list):
 
         num_confs = (num_atoms[i] // mol_size[i]).item()
         split_sizes = [mol_size[i]] * num_confs
@@ -563,22 +577,9 @@ def get_all_atom_feats(atom, feat_types):
     return feat_dic
 
 
-def filter_changed_graphs(compressed_dic):
-    # get rid of species whose conformers don't all have the same graph
-    good_keys = [key for key, sub_dic in compressed_dic.items()
-                 if all((len(sub_dic["atoms"]) == 1,
-                         len(sub_dic["bonds"]) == 1))]
-
-    new_dic = {key: compressed_dic[key] for key in good_keys}
-    for key, sub_dic in new_dic.items():
-        atom_feats = list(sub_dic["atoms"].keys())[0]
-
-        sub_dic["atom_features"] = 0
-
-    pass
-
-
-def featurize_bonds(dataset, feat_types=BOND_FEAT_TYPES):
+def featurize_bonds(dataset,
+                    feat_types=BOND_FEAT_TYPES,
+                    track=True):
 
     props = dataset.props
 
@@ -588,8 +589,10 @@ def featurize_bonds(dataset, feat_types=BOND_FEAT_TYPES):
 
     num_atoms = dataset.props['num_atoms']
     mol_size = dataset.props.get("mol_size", num_atoms).tolist()
+    enum = get_enum_func(track)
+    # for i, rd_mols in enum(dataset.props["rd_mols"], track):
 
-    for i, rd_mols in enumerate(dataset.props["rd_mols"]):
+    for i, rd_mols in enum(dataset.props["rd_mols"]):
 
         num_confs = (num_atoms[i] // mol_size[i]).item()
         split_sizes = [mol_size[i]] * num_confs
@@ -633,12 +636,16 @@ def featurize_bonds(dataset, feat_types=BOND_FEAT_TYPES):
     return dataset
 
 
-def featurize_atoms(dataset, feat_types=ATOM_FEAT_TYPES):
+def featurize_atoms(dataset,
+                    feat_types=ATOM_FEAT_TYPES,
+                    track=True):
 
     props = dataset.props
     props["atom_features"] = []
 
-    for i, rd_mols in enumerate(dataset.props["rd_mols"]):
+    enum = get_enum_func(track)
+
+    for i, rd_mols in enum(dataset.props["rd_mols"]):
 
         all_props = []
         for rd_mol in rd_mols:

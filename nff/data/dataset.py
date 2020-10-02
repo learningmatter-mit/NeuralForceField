@@ -289,8 +289,7 @@ class Dataset(TorchDataset):
             atoms = AtomsBatch(positions=self.props['nxyz'][i][:, 1:4],
                                numbers=self.props['nxyz'][i][:, 0],
                                cell=self.props["cell"][i],
-                               pbc=True
-                               )
+                               pbc=True)
 
             # recontruct coordinates based on subgraphs index
             if self.props['smiles']:

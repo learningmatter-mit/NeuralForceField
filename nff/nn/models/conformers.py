@@ -115,7 +115,7 @@ class WeightedConformers(nn.Module):
         )
 
         # extra features to consider
-        self.extra_feats = self.make_extra_feats(modelparams)
+        self.extra_feats = modelparams["extra_features"]
 
         mol_fp_layers = modelparams["mol_fp_layers"]
         readoutdict = modelparams["readoutdict"]
@@ -134,20 +134,6 @@ class WeightedConformers(nn.Module):
 
         # whether to learn the embeddings or get them from the batch
         self.batch_embeddings = modelparams.get("batch_embeddings", False)
-
-    def make_extra_feats(self, modelparams):
-        """
-        Example:
-            "extra_features": [{"name": "morgan", "length": 1048},
-                              {"name": "rdkit_2d", "length": 120}]
-        Returns:
-            ["morgan", "rdkit_2d"]
-        """
-        if modelparams.get("extra_features") is None:
-            return
-        feat_dics = modelparams["extra_features"]
-        feat_names = [dic["name"] for dic in feat_dics]
-        return feat_names
 
     def make_boltz_nn(self, boltzmann_dict):
 

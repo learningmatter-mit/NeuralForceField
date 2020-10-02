@@ -1,12 +1,10 @@
 import pickle
-import random
 import json
 import os
 import torch
 import numpy as np
 import argparse
-import sys
-
+from tqdm import tqdm
 
 from nff.data import Dataset, concatenate_dict
 from nff.utils import tqdm_enum, parse_args, fprint
@@ -21,6 +19,7 @@ KEY_MAP = {"rd_mol": "nxyz",
 EXCLUDE_KEYS = ["totalconfs", "datasets", "conformerweights",
                 "uncleaned_smiles"]
 
+
 def get_thread_dic(sample_dic, thread, num_threads):
 
     keys = np.array(sorted(list(
@@ -34,136 +33,36 @@ def get_thread_dic(sample_dic, thread, num_threads):
     return sample_dic
 
 
-def gen_splits(sample_dic,
-               pos_per_val,
-               pos_per_test,
-               prop,
-               test_size,
-               val_size):
+def get_splits(sample_dic,
+               csv_folder):
 
-    pos_smiles = [smiles for smiles, sub_dic
-                  in sample_dic.items() if
-                  sample_dic.get(prop) == 1]
-    neg_smiles = [smiles for smiles, sub_dic
-                  in sample_dic.items() if
-                  sample_dic.get(prop) == 0]
+    for name in ["train", "val", "test"]:
+        path = os.path.join(csv_folder, f"{name}_smiles.csv")
+        with open(path, "r") as f:
+            lines = f.readlines()
+        smiles_list = [i.split(",")[0].strip() for i in lines[1:]]
+        for smiles in smiles_list:
+            sample_dic[smiles].update({"split": name})
 
-    random.shuffle(pos_smiles)
-    random.shuffle(neg_smiles)
-
-    val_pos = pos_smiles[:pos_per_val]
-    test_pos = pos_smiles[pos_per_val: pos_per_val + pos_per_test]
-
-    neg_per_val = val_size - pos_per_val
-    val_neg = neg_smiles[:neg_per_val]
-
-    neg_per_test = test_size - pos_per_test
-    test_neg = neg_smiles[neg_per_val: neg_per_val + neg_per_test]
-
-    val_all = val_pos + val_neg
-    test_all = test_pos + test_neg
-
-    for smiles in sample_dic.keys():
-        if smiles in val_all:
-            sample_dic[smiles].update({"split": "val"})
-        elif smiles in test_all:
-            sample_dic[smiles].update({"split": "test"})
-        else:
-            sample_dic[smiles].update({"split": "train"})
+    keys = list(sample_dic.keys())
+    for key in keys:
+        if "split" not in sample_dic[key]:
+            sample_dic.pop(key)
 
     return sample_dic
 
 
-def proportional_sample(summary_dic,
-                        max_specs,
-                        prop_sample_path,
-                        test_size=None,
-                        val_size=None,
-                        pos_per_val=None,
-                        pos_per_test=None,
-                        prop=None,
-                        thread=None,
-                        num_threads=None,
-                        sample_type='random'):
-    """
-    Sample species for a dataset so that the number of positives
-    and negatives is the same proportion as in the overall
-    dataset.
+def get_sample(summary_dic,
+               csv_folder,
+               thread=None,
+               num_threads=None):
 
-    """
-
-    if os.path.isfile(prop_sample_path):
-        with open(prop_sample_path, "r") as f:
-            sample_dic = json.load(f)
-        if thread is not None:
-            sample_dic = get_thread_dic(sample_dic=sample_dic,
-                                        thread=thread,
-                                        num_threads=num_threads)
-        return sample_dic
-
-    if sample_type == 'random':
-
-        smiles_list = [key for key, val in summary_dic.items()
-                       if val.get("pickle_path") is not None]
-        random.shuffle(smiles_list)
-        if max_specs is None:
-            max_specs = len(smiles_list)
-        all_samples = smiles_list[:max_specs]
-
-    elif sample_type == 'class_proportional':
-
-        positives = []
-        negatives = []
-
-        for smiles, sub_dic in summary_dic.items():
-            value = sub_dic.get(prop)
-            if value is None:
-                continue
-            if sub_dic.get("pickle_path") is None:
-                continue
-            if value == 0:
-                negatives.append(smiles)
-            elif value == 1:
-                positives.append(smiles)
-
-        num_neg = len(negatives)
-        num_pos = len(positives)
-
-        if max_specs is None:
-            max_specs = num_neg + num_pos
-
-        # get the number of desired negatives and positives to
-        # get the right proportional sampling
-
-        num_neg_sample = int(num_neg / (num_neg + num_pos) * max_specs)
-        num_pos_sample = int(num_pos / (num_neg + num_pos) * max_specs)
-
-        # shuffle negatives and positives and extract the appropriate
-        # number of each
-
-        random.shuffle(negatives)
-        random.shuffle(positives)
-
-        neg_sample = negatives[:num_neg_sample]
-        pos_sample = positives[:num_pos_sample]
-
-        all_samples = [*neg_sample, *pos_sample]
-
-    sample_dic = {key: summary_dic[key]
-                  for key in all_samples if "pickle_path"
-                  in summary_dic[key] and prop in summary_dic[key]}
+    sample_dic = copy.deepcopy(summary_dic)
 
     # generate train/val/test labels
 
-    sample_dic = gen_splits(sample_dic=sample_dic,
-                            pos_per_val=pos_per_val,
-                            pos_per_test=pos_per_test,
-                            prop=prop,
-                            test_size=test_size,
-                            val_size=val_size)
-
-    with open(prop_sample_path, "w") as f:
-        json.dump(sample_dic, f, indent=4, sort_keys=True)
+    sample_dic = get_splits(sample_dic=sample_dic,
+                            csv_folder=csv_folder)
 
     if thread is not None:
         sample_dic = get_thread_dic(sample_dic=sample_dic,
@@ -173,32 +72,19 @@ def proportional_sample(summary_dic,
     return sample_dic
 
 
-def load_data_from_pickle(sample_dic, max_atoms, pickle_folder):
+def load_data_from_pickle(sample_dic, pickle_folder):
 
     overall_dic = {}
-    i = 0
-    total_num = len(sample_dic)
-    if max_atoms is None:
-        max_atoms = float("inf")
+    keys = list(sample_dic.keys())
 
-    for smiles, sub_dic in sample_dic.items():
-
-        i += 1
+    for smiles in tqdm(keys):
+        sub_dic = sample_dic[smiles]
 
         pickle_path = sub_dic["pickle_path"]
         full_path = os.path.join(pickle_folder, pickle_path)
         with open(full_path, "rb") as f:
             dic = pickle.load(f)
-        num_atoms = dic["conformers"][0]["rd_mol"].GetNumAtoms()
-        if num_atoms > max_atoms:
-            continue
         overall_dic.update({smiles: dic})
-
-        if np.mod(i, 1000) == 0:
-            fprint(("Completed loading {} of {} "
-                    "dataset pickles".format(i, total_num)))
-
-    fprint("Completed dataset pickles")
 
     return overall_dic
 
@@ -353,7 +239,9 @@ def add_missing(props_list):
     return props_list
 
 
-def make_nff_dataset(spec_dics, nbrlist_cutoff):
+def make_nff_dataset(spec_dics,
+                     nbrlist_cutoff,
+                     parallel_feat_threads):
 
     fprint("Making dataset with %d species" % (len(spec_dics)))
 
@@ -436,7 +324,7 @@ def make_nff_dataset(spec_dics, nbrlist_cutoff):
     # generate features
 
     big_dataset.props["rd_mols"] = rd_mols_list
-    big_dataset.featurize()
+    big_dataset.featurize(num_procs=parallel_feat_threads)
 
     fprint("Complete!")
 
@@ -465,7 +353,6 @@ def split_dataset(dataset, idx):
 
 
 def save_splits(dataset,
-                targ_name,
                 dataset_folder,
                 thread,
                 sample_dic):
@@ -485,9 +372,6 @@ def save_splits(dataset,
     val = split_dic["val"]
     test = split_dic["test"]
 
-    # train, val, test = split_train_validation_test(
-    #     dataset, binary=True, targ_name=targ_name)
-
     fprint("Saving...")
     data_folder = get_data_folder(dataset_folder, thread)
     names = ["train", "val", "test"]
@@ -497,53 +381,39 @@ def save_splits(dataset,
         dset.save(dset_path)
 
 
-def main(max_specs,
-         max_atoms,
-         max_confs,
-         prop,
+def main(max_confs,
          summary_path,
          dataset_folder,
          pickle_folder,
-         prop_sample_path,
          num_threads,
          thread,
-         pos_per_val,
-         pos_per_test,
-         test_size,
-         val_size,
-         sample_type,
          nbrlist_cutoff,
-         **kwargs):
+         csv_folder,
+         parallel_feat_threads,
+         ** kwargs):
 
     with open(summary_path, "r") as f:
         summary_dic = json.load(f)
 
-    fprint("Generating proportional sample...")
+    fprint("Loading splits...")
 
-    sample_dic = proportional_sample(summary_dic=summary_dic,
-                                     prop=prop,
-                                     max_specs=max_specs,
-                                     prop_sample_path=prop_sample_path,
-                                     thread=thread,
-                                     num_threads=num_threads,
-                                     pos_per_val=pos_per_val,
-                                     pos_per_test=pos_per_test,
-                                     test_size=test_size,
-                                     val_size=val_size,
-                                     sample_type=sample_type)
+    sample_dic = get_sample(summary_dic=summary_dic,
+                            thread=thread,
+                            num_threads=num_threads,
+                            csv_folder=csv_folder)
 
     fprint("Loading data from pickle files...")
-    overall_dic = load_data_from_pickle(sample_dic, max_atoms, pickle_folder)
+    overall_dic = load_data_from_pickle(sample_dic, pickle_folder)
 
     fprint("Converting data...")
     spec_dics = convert_data(overall_dic, max_confs)
 
     fprint("Combining to make NFF dataset...")
     dataset = make_nff_dataset(spec_dics=spec_dics,
-                               nbrlist_cutoff=nbrlist_cutoff)
+                               nbrlist_cutoff=nbrlist_cutoff,
+                               parallel_feat_threads=parallel_feat_threads)
     fprint("Creating test/train/val splits...")
     save_splits(dataset=dataset,
-                targ_name=prop,
                 dataset_folder=dataset_folder,
                 thread=thread,
                 sample_dic=sample_dic)
@@ -554,15 +424,6 @@ def main(max_specs,
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--max_specs', type=int, default=None,
-                        help=("Maximum number of species to use in your "
-                              "dataset. No limit if max_specs isn't "
-                              "specified."))
-
-    parser.add_argument('--max_atoms', type=int, default=None,
-                        help=("Maximum number of atoms to allow in any "
-                              "species in your dataset. No limit if "
-                              "max_atoms isn't specified."))
     parser.add_argument('--max_confs', type=int, default=None,
                         help=("Maximum number of conformers to allow in any "
                               "species in your dataset. No limit if "
@@ -574,30 +435,19 @@ if __name__ == "__main__":
     parser.add_argument('--summary_path', type=str)
     parser.add_argument('--dataset_folder', type=str)
     parser.add_argument('--pickle_folder', type=str)
-    parser.add_argument('--prop_sample_path', type=str)
     parser.add_argument('--num_threads', type=int, default=None)
     parser.add_argument('--thread', type=int, default=None)
-
-    parser.add_argument('--sample_type', type=str, default='random',
-                        choices=['random', 'class_proportional'],
-                        help=("Strategy of sampling species to make dataset. "
-                              "Current options are random and "
-                              "class_proportional. `random` samples "
-                              "randomly, and `class_proportional` generates "
-                              "a new dataset with the same proportion of "
-                              "positive and negative classes as in the "
-                              "set we're sampling form."))
     parser.add_argument('--prop', type=str, default=None,
                         help=("Name of property for which to generate "
                               "a proportional classification sample"))
-    parser.add_argument('--pos_per_val', type=int, default=None)
-    parser.add_argument('--pos_per_test', type=int, default=None)
-
-    parser.add_argument('--test_size', type=int, default=None,
-                        help=("Absolute size of test set (number of species) "))
-    parser.add_argument('--val_size', type=int, default=None,
-                        help=("Absolute size of validation set (number of species) "))
-
+    parser.add_argument('--csv_folder', type=str,
+                        help=("Name of the folder in which "
+                              "you want to save the SMILES "
+                              "splits"))
+    parser.add_argument('--parallel_feat_threads', type=int,
+                        default=5,
+                        help=("Number of parallel threads to use "
+                              "when generating features"))
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "

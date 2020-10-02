@@ -9,7 +9,7 @@ from nff.data.features import (make_rd_mols, featurize_bonds,
                                featurize_atoms, BOND_FEAT_TYPES,
                                ATOM_FEAT_TYPES)
 
-NUM_PROCS = 10
+NUM_PROCS = 5
 
 
 def split_dataset(dataset, num):
@@ -53,11 +53,16 @@ def rejoin_props(datasets):
 
 def gen_parallel(func, kwargs_list):
 
+    import pdb
+    pdb.set_trace()
+
     cpu_count = os.cpu_count()
     with futures.ProcessPoolExecutor(max_workers=cpu_count) as executor:
 
         future_objs = []
-        for kwargs in kwargs_list:
+        for i, kwargs in enumerate(kwargs_list):
+
+            kwargs["track"] = (i == 0)
             result = executor.submit(func, **kwargs)
 
             future_objs.append(result)
@@ -111,8 +116,12 @@ def featurize_parallel(dataset,
                        bond_feats=BOND_FEAT_TYPES,
                        atom_feats=ATOM_FEAT_TYPES):
 
-    print("Featurizing dataset with {} parallel processes.".format(
-        num_procs))
+    msg = "Featurizing dataset with {} parallel processes.".format(
+        num_procs)
+    if num_procs == 1:
+        msg = msg.replace("processes", "process")
+    print(msg)
+
     datasets = split_dataset(dataset=dataset, num=num_procs)
 
     has_rdmols = all(['rd_mols' in dset.props for dset in datasets])
@@ -123,6 +132,13 @@ def featurize_parallel(dataset,
 
     print("Featurizing bonds...")
     datasets = bonds_parallel(datasets, feat_types=bond_feats)
+    ########################################################################
+    # kwargs = {"dataset": dataset,
+    #           "feat_types": bond_feats,
+    #           "track": True}
+    # dataset = featurize_bonds(**kwargs)
+    ########################################################################
+
     print("Completed featurizing bonds.")
 
     print("Featurizing atoms...")
