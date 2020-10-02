@@ -7,8 +7,8 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
 - [Making a dataset](#making-a-dataset)
     * [Splitting the data](#splitting-the-data)
     * [Generating the dataset from splits and pickles](#generating-the-dataset-from-splits-and-pickles)
-    * [Reducing the number of conformers](#reducing-the-number-of-conformers)
     * [Adding custom features](#adding-custom-features)
+    * [Reducing the number of conformers](#reducing-the-number-of-conformers)
 - [Training](#training)
     * [Running the script](#running-the-script)
     * [The config file](#the-config-file)
@@ -63,6 +63,26 @@ Details for the script are found in the file `dset_config.json`. This is where y
 - `csv_folder` (str): The folder in which you've saved your CSV files with the train, test, and split species.
 - `parallel_feat_threads` (int): Number of parallel threads to use when featurizing the dataset
 
+### Adding custom features 
+The script automatically generates atom and bond features, but you can add other features to the dataset too. 
+
+- Morgan fingerprint. The Morgan fingerprint is a classic 2D bit vector fingerprint. Given a dataset called `dset` and a desired fingerprint length `vec_length`, call `dset.add_morgan(vec_length)`
+- E3FP. The E3FP fingerprint is a 3D version of the Morgan fingerprint. To generate E3FP fingerprints call `dset.add_e3fp(vec_length)`. (Note, however, that creating a conda environment with the latest versions of both RDKit and E3FP leads to clashes, and so the `nff` environment does not automatically contain E3FP functionality. If you want to generate an E3FP fingerprint, you will have to create a new environment with E3FP and an older version of RDKit).
+- RDKit descriptors. RDKit has a variety of 3D descriptors, such as `autocorrelation_3d`, `rdf`, `morse`, `whim` and `getaway`. To generate features with any of these methods, call `dset.featurize_rdkit(method)`.
+
+To load, modify, and save a dataset, run:
+
+```
+from nff.data import Dataset
+dset = Dataset.from_file(<path>)
+<dset.add_e3fp(100), dset.featurize_rdkit('rdf'), ...>
+dset.save(<path>)
+```
+
+If you are interested in adding other types of features then you can write your own class methods to generate them!
+
+
+
 
 ### Reducing the number of conformers
 
@@ -73,13 +93,6 @@ If you've already made a dataset and you want to reduce the number of conformers
 
 Of course you can always just run `dset_from_pickles.sh` again, but using fewer conformers. But running `trim_confs.sh` might save some time if your pickle files don't contain `rdmols`. In this case you'd have to generate `rdmols` from `xyz`'s all over again, which would not be worth it! 
 
-### Adding custom features 
-The script automatically generates atom and bond features, but you can add other features to the dataset too:
-- Morgan fingerprint. The Morgan fingerprint is a classic 2D bit vector fingerprint. Given a dataset called `dset` and a desired fingerprint length `vec_length`, call `dset.add_morgan(vec_length)`
-- E3FP. The E3FP fingerprint is a 3D version of the Morgan fingerprint. To generate E3FP fingerprints call `dset.add_e3fp(vec_length)`. (Note, however, that creating a conda environment with the latest versions of both RDKit and E3FP leads to clashes, and so the `nff` environment does not automatically contain E3FP functionality. If you want to generate an E3FP fingerprint, you will have to create a new environment with E3FP and an older version of RDKit).
-- RDKit descriptors. RDKit has a variety of 3D descriptors, such as `autocorrelation_3d`, `rdf`, `morse`, `whim` and `getaway`. To generate features with any of these methods, call `dset.featurize_rdkit(method)`.
-
-If you are interested in adding other types of features then you can write your own class methods to generate them!
 
 
 ## Training
