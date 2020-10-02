@@ -5,6 +5,7 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
 ## Table of Contents
 
 - [Making a dataset](#making-a-dataset)
+    * [From pickle files](#from-pickle-files)
     * [Reducing the number of conformers](#reducing-the-number-of-conformers)
 - [Training](#training)
     * [Running the script](#running-the-script)
@@ -18,7 +19,9 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
 
 
 ## Making a dataset
-To make a CP3D dataset, we run the script `scripts/cp3d/make_dset/dset_from_pickles.sh`. This script can be used when you have a pickle file for each species. The pickle file should contain the following keys:
+
+### From pickle files
+To make a CP3D dataset from a set of pickle files, we run the script `scripts/cp3d/make_dset/dset_from_pickles.sh`. This script can be used when you have a pickle file for each species. The pickle file should contain the following keys:
 
 - `smiles`: The SMILES string of the species
 - `conformers`: a list of dictionaries for each conformer
