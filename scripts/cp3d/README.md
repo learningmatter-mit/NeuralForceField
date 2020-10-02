@@ -77,9 +77,11 @@ Now that we have a dataset, we're ready to train a model! The model can be train
 ### The config file
 
 
-The script loads parameters from `scripts/cp3d/train/train_config.json`. The two main keys in this file are `model_params` and `train_params`.`model_params` (dict): A dictionary with all parameters required to create a model. Its sub-keys are:
+The script loads parameters from `scripts/cp3d/train/train_config.json`. The two main keys in this file are `model_params` and `train_params`.
 
-- `model_type` (str): The kind of model you want to make. The currently supported options are `WeightedConformers`, which builds a SchNet model with pooled conformer fingerprints, and `SchNetFeatures`, which builds a ChemProp3D model with pooled conformers. If your dataset only contains one conformer per species, then each model will still work!
+- `model_params` (dict): A dictionary with all parameters required to create a model. Its sub-keys are:
+    - `model_type` (str): The kind of model you want to make. The currently supported options are `WeightedConformers`, which builds a SchNet model with pooled conformer fingerprints, and `SchNetFeatures`, which builds a ChemProp3D model with pooled conformers. If your dataset only contains one conformer per species, then each model will still work!
+    - An assortment of other keys, which depend on the model type. Below we go through each key for the two different model types.
     
     
 #### SchNet pooled conformer model parameters
