@@ -80,7 +80,7 @@ The script loads parameters from `scripts/cp3d/train/train_config.json`. These a
                 - `dropout_rate` (float): Dropout rate for the layers that create the attention mask
                 - `final_act` (str): Activation function applied after the weighted sum of conformer fingerprints
                 - `num_heads` (int): Number of attention heads
-                - `head_pool` (str): If you are using multiple attention heads, the way in which you combine the fingerprints that are pooled from the different heads. If set to `sum`, then these fingerprints are summed and the readout layer should take as input a vector of dimension `mol_basis`. If set to `concatenate`, then they are concatenated  and the readout layer should take as input a vector of dimension `num_heads` $\times$ mol_basis`.
+                - `head_pool` (str): If you are using multiple attention heads, the way in which you combine the fingerprints that are pooled from the different heads. If set to `sum`, then these fingerprints are summed and the readout layer should take as input a vector of dimension `mol_basis`. If set to `concatenate`, then they are concatenated  and the readout layer should take as input a vector of dimension `num_heads` x `mol_basis`.
                 - `mol_basis` (int): Dimension of the molecular fingerprint. Should have the same value as in the main dictionary.
                 - `boltz_basis` (int): Dimension of the vector into which the Boltzmann statistical weight will be converted.
                 - `equal_weights` (bool): Whether to forego the learned attention mechanism and just use equal weights for each conformer. This is useful as an ablation study.
