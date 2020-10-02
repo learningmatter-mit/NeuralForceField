@@ -15,7 +15,7 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
         * [Training parameters](#training-parameters)
 - [Hyperparameter optimization](#hyperparameter-optimization)
 - [Transfer learning](#transfer-learning)
-    * [Making fingerprints](#making-fingerprints)
+    * [Getting fingerprints, predictions, and learned weights](#gett-fingerprints,-predictions,-and-learned-weights)
     * [Exporting fingerprints to ChemProp](#exporting-fingerprints-to-chemprop)
     * [Training ChemProp models with the fingerprints](#training-chemprop-models-with-the-fingerprints)
 
@@ -201,10 +201,10 @@ There may be cases in which there are two similar regression/classification task
 
 As detailed in our paper, we have found that using this transfer learning technique with CP3D yields significantly better results for SARS-CoV-2 binding than any 2D methods. 
 
-Scripts are available for transfer learning `scripts/cp3d/transfer`. The main script is `transfer.sh`, which runs the following three scripts in order. Note that you can run any of the scripts on their own if you want (for example, if you've already made fingerprints, you can skip the first script below).
+Scripts are available for transfer learning `scripts/cp3d/transfer`. The main script is `transfer.sh`, which runs the following three scripts in order. Note that you can run any of the scripts on their own if you want (for example, if you've already made fingerprints, you can skip the first script below). Also note that making fingerprints and saving predictions is useful even if you're not doing transfer learning.
 
-### Making fingerprints
-The script `get_fps/make_fps.sh` takes the model and adds fingerprints to species in other datasets.
+### Getting fingerprints, predictions, and learned weights
+The script `get_fps/make_fps.sh` uses the model to generate pooled fingerprints for species in other datasets. It also reports the model prediction for the property of interest, the real value of the property, the individual conformer fingerprints (before nonlinearities), the learned weights that multiply the conformer fingerprints (after nonlinearities), the energy of each conformer, and the conformer Boltzmann weights. These are quite useful for comparing fingerprints between and among species, and for seeing how the model learned to weight each fingerprint. 
 
 - Details for the script are found in the file `get_fps/fp_config.json `. This is where you should change the values for your project. The keys in the file are:
     - `model_folder` (str): Folder in which the model is saved
