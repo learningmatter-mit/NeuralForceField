@@ -224,7 +224,18 @@ An example of a `ChemProp3D` config file is `train_config.json` (this is the def
 
 ## Hyperparameter optimization
 
-- Coming soon...
+A basic random search algorithm is available for optimizing hyperparameters. The script is `scripts/cp3d/hyperopt/random_search.sh`. The config file is `scripts/cp3d/hyperopt/search_config.json`. Its keys are:
+- `job_path` (str): The path to the training config file. This file will be modified with different hyperparameters throughout the search.
+- `model_path` (str): The folder that your model lives in
+- `param_names` (list[str]): parameters that you want to optimize. The simple script currently allows optimizing SchNet, ChemProp and readout dropout rates, as well as the number of attention heads. It shouldn't be too difficult to add extra options!
+- `data_types` (list[str]): The data type of each parameter. For example, if you have a dropout parameter (float) and number of heads (int), then this should be `["float", "int"]`.
+- `min_vals` (list): minimum value each hyperparameter
+- `max_vals` (list): maximum value of each hyperparameter
+- `num_samples` (int): number of hyperparameter combinations to try
+- `metric` (str): metric with which to evaluate model performance. Can be `prc-auc`, `auc`, `loss`, or `mae`.
+- `prop_name` (str): Name of the property whose performance you want to optimize. If you're using `metric=loss` then this won't matter.
+- `score_file` (str): Name of the `JSON` file in which you store the model performance for each hyperparameter set.
+
 
 ## Transfer learning
 
