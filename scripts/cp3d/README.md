@@ -28,7 +28,7 @@ To make a CP3D dataset from a set of pickle files, we run the script `scripts/cp
 
 - `smiles`: The SMILES string of the species
 - `conformers`: a list of dictionaries for each conformer
-    - Each dictionary should contain at least the keys `boltzmannweight`, for the statistical weight of the conformer, and  `rd_mol`, an RDKit `mol` object for the conformer. If you don't have a statistical weight, or you only have one conformer, then simply set `boltzmannweight` to a torch Tensor of length <number_of_conformers>, with each value equal to 1 / <number_of_conformers>.
+    - Each dictionary should contain at least the keys `boltzmannweight`, for the statistical weight of the conformer, and  `rd_mol`, an RDKit `mol` object for the conformer. If you don't have a statistical weight, or you only have one conformer, then simply set `boltzmannweight` to 1 /  <number_of_conformers>.
     - If it doesn't contain `rd_mol` then it should contain `xyz` for the coordinates of the conformer. In this case the script will call `xyz2mol` to generate an RDKit `mol` object.
     - If you are using the RDKit pickles from the GEOM dataset, then a more in-depth discussion of the structure of the pickle files can be found [here](https://github.com/learningmatter-mit/geom/blob/master/tutorials/02_loading_rdkit_mols.ipynb).
     
