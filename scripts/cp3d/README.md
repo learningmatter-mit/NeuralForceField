@@ -49,9 +49,28 @@ Of course you can always just run `dset_from_pickles.sh` again, but using fewer 
 
 ## Training
 
-- Coming soon...
+Now that we have a dataset, we're ready to train a model! The model can be trained by running `scripts/cp3d/train/train_parallel.sh`. Some remarks about the script:
 
+- This is a Slurm batch script. If you have access to a cluster that is managed by the Slurm scheduler, you can run `sbatch train_parallel.sh`, and the training will take place on the cluster. You may have to modify some of the slurm keywords (those that come after `#SBATCH`) depending on your cluster partitions, available number and make of GPUs, etc. You can request >= 1 node and >= 1 GPU per node, and the script will automatically parallelize over GPUs and nodes.
+- If you don't have access to a cluster but have access to >= 1 GPU, you can run `bash train_parallel.sh`. You will have to set `use_slurm=False` and `num_gpus = <number_of_gpus_you_have>` in the config file (see below).
+- If you don't have access to a cluster don't have access to a GPU, you can run `bash train_single.sh` and set `device` to `cpu` in the config file (see below).
+- If you have access to > 1 node and > 1 GPU, but the nodes are not managed by Slurm, then you can run multi-GPU training but not multi-node training. However, `train_parallel.py` and `train_parallel.sh` are not too difficult to decipher, and you should be able to modify them to parallelize over nodes using your scheduler.
+    
+The script loads parameters from `scripts/cp3d/train/train_config.json`. These are the parameters that you should modify for your training:
 
+- `model_params` (dict): A dictionary with all parameters required to create a model. Its sub-keys are:
+    - `model_type` (str): The kind of model you want to make. The currently supported options are `WeightedConformers`, which builds a SchNet model with pooled conformer fingerprints, and `SchNetFeatures`, which builds a ChemProp3D model with pooled conformers. If your dataset only contains one conformer per species, then each model will still work!
+    - The keys required for `WeightedConformers` are as follows:
+        - `mol_basis` (int): Dimension of the molecular fingerprint
+        - `dropout_rate` (float) : Dropout rate applied to the convolutional layers
+        - `activation` (str): Name of the activation function to use in the convolutional layers.
+        - `n_atom_basis` (int): Dimension of the atomic feature vector created by embedding the atomic number.
+        - `n_convolutions` (int): How many convolutions to apply to generate the fingerprint
+        - `cutoff` (float): cutoff distance used to define neighboring atoms. Note that whatever cutoff you used to generate your neighbor list in the dataset should be the cutoff you use here. 
+        - `n_gaussians` (int): Number of Gaussians, evenly spaced between 0 and `cutoff`, used for transforming the interatomic distances.
+        - `n_filters` (int): Dimension into which the edge features will be transformed. Note that the edge features are embedded in a basis of `n_gauss` Gaussian functions, and are then transformed into a vector of dimension `n_filters
+        - `mol_fp_layers`: 
+    
 ## Hyperparameter optimization
 
 - Coming soon...

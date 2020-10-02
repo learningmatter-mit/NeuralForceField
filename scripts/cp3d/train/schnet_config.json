@@ -6,7 +6,7 @@
         "mol_basis": 300,
         "dropout_rate": 0.3,
         "activation": "ReLU",
-        "n_atom_basis": 133,
+        "n_atom_basis": 256,
         "n_convolutions": 2,
         "n_filters": 64,
         "n_gaussians": 10,
