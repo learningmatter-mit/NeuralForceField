@@ -15,6 +15,9 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
         * [Training parameters](#training-parameters)
 - [Hyperparameter optimization](#hyperparameter-optimization)
 - [Transfer learning](#transfer-learning)
+    * [Making fingerprints](#making-fingerprints)
+    * [Exporting fingerprints to ChemProp](#exporting-fingerprints-to-chemprop)
+    * [Training ChemProp models with the fingerprints](#training-chemprpop-models-with-the-fingerprints)
 
 
 
