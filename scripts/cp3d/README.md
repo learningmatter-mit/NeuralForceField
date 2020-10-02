@@ -165,7 +165,7 @@ An example of a `ChemProp3D` config file is `train_config.json` (this is the def
 
     If you are using slurm for parallel training, make sure to manually change `SLURM_GPUS_PER_NODE` in the `train_parallel.sh` script, so that it's equal to the number of GPUs you request per note in `#SBATCH`. 
 
-    Also, amke sure to change `NFFDIR` in the script to the location of your NeuralForceField folder.
+    Also, make sure to change `NFFDIR` in the script to the location of your NeuralForceField folder.
 
     - `seed` (int): random seed used in training.
     - `batch_size` (int): Number of molecules to include in a batch. Note that this is the batch size when accounting for *all nodes and GPUs*. So, if you have 8 nodes and 2 GPUs each, that makes 16 GPUs total. So a batch size of 16 means that each GPU will use 1 batch at a time. That is, the per-gpu batch size is 1.
@@ -193,7 +193,7 @@ An example of a `ChemProp3D` config file is `train_config.json` (this is the def
     - `log_every_n_epochs` (int): How often to log progress
     - `checkpoints_to_keep` (int): How many past models to keep before deleting them. Say you trained a model to keep label the best model as the one with the lowest loss. But then you want to go back and get the model that had the highest PRC-AUC. Then you can look at the training log, find the epoch with the highest validation PRC-AUC, and load the model from the `checkpoints` folder. If you do not set `checkpoints_to_keep >= max_epochs`, then you run the risk of not being able to find this model and load it.
     - `torch_par` (bool): use built-in PyTorch functionality to do parallel training. The alternative is to save gradients to disk and have parallel processes read these gradients. While PyTorch's functionality is likely faster, we have found the simple disk save to be far less error-prone.
-    - `del_grad_interval` (int): If using disk parallelization, you should delete the saved gradients after you are sure they have been loaded by the paralell processes. `del_grad_interval` tells you that you can delete all saved files from >= `del_grad_interval` batches earlier.
+    - `del_grad_interval` (int): If using disk parallelization, you should delete the saved gradients after you are sure they have been loaded by the parallel processes. `del_grad_interval` tells you that you can delete all saved files from >= `del_grad_interval` batches earlier.
 
     - `weight_path` (str): path to the folder that contains all the models
     - `model_name` (str): name of the model you're training. The model will be saved and logged in `weight_path/model_name`. 
@@ -248,7 +248,7 @@ The script `run_cp/run_all_tls.sh` runs ChemProp using the features generated ab
 - Details for the script are in `run_cp/all_tls_config.json`. The keys are:
     - `base_config_path` (str): Path to the config file for the ChemProp. All of these parameters will be used for the ChemProp runs, except if you specify `metrics`, `features_path` or `features_only`, as these will change as you loop through the combinations of `metrics`, `feat_options`, and `mpnn_options` below. 
     - `cp_folder` (str): Path to the ChemProp folder on your computer.
-    - `feature_folder` (str): Folder in which the features you geneated above for ChemProp are saved. 
+    - `feature_folder` (str): Folder in which the features you generated above for ChemProp are saved. 
     - `model_folder_cp` (str): Folder in which you will make sub-folders for all your ChemProp models.
     - `metrics` (list[str]): Subset of the metrics above. For every metric there exists a corresponding best CP3D model and associated CP3D features. A new ChemProp model will be trained for every different set of these features. The associated ChemProp model will also be scored on that metric. 
     - `feat_options` (list[bool]): Whether to use the CP3D features in the ChemProp model. If you specify [True, False], then separate models will be trained, one in which they are used and one in which they aren't. This might be useful if you want to compare performance with and without 3D features.
