@@ -21,6 +21,9 @@ Details for the script are found in the file `dset_config.json`. This is where y
 - `pickle_folder` (str): The path to the folder that contains the pickle files.
 - `prop_sample_path`: Path to the `JSON` file that contains all the info of `summary_path`, but also whether a species is in the train/val/test sets, or is not being used in the current dataset. 
 - `num_threads` (int): How many files you want to divide your total dataset into. Conformer datasets can get quite large, so you may not want a single huge dataset that can't be loaded into memory. Instead you may want `num_threads` datasets. For example, if you perform parallel training with `N` GPUs, then you'll want to set `num_threads` to `N`. During train time, each parallel GPU thread will only read in one of these `N` datasets. For `m` GPUs per node, the node will only have to hold `m / N` of the total dataset in memory.
+- `val_size` (int): absolute size of test set (i.e. number of species, not a proportion of the total dataset size)
+- `test_size` (int): same, but for the test set
+
 
 
 
@@ -34,8 +37,6 @@ If you want to generate the splits yourself (e.g. with a ChemProp scaffold split
 - `prop` (str): The name of the binary property that your model is predicting
 - `pos_per_val` (int): number of positives that you want in the validation set
 - `pos_per_test` (int): number of positives that you want in the test set
-- `val_size` (int): absolute size of test set (i.e. number of species, not a proportion of the total dataset size)
-- `test_size` (int): same, but for the test set
 
 #### Reducing the number of conformers
 
@@ -68,7 +69,7 @@ The script loads parameters from `scripts/cp3d/train/train_config.json`. These a
         - `n_convolutions` (int): How many convolutions to apply to generate the fingerprint
         - `cutoff` (float): cutoff distance used to define neighboring atoms. Note that whatever cutoff you used to generate your neighbor list in the dataset should be the cutoff you use here. 
         - `n_gaussians` (int): Number of Gaussians, evenly spaced between 0 and `cutoff`, used for transforming the interatomic distances.
-        - `n_filters` (int): Dimension into which the edge features will be transformed. Note that the edge features are embedded in a basis of `n_gauss` Gaussian functions, and are then transformed into a vector of dimension `n_filters`.
+        - `n_filters` (int): Dimension into which the edge features will be transformed. Note that the edge features are embedded in a basis of `n_gauss` Gaussian functions, and are then transformed into a vector of dimension `n_filters`.        
         - `mol_fp_layers` (list[dict]): a list of dictionaries. Each dictionary will be turned into a neural network layer. The way this is done is by creating a layer given by the name in `name` and with the parameters specified in `param`. Once the atomic feature vectors are summed after the convolutions, these layers will be applied sequentially to create a final molecular fingerprint. The final dimension after these layers should be equal to `mol_basis`.
         
         Note that if `n_atom_basis` is not equal to `mol_basis`, you must supply at least one linear layer to convert it to the right dimension. If they are equal, you can simply set `mol_fp_layers = []`, and no transformation will be applied to them.
