@@ -66,7 +66,6 @@ PARAMS_TYPE = {"SchNet":
                    'n_filters': int,
                    'n_gaussians': int,
                    'n_convolutions': int,
-                   'cutoff': float,
                    'trainable_gauss': bool,
                    'dropout_rate': float,
                    'readoutdict': dict,

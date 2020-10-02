@@ -17,7 +17,8 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
         * [Training parameters](#training-parameters)
 - [Hyperparameter optimization](#hyperparameter-optimization)
 - [Transfer learning](#transfer-learning)
-    * [Getting fingerprints, predictions, and learned weights](#gett-fingerprints,-predictions,-and-learned-weights)
+    * [Making a dataset for the new task](#making-a-dataset-for-the-new-task)
+    * [Getting fingerprints, predictions, and learned weights](#getting-fingerprints-predictions-and-learned-weights)
     * [Exporting fingerprints to ChemProp](#exporting-fingerprints-to-chemprop)
     * [Training ChemProp models with the fingerprints](#training-chemprop-models-with-the-fingerprints)
     * [Saving the predictions](#saving-the-predictions)
@@ -150,6 +151,7 @@ Note that if `n_atom_basis` is not equal to `mol_basis`, you must supply at leas
 
 In the example given in `schnet_config.json`, a vector of size 900 (3x `mol_basis` because of three attention heads with concatenation) is converted to size 450 through a linear layer. Then a dropout layer and the ReLU activation are applied. Then another linear layer converts it to size 1, and a final dropout layer is applied. Note that this does not have a sigmoid layer because the model is trained with a BCELogits loss, which is equal to cross-entropy loss + sigmoid, but is more stable. At inference you must remember to apply the sigmoid layer! 
 
+- `gauss_embed` (bool): Whether to expand distances in a Gaussian basis, or just use them as they are
 - `batch_embeddings` (bool): Whether to use fingerprints already present in the dataset instead of learning the fingerprints. In this case the dataset properties must contain fingerprints under the key `fingerprints`.
 - `trainable_gauss` (bool): Whether the width and spacings of the Gaussian functions are learnable parameters.
 - `extra_features` (list]): a list of names of any extra features to concatenate with the learned features. Each dictionary only needs the key `name`, which tells you the name of the feature in the dataset. 
@@ -246,8 +248,12 @@ As detailed in our paper, we have found that using this transfer learning techni
 
 Scripts are available for transfer learning `scripts/cp3d/transfer`. The main script is `transfer.sh`, which runs the following four scripts in order. Note that you can run any of the scripts on their own if you want (for example, if you've already made fingerprints, you can skip the first script below). Also note that making fingerprints and saving predictions is useful even if you're not doing transfer learning.
 
+### Making a dataset for the new task
+
+The first thing we have to do is make a dataset for the new task. Say we trained on SARS-CoV data, but now we want to predict SARS-CoV-2 results. Then we have to go back to the [Making a Dataset](#making-a-dataset-section) section above, and change `props` in `split_config.json` from `["sars_cov_one_cl_protease_active"]` to `["sars_cov_two_cl_protease_active"]`. Then we make the dataset as usual. In this case the dataset is fairly small, so we should set `--num_threads=1` so that all of our data goes only into one set of train, validation, and test datasets.
+
 ### Getting fingerprints, predictions, and learned weights
-The script `get_fps/make_fps.sh` uses the model to generate pooled fingerprints for species in other datasets. It also reports the model prediction for the property of interest, the real value of the property, the individual conformer fingerprints (before nonlinearities), the learned weights that multiply the conformer fingerprints (after nonlinearities), the energy of each conformer, and the conformer Boltzmann weights. These are quite useful for comparing fingerprints between and among species, and for seeing how the model learned to weight each fingerprint. 
+The script `get_fps/make_fps.sh` uses the model to generate pooled fingerprints for species in other datasets (in our case, the three new datasets for `sars_cov_two_cl_protease`). It also reports the model prediction for the property of interest, the real value of the property, the individual conformer fingerprints (before nonlinearities), the learned weights that multiply the conformer fingerprints (after nonlinearities), the energy of each conformer, and the conformer Boltzmann weights. These are quite useful for comparing fingerprints between and among species, and for seeing how the model learned to weight each fingerprint. 
 
 - Details for the script are found in the file `get_fps/fp_config.json `. This is where you should change the values for your project. The keys in the file are:
     - `model_folder` (str): Folder in which the model is saved

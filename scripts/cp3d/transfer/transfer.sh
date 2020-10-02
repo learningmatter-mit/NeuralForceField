@@ -32,4 +32,15 @@ echo ""
 
 cd run_cp
 bash run_all_tls.sh
+
+echo ""
+echo "-----------------------------------------------------------------------------------"
+echo "Getting and saving the ChemProp predictions. "
+echo "Using the details specified in run_cp/predict_config.json."
+echo "-----------------------------------------------------------------------------------"
+echo ""
+
+bash predict.sh
 cd - > /dev/null
+
+

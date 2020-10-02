@@ -14,7 +14,7 @@ export NFFDIR="$HOME/Repo/projects/covid_clean/NeuralForceField"
 export PYTHONPATH="$NFFDIR:$PYTHONPATH"
 
 # `jq` allows you to read a JSON file in bash. Here we are using it to get the number of threads from the config file. If you don't have `jq` installed,
-# you can just change `num_threads` manually here, or you can download it by running `bash download_jq.sh`
+# you can just change `num_threads` manually here, or you can download it by running `cd ../.. && bash download_jq.sh && cd -`
 
 NUM_THREADS=$(cat dset_config.json | $jq ".num_threads")
 END=$((NUM_THREADS-1))

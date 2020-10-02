@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import sys
 import copy
+from tqdm import tqdm
 
 from nff.utils.cuda import batch_to, batch_detach
 from nff.train.evaluate import evaluate
@@ -129,6 +130,17 @@ class Trainer:
             if self.base:
                 os.makedirs(self.checkpoint_path)
                 self.store_checkpoint()
+
+    def tqdm_enum(self, iter):
+        i = 0
+        if self.base:
+            for y in tqdm(iter):
+                yield i, y
+                i += 1
+        else:
+            for y in iter:
+                yield i, y
+                i += 1
 
     def to(self, device):
         """Changes the device"""
@@ -325,7 +337,7 @@ class Trainer:
                 if self._stop:
                     break
 
-                for j, batch in enumerate(self.train_loader):
+                for j, batch in self.tqdm_enum(self.train_loader):
 
                     # self.fprint("Putting batch onto device...")
                     batch = batch_to(batch, device)
@@ -362,8 +374,6 @@ class Trainer:
                         self.optimizer.zero_grad()
                         # self.fprint("Took a step at batch {}".format(j))
 
-                    self.fprint("Batch {} of {} complete".format(
-                        j + 1, self.max_batch_iters))
 
                     if any((self.batch_stop, self._stop, j == self.epoch_cutoff)):
                         break
@@ -578,12 +588,9 @@ class Trainer:
                 if self.metric_objective.lower() == "maximize":
                     val_loss *= -1
 
-        print("Validation loss is {}".format(val_loss))
         if self.best_loss > val_loss:
             self.best_loss = val_loss
             self.save_as_best()
-        print(self.best_loss)
-        print("Best loss is {}".format(self.best_loss))
 
     def evaluate(self, device):
         """Evaluate the current state of the model using the validation loader

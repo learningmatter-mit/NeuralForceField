@@ -53,8 +53,10 @@ def rejoin_props(datasets):
 
 def gen_parallel(func, kwargs_list):
 
-    import pdb
-    pdb.set_trace()
+    if len(kwargs_list) == 1:
+        kwargs = kwargs_list[0]
+        kwargs["track"] = True
+        return [func(**kwargs)]
 
     cpu_count = os.cpu_count()
     with futures.ProcessPoolExecutor(max_workers=cpu_count) as executor:

@@ -1,6 +1,6 @@
 {
   "cp_folder": "/home/saxelrod/Repo/projects/chemprop",
   "model_folder_cp": "/home/saxelrod/chemprop_cov_2/models",
-  "gpu": 0,
+  "device": 0,
   "test_path": "/home/saxelrod/chemprop_cov_2/make_splits/cl_protease/test_full.csv"
 }

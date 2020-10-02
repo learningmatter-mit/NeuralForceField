@@ -160,6 +160,7 @@ def convert_data(overall_dic, max_confs):
 
         actual_confs = min(max_confs, len(sub_dic["conformers"]))
         spec_dic = fix_iters(spec_dic, actual_confs)
+
         spec_dic.update({map_key(key): [] for key
                          in sub_dic["conformers"][0].keys()
                          if key not in EXCLUDE_KEYS})

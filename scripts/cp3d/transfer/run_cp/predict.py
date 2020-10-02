@@ -7,20 +7,20 @@ import os
 import json
 import argparse
 
-from nff.utils import bash_cmd, parse_args
+from nff.utils import bash_command, parse_args
 
 
-def predict(cp_path,
+def predict(cp_folder,
             test_path,
             cp_model_path,
-            gpu):
+            device):
 
-    script = os.path.join(cp_path, "predict.py")
+    script = os.path.join(cp_folder, "predict.py")
     preds_path = os.path.join(cp_model_path, f"test_pred.csv")
 
     check_names = [i for i in os.listdir(cp_model_path)
                    if i.startswith("fold_") and i.split("_")[-1].isdigit()]
-    check_paths = [os.path.join(cp_model_path, name, "model_0")
+    check_paths = [os.path.join(cp_model_path, name, "model_0/model.pt")
                    for name in check_names]
 
     # then not a model path
@@ -36,29 +36,37 @@ def predict(cp_path,
 
     cmd = (f"python {script} "
            f" --test_path {test_path} --preds_path {preds_path} "
-           f" --checkpoint_paths {check_str} "
-           f" --gpu {gpu} ")
+           f" --checkpoint_paths {check_str} ")
+
+    if device == "cpu":
+        cmd += f" --no_cuda"
+    else:
+        cmd += f" --gpu {device} "
 
     if features_path is not None:
         cmd += f" --features_path {features_path[0]}"
 
-    bash_cmd(cmd)
+    p = bash_command(cmd)
+    p.wait()
 
 
 def main(model_folder_cp,
-         cp_path,
+         cp_folder,
          test_path,
-         gpu):
+         device,
+         **kwargs):
 
     folders = os.listdir(model_folder_cp)
     for folder in folders:
         cp_model_path = os.path.join(model_folder_cp,
                                      folder)
+        if not os.path.isdir(cp_model_path):
+            continue
 
-        predict(cp_path=cp_path,
+        predict(cp_folder=cp_folder,
                 test_path=test_path,
                 cp_model_path=cp_model_path,
-                gpu=gpu)
+                device=device)
 
 
 if __name__ == "__main__":
@@ -75,9 +83,10 @@ if __name__ == "__main__":
     parser.add_argument("--test_path", type=str,
                         help=("Path to the CSV with test set SMILES "
                               "and their actual property values"))
-    parser.add_argument("--gpu", type=int,
-                        help=("Index of the GPU to use for evaluating "
-                              "the model."))
+    parser.add_argument("--device", type=str,
+                        help=("Device to use for model evaluation: "
+                              "either the index of the GPU, "
+                              "or 'cpu'. "))
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "

@@ -630,6 +630,7 @@ def featurize_bonds(dataset,
                 shifted_bond_list))
             props["num_bonds"][-1].append(len(bonds))
 
+        props["num_bonds"][-1] = torch.LongTensor(props["num_bonds"][-1])
         props["bond_list"][-1] = torch.cat(props["bond_list"][-1])
         props["bond_features"].append(torch.stack(all_props))
 
