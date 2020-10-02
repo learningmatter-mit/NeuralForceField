@@ -258,7 +258,7 @@ def make_all_loaders(weight_path,
                      world_size,
                      params,
                      base,
-                     nnid,
+                     model_name,
                      batch_size,
                      node_rank,
                      gpu,
@@ -273,7 +273,7 @@ def make_all_loaders(weight_path,
         params (dict): training/network parameters
         base (bool): whether this is the base process
         geoms (QuerySet): Geom objects to use when creating the dataset
-        nnid (int): neural network database object ID
+        model_name (int): name given to the model
         batch_size (int): per-gpu batch size
         node_rank (int): rank of the node
         gpu (int): local rank of the current gpu
@@ -310,7 +310,7 @@ def make_all_loaders(weight_path,
 
         if base:
             train, val, test = make_or_get_datasets(params=params,
-                                                    nnid=nnid,
+                                                    model_name=model_name,
                                                     weight_path=weight_path)
     else:
 
@@ -420,14 +420,14 @@ def nff_to_splits(dataset, params, weight_path):
     return datasets
 
 
-def make_or_get_datasets(nnid, params, weight_path):
+def make_or_get_datasets(model_name, params, weight_path):
     """
     Create the nff dataset and split it into train, val, and test.
     If the dataset is already there (e.g. if you've picked up
     training where you left off earlier), then load it.
     Args:
         params (dict):   training/network parameters
-        nnid (int): neural network database object ID
+        model_name (int): neural network database object ID
         weight_path (str): training folder
     Returns:
         datasets (list): train, val and test datasets
@@ -511,21 +511,20 @@ def get_nn_quants(all_params):
         all_params (dict): all parameters in the job_info.json
             file
     Returns:
-        nnid (int): id of the neural network
-        params (dict): job details
+        model_name (int): id of the neural network
+        params (dict): job params
         nn (neuralnet.models.NnPotential): neural network database object
         geoms (QuerySet): Geom objects to use when creating the dataset
         weight_path (str): training folder
 
     """
 
-    nnid = all_params['nnid']
-    params = all_params['details']
-    # nn = NnPotential.objects.get(id=nnid)
-    # geoms = nn.trainingset.all()
-    weight_path = os.path.join(params['weightpath'], str(nnid))
+    params = {**all_params['train_params'],
+              **all_params['model_params']}
+    model_name = params['model_name']
+    weight_path = os.path.join(params['weightpath'], str(model_name))
 
-    return nnid, params, weight_path
+    return model_name, params, weight_path
 
 
 def init_quants(node_rank, gpu, gpus, world_size, params):
@@ -695,7 +694,10 @@ def optim_loss_hooks(params,
     optimizer = Adam(trainable_params, lr=params['lr'])
 
     # loss function and training metrics
-    loss_coef = json.loads(params['loss_coef'])
+    loss_coef = params['loss_coef']
+    if isinstance(loss_coef, str):
+        loss_coef = json.loads(loss_coef)
+
     loss_type = params.get("loss", "mse")
     loss_builder = getattr(loss, "build_{}_loss".format(loss_type))
     loss_fn = loss_builder(loss_coef=loss_coef)
@@ -809,7 +811,7 @@ def train(gpu,
 
     # get the neural network quantities
     print("Initializing...")
-    nnid, params, weight_path = get_nn_quants(all_params)
+    model_name, params, weight_path = get_nn_quants(all_params)
 
     # get the parallel quantities
     rank, batch_size, base, log_train = init_quants(node_rank=node_rank,
@@ -818,7 +820,7 @@ def train(gpu,
                                                     world_size=world_size,
                                                     params=params)
 
-    log_train('neural network id: ' + str(nnid))
+    log_train('neural network id: ' + str(model_name))
     log_train("Making loaders...")
 
     loaders = make_all_loaders(weight_path=weight_path,
@@ -826,7 +828,7 @@ def train(gpu,
                                world_size=world_size,
                                params=params,
                                base=base,
-                               nnid=nnid,
+                               model_name=model_name,
                                batch_size=batch_size,
                                node_rank=node_rank,
                                gpu=gpu,
@@ -878,7 +880,7 @@ def train(gpu,
     save_path = os.path.join(weight_path, str(node_rank * gpus + gpu),
                              "init_model.pth.tar")
     torch.save(model, save_path)
-    T.train(device=gpu, n_epochs=params['n_epochs'])
+    T.train(device=gpu, n_epochs=params['max_epochs'])
 
     log_train('model saved in ' + weight_path)
 
@@ -897,13 +899,14 @@ def train(gpu,
                trainer_kwargs=trainer_kwargs)
 
 
-def add_args(params):
+def add_args(all_params):
 
-    details = params["details"]
-    stat_metric_name = details.get("stat_metric", DEFAULT_METRIC)
-    metric_names = details.get("metrics", [DEFAULT_METRIC])
-    base_keys = details.get("base_keys", ["energy"])
-    grad_keys = details.get("grad_keys", ["energy_grad"])
+    params = {**all_params['train_params'],
+              **all_params['model_params']}
+    stat_metric_name = params.get("stat_metric", DEFAULT_METRIC)
+    metric_names = params.get("metrics", [DEFAULT_METRIC])
+    base_keys = params.get("base_keys", ["energy"])
+    grad_keys = params.get("grad_keys", ["energy_grad"])
 
     args = [stat_metric_name,
             metric_names,
