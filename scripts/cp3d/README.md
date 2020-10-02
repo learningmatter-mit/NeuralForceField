@@ -60,7 +60,7 @@ The script loads parameters from `scripts/cp3d/train/train_config.json`. These a
 
 - `model_params` (dict): A dictionary with all parameters required to create a model. Its sub-keys are:
     - `model_type` (str): The kind of model you want to make. The currently supported options are `WeightedConformers`, which builds a SchNet model with pooled conformer fingerprints, and `SchNetFeatures`, which builds a ChemProp3D model with pooled conformers. If your dataset only contains one conformer per species, then each model will still work!
-    - The keys required for `WeightedConformers` are as follows:
+    - An example of a `WeightedConformers` config file is `schnet_config.json`. The keys required for `WeightedConformers` are as follows:
         - `mol_basis` (int): Dimension of the molecular fingerprint
         - `dropout_rate` (float) : Dropout rate applied to the convolutional layers
         - `activation` (str): Name of the activation function to use in the convolutional layers.
@@ -69,7 +69,58 @@ The script loads parameters from `scripts/cp3d/train/train_config.json`. These a
         - `cutoff` (float): cutoff distance used to define neighboring atoms. Note that whatever cutoff you used to generate your neighbor list in the dataset should be the cutoff you use here. 
         - `n_gaussians` (int): Number of Gaussians, evenly spaced between 0 and `cutoff`, used for transforming the interatomic distances.
         - `n_filters` (int): Dimension into which the edge features will be transformed. Note that the edge features are embedded in a basis of `n_gauss` Gaussian functions, and are then transformed into a vector of dimension `n_filters
-        - `mol_fp_layers`: 
+        - `mol_fp_layers` (list[dict]): a list of dictionaries. Each dictionary will be turned into a neural network layer. The way this is done is by creating a layer given by the name in `name` and with the parameters specified in `param`. Once the atomic feature vectors are summed after the convolutions, these layers will be applied sequentially to create a final molecular fingerprint. The final dimension after these layers should be equal to `mol_basis`.
+        
+        Note that if `n_atom_basis` is not equal to `mol_basis`, you must supply at least one linear layer to convert it to the right dimension. If they are equal, you can simply set `mol_fp_layers = []`, and no transformation will be applied to them.
+        
+        - `boltzmann_dict` (dict): A dictionary that tells you how to use the conformer fingerprints and Boltzmann weights to pool the conformers together. The key `type` tells you the kind of pooling:
+            - If set to `multiply`, the fingerprints will be multiplied by the corresponding Boltzmann weights and summed. No other keys need to be specified.
+            - If set to `attention`, then an attention mechanism $\alpha_{ij}$ will be applied between each pair of conformers $ij$. In this case one must also specify the following parameters:
+                - `dropout_rate` (float): Dropout rate for the layers that create the attention mask
+                - `final_act` (str): Activation function applied after the weighted sum of conformer fingerprints
+                - `num_heads` (int): Number of attention heads
+                - `head_pool` (str): If you are using multiple attention heads, the way in which you combine the fingerprints that are pooled from the different heads. If set to `sum`, then these fingerprints are summed and the readout layer should take as input a vector of dimension `mol_basis`. If set to `concatenate`, then they are concatenated  and the readout layer should take as input a vector of dimension `num_heads` $\times$ mol_basis`.
+                - `mol_basis` (int): Dimension of the molecular fingerprint. Should have the same value as in the main dictionary.
+                - `boltz_basis` (int): Dimension of the vector into which the Boltzmann statistical weight will be converted.
+                - `equal_weights` (bool): Whether to forego the learned attention mechanism and just use equal weights for each conformer. This is useful as an ablation study.
+            - If set to `linear_attention`, then an attention mechanism $\alpha_i$ will be applied between conformers $i$.
+                - In this case the same keys are required as for `attention`.
+       - `readoutdict` (dict): A dictionary that tells you how to convert the final pooled fingerprint into a prediction. Each key corresponds to the name of a different quantity to predict. Each value is a list of layer dictionaries telling you which layers to apply sequentially. 
+       
+       In the example given in `schnet_config.json`, a vector of size 900 (3x `mol_basis` because of three attention heads with concatenation) is converted to size 450 through a linear layer. Then a dropout layer and the ReLU activation are applied. Then another linear layer converts it to size 1, and a final dropout layer is applied. Note that this does not have a sigmoid layer because the model is trained with a BCELogits loss, which is equal to cross-entropy loss + sigmoid, but is more stable. At inference you must remember to apply the sigmoid layer! 
+       
+       - `batch_embeddings` (bool): Whether to use fingerprints already present in the dataset instead of learning the fingerprints. In this case the dataset properties must contain fingerprints under the key `fingerprints`.
+       - `trainable_gauss` (bool): Whether the width and spacings of the Gaussian functions are learnable parameters.
+        - `extra_features` (list[dict]): a list of dictionaries specifying the names of any extra features to concatenate with the learned features. Each dictionary only needs the key `name`, which tells you the name of the feature in the dataset. 
+        
+        For example, if you have Morgan fingerprints in your dataset and you want to concatenate these with the learned finerprints, you can set `extra_features=["morgan"]`.
+        
+        - `base_keys` (list[str]): names of the values that your model is predicting
+        - `grad_keys` (list[str]): any values for which you also want the gradient with respect to nuclear coordinates. For example, if you are predicting energies then you may also want the gradients, as the negative gradients are the nuclear forces.
+    
+    - An example of a `ChemProp3D` config file is `train_config.json` (this is the default used in `train_parallel.sh` and `train_single.sh`). The keys required for `WeightedConformers` are as follows:
+    
+    (*** FILL IN HERE !!! ***)
+    
+- `train_params`: A dictionary with information about the training process. The required keys are the same for all model types. They are:
+    - `use_slurm` (bool): Use slurm when running parallel training. If set to true, the script will use Slurm variables to find the number of GPUs and nodes. 
+    - `num_gpus` (int): Number of GPUs to use in parallel training. Must be set if not using slurm for parallel training. Otherwise doesn't need to be set.
+    
+    If you are using slurm for parallel training, make sure to manually change `SLURM_GPUS_PER_NODE` in the `train_parallel.sh` script, so that it's equal to the number of GPUs you request per note in `#SBATCH`. 
+    
+    Also, amke sure to change `NFFDIR` in the script to the location of your NeuralForceField folder.
+    
+    - `seed` (int): random seed used in training.
+    - `batch_size` (int): Number of molecules to include in a batch. Note that this is the batch size when accounting for *all nodes and GPUs*. So, if you have 8 nodes and 2 GPUs each, that makes 16 GPUs total. So a batch size of 16 means that each GPU will use 1 batch at a time. That is, the per-gpu batch size is 1.
+    - `mini_batches` (int): How many batches to go through before taking an optimizer step. Say you only put one molecule in a batch at a time, but set `mini_batches` to 4. Then you only need memory for one molecule at a time, but your optimizer step will include gradients accumulated from 4 molecules.
+    - `model_kwargs` (dict): Any keyword arguments to use when calling the model. For all conformer models, thee only keyword to worry about is `sub_batch_size`. This is the number of sub-batches you want to divide each batch into. For more than about 10 conformers per species, most GPUs won't be able to calculate fingerprints in parallel for all conformers of a species. 7 is usually a good choice for a typical GPU. 
+    
+    Note that if you set `sub_batch_size` to anything but `None`, then your per-gpu batch size should always be 1. That's why the config file has `batch_size=16` (since the slurm script requests 2x8 = 16 GPUs, this makes a per-gpu batch size of 1).
+    
+    - `sampler` (dict): Optional argument for the kind of sampler you want for your data. If specified, the only alternative to random is `ImbalancedDataSampler`, which makes sure you see equal amounts of each label in a classification problem. Simply set `name` in the dictionary to `ImbalancedDataSampler` and set `target_name` to the property name that you want to sample in a balanced way.
+    
+    - `loss_coef` ...
+    
     
 ## Hyperparameter optimization
 

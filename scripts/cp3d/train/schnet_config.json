@@ -12,7 +12,9 @@
         "n_gaussians": 10,
         "cutoff": 5.0,
 
-        "mol_fp_layers": [],
+        "mol_fp_layers": [{"name": "linear",
+                           "param": {"in_features": 256,
+                                     "out_features": 300}}],
 
         "boltzmann_dict": {
             "boltz_basis": 10,
@@ -21,7 +23,8 @@
             "head_pool": "concatenate",
             "mol_basis": 300,
             "num_heads": 3,
-            "type": "linear_attention"
+            "type": "linear_attention",
+            "equal_weights": false
         },
 
 
