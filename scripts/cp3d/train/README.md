@@ -1,1 +1,0 @@
-- Make sure that batch_size = total_num_gpus
