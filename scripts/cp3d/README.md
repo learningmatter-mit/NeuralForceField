@@ -20,6 +20,7 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
     * [Getting fingerprints, predictions, and learned weights](#gett-fingerprints,-predictions,-and-learned-weights)
     * [Exporting fingerprints to ChemProp](#exporting-fingerprints-to-chemprop)
     * [Training ChemProp models with the fingerprints](#training-chemprop-models-with-the-fingerprints)
+    * [Saving the predictions](#saving-the-predictions)
 
 
 
@@ -243,7 +244,7 @@ There may be cases in which there are two similar regression/classification task
 
 As detailed in our paper, we have found that using this transfer learning technique with CP3D yields significantly better results for SARS-CoV-2 binding than any 2D methods. 
 
-Scripts are available for transfer learning `scripts/cp3d/transfer`. The main script is `transfer.sh`, which runs the following three scripts in order. Note that you can run any of the scripts on their own if you want (for example, if you've already made fingerprints, you can skip the first script below). Also note that making fingerprints and saving predictions is useful even if you're not doing transfer learning.
+Scripts are available for transfer learning `scripts/cp3d/transfer`. The main script is `transfer.sh`, which runs the following four scripts in order. Note that you can run any of the scripts on their own if you want (for example, if you've already made fingerprints, you can skip the first script below). Also note that making fingerprints and saving predictions is useful even if you're not doing transfer learning.
 
 ### Getting fingerprints, predictions, and learned weights
 The script `get_fps/make_fps.sh` uses the model to generate pooled fingerprints for species in other datasets. It also reports the model prediction for the property of interest, the real value of the property, the individual conformer fingerprints (before nonlinearities), the learned weights that multiply the conformer fingerprints (after nonlinearities), the energy of each conformer, and the conformer Boltzmann weights. These are quite useful for comparing fingerprints between and among species, and for seeing how the model learned to weight each fingerprint. 
@@ -281,6 +282,17 @@ The script `run_cp/run_all_tls.sh` runs ChemProp using the features generated ab
     - `metrics` (list[str]): Subset of the metrics above. For every metric there exists a corresponding best CP3D model and associated CP3D features. A new ChemProp model will be trained for every different set of these features. The associated ChemProp model will also be scored on that metric. 
     - `feat_options` (list[bool]): Whether to use the CP3D features in the ChemProp model. If you specify [True, False], then separate models will be trained, one in which they are used and one in which they aren't. This might be useful if you want to compare performance with and without 3D features.
     - `mpnn_options` (list[bool]):  Whether to use an MPNN in conjunction with the CP3D features in the ChemProp model. If you specify [True, False], then separate models will be trained, one in which an MPNN is used and one in which it isn't. 
+
+### Saving the predictions
+Now that we've trained our models we want to get and save their predictions. That way we can do further analysis afterwards. For example, if we've trained a model to maximize the PRC-AUC but we want to also see what the model's ROC-AUC is, we'll have to get its predictions and do the analysis ourselves.
+
+The script that generates predictions is `run_cp/predict.sh`. Details for the script are in `run_cp/predict_config.json`. The keys are:
+- `cp_folder` (str): Path to the ChemProp folder on your computer.
+- `model_folder_cp` (str): Folder in which you made sub-folders for all your ChemProp models.
+- `device` (str): Device you want to use when calling the model. Can be "cpu" or any integer from 0 to the number of GPUs you have available, if you want to use a GPU.
+- `test_path` (str): path to the file with the test SMILES and their properties. If you split the data using the scripts above, then this should be equal to `<csv_folder>/test_full.csv`.
+
+
 
 
 
