@@ -33,7 +33,7 @@ The script `scripts/cp3d/make_dset/make_dset.sh` first generates training, valid
 ### Splitting the data
 The script `scripts/cp3d/make_dset/splits/split.sh` uses your summary file to get information about the data, generates a CSV of the data for ChemProp to read, and uses ChemProp to split the data. 
 
-Details for the script are in `scripts/cp3d/make_dset/splits/split.sh/split_config.json`, which you should modify for your project. The keys are:
+Details for the script are in `scripts/cp3d/make_dset/splits/split_config.json`, which you should modify for your project. The keys are:
 
 - `summary_path` (str): The path to the `JSON` file that contains a summary of the superset (the species from which you will sample to make your dataset). It has all the information about the species, excluding conformer/structural information. It also has the path to the corresponding pickle file, which has the structural information.
 - `csv_folder` (str): The folder in which you want to save your CSV files with the train, test, and split species.
