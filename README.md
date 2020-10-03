@@ -17,7 +17,7 @@ This software requires the following packages:
 - [sigopt=5.3.1](https://sigopt.com/)
 - [munch=2.5.0](https://pypi.org/project/munch/)
 - [e3fp=1.2.1](https://github.com/keiserlab/e3fp)
-
+- [ipykernel==5.3.0](https://github.com/ipython/ipykernel)
 
 We highly recommend to create a `conda` environment to run the code. To do that, use the following commands:
 
@@ -30,7 +30,7 @@ Next install remaining pip requirements:
 
 ```bash
 conda activate nff
-pip install munch sigopt e3fp
+pip install munch sigopt e3fp ipykernel
 ```
 
 Finally, install the `nff` package by running:
