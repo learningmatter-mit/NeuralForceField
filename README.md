@@ -33,16 +33,18 @@ conda activate nff
 pip install munch sigopt e3fp ipykernel
 ```
 
+To ensure that the `geom` environment is accessible through Jupyter, add the the `nff` display name:
+```bash
+python -m ipykernel install --user --name geom --display-name "Python [conda env:nff"]
+```
+
 Finally, install the `nff` package by running:
 
 ```bash
 pip install .
 ```
 
-To ensure that the `geom` environment is accessible through Jupyter, add the the `nff` display name:
-```bash
-python -m ipykernel install --user --name geom --display-name "Python [conda env:nff"]
-```
+
 
 ## Usage
 
