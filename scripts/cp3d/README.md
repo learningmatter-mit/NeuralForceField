@@ -70,7 +70,7 @@ Details for the script are found in the file `dset_config.json`. This is where y
 The script automatically generates atom and bond features, but you can add other features to the dataset too. 
 
 - Morgan fingerprint. The Morgan fingerprint is a classic 2D bit vector fingerprint. Given a dataset called `dset` and a desired fingerprint length `vec_length`, call `dset.add_morgan(vec_length)`
-- E3FP. The E3FP fingerprint is a 3D version of the Morgan fingerprint. To generate E3FP fingerprints call `dset.add_e3fp(vec_length)`. (Note, however, that creating a conda environment with the latest versions of both RDKit and E3FP leads to clashes, and so the `nff` environment does not automatically contain E3FP functionality. If you want to generate an E3FP fingerprint, you will have to create a new environment with E3FP and an older version of RDKit).
+- E3FP. The E3FP fingerprint is a 3D version of the Morgan fingerprint. To generate E3FP fingerprints call `dset.add_e3fp(vec_length)`.
 - RDKit descriptors. RDKit has a variety of 3D descriptors, such as `autocorrelation_3d`, `rdf`, `morse`, `whim` and `getaway`. To generate features with any of these methods, call `dset.featurize_rdkit(method)`.
 
 To load, modify, and save a dataset, run:
