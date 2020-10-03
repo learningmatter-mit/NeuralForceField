@@ -39,7 +39,7 @@ def run(job_path, model_path, metric):
     metric_func_dic = {"prc_auc": parse_prc_auc}
     metric_func = metric_func_dic[metric]
 
-    cmd = "cd {} && bash job.sh".format(job_path)
+    cmd = "cd $NFFDIR/scripts/cp3d/train && bash train_parallel.sh"
     os.system(cmd)
     best_score = metric_func(job_path=job_path,
                              model_path=model_path)
@@ -92,9 +92,7 @@ def update_info(job_path,
                 param_names,
                 prop_name):
 
-    info_file = os.path.join(job_path, "job_info.json")
-
-    with open(info_file, "r") as f:
+    with open(job_path, "r") as f:
         info = json.load(f)
 
     for param_type, val in zip(param_names, vals):
@@ -108,7 +106,7 @@ def update_info(job_path,
             update_heads(info=info,
                          heads=val)
 
-    with open(info_file, "w") as f:
+    with open(job_path, "w") as f:
         json.dump(info, f, indent=4, sort_keys=True)
 
 
@@ -139,7 +137,7 @@ def main(job_path,
          data_types,
          **kwargs):
 
-    dic_path = os.path.join(job_path, score_file)
+    dic_path = os.path.join(model_path, score_file)
     score_list = []
 
     for _ in range(num_samples):
@@ -167,7 +165,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--job_path', type=int,
-                        help=('The path with the `job_info.json` file'))
+                        help=('The path with to the train config file'))
     parser.add_argument('--model_path', type=int,
                         help=("The path with the dataset where the model "
                               "will be trained"))
