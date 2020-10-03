@@ -5,7 +5,7 @@
 
         "mol_basis": 300,
         "cp_dropout": 0.02,
-        "schnet_dropout": 0.3,
+        "schnet_dropout": 0.2,
         "activation": "ReLU",
         "n_atom_basis": 133,
         "n_bond_features": 26,
@@ -67,7 +67,7 @@
                 {
                     "name": "Dropout",
                     "param": {
-                        "p": 0.2
+                        "p": 0.02
                     }
                 },
                 {
@@ -84,7 +84,7 @@
                 {
                     "name": "Dropout",
                     "param": {
-                        "p": 0.2
+                        "p": 0.02
                     }
                 }
             ]
@@ -94,6 +94,7 @@
         "same_filters": true,
         "trainable_gauss": false,
         "extra_features": null,
+        "ext_feat_types": null,
 
         "base_keys": ["sars_cov_one_cl_protease_active"],
         "grad_keys": []

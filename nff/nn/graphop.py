@@ -22,10 +22,6 @@ def update_boltz(conf_fp, weight, boltz_nn, extra_feats=None):
     Returns:
         boltzmann_fp (torch.Tensor): updated fingerprint
     """
-    # if no boltzmann nn, just multiply
-    if extra_feats is not None:
-        extra_feats = extra_feats.to(conf_fp.device)
-        conf_fp = torch.cat((conf_fp, extra_feats))
 
     if boltz_nn is None:
         boltzmann_fp = conf_fp * weight

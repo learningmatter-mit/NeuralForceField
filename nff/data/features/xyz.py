@@ -42,8 +42,25 @@ def featurize_rdkit(dataset, method):
     dataset.props[method] = []
     props = dataset.props
 
-    for nxyz, smiles in zip(props['nxyz'], props['smiles']):
-        xyz = nxyz.detach().cpu().numpy().tolist()
-        rep = get_3d_representation(xyz=xyz, smiles=smiles, method=method)
-        dataset.props[method].append(torch.tensor(rep))
-    dataset.props[method] = torch.stack(dataset.props[method])
+    for i in range(len(props['nxyz'])):
+
+        smiles = props['smiles'][i]
+        nxyz = props['nxyz'][i]
+
+        if 'mol_size' in props:
+            mol_size = props['mol_size'][i].item()
+            n_confs = nxyz.shape[0] // mol_size
+            nxyz_list = torch.split(nxyz, [mol_size] * n_confs)
+        else:
+            nxyz_list = [nxyz]
+
+        reps = []
+        for sub_nxyz in nxyz_list:
+            xyz = sub_nxyz.detach().cpu().numpy().tolist()
+            rep = torch.Tensor(get_3d_representation(xyz=xyz,
+                                                     smiles=smiles,
+                                                     method=method))
+            reps.append(rep)
+
+        reps = torch.stack(reps)
+        dataset.props[method].append(reps)

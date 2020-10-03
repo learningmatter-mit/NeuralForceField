@@ -115,7 +115,8 @@ class WeightedConformers(nn.Module):
         )
 
         # extra features to consider
-        self.extra_feats = modelparams["extra_features"]
+        self.extra_feats = modelparams.get("extra_features")
+        self.ext_feat_types = modelparams.get("ext_feat_types")
 
         mol_fp_layers = modelparams["mol_fp_layers"]
         readoutdict = modelparams["readoutdict"]
@@ -184,20 +185,21 @@ class WeightedConformers(nn.Module):
         assert all([feat in batch.keys() for feat in self.extra_feats])
 
         feats = []
-        for feat_name in self.extra_feats:
+
+        for feat_name, feat_type in zip(self.extra_feats, self.ext_feat_types):
+
+            if feat_type == "conformer":
+                continue
+
             feat_len = len(batch[feat_name]) // num_mols
             splits = [feat_len] * num_mols
-            feat = list(torch.split(batch[feat_name] * FEAT_SCALING, splits))
+            feat = torch.stack(
+                list(torch.split(batch[feat_name] * FEAT_SCALING, splits)))
             feats.append(feat)
 
-        common_feats = []
-        for j in range(len(feats[0])):
-            common_feats.append([])
-            for i in range(len(feats)):
-                common_feats[-1].append(feats[i][j])
-            common_feats[-1] = torch.cat(common_feats[-1])
+        feats = torch.cat(feats, dim=-1)
 
-        return common_feats
+        return feats
 
     def convolve(self, batch, xyz=None, xyz_grad=False, **kwargs):
         """
@@ -243,7 +245,10 @@ class WeightedConformers(nn.Module):
 
         return r, xyz
 
-    def get_conf_fps(self, smiles_fp, mol_size):
+    def get_conf_fps(self,
+                     smiles_fp,
+                     mol_size,
+                     batch):
 
         # total number of atoms
         num_atoms = smiles_fp.shape[0]
@@ -262,6 +267,17 @@ class WeightedConformers(nn.Module):
 
         conf_fps = torch.stack(conf_fps)
 
+        if self.extra_feats is not None:
+            extra_conf_fps = []
+            for feat_name, feat_type in zip(self.extra_feats,
+                                            self.ext_feat_types):
+                if feat_type == "conformer":
+                    extra_conf_fps.append(batch[feat_name])
+
+            if extra_conf_fps != []:
+                extra_conf_fps = torch.cat(extra_conf_fps, dim=-1)
+                conf_fps = torch.cat([conf_fps, extra_conf_fps], dim=-1)
+
         return conf_fps
 
     def post_process(self, batch, r, xyz, **kwargs):
@@ -274,7 +290,9 @@ class WeightedConformers(nn.Module):
         conf_fps_by_smiles = []
 
         for mol_size, smiles_fp in zip(mol_sizes, fps_by_smiles):
-            conf_fps = self.get_conf_fps(smiles_fp, mol_size)
+            conf_fps = self.get_conf_fps(smiles_fp,
+                                         mol_size,
+                                         batch)
             conf_fps_by_smiles.append(conf_fps)
 
         # split the boltzmann weights by species
@@ -372,6 +390,10 @@ class WeightedConformers(nn.Module):
                 conf_fps=conf_fps,
                 extra_feats=extra_feats,
                 head_pool=self.head_pool)
+
+            if extra_feats is not None:
+                extra_feats = extra_feats.to(final_fp.device)
+                final_fp = torch.cat((final_fp, extra_feats))
 
             final_fps.append(final_fp)
             final_weights.append(learned_weights)

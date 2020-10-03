@@ -108,8 +108,8 @@ class Dataset(TorchDataset):
                 new_props[key] += val
             else:
                 old_val = new_props[key]
-                new_props.props[key] = torch.cat([old_val,
-                                                  val.to(old_val.dtype)])
+                new_props[key] = torch.cat([old_val,
+                                            val.to(old_val.dtype)])
         self.props = new_props
 
         return copy.deepcopy(self)
