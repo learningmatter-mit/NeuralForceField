@@ -155,7 +155,7 @@ In the example given in `schnet_config.json`, a vector of size 900 (3x `mol_basi
 - `gauss_embed` (bool): Whether to expand distances in a Gaussian basis, or just use them as they are
 - `batch_embeddings` (bool): Whether to use fingerprints already present in the dataset instead of learning the fingerprints. In this case the dataset properties must contain fingerprints under the key `fingerprints`.
 - `trainable_gauss` (bool): Whether the width and spacings of the Gaussian functions are learnable parameters.
-- `extra_features` (list]): a list of names of any extra features to concatenate with the learned features. Each dictionary only needs the key `name`, which tells you the name of the feature in the dataset. 
+- `extra_features` (list): a list of names of any extra features to concatenate with the learned features. 
 
 For example, if you have Morgan fingerprints in your dataset and you want to concatenate these with the learned fingerprints, you can set `extra_features=["morgan"]`.
 
