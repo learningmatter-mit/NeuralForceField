@@ -126,15 +126,22 @@ def submit_to_nodes(params_file):
                   **params["model_params"]}
     use_slurm = all_params["use_slurm"]
 
+    cmds = ["echo $(srun -l bash -c 'hostname' | sort | head -1 | awk '{print $2}')",
+            "echo $(getent hosts `hostname` | cut -d ' ' -f1)",
+            "echo 8888"]
+
+    env_vars = ["MASTER_ADDR", "MASTER_IP", "MASTER_PORT"]
+
+    if not use_slurm:
+        cmds[0] = "echo $(cat /proc/sys/kernel/hostname)"
+
+    for cmd, env_var in zip(cmds, env_vars):
+        var = subprocess.check_output(
+            cmd, env=os.environ.copy(), shell=True).decode()
+        os.environ[env_var] = var
+
+
     if use_slurm:
-
-        cmds = ["export MASTER_ADDR=$(srun -l bash -c 'hostname' | sort | head -1 | awk '{print $2}')",
-                "export MASTER_IP=$(getent hosts `hostname` | cut -d ' ' -f1)",
-                "export MASTER_PORT=8888"]
-
-        for cmd in cmds:
-            _ = subprocess.check_output(
-                cmd, env=os.environ.copy(), shell=True).decode()
 
         # get the number of nodes, cpus per task, and gpus per task
 
