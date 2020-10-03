@@ -70,7 +70,7 @@ Details for the script are found in the file `dset_config.json`. This is where y
 The script automatically generates atom and bond features, but you can add other features to the dataset too. 
 
 - Morgan fingerprint. The Morgan fingerprint is a classic 2D bit vector fingerprint. Given a dataset called `dset` and a desired fingerprint length `vec_length`, call `dset.add_morgan(vec_length)`
-- E3FP. The E3FP fingerprint is a 3D version of the Morgan fingerprint. To generate E3FP fingerprints call `dset.add_e3fp(vec_length)`. (Note, however, that creating a conda environment with the latest versions of both RDKit and E3FP leads to clashes, and so the `nff` environment does not automatically contain E3FP functionality. If you want to generate an E3FP fingerprint, you will have to create a new environment with E3FP and an older version of RDKit).
+- E3FP. The E3FP fingerprint is a 3D version of the Morgan fingerprint. To generate E3FP fingerprints call `dset.add_e3fp(vec_length)`.
 - RDKit descriptors. RDKit has a variety of 3D descriptors, such as `autocorrelation_3d`, `rdf`, `morse`, `whim` and `getaway`. To generate features with any of these methods, call `dset.featurize_rdkit(method)`.
 
 To load, modify, and save a dataset, run:
@@ -155,7 +155,7 @@ In the example given in `schnet_config.json`, a vector of size 900 (3x `mol_basi
 - `gauss_embed` (bool): Whether to expand distances in a Gaussian basis, or just use them as they are
 - `batch_embeddings` (bool): Whether to use fingerprints already present in the dataset instead of learning the fingerprints. In this case the dataset properties must contain fingerprints under the key `fingerprints`.
 - `trainable_gauss` (bool): Whether the width and spacings of the Gaussian functions are learnable parameters.
-- `extra_features` (list]): a list of names of any extra features to concatenate with the learned features. Each dictionary only needs the key `name`, which tells you the name of the feature in the dataset. 
+- `extra_features` (list): a list of names of any extra features to concatenate with the learned features. 
 
 For example, if you have Morgan fingerprints in your dataset and you want to concatenate these with the learned fingerprints, you can set `extra_features=["morgan"]`.
 
@@ -191,7 +191,7 @@ An example of a `ChemProp3D` config file is `train_config.json` (this is the def
     - `seed` (int): random seed used in training.
     - `batch_size` (int): Number of molecules to include in a batch. Note that this is the batch size when accounting for *all nodes and GPUs*. So, if you have 8 nodes and 2 GPUs each, that makes 16 GPUs total. So a batch size of 16 means that each GPU will use 1 batch at a time. That is, the per-gpu batch size is 1.
     - `mini_batches` (int): How many batches to go through before taking an optimizer step. Say you only put one molecule in a batch at a time, but set `mini_batches` to 4. Then you only need memory for one molecule at a time, but your optimizer step will include gradients accumulated from 4 molecules.
-    - `model_kwargs` (dict): Any keyword arguments to use when calling the model. For all conformer models, thee only keyword to worry about is `sub_batch_size`. This is the number of sub-batches you want to divide each batch into. For more than about 10 conformers per species, most GPUs won't be able to calculate fingerprints in parallel for all conformers of a species. 7 is usually a good choice for a typical GPU. If you use a sub-batch size but a total batch size per gpu > 1, you will get an error that looks like this: `mol_size = batch["mol_size"].item() ... ValueError: only one element tensors can be converted to Python scalars`. In this case you must make sure that your batch size-per-gpu is equal to 1. Once again, if you are using `M` GPUs, then your batch size should be equal to `M`, so that your batch size-per-gpu is 1.
+    - `model_kwargs` (dict): Any keyword arguments to use when calling the model. For all conformer models, the only keyword to worry about is `sub_batch_size`. This is the number of sub-batches you want to divide each batch into. For more than about 10 conformers per species, most GPUs won't be able to calculate fingerprints in parallel for all conformers of a species. 7 is usually a good choice for a typical GPU. If you use a sub-batch size but a total batch size per gpu > 1, you will get an error that looks like this: `mol_size = batch["mol_size"].item() ... ValueError: only one element tensors can be converted to Python scalars`. In this case you must make sure that your batch size-per-gpu is equal to 1. Once again, if you are using `M` GPUs, then your batch size should be equal to `M`, so that your batch size-per-gpu is 1.
 
     Note that if you set `sub_batch_size` to anything but `None`, then your per-gpu batch size should always be 1. That's why the config file has `batch_size=16` (since the slurm script requests 2x8 = 16 GPUs, this makes a per-gpu batch size of 1).
 
