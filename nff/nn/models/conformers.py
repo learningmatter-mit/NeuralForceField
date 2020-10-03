@@ -399,7 +399,6 @@ class WeightedConformers(nn.Module):
             final_weights.append(learned_weights)
 
         final_fps = torch.stack(final_fps)
-        final_weights = torch.stack(final_weights)
 
         return final_fps, final_weights
 
