@@ -811,7 +811,6 @@ def train(gpu,
     """
 
     # get the neural network quantities
-    print("Initializing...")
     model_name, params, weight_path = get_nn_quants(all_params)
 
     # get the parallel quantities
@@ -883,8 +882,6 @@ def train(gpu,
         global_rank=rank,
         **trainer_kwargs
     )
-
-    log_train('training...')
 
     save_path = os.path.join(weight_path, str(node_rank * gpus + gpu),
                              "init_model.pth.tar")
