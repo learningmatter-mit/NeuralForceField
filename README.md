@@ -39,6 +39,11 @@ Finally, install the `nff` package by running:
 pip install .
 ```
 
+To ensure that the `geom` environment is accessible through Jupyter, add the the `nff` display name:
+```bash
+python -m ipykernel install --user --name geom --display-name "Python [conda env:nff"]
+```
+
 ## Usage
 
 ### Command line
