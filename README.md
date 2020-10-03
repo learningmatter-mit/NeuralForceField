@@ -17,6 +17,8 @@ This software requires the following packages:
 - [sigopt=5.3.1](https://sigopt.com/)
 - [munch=2.5.0](https://pypi.org/project/munch/)
 
+*** add e3fp!! ***
+
 We highly recommend to create a `conda` environment to run the code. To do that, use the following commands:
 
 ```bash
@@ -45,18 +47,26 @@ pip install .
 ## Usage
 
 ### Command line
+
+#### Force field
 The simplest way to use the `nff` package is to use the premade scripts (in the `scripts`) folder. As an example, to train a SchNet model with the default parameters using the example dataset (ethanol geometries) from the command line, run the command
 
 ```bash
 nff_train.py train schnet tutorials/data/dataset.pth.tar $HOME/train_model --device cuda:0
 ```
-
 This will use 60% of the dataset for training, 20% for validation and 20% for testing. The training will happen on the device `cuda:0`. Results of training, checkpoints and hyperparameters will be saved on the path `$HOME/train_model`.
+
+#### Property predictor
+NFF also contains modules that predict properties from 3D geometries of conformers. These include the SchNet model, expanded to include multiple conformers, as well as the ChemProp3D (CP3D)  model, which also includes graph information. A series of scripts for these modules can be found in `scripts/cp3d`. An in-depth discussion of how to use these scripts can be found in `scripts/cp3d/README.md`.   
+
 
 ### Usage with Jupyter Notebooks and other scripts
 
+### Force field
 A series of tutorials illustrating how `nff` can be used in conjunction with Jupyter Notebooks or other scripts is provided in the `tutorials/` folder. It also covers how to integrate a pre-trained model with an ASE calculator.
 
+### Property predictor
+While `scripts/cp3d/README.md` explains in depth how to use the scripts, the notebook `06_cp3d.ipynb` goes into some detail about what happens behind the scenes. In this notebook you'll see how the datasets get made and what the models look like.
 
 ## References
 
