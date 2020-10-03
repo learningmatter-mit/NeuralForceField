@@ -24,7 +24,6 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
     * [Saving the predictions](#saving-the-predictions)
 
 
-
 ## Making a dataset
 
 The scripts for making a dataset assume that you have a set of pickle files in a folder, one for each species, each of which contains all the 3D information about the conformers. It also assumes that you have one summary `JSON` file, which tells you all the properties of each species (except for its 3D information), and the path to the pickle file. This follows the organization of the GEOM dataset. More information about this organization can be found [here](https://github.com/learningmatter-mit/geom/blob/master/tutorials/02_loading_rdkit_mols.ipynb). 
@@ -32,7 +31,9 @@ The scripts for making a dataset assume that you have a set of pickle files in a
 The script `scripts/cp3d/make_dset/make_dset.sh` first generates training, validation and test splits from your summary file. It interfaces with ChemProp to do so, so that you can use functionality like ChemProp's scaffold split. It then uses the splits you've generated, together with the pickle files, to create train, validation, and test datasets complete with all the 3D information. The following two sections discuss the two functions that `make_dset.sh` calls. You can run `make_dset.sh` or you can run the individual scripts themselves.
 
 ### Splitting the data
-The script `scripts/cp3d/make_dset/splits/split.sh` uses your summary file to get information about the data, generates a CSV of the data for ChemProp to read, and uses ChemProp to split the data. Details for the script are in `scripts/cp3d/make_dset/splits/split.sh/split_config.json`, which you should modify for your project. The keys are:
+The script `scripts/cp3d/make_dset/splits/split.sh` uses your summary file to get information about the data, generates a CSV of the data for ChemProp to read, and uses ChemProp to split the data. Before getting started make sure to install `jq` by running `bash install_jq.sh`. 
+
+Details for the script are in `scripts/cp3d/make_dset/splits/split.sh/split_config.json`, which you should modify for your project. The keys are:
 
 - `summary_path` (str): The path to the `JSON` file that contains a summary of the superset (the species from which you will sample to make your dataset). It has all the information about the species, excluding conformer/structural information. It also has the path to the corresponding pickle file, which has the structural information.
 - `csv_folder` (str): The folder in which you want to save your CSV files with the train, test, and split species.
