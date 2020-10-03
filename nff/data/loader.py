@@ -4,7 +4,7 @@ from torch.utils.data import DistributedSampler
 from torch.utils.data import Dataset as TorchDataset
 from operator import itemgetter
 
-REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list']
+REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'bonded_nbr_list']
 NBR_LIST_KEYS = ['bond_idx']
 
 
@@ -12,7 +12,8 @@ TYPE_KEYS = {
     'atoms_nbr_list': torch.long,
     'nbr_list': torch.long,
     'num_atoms': torch.long,
-    'bond_idx': torch.long}
+    'bond_idx': torch.long,
+    'bond_nbrs': torch.long}
 
 
 def collate_dicts(dicts):

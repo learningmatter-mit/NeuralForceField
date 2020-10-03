@@ -248,7 +248,8 @@ class WeightedConformers(nn.Module):
     def get_conf_fps(self,
                      smiles_fp,
                      mol_size,
-                     batch):
+                     batch,
+                     idx):
 
         # total number of atoms
         num_atoms = smiles_fp.shape[0]
@@ -276,7 +277,8 @@ class WeightedConformers(nn.Module):
 
             if extra_conf_fps != []:
                 extra_conf_fps = torch.cat(extra_conf_fps, dim=-1)
-                conf_fps = torch.cat([conf_fps, extra_conf_fps], dim=-1)
+                this_extra = extra_conf_fps[idx].reshape(1, -1)
+                conf_fps = torch.cat([conf_fps, this_extra], dim=-1)
 
         return conf_fps
 
@@ -289,10 +291,13 @@ class WeightedConformers(nn.Module):
         fps_by_smiles = torch.split(r, N)
         conf_fps_by_smiles = []
 
-        for mol_size, smiles_fp in zip(mol_sizes, fps_by_smiles):
+        for i, smiles_fp in enumerate(fps_by_smiles):
+            mol_size = mol_sizes[i]
             conf_fps = self.get_conf_fps(smiles_fp,
                                          mol_size,
-                                         batch)
+                                         batch,
+                                         i)
+
             conf_fps_by_smiles.append(conf_fps)
 
         # split the boltzmann weights by species
