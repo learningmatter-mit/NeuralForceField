@@ -29,13 +29,8 @@ conda create -n nff python=3.7 scikit-learn pytorch\>=1.2.0 cudatoolkit=10.0 ase
 Next install remaining pip requirements:
 
 ```bash
-pip install munch sigopt e3fp
-```
-
-You need to activate the `nff` environment to install the NFF package:
-
-```bash
 conda activate nff
+pip install munch sigopt e3fp
 ```
 
 Finally, install the `nff` package by running:
