@@ -13,6 +13,7 @@
         "n_convolutions": 2,
         "n_filters": 64,
         "n_gaussians": 10,
+        "cutoff": 5.0,
 
         "input_layers": [
             {
@@ -90,6 +91,7 @@
             ]
         },
 
+        "gauss_embed": true,
         "batch_embeddings": false,
         "same_filters": true,
         "trainable_gauss": false,
