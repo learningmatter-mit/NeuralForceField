@@ -128,6 +128,14 @@ def submit_to_nodes(params_file):
 
     if use_slurm:
 
+        cmds = ["export MASTER_ADDR=$(srun -l bash -c 'hostname' | sort | head -1 | awk '{print $2}')",
+                "export MASTER_IP=$(getent hosts `hostname` | cut -d ' ' -f1)",
+                "export MASTER_PORT=8888"]
+
+        for cmd in cmds:
+            _ = subprocess.check_output(
+                cmd, env=os.environ.copy(), shell=True).decode()
+
         # get the number of nodes, cpus per task, and gpus per task
 
         node_list = get_nodes()
@@ -155,9 +163,10 @@ def submit_to_nodes(params_file):
 
     else:
         num_gpus = all_params["num_gpus"]
-        run_local_job(params_file=params_file,
+        p = run_local_job(params_file=params_file,
                       num_gpus=num_gpus)
 
+        p.wait()
 
 if __name__ == "__main__":
 
