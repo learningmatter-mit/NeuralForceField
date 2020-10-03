@@ -16,7 +16,7 @@ This software requires the following packages:
 - [rdkit=2020.03.3](https://www.rdkit.org/)
 - [sigopt=5.3.1](https://sigopt.com/)
 - [munch=2.5.0](https://pypi.org/project/munch/)
-- [e3fp==1.2.1](https://github.com/keiserlab/e3fp)
+- [e3fp=1.2.1](https://github.com/keiserlab/e3fp)
 
 
 We highly recommend to create a `conda` environment to run the code. To do that, use the following commands:
