@@ -481,7 +481,8 @@ def make_model(params, device, world_size, weight_path):
          model = get_model(params=params,
                            model_type=params.get("model_type", "SchNet"))
 
-    torch.cuda.set_device(device)
+    if device != "cpu":
+        torch.cuda.set_device(device)
     model.to(device)
 
     torch_par = params.get("torch_par", True)
@@ -842,7 +843,7 @@ def train(gpu,
     # if the world size is 1, then allow the option of `device` being
     # something other than `gpu` (e.g. if you want to train on a cpu)
 
-    if world_size == 1 and all_params["device"] == "cpu":
+    if world_size == 1 and params.get("device") == "cpu":
         device = "cpu"
     else:
         device = gpu
