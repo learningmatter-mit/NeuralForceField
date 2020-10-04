@@ -12,7 +12,7 @@ from nff.train import load_model
 from nff.data import collate_dicts
 from nff.utils.cuda import batch_to, batch_detach
 from nff.data.dataset import concatenate_dict
-from nff.utils import tqdm_enum, parse_args, fprint, parse_score, METRICS
+from nff.utils import tqdm_enum, parse_args, fprint, parse_score
 
 
 def save(results,
@@ -222,8 +222,7 @@ if __name__ == "__main__":
                               "score on this metric. If no metric "
                               "is given, the metric used in the training "
                               "process will be used."),
-                        default=None,
-                        choices=METRICS)
+                        default=None)
     parser.add_argument('--test_only', action='store_true',
                         help=("Only evaluate model "
                               "and generate fingerprints for "
