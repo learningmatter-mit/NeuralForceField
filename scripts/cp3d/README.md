@@ -231,10 +231,9 @@ An example of a `ChemProp3D` config file is `train_config.json` (this is the def
 A basic random search algorithm is available for optimizing hyperparameters. The script is `scripts/cp3d/hyperopt/random_search.sh`. The config file is `scripts/cp3d/hyperopt/search_config.json`. Its keys are:
 - `job_path` (str): The path to the training config file. This file will be modified with different hyperparameters throughout the search.
 - `model_path` (str): The folder that your model lives in
-- `param_names` (list[str]): parameters that you want to optimize. The simple script currently allows optimizing SchNet, ChemProp and readout dropout rates, as well as the number of attention heads. It shouldn't be too difficult to add extra options!
-- `data_types` (list[str]): The data type of each parameter. For example, if you have a dropout parameter (float) and number of heads (int), then this should be `["float", "int"]`.
-- `min_vals` (list): minimum value each hyperparameter
-- `max_vals` (list): maximum value of each hyperparameter
+- `param_names` (list[str]): parameters that you want to optimize. You can choose any keys that appear in `model_params` in the training config file. Keys that are nested within `model_params` are more complicated. For example, the script allows you to vary the readout dropout rate and the number of attention heads, but other nested values are not yet supported. However, it shouldn't be too difficult to add extra options!
+- `param_types` (list[str]): The parameter type of each parameter. The options are `float`, `int`, and `categorical`. Floats and ints will be sampled uniformly between their minimum and maximum. Categorical values will be randomly sampled from their options.
+- `options` (list[list]): Options for each hyperparameter. If a hyperparameter is an integer or float, then its value in the list should be a list of the form `[min_value, max_value]`. If it is categorical then the list should be a list of options. If using the command line, please supply this list as a `JSON` string.
 - `num_samples` (int): number of hyperparameter combinations to try
 - `metric` (str): metric with which to evaluate model performance. Can be `prc-auc`, `auc`, `loss`, or `mae`.
 - `prop_name` (str): Name of the property whose performance you want to optimize. If you're using `metric=loss` then this won't matter.
