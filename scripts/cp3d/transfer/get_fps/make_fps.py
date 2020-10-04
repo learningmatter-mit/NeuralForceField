@@ -12,8 +12,14 @@ from nff.train import load_model
 from nff.data import collate_dicts
 from nff.utils.cuda import batch_to, batch_detach
 from nff.data.dataset import concatenate_dict
-from nff.utils import tqdm_enum, parse_args, fprint, parse_score
+from nff.utils import tqdm_enum, parse_args, fprint, parse_score, METRICS
 
+# transform from chemprop syntax to our syntax for the metrics
+
+TRANSFORM = {"auc": "roc_auc",
+             "prc-auc": "prc_auc"}
+
+METRIC_LIST = [TRANSFORM.get(metric, metric) for metric in METRICS]
 
 def save(results,
          targets,
@@ -79,10 +85,9 @@ def save(results,
 
 def model_from_metric(model, model_folder, metric):
 
-    if metric == "auc":
-        use_metric = "roc_auc"
-    elif metric == "prc-auc":
-        use_metric = "prc_auc"
+    if metric in TRANSFORM:
+        use_metric = TRANSFORM[metric]
+
     else:
         use_metric = metric
 
@@ -229,7 +234,8 @@ if __name__ == "__main__":
                               "score on this metric. If no metric "
                               "is given, the metric used in the training "
                               "process will be used."),
-                        default=None)
+                        default=None,
+                        choices=METRIC_LIST)
     parser.add_argument('--test_only', action='store_true',
                         help=("Only evaluate model "
                               "and generate fingerprints for "

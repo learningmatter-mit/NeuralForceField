@@ -3,7 +3,7 @@ import json
 import argparse
 import random
 
-from nff.utils import fprint, parse_args, parse_score
+from nff.utils import fprint, parse_args, parse_score, METRICS
 
 
 def clean_up(model_path):
@@ -205,7 +205,8 @@ if __name__ == "__main__":
     parser.add_argument('--num_samples', type=int,
                         help=("How many hyperparameter samples to try"))
     parser.add_argument('--metric', type=str, default='prc_auc',
-                        help=("Metric for judging model performance"))
+                        help=("Metric for judging model performance"),
+                        choices=METRICS)
     parser.add_argument('--prop_name', type=str,
                         default='sars_cov_one_cl_protease_active',
                         help=("Name of property that you're predicting"))
