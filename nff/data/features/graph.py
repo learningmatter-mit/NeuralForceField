@@ -6,9 +6,7 @@ from rdkit.Chem import AllChem
 from e3fp.pipeline import fprints_from_mol
 
 from nff.utils.xyz2mol import xyz2mol
-from nff.utils.cuda import batch_to
 from nff.utils import tqdm_enum
-from torch.utils.data import DataLoader
 
 QUICK = True
 EMBED_CHIRAL = True
