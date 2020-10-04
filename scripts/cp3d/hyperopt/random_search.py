@@ -148,9 +148,9 @@ def sample_vals(options, param_types):
             max_val = lst[1]
 
             if param_type == "float":
-                val = random.uniform(min_val, max_val)
+                val = random.uniform(float(min_val), float(max_val))
             elif param_type == "int":
-                val = random.randrange(min_val, max_val)
+                val = random.randrange(int(min_val), int(max_val))
 
         vals.append(val)
 
