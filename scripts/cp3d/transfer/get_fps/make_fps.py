@@ -12,12 +12,7 @@ from nff.train import load_model
 from nff.data import collate_dicts
 from nff.utils.cuda import batch_to, batch_detach
 from nff.data.dataset import concatenate_dict
-from nff.utils import tqdm_enum, parse_args, fprint
-
-
-METRIC_DIC = {"pr_auc": "maximize",
-              "roc_auc": "maximize",
-              "loss": "minimize"}
+from nff.utils import tqdm_enum, parse_args, fprint, parse_score, METRICS
 
 
 def save(results,
@@ -82,53 +77,9 @@ def save(results,
         pickle.dump(dic, f)
 
 
-def prepare_metric(lines, metric):
-    header_items = [i.strip() for i in lines[0].split("|")]
-    if metric in ["prc_auc", "prc-auc"]:
-        metric = "pr_auc"
-    elif metric in ["auc", "roc-auc"]:
-        metric = "roc_auc"
-    if metric == "loss":
-        idx = header_items.index("Validation loss")
-    else:
-        for i, item in enumerate(header_items):
-            sub_keys = metric.split("_")
-            if all([key.lower() in item.lower()
-                    for key in sub_keys]):
-                idx = i
-
-    optim = METRIC_DIC[metric]
-
-    if optim == "minimize":
-        best_score = float("inf")
-    else:
-        best_score = -float("inf")
-
-    best_epoch = -1
-
-    return idx, best_score, best_epoch, optim
-
-
 def model_from_metric(model, model_folder, metric):
 
-    log_path = os.path.join(model_folder, "log_human_read.csv")
-    with open(log_path, "r") as f:
-        lines = f.readlines()
-
-    idx, best_score, best_epoch, optim = prepare_metric(
-        lines=lines,
-        metric=metric)
-
-    for line in lines:
-        splits = [i.strip() for i in line.split("|")]
-        try:
-            score = float(splits[idx])
-        except ValueError:
-            continue
-        if any([(optim == "minimize" and score < best_score),
-                (optim == "maximize" and score > best_score)]):
-            best_score = score
-            best_epoch = splits[1]
+    best_score, best_epoch = parse_score(model_folder, metric)
     check_path = os.path.join(model_folder, "checkpoints",
                               f"checkpoint-{best_epoch}.pth.tar")
 
@@ -271,7 +222,8 @@ if __name__ == "__main__":
                               "score on this metric. If no metric "
                               "is given, the metric used in the training "
                               "process will be used."),
-                        default=None)
+                        default=None,
+                        choices=METRICS)
     parser.add_argument('--test_only', action='store_true',
                         help=("Only evaluate model "
                               "and generate fingerprints for "

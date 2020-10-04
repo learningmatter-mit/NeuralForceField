@@ -3,7 +3,7 @@ import json
 import argparse
 import random
 
-from nff.utils import fprint, parse_args
+from nff.utils import fprint, parse_args, parse_score, METRICS
 
 
 def clean_up(model_path):
@@ -19,32 +19,11 @@ def clean_up(model_path):
         os.system("cd {} && {}".format(model_path, cmd))
 
 
-def parse_prc_auc(job_path, model_path):
-
-    log_path = os.path.join(model_path, "log_human_read.csv")
-    with open(log_path, "r") as f:
-        lines = f.readlines()
-
-    aucs = []
-    for line in reversed(lines):
-        try:
-            aucs.append(float(line.split("|")[-2]))
-        except:
-            continue
-
-    best_auc = max(aucs)
-    return best_auc
-
-
 def run(job_path, model_path, metric):
-
-    metric_func_dic = {"prc_auc": parse_prc_auc}
-    metric_func = metric_func_dic[metric]
 
     cmd = "cd $NFFDIR/scripts/cp3d/train && bash train_parallel.sh"
     os.system(cmd)
-    best_score = metric_func(job_path=job_path,
-                             model_path=model_path)
+    best_score, best_epoch = parse_score(job_path, model_path, metric)
 
     return best_score
 
@@ -218,14 +197,16 @@ if __name__ == "__main__":
                               "for categorical parameters."))
     parser.add_argument('--options', type=str,
                         help=("Options for each parameter. Should be a list "
-                              "of length 2 with the minimum and maximum values "
-                              "for ints and floats. Can be a list of any size "
-                              "for categorical parameters. If using the command "
-                              "line, provide as a JSON string."))
+                              "of length 2 with the minimum and maximum "
+                              "values for ints and floats. Can be a list of "
+                              "any size for categorical parameters. If "
+                              "using the command line, provide as a "
+                              "JSON string."))
     parser.add_argument('--num_samples', type=int,
                         help=("How many hyperparameter samples to try"))
     parser.add_argument('--metric', type=str, default='prc_auc',
-                        help=("Metric for judging model performance"))
+                        help=("Metric for judging model performance"),
+                        choices=METRICS)
     parser.add_argument('--prop_name', type=str,
                         default='sars_cov_one_cl_protease_active',
                         help=("Name of property that you're predicting"))
