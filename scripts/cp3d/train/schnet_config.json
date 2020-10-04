@@ -103,7 +103,6 @@
         "max_epochs": 100,
 
 
-        "logger": "csv",
         "log_every_n_epochs": 1,
         "checkpoints_to_keep": 10000,
         "torch_par": false,

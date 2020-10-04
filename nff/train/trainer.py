@@ -523,7 +523,7 @@ class Trainer:
         else:
             torch.save(self._model, self.best_model)
 
-    def validate(self, device):
+    def validate(self, device, test=False):
         """Validate the current state of the model using the validation set
         """
 
@@ -578,6 +578,9 @@ class Trainer:
             self.save_val_loss(val_loss)
             val_loss = self.load_val_loss()
 
+        if test:
+            return
+            
         for h in self.hooks:
             h.on_validation_end(self, val_loss)
             metric_dic = getattr(h, "metric_dic", None)

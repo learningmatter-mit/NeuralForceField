@@ -8,15 +8,14 @@ import numpy as np
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 from nff.data import Dataset, split_train_validation_test, collate_dicts
-from nff.train import evaluate
-from nff.train import metrics
+from nff.data.loader import ImbalancedDatasetSampler
+from nff.train import evaluate, metrics, Trainer, get_model, loss, hooks
+from nff.utils import fprint 
 
 import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.distributed as dist
 from torch.utils.data.distributed import DistributedSampler
-from nff.train import Trainer, get_model, loss, hooks
-from nff.data.loader import ImbalancedDatasetSampler
 
 DEFAULTPARAMSFILE = 'job_info.json'
 DEFAULT_METRIC = "MeanAbsoluteError"
@@ -617,68 +616,34 @@ def make_stats(T,
     # get the best model
     best_model = get_best_model(T)
 
-    # get targets and results on test set
+    # set the trainer model to the best model
+    T._model = best_model
 
-    model_kwargs = trainer_kwargs["model_kwargs"]
-    if model_kwargs is None:
-        model_kwargs = {}
+    # set the trainer validation loader to the test
+    # loader so you can use its metrics to get the
+    # performance on the test set
 
-    results, targets, test_loss = evaluate(
-        best_model,
-        test_loader,
-        loss_fn,
-        device=device,
-        **model_kwargs
-    )
+    T.validation_loader = test_loader
 
-    # make the test stats
+    # validate on test loader
+    T.validate(device, test=True)
 
-    test_stats = {}
-    metric = getattr(metrics, stat_metric_name)
+    # get the metric performance
 
-    for key in (base_keys + grad_keys):
+    log_hook = [h for h in T.hooks if isinstance(h, hooks.PrintingHook)]
+    final_stats = log_hook.aggregate()
 
-        targ = torch.cat([target.reshape(-1) for target in targets[key]])
-        good_idx = torch.bitwise_not(torch.isnan(targ))
-        targ = targ[good_idx]
-        res = torch.cat(results[key], dim=0).reshape(-1)[good_idx]
+    stat_path = os.path.join(weight_path, "test_stats.json")
+    param_path = os.path.join(weight_path, "params.json")
 
-        test_stats[key] = metric.loss_fn(
-            targ, res).item() / np.prod(res.shape)
-
-    # save the test stats of this gpu in its own folder
-
-    rank_files = [os.path.join(weight_path, str(i), "test_stats.json")
-                  for i in range(world_size)]
-
-    with open(rank_files[global_rank], "w") as f:
-        json.dump(test_stats, f, sort_keys=True, indent=4)
-
-    if not base:
-        return
-
-    # if this is the base, collect all test stats and average the
-    # results
-
-    stats_dic = {file: None for file in rank_files}
-
-    while None in list(stats_dic.values()):
-        for file in rank_files:
-            try:
-                with open(file, "r") as f:
-                    stats = json.load(f)
-            except (json.JSONDecodeError, FileNotFoundError):
-                continue
-            stats_dic[file] = stats
-
-    final_stats = {key: np.mean([stats[key] for stats in stats_dic.values()])
-                   for key in test_stats.keys()}
-
-    with open('test_stats.json', 'w') as f:
+    with open(stat_path, 'w') as f:
         json.dump(final_stats, f, sort_keys=True, indent=4)
 
-    with open('params.json', 'w') as f:
+    with open(param_path, 'w') as f:
         json.dump(params, f, sort_keys=True, indent=4)
+
+    fprint(f"Test stats saved in {stat_path}")
+    fprint(f"Model and training details saved in {param_path}")
 
 
 def optim_loss_hooks(params,
@@ -721,22 +686,21 @@ def optim_loss_hooks(params,
         )
     ]
 
-    if params['logger'] == 'csv':
 
-        # the logging path is the main folder if this is the base,
-        # and the rank sub_folder otherwise
+    # the logging path is the main folder if this is the base,
+    # and the rank sub_folder otherwise
 
-        log_path = weight_path if base else (
-            os.path.join(weight_path, str(rank)))
-        train_hooks.append(
-            hooks.PrintingHook(
-                log_path,
-                metrics=train_metrics,
-                separator=' | ',
-                world_size=world_size,
-                global_rank=rank
-            )
+    log_path = weight_path if base else (
+        os.path.join(weight_path, str(rank)))
+    train_hooks.append(
+        hooks.PrintingHook(
+            log_path,
+            metrics=train_metrics,
+            separator=' | ',
+            world_size=world_size,
+            global_rank=rank
         )
+    )
 
     return loss_fn, optimizer, train_hooks
 
