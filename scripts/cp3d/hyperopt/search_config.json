@@ -3,7 +3,7 @@
   "model_path": "/home/gridsan/saxelrod/models/reduced_size",
   "param_names": [
     "num_heads",
-    "attention_dropout"
+    "attention_dropout",
     "cp_dropout",
     "readout_dropout",
     "schnet_dropout"
