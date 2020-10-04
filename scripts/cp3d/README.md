@@ -232,7 +232,7 @@ A basic random search algorithm is available for optimizing hyperparameters. The
 - `job_path` (str): The path to the training config file. This file will be modified with different hyperparameters throughout the search.
 - `model_path` (str): The folder that your model lives in
 - `param_names` (list[str]): parameters that you want to optimize. You can choose any keys that appear in `model_params` in the training config file. Keys that are nested within `model_params` are more complicated. For example, the script allows you to vary the readout dropout rate and the number of attention heads, but other nested values are not yet supported. However, it shouldn't be too difficult to add extra options!
-- `param_types` (list[str]): The parameter type of each parameter. The options are `float`, `int`, and `categorical`. Floats and ints will be sampled uniformly between their minimum and maximum. Categorical values will be randomly sampled from their options.
+- `param_types` (list[str]): The type of each parameter. The options are `float`, `int`, and `categorical`. Floats and integers will be sampled uniformly between their minimum and maximum. Categorical values will be randomly sampled from their options.
 - `options` (list[list]): Options for each hyperparameter. If a hyperparameter is an integer or float, then its value in the list should be a list of the form `[min_value, max_value]`. If it is categorical then the list should be a list of options. If using the command line, please supply this list as a `JSON` string.
 - `num_samples` (int): number of hyperparameter combinations to try
 - `metric` (str): metric with which to evaluate model performance. Can be `prc-auc`, `auc`, `loss`, or `mae`.
