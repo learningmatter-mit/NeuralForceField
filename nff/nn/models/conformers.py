@@ -12,6 +12,7 @@ from nff.nn.modules import (
 from nff.nn.graphop import conf_pool
 from nff.nn.utils import construct_sequential
 from nff.utils.scatter import compute_grad
+from torch import sigmoid
 
 """
 Model that uses a representation of a molecule in terms of different 3D
@@ -135,6 +136,9 @@ class WeightedConformers(nn.Module):
 
         # whether to learn the embeddings or get them from the batch
         self.batch_embeddings = modelparams.get("batch_embeddings", False)
+
+        # whether this is a classifier 
+        self.classifier = modelparams["classifier"]
 
     def make_boltz_nn(self, boltzmann_dict):
 
@@ -424,7 +428,14 @@ class WeightedConformers(nn.Module):
 
         return results
 
-    def forward(self, batch, xyz=None, **kwargs):
+    def forward(self,
+                batch,
+                xyz=None,
+                **kwargs):
+
+        # for backwards compatibility
+        if not hasattr(self, "classifier"):
+            self.classifier = True
 
         if self.batch_embeddings:
             outputs, xyz = self.get_embeddings(batch, **kwargs)
@@ -433,6 +444,13 @@ class WeightedConformers(nn.Module):
 
         pooled_fp, final_weights = self.pool(outputs)
         results = self.readout(pooled_fp)
+
+        # add sigmoid if it's a classifier and not in training mode
+        if self.classifier and not self.training:
+            keys = list(self.readout.readout.keys())
+            for key in keys:
+                results[key] = sigmoid(results[key])
+
         results = self.add_grad(batch=batch, results=results, xyz=xyz)
         results.update({"learned_weights": final_weights})
 

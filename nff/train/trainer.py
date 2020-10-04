@@ -370,7 +370,8 @@ class Trainer:
                         loss = torch.tensor(0.0).to(device)
                         self.optimizer.zero_grad()
 
-                    if any((self.batch_stop, self._stop, j == self.epoch_cutoff)):
+                    if any((self.batch_stop,
+                            self._stop, j == self.epoch_cutoff)):
                         break
 
                 # reset for next epoch

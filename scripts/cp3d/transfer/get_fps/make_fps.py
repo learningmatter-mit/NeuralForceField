@@ -25,21 +25,15 @@ METRIC_LIST = [REVERSE_TRANSFORM.get(metric, metric) for metric in METRICS]
 def save(results,
          targets,
          feat_save_folder,
-         prop,
-         add_sigmoid):
+         prop):
 
     if prop is None:
         y_true = None
         probas_pred = None
 
     else:
-        if add_sigmoid:
-            sigmoid = Sigmoid()
-            probas_pred = sigmoid(torch.cat(results[prop])
-                                  ).reshape(-1).numpy()
-        else:
-            probas_pred = (torch.cat(results[prop])
-                           .reshape(-1).numpy())
+        probas_pred = (torch.cat(results[prop])
+                       .reshape(-1).numpy())
 
         if prop in targets:
             y_true = torch.stack(targets[prop]).numpy()
@@ -106,6 +100,8 @@ def model_from_metric(model, model_folder, metric):
 
 def fps_and_pred(model, batch, **kwargs):
 
+    model.eval()
+
     outputs, xyz = model.make_embeddings(batch, xyz=None, **kwargs)
     pooled_fp, learned_weights = model.pool(outputs)
     results = model.readout(pooled_fp)
@@ -169,7 +165,6 @@ def main(dset_folder,
          prop,
          sub_batch_size,
          feat_save_folder,
-         add_sigmoid,
          metric=None,
          test_only=False,
          **kwargs):
@@ -204,8 +199,7 @@ def main(dset_folder,
         save(results=results,
              targets=targets,
              feat_save_folder=pickle_path,
-             prop=prop,
-             add_sigmoid=add_sigmoid)
+             prop=prop)
 
     fprint("Complete!")
 
@@ -241,10 +235,6 @@ if __name__ == "__main__":
                         help=("Only evaluate model "
                               "and generate fingerprints for "
                               "the test set"))
-    parser.add_argument('--add_sigmoid', action='store_true',
-                        help=("Add a sigmoid layer to predictions. "
-                              "This should be done if your model is a "
-                              "classifier trained with a BCELogits loss. "))
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "

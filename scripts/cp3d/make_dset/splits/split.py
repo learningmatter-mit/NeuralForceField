@@ -51,6 +51,9 @@ def filter_prop_and_pickle(sample_dic, props):
 
 def filter_atoms(sample_dic, max_atoms):
 
+    if max_atoms is None:
+        max_atoms = float("inf")
+
     smiles_list = list(sample_dic.keys())
     good_smiles = []
 

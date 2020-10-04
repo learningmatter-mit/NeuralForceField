@@ -2,6 +2,7 @@ import os
 import argparse
 import json
 import sys
+import copy
 
 import torch
 from torch.utils.data import DataLoader
@@ -613,6 +614,14 @@ def make_stats(T,
         None
     """
 
+    # old model
+    old_model = copy.deepcopy(T._model)
+
+    # get best model and put into eval mode
+    model = T.get_best_model()
+    model.eval()
+    T._model = model.to(old_model.device)
+
     # set the trainer validation loader to the test
     # loader so you can use its metrics to get the
     # performance on the test set
@@ -639,7 +648,9 @@ def make_stats(T,
     log_train(f"Test stats saved in {stat_path}")
     log_train(f"Model and training details saved in {param_path}")
 
+    # put the validation loader and the old model back
     T.validation_loader = val_loader
+    T._model = old_model
 
 
 def optim_loss_hooks(params,

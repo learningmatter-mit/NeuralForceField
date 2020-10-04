@@ -7,7 +7,6 @@
   "batch_size": 1,
   "sub_batch_size": 7,
   "test_only": false,
-  "add_sigmoid": true,
   "metrics": [
     "loss",
     "prc-auc",
