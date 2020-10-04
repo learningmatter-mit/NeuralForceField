@@ -152,6 +152,7 @@ Note that if `n_atom_basis` is not equal to `mol_basis`, you must supply at leas
 
 In the example given in `schnet_config.json`, a vector of size 900 (3x `mol_basis` because of three attention heads with concatenation) is converted to size 450 through a linear layer. Then a dropout layer and the ReLU activation are applied. Then another linear layer converts it to size 1, and a final dropout layer is applied. Note that this does not have a sigmoid layer because the model is trained with a BCELogits loss, which is equal to cross-entropy loss + sigmoid, but is more stable. At inference time you must remember to put the model into `eval` mode so that a sigmoid layer is applied! 
 
+- `classifier` (bool): Whether the model is a classifier. If true, a sigmoid layer will automatically be added when the model is in `eval` mode, but not when it is in `train` mode. 
 - `gauss_embed` (bool): Whether to expand distances in a Gaussian basis, or just use them as they are
 - `batch_embeddings` (bool): Whether to use fingerprints already present in the dataset instead of learning the fingerprints. In this case the dataset properties must contain fingerprints under the key `fingerprints`.
 - `trainable_gauss` (bool): Whether the width and spacings of the Gaussian functions are learnable parameters.
