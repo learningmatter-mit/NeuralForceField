@@ -11,8 +11,8 @@
     "int",
     "categorical"
   ],
-  "options": [[0, 1],
-              [0.7, 5],
+  "options": [[0.7, 5],
+              [0, 1],
               [true, false]],
 
   "num_samples": 20,
