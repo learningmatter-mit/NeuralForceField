@@ -92,7 +92,7 @@ def update_heads(info,
 
 def update_general(info, key, val):
 
-    info[key] = val
+    info["model_params"][key] = val
 
 
 def update_info(job_path,
@@ -115,7 +115,7 @@ def update_info(job_path,
                          heads=val)
 
         else:
-            if param_type not in info:
+            if param_type not in info["model_params"]:
                 msg = (f"Warning: assuming that {param_type} "
                        "is just a key in `model_params`, but "
                        "it is not currently in `model_params` in "
