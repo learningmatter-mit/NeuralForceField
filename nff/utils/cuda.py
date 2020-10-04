@@ -10,7 +10,7 @@ def batch_to(batch, device):
 
 
 def detach(val):
-    return val.detach.cpu() if hasattr(val, "detach") else val
+    return val.detach().cpu() if hasattr(val, "detach") else val
 
 
 def batch_detach(batch):
