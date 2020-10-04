@@ -10,7 +10,7 @@ from torch.optim import Adam
 from nff.data import Dataset, split_train_validation_test, collate_dicts
 from nff.data.loader import ImbalancedDatasetSampler
 from nff.train import evaluate, metrics, Trainer, get_model, loss, hooks
-from nff.utils import fprint 
+from nff.utils import fprint
 
 import torch.multiprocessing as mp
 import torch.nn as nn
@@ -19,6 +19,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 DEFAULTPARAMSFILE = 'job_info.json'
 DEFAULT_METRIC = "MeanAbsoluteError"
+
 
 def init_parallel(node_rank,
                   gpu,
@@ -477,8 +478,8 @@ def make_model(params, device, world_size, weight_path):
         print(f"Loading model from {start_model_path}")
         sys.stdout.flush()
     else:
-         model = get_model(params=params,
-                           model_type=params.get("model_type", "SchNet"))
+        model = get_model(params=params,
+                          model_type=params.get("model_type", "SchNet"))
 
     if device != "cpu":
         torch.cuda.set_device(device)
@@ -613,12 +614,6 @@ def make_stats(T,
         None
     """
 
-    # get the best model
-    best_model = get_best_model(T)
-
-    # set the trainer model to the best model
-    T._model = best_model
-
     # set the trainer validation loader to the test
     # loader so you can use its metrics to get the
     # performance on the test set
@@ -685,7 +680,6 @@ def optim_loss_hooks(params,
             stop_after_min=True
         )
     ]
-
 
     # the logging path is the main folder if this is the base,
     # and the rank sub_folder otherwise
@@ -917,6 +911,7 @@ def main():
                        args.node_rank,
                        args.gpus,
                        *extra_args))
+
 
 if __name__ == "__main__":
     main()
