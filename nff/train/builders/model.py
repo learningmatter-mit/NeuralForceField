@@ -4,7 +4,7 @@
 import os
 import numpy as np
 import torch
-from nff.nn.models.schnet import SchNet, SchNetAuTopology, AuTopology
+from nff.nn.models.schnet import SchNet
 from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.models.schnet_features import SchNetFeatures
@@ -34,34 +34,9 @@ PARAMS_TYPE = {"SchNet":
                    'V_ex_sigma': float,
                    'trainable_gauss': bool
                },
-               "AuTopology":
+
+               "WeightedConformers":
                {
-                  "n_features": int,
-                  "n_convolutions": int,
-                  "conv_type": str,
-                  "conv_update_layers": list,
-                  "readout_hidden_nodes": list,
-                  "bond_terms": list,
-                  "angle_terms": list,
-                  "dihedral_terms": list,
-                  "improper_terms": list,
-                  "pair_terms": list,
-                  "output_keys": list,
-                  "trainable_prior": bool
-                },
-
-
-               "SchNetAuTopology":
-                {
-                  "autopology_params": dict,
-                  "schnet_params": dict,
-                  "sorted_result_keys": list,
-                  "grad_keys": list,
-                  "sort_results": bool,
-                },
-
-                "WeightedConformers":
-                {
                    'n_atom_basis': int,
                    'n_filters': int,
                    'n_gaussians': int,
@@ -70,9 +45,9 @@ PARAMS_TYPE = {"SchNet":
                    'dropout_rate': float,
                    'readoutdict': dict,
                    'mol_fp_layers': list
-                },
+               },
 
-              "SchNetFeatures":
+               "SchNetFeatures":
                {
                    'n_atom_basis': int,
                    'n_filters': int,
@@ -88,8 +63,6 @@ PARAMS_TYPE = {"SchNet":
 
 MODEL_DICT = {
     "SchNet": SchNet,
-    "AuTopology": AuTopology,
-    "SchNetAuTopology": SchNetAuTopology,
     "HybridGraphConv": HybridGraphConv,
     "WeightedConformers": WeightedConformers,
     "SchNetFeatures": SchNetFeatures
@@ -114,9 +87,8 @@ def check_parameters(params_type, params):
             )
 
         for model in PARAMS_TYPE.keys():
-          if key == "{}_params".format(model.lower()):
-            check_parameters(PARAMS_TYPE[model], val)
-
+            if key == "{}_params".format(model.lower()):
+                check_parameters(PARAMS_TYPE[model], val)
 
 
 def get_model(params, model_type="SchNet", **kwargs):
@@ -129,7 +101,7 @@ def get_model(params, model_type="SchNet", **kwargs):
     Returns:
         model (nff.nn.models)
     """
-      
+
     check_parameters(PARAMS_TYPE[model_type], params)
     model = MODEL_DICT[model_type](params, **kwargs)
 
