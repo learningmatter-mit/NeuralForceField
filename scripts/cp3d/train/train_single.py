@@ -625,7 +625,7 @@ def make_stats(T,
 
     # get the metric performance
 
-    log_hook = [h for h in T.hooks if isinstance(h, hooks.PrintingHook)]
+    log_hook = [h for h in T.hooks if isinstance(h, hooks.PrintingHook)][0]
     final_stats = log_hook.aggregate()
 
     stat_path = os.path.join(weight_path, "test_stats.json")
