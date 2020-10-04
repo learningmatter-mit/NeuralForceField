@@ -251,6 +251,8 @@ class Trainer:
                     self.loss_is_normalized)):
 
             loss = self.loss_fn(batch, results)
+            self.nloss += 1
+
             return loss
 
         if self.mol_loss_norm:
@@ -340,11 +342,11 @@ class Trainer:
                         h.on_batch_begin(self, batch)
 
                     results = self.call_model(batch, train=True)
+
                     mini_loss = self.get_loss(batch, results)
                     self.loss_backward(mini_loss)
                     if not torch.isnan(mini_loss):
-                        loss += (mini_loss.cpu().detach().to(device)
-                                 / self.mini_batches)
+                        loss += mini_loss.cpu().detach().to(device)
 
                     self.step += 1
                     # update the loss self.minibatches number
@@ -353,6 +355,7 @@ class Trainer:
 
                     if num_batches == self.mini_batches:
 
+                        loss /= self.nloss
                         num_batches = 0
                         eff_batches = int((j + 1) / self.mini_batches)
 
