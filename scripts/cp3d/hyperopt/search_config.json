@@ -1,6 +1,6 @@
 {
   "job_path": "/home/gridsan/saxelrod/repo/nff/covid_clean/NeuralForceField/scripts/cp3d/train/train_config.json",
-  "model_path": "/home/gridsan/saxelrod/models/attention_equal_weights_k_1_yes_prob_cov_cl_protease",
+  "model_path": "/home/gridsan/saxelrod/models/reduced_size",
   "param_names": [
     "schnet_dropout",
     "num_heads",
