@@ -239,7 +239,7 @@ A basic random search algorithm is available for optimizing hyperparameters. The
 - `prop_name` (str): Name of the property whose performance you want to optimize. If you're using `metric=loss` then this won't matter.
 - `score_file` (str): Name of the `JSON` file in which you store the model performance for each hyperparameter set. The scores will be saved in `model_path/score_file`.
 
-Note that the hyperparamer optimizatio uses *validation* scores, rather than test scores, to judge each model's performance. This avoids cheating: if you used test scores to optimize hyperparameters, and then compared your model's test performance to someone else's, then yours would look better than it really is!
+Note that the hyperparamer optimization uses *validation* scores, rather than test scores, to judge each model's performance. This avoids cheating: if you used test scores to optimize hyperparameters, and then compared your model's test performance to someone else's, then yours would look better than it really is!
 
 
 ## Transfer learning
