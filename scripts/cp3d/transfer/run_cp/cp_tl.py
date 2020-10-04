@@ -16,8 +16,7 @@ METRIC_CHOICES = ["auc",
                   "mse",
                   "r2",
                   "accuracy",
-                  "cross_entropy",
-                  "single_class_entropy"]
+                  "cross_entropy"]
 
 
 def train(cp_folder,

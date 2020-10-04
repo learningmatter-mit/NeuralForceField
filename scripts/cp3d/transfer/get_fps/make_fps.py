@@ -79,7 +79,14 @@ def save(results,
 
 def model_from_metric(model, model_folder, metric):
 
-    best_score, best_epoch = parse_score(model_folder, metric)
+    if metric == "auc":
+        use_metric = "roc_auc"
+    elif metric == "prc-auc":
+        use_metric = "prc_auc"
+    else:
+        use_metric = metric
+
+    best_score, best_epoch = parse_score(model_folder, use_metric)
     check_path = os.path.join(model_folder, "checkpoints",
                               f"checkpoint-{best_epoch}.pth.tar")
 
