@@ -209,8 +209,6 @@ An example of a `ChemProp3D` config file is `train_config.json` (this is the def
     - `lr_decay` (float < 1): factor by which to multiply the learning rate after the loss hasn't improved for `lr_patience` epochs.
     - `lr_min` (float): minimum learning rate. The training will stop once the learning rate drops below this value.
     - `max_epochs` (int): Maximum number of training epochs.
-
-    - `logger` (str): Only option is `csv`. If set to `csv` then the model performance will be logged every `log_every_n_epochs` epochs.
     - `log_every_n_epochs` (int): How often to log progress
     - `checkpoints_to_keep` (int): How many past models to keep before deleting them. Say you trained a model to keep label the best model as the one with the lowest loss. But then you want to go back and get the model that had the highest PRC-AUC. Then you can look at the training log, find the epoch with the highest validation PRC-AUC, and load the model from the `checkpoints` folder. If you do not set `checkpoints_to_keep >= max_epochs`, then you run the risk of not being able to find this model and load it.
     - `torch_par` (bool): use built-in PyTorch functionality to do parallel training. The alternative is to save gradients to disk and have parallel processes read these gradients. While PyTorch's functionality is likely faster, we have found the simple disk save to be far less error-prone.
