@@ -70,6 +70,9 @@ def update_dropout(info,
                 layer_dic["param"]["p"] = dropout
         info["model_params"]["readoutdict"] = {prop_name: layer_dics}
 
+    else:
+        info["model_params"][dropout_type] = dropout
+
 
 def update_heads(info,
                  heads):
@@ -150,7 +153,7 @@ def sample_vals(options, param_types):
             if param_type == "float":
                 val = random.uniform(float(min_val), float(max_val))
             elif param_type == "int":
-                val = random.randrange(int(min_val), int(max_val))
+                val = random.randrange(int(min_val), int(max_val) + 1)
 
         vals.append(val)
 
@@ -170,6 +173,10 @@ def main(job_path,
 
     dic_path = os.path.join(model_path, score_file)
     score_list = []
+
+    if os.path.isfile(dic_path):
+        with open(dic_path, "r") as f:
+            score_list = json.load(f)
 
     for _ in range(num_samples):
 
