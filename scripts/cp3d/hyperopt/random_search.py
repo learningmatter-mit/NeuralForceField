@@ -3,6 +3,8 @@ import json
 import argparse
 import random
 
+from nff.utils import fprint, parse_args
+
 
 def clean_up(model_path):
     cmds = ["rm */*.pickle",
@@ -87,6 +89,11 @@ def update_heads(info,
     info["model_params"]["readoutdict"] = readoutdict
 
 
+def update_general(info, key, val):
+
+    info[key] = val
+
+
 def update_info(job_path,
                 vals,
                 param_names,
@@ -106,35 +113,59 @@ def update_info(job_path,
             update_heads(info=info,
                          heads=val)
 
+        else:
+            if param_type not in info:
+                msg = (f"Warning: assuming that {param_type} "
+                       "is just a key in `model_params`, but "
+                       "it is not currently in `model_params` in "
+                       "the config file. If it should be in a "
+                       "different location then you will need "
+                       "to write a custom function for updating "
+                       "it.")
+
+                fprint(msg)
+
+            update_general(info, key=param_type, val=val)
+
     with open(job_path, "w") as f:
         json.dump(info, f, indent=4, sort_keys=True)
 
 
-def sample_vals(min_vals, max_vals, data_types):
+def sample_vals(options, param_types):
 
-    nums = []
+    vals = []
 
-    for i, min_val in enumerate(min_vals):
-        max_val = max_vals[i]
-        data_type = eval(data_types[i])
-        if data_type == float:
-            num = random.uniform(min_val, max_val)
-        elif data_type == int:
-            num = random.randrange(min_val, max_val)
-        nums.append(num)
-    return nums
+    for i, lst in enumerate(options):
+
+        param_type = param_types[i]
+
+        if param_type == "categorical":
+            val = random.choice(lst)
+
+        elif param_type in ["int", "float"]:
+
+            min_val = lst[0]
+            max_val = lst[1]
+
+            if param_type == "float":
+                val = random.uniform(min_val, max_val)
+            elif param_type == "int":
+                val = random.randrange(min_val, max_val)
+
+        vals.append(val)
+
+    return vals
 
 
 def main(job_path,
          model_path,
-         min_vals,
-         max_vals,
+         options,
          num_samples,
          metric,
          score_file,
          param_names,
          prop_name,
-         data_types,
+         param_types,
          **kwargs):
 
     dic_path = os.path.join(model_path, score_file)
@@ -144,7 +175,7 @@ def main(job_path,
 
         clean_up(model_path=model_path)
 
-        vals = sample_vals(min_vals, max_vals, data_types)
+        vals = sample_vals(options, param_types)
         update_info(job_path=job_path,
                     vals=vals,
                     param_names=param_names,
@@ -172,14 +203,20 @@ if __name__ == "__main__":
     parser.add_argument('--param_names', type=str, default='schnet_dropout',
                         nargs='+',
                         help=("Names of hyperparameters to optimize"))
-    parser.add_argument('--data_types', type=str,
+    parser.add_argument('--param_types',
+                        type=str,
                         nargs='+',
-                        help=("Data types of hyperparameters to optimize"))
-    parser.add_argument('--min_vals', type=int,
-                        help=("Minimum values of parameters in grid search"),
-                        nargs='+')
-    parser.add_argument('--max_vals', type=int,
-                        help=("Maximum values of parameters in grid search"),
+                        choices=["int", "float", "categorical"],
+                        help=("Data types of hyperparameters to optimize. "
+                              "Will sample uniformly between boundaries "
+                              "of ints and floats, and pick random choices "
+                              "for categorical parameters."))
+    parser.add_argument('--options', type=list,
+                        help=("Options for each parameter. Should be a list "
+                              "of length 2 with the minimum and maximum values "
+                              "for ints and floats. Can be a list of any size "
+                              "for categorical parameters. If using the command "
+                              "line, provide as a JSON string."),
                         nargs='+')
     parser.add_argument('--num_samples', type=int,
                         help=("How many hyperparameter samples to try"))
@@ -195,13 +232,8 @@ if __name__ == "__main__":
                               "any arguments in the file override the command "
                               "line arguments."))
 
-    args = parser.parse_args()
-
-    if args.config_file is not None:
-        with open(args.config_file, "r") as f:
-            config_args = json.load(f)
-        for key, val in config_args.items():
-            if hasattr(args, key):
-                setattr(args, key, val)
+    args = parse_args(parser)
+    if type(args.options) is str:
+        args.options = json.loads(args.options)
 
     main(**args.__dict__)
