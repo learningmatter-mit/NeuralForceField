@@ -169,7 +169,7 @@ def main(job_path,
                          metric=metric)
         score_dic = {param_type: val for param_type, val
                      in zip(param_names, vals)}
-        score_dic.update({"score": best_score})
+        score_dic.update({metric: best_score})
         score_list.append(score_dic)
 
         with open(dic_path, "w") as f:
