@@ -1,22 +1,20 @@
 {
-  "job_path": "/home/gridsan/saxelrod/final_cp3d_train/job_info.json",
-  "model_path": "/home/gridsan/saxelrod/models/1092",
+  "job_path": "/home/gridsan/saxelrod/repo/nff/covid_clean/NeuralForceField/scripts/cp3d/train/train_config.json",
+  "model_path": "/home/gridsan/saxelrod/models/attention_equal_weights_k_1_yes_prob_cov_cl_protease",
   "param_names": [
     "schnet_dropout",
-    "num_heads"
+    "num_heads",
+    "same_filters"
   ],
-  "data_types": [
+  "param_types": [
     "float",
-    "int"
+    "int",
+    "categorical"
   ],
-  "min_vals": [
-    0,
-    1
-  ],
-  "max_vals": [
-    0.7,
-    5
-  ],
+  "options": [[0, 1],
+              [0.7, 5],
+              [true, false]],
+
   "num_samples": 20,
   "metric": "prc_auc",
   "prop_name": "sars_cov_one_cl_protease_active",
