@@ -130,7 +130,7 @@ class LoggingHook(Hook):
                        for i in range(self.world_size)]
         return par_folders
 
-    def save_metrics(self, epoch):
+    def save_metrics(self, epoch, test):
         """
         Save data from the metrics calculated on this parallel process.
         Args:
@@ -141,7 +141,11 @@ class LoggingHook(Hook):
 
         # save metrics to json file
         par_folder = self.par_folders[self.global_rank]
-        json_file = os.path.join(par_folder, "epoch_{}.json".format(epoch))
+        if test:
+            json_file = os.path.join(
+                par_folder, "epoch_{}_test.json".format(epoch))
+        else:
+            json_file = os.path.join(par_folder, "epoch_{}.json".format(epoch))
 
         # if the json file you're saving to already exists,
         # then load its contents
@@ -164,7 +168,7 @@ class LoggingHook(Hook):
         with open(json_file, "w") as f:
             json.dump(dic, f, indent=4, sort_keys=True)
 
-    def avg_parallel_metrics(self, epoch):
+    def avg_parallel_metrics(self, epoch, test):
         """
         Average metrics over parallel processes.
         Args:
@@ -176,7 +180,7 @@ class LoggingHook(Hook):
 
         # save metrics from this process
 
-        self.save_metrics(epoch)
+        self.save_metrics(epoch, test)
         metric_dic = {}
 
         for metric in self.metrics:
@@ -188,7 +192,12 @@ class LoggingHook(Hook):
             # loaded their metric values
             while None in par_dic.values():
                 for folder in self.par_folders:
-                    path = os.path.join(folder, "epoch_{}.json".format(epoch))
+                    if test:
+                        path = os.path.join(
+                            folder, "epoch_{}_test.json".format(epoch))
+                    else:
+                        path = os.path.join(
+                            folder, "epoch_{}.json".format(epoch))
                     try:
                         with open(path, "r") as f:
                             path_dic = json.load(f)
@@ -217,7 +226,7 @@ class LoggingHook(Hook):
 
         return metric_dic
 
-    def aggregate(self, trainer):
+    def aggregate(self, trainer, test=False):
         """
         Aggregate metrics.
         Args:
@@ -229,7 +238,8 @@ class LoggingHook(Hook):
 
         # if parallel, average over parallel metrics
         if self.parallel:
-            metric_dic = self.avg_parallel_metrics(epoch=trainer.epoch)
+            metric_dic = self.avg_parallel_metrics(epoch=trainer.epoch,
+                                                   test=test)
 
         # otherwise aggregate as usual
         else:
@@ -237,7 +247,7 @@ class LoggingHook(Hook):
             for metric in self.metrics:
                 m = metric.aggregate()
                 metric_dic[metric.name] = m
-        
+
         self.metric_dic = metric_dic
 
         return metric_dic
@@ -276,7 +286,6 @@ class CSVHook(LoggingHook):
         self._offset = 0
         self._restart = False
         self.every_n_epochs = every_n_epochs
-        
 
     def on_train_begin(self, trainer):
 

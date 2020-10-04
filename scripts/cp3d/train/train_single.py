@@ -593,7 +593,8 @@ def make_stats(T,
                base_keys,
                grad_keys,
                stat_metric_name,
-               trainer_kwargs):
+               trainer_kwargs,
+               val_loader):
     """
     Make test stats.
     Args:
@@ -626,7 +627,7 @@ def make_stats(T,
     # get the metric performance
 
     log_hook = [h for h in T.hooks if isinstance(h, hooks.PrintingHook)][0]
-    final_stats = log_hook.aggregate()
+    final_stats = log_hook.aggregate(T, test=True)
 
     stat_path = os.path.join(weight_path, "test_stats.json")
     param_path = os.path.join(weight_path, "params.json")
@@ -639,6 +640,8 @@ def make_stats(T,
 
     fprint(f"Test stats saved in {stat_path}")
     fprint(f"Model and training details saved in {param_path}")
+
+    T.validation_loader = val_loader
 
 
 def optim_loss_hooks(params,
@@ -860,7 +863,8 @@ def train(gpu,
                stat_metric_name=stat_metric_name,
                base_keys=base_keys,
                grad_keys=grad_keys,
-               trainer_kwargs=trainer_kwargs)
+               trainer_kwargs=trainer_kwargs,
+               val_loader=val_loader)
 
 
 def add_args(all_params):
