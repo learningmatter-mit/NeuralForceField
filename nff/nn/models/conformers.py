@@ -249,7 +249,8 @@ class WeightedConformers(nn.Module):
                      smiles_fp,
                      mol_size,
                      batch,
-                     idx):
+                     idx,
+                     n_conf_list):
 
         # total number of atoms
         num_atoms = smiles_fp.shape[0]
@@ -276,8 +277,11 @@ class WeightedConformers(nn.Module):
                     extra_conf_fps.append(batch[feat_name])
 
             if extra_conf_fps != []:
+
                 extra_conf_fps = torch.cat(extra_conf_fps, dim=-1)
-                this_extra = extra_conf_fps[idx].reshape(1, -1)
+                split_extra = torch.split(extra_conf_fps, n_conf_list)
+
+                this_extra = split_extra[idx]
                 conf_fps = torch.cat([conf_fps, this_extra], dim=-1)
 
         return conf_fps
@@ -296,7 +300,8 @@ class WeightedConformers(nn.Module):
             conf_fps = self.get_conf_fps(smiles_fp,
                                          mol_size,
                                          batch,
-                                         i)
+                                         i,
+                                         num_confs)
 
             conf_fps_by_smiles.append(conf_fps)
 
