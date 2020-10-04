@@ -14,9 +14,8 @@
   "options": [[0, 0.7],
               [1, 3],
               [true, false]],
-
   "num_samples": 20,
-  "metric": "prc_auc",
+  "metric": "roc_auc",
   "prop_name": "sars_cov_one_cl_protease_active",
   "score_file": "score.json"
 }
