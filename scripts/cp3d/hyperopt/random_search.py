@@ -47,6 +47,9 @@ def update_dropout(info,
                 layer_dic["param"]["p"] = dropout
         info["model_params"]["readoutdict"] = {prop_name: layer_dics}
 
+    elif dropout_type == "attention_dropout":
+        info["model_params"]["boltzmann_dict"]["dropout_rate"] = dropout
+
     else:
         info["model_params"][dropout_type] = dropout
 
