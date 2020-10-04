@@ -137,7 +137,7 @@ class WeightedConformers(nn.Module):
         # whether to learn the embeddings or get them from the batch
         self.batch_embeddings = modelparams.get("batch_embeddings", False)
 
-        # whether this is a classifier 
+        # whether this is a classifier
         self.classifier = modelparams["classifier"]
 
     def make_boltz_nn(self, boltzmann_dict):
