@@ -95,6 +95,6 @@ def parse_score(model_path, metric):
         if any([(optim == "minimize" and score < best_score),
                 (optim == "maximize" and score > best_score)]):
             best_score = score
-            best_epoch = splits[1],
+            best_epoch = splits[1]
 
     return best_score, best_epoch
