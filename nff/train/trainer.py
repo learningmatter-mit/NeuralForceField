@@ -296,11 +296,6 @@ class Trainer:
         if not self.grad_is_nan():
             self.optimizer.step()
 
-    def fprint(self, msg):
-        if self.base:
-            print(msg)
-            sys.stdout.flush()
-
     def train(self, device, n_epochs=MAX_EPOCHS):
         """Train the model for the given number of epochs on a specified
         device.
@@ -339,9 +334,7 @@ class Trainer:
 
                 for j, batch in self.tqdm_enum(self.train_loader):
 
-                    # self.fprint("Putting batch onto device...")
                     batch = batch_to(batch, device)
-                    # self.fprint("Batch on device.")
 
                     for h in self.hooks:
                         h.on_batch_begin(self, batch)
@@ -350,7 +343,8 @@ class Trainer:
                     mini_loss = self.get_loss(batch, results)
                     self.loss_backward(mini_loss)
                     if not torch.isnan(mini_loss):
-                        loss += mini_loss.cpu().detach().to(device)
+                        loss += (mini_loss.cpu().detach().to(device)
+                                 / self.mini_batches)
 
                     self.step += 1
                     # update the loss self.minibatches number
@@ -372,8 +366,6 @@ class Trainer:
 
                         loss = torch.tensor(0.0).to(device)
                         self.optimizer.zero_grad()
-                        # self.fprint("Took a step at batch {}".format(j))
-
 
                     if any((self.batch_stop, self._stop, j == self.epoch_cutoff)):
                         break
@@ -392,10 +384,6 @@ class Trainer:
                 if (self.epoch % self.checkpoint_interval == 0
                         and self.base):
                     self.store_checkpoint()
-
-                # self.fprint("Epoch {} complete; skipping validation".format(
-                #     self.epoch))
-                # continue
 
                 # validation
                 if (self.epoch % self.validation_interval == 0 or self._stop):
@@ -580,7 +568,7 @@ class Trainer:
 
         if test:
             return
-            
+
         for h in self.hooks:
             h.on_validation_end(self, val_loss)
             metric_dic = getattr(h, "metric_dic", None)
