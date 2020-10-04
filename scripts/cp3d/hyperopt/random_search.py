@@ -221,8 +221,7 @@ if __name__ == "__main__":
                               "of length 2 with the minimum and maximum values "
                               "for ints and floats. Can be a list of any size "
                               "for categorical parameters. If using the command "
-                              "line, provide as a JSON string."),
-                        nargs='+')
+                              "line, provide as a JSON string."))
     parser.add_argument('--num_samples', type=int,
                         help=("How many hyperparameter samples to try"))
     parser.add_argument('--metric', type=str, default='prc_auc',
