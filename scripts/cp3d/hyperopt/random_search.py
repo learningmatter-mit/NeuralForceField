@@ -21,7 +21,7 @@ def clean_up(model_path):
 
 def run(job_path, model_path, metric):
 
-    cmd = f"cd $NFFDIR/scripts/cp3d/train && python $NFFDIR/scripts/cp3d/train/train_parallel.py {job_path}"
+    cmd = f"cd $NFFDIR/scripts/cp3d/train && python train_parallel.py {job_path}"
     os.system(cmd)
     best_score, best_epoch = parse_score(model_path, metric)
 
