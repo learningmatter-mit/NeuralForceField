@@ -12,6 +12,12 @@ METRIC_DIC = {"pr_auc": "maximize",
 
 METRICS = list(METRIC_DIC.keys())
 
+# transform from chemprop syntax to our syntax for the metrics
+
+CHEMPROP_TRANSFORM = {"auc": "roc_auc",
+                      "prc-auc": "pr_auc"}
+
+
 def tqdm_enum(iter):
     i = 0
     for y in tqdm(iter):

@@ -12,14 +12,15 @@ from nff.train import load_model
 from nff.data import collate_dicts
 from nff.utils.cuda import batch_to, batch_detach
 from nff.data.dataset import concatenate_dict
-from nff.utils import tqdm_enum, parse_args, fprint, parse_score, METRICS
+from nff.utils import (tqdm_enum, parse_args, fprint, parse_score,
+                       METRICS, CHEMPROP_TRANSFORM)
 
-# transform from chemprop syntax to our syntax for the metrics
 
-TRANSFORM = {"auc": "roc_auc",
-             "prc-auc": "prc_auc"}
+# dictionary that transforms our metric syntax to chemprop's
+REVERSE_TRANSFORM = {val: key for key, val in CHEMPROP_TRANSFORM.items()}
+# available metrics
+METRIC_LIST = [REVERSE_TRANSFORM.get(metric, metric) for metric in METRICS]
 
-METRIC_LIST = [TRANSFORM.get(metric, metric) for metric in METRICS]
 
 def save(results,
          targets,
@@ -85,8 +86,8 @@ def save(results,
 
 def model_from_metric(model, model_folder, metric):
 
-    if metric in TRANSFORM:
-        use_metric = TRANSFORM[metric]
+    if metric in CHEMPROP_TRANSFORM:
+        use_metric = CHEMPROP_TRANSFORM[metric]
 
     else:
         use_metric = metric
