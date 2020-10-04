@@ -216,7 +216,7 @@ if __name__ == "__main__":
                               "Will sample uniformly between boundaries "
                               "of ints and floats, and pick random choices "
                               "for categorical parameters."))
-    parser.add_argument('--options', type=list,
+    parser.add_argument('--options', type=str,
                         help=("Options for each parameter. Should be a list "
                               "of length 2 with the minimum and maximum values "
                               "for ints and floats. Can be a list of any size "
