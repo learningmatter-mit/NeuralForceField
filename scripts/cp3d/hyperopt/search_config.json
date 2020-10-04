@@ -11,7 +11,7 @@
     "int",
     "categorical"
   ],
-  "options": [[0.7, 5],
+  "options": [[0, 0.7],
               [1, 3],
               [true, false]],
 
