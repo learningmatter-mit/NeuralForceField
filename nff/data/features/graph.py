@@ -3,6 +3,7 @@ import numpy as np
 import copy
 from rdkit import Chem
 from rdkit.Chem import AllChem
+from e3fp.pipeline import fprints_from_mol
 
 from nff.utils.xyz2mol import xyz2mol
 from nff.utils.cuda import batch_to
@@ -797,51 +798,3 @@ def add_e3fp(rd_dataset, fp_length):
 
     rd_dataset.props['e3fp'] = e3fp_list
     rd_dataset.props['mean_e3fp'] = bwfp_list
-
-
-def dset_without_rdmols(rd_dataset):
-
-    from nff.data.dataset import to_tensor
-
-    no_rdmol_prop = {key: val for key, val in rd_dataset.props.items()
-                     if 'rd_mol' not in key}
-    no_rdmol_dset = copy.deepcopy(rd_dataset)
-    no_rdmol_dset.props = {key: to_tensor(val)
-                           for key, val in no_rdmol_prop.items()}
-    return no_rdmol_dset
-
-
-def add_model_fps(rd_dataset, model_path, device=0):
-
-    from nff.train.builders.model import load_model
-    from nff.data.dataset import collate_dicts
-
-    no_rdmol_dset = dset_without_rdmols(rd_dataset)
-    loader = DataLoader(no_rdmol_dset, batch_size=1, collate_fn=collate_dicts)
-
-    model = load_model(model_path).to(device)
-    dic = {}
-    loader_len = len(loader)
-
-    for i, batch in enumerate(loader):
-
-        batch = batch_to(batch, device)
-
-        smiles_list = batch['smiles']
-
-        conf_fps, xyz = model.embedding_forward(batch)
-        conf_fps = conf_fps.detach().cpu().numpy().tolist()
-
-        del xyz
-        del batch
-
-        assert len(smiles_list) == len(conf_fps)
-
-        dic.update({smiles: conf_fp
-                    for smiles, conf_fp in zip(smiles_list, conf_fps)})
-
-        pct = int(i / loader_len * 100)
-        print("%d%% done" % pct)
-
-    rd_dataset.props["model_fp"] = [dic[smiles]
-                                    for smiles in rd_dataset.props["smiles"]]
