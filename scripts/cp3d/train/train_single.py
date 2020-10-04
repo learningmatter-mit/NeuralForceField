@@ -4,13 +4,11 @@ import json
 import sys
 
 import torch
-import numpy as np
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 from nff.data import Dataset, split_train_validation_test, collate_dicts
 from nff.data.loader import ImbalancedDatasetSampler
-from nff.train import evaluate, metrics, Trainer, get_model, loss, hooks
-from nff.utils import fprint
+from nff.train import metrics, Trainer, get_model, loss, hooks
 
 import torch.multiprocessing as mp
 import torch.nn as nn
@@ -592,9 +590,9 @@ def make_stats(T,
                device,
                base_keys,
                grad_keys,
-               stat_metric_name,
                trainer_kwargs,
-               val_loader):
+               val_loader,
+               log_train):
     """
     Make test stats.
     Args:
@@ -638,8 +636,8 @@ def make_stats(T,
     with open(param_path, 'w') as f:
         json.dump(params, f, sort_keys=True, indent=4)
 
-    fprint(f"Test stats saved in {stat_path}")
-    fprint(f"Model and training details saved in {param_path}")
+    log_train(f"Test stats saved in {stat_path}")
+    log_train(f"Model and training details saved in {param_path}")
 
     T.validation_loader = val_loader
 
@@ -755,7 +753,6 @@ def train(gpu,
           world_size,
           node_rank,
           gpus,
-          stat_metric_name,
           metric_names,
           base_keys,
           grad_keys):
@@ -860,24 +857,22 @@ def train(gpu,
                base=base,
                world_size=world_size,
                device=device,
-               stat_metric_name=stat_metric_name,
                base_keys=base_keys,
                grad_keys=grad_keys,
                trainer_kwargs=trainer_kwargs,
-               val_loader=val_loader)
+               val_loader=val_loader,
+               log_train=log_train)
 
 
 def add_args(all_params):
 
     params = {**all_params['train_params'],
               **all_params['model_params']}
-    stat_metric_name = params.get("stat_metric", DEFAULT_METRIC)
     metric_names = params.get("metrics", [DEFAULT_METRIC])
     base_keys = params.get("base_keys", ["energy"])
     grad_keys = params.get("grad_keys", ["energy_grad"])
 
-    args = [stat_metric_name,
-            metric_names,
+    args = [metric_names,
             base_keys,
             grad_keys]
 
