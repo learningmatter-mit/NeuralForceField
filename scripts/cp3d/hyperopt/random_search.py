@@ -55,11 +55,9 @@ def update_dropout(info,
                    prop_name):
 
     if dropout_type == "schnet_dropout":
-        info["schnet_dropout"] = dropout
         info["model_params"]["schnet_dropout"] = dropout
 
     elif dropout_type == "chemprop_dropout":
-        info["cp_dropout"] = dropout
         info["model_params"]["cp_dropout"] = dropout
 
     elif dropout_type == "readout_dropout":
