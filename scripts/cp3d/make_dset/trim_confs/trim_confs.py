@@ -225,6 +225,11 @@ def main(from_model_path,
     folders = sorted([i for i in os.listdir(from_model_path)
                       if i.isdigit()], key=lambda x: int(x))
 
+    # then the dataset is in the main folder
+
+    if folders == []:
+        folders = [""]
+
     for folder in tqdm(folders):
 
         fprint(folder)
