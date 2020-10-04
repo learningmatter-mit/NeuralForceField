@@ -54,29 +54,29 @@ def update_dropout(info,
 
     if dropout_type == "schnet_dropout":
         info["schnet_dropout"] = dropout
-        info["details"]["schnet_dropout"] = dropout
+        info["model_params"]["schnet_dropout"] = dropout
 
     elif dropout_type == "chemprop_dropout":
         info["cp_dropout"] = dropout
-        info["details"]["cp_dropout"] = dropout
+        info["model_params"]["cp_dropout"] = dropout
 
     elif dropout_type == "readout_dropout":
-        readout = info["details"]["readoutdict"]
+        readout = info["model_params"]["readoutdict"]
         layer_dics = readout[prop_name]
         for layer_dic in layer_dics:
             if layer_dic["name"] == "Dropout":
                 layer_dic["param"]["p"] = dropout
-        info["details"]["readoutdict"] = {prop_name: layer_dics}
+        info["model_params"]["readoutdict"] = {prop_name: layer_dics}
 
 
 def update_heads(info,
                  heads):
 
-    info["details"]["boltzmann_dict"]["num_heads"] = heads
-    info["details"]["boltzmann_dict"]["head_pool"] = "concatenate"
+    info["model_params"]["boltzmann_dict"]["num_heads"] = heads
+    info["model_params"]["boltzmann_dict"]["head_pool"] = "concatenate"
 
-    readoutdict = info["details"]["readoutdict"]
-    input_layers = info["details"]["input_layers"]
+    readoutdict = info["model_params"]["readoutdict"]
+    input_layers = info["model_params"]["input_layers"]
     feat_dim = input_layers[0]["param"]["out_features"]
 
     for key, lst in readoutdict.items():
@@ -84,7 +84,7 @@ def update_heads(info,
             if "param" in dic and "in_features" in dic.get("param", {}):
                 readoutdict[key][i]["param"]["in_features"] = feat_dim * heads
                 break
-    info["details"]["readoutdict"] = readoutdict
+    info["model_params"]["readoutdict"] = readoutdict
 
 
 def update_info(job_path,
