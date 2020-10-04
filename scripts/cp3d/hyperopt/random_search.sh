@@ -14,6 +14,11 @@
 
 source deactivate
 source ~/.bashrc
+
+# change to your location of NeuralForceField
+export NFFDIR="$HOME/repo/nff/covid_clean/NeuralForceField"
+export PYTHONPATH=$NFFDIR:$PYTHON_PATH
+
 source activate nff
 
 cmd="python random_search.py --config_file search_config.json"
