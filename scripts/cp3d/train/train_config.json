@@ -92,7 +92,6 @@
         },
 
         "gauss_embed": true,
-        "batch_embeddings": false,
         "same_filters": true,
         "trainable_gauss": false,
         "extra_features": null,

@@ -134,9 +134,6 @@ class WeightedConformers(nn.Module):
         # the readout acts on this final molceular fp
         self.readout = NodeMultiTaskReadOut(multitaskdict=readoutdict)
 
-        # whether to learn the embeddings or get them from the batch
-        self.batch_embeddings = modelparams.get("batch_embeddings", False)
-
         # whether this is a classifier
         self.classifier = modelparams["classifier"]
 
@@ -253,8 +250,8 @@ class WeightedConformers(nn.Module):
         return r, xyz
 
     def get_external_3d(self,
-                     batch,
-                     n_conf_list):
+                        batch,
+                        n_conf_list):
 
         extra_conf_fps = []
         for feat_name, feat_type in zip(self.extra_feats,
@@ -296,7 +293,7 @@ class WeightedConformers(nn.Module):
 
         conf_fps = torch.stack(conf_fps)
         split_extra = self.get_external_3d(batch,
-                                        n_conf_list)
+                                           n_conf_list)
 
         if split_extra is not None:
             this_extra = split_extra[idx]
@@ -347,7 +344,7 @@ class WeightedConformers(nn.Module):
         n_conf_list = (torch.tensor(N) / torch.tensor(mol_sizes)).tolist()
 
         conf_fps_by_smiles = self.get_external_3d(batch,
-                                               n_conf_list)
+                                                  n_conf_list)
 
         boltzmann_weights = torch.split(batch["weights"], n_conf_list)
         extra_feats = self.add_features(batch=batch, **kwargs)
@@ -376,23 +373,6 @@ class WeightedConformers(nn.Module):
             xyz = None
 
         return outputs, xyz
-
-    def get_embeddings(self, batch, **kwargs):
-
-        mol_sizes = batch["mol_size"].reshape(-1).tolist()
-        N = batch["num_atoms"].reshape(-1).tolist()
-        num_confs = (torch.tensor(N) / torch.tensor(mol_sizes)).tolist()
-
-        conf_fps_by_smiles = list(torch.split(batch["fingerprint"], num_confs))
-        extra_feats = self.add_features(batch=batch, **kwargs)
-        boltzmann_weights = torch.split(batch["weights"], num_confs)
-
-        outputs = {"conf_fps_by_smiles": conf_fps_by_smiles,
-                   "boltzmann_weights": boltzmann_weights,
-                   "mol_sizes": mol_sizes,
-                   "extra_feats": extra_feats}
-
-        return outputs, None
 
     def pool(self, outputs):
         """
@@ -478,10 +458,7 @@ class WeightedConformers(nn.Module):
         if not hasattr(self, "classifier"):
             self.classifier = True
 
-        if self.batch_embeddings:
-            outputs, xyz = self.get_embeddings(batch, **kwargs)
-        else:
-            outputs, xyz = self.make_embeddings(batch, xyz, **kwargs)
+        outputs, xyz = self.make_embeddings(batch, xyz, **kwargs)
 
         pooled_fp, final_weights = self.pool(outputs)
         results = self.readout(pooled_fp)

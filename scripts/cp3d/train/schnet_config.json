@@ -65,7 +65,6 @@
 
         "classifier": true,
         "gauss_embed": true,
-        "batch_embeddings": false,
         "trainable_gauss": true,
         "extra_features": null,
         "ext_feat_types": null,
