@@ -751,6 +751,7 @@ def featurize_dataset(dataset,
 
 
 def add_morgan(dataset, vec_length):
+
     dataset.props["morgan"] = []
     for smiles in dataset.props['smiles']:
         mol = Chem.MolFromSmiles(smiles)
@@ -770,15 +771,14 @@ def add_morgan(dataset, vec_length):
 
 def add_e3fp(rd_dataset, fp_length, verbose=False, track=True):
 
-    if not verbose:
-        # disable verbose logging from e3fp
+    # disable verbose logging from e3fp
 
+    if not verbose:
         logger = logging.getLogger()
         logger.disabled = True
 
-    enum = get_enum_func(track)
-
     e3fp_list = []
+    enum = get_enum_func(track)
 
     for i, batch in enum(rd_dataset):
 
@@ -800,8 +800,6 @@ def add_e3fp(rd_dataset, fp_length, verbose=False, track=True):
 
         e3fp_list.append(torch.stack(fps))
 
-    # mol_iter = make_data_iterator(mols)
-    # parallelizer = Parallelizer(parallel_mode="processes")
-    # fp = parallelizer.run(fprints_from_mol, mol_iter , kwargs=kwargs)
-
     rd_dataset.props['e3fp'] = e3fp_list
+
+    return rd_dataset

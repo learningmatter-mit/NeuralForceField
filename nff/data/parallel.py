@@ -163,7 +163,7 @@ def add_e3fp_parallel(dataset,
                       fp_length,
                       num_procs):
 
-    msg = f"Adding E3P fingerprints with {num_procs} parallel processes."
+    msg = f"Adding E3FP fingerprints with {num_procs} parallel processes."
     if num_procs == 1:
         msg = msg.replace("processes", "process")
     print(msg)
