@@ -162,7 +162,7 @@ def main(job_path,
 
         clean_up(model_path=model_path)
         vals = sample_vals(options, param_types)
-        val_str = "   " + "\n  ".join([f"{key}: {val}" for key, val
+        val_str = "  " + "\n  ".join([f"{key}: {val}" for key, val
                   in zip(param_names, vals)])
         fprint(f"Hyperpameters used this round:\n{val_str}")
 
