@@ -249,22 +249,18 @@ class WeightedConformers(nn.Module):
                         batch,
                         n_conf_list):
 
-        if self.extra_feats is None:
+        if (self.extra_feats is None or
+                "conformer" not in self.ext_feat_types):
             return
-            
+
         extra_conf_fps = []
         for feat_name, feat_type in zip(self.extra_feats,
                                         self.ext_feat_types):
             if feat_type == "conformer":
                 extra_conf_fps.append(batch[feat_name])
 
-        if extra_conf_fps != []:
-
-            extra_conf_fps = torch.cat(extra_conf_fps, dim=-1)
-            split_extra = torch.split(extra_conf_fps, n_conf_list)
-
-        else:
-            split_extra = None
+        extra_conf_fps = torch.cat(extra_conf_fps, dim=-1)
+        split_extra = torch.split(extra_conf_fps, n_conf_list)
 
         return split_extra
 
