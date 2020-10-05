@@ -69,6 +69,7 @@
         "trainable_gauss": true,
         "extra_features": null,
         "ext_feat_types": null,
+        "use_mpnn": true,
 
         "base_keys": ["sars_cov_one_cl_protease_active"],
         "grad_keys": []

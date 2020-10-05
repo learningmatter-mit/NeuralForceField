@@ -1,6 +1,10 @@
 source deactivate
 source ~/.bashrc
 
+# change to your nff directory
+export NFFDIR="$HOME/Repo/projects/covid_clean/NeuralForceField"
+export PYTHONPATH="$NFFDIR:$PYTHONPATH"
+
 echo ""
 echo "-----------------------------------------------------------------------------------"
 echo "Interfacing with ChemProp to generate train/val/test labels for the dataset."

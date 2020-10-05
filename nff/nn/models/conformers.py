@@ -140,6 +140,9 @@ class WeightedConformers(nn.Module):
         # whether this is a classifier
         self.classifier = modelparams["classifier"]
 
+        # whether to embed fingerprints or just use external features
+        self.use_mpnn = modelparams.get("use_mpnn", True)
+
     def make_boltz_nn(self, boltzmann_dict):
 
         networks = nn.ModuleList([])
@@ -249,6 +252,26 @@ class WeightedConformers(nn.Module):
 
         return r, xyz
 
+    def get_external_3d(self,
+                     batch,
+                     n_conf_list):
+
+        extra_conf_fps = []
+        for feat_name, feat_type in zip(self.extra_feats,
+                                        self.ext_feat_types):
+            if feat_type == "conformer":
+                extra_conf_fps.append(batch[feat_name])
+
+        if extra_conf_fps != []:
+
+            extra_conf_fps = torch.cat(extra_conf_fps, dim=-1)
+            split_extra = torch.split(extra_conf_fps, n_conf_list)
+
+        else:
+            split_extra = None
+
+        return split_extra
+
     def get_conf_fps(self,
                      smiles_fp,
                      mol_size,
@@ -272,21 +295,12 @@ class WeightedConformers(nn.Module):
             conf_fps.append(mol_fp)
 
         conf_fps = torch.stack(conf_fps)
+        split_extra = self.get_external_3d(batch,
+                                        n_conf_list)
 
-        if self.extra_feats is not None:
-            extra_conf_fps = []
-            for feat_name, feat_type in zip(self.extra_feats,
-                                            self.ext_feat_types):
-                if feat_type == "conformer":
-                    extra_conf_fps.append(batch[feat_name])
-
-            if extra_conf_fps != []:
-
-                extra_conf_fps = torch.cat(extra_conf_fps, dim=-1)
-                split_extra = torch.split(extra_conf_fps, n_conf_list)
-
-                this_extra = split_extra[idx]
-                conf_fps = torch.cat([conf_fps, this_extra], dim=-1)
+        if split_extra is not None:
+            this_extra = split_extra[idx]
+            conf_fps = torch.cat([conf_fps, this_extra], dim=-1)
 
         return conf_fps
 
@@ -326,14 +340,40 @@ class WeightedConformers(nn.Module):
 
         return outputs
 
+    def fps_no_mpnn(self, batch, **kwargs):
+
+        N = batch["num_atoms"].reshape(-1).tolist()
+        mol_sizes = batch["mol_size"].reshape(-1).tolist()
+        n_conf_list = (torch.tensor(N) / torch.tensor(mol_sizes)).tolist()
+
+        conf_fps_by_smiles = self.get_external_3d(batch,
+                                               n_conf_list)
+
+        boltzmann_weights = torch.split(batch["weights"], n_conf_list)
+        extra_feats = self.add_features(batch=batch, **kwargs)
+
+        outputs = {"conf_fps_by_smiles": conf_fps_by_smiles,
+                   "boltzmann_weights": boltzmann_weights,
+                   "mol_sizes": mol_sizes,
+                   "extra_feats": extra_feats}
+
+        return outputs
+
     def make_embeddings(self, batch, xyz=None, **kwargs):
 
-        r, xyz = self.convolve(batch=batch,
-                               xyz=xyz,
-                               **kwargs)
-        outputs = self.post_process(batch=batch,
-                                    r=r,
-                                    xyz=xyz, **kwargs)
+        if not hasattr(self, "use_mpnn"):
+            self.use_mpnn = True
+
+        if self.use_mpnn:
+            r, xyz = self.convolve(batch=batch,
+                                   xyz=xyz,
+                                   **kwargs)
+            outputs = self.post_process(batch=batch,
+                                        r=r,
+                                        xyz=xyz, **kwargs)
+        else:
+            outputs = self.fps_no_mpnn(batch, **kwargs)
+            xyz = None
 
         return outputs, xyz
 
@@ -383,6 +423,7 @@ class WeightedConformers(nn.Module):
         final_fps = []
         final_weights = []
         # go through each species
+
         for i in range(len(conf_fps_by_smiles)):
             boltzmann_weights = batched_weights[i]
             conf_fps = conf_fps_by_smiles[i]
