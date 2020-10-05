@@ -154,11 +154,10 @@ In the example given in `schnet_config.json`, a vector of size 900 (3x `mol_basi
 
 - `classifier` (bool): Whether the model is a classifier. If true, a sigmoid layer will automatically be added when the model is in `eval` mode, but not when it is in `train` mode. 
 - `gauss_embed` (bool): Whether to expand distances in a Gaussian basis, or just use them as they are
-- `batch_embeddings` (bool): Whether to use fingerprints already present in the dataset instead of learning the fingerprints. In this case the dataset properties must contain fingerprints under the key `fingerprints`.
 - `trainable_gauss` (bool): Whether the width and spacings of the Gaussian functions are learnable parameters.
 - `extra_features` (list): a list of names of any extra features to concatenate with the learned features.  For example, if you have Morgan fingerprints in your dataset and you want to concatenate these with the learned fingerprints, you can set `extra_features=["morgan"]`.
 - `ext_feat_types` (list): a list of the types of extra features you're adding. Can be `conformer` or `species` for each one. `conformer` means the features are per-conformer fingerprints (like a 3D fingerprint for each conformer), while `species` means it's a graph-based fingerprint for the whole molecule (like a Morgan fingerprint).
-- `use_mpnn` (bool): Use an MPNN for making the 3D features. If set to False, then you must supply both a `conformer` fingerprint (e.g WHIM) and a `species` fingerprint (e.g. Morgan) for the network to use as input.
+- `use_mpnn` (bool): Use an MPNN for making the 3D features. If set to False, then you must supply at least a `conformer` fingerprint (e.g WHIM) for the network to use as input. You can also supply a `species` fingerprint (e.g. Morgan), but it is not required.
 - `base_keys` (list[str]): names of the values that your model is predicting
 - `grad_keys` (list[str]): any values for which you also want the gradient with respect to nuclear coordinates. For example, if you are predicting energies then you may also want the gradients, as the negative gradients are the nuclear forces.
 
