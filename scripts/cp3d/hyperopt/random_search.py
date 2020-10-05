@@ -161,8 +161,11 @@ def main(job_path,
     for _ in range(num_samples):
 
         clean_up(model_path=model_path)
-
         vals = sample_vals(options, param_types)
+        val_str = "\n".join([f"{key}: {val}" for key, val
+                  in zip(param_types, vals)])
+        fprint(f"Using:\n {val_str})
+
         update_info(job_path=job_path,
                     vals=vals,
                     param_names=param_names,
