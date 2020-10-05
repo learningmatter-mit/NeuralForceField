@@ -164,7 +164,7 @@ def main(job_path,
         vals = sample_vals(options, param_types)
         val_str = "\n".join([f"{key}: {val}" for key, val
                   in zip(param_types, vals)])
-        fprint(f"Using:\n {val_str})
+        fprint(f"Using:\n {val_str}")
 
         update_info(job_path=job_path,
                     vals=vals,
