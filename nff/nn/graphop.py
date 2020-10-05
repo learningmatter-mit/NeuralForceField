@@ -4,7 +4,7 @@ from nff.nn.modules import ConfAttention
 EPS = 1e-15
 
 
-def update_boltz(conf_fp, weight, boltz_nn, extra_feats=None):
+def update_boltz(conf_fp, weight, boltz_nn):
     """
     Given a conformer fingerprint and Boltzmann weight,
     return a new updated fingerprint.
@@ -16,9 +16,6 @@ def update_boltz(conf_fp, weight, boltz_nn, extra_feats=None):
             the fingerprint and weight into a new
             fingerprint. If None, just multiply the Boltzmann
             factor with the fingerprint.
-        extra_feats (torch.Tensor): extra fingerprint that
-            gets tacked on to the end of the SchNet-generated
-            fingerprint.
     Returns:
         boltzmann_fp (torch.Tensor): updated fingerprint
     """
@@ -39,7 +36,6 @@ def conf_pool(mol_size,
               mol_fp_nn,
               boltz_nns,
               conf_fps,
-              extra_feats=None,
               head_pool="concatenate"):
     """
     Pool atomic representations of conformers into molecular fingerprint,
@@ -53,9 +49,6 @@ def conf_pool(mol_size,
         boltz_nn (torch.nn.Module): nn that takes a molecular
             fingerprint and boltzmann weight as input and returns
             a new fingerprint.
-        extra_feats (torch.Tensor): extra fingerprint that
-            gets tacked on to the end of the SchNet-generated
-            fingerprint.
     Returns:
         final_fp (torch.Tensor): H-dimensional tensor, where
             H is the number of features in the molecular fingerprint.
@@ -82,8 +75,7 @@ def conf_pool(mol_size,
                 boltzmann_fp = update_boltz(
                     conf_fp=conf_fp,
                     weight=weight,
-                    boltz_nn=boltz_nn,
-                    extra_feats=extra_feats)
+                    boltz_nn=boltz_nn)
                 boltzmann_fps.append(boltzmann_fp)
 
             boltzmann_fps = torch.stack(boltzmann_fps)

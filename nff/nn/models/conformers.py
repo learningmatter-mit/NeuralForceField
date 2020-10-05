@@ -183,7 +183,7 @@ class WeightedConformers(nn.Module):
         N = batch["num_atoms"].reshape(-1).tolist()
         num_mols = len(N)
 
-        if self.extra_feats is None:
+        if self.extra_feats is None or "species" not in self.ext_feat_types:
             return [torch.tensor([]) for _ in range(num_mols)]
 
         assert all([feat in batch.keys() for feat in self.extra_feats])
@@ -423,7 +423,6 @@ class WeightedConformers(nn.Module):
                 mol_fp_nn=self.mol_fp_nn,
                 boltz_nns=self.boltz_nns,
                 conf_fps=conf_fps,
-                extra_feats=extra_feats,
                 head_pool=self.head_pool)
 
             if extra_feats is not None:
