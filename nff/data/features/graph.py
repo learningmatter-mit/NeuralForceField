@@ -4,6 +4,9 @@ import copy
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from e3fp.pipeline import fprints_from_mol
+from tqdm import tqdm
+import logging
+
 
 from nff.utils.xyz2mol import xyz2mol
 from nff.utils import tqdm_enum
@@ -765,21 +768,26 @@ def add_morgan(dataset, vec_length):
         dataset.props["morgan"].append(morgan_tens)
 
 
-def add_e3fp(rd_dataset, fp_length):
+def add_e3fp(rd_dataset, fp_length, verbose=False, track=True):
 
-    bwfp_list = []
+    if not verbose:
+        # disable verbose logging from e3fp
+
+        logger = logging.getLogger()
+        logger.disabled = True
+
+    enum = get_enum_func(track)
+
     e3fp_list = []
 
-    for batch in rd_dataset:
+    for i, batch in enum(rd_dataset):
 
         mols = batch["rd_mols"]
-        weights = batch["weights"]
         smiles = batch["smiles"]
 
         fps = []
-        weighted_fps = []
 
-        for weight, mol in zip(weights.reshape(-1), mols):
+        for mol in mols:
 
             mol.SetProp("_Name", smiles)
             fprint_params = {"bits": fp_length}
@@ -788,11 +796,12 @@ def add_e3fp(rd_dataset, fp_length):
             indices = fp[0].indices
             fp_array[indices] = 1
 
-            weighted_fps.append(fp_array * weight.item())
             fps.append(torch.Tensor(fp_array))
 
-        bwfp_list.append(torch.Tensor(np.array(weighted_fps).sum(0)))
         e3fp_list.append(torch.stack(fps))
 
+    # mol_iter = make_data_iterator(mols)
+    # parallelizer = Parallelizer(parallel_mode="processes")
+    # fp = parallelizer.run(fprints_from_mol, mol_iter , kwargs=kwargs)
+
     rd_dataset.props['e3fp'] = e3fp_list
-    rd_dataset.props['mean_e3fp'] = bwfp_list

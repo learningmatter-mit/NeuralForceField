@@ -11,9 +11,9 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset as TorchDataset
 from nff.data.graphs import (reconstruct_atoms, get_neighbor_list,
                              get_bond_idx)
-from nff.data.parallel import featurize_parallel, NUM_PROCS
+from nff.data.parallel import featurize_parallel, NUM_PROCS, add_e3fp_parallel
 from nff.data.features import (ATOM_FEAT_TYPES, BOND_FEAT_TYPES,
-                               add_morgan, add_e3fp, featurize_rdkit)
+                               add_morgan, featurize_rdkit)
 
 
 class Dataset(TorchDataset):
@@ -266,8 +266,13 @@ class Dataset(TorchDataset):
     def add_morgan(self, vec_length):
         add_morgan(self, vec_length)
 
-    def add_e3fp(self, fp_length):
-        add_e3fp(self, fp_length)
+    def add_e3fp(self,
+                 fp_length,
+                 num_procs=NUM_PROCS):
+
+        add_e3fp_parallel(self,
+                          fp_length,
+                          num_procs)
 
     def featurize_rdkit(self, method):
 

@@ -5,8 +5,11 @@ import torch
 import os
 
 
-from nff.data.features import (make_rd_mols, featurize_bonds,
-                               featurize_atoms, BOND_FEAT_TYPES,
+from nff.data.features import (make_rd_mols,
+                               featurize_bonds,
+                               featurize_atoms,
+                               add_e3fp,
+                               BOND_FEAT_TYPES,
                                ATOM_FEAT_TYPES)
 
 NUM_PROCS = 5
@@ -105,6 +108,16 @@ def atoms_parallel(datasets, feat_types):
     return result_dsets
 
 
+def e3fp_parallel(datasets, fp_length):
+    kwargs_list = [{"rd_dataset": dataset, "fp_length": fp_length} for
+                   dataset in datasets]
+
+    result_dsets = gen_parallel(func=add_e3fp,
+                                kwargs_list=kwargs_list)
+
+    return result_dsets
+
+
 def summarize_rd(new_sets, first_set):
     tried = len(first_set)
     succ = sum([len(d) for d in new_sets])
@@ -141,6 +154,21 @@ def featurize_parallel(dataset,
     new_props = rejoin_props(datasets)
     dataset.props = new_props
 
-    new_props.pop("rd_mols")
+    # new_props.pop("rd_mols")
     new_props["bonded_nbr_list"] = copy.deepcopy(new_props["bond_list"])
     new_props.pop("bond_list")
+
+
+def add_e3fp_parallel(dataset,
+                      fp_length,
+                      num_procs):
+
+    msg = f"Adding E3P fingerprints with {num_procs} parallel processes."
+    if num_procs == 1:
+        msg = msg.replace("processes", "process")
+    print(msg)
+
+    datasets = split_dataset(dataset=dataset, num=num_procs)
+    datasets = e3fp_parallel(datasets, fp_length=fp_length)
+    new_props = rejoin_props(datasets)
+    dataset.props = new_props

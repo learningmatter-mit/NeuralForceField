@@ -6,6 +6,7 @@ from operator import itemgetter
 
 REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'bonded_nbr_list']
 NBR_LIST_KEYS = ['bond_idx']
+IGNORE_KEYS = ['rd_mols']
 
 
 TYPE_KEYS = {
@@ -54,6 +55,8 @@ def collate_dicts(dicts):
                 data[key]
                 for data in dicts
             ], dim=0)
+        elif key in IGNORE_KEYS:
+            continue
         else:
             batch[key] = torch.stack(
                 [data[key] for data in dicts],

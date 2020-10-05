@@ -561,23 +561,7 @@ def init_quants(node_rank, gpu, gpus, world_size, params):
     return rank, batch_size, base, log_train
 
 
-def get_best_model(T):
-    """
-    Get the best model from a trainer.
-    Args:
-        T (Trainer): trainer instance
-    Returns:
-        best_model (nff.nn.model): best model
-    """
 
-    # continue looping until you succesfully
-    # get the best model
-    while True:
-        try:
-            best_model = T.get_best_model()
-            return best_model
-        except (EOFError, FileNotFoundError):
-            continue
 
 
 def make_stats(T,
@@ -615,12 +599,12 @@ def make_stats(T,
     """
 
     # old model
-    old_model = copy.deepcopy(T._model)
+    old_model = copy.deepcopy(T._model.to("cpu"))
 
     # get best model and put into eval mode
-    model = T.get_best_model()
+    model = torch.load(T.best_model, map_location="cpu")
     model.eval()
-    T._model = model.to(old_model.device)
+    T._model = model.to(device)
 
     # set the trainer validation loader to the test
     # loader so you can use its metrics to get the
@@ -650,7 +634,7 @@ def make_stats(T,
 
     # put the validation loader and the old model back
     T.validation_loader = val_loader
-    T._model = old_model
+    T._model = old_model.to(device)
 
 
 def optim_loss_hooks(params,
