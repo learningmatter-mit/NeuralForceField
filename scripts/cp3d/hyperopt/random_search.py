@@ -2,6 +2,7 @@ import os
 import json
 import argparse
 import random
+import numpy as np
 
 from nff.utils import fprint, parse_args, parse_score, METRICS
 
@@ -85,7 +86,18 @@ def update_info(job_path,
     with open(job_path, "r") as f:
         info = json.load(f)
 
-    for param_type, val in zip(param_names, vals):
+    real_names = []
+    real_vals = []
+
+    for param_name in param_names:
+        if param_name.startswith("log_"):
+            real_names.append(param_name.replace("log_", ""))
+            real_vals.append(np.exp(val))
+        else:
+            real_names.append(param_name)
+            real_vals.append(val)
+
+    for param_type, val in zip(real_names, real_vals):
         if 'dropout' in param_type:
             update_dropout(info=info,
                            dropout=val,

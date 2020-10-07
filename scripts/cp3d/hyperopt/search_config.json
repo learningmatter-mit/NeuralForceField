@@ -3,10 +3,10 @@
   "model_path": "/home/gridsan/saxelrod/models/reduced_size",
   "param_names": [
     "num_heads",
-    "attention_dropout",
-    "cp_dropout",
-    "readout_dropout",
-    "schnet_dropout"
+    "log_attention_dropout",
+    "log_cp_dropout",
+    "log_readout_dropout",
+    "log_schnet_dropout"
   ],
   "param_types": [
     "int",
@@ -16,10 +16,10 @@
     "float"
   ],
   "options": [[1, 3],
-              [0, 0.5],
-              [0, 0.5],
-              [0, 0.5],
-              [0, 0.5]],
+              [-5, -0.7],
+              [-5, -0.7],
+              [-5, -0.7],
+              [-5, -0.7]],
   "num_samples": 20,
   "metric": "prc_auc",
   "prop_name": "sars_cov_one_cl_protease_active",
