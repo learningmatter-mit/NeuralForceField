@@ -89,7 +89,7 @@ def update_info(job_path,
     real_names = []
     real_vals = []
 
-    for param_name in param_names:
+    for param_name, val in zip(param_names, vals):
         if param_name.startswith("log_"):
             real_names.append(param_name.replace("log_", ""))
             real_vals.append(np.exp(val))
