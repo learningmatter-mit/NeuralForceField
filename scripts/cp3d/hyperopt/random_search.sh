@@ -15,6 +15,10 @@
 source deactivate
 source ~/.bashrc
 
+# change to the number of GPUs you're using per node
+export SLURM_GPUS_PER_NODE=2
+export LD_LIBRARY_PATH=lib/$CONDA_PREFIX/:$LD_LIBRARY_PATH
+
 # change to your location of NeuralForceField
 export NFFDIR="$HOME/repo/nff/covid_clean/NeuralForceField"
 export PYTHONPATH=$NFFDIR:$PYTHON_PATH
