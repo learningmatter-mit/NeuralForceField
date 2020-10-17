@@ -1,9 +1,13 @@
 #!/bin/bash
-#SBATCH -p sched_mit_rafagb
-#SBATCH -t 4300
-#SBATCH -n 64
 #SBATCH -N 1
-#SBATCH --mem 350G
+#SBATCH -t 30240
+#SBATCH --mem=300G
+#SBATCH --no-requeue
+#SBATCH --signal=B:2@300
+#SBATCH --ntasks-per-node 40
+#SBATCH --qos=high
+#SBATCH -p normal
+#SBATCH --constraint=xeon-g6
 
 source deactivate
 source ~/.bashrc
@@ -11,10 +15,10 @@ source activate nff
 
 # change to your nff directory
 export NFFDIR="$HOME/Repo/projects/covid_clean/NeuralForceField"
-export PYTHONPATH="$NFFDIR:$PYTHONPATH"
+export PYTHONPATH="$PYTHONPATH:$NFFDIR"
 
 # `jq` allows you to read a JSON file in bash. Here we are using it to get the number of threads from the config file. If you don't have `jq` installed,
-# you can just change `num_threads` manually here, or you can download it by running `cd ../.. && bash download_jq.sh && cd -`
+# you can just change `num_threads` manually here, or you can download it by running `cd ../.. && bash download_jq.sh && cd - && source ~/.bashrc `
 
 NUM_THREADS=$(cat dset_config.json | $jq ".num_threads")
 END=$((NUM_THREADS-1))
