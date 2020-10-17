@@ -14,8 +14,8 @@ source ~/.bashrc
 source activate nff
 
 # change to your nff directory
-export NFFDIR="$HOME/Repo/projects/covid_clean/NeuralForceField"
-export PYTHONPATH="$PYTHONPATH:$NFFDIR"
+export NFFDIR="$HOME/repo/nff/covid_clean/NeuralForceField"
+export PYTHONPATH="$NFFDIR:$PYTHONPATH"
 
 # `jq` allows you to read a JSON file in bash. Here we are using it to get the number of threads from the config file. If you don't have `jq` installed,
 # you can just change `num_threads` manually here, or you can download it by running `cd ../.. && bash download_jq.sh && cd - && source ~/.bashrc `
