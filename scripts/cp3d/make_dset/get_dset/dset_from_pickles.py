@@ -153,8 +153,8 @@ def convert_data(overall_dic, max_confs):
     if max_confs is None:
         max_confs = float("inf")
 
-    for key, sub_dic in overall_dic.items():
-
+    for key in tqdm(overall_dic.keys()):
+        sub_dic = overall_dic[key]
         spec_dic = {map_key(key): val for key, val in sub_dic.items()
                     if key != "conformers"}
 
@@ -324,6 +324,14 @@ def make_nff_dataset(spec_dics,
 
     big_dataset.props["rd_mols"] = rd_mols_list
     big_dataset.featurize(num_procs=parallel_feat_threads)
+
+    fprint("Adding E3FP fingerprints...")
+    big_dataset.add_e3fp(256, num_procs=parallel_feat_threads)
+    fprint("Adding whim fingerprints...")
+    big_dataset.featurize_rdkit('whim')
+    fprint("Adding Morgan fingerprints...")
+    big_dataset.add_morgan(256)
+
 
     fprint("Complete!")
 

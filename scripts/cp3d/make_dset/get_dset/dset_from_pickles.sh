@@ -23,6 +23,9 @@ export PYTHONPATH="$NFFDIR:$PYTHONPATH"
 NUM_THREADS=$(cat dset_config.json | $jq ".num_threads")
 END=$((NUM_THREADS-1))
 
+# increase the resource limit to avoid "too many open files" errors during parallel feature generation
+ulimit -n 50000
+
 for i in $(seq 0 $END);
 do
 cmd="python dset_from_pickles.py --thread $i --config_file dset_config.json"
