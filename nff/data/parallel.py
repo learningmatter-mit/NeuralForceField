@@ -159,7 +159,6 @@ def featurize_parallel(dataset,
     new_props = rejoin_props(datasets)
     dataset.props = new_props
 
-    # new_props.pop("rd_mols")
     new_props["bonded_nbr_list"] = copy.deepcopy(new_props["bond_list"])
     new_props.pop("bond_list")
 
