@@ -61,8 +61,7 @@ def gen_parallel(func, kwargs_list):
         kwargs["track"] = True
         return [func(**kwargs)]
 
-    cpu_count = os.cpu_count()
-    with futures.ProcessPoolExecutor(max_workers=cpu_count) as executor:
+    with futures.ProcessPoolExecutor() as executor:
 
         future_objs = []
         for i, kwargs in enumerate(kwargs_list):
