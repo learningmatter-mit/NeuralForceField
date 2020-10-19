@@ -21,6 +21,12 @@ def split_dataset(dataset, num):
     idx = range(len(dataset))
     splits = np.array_split(idx, num)
 
+    # a reference dataset to copy and assign
+    # new props to
+
+    ref_dset = copy.deepcopy(dataset)
+    ref_dset.props = {key: val[:1] for key, val in dataset.props.items()}
+
     for split in splits:
 
         if len(split) == 0:
@@ -30,7 +36,7 @@ def split_dataset(dataset, num):
         new_props = {key: val[min_split: max_split] for key, val
                      in dataset.props.items()}
 
-        new_dataset = copy.deepcopy(dataset)
+        new_dataset = copy.deepcopy(ref_dset)
         new_dataset.props = new_props
         datasets.append(new_dataset)
 
