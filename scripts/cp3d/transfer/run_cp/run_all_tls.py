@@ -59,6 +59,9 @@ def get_msg(feat, mpnn, metric, train_folder):
 
 
 def main(base_config_path,
+         hyp_config_path,
+         do_hyperopt,
+         rerun_hyperopt,
          cp_folder,
          feature_folder,
          model_folder_cp,
@@ -95,12 +98,18 @@ def main(base_config_path,
 
                 cmd = (f"python {script} "
                        f"--base_config_path {base_config_path} "
+                       f"--hyp_config_path {hyp_config_path} "
                        f"--metric {metric} "
                        f"--train_feat_path {train_feat_path} "
                        f"--val_feat_path {val_feat_path} "
                        f"--test_feat_path {test_feat_path} "
                        f"--train_folder {train_folder} "
                        f"--cp_folder {cp_folder} ")
+
+                if do_hyperopt:
+                    cmd += "--do_hyperopt "
+                if rerun_hyperopt:
+                    cmd += "--rerun_hyperopt "
 
                 p = bash_command(cmd)
                 p.wait()
@@ -114,6 +123,17 @@ if __name__ == "__main__":
                               "used to train a ChemProp model. "
                               "This file will be modified as "
                               "we loop through different arguments."))
+    parser.add_argument("--hyp_config_path", type=str, default=None,
+                        help=("Same as `base_config_path`, but "
+                              "for the hyperparameter optimization "
+                              "stage"))
+    parser.add_argument("--do_hyperopt", action='store_true',
+                        help=("Do hyperparameter optimization before "
+                              "training "))
+    parser.add_argument("--rerun_hyperopt", action='store_true',
+                        help=("Rerun hyperparameter optimization even if "
+                              "it has been done already. "))
+
     parser.add_argument("--cp_folder", type=str,
                         help=("Path to ChemProp folder."))
     parser.add_argument("--feature_folder", type=str,
