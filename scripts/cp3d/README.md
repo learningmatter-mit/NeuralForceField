@@ -290,7 +290,7 @@ The script `run_cp/run_all_tls.sh` runs ChemProp using the features generated ab
     -   `hyp_config_path` (str): Path to the config path that will be used for hyperparameter optimization before training the final model
     - `rerun_hyerpopt` (bool): Do a new hyperparameter optimization even if the results of an optimization are already available in the `hyp_config_path` folder
 
-Examples for `base_config` and `hyp_config` are `base_config.json` and `base_hyp_config.json`, respectively.
+Examples `base_config_path` and `hyp_config_path` files are `run_cp/base_config.json` and `run_cp/base_hyp_config.json`, respectively.
 
 
 ### Saving the predictions
