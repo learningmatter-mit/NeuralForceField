@@ -1,6 +1,7 @@
 """
 Save fingerprints generated with a 3D model so that they can
-be used as features for a ChemProp model.
+be used as features for a ChemProp model. Also make a sub-split
+of training and validation molecules for hyperparameter optimization.
 """
 
 import os
@@ -59,10 +60,48 @@ def summarize(save_paths, feat_folder):
     fprint(summary)
 
 
+def save_hyperopt(feat_folder,
+                  metric,
+                  smiles_folder,
+                  cp_save_folder,
+                  dset_size):
+    """
+    Aggregate the train and validation SMILES for hyperparameter optimization.
+    Split them into train/val/test for use in hyperopt.
+    """
+
+    names = ["train", "val"]
+    all_feats = []
+    all_smiles = []
+
+    for name in names:
+        smiles_list = get_smiles(smiles_folder, f"{name}_smiles.csv")
+        np_save_path = os.path.join(cp_save_folder,
+                                    f"{name}_{metric}.npz")
+        feats = np.load(np_save_path)
+        all_feats.append(feats)
+        all_smiles += smiles_list
+
+    all_feats = np.concatenate(all_feats)
+
+    if dset_size is not None:
+        all_smiles = all_smiles[:dset_size]
+        all_feats = all_feats[:dset_size]
+
+    # save the entire train + val dataset for hyperopt, and let chemprop
+    # do the subsequent splitting during hyperopt
+
+    hyp_np_path = os.path.join(cp_save_folder,
+                               f"hyperopt_{metric}.npz")
+    np.savez_compressed(hyp_np_path, features=all_feats)
+    save_smiles(smiles_folder, all_smiles, name="hyperopt")
+
+
 def main(feat_folder,
          metrics,
          smiles_folder,
          cp_save_folder,
+         hyper_dset_size,
          **kwargs):
 
     save_paths = []
@@ -78,8 +117,8 @@ def main(feat_folder,
             smiles_list = get_smiles(smiles_folder, f"{name}_smiles.csv")
             smiles_list = [smiles for smiles in smiles_list if smiles in dic]
 
-            # re-save the SMILES strings to make sure they're in the same
-            # order as the features
+            # re-save the SMILES strings to account for any that we may
+            # not be using
             save_smiles(smiles_folder, smiles_list, name)
 
             # arrange the features in that order
@@ -94,6 +133,12 @@ def main(feat_folder,
 
             np.savez_compressed(np_save_path, features=ordered_feats)
             save_paths.append(np_save_path)
+
+        save_hyperopt(feat_folder=feat_folder,
+                      metric=metric,
+                      smiles_folder=smiles_folder,
+                      cp_save_folder=cp_save_folder,
+                      dset_size=hyper_dset_size)
 
     summarize(save_paths, feat_folder)
 
@@ -118,6 +163,11 @@ if __name__ == "__main__":
                         help=("Generate features from 3D models "
                               "whose best model is chosen according to "
                               "these metrics."))
+    parser.add_argument('--hyper_dset_size', type=str, default=None,
+                        help=("Maximum size of the subset of the data  "
+                              "used for hyperparameter optimization. "
+                              "If not specified, the  entire training "
+                              "and validation set will be used."))
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "
