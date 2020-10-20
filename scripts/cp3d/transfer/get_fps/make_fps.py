@@ -2,7 +2,6 @@ import argparse
 import os
 import torch
 from torch.utils.data import DataLoader
-from torch.nn import Sigmoid
 import pickle
 from tqdm import tqdm
 import numpy as np
