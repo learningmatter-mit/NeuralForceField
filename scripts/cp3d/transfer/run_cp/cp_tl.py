@@ -30,13 +30,51 @@ def get_cp_cmd(script,
     return cmd
 
 
+def hyperopt(cp_folder,
+             hyp_folder,
+             rerun):
+
+    param_file = os.path.join(hyp_folder, "best_params.json")
+    params_exist = os.path.isfile(param_file)
+
+    if params_exist and not rerun:
+
+        print((f"Folder {hyp_folder} already exists, and "
+               "user requested not to rerun hyperparameter "
+               "optimization. Loading existing hyperparameter "
+               f"results from {hyp_folder}."))
+
+        with open(param_file, "r") as f:
+            best_params = json.load(f)
+        return best_params
+
+    hyp_script = os.path.join(cp_folder, "hyperparameter_optimization.py")
+    config_path = os.path.join(hyp_folder, "config.json")
+
+    with open(config_path, "r") as f:
+        config = json.load(f)
+
+    data_path = config["data_path"]
+    dataset_type = config["dataset_type"]
+    cmd = get_cp_cmd(hyp_script,
+                     config_path,
+                     data_path,
+                     dataset_type)
+    cmd += f" --config_save_path {param_file}"
+
+    p = bash_command(cmd)
+    p.wait()
+
+    with open(param_file, "r") as f:
+        best_params = json.load(f)
+
+    return best_params
+
+
 def train(cp_folder,
-          train_folder,
-          hyperopt):
+          train_folder):
 
     train_script = os.path.join(cp_folder, "train.py")
-    hyp_script = os.path.join(cp_folder, "hyperparameter_optimization.py")
-
     config_path = os.path.join(train_folder, "config.json")
 
     with open(config_path, "r") as f:
@@ -44,29 +82,13 @@ def train(cp_folder,
 
     data_path = config["data_path"]
     dataset_type = config["dataset_type"]
+    cmd = get_cp_cmd(train_script,
+                     config_path,
+                     data_path,
+                     dataset_type)
 
-    scripts = [train_script]
-    if hyperopt:
-        scripts.insert(0, hyp_script)
-
-    for script in scripts:
-
-        cmd = get_cp_cmd(script,
-                         config_path,
-                         data_path,
-                         dataset_type)
-
-        # now we need to:
-        # 1. Only use the train/test split
-        # --> Modify the features paths
-        # --> Modify the split paths
-        # --> Make new splits (with size option)
-        # --> Re-assign them to their proper values after
-        # hyperopt
-        # 2. Load the best hyperparameters into the next run
-
-        p = bash_command(cmd)
-        p.wait()
+    p = bash_command(cmd)
+    p.wait()
 
 
 def modify_config(base_config_path,
@@ -75,7 +97,8 @@ def modify_config(base_config_path,
                   val_feat_path,
                   test_feat_path,
                   train_folder,
-                  features_only):
+                  features_only,
+                  hyp_params):
 
     with open(base_config_path, "r") as f:
         config = json.load(f)
@@ -85,7 +108,8 @@ def modify_config(base_config_path,
            "separate_val_features_path": [val_feat_path],
            "separate_test_features_path": [test_feat_path],
            "save_dir": train_folder,
-           "features_only": features_only}
+           "features_only": features_only,
+           **hyp_params}
 
     config.update({key: val for key, val in
                    dic.items() if val is not None})
@@ -98,7 +122,33 @@ def modify_config(base_config_path,
         json.dump(config, f, indent=4, sort_keys=True)
 
 
+def modify_hyp_config(hyp_config_path,
+                      metric,
+                      hyp_feat_path,
+                      hyp_folder,
+                      features_only):
+
+    with open(hyp_config_path, "r") as f:
+        config = json.load(f)
+
+    dic = {"metric": metric,
+           "features_path": [hyp_feat_path],
+           "save_dir": hyp_folder,
+           "features_only": features_only}
+
+    config.update({key: val for key, val in
+                   dic.items() if val is not None})
+
+    new_config_path = os.path.join(hyp_folder, "config.json")
+    if not os.path.isdir(hyp_folder):
+        os.makedirs(hyp_folder)
+
+    with open(new_config_path, "w") as f:
+        json.dump(config, f, indent=4, sort_keys=True)
+
+
 def main(base_config_path,
+         hyp_config_path,
          train_folder,
          metric,
          train_feat_path,
@@ -106,8 +156,27 @@ def main(base_config_path,
          test_feat_path,
          cp_folder,
          features_only,
-         hyperopt,
+         use_hyperopt,
+         rerun_hyperopt,
          **kwargs):
+
+    if use_hyperopt:
+
+        hyp_feat_path = train_feat_path.replace("train", "hyperopt")
+        hyp_folder = train_folder + "_hyp"
+
+        modify_hyp_config(hyp_config_path=hyp_config_path,
+                          metric=metric,
+                          hyp_feat_path=hyp_feat_path,
+                          hyp_folder=hyp_folder,
+                          features_only=features_only)
+
+        hyp_params = hyperopt(cp_folder=cp_folder,
+                              hyp_folder=hyp_folder,
+                              rerun=rerun_hyperopt)
+
+    else:
+        hyp_params = {}
 
     modify_config(base_config_path=base_config_path,
                   metric=metric,
@@ -115,15 +184,11 @@ def main(base_config_path,
                   val_feat_path=val_feat_path,
                   test_feat_path=test_feat_path,
                   train_folder=train_folder,
-                  features_only=features_only)
-
-    # if we use hyperopt we have to use a subsample of the
-    # data and give them the choice of how to choose that
-    # subsample
+                  features_only=features_only,
+                  hyp_params=hyp_params)
 
     train(cp_folder=cp_folder,
-          train_folder=train_folder,
-          hyperopt=hyperopt)
+          train_folder=train_folder)
 
 
 if __name__ == "__main__":
@@ -137,6 +202,16 @@ if __name__ == "__main__":
                               "If they are not specified then "
                               "the config file will not be "
                               "modified."))
+    parser.add_argument("--hyp_config_path", type=str, default=None,
+                        help=("Same as `base_config_path`, but "
+                              "for the hyperparameter optimization "
+                              "stage"))
+    parser.add_argument("--do_hyperopt", action='store_true',
+                        help=("Do hyperparameter optimization before "
+                              "training "))
+    parser.add_argument("--rerun_hyperopt", action='store_true',
+                        help=("Rerun hyperparameter optimization even if "
+                              "it has been done already. "))
 
     parser.add_argument("--metric", type=str,
                         choices=METRIC_CHOICES,

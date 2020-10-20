@@ -66,8 +66,7 @@ def save_hyperopt(feat_folder,
                   cp_save_folder,
                   dset_size):
     """
-    Aggregate the train and validation SMILES for hyperparameter optimization.
-    Split them into train/val/test for use in hyperopt.
+    Aggregate and save the train and validation SMILES for hyperparameter optimization.
     """
 
     names = ["train", "val"]
@@ -94,6 +93,10 @@ def save_hyperopt(feat_folder,
     hyp_np_path = os.path.join(cp_save_folder,
                                f"hyperopt_{metric}.npz")
     np.savez_compressed(hyp_np_path, features=all_feats)
+
+    # this doesn't work - you need a pre-existing file of this
+    # name for it to work. What you really need to do is just
+    # add the train and val files, without the header in val.
     save_smiles(smiles_folder, all_smiles, name="hyperopt")
 
 
