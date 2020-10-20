@@ -286,6 +286,12 @@ The script `run_cp/run_all_tls.sh` runs ChemProp using the features generated ab
     - `metrics` (list[str]): Subset of the metrics above. For every metric there exists a corresponding best CP3D model and associated CP3D features. A new ChemProp model will be trained for every different set of these features. The associated ChemProp model will also be scored on that metric. 
     - `feat_options` (list[bool]): Whether to use the CP3D features in the ChemProp model. If you specify [True, False], then separate models will be trained, one in which they are used and one in which they aren't. This might be useful if you want to compare performance with and without 3D features.
     - `mpnn_options` (list[bool]):  Whether to use an MPNN in conjunction with the CP3D features in the ChemProp model. If you specify [True, False], then separate models will be trained, one in which an MPNN is used and one in which it isn't. 
+    - `do_hyperopt` (bool): Perform a hyperparameter optimization before training the model and evaluating on the test set.
+    -   `hyp_config_path` (str): Path to the config path that will be used for hyperparameter optimization before training the final model
+    - `rerun_hyerpopt` (bool): Do a new hyperparameter optimization even if the results of an optimization are already available in the `hyp_config_path` folder
+
+Examples for `base_config` and `hyp_config` are `base_config.json` and `base_hyp_config.json`, respectively.
+
 
 ### Saving the predictions
 Now that we've trained our models we want to get and save their predictions. That way we can do further analysis afterwards. For example, if we've trained a model to maximize the PRC-AUC but we want to also see what the model's ROC-AUC is, we'll have to get its predictions and do the analysis ourselves.
