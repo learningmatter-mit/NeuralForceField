@@ -19,10 +19,24 @@ METRIC_CHOICES = ["auc",
                   "cross_entropy"]
 
 
+def get_cp_cmd(script,
+               config_path,
+               data_path,
+               dataset_type):
+
+    cmd = (f"python {script} --config_path {config_path} "
+           f" --data_path {data_path} "
+           f" --dataset_type {dataset_type}")
+    return cmd
+
+
 def train(cp_folder,
-          train_folder):
+          train_folder,
+          hyperopt):
 
     train_script = os.path.join(cp_folder, "train.py")
+    hyp_script = os.path.join(cp_folder, "hyperparameter_optimization.py")
+
     config_path = os.path.join(train_folder, "config.json")
 
     with open(config_path, "r") as f:
@@ -30,12 +44,29 @@ def train(cp_folder,
 
     data_path = config["data_path"]
     dataset_type = config["dataset_type"]
-    cmd = (f"python {train_script} --config_path {config_path} "
-           f" --data_path {data_path} "
-           f" --dataset_type {dataset_type}")
 
-    p = bash_command(cmd)
-    p.communicate()
+    scripts = [train_script]
+    if hyperopt:
+        scripts.insert(0, hyp_script)
+
+    for script in scripts:
+
+        cmd = get_cp_cmd(script,
+                         config_path,
+                         data_path,
+                         dataset_type)
+
+        # now we need to:
+        # 1. Only use the train/test split
+        # --> Modify the features paths
+        # --> Modify the split paths
+        # --> Make new splits (with size option)
+        # --> Re-assign them to their proper values after
+        # hyperopt
+        # 2. Load the best hyperparameters into the next run
+
+        p = bash_command(cmd)
+        p.wait()
 
 
 def modify_config(base_config_path,
@@ -75,6 +106,7 @@ def main(base_config_path,
          test_feat_path,
          cp_folder,
          features_only,
+         hyperopt,
          **kwargs):
 
     modify_config(base_config_path=base_config_path,
@@ -85,8 +117,13 @@ def main(base_config_path,
                   train_folder=train_folder,
                   features_only=features_only)
 
+    # if we use hyperopt we have to use a subsample of the
+    # data and give them the choice of how to choose that
+    # subsample
+
     train(cp_folder=cp_folder,
-          train_folder=train_folder)
+          train_folder=train_folder,
+          hyperopt=hyperopt)
 
 
 if __name__ == "__main__":
