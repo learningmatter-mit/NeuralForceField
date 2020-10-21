@@ -161,10 +161,8 @@ def get_bond_idx(bonded_nbr_list, nbr_list, device):
     nbr_list = nbr_list.to(device)
 
     nbr_dic = {to_tuple(pair): i for i, pair in enumerate(nbr_list)}
-    bond_idx = torch.LongTensor(
-        [list(nbr_dic[to_tuple(pair)])
-         for pair in bond_nbrs]
-    )
+    bond_idx = torch.LongTensor([nbr_dic[to_tuple(pair)]
+                                 for pair in bond_nbrs])
 
     # bond_idx = (bond_nbrs[:, None] == nbr_list
     #             ).prod(-1).nonzero()[:, 1]
