@@ -620,7 +620,8 @@ def main(max_confs,
                 thread=thread,
                 sample_dic=sample_dic)
 
-    fprint("Complete!")
+    fprint((f"Complete! Saved section {thread} of the dataset in "
+            f"{os.path.join(dataset_folder, str(thread))}."))
 
 
 if __name__ == "__main__":
