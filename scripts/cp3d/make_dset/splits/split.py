@@ -37,7 +37,7 @@ def to_csv(summary_dic,
 
 def filter_prop_and_pickle(sample_dic, props):
 
-    # filter for both having the prop and having an associated
+    # filter for both having the props and having an associated
     # pickle file
 
     smiles_list = [key for key, sub_dic in sample_dic.items()

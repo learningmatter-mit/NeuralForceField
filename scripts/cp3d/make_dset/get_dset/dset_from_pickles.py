@@ -5,6 +5,7 @@ import torch
 import numpy as np
 import argparse
 from tqdm import tqdm
+from rkdit import Chem
 
 from nff.data import Dataset, concatenate_dict
 from nff.utils import tqdm_enum, parse_args, fprint
@@ -18,6 +19,72 @@ KEY_MAP = {"rd_mol": "nxyz",
 # these are keys that confuse the dataset
 EXCLUDE_KEYS = ["totalconfs", "datasets", "conformerweights",
                 "uncleaned_smiles"]
+
+
+def mol_to_smiles(rd_mol):
+    """
+    Get the canonical SMILES from an RDKit mol 
+    """
+    smiles = Chem.MolToSmiles(rd_mol)
+    new_mol = Chem.MolFromSmiles(smiles)
+    smiles = Chem.MolToSmiles(new_mol)
+
+    return smiles
+
+
+def trim_dset(dset, good_idx):
+    for key, val in dset.props.items():
+        if type(val) is list:
+            dset.props[key] = [val[i] for i in good_idx]
+        else:
+            dset.props[key] = val[good_idx]
+    return dset
+
+
+def filter_same_smiles(dset):
+    """
+    Filter out species whose conformers don't all have the same SMILES. Can happen
+    because, for example, CREST simulations can be reactive. This won't happen if
+    conformers are generated using RDKit.
+    """
+
+    good_idx = []
+
+    for i, batch in enumerate(dset):
+        rd_mols = batch["rd_mols"]
+        smiles_list = [mol_to_smiles(mol) for mol in rd_mols]
+        unique_smiles = list(set(smiles_list))
+        if len(unique_smiles) == 1:
+            good_idx.append(i)
+
+    dset = trim_dset(dset, good_idx)
+
+    return dset
+
+
+def filter_bonds_in_nbr(cutoff, dset):
+    """
+    Filter out conformers whose bonds are not within the cutoff distance
+    that defines the neighbor list. CP3D can't use these conformers because
+    there will be bonds that don't have distance features, as the two atoms are
+    not within each other's cutoff. Any conformer with bonds > 5 A is probably
+    not too accurate anyway.
+    """
+
+    good_idx = []
+
+    for i, batch in enumerate(dset):
+        bond_list = batch["bonded_nbr_list"]
+        nxyz = batch["nxyz"]
+        bond_lens = (nxyz[:, 1:][bond_list[:, 0]] -
+                     nxyz[:, 1:][bond_list[:, 1]]).norm(dim=1)
+        valid = (bond_lens < cutoff).all()
+        if valid:
+            good_idx.append(i)
+
+    dset = trim_dset(dset, good_idx)
+
+    return dset
 
 
 def get_thread_dic(sample_dic, thread, num_threads):
@@ -50,6 +117,50 @@ def get_splits(sample_dic,
             sample_dic.pop(key)
 
     return sample_dic
+
+
+def resave_splits(csv_folder,
+                  dset):
+    """
+    Re-save the SMILES splits accounting for the fact that not all
+    species made it into this dataset
+    """
+
+    # create a dictionary to quickly see if a SMILES is in the dataset,
+    # rather than having to loop over the entire thing every time we
+    # want to see if a SMILES string is present
+
+    dset_smiles = {smiles: i for i,
+                   smiles in enumerate(dset.props["smiles"])}
+
+    # new number of SMILES
+    new_num = len(dset_smiles)
+    # old number of smiles
+    old_num = 0
+
+    split_names = ["train", "val", "test"]
+    suffixes = ["smiles", "full"]
+
+    for name in split_names:
+        for suffix in suffixes:
+
+            path = os.path.join(csv_folder, f"{name}_{suffix}.csv")
+            with open(path, "r") as f:
+                lines = f.readlines()
+
+            keep_lines = [lines[0]]
+            old_num += len(lines) - 1
+
+            for line in lines[1:]:
+                smiles = i.split(",")[0].strip()
+                if smiles in dset_smiles:
+                    keep_lines.append(line)
+
+            new_text = "".join(keep_lines)
+            with open(path, "w") as f:
+                f.write(new_text)
+
+    return old_num, new_num
 
 
 def get_sample(summary_dic,
@@ -240,9 +351,64 @@ def add_missing(props_list):
     return props_list
 
 
+def clean_up_dset(dset,
+                  nbr_list,
+                  rd_mols_list,
+                  nbrlist_cutoff,
+                  strict_conformers,
+                  csv_folder):
+    """
+    Do various things to clean up the dataset after you've made it
+    """
+
+    # give it the proper neighbor list and rdkit mols
+    dset.props['nbr_list'] = nbr_list
+    dset.props["rd_mols"] = rd_mols_list
+
+    # if requested, get rid of any species whose conformers have different
+    # SMILES strings
+    if strict_conformers:
+        dset = filter_same_smiles(dset)
+
+    # Get rid of any conformers whose bond lists aren't subsets of the
+    # neighbor list
+    dset = filter_bonds_in_nbr(nbrlist_cutoff, dset)
+
+    # Add the indices of the neighbor list that correspond to bonded atoms
+    dset.generate_bond_idx()
+
+    # Re-save the train/val/test splits accounting for the fact that some
+    # species are no longer there
+
+    # this doesn't actually return anything yet
+
+    old_num, new_num = resave_splits(csv_folder=csv_folder,
+                                     dset=dset)
+
+    changed_num = old_num != new_num
+    if changed_num:
+        msg = ("WARNING: the original SMILES splits have been re-saved with "
+               f"{new_num} species, reduced from the original {old_num}, "
+               f"because only {new_num} species made it into the final "
+               "dataset. This could be because of conformers with bond "
+                "lengths greater than the cutoff distance of %.2f"
+               ) % nbrlist_cutoff
+
+        if strict_conformers:
+            msg += (", or because the conformers of certain species didn't "
+                    "all have the same SMILES string")
+        msg += "."
+
+        fprint(msg)
+
+    return dset
+
+
 def make_nff_dataset(spec_dics,
                      nbrlist_cutoff,
-                     parallel_feat_threads):
+                     parallel_feat_threads,
+                     strict_conformers,
+                     csv_folder):
 
     fprint("Making dataset with %d species" % (len(spec_dics)))
 
@@ -317,12 +483,15 @@ def make_nff_dataset(spec_dics,
     # one big molecule
     big_dataset = Dataset(props_dic.copy(), units='kcal/mol')
 
-    # give it the proper neighbor list
-    big_dataset.props['nbr_list'] = nbr_list
+    # clean up
+    big_dataset = clean_up_dset(dset=nbr_list,
+                                nbr_list=nbr_list,
+                                rd_mols_list=rd_mols_list,
+                                nbrlist_cutoff=nbrlist_cutoff,
+                                strict_conformers=strict_conformers,
+                                csv_folder=csv_folder)
 
     # generate features
-
-    big_dataset.props["rd_mols"] = rd_mols_list
     big_dataset.featurize(num_procs=parallel_feat_threads)
 
     fprint("Adding E3FP fingerprints...")
@@ -332,6 +501,10 @@ def make_nff_dataset(spec_dics,
     fprint("Adding Morgan fingerprints...")
     big_dataset.add_morgan(256)
 
+    ########
+    # must modify the smiles csvs that we started with so that cp3d and
+    # chemprop won't train on different species. Also note this in the docs
+    ########
 
     fprint("Complete!")
 
@@ -397,6 +570,7 @@ def main(max_confs,
          nbrlist_cutoff,
          csv_folder,
          parallel_feat_threads,
+         strict_conformers,
          ** kwargs):
 
     with open(summary_path, "r") as f:
@@ -418,7 +592,10 @@ def main(max_confs,
     fprint("Combining to make NFF dataset...")
     dataset = make_nff_dataset(spec_dics=spec_dics,
                                nbrlist_cutoff=nbrlist_cutoff,
-                               parallel_feat_threads=parallel_feat_threads)
+                               parallel_feat_threads=parallel_feat_threads,
+                               strict_conformers=strict_conformers,
+                               csv_folder=csv_folder)
+
     fprint("Creating test/train/val splits...")
     save_splits(dataset=dataset,
                 dataset_folder=dataset_folder,
@@ -455,6 +632,9 @@ if __name__ == "__main__":
                         default=5,
                         help=("Number of parallel threads to use "
                               "when generating features"))
+    parser.add_argument('--strict_conformers', action='store_true'
+                        help=("Exclude any species whose conformers don't "
+                              "all have the same SMILES."))
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "
