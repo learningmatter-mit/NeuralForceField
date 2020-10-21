@@ -152,24 +152,14 @@ def to_tuple(tensor):
     return tuple(tensor.cpu().tolist())
 
 
-def get_bond_idx(bonded_nbr_list, nbr_list, device):
+def get_bond_idx(bonded_nbr_list, nbr_list):
 
     bond_nbrs, _ = make_directed(bonded_nbr_list)
     nbr_list, _ = make_directed(nbr_list)
 
-    bond_nbrs = bond_nbrs.to(device)
-    nbr_list = nbr_list.to(device)
-
     nbr_dic = {to_tuple(pair): i for i, pair in enumerate(nbr_list)}
     bond_idx = torch.LongTensor([nbr_dic[to_tuple(pair)]
                                  for pair in bond_nbrs])
-
-    # bond_idx = (bond_nbrs[:, None] == nbr_list
-    #             ).prod(-1).nonzero()[:, 1]
-
-    bond_nbrs = bond_nbrs.detach().cpu()
-    nbr_list = nbr_list.detach().cpu()
-    # bond_idx = bond_idx.detach().cpu()
 
     return nbr_list, bond_nbrs, bond_idx
 

@@ -181,7 +181,7 @@ class Dataset(TorchDataset):
 
         return
 
-    def generate_bond_idx(self, device="cpu"):
+    def generate_bond_idx(self):
 
         self.props["bond_idx"] = []
 
@@ -191,7 +191,7 @@ class Dataset(TorchDataset):
             nbr_list = self.props["nbr_list"][i]
 
             nbr_list, bond_nbrs, bond_idx = get_bond_idx(
-                bonded_nbr_list, nbr_list, device)
+                bonded_nbr_list, nbr_list)
             self.props["nbr_list"][i] = nbr_list.cpu()
             self.props["bonded_nbr_list"][i] = bond_nbrs.cpu()
             self.props["bond_idx"].append(bond_idx.cpu())
