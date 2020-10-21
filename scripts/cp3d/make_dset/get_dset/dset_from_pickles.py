@@ -146,8 +146,6 @@ def resave_splits(csv_folder,
 
     # new number of SMILES
     new_num = len(dset_smiles)
-    # old number of smiles
-    old_num = 0
 
     split_names = ["train", "val", "test"]
     suffixes = ["smiles", "full"]
@@ -160,7 +158,6 @@ def resave_splits(csv_folder,
                 lines = f.readlines()
 
             keep_lines = [lines[0]]
-            old_num += len(lines) - 1
 
             for line in lines[1:]:
                 smiles = line.split(",")[0].strip()
@@ -171,7 +168,7 @@ def resave_splits(csv_folder,
             with open(path, "w") as f:
                 f.write(new_text)
 
-    return old_num, new_num
+    return new_num
 
 
 def get_sample(summary_dic,
@@ -372,6 +369,8 @@ def clean_up_dset(dset,
     Do various things to clean up the dataset after you've made it
     """
 
+    old_num = len(dset)
+
     for i in tqdm(range(3)):
 
         # if requested, get rid of any species whose conformers have different
@@ -393,7 +392,7 @@ def clean_up_dset(dset,
     # Re-save the train/val/test splits accounting for the fact that some
     # species are no longer there
 
-    old_num, new_num = resave_splits(csv_folder=csv_folder,
+    new_num = resave_splits(csv_folder=csv_folder,
                                      dset=dset)
 
     changed_num = old_num != new_num
