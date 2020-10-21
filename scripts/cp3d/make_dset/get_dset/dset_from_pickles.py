@@ -52,6 +52,12 @@ def trim_dset(dset, good_idx):
     return dset
 
 
+def get_bad_smiles(dset, good_idx):
+    bad_smiles = [smiles for i, smiles in enumerate(dset.props["smiles"])
+                  if i not in good_idx]
+    return bad_smiles
+
+
 def filter_same_smiles(dset):
     """
     Filter out species whose conformers don't all have the same SMILES. Can happen
@@ -69,8 +75,9 @@ def filter_same_smiles(dset):
             good_idx.append(i)
 
     dset = trim_dset(dset, good_idx)
+    bad_smiles = get_bad_smiles(dset, good_idx)
 
-    return dset
+    return dset, bad_smiles
 
 
 def filter_bonds_in_nbr(cutoff, dset):
@@ -94,8 +101,9 @@ def filter_bonds_in_nbr(cutoff, dset):
             good_idx.append(i)
 
     dset = trim_dset(dset, good_idx)
+    bad_smiles = get_bad_smiles(dset, good_idx)
 
-    return dset
+    return dset, bad_smiles
 
 
 def get_thread_dic(sample_dic, thread, num_threads):
@@ -131,7 +139,8 @@ def get_splits(sample_dic,
 
 
 def resave_splits(csv_folder,
-                  dset):
+                  dset,
+                  remove_smiles):
     """
     Re-save the SMILES splits accounting for the fact that not all
     species made it into this dataset
@@ -140,12 +149,6 @@ def resave_splits(csv_folder,
     # create a dictionary to quickly see if a SMILES is in the dataset,
     # rather than having to loop over the entire thing every time we
     # want to see if a SMILES string is present
-
-    dset_smiles = {smiles: i for i,
-                   smiles in enumerate(dset.props["smiles"])}
-
-    # new number of SMILES
-    new_num = len(dset_smiles)
 
     split_names = ["train", "val", "test"]
     suffixes = ["smiles", "full"]
@@ -161,14 +164,12 @@ def resave_splits(csv_folder,
 
             for line in lines[1:]:
                 smiles = line.split(",")[0].strip()
-                if smiles in dset_smiles:
+                if smiles not in remove_smiles:
                     keep_lines.append(line)
 
             new_text = "".join(keep_lines)
             with open(path, "w") as f:
                 f.write(new_text)
-
-    return new_num
 
 
 def get_sample(summary_dic,
@@ -370,6 +371,7 @@ def clean_up_dset(dset,
     """
 
     old_num = len(dset)
+    remove_smiles = []
 
     for i in tqdm(range(3)):
 
@@ -377,12 +379,14 @@ def clean_up_dset(dset,
         # SMILES strings
         if i == 1:
             if strict_conformers:
-                dset = filter_same_smiles(dset)
+                dset, removed = filter_same_smiles(dset)
+                remove_smiles += removed
 
         elif i == 2:
             # Get rid of any conformers whose bond lists aren't subsets of the
             # neighbor list
-            dset = filter_bonds_in_nbr(nbrlist_cutoff, dset)
+            dset, removed = filter_bonds_in_nbr(nbrlist_cutoff, dset)
+            remove_smiles += removed
 
         elif i == 3:
             # Add the indices of the neighbor list that correspond to
@@ -392,8 +396,10 @@ def clean_up_dset(dset,
     # Re-save the train/val/test splits accounting for the fact that some
     # species are no longer there
 
-    new_num = resave_splits(csv_folder=csv_folder,
-                                     dset=dset)
+    resave_splits(csv_folder=csv_folder,
+                  dset=dset,
+                  remove_smiles=remove_smiles)
+    new_num = old_num - len(remove_smiles)
 
     changed_num = old_num != new_num
     if changed_num:
