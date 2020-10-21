@@ -53,14 +53,14 @@ def get_msg(feat, mpnn, metric, train_folder):
     if mpnn:
         msg += "an MPNN "
 
-    msg += f"in folder {train_folder}"
+    msg += f"in folder {train_folder}\n"
 
     return msg
 
 
 def main(base_config_path,
          hyp_config_path,
-         do_hyperopt,
+         use_hyperopt,
          rerun_hyperopt,
          cp_folder,
          feature_folder,
@@ -106,8 +106,8 @@ def main(base_config_path,
                        f"--train_folder {train_folder} "
                        f"--cp_folder {cp_folder} ")
 
-                if do_hyperopt:
-                    cmd += "--do_hyperopt "
+                if use_hyperopt:
+                    cmd += "--use_hyperopt "
                 if rerun_hyperopt:
                     cmd += "--rerun_hyperopt "
 
@@ -127,7 +127,7 @@ if __name__ == "__main__":
                         help=("Same as `base_config_path`, but "
                               "for the hyperparameter optimization "
                               "stage"))
-    parser.add_argument("--do_hyperopt", action='store_true',
+    parser.add_argument("--use_hyperopt", action='store_true',
                         help=("Do hyperparameter optimization before "
                               "training "))
     parser.add_argument("--rerun_hyperopt", action='store_true',

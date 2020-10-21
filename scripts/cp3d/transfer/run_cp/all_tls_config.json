@@ -17,7 +17,7 @@
   ],
 
   "hyp_config_path": "/home/saxelrod/Repo/projects/covid_clean/NeuralForceField/scripts/cp3d/transfer/run_cp/base_hyp_config.json",
-  "do_hyperopt": true,
+  "use_hyperopt": true,
   "rerun_hyperopt": false
 
 }

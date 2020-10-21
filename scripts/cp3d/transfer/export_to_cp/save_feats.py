@@ -159,9 +159,9 @@ def save_hyperopt(feat_folder,
       smiles_folder (str): folder with the csvs
       cp_save_folder (str): folder in which you're saving features for chemprop use
       dset_size (int, optional): maximum size of the entire dataset to use in hyperparameter 
-        optimization. 
+        optimization.
     Returns:
-      None
+      hyp_np_path (str): path of npz features file for hyperparameter optimization
     """
 
     names = ["train", "val"]
@@ -172,7 +172,7 @@ def save_hyperopt(feat_folder,
         smiles_list = get_smiles(smiles_folder, f"{name}_smiles.csv")
         np_save_path = os.path.join(cp_save_folder,
                                     f"{name}_{metric}.npz")
-        feats = np.load(np_save_path)
+        feats = np.load(np_save_path)['features']
         all_feats.append(feats)
         all_smiles += smiles_list
 
@@ -190,6 +190,8 @@ def save_hyperopt(feat_folder,
     # save csvs for the train + val dataset
     make_hyperopt_csvs(smiles_folder=smiles_folder,
                        all_smiles=all_smiles)
+
+    return hyp_np_path
 
 
 def main(feat_folder,
@@ -212,6 +214,7 @@ def main(feat_folder,
     """
 
     save_paths = []
+    hyp_save_paths = []
     for metric in metrics:
         names = ["train", "val", "test"]
 
@@ -247,14 +250,15 @@ def main(feat_folder,
             save_paths.append(np_save_path)
 
         # save the subset of train and val for hyperparameter optimization
-        save_hyperopt(feat_folder=feat_folder,
-                      metric=metric,
-                      smiles_folder=smiles_folder,
-                      cp_save_folder=cp_save_folder,
-                      dset_size=hyper_dset_size)
+        hyp_save_path = save_hyperopt(feat_folder=feat_folder,
+                                      metric=metric,
+                                      smiles_folder=smiles_folder,
+                                      cp_save_folder=cp_save_folder,
+                                      dset_size=hyper_dset_size)
+        hyp_save_paths.append(hyp_save_path)
 
     # tell the user what we did
-    summarize(save_paths, feat_folder)
+    summarize(save_paths + hyp_save_paths, feat_folder)
 
 
 if __name__ == "__main__":

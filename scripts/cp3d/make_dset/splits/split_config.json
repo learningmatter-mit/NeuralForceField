@@ -1,5 +1,5 @@
 {
-  "summary_path": "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/rdkit_folder/summary_drugs.json",
+  "summary_path": "/home/saxelrod/supercloud2/models/full_dset/rdkit_folder/summary_drugs.json",
   "csv_folder": "/home/saxelrod/chemprop_cov_2/scaffold_split",
   "cp_folder": "/home/saxelrod/Repo/projects/chemprop",
   "props": ["sars_cov_two_cl_protease_active"],

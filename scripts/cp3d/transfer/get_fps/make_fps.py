@@ -1,3 +1,7 @@
+"""
+Get fingerprints produced by a CP3D model.
+"""
+
 import argparse
 import os
 import torch
@@ -25,6 +29,17 @@ def save(results,
          targets,
          feat_save_folder,
          prop):
+    """
+    Save fingerprints, predicted values, true valuse, and various conformer weights.
+    Args:
+      results (dict): dictionary of the results of applying the CP3D model
+      targets (dict): target values
+      feat_save_folder (str): folder in which we save the features files
+      prop (str): property that you're predicting 
+
+    """
+
+    # get the true and predicted values of `prop`
 
     if prop is None:
         y_true = None
@@ -49,7 +64,10 @@ def save(results,
     smiles_list = targets["smiles"]
     dic = {}
 
-    # for alpha_ij attention
+    # whether we're using alpha_ij attention (i.e., every conformer talks
+    # to every other), or alpha_i attention (i.e., we just use the conformer's
+    # fingerprint to get its weight)
+
     alpha_ij_att = all([w.reshape(-1).shape[0] == conf_fp.shape[0] ** 2
                         for w, conf_fp in zip(learned_weights, all_conf_fps)])
 

@@ -7,7 +7,7 @@ import os
 import json
 import argparse
 
-from nff.utils import bash_command, parse_args
+from nff.utils import bash_command, parse_args, fprint
 
 METRIC_CHOICES = ["auc",
                   "prc-auc",
@@ -37,12 +37,9 @@ def hyperopt(cp_folder,
     param_file = os.path.join(hyp_folder, "best_params.json")
     params_exist = os.path.isfile(param_file)
 
-    if params_exist and not rerun:
+    if params_exist and (not rerun):
 
-        print((f"Folder {hyp_folder} already exists, and "
-               "user requested not to rerun hyperparameter "
-               "optimization. Loading existing hyperparameter "
-               f"results from {hyp_folder}."))
+        fprint(f"Loading hyperparameter results from {param_file}\n")
 
         with open(param_file, "r") as f:
             best_params = json.load(f)
@@ -62,6 +59,7 @@ def hyperopt(cp_folder,
                      dataset_type)
     cmd += f" --config_save_path {param_file}"
 
+    fprint(f"Running hyperparameter optimization in folder {hyp_folder}\n")
     p = bash_command(cmd)
     p.wait()
 
@@ -206,7 +204,7 @@ if __name__ == "__main__":
                         help=("Same as `base_config_path`, but "
                               "for the hyperparameter optimization "
                               "stage"))
-    parser.add_argument("--do_hyperopt", action='store_true',
+    parser.add_argument("--use_hyperopt", action='store_true',
                         help=("Do hyperparameter optimization before "
                               "training "))
     parser.add_argument("--rerun_hyperopt", action='store_true',
