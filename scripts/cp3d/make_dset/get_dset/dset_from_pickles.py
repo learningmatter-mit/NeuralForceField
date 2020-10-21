@@ -61,7 +61,7 @@ def filter_same_smiles(dset):
 
     good_idx = []
 
-    for i, batch in enumerate(dset):
+    for i, batch in tqdm_enum(dset):
         rd_mols = batch["rd_mols"]
         smiles_list = [mol_to_smiles(mol) for mol in rd_mols]
         unique_smiles = list(set(smiles_list))
@@ -84,7 +84,7 @@ def filter_bonds_in_nbr(cutoff, dset):
 
     good_idx = []
 
-    for i, batch in enumerate(dset):
+    for i, batch in tqdm_enum(dset):
         bond_list = batch["bonded_nbr_list"]
         nxyz = batch["nxyz"]
         bond_lens = (nxyz[:, 1:][bond_list[:, 0]] -
@@ -163,7 +163,7 @@ def resave_splits(csv_folder,
             old_num += len(lines) - 1
 
             for line in lines[1:]:
-                smiles = i.split(",")[0].strip()
+                smiles = line.split(",")[0].strip()
                 if smiles in dset_smiles:
                     keep_lines.append(line)
 
@@ -495,6 +495,7 @@ def make_nff_dataset(spec_dics,
     big_dataset.featurize(num_procs=parallel_feat_threads)
 
     # clean up
+    fprint("Cleaning up dataset...")
     big_dataset = clean_up_dset(dset=big_dataset,
                                 nbr_list=nbr_list,
                                 rd_mols_list=rd_mols_list,
