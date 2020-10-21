@@ -6,5 +6,6 @@
   "num_threads": 100,
   "csv_folder": "/home/gridsan/saxelrod/chemprop_cov_2/scaffold_split",
   "parallel_feat_threads": 2,
-  "strict_conformers": true
+  "strict_conformers": true,
+  "device": 0
 }
