@@ -365,7 +365,8 @@ def clean_up_dset(dset,
                   rd_mols_list,
                   nbrlist_cutoff,
                   strict_conformers,
-                  csv_folder):
+                  csv_folder,
+                  device):
     """
     Do various things to clean up the dataset after you've made it
     """
@@ -391,7 +392,7 @@ def clean_up_dset(dset,
         elif i == 2:
             # Add the indices of the neighbor list that correspond to
             # bonded atoms
-            dset.generate_bond_idx()
+            dset.generate_bond_idx(device)
 
     # Re-save the train/val/test splits accounting for the fact that some
     # species are no longer there
@@ -424,7 +425,8 @@ def make_nff_dataset(spec_dics,
                      nbrlist_cutoff,
                      parallel_feat_threads,
                      strict_conformers,
-                     csv_folder):
+                     csv_folder,
+                     device):
 
     fprint("Making dataset with %d species" % (len(spec_dics)))
 
@@ -512,7 +514,8 @@ def make_nff_dataset(spec_dics,
                                 rd_mols_list=rd_mols_list,
                                 nbrlist_cutoff=nbrlist_cutoff,
                                 strict_conformers=strict_conformers,
-                                csv_folder=csv_folder)
+                                csv_folder=csv_folder,
+                                device=device)
 
     fprint("Adding E3FP fingerprints...")
     big_dataset.add_e3fp(256, num_procs=parallel_feat_threads)
@@ -591,6 +594,7 @@ def main(max_confs,
          csv_folder,
          parallel_feat_threads,
          strict_conformers,
+         device,
          ** kwargs):
 
     with open(summary_path, "r") as f:
@@ -614,7 +618,8 @@ def main(max_confs,
                                nbrlist_cutoff=nbrlist_cutoff,
                                parallel_feat_threads=parallel_feat_threads,
                                strict_conformers=strict_conformers,
-                               csv_folder=csv_folder)
+                               csv_folder=csv_folder,
+                               device=device)
 
     fprint("Creating test/train/val splits...")
     save_splits(dataset=dataset,
@@ -655,6 +660,8 @@ if __name__ == "__main__":
     parser.add_argument('--strict_conformers', action='store_true',
                         help=("Exclude any species whose conformers don't "
                               "all have the same SMILES."))
+    parser.add_argument('--device', type=str,
+                        help=("Device to use (cpu or indices for a GPU)"))
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "
