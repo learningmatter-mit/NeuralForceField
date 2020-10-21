@@ -1,10 +1,10 @@
 {
   "max_confs": 200,
-  "summary_path": "/home/saxelrod/supercloud2/models/full_dset/rdkit_folder/summary_drugs.json",
-  "dataset_folder": "/home/saxelrod/supercloud2/models/full_dset",
-  "pickle_folder": "/home/saxelrod/supercloud2/models/full_dset/rdkit_folder",
-  "num_threads": 16,
-  "csv_folder": "/home/saxelrod/supercloud2/chemprop_cov_2/scaffold_split",
-  "parallel_feat_threads": 40,
+  "summary_path": "/home/gridsan/saxelrod/models/full_dset/rdkit_folder/summary_drugs.json",
+  "dataset_folder": "/home/gridsan/saxelrod/models/full_dset",
+  "pickle_folder": "/home/gridsan/saxelrod/models/full_dset/rdkit_folder",
+  "num_threads": 100,
+  "csv_folder": "/home/gridsan/saxelrod/chemprop_cov_2/scaffold_split",
+  "parallel_feat_threads": 2,
   "strict_conformers": true
 }

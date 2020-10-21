@@ -1,10 +1,11 @@
 #!/bin/bash
 #SBATCH -N 1
 #SBATCH -t 30240
-#SBATCH --mem=300G
+##SBATCH --mem=300G
 #SBATCH --no-requeue
 #SBATCH --signal=B:2@300
 #SBATCH --ntasks-per-node 40
+#SBATCH --mem-per-cpu 7500
 #SBATCH --qos=high
 #SBATCH -p normal
 #SBATCH --constraint=xeon-g6
