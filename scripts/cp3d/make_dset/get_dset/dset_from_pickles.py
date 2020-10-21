@@ -21,7 +21,7 @@ KEY_MAP = {"rd_mol": "nxyz",
 EXCLUDE_KEYS = ["totalconfs", "datasets", "conformerweights",
                 "uncleaned_smiles"]
 
-# disable logger to avoid annoying pickle messages 
+# disable logger to avoid annoying pickle messages
 logger = logging.getLogger()
 logger.disabled = True
 
@@ -372,10 +372,6 @@ def clean_up_dset(dset,
     Do various things to clean up the dataset after you've made it
     """
 
-    # give it the proper neighbor list and rdkit mols
-    dset.props['nbr_list'] = nbr_list
-    dset.props["rd_mols"] = rd_mols_list
-
     # if requested, get rid of any species whose conformers have different
     # SMILES strings
     if strict_conformers:
@@ -491,6 +487,12 @@ def make_nff_dataset(spec_dics,
     # make a combined dataset where the species look like they're
     # one big molecule
     big_dataset = Dataset(props_dic.copy(), units='kcal/mol')
+    # give it the proper neighbor list and rdkit mols
+    big_dataset.props['nbr_list'] = nbr_list
+    big_dataset.props["rd_mols"] = rd_mols_list
+
+    # generate features
+    big_dataset.featurize(num_procs=parallel_feat_threads)
 
     # clean up
     big_dataset = clean_up_dset(dset=big_dataset,
@@ -499,9 +501,6 @@ def make_nff_dataset(spec_dics,
                                 nbrlist_cutoff=nbrlist_cutoff,
                                 strict_conformers=strict_conformers,
                                 csv_folder=csv_folder)
-
-    # generate features
-    big_dataset.featurize(num_procs=parallel_feat_threads)
 
     fprint("Adding E3FP fingerprints...")
     big_dataset.add_e3fp(256, num_procs=parallel_feat_threads)
