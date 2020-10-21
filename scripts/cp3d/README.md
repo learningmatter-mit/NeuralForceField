@@ -65,6 +65,11 @@ Details for the script are found in the file `dset_config.json`. This is where y
 - `num_threads` (int): How many files you want to divide your total dataset into. Conformer datasets can get quite large, so you may not want a single huge dataset that can't be loaded into memory. Instead you may want `num_threads` datasets. For example, if you perform parallel training with `N` GPUs, then you'll want to set `num_threads` to `N`. During train time, each parallel GPU thread will only read in one of these `N` datasets. For `m` GPUs per node, the node will only have to hold `m / N` of the total dataset in memory.
 - `csv_folder` (str): The folder in which you've saved your CSV files with the train, test, and split species.
 - `parallel_feat_threads` (int): Number of parallel threads to use when featurizing the dataset
+- `strict_conformers` (bool): Whether to exclude any species whose conformers don't all have the same SMILES string, and are thus not strictly "conformers". This can happen with CREST, for example, as the simulations can be reactive. 
+
+**Warning**: all species are not guaranteed to make it into the final dataset. This can happen, for example, because you set `strict_conformers` to True, or because some of the bond lengths of the conformers exceeded the neighbor list cutoff. If this is the case, the csv files with the Species will be modified to only contain the species being used.
+
+If you are planning to compare the results of a CP3D model to that of another model, like ChemProp, make sure that you only use the csvs *after* creating the dataset, so that you're using the same species.
 
 ### Adding custom features 
 The script automatically generates atom and bond features, but you can add other features to the dataset too. 
