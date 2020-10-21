@@ -20,6 +20,18 @@ from nff.utils import bash_command, parse_args, fprint
 def to_csv(summary_dic,
            props,
            csv_file):
+    """
+    Write the SMILES and properties in the summary dictionary
+    to a csv file.
+    Args:
+      summary_dic (dict): dictionary of the form {smiles: sub_dic},
+        where `sub_dic` is a dictionary with all the species properties
+        apart from its conformers.
+      props (list[str]): list of property names that you want to predict
+      csv_file (str): path to csv file that you want to write to
+    Returns:
+      None
+    """
 
     columns = ['smiles'] + props
     dict_data = []
@@ -36,9 +48,20 @@ def to_csv(summary_dic,
 
 
 def filter_prop_and_pickle(sample_dic, props):
+    """
 
-    # filter for both having the props and having an associated
-    # pickle file
+    Filter the SMILES strings to exclude those that don't have a known value
+    of all `props`, or do not have a known path to a pickle file with conformer
+    information.
+
+    Args:
+      sample_dic (dict): Sample of `summary_dic` that will be used in this dataset
+      props (list[str]): list of property names that you want to predict
+
+    Returns:
+      sample_dic (dict): Updated `sample_dic` with the above filters applied.
+
+    """
 
     smiles_list = [key for key, sub_dic in sample_dic.items()
                    if all([prop in sub_dic for prop in props])
@@ -50,7 +73,17 @@ def filter_prop_and_pickle(sample_dic, props):
 
 
 def filter_atoms(sample_dic, max_atoms):
+    """
+    Filter the SMILES strings to exclude those whose atom count is above
+    `max_atoms`.
+    Args:
+      sample_dic (dict): Sample of `summary_dic` that will be used in this dataset
+      max_atoms (int): Maximum number of atoms allowed in a species
+    Returns:
+      sample_dic (dict): Updated `sample_dic` with the above filter applied.
+    """
 
+    # if `max_atoms` is unspecified then the default is no limit
     if max_atoms is None:
         max_atoms = float("inf")
 
@@ -75,10 +108,33 @@ def subsample(summary_dic,
               max_specs,
               max_atoms,
               dataset_type):
+    """
+    Reduce the number of species according to `props`, `max_specs`,
+    and `max_atoms`.
+
+    Args:
+      summary_dic (dict): dictionary of the form {smiles: sub_dic},
+        where `sub_dic` is a dictionary with all the species properties
+        apart from its conformers.
+      props (list[str]): list of property names that you want to predict
+      max_specs (int): maximum number of species allowed in dataset
+      max_atoms (int): Maximum number of atoms allowed in a species
+      dataset_type (str): type of problem, e.g. "classification" or 
+        "regression".
+    Returns:
+      sample_dic (dict): Updated `sample_dic` with the above filter applied.
+    """
 
     sample_dic = copy.deepcopy(summary_dic)
+    # filter to only include species with the requested props
     sample_dic = filter_prop_and_pickle(sample_dic, props)
+    # filter to only include species with less than `max_atoms` atoms
     sample_dic = filter_atoms(sample_dic, max_atoms)
+
+    # If you set a limit for `max_specs` and are doing classification,
+    # try to keep as many of the underrepresented class as possible.
+    # If you set a limit but aren't doing classification, select them
+    # randomly.
 
     if max_specs is not None and dataset_type == "classification":
 
@@ -91,6 +147,7 @@ def subsample(summary_dic,
         neg_smiles = [key for key, sub_dic in sample_dic.items()
                       if sub_dic.get(prop) == 0]
 
+        # find the underrepresnted and overrepresented class
         if len(pos_smiles) < len(neg_smiles):
             underrep = pos_smiles
             overrep = neg_smiles
@@ -98,12 +155,13 @@ def subsample(summary_dic,
             underrep = neg_smiles
             overrep = pos_smiles
 
+        # if possible, keep all of the underrepresented class
         if max_specs >= 2 * len(underrep):
-            # keep all of the underrepresented class
             random.shuffle(overrep)
             num_left = max_specs - len(underrep)
             keep_smiles = underrep + overrep[:num_left]
 
+        # otherwise create a dataset with half of each
         else:
             random.shuffle(underrep)
             random.shuffle(overrep)
@@ -131,19 +189,48 @@ def make_split(summary_path,
                max_specs,
                max_atoms,
                dataset_type):
+    """
+    Split the species into train, test, and validation sets.
+
+    Args:
+      summary_path (str): path to the JSON file that summarizes
+        all of the information about the species, apart from their
+        conformers.
+      csv_folder (str): path to the folder in which we will save our
+        csv files with the SMILES, properties and training splits.
+      cp_folder (str): path to the ChemProp folder on your computer
+      props (list[str]): list of property names that you want to predict
+      split_sizes (list[float]): list of the form [train_split_size, val_split_size,
+        test_split_size].
+      split_type (str): how to split the data. Options can be found in the Chemprop
+        script `split_data.py`. A good choice is usually `scaffold_balanced`, which splits
+        in such a way that similar scaffolds are in the same split. 
+      max_specs (int): maximum number of species allowed in dataset
+      max_atoms (int): Maximum number of atoms allowed in a species
+      dataset_type (str): type of problem, e.g. "classification" or 
+        "regression".
+    Returns:
+      None
+
+    """
 
     with open(summary_path, "r") as f:
         summary_dic = json.load(f)
 
-    # filter based on max species and max number of atoms
+    # filter based on props, max species and max number of atoms
     summary_dic = subsample(summary_dic=summary_dic,
                             props=props,
                             max_specs=max_specs,
                             max_atoms=max_atoms,
                             dataset_type=dataset_type)
 
+    # path csv file with SMILES and properties
     all_csv = os.path.join(csv_folder, "all.csv")
+    # write the contents of `summary_dic` to the csv
     to_csv(summary_dic, props, all_csv)
+
+    # run the chemprop script `split_data.py` to make the splits
+    # from `all.csv`
 
     script = os.path.join(cp_folder, "scripts", "split_data.py")
     split_str = " ".join(np.array(split_sizes).astype("str"))
@@ -157,6 +244,15 @@ def make_split(summary_path,
 
 
 def add_just_smiles(csv_folder):
+    """
+    Take csv files with SMILES + properties and use them to crea files
+    with just the SMILES strings.
+    Args:
+      csv_folder (str): path to the folder in which we will save oru
+        csv files with the SMILES, properties and training splits.
+    Returns:
+      None
+    """
 
     for name in ['train', 'val', 'test']:
         path = os.path.join(csv_folder, name + '.csv')
@@ -169,6 +265,7 @@ def add_just_smiles(csv_folder):
                     continue
                 smiles_list.append(row[0])
 
+        # save to "train_smiles.csv", "val_smiles.csv", etc.
         smiles_path = os.path.join(csv_folder, f"{name}_smiles.csv")
         columns = ["smiles"]
         dict_data = [{"smiles": smiles} for smiles in smiles_list]
@@ -181,13 +278,34 @@ def add_just_smiles(csv_folder):
 
 
 def rename_csvs(csv_folder):
+    """
+    Rename the csvs saved by the chemprop split function to distinguish
+    between what is just SMILES and what is SMILES + properties.
+    Args:
+      csv_folder (str): path to the folder in which we will save oru
+        csv files with the SMILES, properties and training splits.
+    Returns:
+      None
+
+    """
     for name in ['train', 'val', 'test']:
         path = os.path.join(csv_folder, name + '.csv')
+        # "train_full.csv", "val_full.csv", etc.
         new_path = os.path.join(csv_folder, name + "_full.csv")
         shutil.move(path, new_path)
 
 
 def summarize(csv_folder, dataset_type):
+    """
+    Summarize where the splits have been saved and what their contents are.
+    Args:
+      csv_folder (str): path to the folder in which we will save oru
+        csv files with the SMILES, properties and training splits.
+      dataset_type (str): type of problem, e.g. "classification" or 
+        "regression".
+    Returns:
+      None
+    """
     msgs = []
     for name in ['train', 'val', 'test', 'all']:
         if name == 'all':
@@ -225,6 +343,30 @@ def main(summary_path,
          max_atoms,
          dataset_type,
          **kwargs):
+    """
+    Split the data, write it to csvs, create new csvs with just
+    SMILES and no properties, and rename the existing csvs.
+
+    Args:
+      summary_path (str): path to the JSON file that summarizes
+        all of the information about the species, apart from their
+        conformers.
+      csv_folder (str): path to the folder in which we will save our
+        csv files with the SMILES, properties and training splits.
+      cp_folder (str): path to the ChemProp folder on your computer
+      props (list[str]): list of property names that you want to predict
+      split_sizes (list[float]): list of the form [train_split_size, val_split_size,
+        test_split_size].
+      split_type (str): how to split the data. Options can be found in the Chemprop
+        script `split_data.py`. A good choice is usually `scaffold_balanced`, which splits
+        in such a way that similar scaffolds are in the same split. 
+      max_specs (int): maximum number of species allowed in dataset
+      max_atoms (int): Maximum number of atoms allowed in a species
+      dataset_type (str): type of problem, e.g. "classification" or 
+        "regression".
+    Returns:
+      None
+    """
 
     make_split(summary_path=summary_path,
                csv_folder=csv_folder,
