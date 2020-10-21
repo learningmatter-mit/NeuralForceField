@@ -5,7 +5,7 @@ import torch
 import numpy as np
 import argparse
 from tqdm import tqdm
-from rkdit import Chem
+from rdkit import Chem
 
 from nff.data import Dataset, concatenate_dict
 from nff.utils import tqdm_enum, parse_args, fprint
@@ -380,8 +380,6 @@ def clean_up_dset(dset,
     # Re-save the train/val/test splits accounting for the fact that some
     # species are no longer there
 
-    # this doesn't actually return anything yet
-
     old_num, new_num = resave_splits(csv_folder=csv_folder,
                                      dset=dset)
 
@@ -632,7 +630,7 @@ if __name__ == "__main__":
                         default=5,
                         help=("Number of parallel threads to use "
                               "when generating features"))
-    parser.add_argument('--strict_conformers', action='store_true'
+    parser.add_argument('--strict_conformers', action='store_true',
                         help=("Exclude any species whose conformers don't "
                               "all have the same SMILES."))
     parser.add_argument('--config_file', type=str,
