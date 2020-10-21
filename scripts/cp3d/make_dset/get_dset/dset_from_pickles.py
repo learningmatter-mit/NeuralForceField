@@ -621,7 +621,7 @@ def main(max_confs,
                 sample_dic=sample_dic)
 
     fprint((f"Complete! Saved section {thread} of the dataset in "
-            f"{os.path.join(dataset_folder, str(thread))}."))
+            f"{os.path.join(dataset_folder, str(thread))}.\n\n"))
 
 
 if __name__ == "__main__":
