@@ -21,12 +21,18 @@ KEY_MAP = {"rd_mol": "nxyz",
 EXCLUDE_KEYS = ["totalconfs", "datasets", "conformerweights",
                 "uncleaned_smiles"]
 
+# disable logger to avoid annoying pickle messages 
 logger = logging.getLogger()
 logger.disabled = True
 
+
 def mol_to_smiles(rd_mol):
     """
-    Get the canonical SMILES from an RDKit mol
+    Get the canonical SMILES from an RDKit mol.
+    Args:
+        rd_mol (rdkit.Chem.rdchem.Mol): rdkit Mol
+    Returns:
+        smiles (str): canonical smiles
     """
     smiles = Chem.MolToSmiles(rd_mol)
     new_mol = Chem.MolFromSmiles(smiles)
@@ -36,6 +42,8 @@ def mol_to_smiles(rd_mol):
 
 
 def trim_dset(dset, good_idx):
+    """
+    """
     for key, val in dset.props.items():
         if type(val) is list:
             dset.props[key] = [val[i] for i in good_idx]
@@ -485,7 +493,7 @@ def make_nff_dataset(spec_dics,
     big_dataset = Dataset(props_dic.copy(), units='kcal/mol')
 
     # clean up
-    big_dataset = clean_up_dset(dset=nbr_list,
+    big_dataset = clean_up_dset(dset=big_dataset,
                                 nbr_list=nbr_list,
                                 rd_mols_list=rd_mols_list,
                                 nbrlist_cutoff=nbrlist_cutoff,
