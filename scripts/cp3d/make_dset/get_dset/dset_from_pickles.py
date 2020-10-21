@@ -392,7 +392,7 @@ def clean_up_dset(dset,
         elif i == 2:
             # Add the indices of the neighbor list that correspond to
             # bonded atoms
-            dset.generate_bond_idx(device)
+            dset.generate_bond_idx()
 
     # Re-save the train/val/test splits accounting for the fact that some
     # species are no longer there
