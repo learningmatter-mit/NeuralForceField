@@ -192,9 +192,9 @@ class Dataset(TorchDataset):
 
             nbr_list, bond_nbrs, bond_idx = get_bond_idx(
                 bonded_nbr_list, nbr_list, device)
-            self.props["nbr_list"][i] = nbr_list
-            self.props["bonded_nbr_list"][i] = bond_nbrs
-            self.props["bond_idx"].append(bond_idx)
+            self.props["nbr_list"][i] = nbr_list.cpu()
+            self.props["bonded_nbr_list"][i] = bond_nbrs.cpu()
+            self.props["bond_idx"].append(bond_idx.cpu())
 
     def copy(self):
         """Copies the current dataset

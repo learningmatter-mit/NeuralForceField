@@ -155,13 +155,20 @@ def get_bond_idx(bonded_nbr_list, nbr_list, device):
 
     bond_nbrs = bond_nbrs.to(device)
     nbr_list = nbr_list.to(device)
-    
-    bond_idx = (bond_nbrs[:, None] == nbr_list
-                ).prod(-1).nonzero()[:, 1]
+
+    nbr_dic = {tuple(pair.cpu().tolist()): i
+               for i, pair in enumerate(nbr_list)}
+    bond_idx = torch.LongTensor(
+        [list(nbr_dic[pair.cpu().tolist()])
+         for pair in bond_nbrs]
+    )
+
+    # bond_idx = (bond_nbrs[:, None] == nbr_list
+    #             ).prod(-1).nonzero()[:, 1]
 
     bond_nbrs = bond_nbrs.detach().cpu()
     nbr_list = nbr_list.detach().cpu()
-    bond_idx = bond_idx.detach().cpu()
+    # bond_idx = bond_idx.detach().cpu()
 
     return nbr_list, bond_nbrs, bond_idx
 
