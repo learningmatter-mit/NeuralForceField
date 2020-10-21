@@ -377,18 +377,18 @@ def clean_up_dset(dset,
 
         # if requested, get rid of any species whose conformers have different
         # SMILES strings
-        if i == 1:
+        if i == 0:
             if strict_conformers:
                 dset, removed = filter_same_smiles(dset)
                 remove_smiles += removed
 
-        elif i == 2:
+        elif i == 1:
             # Get rid of any conformers whose bond lists aren't subsets of the
             # neighbor list
             dset, removed = filter_bonds_in_nbr(nbrlist_cutoff, dset)
             remove_smiles += removed
 
-        elif i == 3:
+        elif i == 2:
             # Add the indices of the neighbor list that correspond to
             # bonded atoms
             dset.generate_bond_idx()
