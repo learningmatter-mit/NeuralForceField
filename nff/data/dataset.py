@@ -9,6 +9,8 @@ from copy import deepcopy
 from sklearn.utils import shuffle as skshuffle
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset as TorchDataset
+from tqdm import tqdm
+
 from nff.data.graphs import (reconstruct_atoms, get_neighbor_list,
                              get_bond_idx)
 from nff.data.parallel import featurize_parallel, NUM_PROCS, add_e3fp_parallel
@@ -183,7 +185,7 @@ class Dataset(TorchDataset):
 
         self.props["bond_idx"] = []
 
-        for i in range(len(self)):
+        for i in tqdm(range(len(self))):
 
             bonded_nbr_list = self.props["bonded_nbr_list"][i]
             nbr_list = self.props["nbr_list"][i]

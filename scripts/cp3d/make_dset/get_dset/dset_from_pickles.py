@@ -372,17 +372,23 @@ def clean_up_dset(dset,
     Do various things to clean up the dataset after you've made it
     """
 
-    # if requested, get rid of any species whose conformers have different
-    # SMILES strings
-    if strict_conformers:
-        dset = filter_same_smiles(dset)
+    for i in tqdm(range(3)):
 
-    # Get rid of any conformers whose bond lists aren't subsets of the
-    # neighbor list
-    dset = filter_bonds_in_nbr(nbrlist_cutoff, dset)
+        # if requested, get rid of any species whose conformers have different
+        # SMILES strings
+        if i == 1:
+            if strict_conformers:
+                dset = filter_same_smiles(dset)
 
-    # Add the indices of the neighbor list that correspond to bonded atoms
-    dset.generate_bond_idx()
+        elif i == 2:
+            # Get rid of any conformers whose bond lists aren't subsets of the
+            # neighbor list
+            dset = filter_bonds_in_nbr(nbrlist_cutoff, dset)
+
+        elif i == 3:
+            # Add the indices of the neighbor list that correspond to
+            # bonded atoms
+            dset.generate_bond_idx()
 
     # Re-save the train/val/test splits accounting for the fact that some
     # species are no longer there
