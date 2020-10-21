@@ -66,7 +66,7 @@ Details for the script are found in the file `dset_config.json`. This is where y
 - `csv_folder` (str): The folder in which you've saved your CSV files with the train, test, and split species.
 - `parallel_feat_threads` (int): Number of parallel threads to use when featurizing the dataset
 - `strict_conformers` (bool): Whether to exclude any species whose conformers don't all have the same SMILES string, and are thus not strictly "conformers". This can happen with CREST, for example, as the simulations can be reactive. 
-- `device` (str): Device to do some of the calculations on when making the dataset. Can be `cpu` or any integers in the range of the number of available GPUs.
+
 
 **Warning**: not all species are guaranteed to make it into the final dataset. This can happen, for example, because `strict_conformers` is set to True, or because some of the bond lengths of the conformers exceeded the neighbor list cutoff. If this is the case, the csv files with the species will be modified to only contain the species being used.
 
