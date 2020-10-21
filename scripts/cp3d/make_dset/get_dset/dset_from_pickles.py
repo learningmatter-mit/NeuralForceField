@@ -508,7 +508,8 @@ def make_nff_dataset(spec_dics,
     big_dataset.featurize(num_procs=parallel_feat_threads)
 
     # clean up
-    fprint("Cleaning up dataset...")
+    fprint(("Cleaning up dataset and lining up indices of bonded nbrs "
+            "with the corresponding neighbor list indices "))
     big_dataset = clean_up_dset(dset=big_dataset,
                                 nbr_list=nbr_list,
                                 rd_mols_list=rd_mols_list,
