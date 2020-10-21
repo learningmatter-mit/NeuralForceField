@@ -67,7 +67,7 @@ Details for the script are found in the file `dset_config.json`. This is where y
 - `parallel_feat_threads` (int): Number of parallel threads to use when featurizing the dataset
 - `strict_conformers` (bool): Whether to exclude any species whose conformers don't all have the same SMILES string, and are thus not strictly "conformers". This can happen with CREST, for example, as the simulations can be reactive. 
 
-**Warning**: all species are not guaranteed to make it into the final dataset. This can happen, for example, because you set `strict_conformers` to True, or because some of the bond lengths of the conformers exceeded the neighbor list cutoff. If this is the case, the csv files with the Species will be modified to only contain the species being used.
+**Warning**: not all species are guaranteed to make it into the final dataset. This can happen, for example, because you set `strict_conformers` to True, or because some of the bond lengths of the conformers exceeded the neighbor list cutoff. If this is the case, the csv files with the Species will be modified to only contain the species being used.
 
 If you are planning to compare the results of a CP3D model to that of another model, like ChemProp, make sure that you only use the csvs *after* creating the dataset, so that you're using the same species.
 
