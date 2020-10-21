@@ -5,7 +5,8 @@ import torch
 import numpy as np
 import argparse
 from tqdm import tqdm
-from rkdit import Chem
+from rdkit import Chem
+import logging
 
 from nff.data import Dataset, concatenate_dict
 from nff.utils import tqdm_enum, parse_args, fprint
@@ -20,10 +21,12 @@ KEY_MAP = {"rd_mol": "nxyz",
 EXCLUDE_KEYS = ["totalconfs", "datasets", "conformerweights",
                 "uncleaned_smiles"]
 
+logger = logging.getLogger()
+logger.disabled = True
 
 def mol_to_smiles(rd_mol):
     """
-    Get the canonical SMILES from an RDKit mol 
+    Get the canonical SMILES from an RDKit mol
     """
     smiles = Chem.MolToSmiles(rd_mol)
     new_mol = Chem.MolFromSmiles(smiles)
@@ -632,7 +635,7 @@ if __name__ == "__main__":
                         default=5,
                         help=("Number of parallel threads to use "
                               "when generating features"))
-    parser.add_argument('--strict_conformers', action='store_true'
+    parser.add_argument('--strict_conformers', action='store_true',
                         help=("Exclude any species whose conformers don't "
                               "all have the same SMILES."))
     parser.add_argument('--config_file', type=str,
