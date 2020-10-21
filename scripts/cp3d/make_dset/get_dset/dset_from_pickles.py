@@ -524,13 +524,6 @@ def make_nff_dataset(spec_dics,
     fprint("Adding Morgan fingerprints...")
     big_dataset.add_morgan(256)
 
-    ########
-    # must modify the smiles csvs that we started with so that cp3d and
-    # chemprop won't train on different species. Also note this in the docs
-    ########
-
-    fprint("Complete!")
-
     return big_dataset
 
 
