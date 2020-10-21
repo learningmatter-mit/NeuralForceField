@@ -134,8 +134,8 @@ def get_neighbor_list(xyz, cutoff=5, undirected=True):
     n = xyz.size(0)
 
     # calculating distances
-    dist = (xyz.expand(n, n, 3) - xyz.expand(n, n,
-                                             3).transpose(0, 1)).pow(2).sum(dim=2).sqrt()
+    dist = (xyz.expand(n, n, 3) - xyz.expand(n, n, 3).transpose(0, 1)
+            ).pow(2).sum(dim=2).sqrt()
 
     # neighbor list
     mask = (dist <= cutoff)
@@ -148,6 +148,10 @@ def get_neighbor_list(xyz, cutoff=5, undirected=True):
     return nbr_list
 
 
+def to_tuple(tensor):
+    return tuple(tensor.cpu().tolist())
+
+
 def get_bond_idx(bonded_nbr_list, nbr_list, device):
 
     bond_nbrs, _ = make_directed(bonded_nbr_list)
@@ -156,10 +160,9 @@ def get_bond_idx(bonded_nbr_list, nbr_list, device):
     bond_nbrs = bond_nbrs.to(device)
     nbr_list = nbr_list.to(device)
 
-    nbr_dic = {tuple(pair.cpu().tolist()): i
-               for i, pair in enumerate(nbr_list)}
+    nbr_dic = {to_tuple(pair): i for i, pair in enumerate(nbr_list)}
     bond_idx = torch.LongTensor(
-        [list(nbr_dic[pair.cpu().tolist()])
+        [list(nbr_dic[to_tuple(pair)])
          for pair in bond_nbrs]
     )
 
