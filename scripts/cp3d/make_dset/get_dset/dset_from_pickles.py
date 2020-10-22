@@ -547,7 +547,7 @@ def make_nff_dataset(spec_dics,
                                 strict_conformers=strict_conformers,
                                 csv_folder=csv_folder)
 
-    big_dataset = add_features(big_dataset=big_dataset,
+    big_dataset = add_features(dset=big_dataset,
                                extra_features=extra_features,
                                parallel_feat_threads=parallel_feat_threads)
 
