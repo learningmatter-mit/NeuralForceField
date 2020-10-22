@@ -8,5 +8,5 @@
   "parallel_feat_threads": 1,
   "strict_conformers": true,
   "extra_features": [{"name": "whim", "params": {}},
-                     {"name": "morgan", "params": {"length": 256"}}]
+                     {"name": "morgan", "params": {"length": 256}}]
 }
