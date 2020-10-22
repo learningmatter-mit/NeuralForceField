@@ -436,7 +436,7 @@ class Trainer:
 
         return par_folders
 
-    def save_val_loss(self, val_loss, test=False):
+    def save_val_loss(self, val_loss):
         """
         Save the validation loss from this trainer. Necessary for averaging
         validation losses over all parallel trainers.
@@ -447,18 +447,17 @@ class Trainer:
         """
 
         self_folder = self.par_folders[self.global_rank]
-        name = "test" if test else "val"
 
         # write the loss as a number to a file called "val_epoch_i"
         # for epoch i.
 
         info_file = os.path.join(
-            self_folder, "{}_epoch_{}".format(name, self.epoch))
+            self_folder, "val_epoch_{}".format(self.epoch))
 
         with open(info_file, "w") as f:
             f.write(str(val_loss.item()))
 
-    def load_val_loss(self, test=False):
+    def load_val_loss(self):
         """
         Load the validation losses from the other parallel processes.
         Args:
@@ -474,7 +473,6 @@ class Trainer:
         # `None` is no longer in this dictionary.
 
         loaded_vals = {folder: None for folder in self.par_folders}
-        name = "test" if test else "val"
 
         while None in list(loaded_vals.values()):
             for folder in self.par_folders:
@@ -484,7 +482,7 @@ class Trainer:
                     continue
 
                 val_file = os.path.join(
-                    folder, "{}_epoch_{}".format(name, self.epoch))
+                    folder, "val_epoch_{}".format(self.epoch))
 
                 # try opening the file and getting the value
                 try:
@@ -564,6 +562,9 @@ class Trainer:
             for h in self.hooks:
                 h.on_validation_batch_end(self, val_batch, results)
 
+        if test:
+            return
+
         # weighted average over batches
         if self.loss_is_normalized or self.mol_loss_norm:
             val_loss /= n_val
@@ -572,11 +573,8 @@ class Trainer:
         # and pick up the losses from the other processes too
 
         if self.parallel:
-            self.save_val_loss(val_loss, test)
-            val_loss = self.load_val_loss(test)
-
-        if test:
-            return
+            self.save_val_loss(val_loss)
+            val_loss = self.load_val_loss()
 
         for h in self.hooks:
             h.on_validation_end(self, val_loss)
