@@ -2,7 +2,6 @@ import numpy as np
 from concurrent import futures
 import copy
 import torch
-import os
 
 from nff.utils import fprint
 from nff.data.features import (make_rd_mols,
