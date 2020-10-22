@@ -561,9 +561,6 @@ def init_quants(node_rank, gpu, gpus, world_size, params):
     return rank, batch_size, base, log_train
 
 
-
-
-
 def make_stats(T,
                test_loader,
                loss_fn,
@@ -836,9 +833,6 @@ def train(gpu,
         **trainer_kwargs
     )
 
-    save_path = os.path.join(weight_path, str(node_rank * gpus + gpu),
-                             "init_model.pth.tar")
-    torch.save(model, save_path)
     T.train(device=device, n_epochs=params['max_epochs'])
 
     log_train('model saved in ' + weight_path)
