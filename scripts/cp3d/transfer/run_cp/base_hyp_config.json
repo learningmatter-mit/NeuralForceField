@@ -1,6 +1,6 @@
 {
  "data_path": "/home/saxelrod/chemprop_cov_2/make_splits/cl_protease/hyperopt_full.csv",
- "num_iters": 3,
+ "num_iters": 100,
  "split_type": "scaffold_balanced",
  "dataset_type": "classification",
  "no_features_scaling": true,
@@ -8,7 +8,7 @@
  "gpu": 0,
  "num_folds": 1,
  "class_balance": true,
- "epochs": 30,
+ "epochs": 300,
  "dropout": 0.2,
  "depth": 4,
  "ffn_num_layers": 2,
