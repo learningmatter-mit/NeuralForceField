@@ -48,16 +48,33 @@ def mol_to_smiles(rd_mol):
 
 def trim_dset(dset, good_idx):
     """
+    Trim a dataest based on a set of indices you want to keep.
+    Args:
+        dset (nff.data.dataset): NFF dataset
+        good_idx (list[int]): indices that you want to keep
+    Returns:
+        dset (nff.data.dataset): trimmmed NFF dataset
     """
     for key, val in dset.props.items():
+        # if it's a list, take element by element and put in list
         if type(val) is list:
             dset.props[key] = [val[i] for i in good_idx]
+        # otherwise can take the slice all at once
         else:
             dset.props[key] = val[good_idx]
     return dset
 
 
 def get_bad_smiles(dset, good_idx):
+    """
+    Get the SMILES whose indices are not in `good_idx`.
+    Args:
+        dset (nff.data.dataset): NFF dataset
+        good_idx (list[int]): indices that you want to keep
+    Returns:
+        bad_smiles (list[str]): smiles whose indices are not in 
+            `good_idx`.
+    """
     bad_smiles = [smiles for i, smiles in enumerate(dset.props["smiles"])
                   if i not in good_idx]
     return bad_smiles
@@ -68,6 +85,12 @@ def filter_same_smiles(dset):
     Filter out species whose conformers don't all have the same SMILES. Can happen
     because, for example, CREST simulations can be reactive. This won't happen if
     conformers are generated using RDKit.
+    Args:
+        dset (nff.data.dataset): NFF dataset
+    Returns:
+        dset (nff.data.dataset): NFF dataset trimmed for conformers that have different
+            SMILES
+        bad_smiles (list[str]): The SMILES strings that we're getting rid of 
     """
 
     good_idx = []
@@ -76,6 +99,7 @@ def filter_same_smiles(dset):
         rd_mols = batch["rd_mols"]
         smiles_list = [mol_to_smiles(mol) for mol in rd_mols]
         unique_smiles = list(set(smiles_list))
+        # only keep if there's one unique SMILES string
         if len(unique_smiles) == 1:
             good_idx.append(i)
 
@@ -95,6 +119,14 @@ def filter_bonds_in_nbr(cutoff, dset):
     there will be bonds that don't have distance features, as the two atoms are
     not within each other's cutoff. Any conformer with bonds > 5 A is probably
     not too accurate anyway.
+
+    Args:
+        cutoff (float): neighbor list cutoff
+        dset (nff.data.dataset): NFF dataset
+    Returns:
+        dset (nff.data.dataset): NFF dataset trimmed for above criterion
+            SMILES
+        bad_smiles (list[str]): The SMILES strings that we're getting rid of 
     """
 
     good_idx = []
@@ -102,8 +134,10 @@ def filter_bonds_in_nbr(cutoff, dset):
     for i, batch in tqdm_enum(dset):
         bond_list = batch["bonded_nbr_list"]
         nxyz = batch["nxyz"]
+        # calculate the bond lengths
         bond_lens = (nxyz[:, 1:][bond_list[:, 0]] -
                      nxyz[:, 1:][bond_list[:, 1]]).norm(dim=1)
+        # only valid if they're less than the cutoff
         valid = (bond_lens < cutoff).all()
         if valid:
             good_idx.append(i)
@@ -115,12 +149,36 @@ def filter_bonds_in_nbr(cutoff, dset):
 
 
 def get_thread_dic(sample_dic, thread, num_threads):
+    """
+    Given a thread (i.e., an index that tells us which
+    section of the total dataset we're creating and saving),
+    return the section of `sample_dic` that includes SMILES
+    strings in this thread.
 
+    Args:
+        sample_dic (dict): Sample of `summary_dic` that is used
+            in this combined dataset. `summary_dic` contains
+            information about all smiles strings we have, except
+            for their conformers.
+        thread (int): Index that tells us which section of the
+            total dataset that we're creating and saving
+        num_threads (int): Total number of sections into which
+            we're splitting and saving the dataset.
+    Returns:
+        sample_dic (dict): `sample_dic`, but only with species 
+            from the thread we're looking at.
+    """
+
+    # sort the keys so the order is reproducible
     keys = np.array(sorted(list(
         sample_dic.keys())))
+
+    # split the keys into `num_threads` sections and take
+    # the keys in the element `thread`
     split_keys = np.array_split(keys, num_threads)
     thread_keys = split_keys[thread]
 
+    # use these keys in `sample_dic`
     sample_dic = {key: sample_dic[key]
                   for key in thread_keys}
 
@@ -129,6 +187,21 @@ def get_thread_dic(sample_dic, thread, num_threads):
 
 def get_splits(sample_dic,
                csv_folder):
+    """
+    Figure out which split (train, val or test) each SMILES in
+    `sample_dic` belongs to.
+
+    Args:
+        sample_dic (dict): Sample of `summary_dic` that is used
+            in this combined dataset. `summary_dic` contains
+            information about all smiles strings we have, except
+            for their conformers.
+        csv_folder (str): path to folder that contains the csv files
+            with the test/val/train smiles.
+    Returns:
+        sample_dic (dict): `sample_dic`, but with each sub-dictionary
+            updated to contain the split assignment of the SMILES. 
+    """
 
     for name in ["train", "val", "test"]:
         path = os.path.join(csv_folder, f"{name}_smiles.csv")
@@ -151,14 +224,23 @@ def resave_splits(csv_folder,
                   remove_smiles):
     """
     Re-save the SMILES splits accounting for the fact that not all
-    species made it into this dataset
+    species made it into this dataset.
+    Args:
+        csv_folder (str): path to folder that contains the csv files
+            with the test/val/train smiles.
+        dset (nff.data.dataset): NFF dataset
+        remove_smiles (list[str]): any SMILES strings that had to be
+            removed from the NFF dataset.
+    Returns:
+        None
     """
 
-    # create a dictionary to quickly see if a SMILES is in the dataset,
-    # rather than having to loop over the entire thing every time we
-    # want to see if a SMILES string is present
-
     split_names = ["train", "val", "test"]
+
+    # files have the form train_smiles.csv, train_full.csv, etc.,
+    # where the "smiles" files just contain the SMILES strings,
+    # but the "full" files also contain properties
+
     suffixes = ["smiles", "full"]
 
     for name in split_names:
@@ -172,9 +254,12 @@ def resave_splits(csv_folder,
 
             for line in lines[1:]:
                 smiles = line.split(",")[0].strip()
+                # don't keep the line if it contains a SMILES string
+                # in `remove_smiles`
                 if smiles not in remove_smiles:
                     keep_lines.append(line)
 
+            # re-save the new text
             new_text = "".join(keep_lines)
             with open(path, "w") as f:
                 f.write(new_text)
@@ -184,6 +269,24 @@ def get_sample(summary_dic,
                csv_folder,
                thread=None,
                num_threads=None):
+    """
+    Get the sample of `summary_dic` that is annotated with the
+    test/train splits of this dataset, and only the SMILES relevant
+    to this thread (i.e., this chunk of the dataset that we're
+    currently working on).
+    Args:
+        summary_dic (dict): dictionary of the form {smiles: sub_dic},
+            where `sub_dic` is a dictionary with all the species properties
+            apart from its conformers.
+        csv_folder (str): path to folder that contains the csv files
+            with the test/val/train smiles.
+        thread (int, optional): Index that tells us which section of the
+            total dataset that we're creating and saving
+        num_threads (int, optional): Total number of sections into which
+            we're splitting and saving the dataset.
+    Returns:
+        sample_dic (dict): The sample of `summary_dic`.
+    """
 
     sample_dic = copy.deepcopy(summary_dic)
 
@@ -191,6 +294,8 @@ def get_sample(summary_dic,
 
     sample_dic = get_splits(sample_dic=sample_dic,
                             csv_folder=csv_folder)
+
+    # restrict to just this thread, if we're using threads
 
     if thread is not None:
         sample_dic = get_thread_dic(sample_dic=sample_dic,
@@ -201,6 +306,22 @@ def get_sample(summary_dic,
 
 
 def load_data_from_pickle(sample_dic, pickle_folder):
+    """
+    Load conformer data from pickle files for this chunk 
+    of the dataset.
+    Args:
+        sample_dic (dict): Sample of `summary_dic` that is used
+            in this combined dataset. `summary_dic` contains
+            information about all smiles strings we have, except
+            for their conformers.
+        pickle_folder (str): path to folder that contains all
+            the pickle files. Each sub-dictionary in `sample_dic`
+            will have the key `pickle_path`. Joining `pickle_folder`
+            with `pickle_path` gives the full path to the file.
+    Returns:
+        overall_dic (dict): Dictionary that contains the contents of
+            the pickle file for each SMILES.
+    """
 
     overall_dic = {}
     keys = list(sample_dic.keys())
@@ -218,6 +339,14 @@ def load_data_from_pickle(sample_dic, pickle_folder):
 
 
 def map_key(key):
+    """
+    Args:
+        key (str): key being used
+    Returns:
+        If a key is in `KEY_MAP`, returns the value specified in that dictionary.
+            Otherwise just returns the key.
+
+    """
     if key in KEY_MAP:
         return KEY_MAP[key]
     else:
@@ -225,6 +354,25 @@ def map_key(key):
 
 
 def fix_iters(spec_dic, actual_confs):
+    """
+    Anything that is a per-species quantity will have to
+    get repeated once for each of the conformers in that species
+    when we make the dataset. Anything in `EXCLUDE_KEYS` shouldn't
+    be included because it messes up the dataset (e.g. variable length
+    strings, quantities that don't have either length 1 or length of
+    the number of conformers, etc.)
+    Args:
+        spec_dic (dict): a dictionary of quantities associated with a 
+            species.
+        actual_confs (int): the number of conformers being used for this
+            species. This is not the same as the total number of conformers,
+            because we may have set a limit on the maximum conformers per
+            species.
+    Returns:
+        new_spec_dic (dict): `spec_dic` updated with the above changes.
+
+    """
+
     new_spec_dic = {}
     for key, val in spec_dic.items():
         if key in EXCLUDE_KEYS:
@@ -238,6 +386,13 @@ def fix_iters(spec_dic, actual_confs):
 
 
 def get_sorted_idx(sub_dic):
+    """
+    Get the indices of each conformer ordered by ascending statistical weight.
+    Args:
+        sub_dic (dict): dictionary for a species
+    Returns:
+        sorted_idx (list): Sorted indices
+    """
 
     confs = sub_dic["conformers"]
     weight_list = []
@@ -250,12 +405,22 @@ def get_sorted_idx(sub_dic):
 
 
 def get_xyz(rd_mol):
+    """
+    Convert an RDKit mol to an xyz (atomic number + coordinates).
+    Args:
+        rd_mol (rdkit.Chem.rdchem.Mol): RDKit mol
+    Returns:
+        xyz (list): atomic number + coordinates 
+    """
 
     atoms = rd_mol.GetAtoms()
 
     atom_nums = []
     for atom in atoms:
         atom_nums.append(atom.GetAtomicNum())
+
+    # each conformer is a separate rdkit mol object, so each
+    # mol has only one conformer
 
     rd_conf = rd_mol.GetConformers()[0]
     positions = rd_conf.GetPositions()
@@ -268,6 +433,15 @@ def get_xyz(rd_mol):
 
 
 def renorm_weights(spec_dic):
+    """
+    Renormalize weights to sum to 1, accounting for the fact that
+    not using all conformers may make their sum < 1.
+    Args:
+        spec_dic (dict): a dictionary of quantities associated with a 
+            species.
+    Returns:
+        spec_dic (dict): Updated `spec_dic` with renormalized weights
+    """
 
     new_weights = np.array(spec_dic["weights"]) / sum(spec_dic["weights"])
     spec_dic["weights"] = new_weights.tolist()
@@ -276,6 +450,14 @@ def renorm_weights(spec_dic):
 
 
 def convert_data(overall_dic, max_confs):
+    """
+    Args:
+        overall_dic (dict): Dictionary that contains the contents of
+            the pickle file for each SMILES.
+        max_confs (int): Maximum number of conformers per species
+    Returns:
+        spec_dics (list[dict]): a dictionary with data for each species
+    """
 
     spec_dics = []
     if max_confs is None:
@@ -283,36 +465,51 @@ def convert_data(overall_dic, max_confs):
 
     for key in tqdm(overall_dic.keys()):
         sub_dic = overall_dic[key]
+
+        # get everything in the dictionary except the conformer info
         spec_dic = {map_key(key): val for key, val in sub_dic.items()
                     if key != "conformers"}
 
+        # how many conformers we're actually using for this species
         actual_confs = min(max_confs, len(sub_dic["conformers"]))
+
+        # fix various issues with the data
         spec_dic = fix_iters(spec_dic, actual_confs)
 
+        # make a key and empty list for every key in the conformer
+        # list
         spec_dic.update({map_key(key): [] for key
                          in sub_dic["conformers"][0].keys()
                          if key not in EXCLUDE_KEYS})
 
-        # conformers not always ordered by weight
+        # conformers not always ordered by weight - get the ordered
+        # indices
+
         sorted_idx = get_sorted_idx(sub_dic)
         confs = sub_dic["conformers"]
         spec_dic["rd_mols"] = []
 
+        # Go through the conformers from highest to lowest weight
+
         for idx in sorted_idx[:actual_confs]:
             conf = confs[idx]
             for key in conf.keys():
-                if key == "rd_mol":
 
+                # add the RDKit mol and nxyz to the dataset
+                if key == "rd_mol":
                     nxyz = get_xyz(conf[key])
                     spec_dic["nxyz"].append(nxyz)
                     spec_dic["rd_mols"].append(conf[key])
 
+                # add other quantities associated with the conformer
+                # (e.g. Boltzmann weights)
                 else:
                     new_key = map_key(key)
                     if new_key not in spec_dic:
                         continue
                     spec_dic[new_key].append(conf[key])
 
+        # renormalize the weights accounting for missing conformers
         spec_dic = renorm_weights(spec_dic)
         spec_dics.append(spec_dic)
 
@@ -320,6 +517,16 @@ def convert_data(overall_dic, max_confs):
 
 
 def add_missing(props_list):
+    """
+    There are certain quantities that are given for one species but not
+    for another (e.g. whether it binds a certain protein). All quantities
+    that are present for at least one species should be present in all others,
+    and if not known it should be assigned as None or nan.
+    Args:
+        props_list (list[dict]): list of dictionaries of properties for each species
+    Returns:
+        props_list (list[dict]): `props_list` updated as described above
+    """
 
     key_list = [list(props.keys()) for props in props_list]
     # dictionary of the props that have each set of keys
@@ -352,8 +559,11 @@ def add_missing(props_list):
             given_props = props_list[given_idx]
             given_val = given_props[key]
 
+            # If it's a list give it None
             if type(given_val) is list:
                 props[key] = [None]
+
+            # If it's a tensor give it nan
             elif type(given_val) is torch.Tensor:
                 props[key] = torch.Tensor([np.nan])
                 # in this case we need to change the
@@ -375,10 +585,25 @@ def clean_up_dset(dset,
                   strict_conformers,
                   csv_folder):
     """
-    Do various things to clean up the dataset after you've made it
+    Do various things to clean up the dataset after you've made it.
+    Args:
+        dset (nff.data.dataset): NFF dataset
+        nbr_list (torch.LongTensor): neighbor list of the dataset
+        rd_mols_list (list): list of rdkit mols for the dataset
+        nbrlist_cutoff (float): Cutoff for two atoms to be considered
+            neighbors.
+        strict_conformers (bool): Whether to exclude any species whose
+            conformers don't all have the same SMILES.
+        csv_folder (str): path to folder that contains the csv files
+            with the test/val/train smiles.
+    Returns:
+        dset (nff.data.dataset): cleaned up dataset
+
     """
 
     old_num = len(dset)
+
+    # smiles we're getting rid of
     remove_smiles = []
 
     with tqdm(total=3) as pbar:
@@ -388,6 +613,8 @@ def clean_up_dset(dset,
         if strict_conformers:
             dset, removed = filter_same_smiles(dset)
             remove_smiles += removed
+
+        # iterate the tqdm progress bar
         pbar.update(1)
 
         # Get rid of any conformers whose bond lists aren't subsets of the
@@ -410,6 +637,8 @@ def clean_up_dset(dset,
     new_num = old_num - len(remove_smiles)
 
     changed_num = old_num != new_num
+
+    # Print a warning if the total number of species has changed
     if changed_num:
         msg = ("WARNING: the original SMILES splits have been re-saved with "
                f"{new_num} species, reduced from the original {old_num}, "
@@ -431,6 +660,18 @@ def clean_up_dset(dset,
 def add_features(dset,
                  extra_features,
                  parallel_feat_threads):
+    """
+    Add any requested features to the dataset
+    Args:
+        dset (nff.data.dataset): NFF dataset
+        extra_features (list[dict]): list of extra features,
+            where each item is a dictionary of the form
+            {"name": name, "params": {params needed}}.
+        parallel_feat_threads (int): how many parallel threads
+            to use when making the efeatures.
+    Returns:
+        dset (nff.data.dataset): updated NFF dataset
+    """
 
     for dic in tqdm(extra_features):
 
@@ -458,6 +699,23 @@ def make_nff_dataset(spec_dics,
                      strict_conformers,
                      csv_folder,
                      extra_features):
+    """
+    Make an NFF dataset
+    Args:
+        spec_dics (list[dict]): a dictionary with data for each species
+        nbr_list_cutoff (float): Cutoff for two atoms to be considered
+            neighbors.
+        parallel_feat_threads (int): how many parallel threads
+            to use when making the efeatures.
+        strict_conformers (bool): Whether to exclude any species whose
+            conformers don't all have the same SMILES.
+        csv_folder (str): path to folder that contains the csv files
+            with the test/val/train smiles.
+        extra_features (list[dict]): list of extra features dictionaries
+    Returns:
+        big_dataset (nff.data.dataset): NFF dataset
+
+    """
 
     fprint("Making dataset with %d species" % (len(spec_dics)))
 
@@ -467,32 +725,30 @@ def make_nff_dataset(spec_dics,
 
     for j, spec_dic in tqdm_enum(spec_dics):
 
-        # Treat each species' data like a regular dataset
-        # and use it to generate neighbor lists
-        # Ignore the graph features because there's only one
-        # per species right now.
-
-        conf_keys = ["rd_mols", "bonded_nbr_list", "bond_features",
-                     "atom_features"]
-
         # Exclude keys related to individual conformers. These
         # include conformer features, in case you've already put
         # those in your pickle files. If not we'll generate them
         # below
 
+        conf_keys = ["rd_mols", "bonded_nbr_list", "bond_features",
+                     "atom_features"]
+
         small_spec_dic = {key: val for key, val in spec_dic.items()
                           if key not in conf_keys}
 
-        dataset = Dataset(small_spec_dic, units='kcal/mol')
-        mol_size = len(dataset.props["nxyz"][0])
+        # Treat each species' data like a regular dataset
+        # and use it to generate neighbor lists
 
+        dataset = Dataset(small_spec_dic, units='kcal/mol')
+
+        # number of atoms in the molecule
+        mol_size = len(dataset.props["nxyz"][0])
         dataset.generate_neighbor_list(cutoff=nbrlist_cutoff)
 
         # now combine the neighbor lists so that this set
         # of nxyz's can be treated like one big molecule
 
         nbrs = dataset.props['nbr_list']
-        # number of atoms in the molecule
         new_nbrs = []
 
         # shift by i * mol_size for each conformer
@@ -519,14 +775,19 @@ def make_nff_dataset(spec_dics,
                                           ).reshape(-1, 1),
                    "num_atoms": [len(nxyz)]}
 
-        new_dic.update({key: val[:1] for key, val in dataset.props.items(
-        ) if key not in new_dic.keys()})
+        new_dic.update(
+            {
+                key: val[:1] for key, val in dataset.props.items()
+                if key not in new_dic.keys()
+            }
+        )
 
         props_list.append(new_dic)
         rd_mols_list.append(spec_dic["rd_mols"])
 
     # Add props that are in some datasets but not others
     props_list = add_missing(props_list)
+    # convert the list of dicationaries into a dicationary of lists / tensors
     props_dic = concatenate_dict(*props_list)
     # make a combined dataset where the species look like they're
     # one big molecule
@@ -535,7 +796,7 @@ def make_nff_dataset(spec_dics,
     big_dataset.props['nbr_list'] = nbr_list
     big_dataset.props["rd_mols"] = rd_mols_list
 
-    # generate features
+    # generate atom and bond features
     big_dataset.featurize(num_procs=parallel_feat_threads)
 
     # clean up
@@ -547,6 +808,7 @@ def make_nff_dataset(spec_dics,
                                 strict_conformers=strict_conformers,
                                 csv_folder=csv_folder)
 
+    # add any other requested features
     big_dataset = add_features(dset=big_dataset,
                                extra_features=extra_features,
                                parallel_feat_threads=parallel_feat_threads)
@@ -555,8 +817,20 @@ def make_nff_dataset(spec_dics,
 
 
 def get_data_folder(dataset_folder, thread):
+    """
+    Get the folder in which you'll save the dataset.
+    Args:
+        dataset_folder (str): base folder for the datasets
+        thread (int): thread for chunk of dataset
+    Returns:
+        new_path (str): folder in which you'll save the dataset
+    """
+
+    # if we're not doing any chunks then just save in the base fodler
     if thread is None:
         return dataset_folder
+
+    # otherwise save in base_folder/<thread>
     new_path = os.path.join(dataset_folder, str(thread))
     if not os.path.isdir(new_path):
         os.makedirs(new_path)
@@ -564,14 +838,29 @@ def get_data_folder(dataset_folder, thread):
 
 
 def split_dataset(dataset, idx):
-    new_dataset = copy.deepcopy(dataset)
-    new_props = {}
+    """
+    Similar to `trim_dset`, but making a new dataset without modifying
+    the original.
+    Args:
+        dataset (nff.data.dataset): NFF dataset
+        idx (list[int]): indices to keep
+    Returns:
+        new_dataset (nff.data.dataset): new dataset with only
+            `idx` indices, without modifying the old dataset.
+    """
+
+    # create a reference dataset with the right units and dummy
+    # properties
+    ref_props = {"nxyz": dataset.props["nxyz"][:1]}
+    new_dataset = Dataset(ref_props, units=dataset.units)
+
+    # update the properties using `dataset` and `idx`
     for key, val in dataset.props.items():
         if type(val) is list:
-            new_props[key] = [val[i] for i in idx]
+            new_dataset.props[key] = [val[i] for i in idx]
         else:
-            new_props[key] = val[idx]
-    new_dataset.props = new_props
+            new_dataset.props[key] = val[idx]
+
     return new_dataset
 
 
@@ -579,27 +868,33 @@ def save_splits(dataset,
                 dataset_folder,
                 thread,
                 sample_dic):
+    """
+    Save the train/val/test splits of the dataset
+    Args:
+        dataset (nff.data.dataset): NFF dataset
+        dataset_folder (str): base folder for the datasets
+        thread (int): thread for chunk of dataset
+        sample_dic (dict): Sample of `summary_dic` that is used
+            in this combined dataset. `summary_dic` contains
+            information about all smiles strings we have, except
+            for their conformers.
+    Returns:
+        None
+    """
 
     split_names = ["train", "val", "test"]
     split_idx = {name: [] for name in split_names}
-    split_dic = {name: [] for name in split_names}
 
     for i, smiles in enumerate(dataset.props['smiles']):
         split_name = sample_dic[smiles]["split"]
         split_idx[split_name].append(i)
 
-    for name in split_names:
-        split_dic[name] = split_dataset(dataset, split_idx[name])
-
-    train = split_dic["train"]
-    val = split_dic["val"]
-    test = split_dic["test"]
-
     fprint("Saving...")
-    data_folder = get_data_folder(dataset_folder, thread)
-    names = ["train", "val", "test"]
 
-    for name, dset in zip(names, [train, val, test]):
+    data_folder = get_data_folder(dataset_folder, thread)
+
+    for name in split_names:
+        dset = split_dataset(dataset, split_idx[name])
         dset_path = os.path.join(data_folder, name + ".pth.tar")
         dset.save(dset_path)
 
@@ -616,6 +911,36 @@ def main(max_confs,
          strict_conformers,
          extra_features,
          **kwargs):
+    """
+    Sample species, load their pickles, create an NFF dataset, and
+    save train/val/test splits.
+    Args:
+        max_confs (int): Maximum number of conformers per species
+        summary_path (str): Path to file with summary dictionary
+        dataset_folder (str): base folder for the datasets
+        pickle_folder (str): path to folder that contains all
+            the pickle files. Each sub-dictionary in `sample_dic`
+            will have the key `pickle_path`. Joining `pickle_folder`
+            with `pickle_path` gives the full path to the file.
+        num_threads (int): Total number of sections into which
+            we're splitting and saving the dataset.
+        thread (int): Index that tells us which section of the
+            total dataset that we're creating and saving
+        nbrlist_cutoff (float): Cutoff for two atoms to be considered
+            neighbors.
+        csv_folder (str): path to folder that contains the csv files
+            with the test/val/train smiles.
+        parallel_feat_threads (int): how many parallel threads
+            to use when making the efeatures.
+        strict_conformers (bool): Whether to exclude any species whose
+            conformers don't all have the same SMILES.
+        extra_features (list[dict]): list of extra features,
+            where each item is a dictionary of the form
+            {"name": name, "params": {params needed}}.
+    Returns:
+        None
+
+    """
 
     with open(summary_path, "r") as f:
         summary_dic = json.load(f)
