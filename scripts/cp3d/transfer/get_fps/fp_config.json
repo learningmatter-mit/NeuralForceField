@@ -8,7 +8,7 @@
   "sub_batch_size": 7,
   "test_only": false,
   "metrics": [
-    "loss",
+    "binary_cross_entropy",
     "prc-auc",
     "auc"
   ]

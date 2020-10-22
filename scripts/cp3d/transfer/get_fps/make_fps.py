@@ -35,7 +35,7 @@ def save(results,
       results (dict): dictionary of the results of applying the CP3D model
       targets (dict): target values
       feat_save_folder (str): folder in which we save the features files
-      prop (str): property that you're predicting 
+      prop (str): property that you're predicting
 
     """
 

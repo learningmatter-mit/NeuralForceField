@@ -16,7 +16,8 @@ METRIC_CHOICES = ["auc",
                   "mse",
                   "r2",
                   "accuracy",
-                  "cross_entropy"]
+                  "cross_entropy",
+                  "binary_cross_entropy"]
 
 
 def get_cp_cmd(script,

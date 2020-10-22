@@ -15,7 +15,8 @@ METRICS = list(METRIC_DIC.keys())
 # transform from chemprop syntax to our syntax for the metrics
 
 CHEMPROP_TRANSFORM = {"auc": "roc_auc",
-                      "prc-auc": "pr_auc"}
+                      "prc-auc": "pr_auc",
+                      "binary_cross_entropy": "loss"}
 
 
 def tqdm_enum(iter):

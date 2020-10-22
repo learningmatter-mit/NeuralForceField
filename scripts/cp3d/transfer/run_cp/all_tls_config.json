@@ -5,7 +5,8 @@
   "model_folder_cp": "/home/saxelrod/chemprop_cov_2/models",
   "metrics": [
     "auc",
-    "prc-auc"
+    "prc-auc",
+    "binary_cross_entropy"
   ],
   "feat_options": [
     true,
