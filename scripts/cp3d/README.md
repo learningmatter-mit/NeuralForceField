@@ -73,7 +73,7 @@ Details for the script are found in the file `dset_config.json`. This is where y
 If you are planning to compare the results of a CP3D model to that of another model, like ChemProp, make sure that you only use the csvs *after* creating the dataset. This way you will use only the species that are in the CP3D dataset and thus also being used to train the CP3D model.
 
 ### Adding custom features 
-The script automatically generates atom and bond features, but you can add other features to the dataset too. 
+The script automatically generates atom and bond features and any custom features you ask for, but if you forgot some custom features and want to add them after the fact, you can do that too. 
 
 - Morgan fingerprint. The Morgan fingerprint is a classic 2D bit vector fingerprint. Given a dataset called `dset` and a desired fingerprint length `vec_length`, call `dset.add_morgan(vec_length)`
 - E3FP. The E3FP fingerprint is a 3D version of the Morgan fingerprint. To generate E3FP fingerprints call `dset.add_e3fp(vec_length)`.
