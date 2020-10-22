@@ -110,7 +110,6 @@ def filter_bonds_in_nbr(cutoff, dset):
 
     bad_smiles = get_bad_smiles(dset, good_idx)
     dset = trim_dset(dset, good_idx)
-    
 
     return dset, bad_smiles
 
@@ -374,15 +373,13 @@ def clean_up_dset(dset,
                   rd_mols_list,
                   nbrlist_cutoff,
                   strict_conformers,
-                  csv_folder,
-                  device):
+                  csv_folder):
     """
     Do various things to clean up the dataset after you've made it
     """
 
     old_num = len(dset)
     remove_smiles = []
-
 
     with tqdm(total=3) as pbar:
 
@@ -431,12 +428,36 @@ def clean_up_dset(dset,
     return dset
 
 
+def add_features(dset,
+                 extra_features,
+                 parallel_feat_threads):
+
+    for dic in tqdm(extra_features):
+
+        name = dic["name"]
+        params = dic["params"]
+
+        if name.lower() == "e3fp":
+            length = params["length"]
+            fprint(f"Adding E3FP fingerprints of size {length}...")
+            dset.add_e3fp(length, num_procs=parallel_feat_threads)
+        if name.lower() == "whim":
+            fprint("Adding whim fingerprints...")
+            dset.featurize_rdkit('whim')
+        if name.lower() == "morgan":
+            length = params["length"]
+            fprint(f"Adding Morgan fingerprints of size {length}...")
+            dset.add_morgan(length)
+
+    return dset
+
+
 def make_nff_dataset(spec_dics,
                      nbrlist_cutoff,
                      parallel_feat_threads,
                      strict_conformers,
                      csv_folder,
-                     device):
+                     extra_features):
 
     fprint("Making dataset with %d species" % (len(spec_dics)))
 
@@ -524,15 +545,11 @@ def make_nff_dataset(spec_dics,
                                 rd_mols_list=rd_mols_list,
                                 nbrlist_cutoff=nbrlist_cutoff,
                                 strict_conformers=strict_conformers,
-                                csv_folder=csv_folder,
-                                device=device)
+                                csv_folder=csv_folder)
 
-    # fprint("Adding E3FP fingerprints...")
-    # big_dataset.add_e3fp(256, num_procs=parallel_feat_threads)
-    fprint("Adding whim fingerprints...")
-    big_dataset.featurize_rdkit('whim')
-    fprint("Adding Morgan fingerprints...")
-    big_dataset.add_morgan(256)
+    big_dataset = add_features(big_dataset=big_dataset,
+                               extra_features=extra_features,
+                               parallel_feat_threads=parallel_feat_threads)
 
     return big_dataset
 
@@ -597,8 +614,8 @@ def main(max_confs,
          csv_folder,
          parallel_feat_threads,
          strict_conformers,
-         device,
-         ** kwargs):
+         extra_features,
+         **kwargs):
 
     with open(summary_path, "r") as f:
         summary_dic = json.load(f)
@@ -622,7 +639,7 @@ def main(max_confs,
                                parallel_feat_threads=parallel_feat_threads,
                                strict_conformers=strict_conformers,
                                csv_folder=csv_folder,
-                               device=device)
+                               extra_features=extra_features)
 
     fprint("Creating test/train/val splits...")
     save_splits(dataset=dataset,
@@ -664,12 +681,20 @@ if __name__ == "__main__":
     parser.add_argument('--strict_conformers', action='store_true',
                         help=("Exclude any species whose conformers don't "
                               "all have the same SMILES."))
-    parser.add_argument('--device', type=str,
-                        help=("Device to use (cpu or indices for a GPU)"))
+    parser.add_argument('--extra_features', type=str, default=None,
+                        help=("List of dictionaries of extra features, "
+                              "where each dictionary has the name of the"
+                              "feature and any associated parameters. "
+                              "If using the command line, "
+                              "please provide as a JSON string."))
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "
                               "line arguments."))
 
     args = parse_args(parser)
+
+    if type(args.extra_features) == str:
+        args.extra_features = json.loads(args.extra_features)
+
     main(**args.__dict__)
