@@ -6,7 +6,8 @@ import os
 
 METRIC_DIC = {"pr_auc": "maximize",
               "roc_auc": "maximize",
-              "loss": "minimize",
+              "class_loss": "minimize",
+              "regress_loss": "minimize",
               "mae": "minimize",
               "mse": "minimize"}
 
@@ -16,8 +17,8 @@ METRICS = list(METRIC_DIC.keys())
 
 CHEMPROP_TRANSFORM = {"auc": "roc_auc",
                       "prc-auc": "pr_auc",
-                      "binary_cross_entropy": "loss",
-                      "mse": "loss"}
+                      "binary_cross_entropy": "class_loss",
+                      "mse": "regress_loss"}
 
 
 def tqdm_enum(iter):
@@ -63,7 +64,7 @@ def prepare_metric(lines, metric):
         metric = "pr_auc"
     elif metric in ["auc", "roc-auc"]:
         metric = "roc_auc"
-    if metric == "loss":
+    if "loss" in metric:
         idx = header_items.index("Validation loss")
     else:
         for i, item in enumerate(header_items):
