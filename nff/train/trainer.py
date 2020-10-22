@@ -436,7 +436,7 @@ class Trainer:
 
         return par_folders
 
-    def save_val_loss(self, val_loss):
+    def save_val_loss(self, val_loss, test=False):
         """
         Save the validation loss from this trainer. Necessary for averaging
         validation losses over all parallel trainers.
@@ -447,16 +447,18 @@ class Trainer:
         """
 
         self_folder = self.par_folders[self.global_rank]
+        name = "test" if test else "val"
 
         # write the loss as a number to a file called "val_epoch_i"
         # for epoch i.
 
         info_file = os.path.join(
-            self_folder, "val_epoch_{}".format(self.epoch))
+            self_folder, "{}_epoch_{}".format(name, self.epoch))
+
         with open(info_file, "w") as f:
             f.write(str(val_loss.item()))
 
-    def load_val_loss(self):
+    def load_val_loss(self, test=False):
         """
         Load the validation losses from the other parallel processes.
         Args:
@@ -472,6 +474,7 @@ class Trainer:
         # `None` is no longer in this dictionary.
 
         loaded_vals = {folder: None for folder in self.par_folders}
+        name = "test" if test else "val"
 
         while None in list(loaded_vals.values()):
             for folder in self.par_folders:
@@ -479,8 +482,10 @@ class Trainer:
                 # then no need to load anything
                 if loaded_vals[folder] is not None:
                     continue
+
                 val_file = os.path.join(
-                    folder, "val_epoch_{}".format(self.epoch))
+                    folder, "{}_epoch_{}".format(name, self.epoch))
+
                 # try opening the file and getting the value
                 try:
                     with open(val_file, "r") as f:
@@ -567,8 +572,8 @@ class Trainer:
         # and pick up the losses from the other processes too
 
         if self.parallel:
-            self.save_val_loss(val_loss)
-            val_loss = self.load_val_loss()
+            self.save_val_loss(val_loss, test)
+            val_loss = self.load_val_loss(test)
 
         if test:
             return
