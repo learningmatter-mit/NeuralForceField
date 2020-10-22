@@ -6,24 +6,25 @@ with fewer conformers per species.
 
 import torch
 import os
-import sys
 import argparse
 import json
 import pdb
 from tqdm import tqdm
 
 from nff.data import Dataset
-
-
-def fprint(msg):
-
-    print(msg)
-    sys.stdout.flush()
+from nff.utils import fprint
 
 
 def assert_ordered(batch):
+    """
+    Make sure the conformers are ordered by weight.
+    Args:
+        batch (dict): dictionary of properties for one
+            species.
+    Returns:
+        None
+    """
 
-    # make sure the conformers are ordered by weight
     weights = batch["weights"].reshape(-1).tolist()
     sort_weights = sorted(weights,
                           key=lambda x: -x)

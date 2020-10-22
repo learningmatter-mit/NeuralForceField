@@ -1,3 +1,14 @@
+#!/bin/bash
+#SBATCH -N 8
+#SBATCH -t 30240
+#SBATCH --mem=300G
+#SBATCH --no-requeue
+#SBATCH --signal=B:2@300
+#SBATCH --qos=high
+#SBATCH -p normal
+#SBATCH --constraint=xeon-g6
+
+
 source deactivate
 source ~/.bashrc
 

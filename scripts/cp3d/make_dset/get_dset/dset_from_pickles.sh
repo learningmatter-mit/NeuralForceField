@@ -31,11 +31,14 @@ for i in $(seq 0 $END); do
 
     # if parallelizing over nodes with slurm, use srun and let everything run together
     if [ $SLURM_PAR = 'true' ]; then
-        cmd="srun -N 1 "$cmd" &"
-        # only produce the output from the first thread
-        if [ $i != 0 ]; then
+        cmd="srun -N 1 "$cmd
+
+        # only produce the output from threads not run at the same time
+        if (( $i % $SLURM_NNODES != 0)); then
             cmd=$cmd" > /dev/null 2>&1"
         fi
+
+        cmd=$cmd" &"
     fi
     echo $cmd
     eval $cmd
