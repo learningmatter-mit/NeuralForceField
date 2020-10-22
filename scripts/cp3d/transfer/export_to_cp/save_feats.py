@@ -280,7 +280,14 @@ if __name__ == "__main__":
     parser.add_argument('--metrics', type=str, nargs='+',
                         help=("Generate features from 3D models "
                               "whose best model is chosen according to "
-                              "these metrics."))
+                              "these metrics. You can choose any of the "
+                              "metrics that you tracked during training. "
+                              "If you trained a classifier, you can also "
+                              "request `binary_cross_entropy`, and you will "
+                              "get the model with the best loss. If "
+                              "you trained a regressor, you can also "
+                              "request `mse`, and you will get the model "
+                              "with the best loss."))
     parser.add_argument('--hyper_dset_size', type=str, default=None,
                         help=("Maximum size of the subset of the data  "
                               "used for hyperparameter optimization. "
