@@ -79,8 +79,11 @@ def filter_same_smiles(dset):
         if len(unique_smiles) == 1:
             good_idx.append(i)
 
-    dset = trim_dset(dset, good_idx)
+    # must be before trimming
     bad_smiles = get_bad_smiles(dset, good_idx)
+
+    # trim
+    dset = trim_dset(dset, good_idx)
 
     return dset, bad_smiles
 
@@ -105,8 +108,9 @@ def filter_bonds_in_nbr(cutoff, dset):
         if valid:
             good_idx.append(i)
 
-    dset = trim_dset(dset, good_idx)
     bad_smiles = get_bad_smiles(dset, good_idx)
+    dset = trim_dset(dset, good_idx)
+    
 
     return dset, bad_smiles
 
@@ -523,8 +527,8 @@ def make_nff_dataset(spec_dics,
                                 csv_folder=csv_folder,
                                 device=device)
 
-    fprint("Adding E3FP fingerprints...")
-    big_dataset.add_e3fp(256, num_procs=parallel_feat_threads)
+    # fprint("Adding E3FP fingerprints...")
+    # big_dataset.add_e3fp(256, num_procs=parallel_feat_threads)
     fprint("Adding whim fingerprints...")
     big_dataset.featurize_rdkit('whim')
     fprint("Adding Morgan fingerprints...")
