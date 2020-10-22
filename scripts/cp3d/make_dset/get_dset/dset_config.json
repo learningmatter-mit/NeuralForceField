@@ -3,11 +3,12 @@
   "summary_path": "/home/gridsan/saxelrod/models/full_dset/rdkit_folder/summary_drugs.json",
   "dataset_folder": "/home/gridsan/saxelrod/models/full_dset",
   "pickle_folder": "/home/gridsan/saxelrod/models/full_dset/rdkit_folder",
-  "num_threads": 2,
+  "num_threads": 16,
   "csv_folder": "/home/gridsan/saxelrod/chemprop_cov_2/scaffold_split",
   "parallel_feat_threads": 1,
   "strict_conformers": true,
   "slurm_parallel": true,
   "extra_features": [{"name": "whim", "params": {}},
-                     {"name": "morgan", "params": {"length": 256}}]
+                     {"name": "morgan", "params": {"length": 256}},
+                     {"name": "e3fp", "params": {"length": 256}}]
 }
