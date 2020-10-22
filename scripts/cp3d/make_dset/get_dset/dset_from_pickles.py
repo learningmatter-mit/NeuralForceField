@@ -530,7 +530,7 @@ def make_nff_dataset(spec_dics,
     props_dic = concatenate_dict(*props_list)
     # make a combined dataset where the species look like they're
     # one big molecule
-    big_dataset = Dataset(props_dic.copy(), units='kcal/mol')
+    big_dataset = Dataset(props_dic, units='kcal/mol')
     # give it the proper neighbor list and rdkit mols
     big_dataset.props['nbr_list'] = nbr_list
     big_dataset.props["rd_mols"] = rd_mols_list
