@@ -4,9 +4,9 @@
   "feature_folder": "/home/saxelrod/chemprop_cov_2/features/fps_from_att_k1_yes_prob",
   "model_folder_cp": "/home/saxelrod/chemprop_cov_2/models",
   "metrics": [
+    "binary_cross_entropy",
     "auc",
-    "prc-auc",
-    "binary_cross_entropy"
+    "prc-auc"
   ],
   "feat_options": [
     true,
