@@ -36,6 +36,8 @@ def save(results,
       targets (dict): target values
       feat_save_folder (str): folder in which we save the features files
       prop (str): property that you're predicting
+    Returns:
+      None
 
     """
 
@@ -96,6 +98,21 @@ def save(results,
 
 
 def model_from_metric(model, model_folder, metric):
+    """
+    Get the model with the best validation score according
+    to a specified metric.
+    Args:
+      model (nff.nn.models): original NFF model loaded
+      model_folder (str): path to the folder that the model is being trained in
+      metric (str): name of metric to use
+    Returns:
+      model (nff.nn.models): NFF model updated with the state dict of
+        the model with the best metric
+    """
+
+    # the metric asked for should be in chemprop notation (e.g. auc, prc-auc),
+    # but when training a CP3D model we use different names
+    # (e.g. roc_auc, prc_auc), so we need to transform into that name
 
     if metric in CHEMPROP_TRANSFORM:
         use_metric = CHEMPROP_TRANSFORM[metric]
@@ -103,7 +120,10 @@ def model_from_metric(model, model_folder, metric):
     else:
         use_metric = metric
 
+    # find the best epoch by reading the csv with the metrics
     best_score, best_epoch = parse_score(model_folder, use_metric)
+
+    # load the state dict from the checkpoint of that epoch
     check_path = os.path.join(model_folder, "checkpoints",
                               f"checkpoint-{best_epoch}.pth.tar")
 
@@ -116,14 +136,28 @@ def model_from_metric(model, model_folder, metric):
 
 
 def fps_and_pred(model, batch, **kwargs):
+    """
+    Get fingeprints and predictions from the model.
+    Args:
+      model (nff.nn.models): original NFF model loaded
+      batch (dict): batch of data
+    Returns:
+      results (dict): model predictions and its predicted 
+        fingerprints, conformer weights, etc.
+
+    """
 
     model.eval()
 
+    # make the fingerprints
     outputs, xyz = model.make_embeddings(batch, xyz=None, **kwargs)
+    # pool to get the learned weights and pooled fingerprints
     pooled_fp, learned_weights = model.pool(outputs)
+    # get the final result and add any gradients as necessary
     results = model.readout(pooled_fp)
     results = model.add_grad(batch=batch, results=results, xyz=xyz)
 
+    # put into a dictionary
     conf_fps = [i.cpu().detach() for i in outputs["conf_fps_by_smiles"]]
     energy = batch.get("energy")
     boltz_weights = batch.get("weights")
@@ -140,6 +174,16 @@ def evaluate(model,
              loader,
              device,
              **kwargs):
+    """
+    Evaluate a model on a dataset.
+    Args:
+      model (nff.nn.models): original NFF model loaded
+      loader (torch.utils.data.DataLoader): data loader
+      device (Union[str, int]): device on which you run the model
+    Returns:
+      all_results (dict): dictionary of results
+      all_batches (dict): dictionary of ground truth
+    """
 
     model.eval()
     model.to(device)
@@ -162,6 +206,17 @@ def evaluate(model,
 
 
 def get_dsets(full_path, test_only):
+    """
+    Load datasets to evaluate the model on.
+    Args:
+      full_path (str): folder with the data in it
+      test_only (bool): only load the test set
+    Returns:
+      dsets (list): loaded datasets
+      dset_names (list[str]): name of the splits
+        (e.g. train, val, test)
+    """
+
     if test_only:
         dset_names = ['test']
     else:
@@ -185,13 +240,36 @@ def main(dset_folder,
          metric=None,
          test_only=False,
          **kwargs):
+    """
+    Get fingerprints and predictions from the model.
+    Args:
+      dset_folder (str): folder with the data in it
+      device (Union[str, int]): device on which you run the model
+      model_folder (str): path to the folder that the model is being trained in
+      batch_size (int): how many data points per batch
+      prop (str): property to predict
+      sub_batch_size (int): how many conformers to put in memory at a time
+      feat_save_folder (str): folder in which we're saving teh features
+      metric (str): name of metric to use. If not given, this defaults to
+        taking the model with the best validation loss.
+      test_only (bool): only load the test set
 
+    """
+
+    # get the model initially by taken the one saved as "best_model"
     model = load_model(model_folder)
+    # update its state_dict with the checkpoint from the epoch with
+    # the best metric score
     if metric is not None:
         model = model_from_metric(model=model,
                                   model_folder=model_folder,
                                   metric=metric)
+
+    # load the datasets
     datasets, dset_names = get_dsets(dset_folder, test_only)
+
+    # go through each dataset, create a loader, evaluate the model,
+    # and save the predictions
 
     for i in tqdm(range(len(dset_names))):
         dataset = datasets[i]
