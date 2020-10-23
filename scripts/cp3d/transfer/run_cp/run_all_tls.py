@@ -24,6 +24,19 @@ def get_train_folder(model_folder_cp,
                      metric,
                      feat,
                      mpnn):
+    """
+    Create a name for the training folder based on what kind of model
+    you're making.
+    Args:
+      model_folder_cp (str): directory in which you'll be saving your model
+        folders
+      feature_folder (str): directory with files for the features of the species
+      feat (bool): whether this model is being trained with external features
+      mpnn (bool): whether this model is being trained with an mpnn (vs. just with
+        external features)
+    Returns:
+      folder (str): path to the training folder
+    """
 
     model_name_3d = feature_folder.split("/")[-1]
     if model_name_3d == "":
@@ -43,7 +56,17 @@ def get_train_folder(model_folder_cp,
     return folder
 
 
-def get_msg(feat, mpnn, metric, train_folder):
+def get_msg(feat, mpnn, train_folder):
+    """
+    Create a message telling the user what kind of model we're training.
+    Args:
+      feat (bool): whether this model is being trained with external features
+      mpnn (bool): whether this model is being trained with an mpnn (vs. just with
+        external features)
+      train_folder (str): path to the training folder
+    Returns:
+      msg (str): the message
+    """
 
     msg = "Training a ChemProp model with "
     if feat:
@@ -69,6 +92,35 @@ def main(base_config_path,
          feat_options,
          mpnn_options,
          **kwargs):
+    """
+    Run transfer learning using fingerprints from 3D models evaluated by performance
+    on a variety of metrics. Different models are trained with the fingerprints and
+    with or without an MPNN.
+    Args:
+      base_config_path (str): where your basic job config file
+        is, with parameters that may or may not be changed depending
+        on the given run
+      hyp_config_path (str): where your basic hyperopt job config file
+        is, with parameters that may or may not be changed depending
+        on the given run
+      use_hyperopt (bool): do a hyperparameter optimization before training
+        the model
+      rerun_hyperopt (bool): whether to rerun hyperparameter optimization if
+        `hyp_folder` already exists and has the completion file
+        `best_params.json`.
+      cp_folder (str): path to the chemprop folder on your computer
+      feature_folder (str): directory with files for the features of the species
+      model_folder_cp (str): directory in which you'll be saving your model
+        folders
+      metrics (list[str]): metrics you want to use
+      feat_options (list[bool]): options you want to use for features. For example,
+        [True, False] means you want to train one model with features and one without,
+        while [True] just means you want to train one with features.
+      mpnn_options (list[bool]): same idea as `feat_options`, but for whether or not to
+        use an MPNN
+    Returns:
+      None
+    """
 
     cwd = os.path.abspath(".")
     script = os.path.join(cwd, "cp_tl.py")
@@ -93,7 +145,7 @@ def main(base_config_path,
                     feat=feat,
                     mpnn=mpnn)
 
-                msg = get_msg(feat, mpnn, metric, train_folder)
+                msg = get_msg(feat, mpnn, train_folder)
                 fprint(msg)
 
                 cmd = (f"python {script} "

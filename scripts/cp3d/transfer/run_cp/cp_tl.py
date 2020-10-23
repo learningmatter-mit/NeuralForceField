@@ -24,6 +24,17 @@ def get_cp_cmd(script,
                config_path,
                data_path,
                dataset_type):
+    """
+    Get the string for a ChemProp command.
+    Args:
+      script (str): the path to the chemprop script you're running
+      config_path (str): path to the config file for the job
+      data_path (str): path to the dataset being used
+      dataset_type (str): type of problem you're doing (e.g. regression,
+        classification, multiclass)
+    Returns:
+      cmd (str): the chemprop command
+    """
 
     cmd = (f"python {script} --config_path {config_path} "
            f" --data_path {data_path} "
@@ -34,10 +45,25 @@ def get_cp_cmd(script,
 def hyperopt(cp_folder,
              hyp_folder,
              rerun):
+    """
+    Run hyperparameter optimization with ChemProp.
+    Args:
+      cp_folder (str): path to the chemprop folder on your computer
+      hyp_folder (str): where you want to store your hyperparameter
+        optimization models
+      rerun (bool): whether to rerun hyperparameter optimization if
+        `hyp_folder` already exists and has the completion file
+        `best_params.json`.
+    Returns:
+      best_params (dict): best parameters from hyperparameter 
+        optimization
+    """
 
+    # path to `best_params.json` file
     param_file = os.path.join(hyp_folder, "best_params.json")
     params_exist = os.path.isfile(param_file)
 
+    # If it exists and you don't want to re-run, then load it
     if params_exist and (not rerun):
 
         fprint(f"Loading hyperparameter results from {param_file}\n")
@@ -45,6 +71,8 @@ def hyperopt(cp_folder,
         with open(param_file, "r") as f:
             best_params = json.load(f)
         return best_params
+
+    # otherwise run the script and read in the results
 
     hyp_script = os.path.join(cp_folder, "hyperparameter_optimization.py")
     config_path = os.path.join(hyp_folder, "config.json")
@@ -72,6 +100,14 @@ def hyperopt(cp_folder,
 
 def train(cp_folder,
           train_folder):
+    """
+    Train a chemprop model.
+    Args:
+      cp_folder (str): path to the chemprop folder on your computer
+      train_folder (str): where you want to store your trained models
+    Returns:
+      None
+    """
 
     train_script = os.path.join(cp_folder, "train.py")
     config_path = os.path.join(train_folder, "config.json")
@@ -98,6 +134,23 @@ def modify_config(base_config_path,
                   train_folder,
                   features_only,
                   hyp_params):
+    """
+    Modify a chemprop config file with new parameters.
+    Args:
+      base_config_path (str): where your basic job config file
+        is, with parameters that may or may not be changed depending
+        on the given run
+      metric (str): what metric you want to optimize in this run
+      train_feat_path (str): where the features of your training set are
+      val_feat_path (str): where the features of your validation set are
+      test_feat_path (str): where the features of your test set are
+      train_folder (str): where you want to store your trained models
+      features_only (bool): whether to just train with the features and no
+        MPNN
+      hyp_params (dict): any hyperparameters that may have been optimized
+    Returns:
+      None
+    """
 
     with open(base_config_path, "r") as f:
         config = json.load(f)
@@ -126,6 +179,22 @@ def modify_hyp_config(hyp_config_path,
                       hyp_feat_path,
                       hyp_folder,
                       features_only):
+    """
+    Modfiy a hyperparameter optimization config file with new parameters.
+    Args:
+      hyp_config_path (str): where your basic hyperopt job config file
+        is, with parameters that may or may not be changed depending
+        on the given run
+      metric (str): what metric you want to optimize in this run
+      hyp_feat_path (str): path to all the features of the species that are
+        part of the hyperparameter optimization (train and val from the
+        real dataset).
+      hyp_folder (str): where you want to store your trained models
+      features_only (bool): whether to just train with the features and no
+        MPNN
+    Returns:
+      None
+    """
 
     with open(hyp_config_path, "r") as f:
         config = json.load(f)
@@ -158,6 +227,34 @@ def main(base_config_path,
          use_hyperopt,
          rerun_hyperopt,
          **kwargs):
+    """
+    Load pre-set features to train a ChemProp model.
+    Args:
+      base_config_path (str): where your basic job config file
+        is, with parameters that may or may not be changed depending
+        on the given run
+      hyp_config_path (str): where your basic hyperopt job config file
+        is, with parameters that may or may not be changed depending
+        on the given run
+      train_folder (str): where you want to store your trained models
+      metric (str): what metric you want to optimize in this run
+      train_feat_path (str): where the features of your training set are
+      val_feat_path (str): where the features of your validation set are
+      test_feat_path (str): where the features of your test set are
+      cp_folder (str): path to the chemprop folder on your computer
+      features_only (bool): whether to just train with the features and no
+        MPNN
+      use_hyperopt (bool): do a hyperparameter optimization before training
+        the model
+      rerun_hyperopt (bool): whether to rerun hyperparameter optimization if
+        `hyp_folder` already exists and has the completion file
+        `best_params.json`.
+    Returns:
+      None
+    """
+
+    # if doing a hyperparameter optimization, run the optimization and get
+    # the best parameters
 
     if use_hyperopt:
 
@@ -177,6 +274,10 @@ def main(base_config_path,
     else:
         hyp_params = {}
 
+    # modify the base config with the parameters specific to this
+    # run -- optimized hyperparameters, train/val/test features paths,
+    # metric, etc.
+
     modify_config(base_config_path=base_config_path,
                   metric=metric,
                   train_feat_path=train_feat_path,
@@ -185,6 +286,8 @@ def main(base_config_path,
                   train_folder=train_folder,
                   features_only=features_only,
                   hyp_params=hyp_params)
+
+    # train the model
 
     train(cp_folder=cp_folder,
           train_folder=train_folder)
