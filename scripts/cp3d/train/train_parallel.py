@@ -1,3 +1,7 @@
+"""
+Train a model in parallel over multiple GPUs
+"""
+
 import subprocess
 import os
 import argparse
@@ -6,7 +10,7 @@ import json
 
 def get_nodes():
     """
-    Get the nodes that the job is being run on.
+    If using slurm, get the nodes that the job is being run on.
     Args:
         None
     Returns:
@@ -94,6 +98,15 @@ def submit_slurm_job(node,
 
 def run_local_job(params_file,
                   num_gpus):
+    """
+    Run a (potentially parallel) job on a single node locally.
+    Args:
+        params_file (str): name of the file from which to load the
+                nn params.
+        num_gpus (int): number of GPUs
+    Returns:
+        p (subprocess): the process created by the submission.
+    """
 
     cmd = (f"python $NFFDIR/scripts/cp3d/train/train_single.py "
            f"{params_file} -nr 0 "
@@ -126,20 +139,25 @@ def submit_to_nodes(params_file):
                   **params["model_params"]}
     use_slurm = all_params["use_slurm"]
 
-    cmds = ["echo $(srun -l bash -c 'hostname' | sort | head -1 | awk '{print $2}')",
+    cmds = [("echo $(srun -l bash -c 'hostname' | sort | head -1 | "
+             "awk '{print $2}')"),
             "echo $(getent hosts `hostname` | cut -d ' ' -f1)",
             "echo 8888"]
 
     env_vars = ["MASTER_ADDR", "MASTER_IP", "MASTER_PORT"]
 
+    # if not using slurm, replace the first command with a local
+    # command to get the host name
+
     if not use_slurm:
         cmds[0] = "echo $(cat /proc/sys/kernel/hostname)"
+
+    # execute each of the commands
 
     for cmd, env_var in zip(cmds, env_vars):
         var = subprocess.check_output(
             cmd, env=os.environ.copy(), shell=True).decode()
         os.environ[env_var] = var
-
 
     if use_slurm:
 
@@ -169,11 +187,15 @@ def submit_to_nodes(params_file):
             p.wait()
 
     else:
+
+        # run a local job
+
         num_gpus = all_params["num_gpus"]
         p = run_local_job(params_file=params_file,
-                      num_gpus=num_gpus)
+                          num_gpus=num_gpus)
 
         p.wait()
+
 
 if __name__ == "__main__":
 

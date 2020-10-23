@@ -1,3 +1,7 @@
+"""
+Train a CP3D model.
+"""
+
 import os
 import argparse
 import json
@@ -511,7 +515,7 @@ def get_nn_quants(all_params):
         all_params (dict): all parameters in the job_info.json
             file
     Returns:
-        model_name (int): id of the neural network
+        model_name (str): id of the neural network
         params (dict): job params
         nn (neuralnet.models.NnPotential): neural network database object
         geoms (QuerySet): Geom objects to use when creating the dataset
@@ -643,6 +647,27 @@ def optim_loss_hooks(params,
                      base,
                      rank,
                      world_size):
+    """
+    Make the optimizer, the loss function, and the custom hooks for the trainer.
+    Args:
+        params (dict): training/network parameters
+        model (nff.nn.models): NFF model
+        metric_names (list[str]): names of the metrics you want to monitor
+        base_keys (list[str]): names of properties the network is predicting
+        grad_keys (list[str]): names of any gradients of properites it's 
+            predicting. Should have the form [key + "_grad"] for all the keys
+            you want the gradient of. 
+        weight_path (str): path to the folder that the model is being trained in
+        base (bool): whether this training process has global rank 0
+        rank (int): local rank on the node
+        world_size (int): total number of processes being used for training
+    Returns:
+        loss_fn (callable): a function that computes the loss from predictions
+            and ground truth
+        optimizer (torch.optim.Adam): Adam optimizer instance
+        train_hooks (list): list of hooks to apply to the trainer
+
+    """
 
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
     optimizer = Adam(trainable_params, lr=params['lr'])
@@ -652,15 +677,19 @@ def optim_loss_hooks(params,
     if isinstance(loss_coef, str):
         loss_coef = json.loads(loss_coef)
 
+    # build the loss functions
     loss_type = params.get("loss", "mse")
     loss_builder = getattr(loss, "build_{}_loss".format(loss_type))
     loss_fn = loss_builder(loss_coef=loss_coef)
 
+    # make the train metrics
     train_metrics = []
     for metric_name in metric_names:
         metric = getattr(metrics, metric_name)
         for key in [*base_keys, *grad_keys]:
             train_metrics.append(metric(key))
+
+    # make the train hooks
 
     train_hooks = [
         hooks.MaxEpochHook(params['max_epochs']),
@@ -693,8 +722,29 @@ def optim_loss_hooks(params,
 
 
 def get_max_batch_iters(weight_path, world_size):
+    """
+    If using disk-writing parallelization, then the training data
+    will be taken from model_path/0/train.pth.tar for process 0,
+    model_path/1/train.pth.tar for process 1, etc. These in general
+    will have different numbers of species, and so there will be
+    different numbers of batches for each process. If they
+    are all supposed to wait for the others to finish a batch, but one
+    process can't finish it because it's already out of data, the training
+    will hang. This function finds the maximum number of batches that any
+    process can finish without doing more than any of the other processes.
+
+    Args:
+        weight_path (str): path to the folder that the model is being trained in
+        world_size (int): total number of processes being used for training
+    Returns:
+        max_batch_iters (int): maximum number of batches for any parallel process
+    """
 
     max_batch_iters = float("inf")
+
+    # go through each folder and load "train_len" once it's available, which
+    # is the number of batches in the training set. Take the smallest value
+
     for rank in range(world_size):
         batch_path = os.path.join(weight_path, str(rank), "train_len")
         while True:
@@ -710,24 +760,46 @@ def get_max_batch_iters(weight_path, world_size):
 
 
 def get_trainer_kwargs(params, weight_path, world_size):
+    """
+    Get any extra arguments for the trainer class that may have been requested.
+    Args:
+        params (dict): training/network parameters
+        weight_path (str): path to the folder that the model is being trained in
+        world_size (int): total number of processes being used for training
+    Returns:
+        trainer_kwargs (dict): dictionary of keyword arguments
+    """
 
     max_batch_iters = get_max_batch_iters(weight_path=weight_path,
                                           world_size=world_size)
 
     trainer_kwargs = dict(
         max_batch_iters=max_batch_iters,
+        # any kwargs when calling the model
         model_kwargs=params.get("model_kwargs"),
+        # how many batches to accumulate gradients over before
+        # taking an optimization step
         mini_batches=params.get("mini_batches", 1),
+        # how many checkpoints to keep
         checkpoints_to_keep=params.get(
             "checkpoints_to_keep", 3),
+        # how often to make checkpoints
         checkpoint_interval=params.get(
             "checkpoint_interval", 1),
+        # normalize loss by molecule not by atom number
         mol_loss_norm=params.get("mol_loss_norm",
                                  False),
+        # how often to delete pickle files with gradients
         del_grad_interval=params.get("del_grad_interval",
                                      10),
+        # use a metric instead of the loss to determine the
+        # trainer scheduling
         metric_as_loss=params.get("metric_as_loss"),
+        # whether you want to maximize or minimize that metric
         metric_objective=params.get("metric_objective"),
+        # cut off an epoch after `epoch_cutoff` batches. - useful if you want
+        # to validate the model more often than after going through all data
+        # points once.
         epoch_cutoff=params.get("epoch_cutoff", float("inf"))
     )
 
@@ -735,6 +807,13 @@ def get_trainer_kwargs(params, weight_path, world_size):
 
 
 def load_params(file):
+    """
+    Load the train config parameters.
+    Args:
+        file (str): path to config file
+    Returns:
+        out (dict): config dictionary
+    """
     with open(file, "r") as f:
         out = json.load(f)
     return out
@@ -837,6 +916,8 @@ def train(gpu,
 
     log_train('model saved in ' + weight_path)
 
+    # make test stats
+
     make_stats(T=T,
                test_loader=test_loader,
                loss_fn=loss_fn,
@@ -854,6 +935,13 @@ def train(gpu,
 
 
 def add_args(all_params):
+    """
+    Add arguments when calling `train` that can be found in `all_params`.
+    Args:
+        all_params (dict): config dictionary
+    Returns:
+        args (list): extra arguments in `train` 
+    """
 
     params = {**all_params['train_params'],
               **all_params['model_params']}
