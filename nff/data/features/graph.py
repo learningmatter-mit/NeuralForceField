@@ -1,21 +1,27 @@
+"""
+Tools for generating graph-based features
+"""
+
 import torch
 import numpy as np
 import copy
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from e3fp.pipeline import fprints_from_mol
-from tqdm import tqdm
 import logging
 
 
 from nff.utils.xyz2mol import xyz2mol
 from nff.utils import tqdm_enum
 
+# default options for xyz2mol
+
 QUICK = True
 EMBED_CHIRAL = True
 USE_HUCKEL = False
 CHARGED_FRAGMENTS = True
 
+# default feature types and options
 
 BOND_FEAT_TYPES = ["bond_type",
                    "conjugated",
@@ -62,6 +68,9 @@ BONDS = [0, 1, 2, 3, 4, 5]
 NUM_H = [0, 1, 2, 3, 4]
 RING_SIZE = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
+# dictionary with feature names, their options, type,
+# and size when stored as a vector
+
 FEAT_DIC = {"bond_type": {"options": BOND_OPTIONS,
                           "num": len(BOND_OPTIONS) + 1},
             "conjugated": {"options": [bool],
@@ -93,15 +102,29 @@ META_DATA = {"bond_features": BOND_FEAT_TYPES,
              "atom_features": ATOM_FEAT_TYPES,
              "details": FEAT_DIC}
 
+# default number of atom features
+
 NUM_ATOM_FEATS = sum([val["num"] for key, val in FEAT_DIC.items()
                       if key in ATOM_FEAT_TYPES])
 
+# default number of bond features
 
 NUM_BOND_FEATS = sum([val["num"] for key, val in FEAT_DIC.items()
                       if key in BOND_FEAT_TYPES])
 
 
 def remove_bad_idx(dataset, smiles_list, bad_idx, verbose=True):
+    """
+    Remove items in dataset that have indices in `bad_idx`.
+    Args:
+        dataset (nff.data.dataset): NFF dataset
+        smiles_list (list[str]): SMiLES strings originally in dataset
+        bad_idx (list[int]): indices to get rid of in the dataset
+        verbose (bool): whether to print the progress made
+    Returns:
+        None
+    """
+
     bad_idx = sorted(list(set(bad_idx)))
     new_props = {}
     for key, values in dataset.props.items():
@@ -125,6 +148,15 @@ def remove_bad_idx(dataset, smiles_list, bad_idx, verbose=True):
 
 
 def smiles_from_smiles(smiles):
+    """
+    Convert a smiles to its canonical form.
+    Args:
+        smiles (str): smiles string
+    Returns:
+        new_smiles (str): canonicial smiles
+        new_mol (rdkit.Chem.rdchem.Mol): rdkit Mol created
+            from the canonical smiles.
+    """
 
     mol = Chem.MolFromSmiles(smiles)
     new_smiles = Chem.MolToSmiles(mol)
@@ -135,6 +167,15 @@ def smiles_from_smiles(smiles):
 
 
 def smiles_from_mol(mol):
+    """
+    Get the canonical smiles from an rdkit mol.
+    Args:
+        mol (rdkit.Chem.rdchem.Mol): rdkit Mol 
+    Returns:
+        new_smiles (str): canonicial smiles
+        new_mol (rdkit.Chem.rdchem.Mol): rdkit Mol created
+            from the canonical smiles. 
+    """
 
     new_smiles = Chem.MolToSmiles(mol)
     new_mol = Chem.MolFromSmiles(new_smiles)
@@ -144,6 +185,16 @@ def smiles_from_mol(mol):
 
 
 def get_undirected_bonds(mol):
+    """
+    Get an undirected bond list from an RDKit mol. This
+    means that bonds between atoms 1 and 0 are stored as 
+    [0, 1], whereas in a directed list they would be stored as
+    both [0, 1] and [1, 0].
+    Args:
+        mol (rdkit.Chem.rdchem.Mol): rdkit Mol 
+    Returns:
+        bond_list (list): undirected bond list
+    """
 
     bond_list = []
     bonds = mol.GetBonds()
@@ -160,9 +211,19 @@ def get_undirected_bonds(mol):
     return bond_list
 
 
-def get_undirected_bond_idx(mol):
+def undirected_bond_atoms(mol):
+    """
+    Get a list of the atomic numbers comprising a bond
+    in each bond of an undirected bond list.
+    Args:
+        mol (rdkit.Chem.rdchem.Mol): rdkit Mol 
+    Returns:
+        atom_num_list (list): list of the form [[num__00, num_01],
+        [num_10, num_11], [num_20, num_21], ...], where the `num_ij`
+        is the atomic number of atom `j` in bond `i`.
+    """
 
-    bond_list = []
+    atom_num_list = []
     bonds = mol.GetBonds()
 
     for bond in bonds:
@@ -172,23 +233,45 @@ def get_undirected_bond_idx(mol):
         lower = min((start, end))
         upper = max((start, end))
 
-        bond_list.append([lower, upper])
+        atom_num_list.append([lower, upper])
 
-    return bond_list
+    return atom_num_list
 
 
 def check_connectivity(mol_0, mol_1):
+    """
+    Check if the atom connectivity in two mol objects is the same.
+    Args:
+        mol_0 (rdkit.Chem.rdchem.Mol): first rdkit Mol 
+        mol_1 (rdkit.Chem.rdchem.Mol): second rdkit Mol 
+    Returns:
+        same (bool): whether or not the connectivity is the same
+    """
 
-    bonds_0 = get_undirected_bond_idx(mol_0)
-    bonds_1 = get_undirected_bond_idx(mol_1)
+    bonds_0 = undirected_bond_atoms(mol_0)
+    bonds_1 = undirected_bond_atoms(mol_1)
+    same = (bonds_0 == bonds_1)
 
-    return bonds_0 == bonds_1
+    return same
 
 
 def verify_smiles(rd_mol, smiles):
+    """
+    Verify that an RDKit mol has the same smiles as the original smiles
+    that made it.
+    Args:
+        rd_mol (rdkit.Chem.rdchem.Mol): rdkit Mol 
+        smiles (str): claimed smiles
+    Returns:
+        None
+    """
+
+    # get the canonical smiles of each
 
     rd_smiles, new_rd_mol = smiles_from_mol(rd_mol)
     db_smiles, db_mol = smiles_from_smiles(smiles)
+
+    # if they're the same then we're good
 
     if rd_smiles == db_smiles:
         return
@@ -226,6 +309,15 @@ def verify_smiles(rd_mol, smiles):
 
 
 def log_failure(bad_idx, i):
+    """
+    Log how many smiles have conformers that you've successfully converted 
+    to RDKit mols.
+    Args:
+        bad_idx (list[int]): indices to get rid of in the dataset
+        i (int): index of the smiles in the dataset
+    Returns:
+        None
+    """
 
     if i == 0:
         return
@@ -239,6 +331,15 @@ def log_failure(bad_idx, i):
 
 
 def log_missing(missing_e):
+    """
+    Log any atom types that are missing from `xyz2mol` that cause
+    conversion errors.
+    Args:
+        misisng_e (list[int]): atomic numbers of any atoms that caused
+            exceptions
+    Returns:
+        None
+    """
     if not missing_e:
         print("No elements are missing from xyz2mol")
     else:
@@ -248,11 +349,20 @@ def log_missing(missing_e):
 
 
 def get_enum_func(track):
+    """
+    Get the enumerate function.
+    Args:
+        track (bool): whether to track progress with tqdm_enum
+    Returns:
+        func (callable): enumerate function that tracks progress with
+            tqdm if track == True.
+    """
 
     if track:
-        return tqdm_enum
+        func = tqdm_enum
     else:
-        return enumerate
+        func = enumerate
+    return func
 
 
 def make_rd_mols(dataset,
