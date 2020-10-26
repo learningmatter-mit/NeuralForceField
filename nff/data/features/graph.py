@@ -367,10 +367,26 @@ def get_enum_func(track):
 
 def make_rd_mols(dataset,
                  verbose=True,
-                 check_smiles=True,
+                 check_smiles=False,
                  track=True):
+    """
+    Use xyz2mol to add RDKit mols to a dataset that contains
+    molecule coordinates.
+    Args::
+        dataset (nff.data.dataset): NFF dataset
+        verbose (bool): communicate a lot about the status of the
+            RDKit mosl being made
+        check_smiles (bool): only include species whose geometries
+            produce smiles strings that are the same (or close) to
+            the target smiles
+        track (bool): use tqdm to track progress
+    Returns:
+        dataset (nff.data.dataset): dataset updated with RDKit mols
+
+    """
 
     num_atoms = dataset.props['num_atoms']
+    # number of atoms in each conformer
     mol_size = dataset.props.get("mol_size", num_atoms).tolist()
     smiles_list = dataset.props["smiles"]
     all_nxyz = dataset.props["nxyz"]
@@ -380,11 +396,12 @@ def make_rd_mols(dataset,
     all_mols = []
     bad_idx = []
 
-    # for i, smiles in tqdm(enumerate(smiles_list)):
-
     enum = get_enum_func(track)
 
     for i, smiles in enum(smiles_list):
+
+        # split the nxyz of each species into the component
+        # nxyz of each conformer
 
         num_confs = (num_atoms[i] // mol_size[i]).item()
         split_sizes = [mol_size[i]] * num_confs
@@ -394,10 +411,18 @@ def make_rd_mols(dataset,
         spec_mols = []
         missing_e = []
 
+        # go through each conformer nxyz
+
         for j, nxyz in enumerate(nxyz_list):
+
+            # if a conformer in the species has already failed
+            # to produce an RDKit mol, then don't bother converting
+            # any of the other conformers for that species
 
             if i in bad_idx:
                 continue
+
+            # coordinates and atomic numbers
 
             xyz = nxyz[:, 1:].tolist()
             atoms = nxyz[:, 0].numpy().astype('int').tolist()
@@ -412,13 +437,10 @@ def make_rd_mols(dataset,
                               embed_chiral=EMBED_CHIRAL,
                               use_huckel=USE_HUCKEL)
                 if check_smiles:
+                    # check the smiles if requested
                     verify_smiles(rd_mol=mol, smiles=smiles)
 
             except Exception as e:
-
-                # import pdb
-                # print(e)
-                # pdb.post_mortem()
 
                 print(("xyz2mol failed "
                        "with error '{}' ".format(e)))
@@ -427,6 +449,10 @@ def make_rd_mols(dataset,
 
                 if verbose:
                     log_failure(bad_idx=bad_idx, i=i)
+
+                # `xyz2mol` will produce an error that is just an integer
+                # if the problem was that the requested element was not
+                # available in the program
 
                 if str(e).isdigit():
                     missing_e.append(int(str(e)))
@@ -437,6 +463,8 @@ def make_rd_mols(dataset,
 
         all_mols.append(spec_mols)
         dataset.props["rd_mols"].append(spec_mols)
+
+    # remove any species with missing RDKit mols
 
     remove_bad_idx(dataset=dataset,
                    smiles_list=smiles_list,
@@ -450,6 +478,18 @@ def make_rd_mols(dataset,
 
 
 def make_one_hot(options, result):
+    """
+    Convert a value from a set of options into a one-hot encoding.
+    Args:
+        options (list): possible values the result can have
+        result (Union[float, int, str]): actual value
+    Return:
+        one_hot (torch.Tensor): one-hot encoding of result.
+    """
+
+    # get the option index corresponding to the result, and if
+    # it's not there, then give it the index -1 (last index of the
+    # vector)
 
     index = options.index(result) if result in options else -1
     one_hot = torch.zeros(len(options) + 1)
@@ -459,13 +499,24 @@ def make_one_hot(options, result):
 
 
 def bond_feat_to_vec(feat_type, feat):
+    """
+    Convert a bond feature to a feature vector.
+    Args:
+        feat_type (int): what type of feature it is
+        feat (Union[floa, int]): feaure value
+    Returns:
+        one_hot (torch.Tensor): one-hot encoding of 
+            the feature.
+    """
 
     if feat_type == "conjugated":
+        # just 0 or 1
         conj = feat
         result = torch.Tensor([conj])
         return result
 
     elif feat_type == "bond_type":
+        # select from `BOND_OPTIONS`
         options = BOND_OPTIONS
         bond_type = feat
         one_hot = make_one_hot(options=options,
@@ -473,8 +524,17 @@ def bond_feat_to_vec(feat_type, feat):
         return one_hot
 
     elif feat_type == "in_ring_size":
+
+        # This is already a one-hot encoded vector,
+        # because RDKit tests if the bond is in a
+        # ring of a specific size, so the feature we
+        # produce is a set of 1s or 0s for each ring size
+        # between 0 and 10. However, if they are all
+        # zeros, we need to add a 1 at the end of the vector,
+        # and hence we go through `make_one_hot` as well
+
         options = RING_SIZE
-        ring_size = - 1
+        ring_size = -1
         for is_in_size, option in zip(feat, options):
             if is_in_size:
                 ring_size = option
@@ -486,11 +546,13 @@ def bond_feat_to_vec(feat_type, feat):
         return one_hot
 
     elif feat_type == "in_ring":
+        # just 0 or 1
         in_ring = feat
         result = torch.Tensor([in_ring])
         return result
 
     elif feat_type == "stereo":
+        # select from `STEREO_OPTIONS`
         stereo = feat
         options = STEREO_OPTIONS
         one_hot = make_one_hot(options=options,
@@ -499,6 +561,16 @@ def bond_feat_to_vec(feat_type, feat):
 
 
 def get_bond_features(bond, feat_type):
+    """
+    Get features for a bond.
+    Args:
+        bond (rdkit.Chem.rdchem.Bond): bond object
+        feat_type (str): type of feature
+    Returns:
+        vec (torch.Tensor): feature vector
+    """
+
+    # get the feature
 
     if feat_type == "conjugated":
         feat = bond.GetIsConjugated()
@@ -507,6 +579,8 @@ def get_bond_features(bond, feat_type):
         feat = bond.GetBondType().name.lower()
 
     elif feat_type == "in_ring_size":
+        # go through ring sizes 0 to 10 and see if the bond
+        # is in a ring of any of those sizes
         feat = [bond.IsInRingSize(option) for option in RING_SIZE]
 
     elif feat_type == "in_ring":
@@ -515,10 +589,22 @@ def get_bond_features(bond, feat_type):
     elif feat_type == "stereo":
         feat = bond.GetStereo().name.lower()
 
-    return bond_feat_to_vec(feat_type, feat)
+    # convert it to a feature vector
+    vec = bond_feat_to_vec(feat_type, feat)
+
+    return vec
 
 
 def atom_feat_to_vec(feat_type, feat):
+    """
+    Convert an atom feature to a feature vector.
+    Args:
+        feat_type (int): what type of feature it is
+        feat (Union[floa, int]): feaure value
+    Returns:
+        one_hot (torch.Tensor): one-hot encoding of 
+            the feature.
+    """
 
     if feat_type == "atom_type":
         options = AT_NUM
@@ -571,12 +657,24 @@ def atom_feat_to_vec(feat_type, feat):
         return one_hot
 
     elif feat_type == "mass":
+        # the mass is converted to a feature vector
+        # by dividing by 100
         result = torch.Tensor([feat / 100])
 
         return result
 
 
 def get_atom_features(atom, feat_type):
+    """
+    Get features for an atom.
+    Args:
+        atom (rdkit.Chem.rdchem.Atom): atom object
+        feat_type (str): type of feature
+    Returns:
+        vec (torch.Tensor): feature vector
+    """
+
+    # get the feature
 
     if feat_type == "atom_type":
         feat = atom.GetAtomicNum()
@@ -608,8 +706,12 @@ def get_atom_features(atom, feat_type):
     elif feat_type == "mass":
         feat = atom.GetMass()
 
-    return atom_feat_to_vec(feat_type=feat_type,
-                            feat=feat)
+    # convert to a feature vector
+
+    vec = atom_feat_to_vec(feat_type=feat_type,
+                           feat=feat)
+
+    return vec
 
 
 def bond_feats_from_dic(dic_list, feat_types=BOND_FEAT_TYPES):
