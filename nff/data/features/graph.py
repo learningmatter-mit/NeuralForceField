@@ -372,7 +372,7 @@ def make_rd_mols(dataset,
     """
     Use xyz2mol to add RDKit mols to a dataset that contains
     molecule coordinates.
-    Args::
+    Args:
         dataset (nff.data.dataset): NFF dataset
         verbose (bool): communicate a lot about the status of the
             RDKit mosl being made
@@ -714,60 +714,17 @@ def get_atom_features(atom, feat_type):
     return vec
 
 
-def bond_feats_from_dic(dic_list, feat_types=BOND_FEAT_TYPES):
-
-    key_map = {key: key for key in feat_types}
-    key_map.update({"bond_type": "type", "in_ring_size": "ring_size"})
-
-    bond_feats = []
-    for bond_dic in dic_list:
-        vec_list = []
-        for feat_type in feat_types:
-            if feat_type == "in_ring_size":
-                feat = [False] * len(RING_SIZE)
-                ring_size_idx = bond_dic[key_map[feat_type]]
-                if ring_size_idx != -1:
-                    feat[ring_size_idx] = True
-            else:
-                feat = bond_dic[key_map[feat_type]]
-            vec = bond_feat_to_vec(feat_type, feat)
-            vec_list.append(vec)
-
-        feats = torch.cat(vec_list)
-        bond_feats.append(feats)
-
-    return torch.stack(bond_feats)
-
-
-def atom_feats_from_dic(dic_list, feat_types=ATOM_FEAT_TYPES):
-
-    key_map = {key: key for key in feat_types}
-    key_map.update({"hybrid": "hybridization",
-                    "aromaticity": "aromatic"})
-
-    atom_feats = []
-    for atom_dic in dic_list:
-        vec_list = []
-        for feat_type in feat_types:
-            feat = atom_dic[key_map[feat_type]]
-            vec = atom_feat_to_vec(feat_type, feat)
-            vec_list.append(vec)
-
-        feats = torch.cat(vec_list)
-        atom_feats.append(feats)
-
-    return torch.stack(atom_feats)
-
-
-def nbr_list_from_dic(dic_list):
-    nbr_list = []
-    for bond_dic in dic_list:
-        nbr_list.append(bond_dic["indices"])
-
-    return nbr_list
-
-
 def get_all_bond_feats(bond, feat_types):
+    """
+    Get all sets of bond features vectors.
+    Args:
+        bond (rdkit.Chem.rdchem.Bond): bond object
+        feat_types (list[str]): list of feature types
+    Returns:
+        feat_dic (dict): dictionary of the form 
+            {feat_type: bond_feat_vector} for all
+            feature types.
+    """
 
     feat_dic = {}
 
@@ -780,6 +737,16 @@ def get_all_bond_feats(bond, feat_types):
 
 
 def get_all_atom_feats(atom, feat_types):
+    """
+    Get all sets of atom features vectors.
+    Args:
+        atom (rdkit.Chem.rdchem.Atom): atom object
+        feat_types (list[str]): list of feature types
+    Returns:
+        feat_dic (dict): dictionary of the form 
+            {feat_type: atom_feat_vector} for all
+            feature types.
+    """
 
     feat_dic = {}
 
@@ -794,17 +761,32 @@ def get_all_atom_feats(atom, feat_types):
 def featurize_bonds(dataset,
                     feat_types=BOND_FEAT_TYPES,
                     track=True):
+    """
+    Add the bond feature vectors of each species and conformer
+    to the dataset.
+    Args:
+        dataset (nff.data.dataset): NFF dataset
+        feat_types (list[str]): names of the bond features to add
+        track (bool): use tqdm to track progress
+    Returns:
+        dataset (nff.data.dataset): NFF dataset updated with bond
+            features.
+    """
 
     props = dataset.props
 
+    # indices of which atoms are bonded to which
     props["bond_list"] = []
+    # concatenated set of bond features for each graph
     props["bond_features"] = []
+    # number of bonds in a species
     props["num_bonds"] = []
 
     num_atoms = dataset.props['num_atoms']
     mol_size = dataset.props.get("mol_size", num_atoms).tolist()
     enum = get_enum_func(track)
-    # for i, rd_mols in enum(dataset.props["rd_mols"], track):
+
+    # go through each set of RDKit mols
 
     for i, rd_mols in enum(dataset.props["rd_mols"]):
 
@@ -815,6 +797,8 @@ def featurize_bonds(dataset,
         props["num_bonds"].append([])
 
         all_props = []
+
+        # go through each RDKit mol
 
         for j, rd_mol in enumerate(rd_mols):
 
@@ -830,13 +814,21 @@ def featurize_bonds(dataset,
                 lower = min((start, end))
                 upper = max((start, end))
 
+                # add to the bond list
                 bond_list.append([lower, upper])
+
+                # get the bond features
                 feat_dic = get_all_bond_feats(bond=bond,
                                               feat_types=feat_types)
 
+                # add to the features `all_props`, which contains
+                # the bond features of all the conformers of this species
                 for key, feat in feat_dic.items():
                     all_props[-1] = torch.cat((all_props[-1], feat))
 
+            # shift the bond list for each conformer to take into account
+            # that conformers are all looped into one big nxyz with shifted
+            # atom indices
             other_atoms = sum(split_sizes[:j])
             shifted_bond_list = np.array(bond_list) + other_atoms
 
@@ -844,6 +836,7 @@ def featurize_bonds(dataset,
                 shifted_bond_list))
             props["num_bonds"][-1].append(len(bonds))
 
+        # convert everything into a tensor after looping through each conformer
         props["num_bonds"][-1] = torch.LongTensor(props["num_bonds"][-1])
         props["bond_list"][-1] = torch.cat(props["bond_list"][-1])
         props["bond_features"].append(torch.stack(all_props))
@@ -854,38 +847,70 @@ def featurize_bonds(dataset,
 def featurize_atoms(dataset,
                     feat_types=ATOM_FEAT_TYPES,
                     track=True):
+    """
+    Add the atom feature vectors of each species and conformer
+    to the dataset.
+    Args:
+        dataset (nff.data.dataset): NFF dataset
+        feat_types (list[str]): names of the atom features to add
+        track (bool): use tqdm to track progress
+    Returns:
+        dataset (nff.data.dataset): NFF dataset updated with atom
+            features.
+    """
 
     props = dataset.props
     props["atom_features"] = []
 
     enum = get_enum_func(track)
 
+    # go through each set of RDKit mols for each species
     for i, rd_mols in enum(dataset.props["rd_mols"]):
 
+        # initialize a list of features for each atom
+
         all_props = []
+
+        # go through each mol
         for rd_mol in rd_mols:
             atoms = rd_mol.GetAtoms()
 
             for atom in atoms:
                 all_props.append(torch.tensor([]))
+
+                # get the atomic features
                 feat_dic = get_all_atom_feats(atom=atom,
                                               feat_types=feat_types)
 
                 for key, feat in feat_dic.items():
                     all_props[-1] = torch.cat((all_props[-1], feat))
 
+        # stack the atomic features
         props["atom_features"].append(torch.stack(all_props))
 
     return dataset
 
 
 def decode_one_hot(options, vector):
+    """
+    Decode a one-hot feature encoding.
+    Args:
+        options (list): possible options for the feature
+        vector (torch.Tensor): encoded feature vector
+    Returns:
+        result (Union[str, int, float]): feature value
+    """
 
+    # if the options are a single boolean, return true or false
     if options == [bool]:
         return bool(vector.item())
+
+    # if the options are a single float, return the value
     elif options == [float]:
         return vector.item()
 
+    # otherwise return the option at the nonzero index
+    # (or None if it's the last index or everything is 0)
     index = vector.nonzero()
     if len(index) == 0 or index >= len(options):
         result = None
@@ -896,15 +921,30 @@ def decode_one_hot(options, vector):
 
 
 def decode_atomic(features, meta_data=META_DATA):
+    """
+    Decode an atomic feature vector.
+    Args:
+        features (torch.Tensor): feature vector
+        meta_data (dict): dictionary that tells you the
+            atom and bond feature types 
+    Returns:
+        dic (dict): dictionary of feature values
+    """
 
     feat_names = meta_data["atom_features"]
     details = meta_data["details"]
+
+    # get the length of the vector for each feature
     indices = [details[feat]["num"] for feat in feat_names]
+    # get the options for each feature
     options_list = [details[feat]["options"] for feat in feat_names]
 
+    # split the vector by the length of each feature sub-vector
     vectors = torch.split(features, indices)
 
     dic = {}
+
+    # go through each sub-vector and decode
     for i, vector in enumerate(vectors):
         options = options_list[i]
         name = feat_names[i]
@@ -912,6 +952,8 @@ def decode_atomic(features, meta_data=META_DATA):
         result = decode_one_hot(options=options,
                                 vector=vector)
         dic[name] = result
+
+        # multiply by 100 if it's the mass
         if name == "mass":
             dic[name] *= 100
 
@@ -919,16 +961,29 @@ def decode_atomic(features, meta_data=META_DATA):
 
 
 def decode_bond(features, meta_data=META_DATA):
+    """
+    Decode a bond feature vector.
+    Args:
+        features (torch.Tensor): feature vector
+        meta_data (dict): dictionary that tells you the
+            atom and bond feature types 
+    Returns:
+        dic (dict): dictionary of feature values
+    """
 
     feat_names = meta_data["bond_features"]
     details = meta_data["details"]
+    # get the length of the vector for each feature
     indices = [details[feat]["num"] for feat in feat_names]
+    # get the options for each feature
     options_list = [details[feat]["options"] for feat in feat_names]
 
+    # split the vector by the length of each feature sub-vector
     vectors = torch.split(features, indices)
 
     dic = {}
 
+    # go through each sub-vector and decode
     for i, vector in enumerate(vectors):
         options = options_list[i]
         name = feat_names[i]
@@ -943,6 +998,17 @@ def decode_bond(features, meta_data=META_DATA):
 def featurize_dataset(dataset,
                       bond_feats=BOND_FEAT_TYPES,
                       atom_feats=ATOM_FEAT_TYPES):
+    """
+    Add RDKit mols, atomic features and bond features to 
+    a dataset. Note that this has been superseded by the parallel
+    version in data/parallel.py.
+    Args:
+        dataset (nff.data.dataset): NFF dataset
+        bond_feats (list[str]): names of the bond features to add
+        atom_feats (list[str]): names of the atom features to add
+    Returns:
+        None
+    """
 
     print("Converting xyz to RDKit mols...")
     dataset = make_rd_mols(dataset)
@@ -963,6 +1029,19 @@ def featurize_dataset(dataset,
 
 
 def add_morgan(dataset, vec_length):
+    """
+    Add Morgan fingerprints to the dataset. Note that this uses
+    the smiles of each species to get one fingerprint per species, 
+    as opposed to getting the graph of each conformer and its 
+    fingerprint.
+
+    Args:
+        dataset (nff.data.dataset): NFF dataset
+        vec_length (int): how long the fingerprint should be.
+    Returns:
+        None
+
+    """
 
     dataset.props["morgan"] = []
     for smiles in dataset.props['smiles']:
@@ -973,15 +1052,25 @@ def add_morgan(dataset, vec_length):
         else:
             morgan = []
 
-        # shouldn't be a long tensor if we're going
-        # to apply an NN to it
-
         arr_morgan = np.array(list(morgan)).astype('float32')
         morgan_tens = torch.tensor(arr_morgan)
         dataset.props["morgan"].append(morgan_tens)
 
 
-def add_e3fp(rd_dataset, fp_length, verbose=False, track=True):
+def add_e3fp(rd_dataset,
+             fp_length,
+             verbose=False,
+             track=True):
+    """
+    Add E3FP fingerprints to each conformer in the dataset.
+    Args:
+        rd_dataset (nff.data.dataset): NFF dataset with RDKit mols.
+        fp_length (int): length of each fingerprint
+        verbose (bool): whether to print the progress made
+        track (bool): whether to track progress with tqdm_enum
+    Returns:
+        rd_dataset (nff.data.dataset): NFF dataset updated with E3FP
+    """
 
     # disable verbose logging from e3fp
 
@@ -1001,8 +1090,12 @@ def add_e3fp(rd_dataset, fp_length, verbose=False, track=True):
 
         for mol in mols:
 
+            # need to set "_Name" for the E3FP fingerprint generator to work
             mol.SetProp("_Name", smiles)
+            # set the params to include the number of bits
             fprint_params = {"bits": fp_length}
+            # get the fingperint, which includes nonzero indices
+            # through fp.indices, and convert it to a tensor
             fp = fprints_from_mol(mol, fprint_params=fprint_params)
             fp_array = np.zeros(len(fp[0]))
             indices = fp[0].indices
