@@ -188,7 +188,8 @@ def make_split(summary_path,
                split_type,
                max_specs,
                max_atoms,
-               dataset_type):
+               dataset_type,
+               seed):
     """
     Split the species into train, test, and validation sets.
 
@@ -209,6 +210,7 @@ def make_split(summary_path,
       max_atoms (int): Maximum number of atoms allowed in a species
       dataset_type (str): type of problem, e.g. "classification" or 
         "regression".
+      seed (int): random seed for split
     Returns:
       None
 
@@ -237,7 +239,8 @@ def make_split(summary_path,
     cmd = (f"python {script} --split_type {split_type} "
            f"--split_sizes {split_str} "
            f"--data_path {all_csv} "
-           f"--save_dir {csv_folder}")
+           f"--save_dir {csv_folder} "
+           f"--seed {seed}")
 
     p = bash_command(cmd)
     p.wait()
@@ -342,6 +345,7 @@ def main(summary_path,
          max_specs,
          max_atoms,
          dataset_type,
+         seed,
          **kwargs):
     """
     Split the data, write it to csvs, create new csvs with just
@@ -364,6 +368,7 @@ def main(summary_path,
       max_atoms (int): Maximum number of atoms allowed in a species
       dataset_type (str): type of problem, e.g. "classification" or 
         "regression".
+      seed (int): random seed for split
     Returns:
       None
     """
@@ -376,7 +381,8 @@ def main(summary_path,
                split_type=split_type,
                max_specs=max_specs,
                max_atoms=max_atoms,
-               dataset_type=dataset_type)
+               dataset_type=dataset_type,
+               seed=seed)
 
     add_just_smiles(csv_folder)
     rename_csvs(csv_folder)
@@ -417,6 +423,8 @@ if __name__ == "__main__":
     parser.add_argument('--dataset_type', type=str,
                         choices=['regression', 'classification'],
                         help=("Type of training task."))
+    parser.add_argument('--seed', type=int,
+                        help=("Random seed for split"))
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "

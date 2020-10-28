@@ -1,3 +1,7 @@
+"""
+Tools for applying functions in parallel to the dataset
+"""
+
 import numpy as np
 from concurrent import futures
 import copy
@@ -15,6 +19,14 @@ NUM_PROCS = 5
 
 
 def split_dataset(dataset, num):
+    """
+    Split a dataset into smaller chunks.
+    Args:
+        dataset (nff.data.dataset): NFF dataset
+        num (int): number of chunks
+    Returns:
+        datasets (list): list of smaller datasets
+    """
 
     datasets = []
     idx = range(len(dataset))
@@ -43,6 +55,14 @@ def split_dataset(dataset, num):
 
 
 def rejoin_props(datasets):
+    """
+    Rejoin properties from datasets into one dictionary of
+    properties.
+    Args:
+        datasets (list): list of smaller datasets
+    Returns:
+        new_props (dict): combined properties
+    """
     new_props = {}
     for dataset in datasets:
         for key, val in dataset.props.items():
@@ -60,20 +80,40 @@ def rejoin_props(datasets):
 
 
 def gen_parallel(func, kwargs_list):
+    """
+    General function for executing parallel functions on dataset.
+    Args:
+        func (callable): the function you want to apply to the dataset
+        kwargs_list (list[dict]): keyword arguments for each sub-dataset
+    Returns:
+        results_dsets (list): list of datasets after the functions
+            are applied.
+
+    """
+
+    # if there's only one function, no need to do it in serial
+    # set "track" = True so that progress is monitored with
+    # tqdm
 
     if len(kwargs_list) == 1:
         kwargs = kwargs_list[0]
         kwargs["track"] = True
         return [func(**kwargs)]
 
+    # otherwise do it in parallel with `ProcessPoolExecutor`
+
     with futures.ProcessPoolExecutor() as executor:
 
         future_objs = []
+        # go through each set of kwargs
         for i, kwargs in enumerate(kwargs_list):
 
+            # monitor with tqdm for the first process only
+            # so that they don't print on top of each other
             kwargs["track"] = (i == 0)
             result = executor.submit(func, **kwargs)
 
+            # `future_objs` are the results of applying each function
             future_objs.append(result)
 
     result_dsets = [obj.result() for obj in future_objs]
@@ -81,7 +121,17 @@ def gen_parallel(func, kwargs_list):
     return result_dsets
 
 
-def rd_parallel(datasets, check_smiles=True):
+def rd_parallel(datasets, check_smiles=False):
+    """
+    Generate RDKit mols for the dataset in parallel.
+    Args:
+        datasets (list): list of smaller datasets
+        check_smiles (bool): exclude any species whose
+            SMILES strings aren't the same as the 
+    Returns:
+        results_dsets (list): list of datasets with 
+            RDKit mols.
+    """
 
     kwargs_list = [{"dataset": dataset, "verbose": False,
                     "check_smiles": check_smiles}
@@ -93,6 +143,17 @@ def rd_parallel(datasets, check_smiles=True):
 
 
 def bonds_parallel(datasets, feat_types):
+    """
+    Generate bond lists and bond features for the dataset 
+    in parallel.
+    Args:
+        datasets (list): list of smaller datasets
+        feat_types (list[str]): types of bond features to
+            use 
+    Returns:
+        results_dsets (list): list of datasets with 
+            bond lists and features.
+    """
 
     kwargs_list = [{"dataset": dataset, "feat_types": feat_types}
                    for dataset in datasets]
@@ -127,7 +188,7 @@ def summarize_rd(new_sets, first_set):
     succ = sum([len(d) for d in new_sets])
     pct = succ / tried * 100
     fprint("Converted %d of %d molecules (%.2f%%)." %
-          (succ, tried, pct))
+           (succ, tried, pct))
 
 
 def featurize_parallel(dataset,

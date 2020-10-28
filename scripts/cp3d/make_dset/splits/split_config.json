@@ -11,5 +11,6 @@
  "split_type": "scaffold_balanced",
  "max_specs": null,
  "max_atoms": 100,
- "dataset_type": "classification"
+ "dataset_type": "classification",
+ "seed": 0
 }
