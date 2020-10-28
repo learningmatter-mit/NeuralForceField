@@ -1,7 +1,7 @@
 {
- "data_path": "/home/saxelrod/chemprop_cov_2/make_splits/cl_protease/train_full.csv",
- "separate_val_path": "/home/saxelrod/chemprop_cov_2/make_splits/cl_protease/val_full.csv",
- "separate_test_path": "/home/saxelrod/chemprop_cov_2/make_splits/cl_protease/test_full.csv",
+ "data_path": "/home/saxelrod/chemprop_cov_2/scaffold_split/train_full.csv",
+ "separate_val_path": "/home/saxelrod/chemprop_cov_2/scaffold_split/val_full.csv",
+ "separate_test_path": "/home/saxelrod/chemprop_cov_2/scaffold_split/test_full.csv",
  "dataset_type": "classification",
  "no_features_scaling": true,
  "quiet": true,
