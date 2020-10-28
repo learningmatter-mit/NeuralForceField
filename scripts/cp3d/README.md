@@ -44,6 +44,7 @@ Details for the script are in `scripts/cp3d/make_dset/splits/split_config.json`,
 - `max_specs` (int): Maximum number of species to include in your dataset. No maximum is imposed if `max_specs` is None
 - `max_atoms` (int): Maximum number of atoms for a species that you will allow in your dataset. If you don't want a limit, set this value to None. 
 - `dataset_type` (str): Type of model you're training. Currently `classification` and `regression` are supported.
+- `seed` (int): Random seed for split
 
 Running the script will generate CSV files, save them in `csv_folder`, and print a summary for you.
 
