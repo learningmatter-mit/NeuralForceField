@@ -1,15 +1,12 @@
 import numpy as np
 import networkx as nx
 import torch
-from ase import io
-import nff
-# from nff.utils.tools import make_directed
+from ase import Atoms
 
 
 DISTANCETHRESHOLDICT_SYMBOL = {
     ("H", "H"): 1.00,
     ("H", "Li"): 1.30,
-    ("H", "N"): 1.50,
     ("H", "C"): 1.30,
     ("H", "N"): 1.30,
     ("H", "O"): 1.30,
@@ -104,6 +101,17 @@ DISTANCETHRESHOLDICT_Z = {
 
 
 def make_directed(nbr_list):
+    """
+    Convert an undirected neighbor list into a directed
+    one.
+    Args:
+        nbr_list (torch.Tensor): array with the
+            indices of connected atoms.
+    Returns:
+        nbr_list (torch.Tensor): directed form of the neighbor
+            list.
+        directed (bool): whether it was already directed before
+    """
 
     gtr_ij = (nbr_list[:, 0] > nbr_list[:, 1]).any().item()
     gtr_ji = (nbr_list[:, 1] > nbr_list[:, 0]).any().item()
@@ -227,12 +235,15 @@ def get_dist_mat(xyz, box_len, unwrap=True):
     # create cutoff mask
     # compute squared distance of dim (B, N, N)
     dis_sq = dis_mat.pow(2).sum(-1)
-    # mask = (dis_sq <= cutoff ** 2) & (dis_sq != 0)                 # byte tensor of dim (B, N, N)
+    # mask = (dis_sq <= cutoff ** 2) & (dis_sq != 0)
+    # byte tensor of dim (B, N, N)
     #A = mask.unsqueeze(3).type(torch.FloatTensor).to(self.device) #
 
     # 1) PBC 2) # gradient of zero distance
     dis_sq = dis_sq.unsqueeze(-1)
-    # dis_sq = (dis_sq * A) + 1e-8# to make sure the distance is not zero, otherwise there will be inf gradient
+    # dis_sq = (dis_sq * A) + 1e-8
+    # to make sure the distance is not zero,
+    # otherwise there will be inf gradient
     dis_mat = dis_sq.sqrt().squeeze()
 
     return dis_mat
@@ -260,9 +271,10 @@ def generate_mol_atoms(atomic_nums, xyz, cell):
 
 def generate_subgraphs(atomsobject, unwrap=True, get_edge=False):
 
+    from nff.io.ase import AtomsBatch
+
     atoms = AtomsBatch(atomsobject)
     z, adj, dmat,  threshold = adjdistmat(atoms, unwrap=unwrap)
-    box_len = torch.Tensor(np.diag(atoms.get_cell()))
     G = nx.from_numpy_matrix(adj)
 
     for i, item in enumerate(z):

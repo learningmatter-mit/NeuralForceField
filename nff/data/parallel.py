@@ -164,6 +164,17 @@ def bonds_parallel(datasets, feat_types):
 
 
 def atoms_parallel(datasets, feat_types):
+    """
+    Generate atom features for the dataset 
+    in parallel.
+    Args:
+        datasets (list): list of smaller datasets
+        feat_types (list[str]): types of atom features to
+            use 
+    Returns:
+        results_dsets (list): list of datasets with 
+            atom features.
+    """
 
     kwargs_list = [{"dataset": dataset, "feat_types": feat_types}
                    for dataset in datasets]
@@ -174,6 +185,16 @@ def atoms_parallel(datasets, feat_types):
 
 
 def e3fp_parallel(datasets, fp_length):
+    """
+    Generate E3FP fingerprints for each conformer in the
+    dataset.
+    Args:
+        datasets (list): list of smaller datasets
+        fp_length (int): fingerprint length
+    Returns:
+        results_dsets (list): list of datasets with 
+            E3FP fingerprints.
+    """
     kwargs_list = [{"rd_dataset": dataset, "fp_length": fp_length} for
                    dataset in datasets]
 
@@ -184,6 +205,15 @@ def e3fp_parallel(datasets, fp_length):
 
 
 def summarize_rd(new_sets, first_set):
+    """
+    Summarize how many RDKit mols were successfully made.
+    Args:
+        first_set (nff.data.dataset): initial NFF dataset
+        new_sets (list): chunks of new datasets updated
+            with RDKit mols.
+    Returns:
+        None
+    """
     tried = len(first_set)
     succ = sum([len(d) for d in new_sets])
     pct = succ / tried * 100
@@ -195,15 +225,27 @@ def featurize_parallel(dataset,
                        num_procs,
                        bond_feats=BOND_FEAT_TYPES,
                        atom_feats=ATOM_FEAT_TYPES):
+    """
+    Add RDKit mols, atom features and bond features to a dataset in 
+    parallel.
+    Args:
+         dataset (nff.data.dataset): NFF dataset
+         num_procs (int): number of parallel processes
+         bond_feats (list[str]): names of bond features
+         atom_feats (list[str]): names of atom features
+    Returns:
+        None
+    """
 
-    msg = "Featurizing dataset with {} parallel processes.".format(
-        num_procs)
+    msg = f"Featurizing dataset with {num_procs} parallel processes."
     if num_procs == 1:
         msg = msg.replace("processes", "process")
     fprint(msg)
 
+    # split the dataset so processes can act in parallel on the chunks
     datasets = split_dataset(dataset=dataset, num=num_procs)
 
+    # add RDKit mols if they're not already in the dataset
     has_rdmols = all(['rd_mols' in dset.props for dset in datasets])
     if not has_rdmols:
         fprint("Converting xyz to RDKit mols...")
@@ -216,9 +258,11 @@ def featurize_parallel(dataset,
     fprint("Featurizing atoms...")
     datasets = atoms_parallel(datasets, feat_types=atom_feats)
 
+    # rejoin the dataset
     new_props = rejoin_props(datasets)
     dataset.props = new_props
 
+    # rename the bond list as `bonded_nbr_list`
     new_props["bonded_nbr_list"] = copy.deepcopy(new_props["bond_list"])
     new_props.pop("bond_list")
 
@@ -226,12 +270,21 @@ def featurize_parallel(dataset,
 def add_e3fp_parallel(dataset,
                       fp_length,
                       num_procs):
-
+    """
+    Add E3FP fingerprints to a dataset in parallel.
+    Args:
+         dataset (nff.data.dataset): NFF dataset
+         fp_length (int): fingerprint length
+         num_procs (int): number of parallel processes
+    Returns:
+        None
+    """
     msg = f"Adding E3FP fingerprints with {num_procs} parallel processes."
     if num_procs == 1:
         msg = msg.replace("processes", "process")
     fprint(msg)
 
+    # split the dataset, run E3FP in parallel, and rejoin it
     datasets = split_dataset(dataset=dataset, num=num_procs)
     datasets = e3fp_parallel(datasets, fp_length=fp_length)
     new_props = rejoin_props(datasets)

@@ -1,8 +1,6 @@
 import numpy as np
 import torch
-from torch.utils.data import DistributedSampler
-from torch.utils.data import Dataset as TorchDataset
-from operator import itemgetter
+
 
 REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'bonded_nbr_list']
 NBR_LIST_KEYS = ['bond_idx']
@@ -18,8 +16,8 @@ TYPE_KEYS = {
 
 
 def collate_dicts(dicts):
-    """Collates dictionaries within a single batch. Automatically reindexes neighbor lists
-        and periodic boundary conditions to deal with the batch.
+    """Collates dictionaries within a single batch. Automatically reindexes 
+        neighbor lists and periodic boundary conditions to deal with the batch.
 
     Args:
         dicts (list of dict): each element of the dataset
@@ -28,7 +26,8 @@ def collate_dicts(dicts):
         batch (dict)
     """
 
-    # new indices for the batch: the first one is zero and the last does not matter
+    # new indices for the batch: the first one is zero and the
+    # last does not matter
 
     cumulative_atoms = np.cumsum([0] + [d['num_atoms'] for d in dicts])[:-1]
     for n, d in zip(cumulative_atoms, dicts):
@@ -37,8 +36,8 @@ def collate_dicts(dicts):
                 d[key] = d[key] + int(n)
 
     if all(['nbr_list' in d for d in dicts]):
-        # same idea, but for quantities whose maximum value is the length of the nbr
-        # list in each batch
+        # same idea, but for quantities whose maximum value is the length of
+        # the nbr list in each batch
         cumulative_nbrs = np.cumsum(
             [0] + [len(d['nbr_list']) for d in dicts])[:-1]
         for n, d in zip(cumulative_nbrs, dicts):
