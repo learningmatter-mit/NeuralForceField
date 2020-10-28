@@ -16,7 +16,7 @@ source $HOME/.bashrc
 source activate nff
 
 # `jq` allows you to read a JSON file in bash. Here we are using it to get the number of threads from the config file.
-#  If you don't have `jq` installed, you can download it by running `bash ../make_dset/download_jq.sh`
+#  If you don't have `jq` installed, you can download it by running `bash ../download_jq.sh`
 metrics_lst=$(cat fp_config.json | $jq ".metrics")
 
 # get rid of the square brackets and commas
