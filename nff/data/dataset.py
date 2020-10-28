@@ -14,8 +14,9 @@ from tqdm import tqdm
 from nff.data.graphs import (reconstruct_atoms, get_neighbor_list,
                              get_bond_idx)
 from nff.data.parallel import featurize_parallel, NUM_PROCS, add_e3fp_parallel
-from nff.data.features import (ATOM_FEAT_TYPES, BOND_FEAT_TYPES,
-                               add_morgan, featurize_rdkit)
+from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
+from nff.data.features import add_morgan as external_morgan
+from nff.data.features import featurize_rdkit as external_rdkit
 
 
 class Dataset(TorchDataset):
@@ -182,6 +183,15 @@ class Dataset(TorchDataset):
         return
 
     def generate_bond_idx(self):
+        """
+        For each index in the bond list, get the
+        index in the neighbour list that corresponds to the
+        same directed pair of atoms.
+        Args:
+            None
+        Returns:
+            None
+        """
 
         self.props["bond_idx"] = []
 
@@ -205,8 +215,8 @@ class Dataset(TorchDataset):
         return Dataset(self.props, self.units)
 
     def to_units(self, target_unit):
-        """Converts the dataset to the desired unit. Modifies the dictionary of properties
-            in place.
+        """Converts the dataset to the desired unit. Modifies the dictionary 
+        of properties in place.
 
         Args:
             target_unit (str): unit to use as final one
@@ -260,25 +270,59 @@ class Dataset(TorchDataset):
                   num_procs=NUM_PROCS,
                   bond_feats=BOND_FEAT_TYPES,
                   atom_feats=ATOM_FEAT_TYPES):
+        """
+        Featurize dataset with atom and bond features.
+        Args:
+            num_procs (int): number of parallel processes
+            bond_feats (list[str]): names of bond features
+            atom_feats (list[str]): names of atom features
+        Returns:
+            None
+        """
+
         featurize_parallel(self,
                            num_procs=num_procs,
                            bond_feats=bond_feats,
                            atom_feats=atom_feats)
 
     def add_morgan(self, vec_length):
-        add_morgan(self, vec_length)
+        """
+        Add Morgan fingerprints to each species in the dataset.
+        Args:
+            vec_length (int): length of fingerprint
+        Returns:
+            None
+        """
+        external_morgan(self, vec_length)
 
     def add_e3fp(self,
                  fp_length,
                  num_procs=NUM_PROCS):
+        """
+        Add E3FP fingerprints for each conformer of each species
+        in the dataset.
+        Args:
+            fp_length (int): length of fingerprint
+            num_procs (int): number of processes to use when
+                featurizing.
+        Returns:
+            None
+        """
 
         add_e3fp_parallel(self,
                           fp_length,
                           num_procs)
 
     def featurize_rdkit(self, method):
-
-        featurize_rdkit(self, method=method)
+        """
+        Add 3D-based RDKit fingerprints for each conformer of
+        each species in the dataset.
+        Args:
+            method (str): name of RDKit feature method to use
+        Returns:
+            None
+        """
+        external_rdkit(self, method=method)
 
     def unwrap_xyz(self, mol_dic):
         """
@@ -360,20 +404,28 @@ def force_to_energy_grad(dataset):
 
 
 def convert_nan(x):
+    """
+    If a list has any elements that contain nan, convert its contents 
+    to the right form so that it can eventually be converted to a tensor. 
+    Args:
+        x (list): any list with floats, ints, or Tensors.
+    Returns:
+        new_x (list): updated version of `x`
+    """
 
     new_x = []
+    # whether any of the contents have nan
     has_nan = any([np.isnan(y).any() for y in x])
     for y in x:
-        if np.isnan(y).any():
-            new_x.append(y.clone())
-            has_nan = True
-        # if any are nan then they all have to be floats
+
         elif has_nan:
+            # if one is nan then they will have to become float tensors
             if type(y) in [int, float]:
                 new_x.append(torch.Tensor([y]))
             elif isinstance(y, torch.Tensor):
                 new_x.append(y.float())
         else:
+            # otherwise they can be kept as is
             new_x.append(y)
 
     return new_x
@@ -529,15 +581,31 @@ def concatenate_dict(*dicts):
 
 
 def binary_split(dataset, targ_name, test_size):
+    """
+    Split the dataset with proportional amounts of a binary label in each.
+    Args:
+        dataset (nff.data.dataset): NFF dataset
+        targ_name (str, optional): name of the binary label to use
+            in splitting.
+        test_size (float, optional): fraction of dataset for test
+    Returns:
+        idx_train (list[int]): indices of species in the training set
+        idx_test (list[int]): indices of species in the test set
+    """
 
+    # get indices of positive and negative values
     pos_idx = [i for i, targ in enumerate(dataset.props[targ_name])
                if targ]
     neg_idx = [i for i in range(len(dataset)) if i not in pos_idx]
 
-    pos_idx_train, pos_idx_test = train_test_split(
-        pos_idx, test_size=test_size)
-    neg_idx_train, neg_idx_test = train_test_split(
-        neg_idx, test_size=test_size)
+    # split the positive and negative indices separately
+    pos_idx_train, pos_idx_test = train_test_split(pos_idx,
+                                                   test_size=test_size)
+    neg_idx_train, neg_idx_test = train_test_split(neg_idx,
+                                                   test_size=test_size)
+
+    # combine the negative and positive test idx to get the test idx
+    # do the same for train
 
     idx_train = pos_idx_train + neg_idx_train
     idx_test = pos_idx_test + neg_idx_test
@@ -545,21 +613,28 @@ def binary_split(dataset, targ_name, test_size):
     return idx_train, idx_test
 
 
-def split_train_test(dataset, test_size=0.2, binary=False, targ_name=None):
+def split_train_test(dataset,
+                     test_size=0.2,
+                     binary=False,
+                     targ_name=None):
     """Splits the current dataset in two, one for training and
     another for testing.
 
     Args:
-        dataset (TYPE): Description
-        test_size (float, optional): Description
-
+        dataset (nff.data.dataset): NFF dataset
+        test_size (float, optional): fraction of dataset for test
+        binary (bool, optional): whether to split the dataset with
+            proportional amounts of a binary label in each.
+        targ_name (str, optional): name of the binary label to use
+            in splitting.
     Returns:
         TYPE: Description
     """
 
     if binary:
         idx_train, idx_test = binary_split(dataset=dataset,
-                                           targ_name=targ_name, test_size=test_size)
+                                           targ_name=targ_name,
+                                           test_size=test_size)
     else:
         idx = list(range(len(dataset)))
         idx_train, idx_test = train_test_split(idx, test_size=test_size)
@@ -578,7 +653,10 @@ def split_train_test(dataset, test_size=0.2, binary=False, targ_name=None):
     return train, test
 
 
-def split_train_validation_test(dataset, val_size=0.2, test_size=0.2, **kwargs):
+def split_train_validation_test(dataset,
+                                val_size=0.2,
+                                test_size=0.2,
+                                **kwargs):
     """Summary
 
     Args:
@@ -589,8 +667,11 @@ def split_train_validation_test(dataset, val_size=0.2, test_size=0.2, **kwargs):
     Returns:
         TYPE: Description
     """
-    train, validation = split_train_test(dataset, test_size=val_size, **kwargs)
-    train, test = split_train_test(
-        train, test_size=test_size / (1 - val_size), **kwargs)
+    train, validation = split_train_test(dataset,
+                                         test_size=val_size,
+                                         **kwargs)
+    train, test = split_train_test(train,
+                                   test_size=test_size / (1 - val_size),
+                                   **kwargs)
 
     return train, validation, test
