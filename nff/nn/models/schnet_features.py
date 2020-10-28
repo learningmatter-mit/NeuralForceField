@@ -5,36 +5,68 @@ import math
 
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.modules import (CpSchNetConv, ChemPropMsgToNode,
-                            ChemPropInit, LinearConfAttention)
+                            ChemPropInit)
 from nff.utils.tools import make_directed
 
 REINDEX_KEYS = ["nbr_list", "bonded_nbr_list"]
 
 
 class SchNetFeatures(WeightedConformers):
+    """
+    Model that uses a representation of a molecule in terms of different 3D
+    conformers to predict properties. The fingerprints of each conformer are 
+    generated using a 3D extension of the ChemProp model to include distance
+    information. The 3D information is featurized using a SchNet Gaussian
+    filter.
+
+    """
 
     def __init__(self, modelparams):
+        """
+        Initialize model.
+        Args:
+            modelparams (dict): dictionary of parameters for the model
+        Returns:
+            None
+        """
 
         WeightedConformers.__init__(self, modelparams)
+        # get rid of the atom embedding, as we'll be using graph-based
+        # atom features instead of atomic number embeddings
         delattr(self, "atom_embed")
 
         input_layers = modelparams["input_layers"]
         output_layers = modelparams["output_layers"]
+
+        # make the convolutions, the input network W_i, and the output
+        # network W_o
 
         self.W_i = ChemPropInit(input_layers=input_layers)
         self.convolutions = self.make_convs(modelparams)
         self.W_o = ChemPropMsgToNode(
             output_layers=output_layers)
 
+        # dimension of the hidden bond vector
         self.n_bond_hidden = modelparams["n_bond_hidden"]
 
     def make_convs(self, modelparams):
+        """
+        Make the convolution layers.
+        Args:
+            modelparams (dict): dictionary of parameters for the model
+        Returns:
+            convs (nn.ModuleList): list of networks for each convolution
+        """
 
         num_conv = modelparams["n_convolutions"]
         same_filters = modelparams["same_filters"]
 
+        # call `CpSchNetConv` to make the convolution layers
         convs = nn.ModuleList([CpSchNetConv(**modelparams)
                                for _ in range(num_conv)])
+
+        # if you want to use the same filters for every convolution, repeat
+        # the initial network and delete all the others
         if same_filters:
             convs = nn.ModuleList([convs[0] for _ in range(num_conv)])
 
@@ -42,7 +74,17 @@ class SchNetFeatures(WeightedConformers):
 
     def make_h(self, batch, nbr_list, r):
         """
-        Initialize the hidden bond features
+        Initialize the hidden bond features.
+        Args:
+            batch (dict): batched sample of species
+            nbr_list (torch.LongTensor): neighbor list
+            r (torch.Tensor): initial atom features
+        Returns:
+            h_0 (torch.Tensor): initial hidden bond features
+            bond_nbrs (torch.LongTensor): bonded neighbor list
+            bond_idx (torch.LongTensor): indices that map
+                an element of `bond_nbrs` to the corresponding
+                element in `nbr_list`. 
         """
 
         # get the directed bond list and bond features
@@ -51,6 +93,7 @@ class SchNetFeatures(WeightedConformers):
         bond_feats = batch["bond_features"]
         device = bond_nbrs.device
 
+        # if it wasn't directed before, repeat the bond features twice
         if not was_directed:
             bond_feats = torch.cat([bond_feats] * 2, dim=0)
 
@@ -61,7 +104,7 @@ class SchNetFeatures(WeightedConformers):
                             bond_nbrs=bond_nbrs)
 
         # initialize `h_0`, the features of all edges
-        # (including non-bonded ones), to zero
+        # (including bonded ones), to zero
 
         nbr_dim = nbr_list.shape[0]
         h_0 = torch.zeros((nbr_dim,  self.n_bond_hidden))
@@ -79,10 +122,25 @@ class SchNetFeatures(WeightedConformers):
 
         return h_0, bond_nbrs, bond_idx
 
-    def split_nbrs(self, nbr_list, mol_size, num_confs, confs_per_split):
+    def split_nbrs(self,
+                   nbr_list,
+                   mol_size,
+                   num_confs,
+                   confs_per_split):
+        """
+        Split neighbor list of a species into chunks for each sub-batch.
+        Args:
+            nbr_list (torch.LongTensor): neighbor list for
+            mol_size (int): number of atoms in the molecule
+            num_confs (int): number of conformers in the species
+            confs_per_split (list[int]): number of conformers in each
+                sub-batch.
+        Returns:
+            all_grouped_nbrs (list[torch.LongTensor]): list of 
+                neighbor lists for each sub-batch.
+        """
 
         # first split by conformer
-
         new_nbrs = []
         for i in range(num_confs):
             mask = (nbr_list[:, 0] <= (i + 1) * mol_size
@@ -112,6 +170,22 @@ class SchNetFeatures(WeightedConformers):
                        num_confs,
                        confs_per_split,
                        sub_batches):
+        """
+        Add split-up neighbor lists to each sub-batch.
+        Args:
+            batch (dict): batched sample of species
+            mol_size (int): number of atoms in the molecule
+            num_confs (int): number of conformers in the species
+            confs_per_split (list[int]): number of conformers in each
+                sub-batch.
+            sub_batches (list[dict]): list of sub_batches
+        Returns:
+            sub_batches (list[dict]): list of sub_batches updated with
+                their neighbor lists.
+        """
+
+        # go through each key that needs to be reindex as a neighbor list
+        # (i.e. the neighbor list and the bonded neighbor list)
 
         for key in REINDEX_KEYS:
             if key not in batch:
@@ -126,7 +200,21 @@ class SchNetFeatures(WeightedConformers):
                 sub_batches[i] = sub_batch
         return sub_batches
 
-    def get_confs_per_split(self, batch, num_confs, sub_batch_size):
+    def get_confs_per_split(self,
+                            batch,
+                            num_confs,
+                            sub_batch_size):
+        """
+        Get the number of conformers per sub-batch.
+        Args:
+            batch (dict): batched sample of species
+            num_confs (int): number of conformers in the species
+            sub_batch_size (int): maximum number of conformers per
+                sub-batch.
+        Returns:
+            confs_per_split (list[int]): number of conformers in each
+                sub-batch.
+        """
 
         val_len = len(batch["nxyz"])
         inherent_val_len = val_len // num_confs
@@ -142,9 +230,15 @@ class SchNetFeatures(WeightedConformers):
 
         return confs_per_split
 
-    def split_batch(self, batch, sub_batch_size):
+    def split_batch(self,
+                    batch,
+                    sub_batch_size):
         """
-        Only applies when the batch size is 1 (?)
+        Split a batch into sub-batches.
+        Args:
+            batch (dict): batched sample of species
+            sub_batch_size (int): maximum number of conformers per
+                sub-batch.
         """
 
         mol_size = batch["mol_size"].item()
@@ -188,7 +282,21 @@ class SchNetFeatures(WeightedConformers):
 
         return sub_batches
 
-    def convolve_sub_batch(self, batch, xyz=None, xyz_grad=False):
+    def convolve_sub_batch(self,
+                           batch,
+                           xyz=None,
+                           xyz_grad=False):
+        """
+        Apply the convolution layers to a sub-batch.
+        Args:
+            batch (dict): batched sample of species
+            xyz (torch.Tensor): xyz of the batch
+            xyz_grad (bool): whether to set xyz.requires_grad = True
+        Returns:
+            new_node_feats (torch.Tensor): new node features after
+                the convolutions.
+            xyz (torch.Tensor): xyz of the batch
+        """
 
         if xyz is None:
             xyz = batch["nxyz"][:, 1:4]
@@ -196,16 +304,16 @@ class SchNetFeatures(WeightedConformers):
         if xyz_grad:
             xyz.requires_grad = True
 
+        # get the directed neighbor list
         a, _ = make_directed(batch["nbr_list"])
-        # a, _ = make_directed(batch["bonded_nbr_list"])
-
+        # get the atom features
         r = batch["atom_features"]
         offsets = batch.get("offsets", 0)
+        # get the distances between neighbors
         e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
              offsets).pow(2).sum(1).sqrt()[:, None]
 
         # initialize hidden bond features
-
         h_0, bond_nbrs, bond_idx = self.make_h(batch=batch,
                                                nbr_list=a,
                                                r=r)
@@ -231,12 +339,33 @@ class SchNetFeatures(WeightedConformers):
 
         return new_node_feats, xyz
 
-    def convolve(self, batch, sub_batch_size=None, xyz=None, xyz_grad=False):
+    def convolve(self,
+                 batch,
+                 sub_batch_size=None,
+                 xyz=None,
+                 xyz_grad=False):
+        """
+        Apply the convolution layers to the batch.
+        Args:
+            batch (dict): batched sample of species
+            sub_batch_size (int): maximum number of conformers
+                in a sub-batch.
+            xyz (torch.Tensor): xyz of the batch
+            xyz_grad (bool): whether to set xyz.requires_grad = True
+        Returns:
+            new_node_feats (torch.Tensor): new node features after
+                the convolutions.
+            xyz (torch.Tensor): xyz of the batch
+        """
 
+        # split batches as necessary
         if sub_batch_size is None:
             sub_batches = [batch]
         else:
             sub_batches = self.split_batch(batch, sub_batch_size)
+
+        # go through each sub-batch, get the xyz and node features,
+        # and concatenate them when done
 
         new_node_feat_list = []
         xyz_list = []
