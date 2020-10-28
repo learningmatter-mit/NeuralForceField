@@ -107,7 +107,8 @@ def subsample(summary_dic,
               props,
               max_specs,
               max_atoms,
-              dataset_type):
+              dataset_type,
+              seed):
     """
     Reduce the number of species according to `props`, `max_specs`,
     and `max_atoms`.
@@ -121,6 +122,7 @@ def subsample(summary_dic,
       max_atoms (int): Maximum number of atoms allowed in a species
       dataset_type (str): type of problem, e.g. "classification" or 
         "regression".
+      seed (int): random seed for split
     Returns:
       sample_dic (dict): Updated `sample_dic` with the above filter applied.
     """
@@ -135,6 +137,8 @@ def subsample(summary_dic,
     # try to keep as many of the underrepresented class as possible.
     # If you set a limit but aren't doing classification, select them
     # randomly.
+
+    random.seed(seed)
 
     if max_specs is not None and dataset_type == "classification":
 
@@ -170,7 +174,12 @@ def subsample(summary_dic,
     else:
 
         keep_smiles = list(sample_dic.keys())
-        random.shuffle(keep_smiles)
+
+        # if setting a maximum, need to shuffle in order
+        # to take random smiles
+
+        if max_specs is not None:
+            random.shuffle(keep_smiles)
 
     if max_specs is not None:
         keep_smiles = keep_smiles[:max_specs]
@@ -224,7 +233,8 @@ def make_split(summary_path,
                             props=props,
                             max_specs=max_specs,
                             max_atoms=max_atoms,
-                            dataset_type=dataset_type)
+                            dataset_type=dataset_type,
+                            seed=seed)
 
     # path csv file with SMILES and properties
     all_csv = os.path.join(csv_folder, "all.csv")
@@ -241,7 +251,6 @@ def make_split(summary_path,
            f"--data_path {all_csv} "
            f"--save_dir {csv_folder} "
            f"--seed {seed}")
-
     p = bash_command(cmd)
     p.wait()
 
