@@ -1,17 +1,13 @@
-from torch import nn
 import torch
-import numpy as np
-import math
+from torch import nn
 from torch.nn import Sequential
+
+
 from nff.data.graphs import get_bond_idx
-
 from nff.nn.models.conformers import WeightedConformers
-from nff.nn.modules import (ChemPropConv, ChemPropMsgToNode,
-                            ChemPropInit)
-from nff.utils.tools import make_directed, layer_types
-from nff.nn.layers import Dense, GaussianSmearing
-
-REINDEX_KEYS = ["nbr_list", "bonded_nbr_list"]
+from nff.nn.modules import SchNetEdgeFilter, MixedSchNetConv
+from nff.nn.layers import Dense
+from nff.nn.activations import shifted_softplus
 
 
 class SchNetFeatures(WeightedConformers):
@@ -38,441 +34,110 @@ class SchNetFeatures(WeightedConformers):
         # atom features instead of atomic number embeddings
         delattr(self, "atom_embed")
 
-        cp_input_layers = modelparams["cp_input_layers"]
-        schnet_input_layers = modelparams["schnet_input_layers"]
-        output_layers = modelparams["output_layers"]
+        n_convolutions = modelparams["n_convolutions"]
+        dropout_rate = modelparams["dropout_rate"]
+        n_bond_hidden = modelparams["n_bond_hidden"]
+        n_bond_features = modelparams["n_bond_features"]
+        n_atom_basis = modelparams["n_atom_basis"]
+        n_filters = modelparams["n_filters"]
+        trainable_gauss = modelparams["trainable_gauss"]
+        n_gaussians = modelparams["n_gaussians"]
+        cutoff = modelparams["cutoff"]
 
-        # make the convolutions, the input networks W_i for both
-        # SchNet and ChemProp, and the output network W_o
+        self.convolutions = nn.ModuleList(
+            [
+                MixedSchNetConv(
+                    n_atom_basis=n_atom_basis,
+                    n_filters=n_filters,
+                    dropout_rate=dropout_rate,
+                    n_bond_hidden=n_bond_hidden
+                )
+                for _ in range(n_convolutions)
+            ]
+        )
 
-        self.W_i_cp = ChemPropInit(input_layers=cp_input_layers)
-        self.W_i_schnet = ChemPropInit(input_layers=schnet_input_layers)
-        self.convolutions = self.make_convs(modelparams)
-        self.W_o = ChemPropMsgToNode(output_layers=output_layers)
+        # for converting distances to features before concatenating with
+        # bond features
+        self.distance_filter = SchNetEdgeFilter(
+            cutoff=cutoff,
+            n_gaussians=n_gaussians,
+            trainable_gauss=trainable_gauss,
+            n_filters=n_filters,
+            dropout_rate=dropout_rate)
 
-        # dimension of the hidden bond vector
-        self.n_bond_hidden = modelparams["n_bond_hidden"]
-        # dimension of the hidden SchNet distance edge ector
-        self.n_filters = modelparams["n_filters"]
-
-        # edge filter to convert distances to SchNet feature vectors
-        self.edge_filter = self.get_edge_filter(modelparams)
-
-    def get_edge_filter(self,
-                        modelparams):
-
-        edge_filter = Sequential(
-            GaussianSmearing(
-                start=0.0,
-                stop=modelparams["cutoff"],
-                n_gaussians=modelparams["n_gaussians"],
-                trainable=modelparams["trainable_gauss"],
-            ),
+        # for converting bond features to hidden feature vectors
+        self.bond_filter = Sequential(
             Dense(
-                in_features=modelparams["n_gaussians"],
-                out_features=modelparams["n_filters"],
-                dropout_rate=modelparams["schnet_dropout"],
-            ),
-            layer_types[modelparams["activation"]]())
+                in_features=n_bond_features,
+                out_features=n_bond_hidden,
+                dropout_rate=dropout_rate),
+            shifted_softplus(),
+            Dense(
+                in_features=n_bond_hidden,
+                out_features=n_bond_hidden,
+                dropout_rate=dropout_rate)
+        )
 
-        return edge_filter
-
-    def make_convs(self, modelparams):
-        """
-        Make the convolution layers.
-        Args:
-            modelparams (dict): dictionary of parameters for the model
-        Returns:
-            convs (nn.ModuleList): list of networks for each convolution
-        """
-
-        num_conv = modelparams["n_convolutions"]
-        modelparams.update({"n_edge_hidden": modelparams["mol_basis"],
-                            "dropout_rate": modelparams["schnet_dropout"]})
-
-        # call `CpSchNetConv` to make the convolution layers
-        convs = nn.ModuleList([ChemPropConv(**modelparams)
-                               for _ in range(num_conv)])
-
-        return convs
-
-    def get_distance_feats(self,
-                           batch,
-                           xyz,
-                           offsets):
-        """
-        Get distance features.
-        Args:
-            batch (dict): batched sample of species
-            xyz (torch.Tensor): xyz of the batch
-            offsets (float): periodic boundary condition offsets
-        Returns:
-            nbr_list (torch.LongTensor): directed neighbor list
-            distance_feats (torch.Tensor): distance-based edge features
-            bond_idx (torch.LongTensor): indices that map bonded atom pairs
-                to their location in the neighbor list. 
-        """
-
-        # get directed neighbor list
-        nbr_list, nbr_was_directed = make_directed(batch["nbr_list"])
-        # distances
-        distances = (xyz[nbr_list[:, 0]] - xyz[nbr_list[:, 1]] -
-                     offsets).pow(2).sum(1).sqrt()[:, None]
-        # put through Gaussian filter and dense layer to get features
-        distance_feats = self.edge_filter(distances)
-
-        # get the bond indices, and adjust as necessary if the neighbor list
-        # wasn't directed before
-
+    def find_bond_idx(self, batch, nbr_list):
         if "bond_idx" in batch:
             bond_idx = batch["bond_idx"]
-            if not nbr_was_directed:
-                nbr_dim = nbr_list.shape[0]
-                bond_idx = torch.cat([bond_idx,
-                                      bond_idx + nbr_dim // 2])
         else:
             bonded_nbr_list = batch["bonded_nbr_list"]
             bond_idx = get_bond_idx(bonded_nbr_list, nbr_list)
+        return bond_idx
 
-        return nbr_list, distance_feats, bond_idx
-
-    def make_h(self,
-               batch,
-               nbr_list,
-               r,
-               xyz,
-               offsets):
+    def convolve(self, batch, xyz=None):
         """
-        Initialize the hidden edge features.
+
+        Apply the convolutional layers to the batch.
+
         Args:
-            batch (dict): batched sample of species
-            nbr_list (torch.LongTensor): neighbor list
-            r (torch.Tensor): initial atom features
-            xyz (torch.Tensor): xyz of the batch
-            offsets (float): periodic boundary condition offsets
+            batch (dict): dictionary of props
+
         Returns:
-            h_0 (torch.Tensor): initial hidden edge features
+            r: new feature vector after the convolutions
+            N: list of the number of atoms for each molecule in the batch
+            xyz: xyz (with a "requires_grad") for the batch
         """
 
-        # get the directed bond list and bond features
-
-        bond_nbrs, was_directed = make_directed(batch["bonded_nbr_list"])
-        bond_feats = batch["bond_features"]
-        device = bond_nbrs.device
-
-        # if it wasn't directed before, repeat the bond features twice
-        if not was_directed:
-            bond_feats = torch.cat([bond_feats] * 2, dim=0)
-
-        # get the distance-based edge features
-        nbr_list, distance_feats, bond_idx = self.get_distance_feats(
-            batch=batch,
-            xyz=xyz,
-            offsets=offsets)
-
-        # combine node and bonded edge features to get the bond component
-        # of h_0
-
-        cp_bond_feats = self.W_i_cp(r=r,
-                                    bond_feats=bond_feats,
-                                    bond_nbrs=bond_nbrs)
-        h_0_bond = torch.zeros((nbr_list.shape[0],  cp_bond_feats.shape[1]))
-        h_0_bond = h_0_bond.to(device)
-        h_0_bond[bond_idx] = cp_bond_feats
-
-        # combine node and distance edge features to get the schnet component
-        # of h_0
-
-        h_0_distance = self.W_i_schnet(r=r,
-                                       bond_feats=distance_feats,
-                                       bond_nbrs=nbr_list)
-
-        # concatenate the two together
-
-        h_0 = torch.cat([h_0_bond, h_0_distance], dim=-1)
-
-        return h_0
-
-    def split_nbrs(self,
-                   nbr_list,
-                   mol_size,
-                   num_confs,
-                   confs_per_split):
-        """
-        Split neighbor list of a species into chunks for each sub-batch.
-        Args:
-            nbr_list (torch.LongTensor): neighbor list for
-            mol_size (int): number of atoms in the molecule
-            num_confs (int): number of conformers in the species
-            confs_per_split (list[int]): number of conformers in each
-                sub-batch.
-        Returns:
-            all_grouped_nbrs (list[torch.LongTensor]): list of 
-                neighbor lists for each sub-batch.
-        """
-
-        # first split by conformer
-        new_nbrs = []
-        for i in range(num_confs):
-            mask = (nbr_list[:, 0] <= (i + 1) * mol_size
-                    ) * (nbr_list[:, 1] <= (i + 1) * mol_size)
-
-            new_nbrs.append(nbr_list[mask])
-            nbr_list = nbr_list[torch.bitwise_not(mask)]
-
-        # regroup in sub-batches and subtract appropriately
-
-        all_grouped_nbrs = []
-        for i, num in enumerate(confs_per_split):
-
-            prev_idx = sum(confs_per_split[:i])
-            nbr_idx = list(range(prev_idx, prev_idx + num))
-
-            grouped_nbrs = torch.cat([new_nbrs[i] for i in nbr_idx])
-            grouped_nbrs -= mol_size * prev_idx
-
-            all_grouped_nbrs.append(grouped_nbrs)
-
-        return all_grouped_nbrs
-
-    def fix_bond_idx(self, sub_batches):
-        """
-        Fix `bond_idx` when splitting batch into sub-batches.
-        Args:
-            sub_batches (list[dict]): sub-batches of the batch
-        Returns:
-            sub_batches (list[dict]): `sub_batches` with `bond_idx`
-                fixed.
-        """
-
-        old_num_nbrs = 0
-        for i, batch in enumerate(sub_batches):
-            batch["bond_idx"] -= old_num_nbrs
-            sub_batches[i] = batch
-
-            old_num_nbrs += batch["nbr_list"].shape[0]
-        return sub_batches
-
-    def add_split_nbrs(self,
-                       batch,
-                       mol_size,
-                       num_confs,
-                       confs_per_split,
-                       sub_batches):
-        """
-        Add split-up neighbor lists to each sub-batch.
-        Args:
-            batch (dict): batched sample of species
-            mol_size (int): number of atoms in the molecule
-            num_confs (int): number of conformers in the species
-            confs_per_split (list[int]): number of conformers in each
-                sub-batch.
-            sub_batches (list[dict]): list of sub_batches
-        Returns:
-            sub_batches (list[dict]): list of sub_batches updated with
-                their neighbor lists.
-        """
-
-        # go through each key that needs to be reindex as a neighbor list
-        # (i.e. the neighbor list and the bonded neighbor list)
-
-        for key in REINDEX_KEYS:
-            if key not in batch:
-                continue
-            nbr_list = batch[key]
-            split_nbrs = self.split_nbrs(nbr_list=nbr_list,
-                                         mol_size=mol_size,
-                                         num_confs=num_confs,
-                                         confs_per_split=confs_per_split)
-            for i, sub_batch in enumerate(sub_batches):
-                sub_batch[key] = split_nbrs[i]
-                sub_batches[i] = sub_batch
-        return sub_batches
-
-    def get_confs_per_split(self,
-                            batch,
-                            num_confs,
-                            sub_batch_size):
-        """
-        Get the number of conformers per sub-batch.
-        Args:
-            batch (dict): batched sample of species
-            num_confs (int): number of conformers in the species
-            sub_batch_size (int): maximum number of conformers per
-                sub-batch.
-        Returns:
-            confs_per_split (list[int]): number of conformers in each
-                sub-batch.
-        """
-
-        val_len = len(batch["nxyz"])
-        inherent_val_len = val_len // num_confs
-        split_list = [sub_batch_size * inherent_val_len] * math.floor(
-            num_confs / sub_batch_size)
-
-        # if there's a remainder
-
-        if sum(split_list) != val_len:
-            split_list.append(val_len - sum(split_list))
-
-        confs_per_split = [i // inherent_val_len for i in split_list]
-
-        return confs_per_split
-
-    def split_batch(self,
-                    batch,
-                    sub_batch_size):
-        """
-        Split a batch into sub-batches.
-        Args:
-            batch (dict): batched sample of species
-            sub_batch_size (int): maximum number of conformers per
-                sub-batch.
-        Returns:
-            sub_batches (list[dict]): sub batches of the batch
-        """
-
-        mol_size = batch["mol_size"].item()
-        num_confs = len(batch["nxyz"]) // mol_size
-        sub_batch_dic = {}
-
-        confs_per_split = self.get_confs_per_split(
-            batch=batch,
-            num_confs=num_confs,
-            sub_batch_size=sub_batch_size)
-
-        num_splits = len(confs_per_split)
-
-        for key, val in batch.items():
-            val_len = len(val)
-            if key in REINDEX_KEYS:
-                continue
-            elif np.mod(val_len, num_confs) != 0 or val_len == 1:
-                if key == "num_atoms":
-                    sub_batch_dic[key] = [int(val * num / num_confs)
-                                          for num in confs_per_split]
-                else:
-                    sub_batch_dic[key] = [val] * num_splits
-                continue
-
-            # the per-conformer length of the value is `val_len`
-            # divided by the number of conformers
-
-            inherent_val_len = val_len // num_confs
-
-            # use this to determine the number of items in each
-            # section of the split list
-
-            split_list = [inherent_val_len * num
-                          for num in confs_per_split]
-
-            # split the value accordingly
-            split_val = torch.split(val, split_list)
-            sub_batch_dic[key] = split_val
-
-        sub_batches = [{key: sub_batch_dic[key][i] for key in
-                        sub_batch_dic.keys()} for i in range(num_splits)]
-
-        # fix neighbor list indexing
-        sub_batches = self.add_split_nbrs(batch=batch,
-                                          mol_size=mol_size,
-                                          num_confs=num_confs,
-                                          confs_per_split=confs_per_split,
-                                          sub_batches=sub_batches)
-        # fix `bond_idx`
-        sub_batches = self.fix_bond_idx(sub_batches)
-
-        return sub_batches
-
-    def convolve_sub_batch(self,
-                           batch,
-                           xyz=None,
-                           xyz_grad=False):
-        """
-        Apply the convolution layers to a sub-batch.
-        Args:
-            batch (dict): batched sample of species
-            xyz (torch.Tensor): xyz of the batch
-            xyz_grad (bool): whether to set xyz.requires_grad = True
-        Returns:
-            new_node_feats (torch.Tensor): new node features after
-                the convolutions.
-            xyz (torch.Tensor): xyz of the batch
-        """
+        # Note: we've given the option to input xyz from another source.
+        # E.g. if you already created an xyz  and set requires_grad=True,
+        # you don't want to make a whole new one.
 
         if xyz is None:
             xyz = batch["nxyz"][:, 1:4]
-
-        if xyz_grad:
             xyz.requires_grad = True
 
-        # get the directed neighbor list
-        a, _ = make_directed(batch["nbr_list"])
-        # get the atom features
-        r = batch["atom_features"]
-        # offsets for periodic boundary conditions
+        a = batch["nbr_list"]
+
+        bond_features = self.bond_filter(batch["bond_features"])
+        bond_dim = bond_features.shape[1]
+        num_pairs = a.shape[0]
+        bond_edge_features = torch.zeros(num_pairs, bond_dim
+                                         ).to(a.device)
+
+        bond_idx = self.find_bond_idx(batch, a)
+        bond_edge_features[bond_idx] = bond_features
+
+        # offsets take care of periodic boundary conditions
         offsets = batch.get("offsets", 0)
+        distances = (xyz[a[:, 0]] - xyz[a[:, 1]] -
+                     offsets).pow(2).sum(1).sqrt()[:, None]
+        distance_feats = self.distance_filter(distances)
 
-        # initialize hidden bond features
-        h_0 = self.make_h(batch=batch,
-                          nbr_list=a,
-                          r=r,
-                          xyz=xyz,
-                          offsets=offsets)
-        h_new = h_0.clone()
+        e = torch.cat([bond_edge_features, distance_feats],
+                      dim=-1)
 
-        # update edge features
-        for conv in self.convolutions:
-            h_new = conv(h_0=h_0,
-                         h_new=h_new,
-                         nbrs=a)
+        r = batch["atom_features"]
 
-        # convert back to node features
-        new_node_feats = self.W_o(r=r,
-                                  h=h_new,
-                                  nbrs=a)
+        # update function includes periodic boundary conditions
 
-        return new_node_feats, xyz
+        # ** this isn't right - we need to instantiate convolutions
+        # that just go straight from edge features without a
+        # Gaussian embedding
 
-    def convolve(self,
-                 batch,
-                 sub_batch_size=None,
-                 xyz=None,
-                 xyz_grad=False):
-        """
-        Apply the convolution layers to the batch.
-        Args:
-            batch (dict): batched sample of species
-            sub_batch_size (int): maximum number of conformers
-                in a sub-batch.
-            xyz (torch.Tensor): xyz of the batch
-            xyz_grad (bool): whether to set xyz.requires_grad = True
-        Returns:
-            new_node_feats (torch.Tensor): new node features after
-                the convolutions.
-            xyz (torch.Tensor): xyz of the batch
-        """
+        for i, conv in enumerate(self.convolutions):
+            dr = conv(r=r, e=e, a=a)
+            r = r + dr
 
-        # split batches as necessary
-        if sub_batch_size is None:
-            sub_batches = [batch]
-        else:
-            sub_batches = self.split_batch(batch, sub_batch_size)
-
-        # go through each sub-batch, get the xyz and node features,
-        # and concatenate them when done
-
-        new_node_feat_list = []
-        xyz_list = []
-
-        for sub_batch in sub_batches:
-
-            new_node_feats, xyz = self.convolve_sub_batch(
-                sub_batch, xyz, xyz_grad)
-            new_node_feat_list.append(new_node_feats)
-            xyz_list.append(xyz)
-
-        new_node_feats = torch.cat(new_node_feat_list)
-        xyz = torch.cat(xyz_list)
-
-        return new_node_feats, xyz
+        return r, xyz
