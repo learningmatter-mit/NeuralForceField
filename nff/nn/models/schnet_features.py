@@ -79,6 +79,16 @@ class SchNetFeatures(WeightedConformers):
         )
 
     def find_bond_idx(self, batch, nbr_list):
+        """
+        Get `bond_idx`, which map bond indices to indices
+        in the neighbor list.
+        Args:
+            batch (dict): dictionary of props
+            nbr_list (torch.LongTensor): neighbor list
+        Returns:
+            bond_idx (torch.LongTensor): index map
+        """
+
         if "bond_idx" in batch:
             bond_idx = batch["bond_idx"]
         else:
