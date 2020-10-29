@@ -1,0 +1,104 @@
+{
+    "model_params": {
+    "model_type": "SchNetFeatures",
+    "mol_basis": 133,
+    "n_atom_basis": 133,
+    "n_bond_features": 26,
+    "n_bond_hidden": 300,
+    "n_filters": 64,
+    "n_gaussians": 10,
+    "cutoff": 5.0,
+    "n_convolutions": 4,
+    "dropout_rate": 0.0,
+    "activation": "ReLU",
+    "mol_fp_layers": [],
+    "boltzmann_dict": {
+        "boltz_basis": 10,
+        "dropout_rate": 0.0,
+        "final_act": "ReLU",
+        "head_pool": "concatenate",
+        "mol_basis": 133,
+        "num_heads": 3,
+        "type": "linear_attention"
+    },
+    "readoutdict": {
+        "sars_cov_one_cl_protease_active": [
+            {
+                "name": "linear",
+                "param": {
+                    "in_features": 399,
+                    "out_features": 66
+                }
+            },
+            {
+                "name": "Dropout",
+                "param": {
+                    "p": 0.2
+                }
+            },
+            {
+                "name": "ReLU",
+                "param": {}
+            },
+            {
+                "name": "linear",
+                "param": {
+                    "in_features": 66,
+                    "out_features": 1
+                }
+            },
+            {
+                "name": "Dropout",
+                "param": {
+                    "p": 0.2
+                }
+            }
+        ]
+    },
+    "classifier": true,
+    "gauss_embed": true,
+    "same_filters": true,
+    "trainable_gauss": false,
+    "base_keys": [
+        "sars_cov_one_cl_protease_active"
+    ],
+    "grad_keys": [],
+    "extra_features": [],
+    "ext_feat_types": [],
+    "use_mpnn": true
+    },
+    "train_params": {
+        "batch_size": 128,
+        "checkpoints_to_keep": 10000,
+        "del_grad_interval": 100,
+        "log_every_n_epochs": 1,
+        "loss": "logits_cross_entropy",
+        "loss_coef": {
+            "sars_cov_one_cl_protease_active": 1
+        },
+        "lr": 0.0001,
+        "lr_decay": 0.5,
+        "lr_min": 1e-06,
+        "lr_patience": 10,
+        "max_epochs": 100,
+        "metric_as_loss": "PrAuc_sars_cov_one_cl_protease_active",
+        "metric_objective": "maximize",
+        "metrics": [
+            "RocAuc",
+            "PrAuc"
+        ],
+        "mini_batches": 1,
+        "model_kwargs": {
+        },
+        "model_name": "full_dset",
+        "mol_loss_norm": true,
+        "sampler": {
+            "name": "ImbalancedDatasetSampler",
+            "target_name": "sars_cov_one_cl_protease_active"
+        },
+        "seed": 1,
+        "torch_par": false,
+        "use_slurm": true,
+        "weightpath": "/home/gridsan/saxelrod/models"
+    }
+}
