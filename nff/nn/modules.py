@@ -233,6 +233,7 @@ class MixedSchNetConv(MessagePassingModule):
     def update(self, r):
         return self.moduledict["update_function"](r)
 
+
 class GraphAttention(MessagePassingModule):
     """Weighted graph pooling layer based on self attention
 
