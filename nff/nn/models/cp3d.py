@@ -2,14 +2,12 @@ from torch import nn
 import torch
 import numpy as np
 import math
-from torch.nn import Sequential
 from nff.data.graphs import get_bond_idx
 
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.modules import (ChemPropConv, ChemPropMsgToNode,
-                            ChemPropInit)
-from nff.utils.tools import make_directed, layer_types
-from nff.nn.layers import Dense, GaussianSmearing
+                            ChemPropInit, SchNetEdgeFilter)
+from nff.utils.tools import make_directed
 
 REINDEX_KEYS = ["nbr_list", "bonded_nbr_list"]
 
@@ -56,35 +54,13 @@ class ChemProp3D(WeightedConformers):
         self.n_filters = modelparams["n_filters"]
 
         # edge filter to convert distances to SchNet feature vectors
-        self.edge_filter = self.get_edge_filter(modelparams)
-
-    def get_edge_filter(self,
-                        modelparams):
-        """
-        Create the edge filter network that converts distances
-        to feature vectors.
-        Args:
-            modelparams (dict): dictionary of parameters for the model
-        Returns:
-            edge_filter (nn.Sequential): sequential layers of Gaussian
-                smearing, dense, and an activation.
-        """
-
-        edge_filter = Sequential(
-            GaussianSmearing(
-                start=0.0,
-                stop=modelparams["cutoff"],
-                n_gaussians=modelparams["n_gaussians"],
-                trainable=modelparams["trainable_gauss"],
-            ),
-            Dense(
-                in_features=modelparams["n_gaussians"],
-                out_features=modelparams["n_filters"],
-                dropout_rate=modelparams["schnet_dropout"],
-            ),
-            layer_types[modelparams["activation"]]())
-
-        return edge_filter
+        self.edge_filter = SchNetEdgeFilter(
+            cutoff=modelparams["cutoff"],
+            n_gaussians=modelparams["n_gaussians"],
+            trainable_gauss=modelparams["trainable_gauss"],
+            n_filters=modelparams["n_filters"],
+            dropout_rate=modelparams["dropout_rate"],
+            activation=modelparams["activation"])
 
     def make_convs(self, modelparams):
         """

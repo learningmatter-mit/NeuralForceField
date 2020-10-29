@@ -61,7 +61,8 @@ class SchNetEdgeFilter(nn.Module):
                  n_gaussians,
                  trainable_gauss,
                  n_filters,
-                 dropout_rate):
+                 dropout_rate,
+                 activation='shifted_softplus'):
 
         super(SchNetEdgeFilter, self).__init__()
 
@@ -77,7 +78,7 @@ class SchNetEdgeFilter(nn.Module):
                 out_features=n_gaussians,
                 dropout_rate=dropout_rate,
             ),
-            shifted_softplus(),
+            layer_types[activation](),
             Dense(
                 in_features=n_gaussians,
                 out_features=n_filters,
@@ -178,7 +179,8 @@ class MixedSchNetConv(MessagePassingModule):
         n_atom_basis,
         n_filters,
         dropout_rate,
-        n_bond_hidden
+        n_bond_hidden,
+        activation='shifted_softplus'
     ):
         super(MixedSchNetConv, self).__init__()
         self.moduledict = ModuleDict(
@@ -195,7 +197,7 @@ class MixedSchNetConv(MessagePassingModule):
                         out_features=n_atom_basis,
                         dropout_rate=dropout_rate,
                     ),
-                    shifted_softplus(),
+                    layer_types[activation](),
                     Dense(
                         in_features=n_atom_basis,
                         out_features=n_atom_basis,
