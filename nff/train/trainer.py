@@ -118,7 +118,7 @@ class Trainer:
             try:
                 self.restore_checkpoint()
                 restore = True
-            except:
+            except Exception as e:
                 pass
         if not restore:
             self.epoch = 0
