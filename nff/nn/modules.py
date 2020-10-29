@@ -55,6 +55,39 @@ class SchNetEdgeUpdate(EdgeUpdateModule):
         return self.mlp(e)
 
 
+class SchNetEdgeFilter(nn.Module):
+    def __init__(self,
+                 cutoff,
+                 n_gaussians,
+                 trainable_gauss,
+                 n_filters,
+                 dropout_rate):
+
+        super(SchNetEdgeFilter, self).__init__()
+
+        self.filter = Sequential(
+            GaussianSmearing(
+                start=0.0,
+                stop=cutoff,
+                n_gaussians=n_gaussians,
+                trainable=trainable_gauss,
+            ),
+            Dense(
+                in_features=n_gaussians,
+                out_features=n_gaussians,
+                dropout_rate=dropout_rate,
+            ),
+            shifted_softplus(),
+            Dense(
+                in_features=n_gaussians,
+                out_features=n_filters,
+                dropout_rate=dropout_rate,
+            ))
+
+    def forward(self, e):
+        return self.filter(e)
+
+
 class SchNetConv(MessagePassingModule):
 
     """The convolution layer with filter.
@@ -75,25 +108,13 @@ class SchNetConv(MessagePassingModule):
         super(SchNetConv, self).__init__()
         self.moduledict = ModuleDict(
             {
-                "message_edge_filter": Sequential(
-                    GaussianSmearing(
-                        start=0.0,
-                        stop=cutoff,
-                        n_gaussians=n_gaussians,
-                        trainable=trainable_gauss,
-                    ),
-                    Dense(
-                        in_features=n_gaussians,
-                        out_features=n_gaussians,
-                        dropout_rate=dropout_rate,
-                    ),
-                    shifted_softplus(),
-                    Dense(
-                        in_features=n_gaussians,
-                        out_features=n_filters,
-                        dropout_rate=dropout_rate,
-                    ),
-                ),
+                "message_edge_filter": SchNetEdgeFilter(
+                    cutoff=cutoff,
+                    n_gaussians=n_gaussians,
+                    trainable_gauss=trainable_gauss,
+                    n_filters=n_filters,
+                    dropout_rate=dropout_rate),
+
                 "message_node_filter": Dense(
                     in_features=n_atom_basis,
                     out_features=n_filters,
@@ -143,6 +164,72 @@ class SchNetConv(MessagePassingModule):
     def update(self, r):
         return self.moduledict["update_function"](r)
 
+
+class MixedSchNetConv(MessagePassingModule):
+
+    """The convolution layer with filter.
+
+    Attributes:
+        moduledict (TYPE): Description
+    """
+
+    def __init__(
+        self,
+        n_atom_basis,
+        n_filters,
+        dropout_rate,
+        n_bond_hidden
+    ):
+        super(MixedSchNetConv, self).__init__()
+        self.moduledict = ModuleDict(
+            {
+
+                "message_node_filter": Dense(
+                    in_features=n_atom_basis,
+                    out_features=(n_filters + n_bond_hidden),
+                    dropout_rate=dropout_rate,
+                ),
+                "update_function": Sequential(
+                    Dense(
+                        in_features=(n_filters + n_bond_hidden),
+                        out_features=n_atom_basis,
+                        dropout_rate=dropout_rate,
+                    ),
+                    shifted_softplus(),
+                    Dense(
+                        in_features=n_atom_basis,
+                        out_features=n_atom_basis,
+                        dropout_rate=dropout_rate,
+                    ),
+                ),
+            }
+        )
+
+    def message(self, r, e, a, aggr_wgt=None):
+        """The message function for SchNet convoltuions 
+        Args:
+            r (TYPE): node inputs
+            e (TYPE): edge inputs
+            a (TYPE): neighbor list
+            aggr_wgt (None, optional): Description
+
+        Returns:
+            TYPE: message should a pair of message and
+        """
+        # convection: update
+        r = self.moduledict["message_node_filter"](r)
+
+        # soft aggr if aggr_wght is provided
+        if aggr_wgt is not None:
+            r = r * aggr_wgt
+
+        # combine node and edge info
+        message = r[a[:, 0]] * e, r[a[:, 1]] * \
+            e  # (ri [] eij) -> rj, []: *, +, (,)
+        return message
+
+    def update(self, r):
+        return self.moduledict["update_function"](r)
 
 class GraphAttention(MessagePassingModule):
     """Weighted graph pooling layer based on self attention
@@ -744,7 +831,7 @@ class CpSchNetConv(ChemPropConv):
                    e,
                    nbr_list):
 
-        # this doesn't work because of the indexing -- 
+        # this doesn't work because of the indexing --
         # nbr_list = [0, 1] has indices corresponding to
         # atoms, not to the edge vector.
 
@@ -816,9 +903,9 @@ class CpSchNetConv(ChemPropConv):
 
         if self.update_schnet:
             cp_msg = self.message(h_new=h_new,
-                      nbrs=all_nbrs)
+                                  nbrs=all_nbrs)
             final_h = self.update(msg=cp_msg,
-                                h_0=h_0)
+                                  h_0=h_0)
             return final_h
 
         # extract the ChemProp bond features from the complete set
