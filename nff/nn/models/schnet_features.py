@@ -2,12 +2,11 @@ import torch
 from torch import nn
 from torch.nn import Sequential
 
-
 from nff.data.graphs import get_bond_idx
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.modules import SchNetEdgeFilter, MixedSchNetConv
 from nff.nn.layers import Dense
-from nff.nn.activations import shifted_softplus
+from nff.utils.tools import layer_types
 
 
 class SchNetFeatures(WeightedConformers):
@@ -43,6 +42,7 @@ class SchNetFeatures(WeightedConformers):
         trainable_gauss = modelparams["trainable_gauss"]
         n_gaussians = modelparams["n_gaussians"]
         cutoff = modelparams["cutoff"]
+        activation = modelparams["activation"]
 
         self.convolutions = nn.ModuleList(
             [
@@ -50,7 +50,8 @@ class SchNetFeatures(WeightedConformers):
                     n_atom_basis=n_atom_basis,
                     n_filters=n_filters,
                     dropout_rate=dropout_rate,
-                    n_bond_hidden=n_bond_hidden
+                    n_bond_hidden=n_bond_hidden,
+                    activation=activation
                 )
                 for _ in range(n_convolutions)
             ]
@@ -63,7 +64,8 @@ class SchNetFeatures(WeightedConformers):
             n_gaussians=n_gaussians,
             trainable_gauss=trainable_gauss,
             n_filters=n_filters,
-            dropout_rate=dropout_rate)
+            dropout_rate=dropout_rate,
+            activation=activation)
 
         # for converting bond features to hidden feature vectors
         self.bond_filter = Sequential(
@@ -71,7 +73,7 @@ class SchNetFeatures(WeightedConformers):
                 in_features=n_bond_features,
                 out_features=n_bond_hidden,
                 dropout_rate=dropout_rate),
-            shifted_softplus(),
+            layer_types[activation](),
             Dense(
                 in_features=n_bond_hidden,
                 out_features=n_bond_hidden,

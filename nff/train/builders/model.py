@@ -60,7 +60,8 @@ PARAMS_TYPE = {"SchNet":
                    'box_size': np.array,
                    'dropout_rate': float,
                    'n_bond_hidden': int,
-                   'n_bond_features': int
+                   'n_bond_features': int,
+                   'activation': str
                },
 
                "ChemProp3D":
@@ -78,6 +79,7 @@ PARAMS_TYPE = {"SchNet":
                    'schnet_input_layers': list,
                    'output_layers': list,
                    'n_bond_hidden': int,
+                   'activation': str
                },
                }
 
