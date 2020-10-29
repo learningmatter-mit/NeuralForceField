@@ -42,6 +42,7 @@ for i in $(seq 0 $END); do
     fi
     echo $cmd
     eval $cmd
+
 done
 
 wait

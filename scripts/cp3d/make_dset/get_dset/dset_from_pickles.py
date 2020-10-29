@@ -331,6 +331,7 @@ def load_data_from_pickle(sample_dic, pickle_folder):
 
         pickle_path = sub_dic["pickle_path"]
         full_path = os.path.join(pickle_folder, pickle_path)
+
         with open(full_path, "rb") as f:
             dic = pickle.load(f)
         overall_dic.update({smiles: dic})

@@ -1,5 +1,5 @@
 import torch.nn
-from torch.nn import Sequential, Linear, ReLU, LeakyReLU, ModuleDict
+from torch.nn import ModuleDict
 
 
 class Stack(torch.nn.Module):
@@ -10,7 +10,7 @@ class Stack(torch.nn.Module):
 
         if mode not in implemented_mode:
             raise NotImplementedError(
-                '{} mode is not implemented for Stack'.format(key))
+                '{} mode is not implemented for Stack'.format(mode))
 
         # to implement a check for readout keys
 

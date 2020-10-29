@@ -46,9 +46,12 @@ def conf_pool(mol_size,
             with boltzmann weights of each fonroerm.
         mol_fp_nn (torch.nn.Module): network that converts the sum
             of atomic fingerprints into a molecular fingerprint.
-        boltz_nn (torch.nn.Module): nn that takes a molecular
+        boltz_nns (list[torch.nn.Module]): nns that take a molecular
             fingerprint and boltzmann weight as input and returns
             a new fingerprint.
+        conf_fps (torch.Tensor): fingerprints for each conformer
+        head_pool (str): how to combine species feature vectors from
+            the different `boltz_nns`.
     Returns:
         final_fp (torch.Tensor): H-dimensional tensor, where
             H is the number of features in the molecular fingerprint.
@@ -87,6 +90,8 @@ def conf_pool(mol_size,
         final_fps.append(final_fp)
         final_weights.append(learned_weights)
 
+    # combine the fingerprints produced by the different
+    # `boltz_nns`
     if head_pool == "concatenate":
         final_fp = torch.cat(final_fps, dim=-1)
     elif head_pool == "sum":

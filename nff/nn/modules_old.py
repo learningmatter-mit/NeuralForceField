@@ -571,8 +571,7 @@ class ChemPropConv(MessagePassingModule):
     def __init__(self,
                  n_edge_hidden,
                  dropout_rate,
-                 activation,
-                 **kwargs):
+                 activation):
         """
         Args:
             n_edge_hidden: dimension of the hidden edge vector

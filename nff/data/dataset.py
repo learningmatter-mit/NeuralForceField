@@ -200,10 +200,7 @@ class Dataset(TorchDataset):
             bonded_nbr_list = self.props["bonded_nbr_list"][i]
             nbr_list = self.props["nbr_list"][i]
 
-            nbr_list, bond_nbrs, bond_idx = get_bond_idx(
-                bonded_nbr_list, nbr_list)
-            self.props["nbr_list"][i] = nbr_list.cpu()
-            self.props["bonded_nbr_list"][i] = bond_nbrs.cpu()
+            bond_idx = get_bond_idx(bonded_nbr_list, nbr_list)
             self.props["bond_idx"].append(bond_idx.cpu())
 
     def copy(self):
@@ -418,7 +415,7 @@ def convert_nan(x):
     has_nan = any([np.isnan(y).any() for y in x])
     for y in x:
 
-        elif has_nan:
+        if has_nan:
             # if one is nan then they will have to become float tensors
             if type(y) in [int, float]:
                 new_x.append(torch.Tensor([y]))

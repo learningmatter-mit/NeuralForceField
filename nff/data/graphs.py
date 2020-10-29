@@ -179,10 +179,6 @@ def get_bond_idx(bonded_nbr_list, nbr_list):
         nbr_list (torch.LongTensor): pairs of atoms
             within a cutoff radius of each other.
     Returns:
-        nbr_list (torch.LongTensor): directed
-            version of the neigbhor list
-        bond_nbrs (torch.LongTensor): directed 
-            version of `bonded_nbr_list`
         bond_idx (torch.LongTensor): set of indices in the 
             neighbor list that corresponds to the same 
             directed pair of atoms in the bond list.
@@ -190,18 +186,15 @@ def get_bond_idx(bonded_nbr_list, nbr_list):
 
     # make them both directed
 
-    bond_nbrs, _ = make_directed(bonded_nbr_list)
-    nbr_list, _ = make_directed(nbr_list)
-
     # make the neighbour list into a dictionary of the form
     # {(atom_0, atom_1): nbr_list_index} for each pair of atoms
     nbr_dic = {to_tuple(pair): i for i, pair in enumerate(nbr_list)}
     # call the dictionary for each pair of atoms in the bonded neighbor
     # list to get `bond_idx`
     bond_idx = torch.LongTensor([nbr_dic[to_tuple(pair)]
-                                 for pair in bond_nbrs])
+                                 for pair in bonded_nbr_list])
 
-    return nbr_list, bond_nbrs, bond_idx
+    return bond_idx
 
 
 def get_angle_list(nbr_list):

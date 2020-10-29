@@ -1,10 +1,7 @@
-import numpy as np
 from functools import partial
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn import Parameter
 from torch.nn.init import xavier_uniform_, constant_
 
 
@@ -52,10 +49,16 @@ class GaussianSmearing(nn.Module):
               is False.
     """
 
-    def __init__(self, start, stop, n_gaussians, centered=False, trainable=False):
+    def __init__(self,
+                 start,
+                 stop,
+                 n_gaussians,
+                 centered=False,
+                 trainable=False):
         super().__init__()
         offset = torch.linspace(start, stop, n_gaussians)
-        widths = torch.FloatTensor((offset[1] - offset[0]) * torch.ones_like(offset))
+        widths = torch.FloatTensor(
+            (offset[1] - offset[0]) * torch.ones_like(offset))
         if trainable:
             self.width = nn.Parameter(widths)
             self.offsets = nn.Parameter(offset)
