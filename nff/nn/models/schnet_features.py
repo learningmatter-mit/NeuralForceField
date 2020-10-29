@@ -132,10 +132,6 @@ class SchNetFeatures(WeightedConformers):
 
         # update function includes periodic boundary conditions
 
-        # ** this isn't right - we need to instantiate convolutions
-        # that just go straight from edge features without a
-        # Gaussian embedding
-
         for i, conv in enumerate(self.convolutions):
             dr = conv(r=r, e=e, a=a)
             r = r + dr
