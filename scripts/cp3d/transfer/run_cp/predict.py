@@ -10,6 +10,9 @@ import argparse
 from nff.utils import bash_command, parse_args
 
 
+# this is probably where we should put in the functionality to get the chemprop
+# fingerprints
+
 def predict(cp_folder,
             test_path,
             cp_model_path,
@@ -47,7 +50,7 @@ def predict(cp_folder,
     # make a string for all of the checkpoint paths
     check_str = " ".join(check_paths)
 
-    # make the chempropm command
+    # make the chemprop command
 
     cmd = (f"python {script} "
            f" --test_path {test_path} --preds_path {preds_path} "

@@ -8,6 +8,10 @@ import os
 import pickle
 import numpy as np
 import argparse
+# import json
+# from pathlib import Path
+
+# from nff.utils import bash_command
 from nff.utils import parse_args, fprint
 
 
@@ -84,27 +88,6 @@ def get_name(path):
     else:
         name = splits[-1]
     return name
-
-
-def summarize(save_paths, feat_folder):
-    """
-    Summarize where the files were saved and what their contents are.
-    Args:
-      save_paths (list[str]): list of the paths to all the saved features files
-      feat_folder (str): path to the folder that contains all the feature files.
-    Returns:
-      None
-    """
-
-    base_dir = "/".join(save_paths[0].split("/")[:-1])
-    save_names = [get_name(path) for path in save_paths]
-    num_files = len(save_paths)
-    string = "\n".join(save_names)
-    summary = (f"Saved {num_files} files with features \n"
-               f"Used model in {feat_folder} \n\n"
-               f"Save folder: \n{base_dir}\n\n"
-               f"Save names: \n{string}")
-    fprint(summary)
 
 
 def make_hyperopt_csvs(smiles_folder, all_smiles):
@@ -194,6 +177,27 @@ def save_hyperopt(feat_folder,
     return hyp_np_path
 
 
+def summarize(save_paths, feat_folder):
+    """
+    Summarize where the files were saved and what their contents are.
+    Args:
+      save_paths (list[str]): list of the paths to all the saved features files
+      feat_folder (str): path to the folder that contains all the feature files.
+    Returns:
+      None
+    """
+
+    base_dir = "/".join(save_paths[0].split("/")[:-1])
+    save_names = [get_name(path) for path in save_paths]
+    num_files = len(save_paths)
+    string = "\n".join(save_names)
+    summary = (f"Saved {num_files} files with features \n"
+               f"Used model in {feat_folder} \n\n"
+               f"Save folder: \n{base_dir}\n\n"
+               f"Save names: \n{string}")
+    fprint(summary)
+
+
 def main(feat_folder,
          metrics,
          smiles_folder,
@@ -203,7 +207,7 @@ def main(feat_folder,
     """
     Save features from CP3D model for hyperopt and training with ChemProp.
     Args:
-      feat_folder (str): path to the folder that contains all the feature files.
+      feat_folder (str): Path to model folder where fingerprint pickles are saved
       metrics (list[str]): metrics with which you'll evaluate the model performance
       smiles_folder (str): folder with the csvs
       cp_save_folder (str): folder in which you're saving features for chemprop use
