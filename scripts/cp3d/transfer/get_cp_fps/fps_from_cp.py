@@ -151,11 +151,12 @@ if __name__ == "__main__":
                         help="Folder in which you're saving the features")
     parser.add_argument('--model_folder_paths', type=str, nargs="+",
                         help=("Folders with the different models from which "
-                              "you're making fingerprints."))
+                              "you're making fingerprints. Each corresponds "
+                              "to a model trained on the same data with a "
+                              "different metric."))
     parser.add_argument('--metrics', type=str, nargs="+",
                         choices=CHEMPROP_METRICS,
-                        help=("Names of the metrics corresponding to each "
-                              "ChemProp model name."))
+                        help=("Metrics of each ChemProp model path."))
     parser.add_argument('--device', type=str,
                         help=("Device to evaluate the model on"))
     parser.add_argument('--smiles_folder', type=str,
