@@ -3,7 +3,8 @@ import json
 import numpy as np
 import argparse
 
-from nff.utils import bash_command, parse_args, fprint
+from nff.utils import (bash_command, parse_args, fprint,
+                       CHEMPROP_METRICS)
 
 
 def to_npz(csv):
@@ -69,33 +70,32 @@ def summarize(save_paths, feat_folder):
 
 def main(cp_folder,
          feature_folder,
-         model_folder_cp,
-         model_names,
+         model_folder_paths,
          device,
          smiles_folder,
+         metrics,
          **kwargs):
     """
     Get fingerprints from a pre-trained chemprop model.
     Args:
       cp_folder (str): path to the chemprop folder on your computer
-      feature_folder (str): general folder for features saving
-      model_folder_cp (str): folder with the chemprop models
-      model_names (list[str]): names of models from which we want the features
+      feature_folder (str): folder in which you're sainvg the features
+      model_folder_paths (str): folders with the different models from which
+        you're making fingerprints.
       device (Union[str, int]): device to evaluate the model on
       smiles_folder (str): folder with the csvs
+      metrics (list[str]): names of the metrics corresponding to each 
+        ChemProp model name.
 
     """
 
     script = os.path.join(cp_folder, "predict.py")
     save_paths = []
 
-    for model_name in model_names:
-
-        save_paths.append([])
-        cp_model_path = os.path.join(model_folder_cp, model_name)
+    for model_path, metric in zip(model_folder_paths, metrics):
 
         # load the arguments from that model to get the features path
-        args_path = f"{cp_model_path}/fold_0/args.json"
+        args_path = f"{model_path}/fold_0/args.json"
         if not os.path.isfile(args_path):
             args_path = args_path.replace("fold_0/", "")
         with open(args_path, "r") as f:
@@ -103,7 +103,7 @@ def main(cp_folder,
         features_path = args["separate_test_features_path"]
 
         # make a string for all of the checkpoint paths
-        check_str = os.path.join(cp_model_path, "fold_0/model_0/model.pt")
+        check_str = os.path.join(model_path, "fold_0/model_0/model.pt")
 
         # make the chemprop command
 
@@ -122,8 +122,7 @@ def main(cp_folder,
         for split in ["train", "val", "test"]:
 
             feat_path = os.path.join(feature_folder,
-                                     model_name,
-                                     f"{split}.csv")
+                                     f"{split}_{metric}.csv")
             data_path = os.path.join(smiles_folder, f"{split}_full.csv")
 
             if not os.path.isdir(feature_folder):
@@ -137,10 +136,9 @@ def main(cp_folder,
 
             # convert it to npz
             np_save_path = to_npz(feat_path)
-            save_paths[-1].append(np_save_path)
+            save_paths.append(np_save_path)
 
-    for these_paths, model_name in zip(save_paths, model_names):
-        summarize(these_paths, os.path.join(feature_folder, model_name))
+    summarize(save_paths, feature_folder)
 
 
 if __name__ == "__main__":
@@ -150,17 +148,18 @@ if __name__ == "__main__":
     parser.add_argument('--cp_folder', type=str,
                         help=("Path to the chemprop folder on your computer"))
     parser.add_argument('--feature_folder', type=str,
-                        help="General folder in which you're saving features")
-    parser.add_argument('--model_folder_cp', type=str,
-                        help=("Folder with the various models"))
-    parser.add_argument('--model_names', type=str, nargs="+",
-                        help=("Names of models from which you want to "
-                              "create fingerprints"))
+                        help="Folder in which you're saving the features")
+    parser.add_argument('--model_folder_paths', type=str, nargs="+",
+                        help=("Folders with the different models from which "
+                              "you're making fingerprints."))
+    parser.add_argument('--metrics', type=str, nargs="+",
+                        choices=CHEMPROP_METRICS,
+                        help=("Names of the metrics corresponding to each "
+                              "ChemProp model name."))
     parser.add_argument('--device', type=str,
                         help=("Device to evaluate the model on"))
     parser.add_argument('--smiles_folder', type=str,
                         help=("Folder with the csvs"))
-
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "

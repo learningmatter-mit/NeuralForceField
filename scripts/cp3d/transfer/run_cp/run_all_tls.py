@@ -7,16 +7,8 @@ just MPNN)
 import os
 import argparse
 
-from nff.utils import bash_command, parse_args, fprint
-
-METRIC_CHOICES = ["auc",
-                  "prc-auc",
-                  "rmse",
-                  "mae",
-                  "mse",
-                  "r2",
-                  "accuracy",
-                  "cross_entropy"]
+from nff.utils import (bash_command, parse_args, fprint,
+                       CHEMPROP_METRICS)
 
 
 def get_train_folder(model_folder_cp,
@@ -197,7 +189,7 @@ if __name__ == "__main__":
                               "each located in `model_folder_cp`."))
     parser.add_argument("--metrics", type=str,
                         nargs='+',
-                        choices=METRIC_CHOICES,
+                        choices=CHEMPROP_METRICS,
                         help=("Metrics for which to evaluate "
                               "the model performance. You can "
                               "choose as many as you want; "

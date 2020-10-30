@@ -20,6 +20,16 @@ CHEMPROP_TRANSFORM = {"auc": "roc_auc",
                       "binary_cross_entropy": "class_loss",
                       "mse": "regress_loss"}
 
+CHEMPROP_METRICS = ["auc",
+                    "prc-auc",
+                    "rmse",
+                    "mae",
+                    "mse",
+                    "r2",
+                    "accuracy",
+                    "cross_entropy",
+                    "binary_cross_entropy"]
+
 
 def tqdm_enum(iter):
     i = 0

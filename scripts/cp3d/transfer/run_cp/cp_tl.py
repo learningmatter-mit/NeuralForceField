@@ -7,17 +7,8 @@ import os
 import json
 import argparse
 
-from nff.utils import bash_command, parse_args, fprint
-
-METRIC_CHOICES = ["auc",
-                  "prc-auc",
-                  "rmse",
-                  "mae",
-                  "mse",
-                  "r2",
-                  "accuracy",
-                  "cross_entropy",
-                  "binary_cross_entropy"]
+from nff.utils import (bash_command, parse_args, fprint,
+                       CHEMPROP_METRICS)
 
 
 def get_cp_cmd(script,
@@ -316,7 +307,7 @@ if __name__ == "__main__":
                               "it has been done already. "))
 
     parser.add_argument("--metric", type=str,
-                        choices=METRIC_CHOICES,
+                        choices=CHEMPROP_METRICS,
                         help=("Metric for which to evaluate "
                               "the model performance"),
                         default=None)
