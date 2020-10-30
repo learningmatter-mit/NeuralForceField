@@ -21,6 +21,7 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
     * [Getting fingerprints, predictions, and learned weights](#getting-fingerprints-predictions-and-learned-weights)
     * [Exporting fingerprints to ChemProp](#exporting-fingerprints-to-chemprop)
         * [From a 3D model](#from-a-3D-model)
+        * [From a ChemProp model](#from-a-chemprop-model)
     * [Training ChemProp models with the fingerprints](#training-chemprop-models-with-the-fingerprints)
     * [Saving the predictions](#saving-the-predictions)
 
