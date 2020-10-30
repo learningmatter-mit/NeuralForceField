@@ -40,6 +40,8 @@ def predict(cp_folder,
 
     # load the arguments from that model to get the features path
     args_path = f"{cp_model_path}/fold_0/args.json"
+    if not os.path.isfile(args_path):
+        args_path = args_path.replace("fold_0/", "")
     with open(args_path, "r") as f:
         args = json.load(f)
     features_path = args["separate_test_features_path"]

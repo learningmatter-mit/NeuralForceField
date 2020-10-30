@@ -91,6 +91,7 @@ def main(cp_folder,
 
     for model_name in model_names:
 
+        save_paths.append([])
         cp_model_path = os.path.join(model_folder_cp, model_name)
 
         # load the arguments from that model to get the features path
@@ -136,10 +137,10 @@ def main(cp_folder,
 
             # convert it to npz
             np_save_path = to_npz(feat_path)
-            save_paths.append(np_save_path)
+            save_paths[-1].append(np_save_path)
 
-    for model_name in model_names:
-        summarize(save_paths, os.path.join(feature_folder, model_name))
+    for these_paths, model_name in zip(save_paths, model_names):
+        summarize(these_paths, os.path.join(feature_folder, model_name))
 
 
 if __name__ == "__main__":
