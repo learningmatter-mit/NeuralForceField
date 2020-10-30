@@ -274,7 +274,7 @@ The script `get_fps/make_fps.sh` uses the model to generate pooled fingerprints 
     - `test_only` (bool): Only create fingerprints and evaluate the model on the test set. This is useful if you just want the model predictions on the test set and aren't interested in transfer learning.
     - `metrics` (list[str]): The script will loop through each metric and use the model with the best validation score according to that metric. It will create fingerprints and predictions for all of the different models. Any metrics recorded during training can be used here, such as `auc`, `prc-auc`, `binary_cross_entropy`, `mse` and `mae`.
 
-We also provide a script for extracting and saving features using a 2D ChemProp model trained on a different dataset in `transfer/get_cp_fps/fps_from_cp.sh`. Details for the script are found in the file `get_fps/fp_config.json `. This is where you should change the values for your project. The keys in the file are:
+We also provide a script for extracting and saving features using a *2D* ChemProp model trained on a different dataset. The script is `transfer/get_cp_fps/fps_from_cp.sh`, and details are found in the file `get_fps/fp_config.json `. This is where you should change the values for your project. The keys in the file are:
 - `cp_folder` (str): Path to the ChemProp folder on your computer
 - `feature_folder` (str): Path to the folder in which we'll save the features. Sub-folders for each chemprop model will be generated, and the features will be saved in those sub-folders.
 - `model_folder_cp` (str): Path to the folder with all the different model sub-folders.
