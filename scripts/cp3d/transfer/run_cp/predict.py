@@ -10,9 +10,6 @@ import argparse
 from nff.utils import bash_command, parse_args
 
 
-# this is probably where we should put in the functionality to get the chemprop
-# fingerprints
-
 def predict(cp_folder,
             test_path,
             cp_model_path,
