@@ -413,7 +413,10 @@ def main(job_path,
                                prop_name=prop_name,
                                metric=metric,
                                dic_path=dic_path)
-    # iterate
+
+    # sample hyperparameters with the aim to minimize the
+    # result of `objective`
+
     fmin(objective,
          space,
          algo=tpe.suggest,
