@@ -7,6 +7,7 @@ import argparse
 import json
 import sys
 import copy
+import pickle
 
 import torch
 from torch.utils.data import DataLoader
@@ -603,7 +604,13 @@ def make_stats(T,
     old_model = copy.deepcopy(T._model.to("cpu"))
 
     # get best model and put into eval mode
-    model = torch.load(T.best_model, map_location="cpu")
+    while True:
+        try:
+            model = torch.load(T.best_model, map_location="cpu")
+            break
+        except (EOFError, FileNotFoundError, pickle.UnpicklingError):
+            continue
+
     model.eval()
     T._model = model.to(device)
 
