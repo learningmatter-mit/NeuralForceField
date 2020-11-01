@@ -224,7 +224,9 @@ def get_space(options, param_types, names):
             max_val = lst[1]
 
             if "dropout" in name:
-                sample = hp.loguniform(name, low=min_val, high=max_val)
+                sample = hp.loguniform(name,
+                                       low=np.log(min_val),
+                                       high=np.log(max_val))
             elif param_type == "float":
                 # val = random.uniform(float(min_val), float(max_val))
                 sample = hp.quniform(name, low=min_val, high=max_val)
