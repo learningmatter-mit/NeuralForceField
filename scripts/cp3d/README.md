@@ -236,7 +236,7 @@ An example of a `ChemProp3D` config file is `train_config.json` (this is the def
 
 ## Hyperparameter optimization
 
-`scripts/cp3d/hyperopt/run_hyperopt.sh` is a script that runs Bayesian hyperparameter optimization using the [hyperopt package](https://github.com/hyperopt/hyperopt). The config file is `scripts/cp3d/hyperopt/search_config.json`. Its keys are:
+`scripts/cp3d/hyperopt/run_hyperopt.sh` is a script that runs Bayesian hyperparameter optimization using the [hyperopt](https://github.com/hyperopt/hyperopt) package. The config file is `scripts/cp3d/hyperopt/search_config.json`. Its keys are:
 - `job_path` (str): The path to the training config file. This file will be modified with different hyperparameters throughout the search.
 - `model_path` (str): The folder that your model lives in.
 - `param_names` (list[str]): Parameters that you want to optimize. You can choose any keys that appear in `model_params` in the training config file. Keys that are nested within `model_params` are more complicated. For example, the script allows you to vary the readout dropout rate, the attention dropout rate, and the number of attention heads, but other nested values are not yet supported. However, it shouldn't be too difficult to add extra options!
