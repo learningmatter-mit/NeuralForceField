@@ -1,7 +1,6 @@
 import os
 import json
 import argparse
-import random
 import numpy as np
 from hyperopt import fmin, hp, tpe
 
@@ -194,7 +193,7 @@ def update_info(job_path,
         json.dump(info, f, indent=4, sort_keys=True)
 
 
-def get_sampler(options, param_types, names):
+def get_space(options, param_types, names):
     """
     Create a space for `hyperopt`.
     Args:
@@ -237,7 +236,10 @@ def get_sampler(options, param_types, names):
     return space
 
 
-def save_score(dic_path):
+def save_score(dic_path,
+               hyperparams,
+               metric,
+               best_score):
 
     if os.path.isfile(dic_path):
         with open(dic_path, "r") as f:
@@ -290,7 +292,11 @@ def make_objective(model_path,
 
         hyper_score = (-best_score if (METRIC_DIC[metric] == "maximize")
                        else best_score)
-        save_score(dic_path)
+
+        save_score(dic_path=dic_path,
+                   hyperparams=hyperparams,
+                   metric=metric,
+                   best_score=best_score)
 
         return hyper_score
 
