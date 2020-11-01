@@ -370,7 +370,7 @@ def save_best(dic_path,
 
     # save them
     with open(save_path, "w") as f:
-        json.dump(best_params, f)
+        json.dump(best_params, f, indent=4, sort_keys=True)
 
 
 def main(job_path,
