@@ -232,7 +232,6 @@ def get_space(options, param_types, names):
                                        low=low,
                                        high=high)
             elif param_type == "float":
-                # val = random.uniform(float(min_val), float(max_val))
                 sample = hp.quniform(name, low=min_val, high=max_val)
             elif param_type == "int":
                 sample = hp.quniform(name, low=min_val, high=max_val, q=1)
