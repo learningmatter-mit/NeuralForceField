@@ -100,8 +100,7 @@ def update_heads(info,
     info["model_params"]["boltzmann_dict"]["head_pool"] = "concatenate"
 
     readoutdict = info["model_params"]["readoutdict"]
-    input_layers = info["model_params"]["input_layers"]
-    feat_dim = input_layers[0]["param"]["out_features"]
+    feat_dim = info["mol_basis"]
 
     for key, lst in readoutdict.items():
         for i, dic in enumerate(lst):
