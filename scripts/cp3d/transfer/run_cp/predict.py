@@ -167,13 +167,14 @@ def main(model_folder_cp,
          metrics,
          **kwargs):
     """
-    Get predictions for all models.
+    Get predictions for all models and evaluate with a set of metrics.
     Args:
       model_folder_cp (str): directory in which all the model folders
         can be found
       cp_folder (str): path to the chemprop folder on your computer
       test_path (str): path to the file with the test SMILES and their properties
       device (Union[str, int]): device to evaluate the model on
+      metrics (list[str]): metrics to apply 
     Returns:
       None
     """
