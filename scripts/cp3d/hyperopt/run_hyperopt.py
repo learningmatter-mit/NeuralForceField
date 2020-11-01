@@ -225,9 +225,8 @@ def get_space(options, param_types, names):
 
             if "dropout" in name:
                 if min_val == 0:
-                    low = 1e-4
-                else:
-                    low = np.log(min_val)
+                    min_val = 1e-4
+                low = np.log(min_val)
                 high = np.log(max_val)
                 sample = hp.loguniform(name,
                                        low=low,
