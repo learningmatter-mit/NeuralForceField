@@ -295,8 +295,8 @@ def make_objective(model_path,
                          model_path=model_path,
                          metric=metric)
 
-        hyper_score = (-best_score if (METRIC_DIC[metric] == "maximize")
-                       else best_score)
+        hyper_score = -best_score if (METRIC_DIC[metric] ==
+                                      "maximize") else best_score
 
         save_score(dic_path=dic_path,
                    hyperparams=hyperparams,
