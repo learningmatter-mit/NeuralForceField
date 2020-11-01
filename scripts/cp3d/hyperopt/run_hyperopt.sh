@@ -25,6 +25,6 @@ export PYTHONPATH=$NFFDIR:$PYTHON_PATH
 
 source activate nff
 
-cmd="python random_search.py --config_file search_config.json"
+cmd="python run_hyperopt.py --config_file search_config.json"
 echo $cmd
 eval $cmd

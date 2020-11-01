@@ -278,7 +278,7 @@ def make_objective(model_path,
         fprint(f"Hyperpameters used this round:\n{val_str}")
 
         # update config file, run, get the score, and save
-        vals = hyperparams[key] for key in param_names
+        vals = [hyperparams[key] for key in param_names]
         update_info(job_path=job_path,
                     vals=vals,
                     param_names=param_names,
