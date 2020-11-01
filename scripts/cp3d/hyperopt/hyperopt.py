@@ -3,8 +3,10 @@ import json
 import argparse
 import random
 import numpy as np
+from hyperopt import fmin, hp, tpe
 
-from nff.utils import fprint, parse_args, parse_score, METRICS
+from nff.utils import (fprint, parse_args, parse_score, METRICS,
+                       METRIC_DIC)
 
 
 def clean_up(model_path):
@@ -192,26 +194,28 @@ def update_info(job_path,
         json.dump(info, f, indent=4, sort_keys=True)
 
 
-def sample_vals(options, param_types):
+def get_sampler(options, param_types, names):
     """
-    Do a random sample of values.
+    Create a space for `hyperopt`.
     Args:
       options (list): a set of options for each parameter
       param_types (list[str]): what kind of value each parameter
         is (categorical, int or float)
+      names (list): names of parameters being explored
     Returns:
-      vals (list): sampled values
+      space (dict): space dictionary
     """
 
-    vals = []
+    space = {}
 
     for i, lst in enumerate(options):
 
         param_type = param_types[i]
+        name = names[i]
 
         # if categorical, sample one of the options randomly
         if param_type == "categorical":
-            val = random.choice(lst)
+            sample = hp.pchoice(name, lst)
 
         # otherwise sample between the minimum and maximum values
 
@@ -220,14 +224,98 @@ def sample_vals(options, param_types):
             min_val = lst[0]
             max_val = lst[1]
 
-            if param_type == "float":
-                val = random.uniform(float(min_val), float(max_val))
+            if "dropout" in name:
+                sample = hp.loguniform(name, low=min_val, high=max_val)
+            elif param_type == "float":
+                # val = random.uniform(float(min_val), float(max_val))
+                sample = hp.quniform(name, low=min_val, high=max_val)
             elif param_type == "int":
-                val = random.randrange(int(min_val), int(max_val) + 1)
+                sample = hp.quniform(name, low=min_val, high=max_val, q=1)
 
-        vals.append(val)
+        space[name] = sample
 
-    return vals
+    return space
+
+
+def save_score(dic_path):
+
+    if os.path.isfile(dic_path):
+        with open(dic_path, "r") as f:
+            score_list = json.load(f)
+    else:
+        score_list = []
+
+    score_list.append(hyperparams)
+    score_list[-1].update({metric: best_score})
+
+    with open(dic_path, "w") as f:
+        json.dump(score_list, f, indent=4, sort_keys=True)
+
+
+def make_objective(model_path,
+                   param_names,
+                   param_types,
+                   job_path,
+                   prop_name,
+                   metric,
+                   dic_path):
+
+    param_type_dic = {name: typ for name, typ in zip(param_names,
+                                                     param_types)}
+
+    def objective(hyperparams):
+        # clean up model folder from previous interation
+        clean_up(model_path=model_path)
+
+        # Convert hyperparams from float to int when necessary
+        for key, typ in param_type_dic.items():
+            if typ == "int":
+                hyperparams[key] = int(hyperparams[key])
+
+        # print hyperparameters being used
+        val_str = "  " + "\n  ".join([f"{key}: {val}" for key, val
+                                      in hyperparams.items()])
+        fprint(f"Hyperpameters used this round:\n{val_str}")
+
+        # update config file, run, get the score, and save
+        vals = hyperparams[key] for key in param_names
+        update_info(job_path=job_path,
+                    vals=vals,
+                    param_names=param_names,
+                    prop_name=prop_name)
+
+        best_score = run(job_path=job_path,
+                         model_path=model_path,
+                         metric=metric)
+
+        hyper_score = (-best_score if (METRIC_DIC[metric] == "maximize")
+                       else best_score)
+        save_score(dic_path)
+
+        return hyper_score
+
+    return objective
+
+
+def save_best(dic_path,
+              metric,
+              model_path):
+
+    with open(dic_path, "r") as f:
+        score_list = json.load(f)
+    objective = METRIC_DIC[metric]
+    pref = 1 if (objective == "minimize") else (-1)
+    hyper_scores = [pref * score_dic[metric] for score_dic in score_list]
+    best_params = score_list[np.argmin(hyper_scores)]
+
+    save_path = os.path.join(model_path, "best_params.json")
+    best_str = "  " + "\n  ".join([f"{key}: {val}" for key, val
+                                   in best_params.items()])
+    fprint(f"Best parameters are {best_str}")
+    fprint(f"Saving to {save_path}")
+
+    with open(save_path, "w") as f:
+        json.dump(best_params)
 
 
 def main(job_path,
@@ -258,39 +346,26 @@ def main(job_path,
     """
 
     dic_path = os.path.join(model_path, score_file)
-    score_list = []
 
-    # load old scores if they exist
-    if os.path.isfile(dic_path):
-        with open(dic_path, "r") as f:
-            score_list = json.load(f)
+    space = get_space(options=options,
+                      param_types=param_types,
+                      names=param_names)
 
-    # iterate over hyperparameter combinations
-    for _ in range(num_samples):
+    objective = make_objective(model_path=model_path,
+                               param_names=param_names,
+                               param_types=param_types,
+                               job_path=job_path,
+                               prop_name=prop_name,
+                               metric=metric,
+                               dic_path=dic_path)
+    # iterate
+    fmin(objective,
+         space,
+         algo=tpe.suggest,
+         max_evals=num_samples)
 
-        # clean up model folder from previous interation
-        clean_up(model_path=model_path)
-        # sample hyperparam values
-        vals = sample_vals(options, param_types)
-        val_str = "  " + "\n  ".join([f"{key}: {val}" for key, val
-                                      in zip(param_names, vals)])
-        fprint(f"Hyperpameters used this round:\n{val_str}")
-
-        # update config file, run, get the score, and save
-        update_info(job_path=job_path,
-                    vals=vals,
-                    param_names=param_names,
-                    prop_name=prop_name)
-        best_score = run(job_path=job_path,
-                         model_path=model_path,
-                         metric=metric)
-        score_dic = {param_type: val for param_type, val
-                     in zip(param_names, vals)}
-        score_dic.update({metric: best_score})
-        score_list.append(score_dic)
-
-        with open(dic_path, "w") as f:
-            json.dump(score_list, f, indent=4, sort_keys=True)
+    # save best results
+    save_best(dic_path, metric, model_path)
 
 
 if __name__ == "__main__":
