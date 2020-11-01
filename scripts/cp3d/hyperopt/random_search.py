@@ -171,7 +171,7 @@ def update_info(job_path,
                          heads=val)
 
         elif param_type == "attention_type":
-            info["boltzmann_dict"]["type"] = val
+            info["model_params"]["boltzmann_dict"]["type"] = val
 
         else:
             if param_type not in info["model_params"]:
