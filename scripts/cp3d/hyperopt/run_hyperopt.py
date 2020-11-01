@@ -4,8 +4,8 @@ import argparse
 import numpy as np
 from hyperopt import fmin, hp, tpe
 
-from nff.utils import (fprint, parse_args, parse_score, METRICS,
-                       METRIC_DIC)
+from nff.utils import (fprint, parse_args, parse_score, convert_metric,
+                       METRICS, METRIC_DIC)
 
 
 def clean_up(model_path):
@@ -295,7 +295,8 @@ def make_objective(model_path,
                          model_path=model_path,
                          metric=metric)
 
-        hyper_score = -best_score if (METRIC_DIC[metric] ==
+        metric_obj = METRIC_DIC[convert_metric(metric)]
+        hyper_score = -best_score if (metric_obj ==
                                       "maximize") else best_score
 
         save_score(dic_path=dic_path,
@@ -314,7 +315,7 @@ def save_best(dic_path,
 
     with open(dic_path, "r") as f:
         score_list = json.load(f)
-    objective = METRIC_DIC[metric]
+    objective = METRIC_DIC[convert_metric(metric)]
     pref = 1 if (objective == "minimize") else (-1)
     hyper_scores = [pref * score_dic[metric] for score_dic in score_list]
     best_params = score_list[np.argmin(hyper_scores)]
