@@ -322,8 +322,7 @@ The script that generates predictions is `run_cp/predict.sh`. Details for the sc
 - `model_folder_cp` (str): Folder in which you made sub-folders for all your ChemProp models.
 - `device` (str): Device you want to use when calling the model. Can be "cpu" or any integer from 0 to the number of GPUs you have available, if you want to use a GPU.
 - `test_path` (str): path to the file with the test SMILES and their properties. If you split the data using the scripts above, then this should be equal to `<csv_folder>/test_full.csv`.
-
-
+- `metrics` (list[str]): Optional metrics with which you want to evaluate predictions.
 
 
 
