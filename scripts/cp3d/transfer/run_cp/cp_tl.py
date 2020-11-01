@@ -124,7 +124,8 @@ def modify_config(base_config_path,
                   test_feat_path,
                   train_folder,
                   features_only,
-                  hyp_params):
+                  hyp_params,
+                  no_features):
     """
     Modify a chemprop config file with new parameters.
     Args:
@@ -139,6 +140,7 @@ def modify_config(base_config_path,
       features_only (bool): whether to just train with the features and no
         MPNN
       hyp_params (dict): any hyperparameters that may have been optimized
+      no_features (bool): Don't use external features when training model.
     Returns:
       None
     """
@@ -157,6 +159,11 @@ def modify_config(base_config_path,
     config.update({key: val for key, val in
                    dic.items() if val is not None})
 
+    if no_features:
+        for key in list(config.keys()):
+            if "features_path" in key:
+                config.pop(key)
+
     new_config_path = os.path.join(train_folder, "config.json")
     if not os.path.isdir(train_folder):
         os.makedirs(train_folder)
@@ -169,7 +176,8 @@ def modify_hyp_config(hyp_config_path,
                       metric,
                       hyp_feat_path,
                       hyp_folder,
-                      features_only):
+                      features_only,
+                      no_features):
     """
     Modfiy a hyperparameter optimization config file with new parameters.
     Args:
@@ -183,6 +191,7 @@ def modify_hyp_config(hyp_config_path,
       hyp_folder (str): where you want to store your trained models
       features_only (bool): whether to just train with the features and no
         MPNN
+      no_features (bool): Don't use external features when training model.
     Returns:
       None
     """
@@ -197,6 +206,11 @@ def modify_hyp_config(hyp_config_path,
 
     config.update({key: val for key, val in
                    dic.items() if val is not None})
+
+    if no_features:
+        for key in list(config.keys()):
+            if "features_path" in key:
+                config.pop(key)
 
     new_config_path = os.path.join(hyp_folder, "config.json")
     if not os.path.isdir(hyp_folder):
@@ -217,6 +231,7 @@ def main(base_config_path,
          features_only,
          use_hyperopt,
          rerun_hyperopt,
+         no_features,
          **kwargs):
     """
     Load pre-set features to train a ChemProp model.
@@ -240,6 +255,7 @@ def main(base_config_path,
       rerun_hyperopt (bool): whether to rerun hyperparameter optimization if
         `hyp_folder` already exists and has the completion file
         `best_params.json`.
+      no_features (bool): Don't use external features when training model.
     Returns:
       None
     """
@@ -256,7 +272,8 @@ def main(base_config_path,
                           metric=metric,
                           hyp_feat_path=hyp_feat_path,
                           hyp_folder=hyp_folder,
-                          features_only=features_only)
+                          features_only=features_only,
+                          no_features=no_features)
 
         hyp_params = hyperopt(cp_folder=cp_folder,
                               hyp_folder=hyp_folder,
@@ -276,7 +293,8 @@ def main(base_config_path,
                   test_feat_path=test_feat_path,
                   train_folder=train_folder,
                   features_only=features_only,
-                  hyp_params=hyp_params)
+                  hyp_params=hyp_params,
+                  no_features=no_features)
 
     # train the model
 
@@ -328,6 +346,9 @@ if __name__ == "__main__":
                         help=("Train model with only the stored features"))
     parser.add_argument("--cp_folder", type=str,
                         help=("Path to ChemProp folder."))
+    parser.add_argument("--no_features", action="store_true",
+                        help=("Don't use external features when training "
+                              "model."))
     parser.add_argument('--this_config_file', type=str,
                         help=("Path to JSON file with arguments "
                               "for this script. If given, any "

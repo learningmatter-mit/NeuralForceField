@@ -119,6 +119,7 @@ def main(base_config_path,
 
     for feat in feat_options:
         for mpnn in mpnn_options:
+            # can't run anything without either features or an MPNN
             if (not feat) and (not mpnn):
                 continue
             for metric in metrics:
@@ -156,6 +157,8 @@ def main(base_config_path,
                     cmd += "--rerun_hyperopt "
                 if not mpnn:
                     cmd += "--features_only "
+                if not feat:
+                    cmd += "--no_features "
 
                 p = bash_command(cmd)
                 p.wait()
