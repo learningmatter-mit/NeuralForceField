@@ -171,6 +171,9 @@ def update_info(job_path,
             update_heads(info=info,
                          heads=val)
 
+        elif param_type == "attention_type":
+            info["boltzmann_dict"]["type"] = val
+
         else:
             if param_type not in info["model_params"]:
                 msg = (f"Warning: assuming that {param_type} "
