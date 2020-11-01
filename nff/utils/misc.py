@@ -67,13 +67,18 @@ def bash_command(cmd):
     return subprocess.Popen(cmd, shell=True, executable='/bin/bash')
 
 
-def prepare_metric(lines, metric):
-
-    header_items = [i.strip() for i in lines[0].split("|")]
+def convert_metric(metric):
     if metric in ["prc_auc", "prc-auc"]:
         metric = "pr_auc"
     elif metric in ["auc", "roc-auc"]:
         metric = "roc_auc"
+    return metric
+
+
+def prepare_metric(lines, metric):
+
+    header_items = [i.strip() for i in lines[0].split("|")]
+    metric = convert_metric(metric)
     if "loss" in metric:
         idx = header_items.index("Validation loss")
     else:
