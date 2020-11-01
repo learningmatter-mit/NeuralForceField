@@ -1,9 +1,6 @@
 import numpy as np
 import torch
-import scipy
 from sklearn.metrics import roc_auc_score, auc, precision_recall_curve
-
-import pdb
 
 
 class Metric:
@@ -174,7 +171,6 @@ class Classifier(Metric):
         actual = actual[non_nan_idx].numpy().tolist()
 
         return pred, actual
-
 
     def aggregate(self):
         """Aggregate metric over all previously added batches."""
@@ -443,7 +439,6 @@ class PrAuc(Classifier):
 
         except ValueError:
             pr_auc = float("nan")
-
 
         return pr_auc
 

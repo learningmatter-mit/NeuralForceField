@@ -154,6 +154,8 @@ def main(base_config_path,
                     cmd += "--use_hyperopt "
                 if rerun_hyperopt:
                     cmd += "--rerun_hyperopt "
+                if not mpnn:
+                    cmd += "--features_only "
 
                 p = bash_command(cmd)
                 p.wait()

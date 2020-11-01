@@ -117,3 +117,22 @@ def parse_score(model_path, metric):
             best_epoch = splits[1]
 
     return best_score, best_epoch
+
+
+def read_csv(path):
+    with open(path, "r") as f:
+        lines = f.readlines()
+
+    keys = lines[0].strip().split(",")
+    dic = {key: [] for key in keys}
+    for line in lines[1:]:
+        vals = line.strip().split(",")
+        for key, val in zip(keys, vals):
+            if val.isdigit():
+                dic[key].append(int(val))
+            else:
+                try:
+                    dic[key].append(float(val))
+                except ValueError:
+                    dic[key].append(val)
+    return dic
