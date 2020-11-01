@@ -214,7 +214,7 @@ def get_space(options, param_types, names):
 
         # if categorical, sample one of the options randomly
         if param_type == "categorical":
-            sample = hp.pchoice(name, lst)
+            sample = hp.choice(name, lst)
 
         # otherwise sample between the minimum and maximum values
 
