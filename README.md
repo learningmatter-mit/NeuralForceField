@@ -18,12 +18,13 @@ This software requires the following packages:
 - [munch=2.5.0](https://pypi.org/project/munch/)
 - [e3fp=1.2.1](https://github.com/keiserlab/e3fp)
 - [ipykernel==5.3.0](https://github.com/ipython/ipykernel)
+- [hyperopt=0.2.5](https://github.com/hyperopt/hyperopt)
 
 We highly recommend to create a `conda` environment to run the code. To do that, use the following commands:
 
 ```bash
 conda upgrade conda
-conda create -n nff python=3.7 scikit-learn pytorch\>=1.2.0 cudatoolkit=10.0 ase pandas pymatgen sympy rdkit -c pytorch -c conda-forge -c rdkit
+conda create -n nff python=3.7 scikit-learn pytorch\>=1.2.0 cudatoolkit=10.0 ase pandas pymatgen sympy rdkit hyperopt -c pytorch -c conda-forge
 ```
 
 Next install remaining pip requirements:
