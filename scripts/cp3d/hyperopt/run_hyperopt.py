@@ -245,6 +245,16 @@ def save_score(dic_path,
                hyperparams,
                metric,
                best_score):
+    """
+    Save score from a hyperparameter iteration.
+    Args:
+      dic_path (str): path to the JSON file with the scores
+      hyperparams (dict): current hyperparameters
+      metric (str): metric to optimize
+      best_score (float): score from this round
+    Returns:
+      None
+    """
 
     if os.path.isfile(dic_path):
         with open(dic_path, "r") as f:
@@ -266,11 +276,26 @@ def make_objective(model_path,
                    prop_name,
                    metric,
                    dic_path):
+    """
+    Make objective function that gets called by `hyperopt`.
+    Args:
+      model_path (str): directory of model and dataset
+      param_names (list[str]): names of the parameters being updated
+      param_types (list[str]): what kind of value each parameter
+        is (categorical, int or float)
+      job_path (str): path to the folder with the job config file
+      prop_name (str): Name of property you're predicting
+      num_samples (int): how many combinations of hyperparams to try
+      dic_path (str): path to the JSON file with the scores
+    Returns:
+      objective (callable): objective function for `hyperopt`
+    """
 
     param_type_dic = {name: typ for name, typ in zip(param_names,
                                                      param_types)}
 
     def objective(hyperparams):
+
         # clean up model folder from previous interation
         clean_up(model_path=model_path)
 
@@ -291,14 +316,18 @@ def make_objective(model_path,
                     param_names=param_names,
                     prop_name=prop_name)
 
+        # train the model and get the score
         best_score = run(job_path=job_path,
                          model_path=model_path,
                          metric=metric)
 
+        # get the hyperparameter score, given that the aim is
+        # to minimize whatever comes out
         metric_obj = METRIC_DIC[convert_metric(metric)]
         hyper_score = -best_score if (metric_obj ==
                                       "maximize") else best_score
 
+        # save the score
         save_score(dic_path=dic_path,
                    hyperparams=hyperparams,
                    metric=metric,
@@ -312,20 +341,34 @@ def make_objective(model_path,
 def save_best(dic_path,
               metric,
               model_path):
+    """
+    Save the best parameters from the optimization.
+    Args:
+      dic_path (str): path to the JSON file with the scores
+      metric (str): metric by which to evaluate model performance
+      model_path (str): directory of model and dataset
+    Returns:
+      None
+    """
 
+    # load the scores
     with open(dic_path, "r") as f:
         score_list = json.load(f)
+
+    # get the best parameters
     objective = METRIC_DIC[convert_metric(metric)]
     pref = 1 if (objective == "minimize") else (-1)
     hyper_scores = [pref * score_dic[metric] for score_dic in score_list]
     best_params = score_list[np.argmin(hyper_scores)]
 
+    # print the best parameters
     save_path = os.path.join(model_path, "best_params.json")
     best_str = "  " + "\n  ".join([f"{key}: {val}" for key, val
                                    in best_params.items()])
     fprint(f"Best parameters are {best_str}")
     fprint(f"Saving to {save_path}")
 
+    # save them
     with open(save_path, "w") as f:
         json.dump(best_params)
 
