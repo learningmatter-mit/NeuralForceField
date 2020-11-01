@@ -363,14 +363,14 @@ def save_best(dic_path,
 
     # print the best parameters
     save_path = os.path.join(model_path, "best_params.json")
-    best_str = "  " + "\n  ".join([f"{key}: {val}" for key, val
-                                   in best_params.items()])
+    best_str = "\n  ".join([f"{key}: {val}" for key, val
+                            in best_params.items()])
     fprint(f"Best parameters are {best_str}")
     fprint(f"Saving to {save_path}")
 
     # save them
     with open(save_path, "w") as f:
-        json.dump(best_params)
+        json.dump(best_params, f)
 
 
 def main(job_path,
