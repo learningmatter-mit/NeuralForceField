@@ -1,5 +1,5 @@
 source deactivate
 source ~/.bashrc
-source activate chemprop
+source activate nff
 
 python predict.py --config_file predict_config.json

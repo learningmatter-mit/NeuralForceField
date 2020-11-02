@@ -69,7 +69,7 @@ def predict(cp_folder,
 
     # make the chemprop command
 
-    cmd = (f"python {script} "
+    cmd = (f"source activate chemprop && python {script} "
            f" --test_path {test_path} --preds_path {preds_path} "
            f" --checkpoint_paths {check_str} ")
 
