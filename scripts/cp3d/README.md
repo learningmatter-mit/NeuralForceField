@@ -336,4 +336,6 @@ We also provide a wrapper around ChemProp, so that a ChemProp model can be easil
 - `train_folder` (str): Path to the folder in which training will occur.
 - `cp_folder` (str): The path to the ChemProp folder on your computer
 
+Note that the data paths are in the `base_config` and `hyp_config` paths. You can generate the training and hyperopt splits and csvs using `scripts/cp3d/make_dset/splits/split.sh`
+
     
