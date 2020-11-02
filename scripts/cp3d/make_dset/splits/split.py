@@ -14,7 +14,7 @@ import copy
 from rdkit import Chem
 from tqdm import tqdm
 
-from nff.utils import bash_command, parse_args, fprint
+from nff.utils import bash_command, parse_args, fprint, prop_split
 
 
 def to_csv(summary_dic,
@@ -138,51 +138,11 @@ def subsample(summary_dic,
     # If you set a limit but aren't doing classification, select them
     # randomly.
 
-    random.seed(seed)
-
-    if max_specs is not None and dataset_type == "classification":
-
-        msg = "Not implemented for multiclass"
-        assert len(props) == 1, msg
-
-        prop = props[0]
-        pos_smiles = [key for key, sub_dic in sample_dic.items()
-                      if sub_dic.get(prop) == 1]
-        neg_smiles = [key for key, sub_dic in sample_dic.items()
-                      if sub_dic.get(prop) == 0]
-
-        # find the underrepresnted and overrepresented class
-        if len(pos_smiles) < len(neg_smiles):
-            underrep = pos_smiles
-            overrep = neg_smiles
-        else:
-            underrep = neg_smiles
-            overrep = pos_smiles
-
-        # if possible, keep all of the underrepresented class
-        if max_specs >= 2 * len(underrep):
-            random.shuffle(overrep)
-            num_left = max_specs - len(underrep)
-            keep_smiles = underrep + overrep[:num_left]
-
-        # otherwise create a dataset with half of each
-        else:
-            random.shuffle(underrep)
-            random.shuffle(overrep)
-            keep_smiles = (underrep[:max_specs // 2]
-                           + overrep[max_specs // 2:])
-    else:
-
-        keep_smiles = list(sample_dic.keys())
-
-        # if setting a maximum, need to shuffle in order
-        # to take random smiles
-
-        if max_specs is not None:
-            random.shuffle(keep_smiles)
-
-    if max_specs is not None:
-        keep_smiles = keep_smiles[:max_specs]
+    keep_smiles = prop_split(max_specs=max_specs,
+                             dataset_type=dataset_type,
+                             props=props,
+                             sample_dic=sample_dic,
+                             seed=seed)
 
     sample_dic = {smiles: summary_dic[smiles] for smiles in keep_smiles}
 

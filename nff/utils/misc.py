@@ -3,6 +3,7 @@ from tqdm import tqdm
 import json
 import subprocess
 import os
+import random
 
 METRIC_DIC = {"pr_auc": "maximize",
               "roc_auc": "maximize",
@@ -141,3 +142,76 @@ def read_csv(path):
                 except ValueError:
                     dic[key].append(val)
     return dic
+
+
+def write_csv(path, dic):
+
+    keys = sorted(list(dic.keys()))
+    if "smiles" in keys:
+        keys.remove("smiles")
+        keys.insert(0, "smiles")
+
+    lines = [",".join(keys)]
+    for idx in range(len(dic[keys[0]])):
+        vals = [dic[key][idx] for key in keys]
+        line = ",".join(str(val) for val in vals)
+        lines.append(line)
+    text = "\n".join(lines)
+
+    with open(path, "w") as f:
+        f.write(text)
+
+
+def prop_split(max_specs,
+               dataset_type,
+               props,
+               sample_dic,
+               seed):
+
+    random.seed(seed)
+
+    if max_specs is not None and dataset_type == "classification":
+
+        msg = "Not implemented for multiclass"
+        assert len(props) == 1, msg
+
+        prop = props[0]
+        pos_smiles = [key for key, sub_dic in sample_dic.items()
+                      if sub_dic.get(prop) == 1]
+        neg_smiles = [key for key, sub_dic in sample_dic.items()
+                      if sub_dic.get(prop) == 0]
+
+        # find the underrepresnted and overrepresented class
+        if len(pos_smiles) < len(neg_smiles):
+            underrep = pos_smiles
+            overrep = neg_smiles
+        else:
+            underrep = neg_smiles
+            overrep = pos_smiles
+
+        # if possible, keep all of the underrepresented class
+        if max_specs >= 2 * len(underrep):
+            random.shuffle(overrep)
+            num_left = max_specs - len(underrep)
+            keep_smiles = underrep + overrep[:num_left]
+
+        # otherwise create a dataset with half of each
+        else:
+            random.shuffle(underrep)
+            random.shuffle(overrep)
+            keep_smiles = (underrep[:max_specs // 2]
+                           + overrep[max_specs // 2:])
+    else:
+
+        keep_smiles = list(sample_dic.keys())
+
+        # if setting a maximum, need to shuffle in order
+        # to take random smiles
+
+        if max_specs is not None:
+            random.shuffle(keep_smiles)
+
+    if max_specs is not None:
+        keep_smiles = keep_smiles[:max_specs]
+
+    return keep_smiles
