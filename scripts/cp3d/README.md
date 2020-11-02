@@ -24,6 +24,7 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
         * [From a ChemProp model](#from-a-chemprop-model)
     * [Training ChemProp models with the fingerprints](#training-chemprop-models-with-the-fingerprints)
     * [Saving the predictions](#saving-the-predictions)
+ - [Training a regular ChemProp model](#training-a-regular-chemprop-model)
 
 
 ## Making a dataset
@@ -307,8 +308,8 @@ The script `run_cp/run_all_tls.sh` runs ChemProp using the features generated ab
     - `metrics` (list[str]): Subset of the metrics above. For every metric there exists a corresponding best CP3D model and associated CP3D features. A new ChemProp model will be trained for every different set of these features. The associated ChemProp model will also be scored on that metric. 
     - `feat_options` (list[bool]): Whether to use the CP3D features in the ChemProp model. If you specify [True, False], then separate models will be trained, one in which they are used and one in which they aren't. This might be useful if you want to compare performance with and without 3D features.
     - `mpnn_options` (list[bool]):  Whether to use an MPNN in conjunction with the CP3D features in the ChemProp model. If you specify [True, False], then separate models will be trained, one in which an MPNN is used and one in which it isn't. 
-    - `do_hyperopt` (bool): Perform a hyperparameter optimization before training the model and evaluating on the test set.
-    -   `hyp_config_path` (str): Path to the config path that will be used for hyperparameter optimization before training the final model
+    - `use_hyperopt` (bool): Perform a hyperparameter optimization before training the model and evaluating on the test set.
+    -  `hyp_config_path` (str): Path to the config path that will be used for hyperparameter optimization before training the final model
     - `rerun_hyerpopt` (bool): Do a new hyperparameter optimization even if the results of an optimization are already available in the `hyp_config_path` folder
 
 Examples of the `base_config_path` and `hyp_config_path` files are `run_cp/base_config.json` and `run_cp/base_hyp_config.json`, respectively.
@@ -325,4 +326,14 @@ The script that generates predictions is `run_cp/predict.sh`. Details for the sc
 - `metrics` (list[str]): Optional metrics with which you want to evaluate predictions.
 
 
+# Training a regular ChemProp model
+We also provide a simple wrapper around ChemProp, so that a ChemProp model can be easily trained and compared with a 3D model. We used this script to train a model on CoV data and use it to create fingerprints for transfer learning to CoV-2. The main script is `cp3d/chemprop/cp_train.sh`. This script calls `cp_train.py`, which uses details in `cp_train_config.json`. Its keys are:
+- `base_config_path` (str): Path to the config file for ChemProp
+- `hyp_config_path` (str): Path to the config path that will be used for hyperparameter optimization before training the final model
+- `use_hyperopt` (bool): Perform a hyperparameter optimization before training the model and evaluating on the test set.
+- `rerun_hyerpopt` (bool): Do a new hyperparameter optimization even if the results of an optimization are already available in the `hyp_config_path` folder
+- `metric` (str): Metric to use for evaluating the model.
+- `train_folder` (str): Path to the folder in which training will occur.
+- `cp_folder` (str): The path to the ChemProp folder on your computer
 
+    
