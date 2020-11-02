@@ -15,14 +15,9 @@ def main(base_config_path,
          hyp_config_path,
          train_folder,
          metric,
-         train_feat_path,
-         val_feat_path,
-         test_feat_path,
          cp_folder,
-         features_only,
          use_hyperopt,
          rerun_hyperopt,
-         no_features,
          **kwargs):
     """
     Load pre-set features to train a ChemProp model.
@@ -35,18 +30,12 @@ def main(base_config_path,
         on the given run
       train_folder (str): where you want to store your trained models
       metric (str): what metric you want to optimize in this run
-      train_feat_path (str): where the features of your training set are
-      val_feat_path (str): where the features of your validation set are
-      test_feat_path (str): where the features of your test set are
       cp_folder (str): path to the chemprop folder on your computer
-      features_only (bool): whether to just train with the features and no
-        MPNN
       use_hyperopt (bool): do a hyperparameter optimization before training
         the model
       rerun_hyperopt (bool): whether to rerun hyperparameter optimization if
         `hyp_folder` already exists and has the completion file
         `best_params.json`.
-      no_features (bool): Don't use external features when training model.
     Returns:
       None
     """
@@ -56,15 +45,14 @@ def main(base_config_path,
 
     if use_hyperopt:
 
-        hyp_feat_path = train_feat_path.replace("train", "hyperopt")
         hyp_folder = train_folder + "_hyp"
 
         modify_hyp_config(hyp_config_path=hyp_config_path,
                           metric=metric,
-                          hyp_feat_path=hyp_feat_path,
+                          hyp_feat_path=None,
                           hyp_folder=hyp_folder,
-                          features_only=features_only,
-                          no_features=no_features)
+                          features_only=False,
+                          no_features=False)
 
         hyp_params = cp_hyperopt(cp_folder=cp_folder,
                                  hyp_folder=hyp_folder,
@@ -79,13 +67,13 @@ def main(base_config_path,
 
     modify_config(base_config_path=base_config_path,
                   metric=metric,
-                  train_feat_path=train_feat_path,
-                  val_feat_path=val_feat_path,
-                  test_feat_path=test_feat_path,
+                  train_feat_path=None,
+                  val_feat_path=None,
+                  test_feat_path=None,
                   train_folder=train_folder,
-                  features_only=features_only,
+                  features_only=False,
                   hyp_params=hyp_params,
-                  no_features=no_features)
+                  no_features=False)
 
     # train the model
 
@@ -120,31 +108,17 @@ if __name__ == "__main__":
                         help=("Metric for which to evaluate "
                               "the model performance"),
                         default=None)
-    parser.add_argument("--train_feat_path", type=str,
-                        help=("Path to features file for training set"),
-                        default=None)
-    parser.add_argument("--val_feat_path", type=str,
-                        help=("Path to features file for validation set"),
-                        default=None)
-    parser.add_argument("--test_feat_path", type=str,
-                        help=("Path to features file for test set"),
-                        default=None)
     parser.add_argument("--train_folder", type=str,
                         help=("Folder in which you will store the "
                               "ChemProp model."),
                         default=None)
-    parser.add_argument("--features_only", action='store_true',
-                        help=("Train model with only the stored features"))
     parser.add_argument("--cp_folder", type=str,
                         help=("Path to ChemProp folder."))
-    parser.add_argument("--no_features", action="store_true",
-                        help=("Don't use external features when training "
-                              "model."))
-    parser.add_argument('--this_config_file', type=str,
+    parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments "
                               "for this script. If given, any "
                               "arguments in the file override the "
                               "command line arguments."))
 
-    args = parse_args(parser, config_flag="this_config_file")
+    args = parse_args(parser)
     main(**args.__dict__)

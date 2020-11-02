@@ -1,0 +1,9 @@
+{
+  "base_config_path": "/home/saxelrod/Repo/projects/covid_clean/NeuralForceField/scripts/cp3d/chemprop/base_config.json",
+  "hyp_config_path": "/home/saxelrod/Repo/projects/covid_clean/NeuralForceField/scripts/cp3d/chemprop/base_hyp_config.json",
+  "use_hyperopt": true,
+  "rerun_hyperopt": false,
+  "metric": "prc-auc",
+  "train_folder": "/home/saxelrod/chemprop_cov_2/models/cp_cov",
+  "cp_folder": "/home/saxelrod/Repo/projects/chemprop/chemprop"
+}
