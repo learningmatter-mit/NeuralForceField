@@ -16,7 +16,7 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
            * [SchNet](#schnet)
            * [SchNetFeatures](#schnetfeatures)
            * [ChemProp3D](#chemprop3d)
-           * [ChemProp3D, only bond update](#chemprop3d-only-bond-update)
+           * [ChemProp3D (only bond update)](#chemprop3d-only-bond-update)
         * [Training parameters](#training-parameters)
 - [Hyperparameter optimization](#hyperparameter-optimization)
 - [Transfer learning](#transfer-learning)
@@ -194,7 +194,7 @@ An example of a `ChemProp3D` config file is `train_config.json` (this is the def
 - `same_filters` (bool): Whether to use the same learned SchNet filters for every convolution. 
 
 
-##### ChemProp3D, only bond update
+##### ChemProp3D (only bond update)
 
 - `n_bond_hidden` (int): The dimension of the hidden vector that the bond feature vector is transformed into.
 - `input_layers` (list[dict]): A list of layer dictionaries that tell you how to convert cat([atom_vec, bond_vec]) into a hidden vector. Since `n_atom_basis=133` and `n_bond_features=26`, the input dimension must be `133+26 = 159`. Since `n_bond_hidden=300`, the output dimension must be 300.
