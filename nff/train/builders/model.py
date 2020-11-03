@@ -117,6 +117,7 @@ PARAMS_TYPE = {"SchNet":
                    "grad_keys": list
 
                }
+}
 
 MODEL_DICT = {
     "SchNet": SchNet,
