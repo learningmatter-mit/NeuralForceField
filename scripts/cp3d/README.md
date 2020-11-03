@@ -12,7 +12,7 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
 - [Training](#training)
     * [Running the script](#running-the-script)
     * [The config file](#the-config-file)
-        * [Model parameters]
+        * [Model parameters](#model-parameters)
            * [SchNet](#schnet)
            * [SchNetFeatures](#schnetfeatures)
            * [ChemProp3D](#chemprop3d)
