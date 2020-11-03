@@ -49,7 +49,7 @@ def add_grads(optimizer,
     # the grads. This ensures no differences in the gradients between the
     # different processes, which would occur due to loss of precision
     # if the numbers were added in different orders.
-    
+
     optimizer.zero_grad()
 
     # paths to all pickle files

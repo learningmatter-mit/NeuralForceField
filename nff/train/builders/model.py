@@ -9,6 +9,7 @@ from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import ChemProp3D, OnlyBondUpdateCP3D
+from nff.nn.models.dimenet import DimeNet
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -99,7 +100,21 @@ PARAMS_TYPE = {"SchNet":
                    'output_layers': list,
                    'n_bond_hidden': int,
                    'activation': str
-               }
+               },
+
+               "DimeNet":
+               {
+                   "n_rbf": int,
+                   "cutoff": float,
+                   "envelope_p": int,
+                   "n_spher": int,
+                   "l_spher": int,
+                   "atom_embed_dim": int,
+                   "n_bilinear": int,
+                   "activation": str,
+                   "n_convolutions": int,
+                   "output_keys": list,
+                   "grad_keys": list
 
                }
 
@@ -109,12 +124,14 @@ MODEL_DICT = {
     "WeightedConformers": WeightedConformers,
     "SchNetFeatures": SchNetFeatures,
     "ChemProp3D": ChemProp3D,
-    "OnlyBondUpdateCP3D": OnlyBondUpdateCP3D
+    "OnlyBondUpdateCP3D": OnlyBondUpdateCP3D,
+    "DimeNet": DimeNet
 }
 
 
 class ParameterError(Exception):
     """Raised when a hyperparameter is of incorrect type"""
+
     pass
 
 
@@ -126,9 +143,7 @@ def check_parameters(params_type, params):
     """
     for key, val in params.items():
         if key in params_type and not isinstance(val, params_type[key]):
-            raise ParameterError(
-                '%s is not %s' % (str(key), params_type[key])
-            )
+            raise ParameterError("%s is not %s" % (str(key), params_type[key]))
 
         for model in PARAMS_TYPE.keys():
             if key == "{}_params".format(model.lower()):
@@ -164,11 +179,8 @@ def load_model(path):
     """
 
     if os.path.isdir(path):
-        return torch.load(
-            os.path.join(path, 'best_model'),
-            map_location='cpu'
-        )
+        return torch.load(os.path.join(path, "best_model"), map_location="cpu")
     elif os.path.exists(path):
-        return torch.load(path, map_location='cpu')
+        return torch.load(path, map_location="cpu")
     else:
-        raise FileNotFoundError('{} was not found'.format(path))
+        raise FileNotFoundError("{} was not found".format(path))

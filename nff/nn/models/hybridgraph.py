@@ -39,7 +39,8 @@ class HybridGraphConv(nn.Module):
                              n_filters=n_filters,
                              n_gaussians=n_gaussians, 
                              cutoff=mol_cutoff,
-                             trainable_gauss=trainable_gauss)
+                             trainable_gauss=trainable_gauss,
+                             dropout_rate=0.0)
             for _ in range(mol_n_convolutions)
         ])
         
@@ -48,7 +49,8 @@ class HybridGraphConv(nn.Module):
                              n_filters=n_filters,
                              n_gaussians=n_gaussians, 
                              cutoff=sys_cutoff,
-                             trainable_gauss=trainable_gauss)
+                             trainable_gauss=trainable_gauss,
+                             dropout_rate=0.0)
             for _ in range(sys_n_convolutions)
         ])
 

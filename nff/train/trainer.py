@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import sys
 import copy
+import pickle
 from tqdm import tqdm
 
 from nff.utils.cuda import batch_to, batch_detach
@@ -44,6 +45,19 @@ class Trainer:
             gpus per node, the global rank is 7).
        world_size (int, optional): the total number of gpus over which training is
             parallelized.
+       max_batch_iters (int, optional): if you're training in parallel and have pre-split
+            the datasets that will be loaded on different nodes, the batch sizes per epoch
+            may be different in each dataset. max_batch_iters is the smallest number of
+            batches contained in an epoch among the split datasets.
+       model_kwargs (dict, optional): any kwargs that may be needed when calling the model
+       mol_loss_norm (bool, optional): whether to normalize the loss by the number of molecules
+            in a batch
+       del_grad_interval (int, optional): if training in parallel and writing gradients to disk,
+            this is the number of batches that must pass before deleting old gradients.
+       metric_as_loss (str, optional): if specified, use this metric to determine which validation
+            epoch was the best, rather than the validation loss.
+       metric_objective (str, optional): if metric_as_loss is specified, metric_objective indicates
+            whether the goal is to maximize or minimize `metric_as_loss`.
        epoch_cutoff (int, optional): cut off an epoch after `epoch_cutoff` batches.
             This is useful if you want to validate the model more often than after 
             going through all data points once.
@@ -118,7 +132,7 @@ class Trainer:
             try:
                 self.restore_checkpoint()
                 restore = True
-            except Exception as e:
+            except:
                 pass
         if not restore:
             self.epoch = 0
@@ -161,7 +175,27 @@ class Trainer:
             self._model.load_state_dict(state_dict)
 
     def get_best_model(self):
-        return torch.load(self.best_model)
+        try:
+            return torch.load(self.best_model)
+        except EOFError:
+            # if we had tried to save a model and the
+            # pickling failed (e.g. dimenet), then
+            # load the best state_dict instead
+            state_path = self.best_model + ".pth.tar"
+            state_dict = torch.load(state_path)
+            model = copy.deepcopy(self._model)
+            model.load_state_dict(state_dict["model"])
+
+            return model
+
+    def call_model(self, batch, train):
+
+        if (self.torch_parallel and self.parallel) and not train:
+            model = self._model.module
+        else:
+            model = self._model
+
+        return model(batch, **self.model_kwargs)
 
     def call_model(self, batch, train):
 
@@ -267,9 +301,6 @@ class Trainer:
         return loss
 
     def optim_step(self, batch_num, device):
-
-        # normalize gradients
-
         if self.parallel and not self.torch_parallel:
             self.optimizer = update_optim(optimizer=self.optimizer,
                                           loss_size=self.nloss,
@@ -342,7 +373,6 @@ class Trainer:
                         h.on_batch_begin(self, batch)
 
                     results = self.call_model(batch, train=True)
-
                     mini_loss = self.get_loss(batch, results)
                     self.loss_backward(mini_loss)
                     if not torch.isnan(mini_loss):
@@ -354,9 +384,9 @@ class Trainer:
                     num_batches += 1
 
                     if num_batches == self.mini_batches:
-
                         loss /= self.nloss
                         num_batches = 0
+                        # effective number of batches so far
                         eff_batches = int((j + 1) / self.mini_batches)
 
                         self.optim_step(batch_num=eff_batches,
@@ -396,13 +426,15 @@ class Trainer:
                 for h in self.hooks:
                     h.on_epoch_end(self)
 
-                if self._stop:
-                    break
 
             # Training Ends
             # run hooks & store checkpoint
+
             for h in self.hooks:
                 h.on_train_ends(self)
+
+            if self.base:
+                self.store_checkpoint()
 
         except Exception as e:
             for h in self.hooks:
@@ -453,7 +485,6 @@ class Trainer:
 
         info_file = os.path.join(
             self_folder, "val_epoch_{}".format(self.epoch))
-
         with open(info_file, "w") as f:
             f.write(str(val_loss.item()))
 
@@ -480,10 +511,8 @@ class Trainer:
                 # then no need to load anything
                 if loaded_vals[folder] is not None:
                     continue
-
                 val_file = os.path.join(
                     folder, "val_epoch_{}".format(self.epoch))
-
                 # try opening the file and getting the value
                 try:
                     with open(val_file, "r") as f:

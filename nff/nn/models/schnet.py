@@ -3,10 +3,14 @@ import torch.nn as nn
 from nff.nn.layers import DEFAULT_DROPOUT_RATE
 from nff.nn.modules import (
     SchNetConv,
+    SchNetEdgeUpdate,
     NodeMultiTaskReadOut
 )
-from nff.nn.graphop import batch_and_sum
+from nff.nn.graphop import batch_and_sum, get_atoms_inside_cell
 from nff.nn.utils import get_default_readout
+from nff.nn.activations import shifted_softplus
+from nff.utils.scatter import compute_grad
+import numpy as np
 
 
 class SchNet(nn.Module):

@@ -1,11 +1,11 @@
 from nff.utils.cuda import batch_to, batch_detach
 from nff.data.dataset import concatenate_dict
 
-
 def evaluate(model,
              loader,
              loss_fn,
              device,
+             return_results=True,
              loss_is_normalized=True,
              submodel=None,
              **kwargs):
@@ -23,7 +23,6 @@ def evaluate(model,
 
     for batch in loader:
         # append batch_size
-
         batch = batch_to(batch, device)
 
         vsize = batch['nxyz'].size(0)
@@ -46,14 +45,19 @@ def evaluate(model,
         all_results.append(batch_detach(results))
         all_batches.append(batch_detach(batch))
 
-        del results
-        del batch
+        # del results
+        # del batch
 
     # weighted average over batches
     if loss_is_normalized:
         eval_loss /= n_eval
 
-    all_results = concatenate_dict(*all_results)
-    all_batches = concatenate_dict(*all_batches)
+    if not return_results:
+        return {}, {}, eval_loss
 
-    return all_results, all_batches, eval_loss
+    else:
+        # this step can be slow,
+        all_results = concatenate_dict(*all_results)
+        all_batches = concatenate_dict(*all_batches)
+
+        return all_results, all_batches, eval_loss

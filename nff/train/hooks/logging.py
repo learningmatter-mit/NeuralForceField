@@ -248,7 +248,6 @@ class LoggingHook(Hook):
             for metric in self.metrics:
                 m = metric.aggregate()
                 metric_dic[metric.name] = m
-
         self.metric_dic = metric_dic
 
         return metric_dic
@@ -354,7 +353,6 @@ class CSVHook(LoggingHook):
                 log += ","
 
             metric_dic = self.aggregate(trainer)
-
             for i, metric in enumerate(self.metrics):
                 m = metric_dic[metric.name]
                 if hasattr(m, "__iter__"):

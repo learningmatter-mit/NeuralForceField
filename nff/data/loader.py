@@ -2,17 +2,20 @@ import numpy as np
 import torch
 
 
-REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'bonded_nbr_list']
-NBR_LIST_KEYS = ['bond_idx']
+REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'bonded_nbr_list', 'angle_list']
+NBR_LIST_KEYS = ['bond_idx', 'kj_idx', 'ji_idx']
 IGNORE_KEYS = ['rd_mols']
-
 
 TYPE_KEYS = {
     'atoms_nbr_list': torch.long,
     'nbr_list': torch.long,
     'num_atoms': torch.long,
     'bond_idx': torch.long,
-    'bond_nbrs': torch.long}
+    'bonded_nbr_list': torch.long,
+    'angle_list': torch.long,
+    'ji_idx': torch.long,
+    'kj_idx': torch.long,
+}
 
 
 def collate_dicts(dicts):
@@ -30,6 +33,7 @@ def collate_dicts(dicts):
     # last does not matter
 
     cumulative_atoms = np.cumsum([0] + [d['num_atoms'] for d in dicts])[:-1]
+
     for n, d in zip(cumulative_atoms, dicts):
         for key in REINDEX_KEYS:
             if key in d:
@@ -45,6 +49,11 @@ def collate_dicts(dicts):
                 if key in d:
                     d[key] = d[key] + int(n)
 
+    for n, d in zip(cumulative_nbrs, dicts):
+        for key in NBR_LIST_KEYS:
+            if key in d:
+                d[key] = d[key] + int(n)
+
     # batching the data
     batch = {}
     for key, val in dicts[0].items():
@@ -52,7 +61,7 @@ def collate_dicts(dicts):
             continue
         if type(val) == str:
             batch[key] = [data[key] for data in dicts]
-        elif len(val.shape) > 0:
+        elif hasattr(val, 'shape') and len(val.shape) > 0:
             batch[key] = torch.cat([
                 data[key]
                 for data in dicts

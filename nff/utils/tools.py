@@ -10,21 +10,12 @@ import numpy as np
 import torch
 
 from torch.nn import ModuleDict, Sequential
-# from nff.nn.activations import shifted_softplus
+from nff.nn.activations import shifted_softplus, Swish
 from nff.nn.layers import Dense
 
 import numpy as np
 import torch
 import torch.nn.functional as F
-
-class shifted_softplus(torch.nn.Module):
-
-    def __init__(self):
-        super(shifted_softplus, self).__init__()
-
-    def forward(self, input):
-        return F.softplus(input) - np.log(2.0)
-
 
 __all__ = [
     "set_random_seed",
@@ -42,7 +33,8 @@ layer_types = {
     "sigmoid": torch.nn.Sigmoid,
     "Dropout": torch.nn.Dropout,
     "LeakyReLU": torch.nn.LeakyReLU,
-    "ELU":  torch.nn.ELU
+    "ELU":  torch.nn.ELU,
+    "swish": Swish
 }
 
 

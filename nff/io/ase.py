@@ -5,12 +5,12 @@ import torch
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 from ase.calculators.calculator import Calculator, all_changes
-
 import nff
 import nff.utils.constants as const
 from nff.nn.utils import torch_nbr_list
 from nff.utils.cuda import batch_to
 from nff.data.sparse import sparsify_array
+from nff.train.builders.model import load_model
 
 
 DEFAULT_CUTOFF = 5.0
@@ -27,6 +27,7 @@ class AtomsBatch(Atoms):
         props={},
         cutoff=DEFAULT_CUTOFF,
         nbr_torch=False,
+        directed=False,
         **kwargs
     ):
         """
@@ -44,6 +45,7 @@ class AtomsBatch(Atoms):
         self.nbr_list = props.get('nbr_list', None)
         self.offsets = props.get('offsets', None)
         self.nbr_torch = nbr_torch
+        self.directed = directed
         self.num_atoms = props.get('num_atoms', len(self))
         self.cutoff = cutoff
         self.device = 0
@@ -93,9 +95,10 @@ class AtomsBatch(Atoms):
         """
 
         if self.nbr_torch:
-            edge_from, edge_to, offsets = torch_nbr_list(self, self.cutoff, device=self.device)
+            edge_from, edge_to, offsets = torch_nbr_list(self, self.cutoff, device=self.device, directed=self.directed)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         else:
+            self.wrap()
             edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
             offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]].detach().cpu().numpy()
@@ -217,7 +220,7 @@ class BulkPhaseMaterials(Atoms):
         else:
             edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]].numpy()
+            offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]]#.numpy()
             nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
         if exclude_atoms_nbr_list:
@@ -237,7 +240,7 @@ class BulkPhaseMaterials(Atoms):
             offsets = offsets_mat[nbr_list[:,0], nbr_list[:,1], :]
 
         self.nbr_list = nbr_list
-        self.offsets = sparsify_array(offsets.dot(self.get_cell()))
+        self.offsets = sparsify_array(offsets.matmul( torch.Tensor(self.get_cell())))
         
     def get_list_atoms(self):
 
@@ -334,8 +337,7 @@ class NeuralFF(Calculator):
 
         # add keys so that the readout function can calculate these properties
         batch['energy'] = []
-        if 'forces' in properties:
-            batch['energy_grad'] = []
+        batch['energy_grad'] = []
 
         prediction = self.model(batch)
 
@@ -346,7 +348,7 @@ class NeuralFF(Calculator):
         ).cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
 
         self.results = {
-            'energy': energy.reshape(-1),
+            'energy': energy.reshape(-1)
         }
 
         if 'forces' in properties:
@@ -359,5 +361,134 @@ class NeuralFF(Calculator):
         device='cuda',
         **kwargs
     ):
-        model = nff.train.builders.models.load_model(model_path)
+
+        model = load_model(model_path)
+
         return cls(model, device, **kwargs)
+
+
+class EnsembleNFF(Calculator):
+    """Produces an ensemble of NFF calculators to predict the discrepancy between
+        the properties"""
+    implemented_properties = ['energy', 'forces']
+
+    def __init__(
+        self,
+        models: list,
+        device='cpu',
+        **kwargs
+    ):
+        """Creates a NeuralFF calculator.nff/io/ase.py
+
+        Args:
+            model (TYPE): Description
+            device (str): device on which the calculations will be performed 
+            **kwargs: Description
+            model (one of nff.nn.models)
+        """
+
+        Calculator.__init__(self, **kwargs)
+        self.models = models
+        for m in self.models: 
+            m.eval()
+        self.device = device
+        self.to(device)
+
+    def to(self, device):
+        self.device = device
+        for m in self.models:
+            m.to(device)
+
+    def calculate(
+        self,
+        atoms=None,
+        properties=['energy', 'forces'],
+        system_changes=all_changes,
+    ):
+        """Calculates the desired properties for the given AtomsBatch.
+
+        Args:
+            atoms (AtomsBatch): custom Atoms subclass that contains implementation
+                of neighbor lists, batching and so on. Avoids the use of the Dataset
+                to calculate using the models created.
+            properties (list of str): 'energy', 'forces' or both
+            system_changes (default from ase)
+        """
+
+        Calculator.calculate(self, atoms, properties, system_changes)
+
+        # run model
+        #atomsbatch = AtomsBatch(atoms)
+        # batch_to(atomsbatch.get_batch(), self.device)
+        batch = batch_to(atoms.get_batch(), self.device)
+
+        # add keys so that the readout function can calculate these properties
+        batch['energy'] = []
+        if 'forces' in properties:
+            batch['energy_grad'] = []
+
+        energies = []
+        gradients = []
+        for model in self.models:
+            prediction = model(batch)
+
+            # change energy and force to numpy array
+            energies.append(
+                prediction['energy']
+                .detach()
+                .cpu()
+                .numpy()
+                * (1 / const.EV_TO_KCAL_MOL)
+            )
+            gradients.append(
+                prediction['energy_grad']
+                .detach()
+                .cpu()
+                .numpy()
+                * (1 / const.EV_TO_KCAL_MOL)
+            )
+
+        energies = np.stack(energies)
+        gradients = np.stack(gradients)
+
+        self.results = {
+            'energy': energies.mean(0).reshape(-1),
+            'energy_std': energies.std(0).reshape(-1),
+        }
+
+        if 'forces' in properties:
+            self.results['forces'] = -gradients.mean(0).reshape(-1, 3)
+            self.results['forces_std'] = gradients.std(0).reshape(-1, 3)
+
+        atoms.results = self.results.copy()
+
+
+    @classmethod
+    def from_files(
+        cls,
+        model_paths: list,
+        device='cuda',
+        **kwargs
+    ):
+        models = [
+            load_model(path)
+            for path in model_paths
+        ]
+        return cls(models, device, **kwargs)
+
+
+class NeuralOptimizer:
+    def __init__(
+        self,
+        optimizer,
+        nbrlist_update_freq=5
+    ):
+        self.optimizer = optimizer
+        self.update_freq = nbrlist_update_freq
+
+    def run(self, fmax=0.2, steps=1000):
+        epochs = steps // self.update_freq
+        
+        for step in range(epochs):
+            self.optimizer.run(fmax=fmax, steps=self.update_freq)
+            self.optimizer.atoms.update_nbr_list()

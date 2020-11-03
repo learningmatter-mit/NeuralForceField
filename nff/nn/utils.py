@@ -1,5 +1,6 @@
 """Tools to build layers"""
 import collections
+import numpy as np
 import torch
 import copy
 
@@ -94,28 +95,30 @@ def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
 
     Returns:
         i, j, cutoff: just like ase.neighborlist.neighbor_list
-
     """
     xyz = torch.Tensor(atomsobject.get_positions(wrap=True)).to(device)
     dis_mat = xyz[None, :, :] - xyz[:, None, :]
-    cell_dim = torch.Tensor(atomsobject.get_cell()).diag().to(device)
 
-    offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + \
-        dis_mat.lt(-0.5 * cell_dim).to(torch.float)
-    dis_mat = dis_mat + offsets * cell_dim
+    if any(atomsobject.pbc):
+        cell_dim = torch.Tensor(atomsobject.get_cell()).diag().to(device)
+
+        offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + dis_mat.lt(-0.5 * cell_dim).to(torch.float)
+        dis_mat = dis_mat + offsets * cell_dim
 
     dis_sq = dis_mat.pow(2).sum(-1)
     mask = (dis_sq < cutoff ** 2) & (dis_sq != 0)
 
     nbr_list = mask.nonzero()
-    if directed:
+    if not directed:
         nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
     i, j = nbr_list[:, 0].detach().to("cpu").numpy(
     ), nbr_list[:, 1].detach().to("cpu").numpy()
 
-    offsets = offsets[nbr_list[:, 0],
-                      nbr_list[:, 1], :].detach().to("cpu").numpy()
+    if any(atomsobject.pbc):
+        offsets = offsets[nbr_list[:, 0], nbr_list[:, 1], :].detach().to("cpu").numpy()
+    else:
+        offsets = np.zeros((nbr_list.shape[0], 3))
 
     return i, j, offsets
 
@@ -216,8 +219,6 @@ def chemprop_msg_update(h, nbrs):
     # map from indices `h_to_add` to the indices of `message`
     match_idx = mask.nonzero()[:, 0]
     graph_size = h.shape[0]
-
-    # add together
 
     message = scatter_add(src=h_to_add,
                           index=match_idx,
