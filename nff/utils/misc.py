@@ -5,6 +5,8 @@ import subprocess
 import os
 import random
 
+# optimization goal for various metrics
+
 METRIC_DIC = {"pr_auc": "maximize",
               "roc_auc": "maximize",
               "class_loss": "minimize",
@@ -21,6 +23,8 @@ CHEMPROP_TRANSFORM = {"auc": "roc_auc",
                       "binary_cross_entropy": "class_loss",
                       "mse": "regress_loss"}
 
+# metrics available in chemprop
+
 CHEMPROP_METRICS = ["auc",
                     "prc-auc",
                     "rmse",
@@ -33,6 +37,15 @@ CHEMPROP_METRICS = ["auc",
 
 
 def tqdm_enum(iter):
+    """
+    Wrap tqdm around `enumerate`.
+    Args:
+        iter (iterable): an iterable (e.g. list)
+    Returns
+        i (int): current index
+        y: current value
+    """
+
     i = 0
     for y in tqdm(iter):
         yield i, y
@@ -40,7 +53,22 @@ def tqdm_enum(iter):
 
 
 def parse_args(parser, config_flag="config_file"):
+    """
+    Parse arguments.
+    Args:
+        parser (argparse.ArgumentParser): argument parser
+        config_flag (str): name of the arg key
+            that gives the name of the config file.
+    Returns:
+        args (argparse.Namespace): arguments
+    """
+
+    # parse the arguments
     args = parser.parse_args()
+
+    # if the config path is specified, then load
+    # arguments from that file and apply the results
+    # to `args`
 
     config_path = getattr(args, config_flag, None)
     if config_path is not None:
@@ -53,6 +81,13 @@ def parse_args(parser, config_flag="config_file"):
 
 
 def fprint(msg):
+    """
+    Print a string immediately.
+    Args:
+        msg (str): string to print
+    Returns:
+        None
+    """
     print(msg)
     sys.stdout.flush()
 
@@ -69,6 +104,14 @@ def bash_command(cmd):
 
 
 def convert_metric(metric):
+    """
+    Convert a metric name to a fixed name that can be used in 
+    various scripts.
+    Args:
+        metric (str): input metric
+    Returns:
+        metric (str): output metric
+    """
     if metric in ["prc_auc", "prc-auc"]:
         metric = "pr_auc"
     elif metric in ["auc", "roc-auc"]:
@@ -77,7 +120,19 @@ def convert_metric(metric):
 
 
 def prepare_metric(lines, metric):
-
+    """
+    Get various metric quantities before parsing a log fine.
+    Args:
+        lines (list[str]): lines in the log file
+        metric (str): name of metric
+    Returns:
+        idx (int): index at which the metric score occurs
+            when the given line has been split by `|`
+        best_score (float): initial best score
+        best_epoch (int): initial best_epoch
+        optim (str): goal of the metric optimization (i.e.
+            minimize or maximize.)
+    """
     header_items = [i.strip() for i in lines[0].split("|")]
     metric = convert_metric(metric)
     if "loss" in metric:
@@ -102,6 +157,15 @@ def prepare_metric(lines, metric):
 
 
 def parse_score(model_path, metric):
+    """
+    Find the best score and best epoch according to a given metric.
+    Args:
+        model_path (str): path to the training folder
+        metric (str): name of metric
+    Returns:
+        best_score (float): best validation score
+        best_epoch (int): epoch with the best validation score
+    """
 
     log_path = os.path.join(model_path, "log_human_read.csv")
     with open(log_path, "r") as f:
@@ -126,6 +190,13 @@ def parse_score(model_path, metric):
 
 
 def read_csv(path):
+    """
+    Read a csv into a dictionary.
+    Args:
+        path (str): path to the csv file
+    Returns:
+        dic (dict): dictionary version of the file
+    """
     with open(path, "r") as f:
         lines = f.readlines()
 
@@ -145,6 +216,14 @@ def read_csv(path):
 
 
 def write_csv(path, dic):
+    """
+    Write a dictionary to a csv.
+    Args:
+        path (str): path to the csv file
+        dic (dict): dictionary
+    Returns:
+        None
+    """
 
     keys = sorted(list(dic.keys()))
     if "smiles" in keys:
@@ -167,6 +246,21 @@ def prop_split(max_specs,
                props,
                sample_dic,
                seed):
+    """
+    Sample a set of smiles strings by up to a maximum number. If the
+    property of interest is a binary value, try to get as many of the
+    underrepresented class as possible.
+    Args:
+        max_specs (int): maximum number of species
+        dataset_type (str): type of problem (classification or regression)
+        props (list[str]): names of properties you'll be fitting
+        sample_dic (dict): dictionary of the form {smiles: sub_dic} for the
+            set of smiles strings, where sub_dic contains other information,
+            e.g. about `props`.
+        seed (int): random seed for sampling
+    Returns:
+        keep_smiles (list[str]): sampled smiles strings.
+    """
 
     random.seed(seed)
 
