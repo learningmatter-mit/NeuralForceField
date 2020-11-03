@@ -196,6 +196,8 @@ An example of a `ChemProp3D` config file is `train_config.json` (this is the def
 
 ##### ChemProp3D (only bond update)
 
+Here  only the bonds are updated, and the updated hidden bond vectors are concatenated with distance feature vectors. The keys of note are:
+
 - `n_bond_hidden` (int): The dimension of the hidden vector that the bond feature vector is transformed into.
 - `input_layers` (list[dict]): A list of layer dictionaries that tell you how to convert cat([atom_vec, bond_vec]) into a hidden vector. Since `n_atom_basis=133` and `n_bond_features=26`, the input dimension must be `133+26 = 159`. Since `n_bond_hidden=300`, the output dimension must be 300.
 - `output_layers` (list[dict]): Same idea as for `ChemProp3D`, but here `edge_vec` has length `n_bond_hidden + n_filters`, because it is a concatenation of the graph edge features and the 3D geometry edge features. Therefore, `output_layers` must have an input dimension of `n_atom_basis + n_bond_hidden + n_filters = 133 + 300 + 64 = 497`. 
