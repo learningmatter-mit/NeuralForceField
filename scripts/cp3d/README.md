@@ -12,10 +12,11 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
 - [Training](#training)
     * [Running the script](#running-the-script)
     * [The config file](#the-config-file)
-        * [SchNet model parameters](#schnet-model-parameters)
-        * [SchNetFeatures model parameters](#schnetfeatures-model-parameters)
-        * [ChemProp3D model parameters](#chemprop3d-model-parameters)
-        * [ChemProp3D (only bond update) model parameters](#chemprop3d-%29(only-bond-update%29)-model-parameters)
+        * [Model parameters]
+           * [SchNet](#schnet)
+           * [SchNetFeatures](#schnetfeatures)
+           * [ChemProp3D](#chemprop3d)
+           * [ChemProp3D (only bond update)](#chemprop3d-%29(only-bond-update%29))
         * [Training parameters](#training-parameters)
 - [Hyperparameter optimization](#hyperparameter-optimization)
 - [Transfer learning](#transfer-learning)
@@ -133,8 +134,8 @@ The script loads parameters from `scripts/cp3d/train/train_config.json`. The two
     - An assortment of other keys, which depend on the model type. Below we go through each key for the two different model types.
 
     
-    
-#### SchNet model parameters
+#### Model parameters
+##### SchNet
 
 An example of a `WeightedConformers` config file is `schnet_config.json`. An example of parameters for each of the four models can be found in the `06_cp3d.ipynb` tutorial. The keys required for `WeightedConformers` are as follows:
 
@@ -176,13 +177,13 @@ In the example given in `schnet_config.json`, a vector of size 900 (3x `mol_basi
 - `grad_keys` (list[str]): any values for which you also want the gradient with respect to nuclear coordinates. For example, if you are predicting energies then you may also want the gradients, as the negative gradients are the nuclear forces.
 
 
-#### SchNetFeatures model parameters
+##### SchNetFeatures
 Most of the parameters are the same as in WeightedConformers, with a few notes and additions:
 - `n_atom_basis` (int): This is also present for SchNet conformers. But there it could be any number, and here it must be equal to the dimension of the atomic feature vector generated from the molecular graph. In ChemProp3D that number is 133.
 - `n_atom_hidden` (int): dimension of the atomic hidden vector. The model transforms the atom feature vector from `n_atom_basis` to `n_atom_hidden` (in this case, from 133 to 300).
 - `n_bond_hidden` (int): The dimension of the hidden vector that the bond feature vector is transformed into.
     
-#### ChemProp3D model parameters
+##### ChemProp3D
 
 An example of a `ChemProp3D` config file is `train_config.json` (this is the default used in `train_parallel.sh` and `train_single.sh`). Most of the keys required for `WeightedConformers` are the same as for weighted SchNet conformers. The remaining keys are as follows:
     
@@ -193,7 +194,7 @@ An example of a `ChemProp3D` config file is `train_config.json` (this is the def
 - `same_filters` (bool): Whether to use the same learned SchNet filters for every convolution. 
 
 
-#### ChemProp3D (only bond update) model parameters
+##### ChemProp3D (only bond update)
 
 - `n_bond_hidden` (int): The dimension of the hidden vector that the bond feature vector is transformed into.
 - `input_layers` (list[dict]): A list of layer dictionaries that tell you how to convert cat([atom_vec, bond_vec]) into a hidden vector. Since `n_atom_basis=133` and `n_bond_features=26`, the input dimension must be `133+26 = 159`. Since `n_bond_hidden=300`, the output dimension must be 300.
