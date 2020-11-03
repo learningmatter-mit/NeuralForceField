@@ -35,22 +35,20 @@ def make_hyp_csvs(base_config_path,
     with open(base_config_path, "r") as f:
         base_dic = json.load(f)
 
-    # find out what the hyperparameter csv path should be
+    # load the SMILES strings from the train and validation
+    # paths, then sample them
     train_path = base_dic["data_path"]
-    smiles_folder = "/".join(train_path.split("/")[:-1])
-    hyp_path = os.path.join(smiles_folder, "hyperopt_full.csv")
-
-    # otherwise load the SMILES strings from the train and
-    # validation paths, then sample them
-
     val_path = base_dic.get("separate_val_path")
     paths = [train_path, val_path]
+
+    # initialize the dictionary by reading the train data
     prop_dic = read_csv(paths[0])
 
-    for path in paths[1:]:
-        if path is None:
-            continue
-        new_dic = read_csv(path)
+    # if the validation data is separate, add the data lists
+    # together
+
+    if val_path is not None:
+        new_dic = read_csv(val_path)
         for key, val in new_dic.items():
             prop_dic[key] += val
 
@@ -79,6 +77,8 @@ def make_hyp_csvs(base_config_path,
         new_dic.update({prop: [sample_dic[key][prop]
                                for key in keep_smiles]})
 
+    smiles_folder = "/".join(train_path.split("/")[:-1])
+    hyp_path = os.path.join(smiles_folder, "hyperopt_full.csv")
     write_csv(hyp_path, new_dic)
 
 
