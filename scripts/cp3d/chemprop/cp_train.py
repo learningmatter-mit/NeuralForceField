@@ -9,8 +9,8 @@ import os
 
 from nff.utils import (parse_args, CHEMPROP_METRICS,
                        prop_split, read_csv, write_csv)
-from nff.io.chemprop import (cp_train, cp_hyperopt,
-                             modify_config, modify_hyp_config)
+from nff.io.cprop import (cp_train, cp_hyperopt,
+                          modify_config, modify_hyp_config)
 
 
 def make_hyp_csvs(base_config_path,

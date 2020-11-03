@@ -9,7 +9,7 @@ import pickle
 import numpy as np
 import argparse
 
-from nff.io.chemprop import get_smiles, save_smiles, save_hyperopt
+from nff.io.cprop import get_smiles, save_smiles, save_hyperopt
 from nff.utils import parse_args, fprint
 
 

@@ -6,7 +6,8 @@ from nff.data.graphs import get_bond_idx
 
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.modules import (ChemPropConv, ChemPropMsgToNode,
-                            ChemPropInit, SchNetEdgeFilter)
+                            ChemPropInit, SchNetEdgeFilter,
+                            CpSchNetConv)
 from nff.utils.tools import make_directed
 
 REINDEX_KEYS = ["nbr_list", "bonded_nbr_list"]
@@ -459,5 +460,175 @@ class ChemProp3D(WeightedConformers):
 
         new_node_feats = torch.cat(new_node_feat_list)
         xyz = torch.cat(xyz_list)
+
+        return new_node_feats, xyz
+
+
+class OnlyBondUpdateCP3D(ChemProp3D):
+
+    def __init__(self, modelparams):
+        """
+        Initialize model.
+        Args:
+            modelparams (dict): dictionary of parameters for the model
+        Returns:
+            None
+        """
+
+        WeightedConformers.__init__(self, modelparams)
+
+        input_layers = modelparams["input_layers"]
+        output_layers = modelparams["output_layers"]
+
+        # make the convolutions, the input network W_i, and the output
+        # network W_o
+
+        self.W_i = ChemPropInit(input_layers=input_layers)
+        self.convolutions = self.make_convs(modelparams)
+        self.W_o = ChemPropMsgToNode(
+            output_layers=output_layers)
+
+        # dimension of the hidden bond vector
+        self.n_bond_hidden = modelparams["n_bond_hidden"]
+
+    def make_convs(self, modelparams):
+        """
+        Make the convolution layers.
+        Args:
+            modelparams (dict): dictionary of parameters for the model
+        Returns:
+            convs (nn.ModuleList): list of networks for each convolution
+        """
+
+        num_conv = modelparams["n_convolutions"]
+        same_filters = modelparams["same_filters"]
+
+        # call `CpSchNetConv` to make the convolution layers
+        convs = nn.ModuleList([CpSchNetConv(**modelparams)
+                               for _ in range(num_conv)])
+
+        # if you want to use the same filters for every convolution, repeat
+        # the initial network and delete all the others
+        if same_filters:
+            convs = nn.ModuleList([convs[0] for _ in range(num_conv)])
+
+        return convs
+
+    def make_h(self,
+               batch,
+               nbr_list,
+               r,
+               nbr_was_directed):
+        """
+        Initialize the hidden bond features.
+        Args:
+            batch (dict): batched sample of species
+            nbr_list (torch.LongTensor): neighbor list
+            r (torch.Tensor): initial atom features
+            nbr_was_directed (bool): whether the old neighbor list
+                was directed or not
+        Returns:
+            h_0 (torch.Tensor): initial hidden bond features
+            bond_nbrs (torch.LongTensor): bonded neighbor list
+            bond_idx (torch.LongTensor): indices that map
+                an element of `bond_nbrs` to the corresponding
+                element in `nbr_list`. 
+        """
+
+        # get the directed bond list and bond features
+
+        bond_nbrs, was_directed = make_directed(batch["bonded_nbr_list"])
+        bond_feats = batch["bond_features"]
+        device = bond_nbrs.device
+
+        # if it wasn't directed before, repeat the bond features twice
+        if not was_directed:
+            bond_feats = torch.cat([bond_feats] * 2, dim=0)
+
+        # initialize hidden bond features
+
+        h_0_bond = self.W_i(r=r,
+                            bond_feats=bond_feats,
+                            bond_nbrs=bond_nbrs)
+
+        # initialize `h_0`, the features of all edges
+        # (including bonded ones), to zero
+
+        nbr_dim = nbr_list.shape[0]
+        h_0 = torch.zeros((nbr_dim,  self.n_bond_hidden))
+        h_0 = h_0.to(device)
+
+        # set the features of bonded edges equal to the bond
+        # features
+
+        if "bond_idx" in batch:
+            bond_idx = batch["bond_idx"]
+            if not nbr_was_directed:
+                nbr_dim = nbr_list.shape[0]
+                bond_idx = torch.cat([bond_idx,
+                                      bond_idx + nbr_dim // 2])
+        else:
+            bonded_nbr_list = batch["bonded_nbr_list"]
+            bond_idx = get_bond_idx(bonded_nbr_list, nbr_list)
+
+        h_0[bond_idx] = h_0_bond
+
+        return h_0, bond_nbrs, bond_idx
+
+    def convolve_sub_batch(self,
+                           batch,
+                           xyz=None,
+                           xyz_grad=False):
+        """
+        Apply the convolution layers to a sub-batch.
+        Args:
+            batch (dict): batched sample of species
+            xyz (torch.Tensor): xyz of the batch
+            xyz_grad (bool): whether to set xyz.requires_grad = True
+        Returns:
+            new_node_feats (torch.Tensor): new node features after
+                the convolutions.
+            xyz (torch.Tensor): xyz of the batch
+        """
+
+        if xyz is None:
+            xyz = batch["nxyz"][:, 1:4]
+
+        if xyz_grad:
+            xyz.requires_grad = True
+
+        a, nbr_was_directed = make_directed(batch["nbr_list"])
+        # get the atom features
+        r = batch["atom_features"]
+        offsets = batch.get("offsets", 0)
+        # get the distances between neighbors
+        e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
+             offsets).pow(2).sum(1).sqrt()[:, None]
+
+        # initialize hidden bond features
+        h_0, bond_nbrs, bond_idx = self.make_h(
+            batch=batch,
+            nbr_list=a,
+            r=r,
+            nbr_was_directed=nbr_was_directed)
+
+        h_new = h_0.clone()
+
+        # update edge features
+
+        for conv in self.convolutions:
+
+            h_new = conv(h_0=h_0,
+                         h_new=h_new,
+                         all_nbrs=a,
+                         bond_nbrs=bond_nbrs,
+                         bond_idx=bond_idx,
+                         e=e)
+
+        # convert back to node features
+
+        new_node_feats = self.W_o(r=r,
+                                  h=h_new,
+                                  nbrs=a)
 
         return new_node_feats, xyz

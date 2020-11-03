@@ -5,7 +5,7 @@ import argparse
 
 from nff.utils import (bash_command, parse_args, fprint,
                        CHEMPROP_METRICS)
-from nff.io.chemprop import save_hyperopt
+from nff.io.cprop import save_hyperopt
 
 
 def to_npz(csv):
