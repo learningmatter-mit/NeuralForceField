@@ -2,10 +2,11 @@
   "cp_folder": "/home/saxelrod/Repo/projects/chemprop/chemprop",
   "feature_folder": "/home/saxelrod/chemprop_cov_2/features/cp_model",
   "model_folder_paths": ["/home/saxelrod/chemprop_cov_1/chemprop_auc",
-                         "/home/saxelrod/chemprop_cov_1/chemprop_prc"],
+                         "/home/saxelrod/chemprop_cov_1/prc"],
   "metrics": ["auc", "prc-auc"],
   "device": 0,
-  "smiles_folder": "/home/saxelrod/chemprop_cov_2/scaffold_split"
+  "smiles_folder": "/home/saxelrod/chemprop_cov_2/scaffold_split",
+  "hyper_dset_size": null
 }
 
 

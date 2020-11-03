@@ -4,6 +4,8 @@
   "use_hyperopt": true,
   "rerun_hyperopt": false,
   "metric": "prc-auc",
-  "train_folder": "/home/saxelrod/chemprop_cov_2/models/cp_cov",
-  "cp_folder": "/home/saxelrod/Repo/projects/chemprop/chemprop"
+  "train_folder": "/home/saxelrod/chemprop_cov_1/models/cp_cov_prc",
+  "cp_folder": "/home/saxelrod/Repo/projects/chemprop/chemprop",
+  "seed": 0,
+  "max_hyp_specs": 10000
 }
