@@ -168,70 +168,93 @@ class SchNetConv(MessagePassingModule):
 
 class MixedSchNetConv(MessagePassingModule):
 
-    """The convolution layer with filter.
-
-    Attributes:
-        moduledict (TYPE): Description
+    """
+    SchNet convolution applied to edge features from both
+    distances and bond features. 
     """
 
     def __init__(
         self,
-        n_atom_basis,
+        n_atom_hidden,
         n_filters,
         dropout_rate,
         n_bond_hidden,
         activation='shifted_softplus'
     ):
+        """
+        Args:
+            n_atom_hidden (int): hidden dimension of the atom
+                features. Same as `n_atom_basis` in regular
+                SchNet, but different than `n_atom_basis` in
+                SchNetFeatures, where `n_atom_basis` is the initial
+                dimension of the atom feature vector and
+                `n_atom_hidden` is its dimension after going through
+                another network.
+            n_filters (int): dimension of the distance hidden vector
+            dropout_rate (float): dropout rate
+            n_bond_hidden (int): dimension of the bond hidden vector
+            activation (str): nonlinear activation name
+        Returns:
+            None
+        """
         super(MixedSchNetConv, self).__init__()
         self.moduledict = ModuleDict(
             {
 
+                # convert the atom features to the dimension
+                # of cat(hidden_distance, hidden_bond)
                 "message_node_filter": Dense(
-                    in_features=n_atom_basis,
+                    in_features=n_atom_hidden,
                     out_features=(n_filters + n_bond_hidden),
                     dropout_rate=dropout_rate,
                 ),
+                # after multiplying edge features with
+                # node features, convert them back to size
+                # `n_atom_hidden`
                 "update_function": Sequential(
                     Dense(
                         in_features=(n_filters + n_bond_hidden),
-                        out_features=n_atom_basis,
+                        out_features=n_atom_hidden,
                         dropout_rate=dropout_rate,
                     ),
                     layer_types[activation](),
                     Dense(
-                        in_features=n_atom_basis,
-                        out_features=n_atom_basis,
+                        in_features=n_atom_hidden,
+                        out_features=n_atom_hidden,
                         dropout_rate=dropout_rate,
                     ),
                 ),
             }
         )
 
-    def message(self, r, e, a, aggr_wgt=None):
+    def message(self, r, e, a):
         """The message function for SchNet convoltuions 
         Args:
-            r (TYPE): node inputs
-            e (TYPE): edge inputs
-            a (TYPE): neighbor list
-            aggr_wgt (None, optional): Description
+            r (torch.Tensor): node inputs
+            e (torch.Tensor): edge inputs
+            a (torch.Tensor): neighbor list
 
         Returns:
-            TYPE: message should a pair of message and
+            message (torch.Tensor): message from adjacent
+                atoms.
         """
         # convection: update
         r = self.moduledict["message_node_filter"](r)
-
-        # soft aggr if aggr_wght is provided
-        if aggr_wgt is not None:
-            r = r * aggr_wgt
-
-        # combine node and edge info
-        message = r[a[:, 0]] * e, r[a[:, 1]] * \
-            e  # (ri [] eij) -> rj, []: *, +, (,)
+        # assumes directed neighbor list; no need
+        # to supplement with r[a[:, 1]]
+        message = r[a[:, 0]] * e
         return message
 
     def update(self, r):
         return self.moduledict["update_function"](r)
+
+    def forward(self, r, e, a):
+
+        graph_size = r.shape[0]
+        rij = self.message(r, e, a)
+        r = self.aggregate(rij, a[:, 1], graph_size)
+        r = self.update(r)
+        return r
 
 
 class GraphAttention(MessagePassingModule):
@@ -749,10 +772,9 @@ class ChemPropConv(MessagePassingModule):
 
 
 class CpSchNetConv(ChemPropConv):
-
     """
-    Module for mixing the ChemProp convolution with a distance-based
-    SchNet convolution.
+    Module for combining a ChemProp convolution with non-convolved
+    distance features. 
     """
 
     def __init__(
@@ -771,19 +793,18 @@ class CpSchNetConv(ChemPropConv):
     ):
         """
         Args:
-            n_bond_hidden (int): dimensionality of the hideen bond features
-            cp_dropout (float): dropout rate for the ChemProp convolutions
-            gauss_embed (bool): whether to embed the distances in a Gaussian
-                basis.
-            cutoff (float): distance cutoff for the 3D convolutions.
-            n_gaussians (int): number of Gaussians in which to expand the 
+            n_bond_hidden (int): bond feature hidden dimension
+            cp_dropout (float): dropout rate for the ChemProp convolution
+            gauss_embed (bool): whether to embed distances in a
+                basis of Gaussians.
+            cutoff (float): neighbor list cutoff
+            n_gaussians (int): number of Gaussians in which to expand
                 distances.
-            trainable_gauss (bool): whether the parameters of the Gaussians
-                (width and center locations) are learnable parameters.
-            n_filters (int): dimensionality of the 3D edge feature
-            schnet_dropout (float): dropout rate for the SchNet convolutions
-            activation (str): name of non-linear activation function
-
+            trainable_gauss (bool): whether Gaussian spacings and widths
+                are learnable parameters.
+            n_filters (int): hidden distance feature dimension
+            schnet_dropout (float): dropout rate for SchNet embedding
+            activation (str): name of nonlinear activation function
         Returns:
             None
         """
@@ -796,7 +817,8 @@ class CpSchNetConv(ChemPropConv):
         self.n_bond_hidden = n_bond_hidden
         self.moduledict = ModuleDict({})
 
-        schnet_hidden_dim = n_filters if (gauss_embed) else 1
+        if not gauss_embed:
+            return
 
         edge_filter = Sequential(
             GaussianSmearing(
@@ -812,67 +834,23 @@ class CpSchNetConv(ChemPropConv):
             ),
             layer_types[activation]())
 
-        # layers to apply to schnet edge vectors after they've been
-        # updated
+        self.moduledict["edge_filter"] = edge_filter
 
-        schnet_layers = Sequential(
-            Dense(
-                in_features=schnet_hidden_dim,
-                out_features=schnet_hidden_dim,
-                dropout_rate=schnet_dropout,
-            ),
-            layer_types[activation]())
-
-        self.moduledict.update({"edge_filter": edge_filter,
-                                "schnet_layers": schnet_layers})
-        if not gauss_embed:
-            self.moduledict.pop("edge_filter")
-
-        self.update_schnet = True
-
-    def schnet_msg(self,
-                   e,
-                   nbr_list):
-
-        # this doesn't work because of the indexing --
-        # nbr_list = [0, 1] has indices corresponding to
-        # atoms, not to the edge vector.
-
-        # if we really want to do this then we have to go
-        # full-blown chemprop on all of it. Which could be
-        # very slow, although if we have `bond_idx` and a
-        # larger sub-batch size it could be doable?
-
-        # What's the alternative? A SchNet atom feature-based
-        # update? Probably makes the most sense.
-
-        if self.update_schnet:
-            # add edge features of anything that is in
-            # another's neighbor list
-            e[nbr_list[:, 0]] += e[nbr_list[:, 1]]
-
-            # apply nonlinearities
-            e = self.moduledict["schnet_layers"](e)
-
-        return e
-
-    def add_schnet_feats(self,
-                         h_schnet,
-                         h_new,
-                         nbr_list):
+    def add_schnet_feats(self, e, h_new):
         """
-        Add SchNet edge features to the updated hidden bond features.
+        Add distance features to the ChemProp updated bond
+        features.
         Args:
-            h_schnet (torch.Tensor): edge features based on distances
-            h_new (torch.Tensor): new hidden bond features
-            nbr_list (torch.LongTensor): neighbor list
+            e (torch.Tensor): distance features
+            h_new (torch.Tensor): updated bond features 
         Returns:
-            new_msg (torch.Tesnor): combination of distance and bond
-                features.
+            new_msg (torch.Tensor): concatenation of
+                bond and distance edge features.
         """
 
-        e = self.schnet_msg(e=e,
-                            nbr_list=nbr_list)
+        if "edge_filter" in self.moduledict:
+            e = self.moduledict["edge_filter"](e)
+
         new_msg = torch.cat((h_new, e), dim=1)
 
         return new_msg
@@ -882,73 +860,68 @@ class CpSchNetConv(ChemPropConv):
                 h_new,
                 all_nbrs,
                 bond_nbrs,
-                bond_idx):
+                bond_idx,
+                e):
         """
-        Call the module.
+        Update the edge features.
         Args:
-            h_0 (torch.Tensor): initial hidden edge
-                vector.
-            h_new (torch.Tensor): latest hidden edge vector
-            all_nbrs (torch.LongTensor): 3D neighbor list
-            bond_nbrs (torch.LongTensor): bonded neighbor list
-            bond_idx (torch.LongTensor): indices that map
-                an element of `bond_nbrs` to the corresponding
-                element in `nbr_list`. 
-
+            h_0 (torch.Tensor): original edge features
+            h_new (torch.Tensor): latest updated version
+                of edge features.
+            all_nbrs (torch.LongTensor): full neighbor list
+            bond_nbrs (torch.LongTensor): bonded neighbor
+                list
+            bond_idx (torch.LongTensor): a list that maps a bonded
+                pair to the corresponding index in the neighbor list.
+            e (torch.Tensor): distances between atoms
         Returns:
-            final_h (torch.Tensor): updated edge features after
-                onvolution.
+            final_h (torch.Tensor): new updated version of edge features
         """
 
-        # for backward compatability
-        if not hasattr(self, "update_schnet"):
-            self.update_schnet = False
-
-        if self.update_schnet:
-            cp_msg = self.message(h_new=h_new,
-                                  nbrs=all_nbrs)
-            final_h = self.update(msg=cp_msg,
-                                  h_0=h_0)
-            return final_h
-
-        # extract the ChemProp bond features from the complete set
-        # of features
+        # `h_new` is a concatenation of the ChemProp hidden vector h
+        # with the distance features. So we slice from 0 to self.n_bond_hidden,
+        # then select only the non-zero indices at `bond_idx`, to get the
+        # latest ChemProp edge vector
 
         cp_h = h_new[:, :self.n_bond_hidden][bond_idx]
+
+        # `h_0` is only a ChemProp vector, but padded with zeros
         h0_bond = h_0[bond_idx]
 
-        # get the ChemProp message and update the hidden bond vector
-        # with this message
-
+        # get the ChemProp message and update the ChemProp `h`
         cp_msg = self.message(h_new=cp_h,
                               nbrs=bond_nbrs)
         h_new_bond = self.update(msg=cp_msg,
                                  h_0=h0_bond)
 
-        # make the entire hiddne edge vector by putting zeros for
-        # every pair of atoms that isn't bonded
-
+        # pad it back with zeros for non-bonded atoms
         nbr_dim = all_nbrs.shape[0]
         h_new = torch.zeros((nbr_dim,  self.n_bond_hidden))
         h_new = h_new.to(bond_idx.device)
         h_new[bond_idx] = h_new_bond
 
-        # extract the SchNet edge features from the complete set
-        # of features
-
-        h_schnet = h_new[:, self.n_bond_hidden, :]
-
-        # add the SchNet features
-
-        final_h = self.add_schnet_feats(h_schnet=h_schnet,
-                                        h_new=h_new,
-                                        nbr_list=all_nbrs)
+        # concatenate with SchNet distance features
+        final_h = self.add_schnet_feats(e=e,
+                                        h_new=h_new)
 
         return final_h
 
 
 class ChemPropMsgToNode(nn.Module):
+    """
+    Convert ChemProp edge features to message features.
+    """
+
     def __init__(self, output_layers):
+        """
+        Args:
+            output_layers (list[dict]): instructions for
+                making the output layers applied after the
+                initial node features get concatenated with
+                the edge-turned-node updated features.
+        Returns:
+            None 
+        """
         nn.Module.__init__(self)
 
         # remove bias from linear layers if there
@@ -957,6 +930,16 @@ class ChemPropMsgToNode(nn.Module):
         self.output = construct_sequential(new_layers)
 
     def forward(self, r, h, nbrs):
+        """
+        Call the module.
+        Args:
+            r (torch.Tensor): initial node features
+            h (torch.Tensor): latest edge features
+            nbrs (torch.LongTensor): neighbor list
+        Returns:
+            new_node_feats (torch.Tensor): latest node
+                features.
+        """
         num_nodes = r.shape[0]
         msg_to_node = chemprop_msg_to_node(h=h,
                                            nbrs=nbrs,
@@ -968,8 +951,20 @@ class ChemPropMsgToNode(nn.Module):
 
 
 class ChemPropInit(nn.Module):
+    """
+    Initial module that converts node and edge features
+    to hidden edge features in ChemProp.
+    """
 
     def __init__(self, input_layers):
+        """
+        Args:
+            input_layers (list[dict]): instructions for
+                making the input layers applied to the node
+                and edge features.
+        Returns:
+            None 
+        """
         nn.Module.__init__(self)
 
         # remove bias from linear layers if there
@@ -978,6 +973,15 @@ class ChemPropInit(nn.Module):
         self.input = construct_sequential(new_layers)
 
     def forward(self, r, bond_feats, bond_nbrs):
+        """
+        Call the module.
+        Args:
+            r (torch.Tensor): initial node features
+            bond_feats (torch.Tensor): initial bond features
+            bond_nbrs (torch.LongTensor): bonded neighbor list
+        Returns:
+            hidden_feats (torch.Tensor): hidden edge features
+        """
         cat_feats = torch.cat((r[bond_nbrs[:, 0]], bond_feats),
                               dim=1)
         hidden_feats = self.input(cat_feats)

@@ -6,7 +6,7 @@ from nff.data.graphs import get_bond_idx
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.modules import SchNetEdgeFilter, MixedSchNetConv
 from nff.nn.layers import Dense
-from nff.utils.tools import layer_types
+from nff.utils.tools import layer_types, make_directed
 
 
 class SchNetFeatures(WeightedConformers):
@@ -43,11 +43,12 @@ class SchNetFeatures(WeightedConformers):
         n_gaussians = modelparams["n_gaussians"]
         cutoff = modelparams["cutoff"]
         activation = modelparams["activation"]
+        n_atom_hidden = modelparams["n_atom_hidden"]
 
         self.convolutions = nn.ModuleList(
             [
                 MixedSchNetConv(
-                    n_atom_basis=n_atom_basis,
+                    n_atom_hidden=n_atom_hidden,
                     n_filters=n_filters,
                     dropout_rate=dropout_rate,
                     n_bond_hidden=n_bond_hidden,
@@ -80,25 +81,46 @@ class SchNetFeatures(WeightedConformers):
                 dropout_rate=dropout_rate)
         )
 
-    def find_bond_idx(self, batch, nbr_list):
+        self.atom_filter = Sequential(
+            Dense(
+                in_features=n_atom_basis,
+                out_features=n_atom_hidden,
+                dropout_rate=dropout_rate),
+            layer_types[activation](),
+            Dense(
+                in_features=n_atom_hidden,
+                out_features=n_atom_hidden,
+                dropout_rate=dropout_rate)
+        )
+
+    def find_bond_idx(self,
+                      batch):
         """
         Get `bond_idx`, which map bond indices to indices
         in the neighbor list.
         Args:
             batch (dict): dictionary of props
-            nbr_list (torch.LongTensor): neighbor list
         Returns:
             bond_idx (torch.LongTensor): index map
         """
 
+        nbr_list, was_directed = make_directed(batch["nbr_list"])
+
         if "bond_idx" in batch:
             bond_idx = batch["bond_idx"]
+            if not was_directed:
+                nbr_dim = nbr_list.shape[0]
+                bond_idx = torch.cat([bond_idx,
+                                      bond_idx + nbr_dim // 2])
         else:
             bonded_nbr_list = batch["bonded_nbr_list"]
             bond_idx = get_bond_idx(bonded_nbr_list, nbr_list)
         return bond_idx
 
-    def convolve(self, batch, xyz=None):
+    def convolve(self,
+                 batch,
+                 xyz=None,
+                 **kwargs):
         """
 
         Apply the convolutional layers to the batch.
@@ -120,15 +142,17 @@ class SchNetFeatures(WeightedConformers):
             xyz = batch["nxyz"][:, 1:4]
             xyz.requires_grad = True
 
-        a = batch["nbr_list"]
-
+        a, nbr_was_directed = make_directed(batch["nbr_list"])
         bond_features = self.bond_filter(batch["bond_features"])
+        if not nbr_was_directed:
+            bond_features = torch.cat([bond_features, bond_features])
+
         bond_dim = bond_features.shape[1]
         num_pairs = a.shape[0]
         bond_edge_features = torch.zeros(num_pairs, bond_dim
                                          ).to(a.device)
 
-        bond_idx = self.find_bond_idx(batch, a)
+        bond_idx = self.find_bond_idx(batch)
         bond_edge_features[bond_idx] = bond_features
 
         # offsets take care of periodic boundary conditions
@@ -140,7 +164,7 @@ class SchNetFeatures(WeightedConformers):
         e = torch.cat([bond_edge_features, distance_feats],
                       dim=-1)
 
-        r = batch["atom_features"]
+        r = self.atom_filter(batch["atom_features"])
 
         # update function includes periodic boundary conditions
 

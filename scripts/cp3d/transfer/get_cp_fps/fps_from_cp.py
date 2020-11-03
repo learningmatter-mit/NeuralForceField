@@ -5,6 +5,7 @@ import argparse
 
 from nff.utils import (bash_command, parse_args, fprint,
                        CHEMPROP_METRICS)
+from nff.io.cprop import save_hyperopt
 
 
 def to_npz(csv):
@@ -52,7 +53,8 @@ def summarize(save_paths, feat_folder):
     Summarize where the files were saved and what their contents are.
     Args:
       save_paths (list[str]): list of the paths to all the saved features files
-      feat_folder (str): path to the folder that contains all the feature files.
+      feat_folder (str): path to the folder that contains all the feature
+      files.
     Returns:
       None
     """
@@ -74,6 +76,7 @@ def main(cp_folder,
          device,
          smiles_folder,
          metrics,
+         hyper_dset_size,
          **kwargs):
     """
     Get fingerprints from a pre-trained chemprop model.
@@ -84,13 +87,16 @@ def main(cp_folder,
         you're making fingerprints.
       device (Union[str, int]): device to evaluate the model on
       smiles_folder (str): folder with the csvs
-      metrics (list[str]): names of the metrics corresponding to each 
+      metrics (list[str]): names of the metrics corresponding to each
         ChemProp model name.
+      hyper_dset_size (int): maximum size of the entire dataset to use in
+        hyperparameter optimization.
 
     """
 
     script = os.path.join(cp_folder, "predict.py")
     save_paths = []
+    hyper_paths = []
 
     for model_path, metric in zip(model_folder_paths, metrics):
 
@@ -107,7 +113,8 @@ def main(cp_folder,
 
         # make the chemprop command
 
-        cmd = (f"python {script} "
+        cmd = ("source activate chemprop && "
+               f"python {script} "
                f" --checkpoint_paths {check_str} "
                f"--as_featurizer ")
 
@@ -138,7 +145,15 @@ def main(cp_folder,
             np_save_path = to_npz(feat_path)
             save_paths.append(np_save_path)
 
-    summarize(save_paths, feature_folder)
+        # make hyperparameter optimization splits
+        hyp_save_path = save_hyperopt(feat_folder=feature_folder,
+                                      metric=metric,
+                                      smiles_folder=smiles_folder,
+                                      cp_save_folder=feature_folder,
+                                      dset_size=hyper_dset_size)
+        hyper_paths.append(hyp_save_path)
+
+    summarize(save_paths + hyper_paths, feature_folder)
 
 
 if __name__ == "__main__":
@@ -161,6 +176,9 @@ if __name__ == "__main__":
                         help=("Device to evaluate the model on"))
     parser.add_argument('--smiles_folder', type=str,
                         help=("Folder with the csvs"))
+    parser.add_argument('--hyper_dset_size', type=int,
+                        help=("Maximum size of the entire dataset to use in "
+                              "hyperparameter optimization. "))
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "

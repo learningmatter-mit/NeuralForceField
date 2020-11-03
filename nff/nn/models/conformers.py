@@ -11,7 +11,6 @@ from nff.nn.modules import (
 from nff.nn.graphop import conf_pool
 from nff.nn.utils import construct_sequential
 from nff.utils.scatter import compute_grad
-from torch import sigmoid
 
 
 class WeightedConformers(nn.Module):
@@ -605,7 +604,7 @@ class WeightedConformers(nn.Module):
         if self.classifier and not self.training:
             keys = list(self.readout.readout.keys())
             for key in keys:
-                results[key] = sigmoid(results[key])
+                results[key] = torch.sigmoid(results[key])
 
         # add any required gradients
         results = self.add_grad(batch=batch, results=results, xyz=xyz)

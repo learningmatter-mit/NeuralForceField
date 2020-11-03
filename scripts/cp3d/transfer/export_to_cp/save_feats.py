@@ -8,69 +8,9 @@ import os
 import pickle
 import numpy as np
 import argparse
-# import json
-# from pathlib import Path
 
-# from nff.utils import bash_command
+from nff.io.cprop import get_smiles, save_smiles, save_hyperopt
 from nff.utils import parse_args, fprint
-
-
-def get_smiles(smiles_folder, name):
-    """
-    Get SMILES strings from csv.
-    Args:
-      smiles_folder (str): folder with the csvs
-      name (str): csv file name
-    Returns:
-      smiles_list (list[str]): SMILES strings 
-    """
-
-    path = os.path.join(smiles_folder, name)
-    with open(path, "r") as f:
-        lines = f.readlines()
-    smiles_list = [i.strip() for i in lines[1:]]
-    return smiles_list
-
-
-def save_smiles(smiles_folder, smiles_list, name):
-    """
-    Re-save the SMILES strings, ignoring those that aren't in
-    `smiles_list`.
-
-    Args:
-      smiles_folder (str): folder with the csvs
-      smiles_list (list[str]): SMILES strings that we will use
-        in training -- excludes those that, for example, do not
-        have 3D structures.
-      name (str): csv file name
-
-    Returns:
-      None
-
-    """
-
-    # both the file with only the SMILES string, and the file
-    # that has the SMILES string with its properties (e.g. bind /
-    # no bind):
-
-    file_names = [f"{name}_smiles.csv", f"{name}_full.csv"]
-    paths = [os.path.join(smiles_folder, name) for name in
-             file_names]
-    for path in paths:
-        with open(path, "r") as f:
-            lines = f.readlines()
-        keep_lines = [lines[0]]
-        for line in lines[1:]:
-            smiles = line.split(",")[0].strip()
-
-            # keep the line only if the SMILES string is in
-            # `smiles_list`
-
-            if smiles in smiles_list:
-                keep_lines.append(line)
-        text = "".join(keep_lines)
-        with open(path, "w") as f:
-            f.write(text)
 
 
 def get_name(path):
@@ -87,94 +27,8 @@ def get_name(path):
         name = splits[-2]
     else:
         name = splits[-1]
+
     return name
-
-
-def make_hyperopt_csvs(smiles_folder, all_smiles):
-    """
-    Make csv files with SMILES strings for hyperparameter optimization.
-    Args:
-      smiles_folder (str): folder with the csvs
-      all_smiles (list[str]): combined train and val SMILES for hyperparameter
-        optimization that are actually used
-    Returns:
-      None
-    """
-
-    # full csv with properties, and just smiles csv
-    suffixes = ["smiles", "full"]
-    # dictionary with the combined lines read from train and val csvs
-    # for each of the suffixes
-    combined_lines = {suffix: [] for suffix in suffixes}
-
-    for i, name in enumerate(["train", "val"]):
-        for suffix in suffixes:
-            file_path = os.path.join(smiles_folder, f"{name}_{suffix}.csv")
-            with open(file_path, "r") as f:
-                lines = f.readlines()
-
-            # only include the header in the first file
-            if i != 0:
-                lines = lines[1:]
-            combined_lines[suffix] += lines
-
-    # write to new hyperopt csvs
-    for suffix, lines in combined_lines.items():
-        text = "".join(lines)
-        new_path = os.path.join(smiles_folder, f"hyperopt_{suffix}.csv")
-        with open(new_path, "w") as f:
-            f.write(text)
-
-    # re-save to account for the fact that not all smiles are used
-    save_smiles(smiles_folder, all_smiles, name="hyperopt")
-
-
-def save_hyperopt(feat_folder,
-                  metric,
-                  smiles_folder,
-                  cp_save_folder,
-                  dset_size):
-    """
-    Aggregate and save the train and validation SMILES for hyperparameter optimization.
-    Args:
-      feat_folder (str): path to the folder that contains all the feature files.
-      metric (str): metric with which you're evaluating the model performance
-      smiles_folder (str): folder with the csvs
-      cp_save_folder (str): folder in which you're saving features for chemprop use
-      dset_size (int, optional): maximum size of the entire dataset to use in hyperparameter 
-        optimization.
-    Returns:
-      hyp_np_path (str): path of npz features file for hyperparameter optimization
-    """
-
-    names = ["train", "val"]
-    all_feats = []
-    all_smiles = []
-
-    for name in names:
-        smiles_list = get_smiles(smiles_folder, f"{name}_smiles.csv")
-        np_save_path = os.path.join(cp_save_folder,
-                                    f"{name}_{metric}.npz")
-        feats = np.load(np_save_path)['features']
-        all_feats.append(feats)
-        all_smiles += smiles_list
-
-    all_feats = np.concatenate(all_feats)
-
-    if dset_size is not None:
-        all_smiles = all_smiles[:dset_size]
-        all_feats = all_feats[:dset_size]
-
-    # save the entire train + val dataset features
-    hyp_np_path = os.path.join(cp_save_folder,
-                               f"hyperopt_{metric}.npz")
-    np.savez_compressed(hyp_np_path, features=all_feats)
-
-    # save csvs for the train + val dataset
-    make_hyperopt_csvs(smiles_folder=smiles_folder,
-                       all_smiles=all_smiles)
-
-    return hyp_np_path
 
 
 def summarize(save_paths, feat_folder):
@@ -211,7 +65,7 @@ def main(feat_folder,
       metrics (list[str]): metrics with which you'll evaluate the model performance
       smiles_folder (str): folder with the csvs
       cp_save_folder (str): folder in which you're saving features for chemprop use
-      hyper_dset_size (int, optional): maximum size of the entire dataset to use in hyperparameter 
+      hyper_dset_size (int): maximum size of the entire dataset to use in hyperparameter 
         optimization. 
     Returns:
       None
