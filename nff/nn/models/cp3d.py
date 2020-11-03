@@ -71,8 +71,7 @@ class ChemProp3D(WeightedConformers):
         """
 
         num_conv = modelparams["n_convolutions"]
-        modelparams.update({"n_edge_hidden": modelparams["mol_basis"],
-                            "dropout_rate": modelparams["dropout_rate"]})
+        modelparams.update({"n_edge_hidden": modelparams["mol_basis"]})
 
         # call `CpSchNetConv` to make the convolution layers
         convs = nn.ModuleList([ChemPropConv(**modelparams)
@@ -158,7 +157,7 @@ class ChemProp3D(WeightedConformers):
         cp_bond_feats = self.W_i_cp(r=r,
                                     bond_feats=bond_feats,
                                     bond_nbrs=bond_nbrs)
-        h_0_bond = torch.zeros((nbr_list.shape[0],  cp_bond_feats.shape[1]))
+        h_0_bond = torch.zeros((nbr_list.shape[0], cp_bond_feats.shape[1]))
         h_0_bond = h_0_bond.to(device)
         h_0_bond[bond_idx] = cp_bond_feats
 
