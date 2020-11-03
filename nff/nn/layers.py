@@ -3,6 +3,7 @@ import sympy as sym
 import torch
 import torch.nn as nn
 from torch.nn.init import xavier_uniform_, constant_
+import numpy as np
 
 from nff.utils import bessel_basis, real_sph_harm
 
