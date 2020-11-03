@@ -168,70 +168,93 @@ class SchNetConv(MessagePassingModule):
 
 class MixedSchNetConv(MessagePassingModule):
 
-    """The convolution layer with filter.
-
-    Attributes:
-        moduledict (TYPE): Description
+    """
+    SchNet convolution applied to edge features from both
+    distances and bond features. 
     """
 
     def __init__(
         self,
-        n_atom_basis,
+        n_atom_hidden,
         n_filters,
         dropout_rate,
         n_bond_hidden,
         activation='shifted_softplus'
     ):
+        """
+        Args:
+            n_atom_hidden (int): hidden dimension of the atom
+                features. Same as `n_atom_basis` in regular
+                SchNet, but different than `n_atom_basis` in
+                SchNetFeatures, where `n_atom_basis` is the initial
+                dimension of the atom feature vector and
+                `n_atom_hidden` is its dimension after going through
+                another network.
+            n_filters (int): dimension of the distance hidden vector
+            dropout_rate (float): dropout rate
+            n_bond_hidden (int): dimension of the bond hidden vector
+            activation (str): nonlinear activation name
+        Returns:
+            None
+        """
         super(MixedSchNetConv, self).__init__()
         self.moduledict = ModuleDict(
             {
 
+                # convert the atom features to the dimension
+                # of cat(hidden_distance, hidden_bond)
                 "message_node_filter": Dense(
-                    in_features=n_atom_basis,
+                    in_features=n_atom_hidden,
                     out_features=(n_filters + n_bond_hidden),
                     dropout_rate=dropout_rate,
                 ),
+                # after multiplying edge features with
+                # node features, convert them back to size
+                # `n_atom_hidden`
                 "update_function": Sequential(
                     Dense(
                         in_features=(n_filters + n_bond_hidden),
-                        out_features=n_atom_basis,
+                        out_features=n_atom_hidden,
                         dropout_rate=dropout_rate,
                     ),
                     layer_types[activation](),
                     Dense(
-                        in_features=n_atom_basis,
-                        out_features=n_atom_basis,
+                        in_features=n_atom_hidden,
+                        out_features=n_atom_hidden,
                         dropout_rate=dropout_rate,
                     ),
                 ),
             }
         )
 
-    def message(self, r, e, a, aggr_wgt=None):
+    def message(self, r, e, a):
         """The message function for SchNet convoltuions 
         Args:
-            r (TYPE): node inputs
-            e (TYPE): edge inputs
-            a (TYPE): neighbor list
-            aggr_wgt (None, optional): Description
+            r (torch.Tensor): node inputs
+            e (torch.Tensor): edge inputs
+            a (torch.Tensor): neighbor list
 
         Returns:
-            TYPE: message should a pair of message and
+            message (torch.Tensor): message from adjacent
+                atoms.
         """
         # convection: update
         r = self.moduledict["message_node_filter"](r)
-
-        # soft aggr if aggr_wght is provided
-        if aggr_wgt is not None:
-            r = r * aggr_wgt
-
-        # combine node and edge info
-        message = r[a[:, 0]] * e, r[a[:, 1]] * \
-            e  # (ri [] eij) -> rj, []: *, +, (,)
+        # assumes directed neighbor list; no need
+        # to supplement with r[a[:, 1]]
+        message = r[a[:, 0]] * e
         return message
 
     def update(self, r):
         return self.moduledict["update_function"](r)
+
+    def forward(self, r, e, a):
+
+        graph_size = r.shape[0]
+        rij = self.message(r, e, a)
+        r = self.aggregate(rij, a[:, 1], graph_size)
+        r = self.update(r)
+        return r
 
 
 class GraphAttention(MessagePassingModule):

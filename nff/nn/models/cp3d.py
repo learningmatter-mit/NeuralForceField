@@ -49,8 +49,6 @@ class ChemProp3D(WeightedConformers):
         self.convolutions = self.make_convs(modelparams)
         self.W_o = ChemPropMsgToNode(output_layers=output_layers)
 
-        # dimension of the hidden bond vector
-        self.n_bond_hidden = modelparams["n_bond_hidden"]
         # dimension of the hidden SchNet distance edge ector
         self.n_filters = modelparams["n_filters"]
 
@@ -74,7 +72,7 @@ class ChemProp3D(WeightedConformers):
 
         num_conv = modelparams["n_convolutions"]
         modelparams.update({"n_edge_hidden": modelparams["mol_basis"],
-                            "dropout_rate": modelparams["schnet_dropout"]})
+                            "dropout_rate": modelparams["dropout_rate"]})
 
         # call `CpSchNetConv` to make the convolution layers
         convs = nn.ModuleList([ChemPropConv(**modelparams)
@@ -124,7 +122,6 @@ class ChemProp3D(WeightedConformers):
 
     def make_h(self,
                batch,
-               nbr_list,
                r,
                xyz,
                offsets):
@@ -132,7 +129,6 @@ class ChemProp3D(WeightedConformers):
         Initialize the hidden edge features.
         Args:
             batch (dict): batched sample of species
-            nbr_list (torch.LongTensor): neighbor list
             r (torch.Tensor): initial atom features
             xyz (torch.Tensor): xyz of the batch
             offsets (float): periodic boundary condition offsets
@@ -401,7 +397,6 @@ class ChemProp3D(WeightedConformers):
 
         # initialize hidden bond features
         h_0 = self.make_h(batch=batch,
-                          nbr_list=a,
                           r=r,
                           xyz=xyz,
                           offsets=offsets)
