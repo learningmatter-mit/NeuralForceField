@@ -13,7 +13,9 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
     * [Running the script](#running-the-script)
     * [The config file](#the-config-file)
         * [SchNet model parameters](#schnet-model-parameters)
+        * [SchNetFeatures model parameters](#schnetfeatures-model-parameters)
         * [ChemProp3D model parameters](#chemprop3d-model-parameters)
+        * [ChemProp3D (only bond update) model parameters](#chemprop3d-(only-bond-update)-model-parameters)
         * [Training parameters](#training-parameters)
 - [Hyperparameter optimization](#hyperparameter-optimization)
 - [Transfer learning](#transfer-learning)
@@ -127,14 +129,14 @@ Now that we have a dataset, we're ready to train a model! The model can be train
 The script loads parameters from `scripts/cp3d/train/train_config.json`. The two main keys in this file are `model_params` and `train_params`.
 
 - `model_params` (dict): A dictionary with all parameters required to create a model. Its sub-keys are:
-    - `model_type` (str): The kind of model you want to make. The currently supported options are `WeightedConformers`, which builds a SchNet model with pooled conformer fingerprints, and `SchNetFeatures`, which builds a ChemProp3D model with pooled conformers. If your dataset only contains one conformer per species, then each model will still work!
+    - `model_type` (str): The kind of model you want to make. The currently supported options are `WeightedConformers`, which builds a SchNet model with pooled conformer fingerprints, `SchNetFeatures`, which builds a weighted SchNet model but with added graph-based node and bond features, `ChemProp3D`, which builds a ChemProp3D model with pooled conformers, and `OnlyBondUpdateCP3D`, which is `ChemProp3D` but without updating the distance-based edge features (it only concatenates them with updated graph-based edge features). If your dataset only contains one conformer per species, then each model will still work!
     - An assortment of other keys, which depend on the model type. Below we go through each key for the two different model types.
 
     
     
 #### SchNet model parameters
 
-An example of a `WeightedConformers` config file is `schnet_config.json`. The keys required for `WeightedConformers` are as follows:
+An example of a `WeightedConformers` config file is `schnet_config.json`. An example of parameters for each of the four models can be found in the `06_cp3d.ipynb` tutorial. The keys required for `WeightedConformers` are as follows:
 
 - `mol_basis` (int): Dimension of the molecular fingerprint
 - `dropout_rate` (float) : Dropout rate applied to the convolutional layers
@@ -174,20 +176,32 @@ In the example given in `schnet_config.json`, a vector of size 900 (3x `mol_basi
 - `grad_keys` (list[str]): any values for which you also want the gradient with respect to nuclear coordinates. For example, if you are predicting energies then you may also want the gradients, as the negative gradients are the nuclear forces.
 
 
+#### SchNetFeatures model parameters
+Most of the parameters are the same as in WeightedConformers, with a few notes and additions:
+- `n_atom_basis` (int): This is also present for SchNet conformers. But there it could be any number, and here it must be equal to the dimension of the atomic feature vector generated from the molecular graph. In ChemProp3D that number is 133.
+- `n_atom_hidden` (int): dimension of the atomic hidden vector. The model transforms the atom feature vector from `n_atom_basis` to `n_atom_hidden` (in this case, from 133 to 300).
+- `n_bond_hidden` (int): The dimension of the hidden vector that the bond feature vector is transformed into.
     
 #### ChemProp3D model parameters
-
 
 An example of a `ChemProp3D` config file is `train_config.json` (this is the default used in `train_parallel.sh` and `train_single.sh`). Most of the keys required for `WeightedConformers` are the same as for weighted SchNet conformers. The remaining keys are as follows:
     
 - `n_atom_basis` (int): This is also present for SchNet conformers. But there it could be any number, and here it must be equal to the dimension of the atomic feature vector generated from the molecular graph. In ChemProp3D that number is 133.
-- `n_bond_features` (int): Same as `n_atom_basis`, but for the bond features. It must be equal to the dimension of the bond feature vector generated from the molecular graph. In ChemProp3D that number is 26.
+- `cp_input_layers` (list[dict]): layers that convert node and bond features into hidden bond features. There are 133 atom features and 26 bond features, so there must be a total 159 of input features      
+- `schnet_input_layers` (list[dict]): layers that convert node and distance features to hidden distance features. There are 133 atom features and 64 distance features (`n_filters = 64`), meaing there must be 197 input features.
+- `output_layers` (list[dict]): A list of layer dictionaries that tells you how to convert cat([atom_vec, edge_vec]) into a set of atomic feature vectors after the convolutions. Here `atom_vec` is the initial atomic feature vector and `edge_vec` is the updated edge feature vector after convolutions. `edge_vec` has length `n_atom_basis + mol_basis = 133 + 300 = 433`. Therefore, `output_layers` must have an input dimension of 433. Its output can have any size. However, if the output size is not equal to `mol_basis`, then `mol_fp_layers` must account for this to make a molecular feature vector of the right size.
+- `same_filters` (bool): Whether to use the same learned SchNet filters for every convolution. 
+
+
+#### ChemProp3D (only bond update) model parameters
+
 - `n_bond_hidden` (int): The dimension of the hidden vector that the bond feature vector is transformed into.
 - `input_layers` (list[dict]): A list of layer dictionaries that tell you how to convert cat([atom_vec, bond_vec]) into a hidden vector. Since `n_atom_basis=133` and `n_bond_features=26`, the input dimension must be `133+26 = 159`. Since `n_bond_hidden=300`, the output dimension must be 300.
-- `output_layers` (list[dict]): A list of layer dictionaries that tell you how to convert cat([atom_vec, edge_vec]) into a set of atomic feature vectors after the convolutions. Here `atom_vec` is the initial atomic feature vector and `edge_vec` is the updated edge feature vector after convolutions. `edge_vec` has length `n_bond_hidden + n_filters`, because it is a concatenation of the graph edge features and the 3D geometry edge features. Therefore, `output_layers` must have an input dimension of `n_atom_basis + n_bond_hidden + n_filters = 133 + 300 + 64 = 497`. Its output can have any size. However, if the output size is not equal to `mol_basis`, then `mol_fp_layers` must account for this to make a molecular feature vector of the right size.
-- `same_filters` (bool): Whether to use the same learned SchNet filters for every convolution. This was false in the original SchNet paper.
+- `output_layers` (list[dict]): Same idea as for `ChemProp3D`, but here `edge_vec` has length `n_bond_hidden + n_filters`, because it is a concatenation of the graph edge features and the 3D geometry edge features. Therefore, `output_layers` must have an input dimension of `n_atom_basis + n_bond_hidden + n_filters = 133 + 300 + 64 = 497`. 
+- `cp_dropout` (float): Dropout rate in the ChemProp layers that create hidden bond features
+- `schnet_dropout` (float): Dropout rate in the SchNet layers that create distance features
 
-        
+
 #### Training parameters
 
 - `train_params` (dict): A dictionary with information about the training process. The required keys are the same for all model types. They are:
