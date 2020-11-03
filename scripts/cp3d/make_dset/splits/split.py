@@ -9,7 +9,6 @@ import numpy as np
 import json
 import shutil
 import argparse
-import random
 import copy
 from rdkit import Chem
 from tqdm import tqdm
