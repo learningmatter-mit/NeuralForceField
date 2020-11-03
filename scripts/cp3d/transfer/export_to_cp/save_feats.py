@@ -9,8 +9,7 @@ import pickle
 import numpy as np
 import argparse
 
-from nff.io.chemprop import (get_smiles, save_smiles, make_hyperopt_csvs,
-                             save_hyperopt)
+from nff.io.chemprop import get_smiles, save_smiles, save_hyperopt
 from nff.utils import parse_args, fprint
 
 
@@ -28,6 +27,7 @@ def get_name(path):
         name = splits[-2]
     else:
         name = splits[-1]
+
     return name
 
 
