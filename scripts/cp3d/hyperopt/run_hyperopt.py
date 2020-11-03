@@ -1,3 +1,7 @@
+"""
+Script to optimize hyperparameters for 3D models.
+"""
+
 import os
 import json
 import argparse
