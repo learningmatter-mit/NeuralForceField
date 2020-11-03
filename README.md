@@ -15,7 +15,6 @@ This software requires the following packages:
 - [sympy=1.6.1](https://www.sympy.org/)
 - [rdkit=2020.03.3](https://www.rdkit.org/)
 - [sigopt=5.3.1](https://sigopt.com/)
-- [munch=2.5.0](https://pypi.org/project/munch/)
 - [e3fp=1.2.1](https://github.com/keiserlab/e3fp)
 - [ipykernel==5.3.0](https://github.com/ipython/ipykernel)
 - [hyperopt=0.2.5](https://github.com/hyperopt/hyperopt)
@@ -31,7 +30,7 @@ Next install remaining pip requirements:
 
 ```bash
 conda activate nff
-pip install munch sigopt e3fp ipykernel
+pip install sigopt e3fp ipykernel
 ```
 
 To ensure that the `nff` environment is accessible through Jupyter, add the the `nff` display name:
