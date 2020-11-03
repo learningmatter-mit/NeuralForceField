@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from pymatgen.core.structure import Structure
+# from pymatgen.core.structure import Structure
 
 
 def get_crystal_graph(crystal, cutoff):

@@ -1,14 +1,12 @@
 import numpy as np
 import networkx as nx
 import torch
-from ase import io
-import numpy as np
-import nff
+from ase import Atoms
+
 
 DISTANCETHRESHOLDICT_SYMBOL = {
     ("H", "H"): 1.00,
     ("H", "Li"): 1.30,
-    ("H", "N"): 1.50,
     ("H", "C"): 1.30,
     ("H", "N"): 1.30,
     ("H", "O"): 1.30,
@@ -101,6 +99,29 @@ DISTANCETHRESHOLDICT_Z = {
     (8., 35.): 1.70,
     (9., 12.): 1.35}
 
+def make_directed(nbr_list):
+    """
+    Convert an undirected neighbor list into a directed
+    one.
+    Args:
+        nbr_list (torch.Tensor): array with the
+            indices of connected atoms.
+    Returns:
+        nbr_list (torch.Tensor): directed form of the neighbor
+            list.
+        directed (bool): whether it was already directed before
+    """
+
+    gtr_ij = (nbr_list[:, 0] > nbr_list[:, 1]).any().item()
+    gtr_ji = (nbr_list[:, 1] > nbr_list[:, 0]).any().item()
+    directed = gtr_ij and gtr_ji
+
+    if directed:
+        return nbr_list, directed
+
+    new_nbrs = torch.cat([nbr_list, nbr_list.flip(1)], dim=0)
+    return new_nbrs, directed
+
 
 def get_neighbor_list(xyz, cutoff=5, undirected=True):
     """Get neighbor list from xyz positions of atoms.
@@ -120,8 +141,8 @@ def get_neighbor_list(xyz, cutoff=5, undirected=True):
     n = xyz.size(0)
 
     # calculating distances
-    dist = (xyz.expand(n, n, 3) - xyz.expand(n, n,
-                                             3).transpose(0, 1)).pow(2).sum(dim=2).sqrt()
+    dist = (xyz.expand(n, n, 3) - xyz.expand(n, n, 3).transpose(0, 1)
+            ).pow(2).sum(dim=2).sqrt()
 
     # neighbor list
     mask = (dist <= cutoff)
@@ -132,6 +153,94 @@ def get_neighbor_list(xyz, cutoff=5, undirected=True):
         nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
     return nbr_list
+
+
+def to_tuple(tensor):
+    """
+    Convert tensor to tuple.
+    Args:
+        tensor (torch.Tensor): any tensor
+    Returns:
+        tup (tuple): tuple form
+    """
+    tup = tuple(tensor.cpu().tolist())
+    return tup
+
+
+def get_bond_idx(bonded_nbr_list, nbr_list):
+    """
+    For each index in the bond list, get the
+    index in the neighbour list that corresponds to the
+    same directed pair of atoms.
+    Args:
+        bonded_nbr_list (torch.LongTensor): pairs
+            of bonded atoms.
+        nbr_list (torch.LongTensor): pairs of atoms
+            within a cutoff radius of each other.
+    Returns:
+        bond_idx (torch.LongTensor): set of indices in the 
+            neighbor list that corresponds to the same 
+            directed pair of atoms in the bond list.
+    """
+
+    # make them both directed
+
+    # make the neighbour list into a dictionary of the form
+    # {(atom_0, atom_1): nbr_list_index} for each pair of atoms
+    nbr_dic = {to_tuple(pair): i for i, pair in enumerate(nbr_list)}
+    # call the dictionary for each pair of atoms in the bonded neighbor
+    # list to get `bond_idx`
+    bond_idx = torch.LongTensor([nbr_dic[to_tuple(pair)]
+                                 for pair in bonded_nbr_list])
+
+    return bond_idx
+
+
+def get_angle_list(nbr_list):
+
+    nbr_list, _ = make_directed(nbr_list)
+
+    # Condition that the second index of a nbr
+    # list item is equal to the first index of
+    # another item.  Tthe exception is if the
+    # second item is just the first
+    # item reversed (e.g. [0, 1] and [1, 0])
+
+    # e.g. nbr_list = tensor([[0, 1],
+    # [0, 2],
+    # [1, 0],
+    # [1, 2],
+    # [2, 0],
+    # [2, 1]])
+    # then mask  = tensor([[False, False, False,  True, False, False],
+    # [False, False, False, False, False,  True],
+    # [False,  True, False, False, False, False],
+    # [False, False, False, False,  True, False],
+    # [True, False, False, False, False, False],
+    # [False, False,  True, False, False, False]])
+
+    mask = (nbr_list[:, 1, None] == nbr_list[:, 0]) * (
+        nbr_list[:, 0, None] != nbr_list[:, 1])
+
+    # The index of the third atom in each angle.
+    # In this case it would be tensor([2, 1, 2, 0, 1, 0])
+    third_atoms = nbr_list[:, 1].repeat(nbr_list.shape[0], 1)[mask]
+
+    # number of angles for each item in the nbr_list
+    # In this case it would be tensor([1, 1, 1, 1, 1, 1])
+    num_angles = mask.sum(-1)
+
+    # idx = np.arange(nbr_len)
+    # scatter_idx = torch.LongTensor(np.repeat(idx, num_angles.tolist(), axis=0))
+
+    # the nbr list, but with each item repeated num_angle times
+    nbr_repeats = torch.LongTensor(
+        np.repeat(nbr_list.numpy(), num_angles.tolist(), axis=0))
+
+    # the concatenation of `nbr_repeats` with `third_atoms` is the angle list
+    angle_list = torch.cat((nbr_repeats, third_atoms.reshape(-1, 1)), dim=1)
+
+    return angle_list
 
 
 def get_dist_mat(xyz, box_len, unwrap=True):
@@ -150,12 +259,17 @@ def get_dist_mat(xyz, box_len, unwrap=True):
     # create cutoff mask
     # compute squared distance of dim (B, N, N)
     dis_sq = dis_mat.pow(2).sum(-1)
-    # mask = (dis_sq <= cutoff ** 2) & (dis_sq != 0)                 # byte tensor of dim (B, N, N)
+    # mask = (dis_sq <= cutoff ** 2) & (dis_sq != 0)
+    # byte tensor of dim (B, N, N)
     #A = mask.unsqueeze(3).type(torch.FloatTensor).to(self.device) #
 
     # 1) PBC 2) # gradient of zero distance
     dis_sq = dis_sq.unsqueeze(-1)
-    # dis_sq = (dis_sq * A) + 1e-8# to make sure the distance is not zero, otherwise there will be inf gradient
+
+    # dis_sq = (dis_sq * A) + 1e-8
+    # to make sure the distance is not zero,
+    # otherwise there will be inf gradient
+
     dis_mat = dis_sq.sqrt().squeeze()
 
     return dis_mat
@@ -183,7 +297,9 @@ def generate_mol_atoms(atomic_nums, xyz, cell):
 
 def generate_subgraphs(atomsobject, unwrap=True, get_edge=False):
 
-    atoms = nff.io.ase.AtomsBatch(atomsobject)
+    from nff.io.ase import AtomsBatch
+
+    atoms = AtomsBatch(atomsobject)
     z, adj, dmat,  threshold = adjdistmat(atoms, unwrap=unwrap)
     box_len = torch.Tensor(np.diag(atoms.get_cell()))
     G = nx.from_numpy_matrix(adj)
@@ -200,7 +316,6 @@ def generate_subgraphs(atomsobject, unwrap=True, get_edge=False):
         partitions.append(list(sg.nodes))
         if get_edge:
             edge_list.append(list(sg.edges))
-
     if len(edge_list) != 0:
         return partitions, edge_list
     else:

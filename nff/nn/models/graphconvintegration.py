@@ -63,7 +63,7 @@ class GraphConvIntegration(nn.Module):
         self.atomwisereadout = NodeMultiTaskReadOut(multitaskdict=readoutdict, post_readout=post_readout)        
         self.device = None
 
-    def forward(self, batch):
+    def forward(self, batch, **kwargs):
 
         """Summary
         

@@ -1,0 +1,15 @@
+{
+  "model_folder": "/home/saxelrod/supercloud2/models/saved_models/attention_k_1_yes_prob_cov_cl_protease",
+  "dset_folder": "/home/saxelrod/supercloud2/models/cov_2_protease",
+  "feat_save_folder": "/home/saxelrod/supercloud2/models/cov_2_protease/fps_from_att_k1_yes_prob",
+  "prop": "sars_cov_one_cl_protease_active",
+  "device": 0,
+  "batch_size": 1,
+  "sub_batch_size": 7,
+  "test_only": false,
+  "metrics": [
+    "binary_cross_entropy",
+    "prc-auc",
+    "auc"
+  ]
+}

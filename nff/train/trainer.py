@@ -6,14 +6,17 @@ Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/s
 import os
 import numpy as np
 import torch
+import sys
 import copy
 import pickle
+from tqdm import tqdm
 
-from nff.utils.cuda import batch_to
+from nff.utils.cuda import batch_to, batch_detach
 from nff.train.evaluate import evaluate
 from nff.train.parallel import update_optim
 
 MAX_EPOCHS = 100
+PAR_INFO_FILE = "info.json"
 
 
 class Trainer:
@@ -38,7 +41,7 @@ class Trainer:
        loss_is_normalized (bool, optional): if True, the loss per data point will be
            reported. Otherwise, the accumulated loss is reported.
        global_rank (int, optional): overall rank of the current gpu for parallel
-            training (e.g. for the second gpu on the third node, with four
+            training (e.g. for the second gpu on the third node, with three
             gpus per node, the global rank is 7).
        world_size (int, optional): the total number of gpus over which training is
             parallelized.
@@ -55,9 +58,9 @@ class Trainer:
             epoch was the best, rather than the validation loss.
        metric_objective (str, optional): if metric_as_loss is specified, metric_objective indicates
             whether the goal is to maximize or minimize `metric_as_loss`.
-
-
-
+       epoch_cutoff (int, optional): cut off an epoch after `epoch_cutoff` batches.
+            This is useful if you want to validate the model more often than after 
+            going through all data points once.
    """
 
     def __init__(
@@ -81,7 +84,8 @@ class Trainer:
         mol_loss_norm=False,
         del_grad_interval=10,
         metric_as_loss=None,
-        metric_objective=None
+        metric_objective=None,
+        epoch_cutoff=float("inf")
     ):
         self.model_path = model_path
         self.checkpoint_path = os.path.join(self.model_path, "checkpoints")
@@ -94,6 +98,7 @@ class Trainer:
         self.loss_is_normalized = loss_is_normalized
         self.mol_loss_norm = mol_loss_norm
         self.mini_batches = mini_batches
+        self.epoch_cutoff = epoch_cutoff
 
         self._model = model
         self._stop = False
@@ -111,6 +116,7 @@ class Trainer:
         self.base = global_rank == 0
         # how many times you've called loss.backward()
         self.back_count = 0
+        # maximum number of batches to iterate through
         self.max_batch_iters = max_batch_iters if (
             max_batch_iters is not None) else len(self.train_loader)
         self.model_kwargs = model_kwargs if (model_kwargs is not None
@@ -135,10 +141,20 @@ class Trainer:
 
             # only make the checkpoint and save to it
             # if this is the base process
-
             if self.base:
                 os.makedirs(self.checkpoint_path)
                 self.store_checkpoint()
+
+    def tqdm_enum(self, iter):
+        i = 0
+        if self.base:
+            for y in tqdm(iter):
+                yield i, y
+                i += 1
+        else:
+            for y in iter:
+                yield i, y
+                i += 1
 
     def to(self, device):
         """Changes the device"""
@@ -153,7 +169,7 @@ class Trainer:
         return any((data_par, dist_dat_par))
 
     def _load_model_state_dict(self, state_dict):
-        if self.parallel:
+        if self.torch_parallel:
             self._model.module.load_state_dict(state_dict)
         else:
             self._model.load_state_dict(state_dict)
@@ -176,6 +192,15 @@ class Trainer:
 
         if (self.torch_parallel and self.parallel) and not train:
             model = self._model.module
+        else:
+            model = self._model
+
+        return model(batch, **self.model_kwargs)
+
+    def call_model(self, batch, train):
+
+        if (self.torch_parallel and self.parallel) and not train:
+            model = copy.deepcopy(self._model.module)
         else:
             model = self._model
 
@@ -248,6 +273,8 @@ class Trainer:
 
         for group in self.optimizer.param_groups:
             for param in group['params']:
+                if param.grad is None:
+                    continue
                 if torch.isnan(param.grad).any():
                     return True
         return False
@@ -258,6 +285,8 @@ class Trainer:
                     self.loss_is_normalized)):
 
             loss = self.loss_fn(batch, results)
+            self.nloss += 1
+
             return loss
 
         if self.mol_loss_norm:
@@ -272,7 +301,6 @@ class Trainer:
         return loss
 
     def optim_step(self, batch_num, device):
-
         if self.parallel and not self.torch_parallel:
             self.optimizer = update_optim(optimizer=self.optimizer,
                                           loss_size=self.nloss,
@@ -293,6 +321,8 @@ class Trainer:
         if self.nloss != 0:
             for group in self.optimizer.param_groups:
                 for param in group['params']:
+                    if param.grad is None:
+                        continue
                     param.grad /= self.nloss
             self.nloss = 0
 
@@ -300,7 +330,7 @@ class Trainer:
             self.optimizer.step()
 
     def train(self, device, n_epochs=MAX_EPOCHS):
-        """Train the model for the given number of epochs on a specified 
+        """Train the model for the given number of epochs on a specified
         device.
 
         Args:
@@ -311,12 +341,12 @@ class Trainer:
 
         """
         self.to(device)
-
         self._stop = False
         # initialize loss, num_batches, and optimizer grad to 0
         loss = torch.tensor(0.0).to(device)
         num_batches = 0
         self.optimizer.zero_grad()
+        self.save_as_best()
 
         for h in self.hooks:
             h.on_train_begin(self)
@@ -325,8 +355,8 @@ class Trainer:
 
         try:
             for _ in range(n_epochs):
-                self._model.train()
 
+                self._model.train()
                 self.epoch += 1
 
                 for h in self.hooks:
@@ -335,7 +365,7 @@ class Trainer:
                 if self._stop:
                     break
 
-                for j, batch in enumerate(self.train_loader):
+                for j, batch in self.tqdm_enum(self.train_loader):
 
                     batch = batch_to(batch, device)
 
@@ -354,7 +384,7 @@ class Trainer:
                     num_batches += 1
 
                     if num_batches == self.mini_batches:
-
+                        loss /= self.nloss
                         num_batches = 0
                         # effective number of batches so far
                         eff_batches = int((j + 1) / self.mini_batches)
@@ -370,10 +400,8 @@ class Trainer:
                         loss = torch.tensor(0.0).to(device)
                         self.optimizer.zero_grad()
 
-                    if self.batch_stop:
-                        break
-
-                    if self._stop:
+                    if any((self.batch_stop,
+                            self._stop, j == self.epoch_cutoff)):
                         break
 
                 # reset for next epoch
@@ -398,11 +426,10 @@ class Trainer:
                 for h in self.hooks:
                     h.on_epoch_end(self)
 
-                if self._stop:
-                    break
 
             # Training Ends
             # run hooks & store checkpoint
+
             for h in self.hooks:
                 h.on_train_ends(self)
 
@@ -504,24 +531,6 @@ class Trainer:
 
         return avg_loss
 
-    def save(self, model):
-        """
-        Save the model
-        Args:
-            model (str): path of best model
-        Returns:
-            None
-        """
-        # try to save the model
-        try:
-            torch.save(model, self.best_model)
-        # Sometimes you can't pickle the model (e.g. dimenet)
-        # In that case just save the state dict, which can
-        # be pickled
-        except (AttributeError, pickle.PicklingError):
-            state_path = self.best_model + ".pth.tar"
-            torch.save(self.state_dict, state_path)
-
     def save_as_best(self):
         """
         Save model as the current best model.
@@ -534,11 +543,11 @@ class Trainer:
         if self.torch_parallel:
             # need to save model.module, not model, in the
             # parallel case
-            self.save(self._model.module)
+            torch.save(self._model.module, self.best_model)
         else:
-            self.save(self._model)
+            torch.save(self._model, self.best_model)
 
-    def validate(self, device):
+    def validate(self, device, test=False):
         """Validate the current state of the model using the validation set
         """
 
@@ -567,23 +576,29 @@ class Trainer:
                 h.on_validation_batch_begin(self)
 
             results = self.call_model(val_batch, train=False)
+            # detach from the graph
+            results = batch_to(batch_detach(results), device)
 
             val_batch_loss = self.loss_fn(
                 val_batch, results).data.cpu().numpy()
 
             if self.loss_is_normalized or self.mol_loss_norm:
                 val_loss += val_batch_loss * vsize
+
             else:
                 val_loss += val_batch_loss
 
             for h in self.hooks:
                 h.on_validation_batch_end(self, val_batch, results)
 
+        if test:
+            return
+
         # weighted average over batches
         if self.loss_is_normalized or self.mol_loss_norm:
             val_loss /= n_val
 
-        # if running in parallel, savee the validation loss
+        # if running in parallel, save the validation loss
         # and pick up the losses from the other processes too
 
         if self.parallel:

@@ -6,6 +6,9 @@ import numpy as np
 import torch
 from nff.nn.models.schnet import SchNet
 from nff.nn.models.hybridgraph import HybridGraphConv
+from nff.nn.models.conformers import WeightedConformers
+from nff.nn.models.schnet_features import SchNetFeatures
+from nff.nn.models.cp3d import ChemProp3D, OnlyBondUpdateCP3D
 from nff.nn.models.dimenet import DimeNet
 
 PARAMS_TYPE = {"SchNet":
@@ -34,6 +37,71 @@ PARAMS_TYPE = {"SchNet":
                    'trainable_gauss': bool
                },
 
+               "WeightedConformers":
+               {
+                   'n_atom_basis': int,
+                   'n_filters': int,
+                   'n_gaussians': int,
+                   'n_convolutions': int,
+                   'trainable_gauss': bool,
+                   'dropout_rate': float,
+                   'readoutdict': dict,
+                   'mol_fp_layers': list
+               },
+
+               "SchNetFeatures":
+               {
+                   'n_atom_basis': int,
+                   'n_filters': int,
+                   'n_gaussians': int,
+                   'n_convolutions': int,
+                   'cutoff': float,
+                   'bond_par': float,
+                   'trainable_gauss': bool,
+                   'box_size': np.array,
+                   'dropout_rate': float,
+                   'n_bond_hidden': int,
+                   'n_bond_features': int,
+                   'activation': str
+               },
+
+               "ChemProp3D":
+               {
+                   'n_atom_basis': int,
+                   'n_filters': int,
+                   'n_gaussians': int,
+                   'n_convolutions': int,
+                   'cutoff': float,
+                   'bond_par': float,
+                   'trainable_gauss': bool,
+                   'box_size': np.array,
+                   'dropout_rate': float,
+                   'cp_input_layers': list,
+                   'schnet_input_layers': list,
+                   'output_layers': list,
+                   'n_bond_hidden': int,
+                   'activation': str
+               },
+
+               "OnlyBondUpdateCP3D":
+
+               {
+                   'n_atom_basis': int,
+                   'n_filters': int,
+                   'n_gaussians': int,
+                   'n_convolutions': int,
+                   'cutoff': float,
+                   'bond_par': float,
+                   'trainable_gauss': bool,
+                   'box_size': np.array,
+                   'schnet_dropout': float,
+                   'cp_dropout': float,
+                   'input_layers': list,
+                   'output_layers': list,
+                   'n_bond_hidden': int,
+                   'activation': str
+               },
+
                "DimeNet":
                {
                    "n_rbf": int,
@@ -47,13 +115,16 @@ PARAMS_TYPE = {"SchNet":
                    "n_convolutions": int,
                    "output_keys": list,
                    "grad_keys": list
-               }
 
                }
 
 MODEL_DICT = {
     "SchNet": SchNet,
     "HybridGraphConv": HybridGraphConv,
+    "WeightedConformers": WeightedConformers,
+    "SchNetFeatures": SchNetFeatures,
+    "ChemProp3D": ChemProp3D,
+    "OnlyBondUpdateCP3D": OnlyBondUpdateCP3D,
     "DimeNet": DimeNet
 }
 

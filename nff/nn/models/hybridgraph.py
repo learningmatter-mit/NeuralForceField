@@ -72,7 +72,7 @@ class HybridGraphConv(nn.Module):
         potential = ((dist.reciprocal() * self.sigma).pow(self.power))
         return scatter_add(potential, nbr_list[:, 0], dim_size=xyz.shape[0])[:, None]
     
-    def forward(self, batch):
+    def forward(self, batch, **kwargs):
         r = batch['nxyz'][:, 0]
         xyz = batch['nxyz'][:, 1:4]
         N = batch['num_atoms'].reshape(-1).tolist()

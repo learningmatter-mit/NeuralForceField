@@ -8,9 +8,10 @@ import time
 import numpy as np
 import torch
 import json
+import sys
 
 from nff.train.hooks import Hook
-from nff.train.metrics import RootMeanSquaredError
+from nff.train.metrics import (RootMeanSquaredError, PrAuc, RocAuc)
 
 
 class LoggingHook(Hook):
@@ -52,6 +53,7 @@ class LoggingHook(Hook):
         self.world_size = world_size
         self.par_folders = self.get_par_folders()
         self.parallel = world_size > 1
+        self.metric_dic = None
 
     def on_epoch_begin(self, trainer):
         """Log at the beginning of train epoch.
@@ -68,13 +70,14 @@ class LoggingHook(Hook):
             self._train_loss = None
 
     def on_batch_end(self, trainer, train_batch, result, loss):
+
         if self.log_train_loss:
             n_samples = self._batch_size(result)
-            self._train_loss += float(loss.data) * \
-                n_samples / self.mini_batches
+            self._train_loss += float(loss.data) * n_samples
             self._counter += n_samples
 
     def _batch_size(self, result):
+
         if type(result) is dict:
             n_samples = list(result.values())[0].size(0)
         elif type(result) in [list, tuple]:
@@ -107,7 +110,7 @@ class LoggingHook(Hook):
         # to main_folder/global_rank, then remove the second last
         # part of the path
         base_folder = os.path.join(*self.log_path.split(sep)[:-1])
-        if base_folder.endswith(str(self.global_rank)):
+        if base_folder.endswith(sep + str(self.global_rank)):
             base_folder = os.path.join(*base_folder.split(sep)[:-1])
         # if the original path began with "/", then add it back
         if self.log_path.startswith(sep):
@@ -128,7 +131,7 @@ class LoggingHook(Hook):
                        for i in range(self.world_size)]
         return par_folders
 
-    def save_metrics(self, epoch):
+    def save_metrics(self, epoch, test):
         """
         Save data from the metrics calculated on this parallel process.
         Args:
@@ -139,9 +142,14 @@ class LoggingHook(Hook):
 
         # save metrics to json file
         par_folder = self.par_folders[self.global_rank]
-        json_file = os.path.join(par_folder, "epoch_{}.json".format(epoch))
+        if test:
+            json_file = os.path.join(
+                par_folder, "epoch_{}_test.json".format(epoch))
+        else:
+            json_file = os.path.join(par_folder, "epoch_{}.json".format(epoch))
 
-        # if the json file you're saving to already exists, then load its contents
+        # if the json file you're saving to already exists,
+        # then load its contents
         if os.path.isfile(json_file):
             with open(json_file, "r") as f:
                 dic = json.load(f)
@@ -150,14 +158,18 @@ class LoggingHook(Hook):
 
         # update with metrics
         for metric in self.metrics:
-            m = metric.aggregate()
+            if type(metric) in [RocAuc, PrAuc]:
+                m = {"y_true": metric.actual,
+                     "y_pred": metric.pred}
+            else:
+                m = metric.aggregate()
             dic[metric.name] = m
 
         # save
         with open(json_file, "w") as f:
             json.dump(dic, f, indent=4, sort_keys=True)
 
-    def avg_parallel_metrics(self, epoch):
+    def avg_parallel_metrics(self, epoch, test):
         """
         Average metrics over parallel processes.
         Args:
@@ -169,7 +181,7 @@ class LoggingHook(Hook):
 
         # save metrics from this process
 
-        self.save_metrics(epoch)
+        self.save_metrics(epoch, test)
         metric_dic = {}
 
         for metric in self.metrics:
@@ -181,7 +193,12 @@ class LoggingHook(Hook):
             # loaded their metric values
             while None in par_dic.values():
                 for folder in self.par_folders:
-                    path = os.path.join(folder, "epoch_{}.json".format(epoch))
+                    if test:
+                        path = os.path.join(
+                            folder, "epoch_{}_test.json".format(epoch))
+                    else:
+                        path = os.path.join(
+                            folder, "epoch_{}.json".format(epoch))
                     try:
                         with open(path, "r") as f:
                             path_dic = json.load(f)
@@ -194,13 +211,23 @@ class LoggingHook(Hook):
             if isinstance(metric, RootMeanSquaredError):
                 metric_val = np.mean(
                     np.array(list(par_dic.values)) ** 2) ** 0.5
+            elif type(metric) in [RocAuc, PrAuc]:
+                y_true = []
+                y_pred = []
+                for sub_dic in par_dic.values():
+                    y_true += sub_dic["y_true"]
+                    y_pred += sub_dic["y_pred"]
+                metric.actual = y_true
+                metric.pred = y_pred
+                metric_val = metric.aggregate()
+
             else:
                 metric_val = np.mean(list(par_dic.values()))
             metric_dic[metric.name] = metric_val
 
         return metric_dic
 
-    def aggregate(self, trainer):
+    def aggregate(self, trainer, test=False):
         """
         Aggregate metrics.
         Args:
@@ -212,7 +239,8 @@ class LoggingHook(Hook):
 
         # if parallel, average over parallel metrics
         if self.parallel:
-            metric_dic = self.avg_parallel_metrics(epoch=trainer.epoch)
+            metric_dic = self.avg_parallel_metrics(epoch=trainer.epoch,
+                                                   test=test)
 
         # otherwise aggregate as usual
         else:
@@ -220,6 +248,8 @@ class LoggingHook(Hook):
             for metric in self.metrics:
                 m = metric.aggregate()
                 metric_dic[metric.name] = m
+        self.metric_dic = metric_dic
+
         return metric_dic
 
 
@@ -250,8 +280,8 @@ class CSVHook(LoggingHook):
     ):
         log_path = os.path.join(log_path, "log.csv")
         super().__init__(
-            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate, mini_batches,
-            global_rank, world_size
+            log_path, metrics, log_train_loss, log_validation_loss,
+            log_learning_rate, mini_batches, global_rank, world_size
         )
         self._offset = 0
         self._restart = False
@@ -368,8 +398,8 @@ class TensorboardHook(LoggingHook):
         from tensorboardX import SummaryWriter
 
         super().__init__(
-            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate, mini_batches,
-            global_rank, world_size
+            log_path, metrics, log_train_loss, log_validation_loss,
+            log_learning_rate, mini_batches, global_rank, world_size
         )
         self.writer = SummaryWriter(self.log_path)
         self.every_n_epochs = every_n_epochs
@@ -380,7 +410,8 @@ class TensorboardHook(LoggingHook):
         if trainer.epoch % self.every_n_epochs == 0:
             if self.log_train_loss:
                 self.writer.add_scalar(
-                    "train/loss", self._train_loss / self._counter, trainer.epoch
+                    "train/loss",
+                    self._train_loss / self._counter, trainer.epoch
                 )
             if self.log_learning_rate:
                 self.writer.add_scalar(
@@ -405,7 +436,8 @@ class TensorboardHook(LoggingHook):
 
                         # tensorboardX only accepts images as numpy arrays.
                         # we therefore convert plots in numpy array
-                        # see https://github.com/lanpa/tensorboard-pytorch/blob/master/examples/matplotlib_demo.py
+                        # see https://github.com/lanpa/tensorboard-
+                        # pytorch/blob/master/examples/matplotlib_demo.py
                         fig = plt.figure()
                         plt.colorbar(plt.pcolor(m))
                         fig.canvas.draw()
@@ -474,8 +506,8 @@ class PrintingHook(LoggingHook):
 
         log_path = os.path.join(log_path, "log_human_read.csv")
         super().__init__(
-            log_path, metrics, log_train_loss, log_validation_loss, log_learning_rate, mini_batches,
-            global_rank, world_size
+            log_path, metrics, log_train_loss, log_validation_loss,
+            log_learning_rate, mini_batches, global_rank, world_size
         )
 
         self.every_n_epochs = every_n_epochs
@@ -498,6 +530,7 @@ class PrintingHook(LoggingHook):
         print(log)
         with open(self.log_path, "a+") as f:
             f.write(log + os.linesep)
+        sys.stdout.flush()
 
     def on_train_begin(self, trainer):
 

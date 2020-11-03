@@ -1,13 +1,17 @@
 import numpy as np
 import torch
 
-REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'angle_list']
-NBR_LIST_KEYS = ['kj_idx', 'ji_idx']
+
+REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'bonded_nbr_list', 'angle_list']
+NBR_LIST_KEYS = ['bond_idx', 'kj_idx', 'ji_idx']
+IGNORE_KEYS = ['rd_mols']
 
 TYPE_KEYS = {
     'atoms_nbr_list': torch.long,
     'nbr_list': torch.long,
     'num_atoms': torch.long,
+    'bond_idx': torch.long,
+    'bonded_nbr_list': torch.long,
     'angle_list': torch.long,
     'ji_idx': torch.long,
     'kj_idx': torch.long,
@@ -15,8 +19,8 @@ TYPE_KEYS = {
 
 
 def collate_dicts(dicts):
-    """Collates dictionaries within a single batch. Automatically reindexes neighbor lists
-        and periodic boundary conditions to deal with the batch.
+    """Collates dictionaries within a single batch. Automatically reindexes 
+        neighbor lists and periodic boundary conditions to deal with the batch.
 
     Args:
         dicts (list of dict): each element of the dataset
@@ -25,18 +29,25 @@ def collate_dicts(dicts):
         batch (dict)
     """
 
-    # new indices for the batch: the first one is zero and the last does not matter
+    # new indices for the batch: the first one is zero and the
+    # last does not matter
 
     cumulative_atoms = np.cumsum([0] + [d['num_atoms'] for d in dicts])[:-1]
-
-    # same idea, but for quantities whose maximum value is the length of the nbr
-    # list in each batch
-    cumulative_nbrs = np.cumsum([0] + [len(d['nbr_list']) for d in dicts])[:-1]
 
     for n, d in zip(cumulative_atoms, dicts):
         for key in REINDEX_KEYS:
             if key in d:
                 d[key] = d[key] + int(n)
+
+    if all(['nbr_list' in d for d in dicts]):
+        # same idea, but for quantities whose maximum value is the length of
+        # the nbr list in each batch
+        cumulative_nbrs = np.cumsum(
+            [0] + [len(d['nbr_list']) for d in dicts])[:-1]
+        for n, d in zip(cumulative_nbrs, dicts):
+            for key in NBR_LIST_KEYS:
+                if key in d:
+                    d[key] = d[key] + int(n)
 
     for n, d in zip(cumulative_nbrs, dicts):
         for key in NBR_LIST_KEYS:
@@ -46,6 +57,8 @@ def collate_dicts(dicts):
     # batching the data
     batch = {}
     for key, val in dicts[0].items():
+        if key in IGNORE_KEYS:
+            continue
         if type(val) == str:
             batch[key] = [data[key] for data in dicts]
         elif hasattr(val, 'shape') and len(val.shape) > 0:
@@ -69,8 +82,12 @@ def collate_dicts(dicts):
 
 class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
     """
+
+    Source: https://github.com/ufoym/imbalanced-dataset-sampler/
+            blob/master/torchsampler/imbalanced.py
+
     Sampling class to make sure positive and negative labels
-    are represented equally during training. 
+    are represented equally during training.
     Attributes:
         data_length (int): length of dataset
         weights (torch.Tensor): weights of each index in the
@@ -94,13 +111,21 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
         positive_idx = [i for i in range(data_length)
                         if i not in negative_idx]
 
-        negative_weight = 1 / len(negative_idx)
-        positive_weight = 1 / len(positive_idx)
+        num_neg = len(negative_idx)
+        num_pos = len(positive_idx)
+
+        if num_neg == 0:
+            num_neg = 1
+        if num_pos == 0:
+            num_pos = 1
+
+        negative_weight = num_neg
+        positive_weight = num_pos
 
         self.data_length = data_length
         self.weights = torch.zeros(data_length)
-        self.weights[negative_idx] = negative_weight
-        self.weights[positive_idx] = positive_weight
+        self.weights[negative_idx] = 1 / negative_weight
+        self.weights[positive_idx] = 1 / positive_weight
 
     def __iter__(self):
 

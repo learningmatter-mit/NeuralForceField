@@ -1,23 +1,24 @@
 from itertools import repeat
 from torch.autograd import grad
+import torch
 
 
 def compute_grad(inputs, output):
     """Compute gradient of the scalar output with respect to inputs.
-    
+
     Args:
         inputs (torch.Tensor): torch tensor, requires_grad=True
         output (torch.Tensor): scalar output 
-    
+
     Returns:
         torch.Tensor: gradients with respect to each input component 
     """
 
     assert inputs.requires_grad
-    
+
     gradspred, = grad(output, inputs, grad_outputs=output.data.new(output.shape).fill_(1),
-                   create_graph=True, retain_graph=True)
-    
+                      create_graph=True, retain_graph=True)
+
     return gradspred
 
 
