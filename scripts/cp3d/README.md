@@ -16,7 +16,7 @@ This folder contains scripts for doing ChemProp3D tasks. These include making a 
            * [SchNet](#schnet)
            * [SchNetFeatures](#schnetfeatures)
            * [ChemProp3D](#chemprop3d)
-           * [ChemProp3D, only bond update](#chemprop3d,-only-bond-update)
+           * [ChemProp3D, only bond update](#chemprop3d-only-bond-update)
         * [Training parameters](#training-parameters)
 - [Hyperparameter optimization](#hyperparameter-optimization)
 - [Transfer learning](#transfer-learning)
