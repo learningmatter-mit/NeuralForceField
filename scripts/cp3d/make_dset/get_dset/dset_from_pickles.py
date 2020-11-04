@@ -491,7 +491,7 @@ def convert_data(overall_dic, max_confs):
         sub_dic = overall_dic[smiles]
         spec_dic = {map_key(key): val for key, val in sub_dic.items()
                     if key != "conformers"}
-        sub_dic.update({"smiles": overall_dic[smiles]})
+        sub_dic.update({"smiles": smiles})
 
         # how many conformers we're actually using for this species
         actual_confs = min(max_confs, len(sub_dic["conformers"]))
