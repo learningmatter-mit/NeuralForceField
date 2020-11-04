@@ -20,7 +20,7 @@ export SLURM_GPUS_PER_NODE=2
 export LD_LIBRARY_PATH=lib/$CONDA_PREFIX/:$LD_LIBRARY_PATH
 
 # change to your location of NeuralForceField
-export NFFDIR="$HOME/repo/nff/covid_clean/NeuralForceField"
+export NFFDIR="$HOME/repo/nff/master/NeuralForceField"
 export PYTHONPATH=$NFFDIR:$PYTHON_PATH
 
 source activate nff

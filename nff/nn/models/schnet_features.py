@@ -114,6 +114,7 @@ class SchNetFeatures(WeightedConformers):
                                       bond_idx + nbr_dim // 2])
         else:
             bonded_nbr_list = batch["bonded_nbr_list"]
+            bonded_nbr_list, _ = make_directed(bonded_nbr_list)
             bond_idx = get_bond_idx(bonded_nbr_list, nbr_list)
         return bond_idx
 
