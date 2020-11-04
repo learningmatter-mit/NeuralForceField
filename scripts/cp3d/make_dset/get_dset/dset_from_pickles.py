@@ -28,6 +28,10 @@ KEY_MAP = {"rd_mol": "nxyz",
 EXCLUDE_KEYS = ["totalconfs", "datasets", "conformerweights",
                 "uncleaned_smiles"]
 
+# these keys are for per-conformer quantities
+CONF_KEYS = ["rd_mols", "bonded_nbr_list", "bond_features",
+             "atom_features"]
+
 # disable logger to avoid annoying pickle messages
 logger = logging.getLogger()
 logger.disabled = True
@@ -222,7 +226,6 @@ def get_splits(sample_dic,
 
 
 def resave_splits(csv_folder,
-                  dset,
                   remove_smiles):
     """
     Re-save the SMILES splits accounting for the fact that not all
@@ -230,7 +233,6 @@ def resave_splits(csv_folder,
     Args:
         csv_folder (str): path to folder that contains the csv files
             with the test/val/train smiles.
-        dset (nff.data.dataset): NFF dataset
         remove_smiles (list[str]): any SMILES strings that had to be
             removed from the NFF dataset.
     Returns:
@@ -280,8 +282,8 @@ def resave_splits(csv_folder,
                 if new_lines == lines:
                     shutil.move(tmp_path, path)
                     break
-                else:
-                    os.remove(tmp_path)
+
+                os.remove(tmp_path)
 
 
 def get_sample(summary_dic,
@@ -513,21 +515,21 @@ def convert_data(overall_dic, max_confs):
 
         for idx in sorted_idx[:actual_confs]:
             conf = confs[idx]
-            for key in conf.keys():
+            for conf_key in conf.keys():
 
                 # add the RDKit mol and nxyz to the dataset
-                if key == "rd_mol":
-                    nxyz = get_xyz(conf[key])
+                if conf_key == "rd_mol":
+                    nxyz = get_xyz(conf[conf_key])
                     spec_dic["nxyz"].append(nxyz)
-                    spec_dic["rd_mols"].append(conf[key])
+                    spec_dic["rd_mols"].append(conf[conf_key])
 
                 # add other quantities associated with the conformer
                 # (e.g. Boltzmann weights)
                 else:
-                    new_key = map_key(key)
+                    new_key = map_key(conf_key)
                     if new_key not in spec_dic:
                         continue
-                    spec_dic[new_key].append(conf[key])
+                    spec_dic[new_key].append(conf[conf_key])
 
         # renormalize the weights accounting for missing conformers
         spec_dic = renorm_weights(spec_dic)
@@ -652,7 +654,6 @@ def clean_up_dset(dset,
     # species are no longer there
 
     resave_splits(csv_folder=csv_folder,
-                  dset=dset,
                   remove_smiles=remove_smiles)
     new_num = old_num - len(remove_smiles)
 
@@ -750,11 +751,8 @@ def make_nff_dataset(spec_dics,
         # those in your pickle files. If not we'll generate them
         # below
 
-        conf_keys = ["rd_mols", "bonded_nbr_list", "bond_features",
-                     "atom_features"]
-
         small_spec_dic = {key: val for key, val in spec_dic.items()
-                          if key not in conf_keys}
+                          if key not in CONF_KEYS}
 
         # Treat each species' data like a regular dataset
         # and use it to generate neighbor lists
@@ -905,6 +903,9 @@ def save_splits(dataset,
     split_names = ["train", "val", "test"]
     split_idx = {name: [] for name in split_names}
 
+    import pdb
+    pdb.set_trace()
+    
     for i, smiles in enumerate(dataset.props['smiles']):
         split_name = sample_dic[smiles]["split"]
         split_idx[split_name].append(i)
