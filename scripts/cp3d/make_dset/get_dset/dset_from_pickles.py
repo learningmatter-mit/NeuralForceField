@@ -274,7 +274,7 @@ def resave_splits(csv_folder,
                 # loaded and modified hasn't been changed by another
                 # process while you were working
 
-                with open(path, "r"):
+                with open(path, "r") as f:
                     new_lines = f.readlines()
 
                 if new_lines == lines:
