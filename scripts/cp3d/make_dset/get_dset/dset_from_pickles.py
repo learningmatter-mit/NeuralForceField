@@ -487,11 +487,11 @@ def convert_data(overall_dic, max_confs):
 
     for smiles in tqdm(overall_dic.keys()):
 
-        sub_dic = overall_dic[smiles]
+        spec_dic = {"smiles": smiles}
         # get everything in the dictionary except the conformer info
-        spec_dic = {map_key(key): val for key, val in sub_dic.items()
-                    if key != "conformers"}
-        # spec_dic["smiles"] = smiles
+        sub_dic = overall_dic[smiles]
+        spec_dic.update({map_key(key): val for key, val in sub_dic.items()
+                         if key != "conformers"})
 
         # how many conformers we're actually using for this species
         actual_confs = min(max_confs, len(sub_dic["conformers"]))
@@ -535,10 +535,6 @@ def convert_data(overall_dic, max_confs):
         # renormalize the weights accounting for missing conformers
         spec_dic = renorm_weights(spec_dic)
         spec_dics.append(spec_dic)
-
-        if spec_dic["smiles"][0] != smiles:
-            import pdb
-            pdb.set_trace()
 
     return spec_dics
 
