@@ -12,6 +12,8 @@ import argparse
 from tqdm import tqdm
 from rdkit import Chem
 import logging
+from datetime import datetime
+import shutil
 
 from nff.data import Dataset, concatenate_dict
 from nff.utils import tqdm_enum, parse_args, fprint
@@ -245,24 +247,41 @@ def resave_splits(csv_folder,
 
     for name in split_names:
         for suffix in suffixes:
+            while True:
+                path = os.path.join(csv_folder, f"{name}_{suffix}.csv")
+                with open(path, "r") as f:
+                    lines = f.readlines()
+                keep_lines = [lines[0]]
 
-            path = os.path.join(csv_folder, f"{name}_{suffix}.csv")
-            with open(path, "r") as f:
-                lines = f.readlines()
+                for line in lines[1:]:
+                    smiles = line.split(",")[0].strip()
+                    # don't keep the line if it contains a SMILES string
+                    # in `remove_smiles`
+                    if smiles not in remove_smiles:
+                        keep_lines.append(line)
 
-            keep_lines = [lines[0]]
+                new_text = "".join(keep_lines)
 
-            for line in lines[1:]:
-                smiles = line.split(",")[0].strip()
-                # don't keep the line if it contains a SMILES string
-                # in `remove_smiles`
-                if smiles not in remove_smiles:
-                    keep_lines.append(line)
+                # re-save the new text to a temporary file
+                dt = datetime.now()
+                ms_time = int(float(dt.strftime("%Y%m%d%H%M%S.%f")) * 1e3)
+                tmp_path = f"{ms_time}.csv"
 
-            # re-save the new text
-            new_text = "".join(keep_lines)
-            with open(path, "w") as f:
-                f.write(new_text)
+                with open(tmp_path, "w") as f:
+                    f.write(new_text)
+
+                # keep looping until you're sure that the file you
+                # loaded and modified hasn't been changed by another
+                # process while you were working
+
+                with open(path, "r"):
+                    new_lines = f.readlines()
+
+                if new_lines == lines:
+                    shutil.move(tmp_path, path)
+                    break
+                else:
+                    os.remove(tmp_path)
 
 
 def get_sample(summary_dic,
