@@ -15,7 +15,6 @@ from nff.data.parallel import featurize_parallel, NUM_PROCS, add_e3fp_parallel
 from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
 from nff.data.features import add_morgan as external_morgan
 from nff.data.features import featurize_rdkit as external_rdkit
-from nff.data.sparse import sparsify_tensor
 from nff.data.graphs import (get_bond_idx, reconstruct_atoms, get_neighbor_list, generate_subgraphs,
                              DISTANCETHRESHOLDICT_Z, get_angle_list, add_ji_kj)
 
@@ -394,7 +393,16 @@ class Dataset(TorchDataset):
         Args:
             path (TYPE): Description
         """
+
+        # to deal with the fact that sparse tensors can't be pickled
+        offsets = self.props['offsets']
+        old_offsets = copy.deepcopy(offsets)
+
+        if isinstance(offsets[0], torch.sparse.FloatTensor):
+            self.props['offsets'] = [val.to_dense() for val in offsets]
+
         torch.save(self, path)
+        self.props['offsets'] = old_offsets
 
     def gen_bond_stats(self):
 
