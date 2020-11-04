@@ -564,18 +564,21 @@ def convert_nan(x):
 
     new_x = []
     # whether any of the contents have nan
-    has_nan = any([np.isnan(y).any() for y in x])
-    for y in x:
+    try:
+        has_nan = any([np.isnan(y).any() for y in x])
+        for y in x:
 
-        if has_nan:
-            # if one is nan then they will have to become float tensors
-            if type(y) in [int, float]:
-                new_x.append(torch.Tensor([y]))
-            elif isinstance(y, torch.Tensor):
-                new_x.append(y.float())
-        else:
-            # otherwise they can be kept as is
-            new_x.append(y)
+            if has_nan:
+                # if one is nan then they will have to become float tensors
+                if type(y) in [int, float]:
+                    new_x.append(torch.Tensor([y]))
+                elif isinstance(y, torch.Tensor):
+                    new_x.append(y.float())
+            else:
+                # otherwise they can be kept as is
+                new_x.append(y)
+    except Exception as e:
+        raise e
 
     return new_x
 
@@ -603,7 +606,8 @@ def to_tensor(x, stack=False):
         return x
 
     if type(x) is list and type(x[0]) != str:
-        x = convert_nan(x)
+        if not isinstance(x[0], torch.sparse.FloatTensor):
+            x = convert_nan(x)
 
     # all objects in x are tensors
     if isinstance(x, list) and all([isinstance(y, torch.Tensor) for y in x]):

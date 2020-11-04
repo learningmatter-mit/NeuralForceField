@@ -228,6 +228,8 @@ class ChemProp3D(WeightedConformers):
 
         old_num_nbrs = 0
         for i, batch in enumerate(sub_batches):
+            if "bond_idx" not in batch:
+                continue
             batch["bond_idx"] -= old_num_nbrs
             sub_batches[i] = batch
 
@@ -562,8 +564,8 @@ class OnlyBondUpdateCP3D(ChemProp3D):
                 bond_idx = torch.cat([bond_idx,
                                       bond_idx + nbr_dim // 2])
         else:
-            bonded_nbr_list = batch["bonded_nbr_list"]
-            bond_idx = get_bond_idx(bonded_nbr_list, nbr_list)
+            bond_idx = get_bond_idx(bond_nbrs, nbr_list)
+            bond_idx = bond_idx.to(device)
 
         h_0[bond_idx] = h_0_bond
 
