@@ -49,11 +49,6 @@ def collate_dicts(dicts):
                 if key in d:
                     d[key] = d[key] + int(n)
 
-    for n, d in zip(cumulative_nbrs, dicts):
-        for key in NBR_LIST_KEYS:
-            if key in d:
-                d[key] = d[key] + int(n)
-
     # batching the data
     batch = {}
     for key, val in dicts[0].items():
