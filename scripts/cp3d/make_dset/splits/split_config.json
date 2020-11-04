@@ -2,7 +2,7 @@
   "summary_path": "/home/gridsan/saxelrod/models/full_dset/rdkit_folder/summary_drugs.json",
   "csv_folder": "/home/gridsan/saxelrod/chemprop_cov_1",
   "cp_folder": "/home/gridsan/saxelrod/repo/chemprop/chemprop",
-  "props": ["sars_cov_two_cl_protease_active"],
+  "props": ["sars_cov_one_cl_protease_active"],
   "split_sizes": [
     0.6,
     0.2,
