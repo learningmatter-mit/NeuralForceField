@@ -536,7 +536,7 @@ def convert_data(overall_dic, max_confs):
         spec_dic = renorm_weights(spec_dic)
         spec_dics.append(spec_dic)
 
-        if spec_dic["smiles"] != smiles:
+        if spec_dic["smiles"][0] != smiles:
             import pdb
             pdb.set_trace()
 
