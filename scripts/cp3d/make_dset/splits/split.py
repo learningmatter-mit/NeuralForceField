@@ -9,11 +9,54 @@ import numpy as np
 import json
 import shutil
 import argparse
-import copy
 from rdkit import Chem
 from tqdm import tqdm
 
 from nff.utils import bash_command, parse_args, fprint, prop_split
+
+
+def apply_transfs(props, summary_dic):
+    """
+    Apply transformation to quantities in the dataset. For example,
+    if a requested property is log_<actual property>, then create
+    this requested property by taking logs in the dataset.
+    Args:
+       props (list[str]): list of property names that you want to predict
+       summary_dic (dict): dictionary of the form {smiles: sub_dic},
+        where `sub_dic` is a dictionary with all the species properties
+        apart from its conformers.
+    Returns:
+      None
+    """
+
+    for prop in props:
+        prop_present = any([prop in sub_dic for sub_dic
+                            in summary_dic.values()])
+        if prop_present:
+            continue
+
+        if prop.startswith("log_"):
+            base_prop = prop.split("log_")[-1]
+
+            def transf(x): return np.log(x)
+
+        else:
+            raise Exception((f"{prop} is not in the summary "
+                             "dictionary and doesn't have a prefix "
+                             "corresponding to a known transformation, "
+                             "such as log."))
+
+        base_present = any([base_prop in sub_dic for sub_dic
+                            in summary_dic.values()])
+        if not base_present:
+            raise Exception((f"{base_prop} is not in the summary "
+                             "dictionary."))
+
+        # update summary dictionary with transformed keys
+
+        for smiles, sub_dic in summary_dic.items():
+            if base_prop in sub_dic:
+                sub_dic.update({prop: transf(sub_dic[base_prop])})
 
 
 def to_csv(summary_dic,
@@ -35,6 +78,13 @@ def to_csv(summary_dic,
     columns = ['smiles'] + props
     dict_data = []
     for smiles, sub_dic in summary_dic.items():
+        dic = {}
+        for prop in props:
+            if prop.startswith("log_"):
+                base_prop = prop.split("log_")[-1]
+                if base_prop in sub_dic:
+                    dic[prop] = np.log(sub_dic[base_prop])
+
         dic = {prop: sub_dic[prop] for prop in props}
         dic["smiles"] = smiles
         dict_data.append(dic)
@@ -126,9 +176,8 @@ def subsample(summary_dic,
       sample_dic (dict): Updated `sample_dic` with the above filter applied.
     """
 
-    sample_dic = copy.deepcopy(summary_dic)
     # filter to only include species with the requested props
-    sample_dic = filter_prop_and_pickle(sample_dic, props)
+    sample_dic = filter_prop_and_pickle(summary_dic, props)
     # filter to only include species with less than `max_atoms` atoms
     sample_dic = filter_atoms(sample_dic, max_atoms)
 
@@ -143,7 +192,7 @@ def subsample(summary_dic,
                              sample_dic=sample_dic,
                              seed=seed)
 
-    sample_dic = {smiles: summary_dic[smiles] for smiles in keep_smiles}
+    sample_dic = {smiles: sample_dic[smiles] for smiles in keep_smiles}
 
     return sample_dic
 
@@ -187,6 +236,11 @@ def make_split(summary_path,
     with open(summary_path, "r") as f:
         summary_dic = json.load(f)
 
+    # apply any transformations to the data, e.g. wanting a
+    # dataset that has the log of a value instead of the
+    # value itself
+    apply_transfs(props, summary_dic)
+
     # filter based on props, max species and max number of atoms
     summary_dic = subsample(summary_dic=summary_dic,
                             props=props,
@@ -197,6 +251,8 @@ def make_split(summary_path,
 
     # path csv file with SMILES and properties
     all_csv = os.path.join(csv_folder, "all.csv")
+    if not os.path.isdir(csv_folder):
+        os.makedirs(csv_folder)
     # write the contents of `summary_dic` to the csv
     to_csv(summary_dic, props, all_csv)
 
@@ -205,7 +261,8 @@ def make_split(summary_path,
 
     script = os.path.join(cp_folder, "scripts", "split_data.py")
     split_str = " ".join(np.array(split_sizes).astype("str"))
-    cmd = (f"python {script} --split_type {split_type} "
+    cmd = (f"source activate chemprop && "
+           f"python {script} --split_type {split_type} "
            f"--split_sizes {split_str} "
            f"--data_path {all_csv} "
            f"--save_dir {csv_folder} "
