@@ -19,6 +19,7 @@ from nff.data.sparse import sparsify_tensor
 from nff.data.graphs import (get_bond_idx, reconstruct_atoms, get_neighbor_list, generate_subgraphs,
                              DISTANCETHRESHOLDICT_Z, get_angle_list, add_ji_kj)
 
+
 class Dataset(TorchDataset):
     """Dataset to deal with NFF calculations.
 
@@ -564,21 +565,18 @@ def convert_nan(x):
 
     new_x = []
     # whether any of the contents have nan
-    try:
-        has_nan = any([np.isnan(y).any() for y in x])
-        for y in x:
+    has_nan = any([np.isnan(y).any() for y in x])
+    for y in x:
 
-            if has_nan:
-                # if one is nan then they will have to become float tensors
-                if type(y) in [int, float]:
-                    new_x.append(torch.Tensor([y]))
-                elif isinstance(y, torch.Tensor):
-                    new_x.append(y.float())
-            else:
-                # otherwise they can be kept as is
-                new_x.append(y)
-    except Exception as e:
-        raise e
+        if has_nan:
+            # if one is nan then they will have to become float tensors
+            if type(y) in [int, float]:
+                new_x.append(torch.Tensor([y]))
+            elif isinstance(y, torch.Tensor):
+                new_x.append(y.float())
+        else:
+            # otherwise they can be kept as is
+            new_x.append(y)
 
     return new_x
 
