@@ -24,7 +24,7 @@ KEY_MAP = {"rd_mol": "nxyz",
            "boltzmannweight": "weights",
            "relativeenergy": "energy"}
 
-# these are keys that confuse the dataset
+# These are keys that confuse the dataset.
 EXCLUDE_KEYS = ["totalconfs", "datasets", "conformerweights",
                 "uncleaned_smiles"]
 
@@ -485,12 +485,13 @@ def convert_data(overall_dic, max_confs):
     if max_confs is None:
         max_confs = float("inf")
 
-    for key in tqdm(overall_dic.keys()):
-        sub_dic = overall_dic[key]
+    for smiles in tqdm(overall_dic.keys()):
 
+        sub_dic = overall_dic[smiles]
         # get everything in the dictionary except the conformer info
         spec_dic = {map_key(key): val for key, val in sub_dic.items()
                     if key != "conformers"}
+        # spec_dic["smiles"] = smiles
 
         # how many conformers we're actually using for this species
         actual_confs = min(max_confs, len(sub_dic["conformers"]))
@@ -534,6 +535,10 @@ def convert_data(overall_dic, max_confs):
         # renormalize the weights accounting for missing conformers
         spec_dic = renorm_weights(spec_dic)
         spec_dics.append(spec_dic)
+
+        if spec_dic["smiles"] != smiles:
+            import pdb
+            pdb.set_trace()
 
     return spec_dics
 
@@ -903,9 +908,6 @@ def save_splits(dataset,
     split_names = ["train", "val", "test"]
     split_idx = {name: [] for name in split_names}
 
-    import pdb
-    pdb.set_trace()
-    
     for i, smiles in enumerate(dataset.props['smiles']):
         split_name = sample_dic[smiles]["split"]
         split_idx[split_name].append(i)
