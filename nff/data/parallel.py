@@ -6,6 +6,8 @@ import numpy as np
 from concurrent import futures
 import copy
 import torch
+import multiprocessing as mp
+import pdb
 
 from nff.utils import fprint
 from nff.data.features import (make_rd_mols,
@@ -80,30 +82,13 @@ def rejoin_props(datasets):
 
 
 def gen_parallel(func, kwargs_list):
-    """
-    General function for executing parallel functions on dataset.
-    Args:
-        func (callable): the function you want to apply to the dataset
-        kwargs_list (list[dict]): keyword arguments for each sub-dataset
-    Returns:
-        results_dsets (list): list of datasets after the functions
-            are applied.
-
-    """
-
-    # if there's only one function, no need to do it in serial
-    # set "track" = True so that progress is monitored with
-    # tqdm
 
     if len(kwargs_list) == 1:
         kwargs = kwargs_list[0]
         kwargs["track"] = True
         return [func(**kwargs)]
 
-    # otherwise do it in parallel with `ProcessPoolExecutor`
-
     with futures.ProcessPoolExecutor() as executor:
-
         future_objs = []
         # go through each set of kwargs
         for i, kwargs in enumerate(kwargs_list):
@@ -117,6 +102,9 @@ def gen_parallel(func, kwargs_list):
             future_objs.append(result)
 
     result_dsets = [obj.result() for obj in future_objs]
+
+    # this is unnecessary
+    executor.shutdown(wait=True)
 
     return result_dsets
 
@@ -237,6 +225,16 @@ def featurize_parallel(dataset,
         None
     """
 
+    # offsets can be sparse tensors which in torch version <= 1.3
+    # can't yet be pickled. So we have to remove them to not cause
+    # errors in the pickling during parallelization
+
+    add_offsets = False
+    if "offsets" in dataset.props:
+        offsets = copy.deepcopy(dataset.props["offsets"])
+        add_offsets = True
+        dataset.props.pop("offsets")
+
     msg = f"Featurizing dataset with {num_procs} parallel processes."
     if num_procs == 1:
         msg = msg.replace("processes", "process")
@@ -265,6 +263,9 @@ def featurize_parallel(dataset,
     # rename the bond list as `bonded_nbr_list`
     new_props["bonded_nbr_list"] = copy.deepcopy(new_props["bond_list"])
     new_props.pop("bond_list")
+
+    if add_offsets:
+        dataset.props["offsets"] = offsets
 
 
 def add_e3fp_parallel(dataset,
