@@ -217,8 +217,9 @@ def get_splits(sample_dic,
             props = {key: csv_dic[key][i] for key in csv_dic.keys()
                      if key != "smiles"}
             sample_dic[smiles].update({"split": name,
-                                       **props[smiles]})
+                                       **props})
 
+    # get rid of anything that doesn't have a split labels
     keys = list(sample_dic.keys())
     for key in keys:
         if "split" not in sample_dic[key]:
@@ -355,8 +356,16 @@ def load_data_from_pickle(sample_dic, pickle_folder):
         pickle_path = sub_dic["pickle_path"]
         full_path = os.path.join(pickle_folder, pickle_path)
 
+        # initialize from `sample_dic`, as it may have
+        # loaded some extra props from the csvs. Ignore
+        # the split label as it's unnecessary.
+
+        dic = {key: val for key, val in sub_dic.items() if
+               key != "split"}
+
         with open(full_path, "rb") as f:
-            dic = pickle.load(f)
+            dic.update(pickle.load(f))
+
         overall_dic.update({smiles: dic})
 
     return overall_dic
