@@ -16,7 +16,7 @@ from datetime import datetime
 import shutil
 
 from nff.data import Dataset, concatenate_dict
-from nff.utils import tqdm_enum, parse_args, fprint
+from nff.utils import tqdm_enum, parse_args, fprint, read_csv
 import copy
 
 
@@ -210,12 +210,14 @@ def get_splits(sample_dic,
     """
 
     for name in ["train", "val", "test"]:
-        path = os.path.join(csv_folder, f"{name}_smiles.csv")
-        with open(path, "r") as f:
-            lines = f.readlines()
-        smiles_list = [i.split(",")[0].strip() for i in lines[1:]]
-        for smiles in smiles_list:
-            sample_dic[smiles].update({"split": name})
+        path = os.path.join(csv_folder, f"{name}_full.csv")
+        csv_dic = read_csv(path)
+        for i, smiles in enumerate(csv_dic["smiles"]):
+            # add any properties present in the csv
+            props = {key: csv_dic[key][i] for key in csv_dic.keys()
+                     if key != "smiles"}
+            sample_dic[smiles].update({"split": name,
+                                       **props[smiles]})
 
     keys = list(sample_dic.keys())
     for key in keys:
