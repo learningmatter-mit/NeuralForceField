@@ -1,5 +1,5 @@
 {
-  "job_path": "/home/gridsan/saxelrod/repo/nff/master/NeuralForceField/scripts/cp3d/train/files/confs.json",
+  "job_path": "/home/saxelrod/repo/nff/master/NeuralForceField/scripts/cp3d/train/files/confs.json",
   "model_path": "/nfs/rafagblab001/saxelrod/dsets/synthetic/confs/",
   "param_names": [
     "num_heads",

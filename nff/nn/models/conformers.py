@@ -273,6 +273,9 @@ class WeightedConformers(nn.Module):
 
         # offsets take care of periodic boundary conditions
         offsets = batch.get("offsets", 0)
+        # to deal with any shape mismatches
+        if offsets.max() == 0:
+           offsets = 0
 
         e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
              offsets).pow(2).sum(1).sqrt()[:, None]

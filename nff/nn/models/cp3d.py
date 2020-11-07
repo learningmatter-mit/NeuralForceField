@@ -395,6 +395,9 @@ class ChemProp3D(WeightedConformers):
         r = batch["atom_features"]
         # offsets for periodic boundary conditions
         offsets = batch.get("offsets", 0)
+        # to deal with any shape mismatches
+        if offsets.max() == 0:
+           offsets = 0
 
         # initialize hidden bond features
         h_0 = self.make_h(batch=batch,
@@ -597,6 +600,10 @@ class OnlyBondUpdateCP3D(ChemProp3D):
         # get the atom features
         r = batch["atom_features"]
         offsets = batch.get("offsets", 0)
+        # to deal with any shape mismatches
+        if offsets.max() == 0:
+           offsets = 0
+
         # get the distances between neighbors
         e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
              offsets).pow(2).sum(1).sqrt()[:, None]
