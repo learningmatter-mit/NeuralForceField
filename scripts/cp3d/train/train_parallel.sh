@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -N 8
+#SBATCH -N 16
 #SBATCH -t 30240
 #SBATCH --gres=gpu:2
 #SBATCH --mem=300G
@@ -16,6 +16,9 @@ source deactivate
 source ~/.bashrc
 source activate nff
 
+# change to your config path
+CONFIG="files/schnet_feat_cov1.json"
+
 # change to the number of GPUs you're using per node
 export SLURM_GPUS_PER_NODE=2
 export LD_LIBRARY_PATH=lib/$CONDA_PREFIX/:$LD_LIBRARY_PATH
@@ -24,7 +27,9 @@ export LD_LIBRARY_PATH=lib/$CONDA_PREFIX/:$LD_LIBRARY_PATH
 export NFFDIR="$HOME/repo/nff/covid_clean/NeuralForceField"
 export PYTHONPATH=$NFFDIR:$PYTHON_PATH
 
-python $NFFDIR/scripts/cp3d/train/train_parallel.py train_config.json  & pid=$!
+cmd="python $NFFDIR/scripts/cp3d/train/train_parallel.py $CONFIG  & pid=\$!"
+echo $cmd
+eval $cmd
 wait
 
 

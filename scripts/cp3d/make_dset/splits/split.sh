@@ -2,4 +2,8 @@ source deactivate
 source ~/.bashrc
 source activate chemprop
 
-python split.py --config_file split_config.json
+# change to your config path
+CONFIG_FILE="files/cov_1.json"
+cmd="python split.py --config_file $CONFIG_FILE"
+echo $cmd
+eval $cmd
