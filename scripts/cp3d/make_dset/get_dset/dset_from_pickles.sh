@@ -12,6 +12,9 @@ source deactivate
 source ~/.bashrc
 source activate nff
 
+# change to your config file
+CONFIG="config/cov_1.json"
+
 # change to your nff directory
 export NFFDIR="$HOME/repo/nff/covid_clean/NeuralForceField"
 export PYTHONPATH="$NFFDIR:$PYTHONPATH"
@@ -19,15 +22,15 @@ export PYTHONPATH="$NFFDIR:$PYTHONPATH"
 # `jq` allows you to read a JSON file in bash. Here we are using it to get the number of threads from the config file. If you don't have `jq` installed,
 # you can just change `num_threads` manually here, or you can download it by running `cd ../.. && bash download_jq.sh && cd - && source ~/.bashrc `
 
-NUM_THREADS=$(cat dset_config.json | $jq ".num_threads")
-SLURM_PAR=$(cat dset_config.json | $jq ".slurm_parallel")
+NUM_THREADS=$(cat $CONFIG | $jq ".num_threads")
+SLURM_PAR=$(cat $CONFIG | $jq ".slurm_parallel")
 END=$((NUM_THREADS-1))
 
 # increase the resource limit to avoid "too many open files" errors during parallel feature generation
 ulimit -n 50000
 
 for i in $(seq 0 $END); do
-    cmd="python dset_from_pickles.py --thread $i --config_file dset_config.json"
+    cmd="python dset_from_pickles.py --thread $i --config_file $CONFIG"
 
     # if parallelizing over nodes with slurm, use srun and let everything run together
     if [ $SLURM_PAR = 'true' ]; then

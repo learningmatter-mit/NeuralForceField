@@ -4,7 +4,7 @@
   "dataset_folder": "/home/gridsan/saxelrod/models/full_dset",
   "pickle_folder": "/home/gridsan/saxelrod/models/full_dset/rdkit_folder",
   "num_threads": 32,
-  "csv_folder": "/home/gridsan/saxelrod/chemprop_cov_1",
+  "csv_folder": "/home/gridsan/saxelrod/chemprop_cov_1/scaffold_split",
   "parallel_feat_threads": 1,
   "strict_conformers": true,
   "slurm_parallel": true,

@@ -1,6 +1,6 @@
 # Running CP3D scripts
 
-This folder contains scripts for doing ChemProp3D tasks. These include making a dataset out of pickle files with species information, and training a CP3D model using this dataset. Below are some details about how to use the different folders.
+This folder contains scripts for doing 3D-based prediction tasks. These include making a dataset out of pickle files with species information, and training a 3D model using this dataset. Below are some details about how to use the different folders.
 
 ## Table of Contents
 
@@ -39,7 +39,7 @@ The script `scripts/cp3d/make_dset/make_dset.sh` first generates training, valid
 ### Splitting the data
 The script `scripts/cp3d/make_dset/splits/split.sh` uses your summary file to get information about the data, generates a CSV of the data for ChemProp to read, and uses ChemProp to split the data. 
 
-Details for the script are in `scripts/cp3d/make_dset/splits/split_config.json`, which you should modify for your project. The keys are:
+Details for the script are can be found in any of the `JSON` files in `scripts/cp3d/make_dset/splits/config`. If you want to use a config file with a different name than what is specified in `split.sh`, then you should modify the `split.sh` script accordingly. The keys are:
 
 - `summary_path` (str): The path to the `JSON` file that contains a summary of the superset (the species from which you will sample to make your dataset). It has all the information about the species, excluding conformer/structural information. It also has the path to the corresponding pickle file, which has the structural information.
 - `csv_folder` (str): The folder in which you want to save your CSV files with the train, test, and split species.
@@ -56,7 +56,7 @@ Running the script will generate CSV files, save them in `csv_folder`, and print
 
 
 ### Generating the dataset from splits and pickles
-To make a CP3D dataset from a set of pickle files, we run the script `scripts/cp3d/make_dset/dset_from_pickles.sh`. This script can be used when you have a pickle file for each species. The pickle file should contain the following keys:
+To make a CP3D dataset from a set of pickle files, we run the script `scripts/cp3d/make_dset/get_dset/dset_from_pickles.sh`. This script can be used when you have a pickle file for each species. The pickle file should contain the following keys:
 
 - `smiles`: The SMILES string of the species
 - `conformers`: a list of dictionaries for each conformer
@@ -64,7 +64,7 @@ To make a CP3D dataset from a set of pickle files, we run the script `scripts/cp
     - If it doesn't contain `rd_mol` then it should contain `xyz` for the coordinates of the conformer. In this case the script will call `xyz2mol` to generate an RDKit `mol` object.
     - If you are using the RDKit pickles from the GEOM dataset, then a more in-depth discussion of the structure of the pickle files can be found [here](https://github.com/learningmatter-mit/geom/blob/master/tutorials/02_loading_rdkit_mols.ipynb).
     
-Details for the script are found in the file `dset_config.json`. This is where you should change the values for your project. The keys in the file are:
+Details for the script are can be found in any of the `JSON` files in `scripts/cp3d/make_dset/get_dset/config`. If you want to use a config file with a different name than what is specified in `dset_from_pickles.sh`, then you should modify the script accordingly. The keys in the files are:
 - `max_confs` (int): Maximum number of conformers for a species that you will allow in your dataset. If you don't want a limit, set this value to None.
 - `summary_path` (str): The path to the `JSON` file that contains a summary of the superset (the species from which you will sample to make your dataset). It has all the information about the species, excluding conformer/structural information. It also has the path to the corresponding pickle file, which has the structural information.
 - `dataset_folder` (str): The path to the folder you want to save your dataset in.
@@ -100,8 +100,6 @@ dset.save(<path>)
 If you are interested in adding other types of features then you can write your own class methods to generate them!
 
 
-
-
 ### Reducing the number of conformers
 
 If you've already made a dataset and you want to reduce the number of conformers, you can do that by running the script `scripts/cp3d/make_dset/trim_confs.sh`. The only arguments you need are:
@@ -127,7 +125,7 @@ Now that we have a dataset, we're ready to train a model! The model can be train
 ### The config file
 
 
-The script loads parameters from `scripts/cp3d/train/train_config.json`. The two main keys in this file are `model_params` and `train_params`.
+Details for the script are can be found in any of the `JSON` files in `scripts/cp3d/train/config`. If you want to use a config file with a different name than what is specified in `train_parallel.sh` or `train_single.sh`, then you should modify the script accordingly. The two main keys in the files are `model_params` and `train_params`.
 
 - `model_params` (dict): A dictionary with all parameters required to create a model. Its sub-keys are:
     - `model_type` (str): The kind of model you want to make. The currently supported options are `WeightedConformers`, which builds a SchNet model with pooled conformer fingerprints, `SchNetFeatures`, which builds a weighted SchNet model but with added graph-based node and bond features, `ChemProp3D`, which builds a ChemProp3D model with pooled conformers, and `OnlyBondUpdateCP3D`, which is `ChemProp3D` but without updating the distance-based edge features (it only concatenates them with updated graph-based edge features). If your dataset only contains one conformer per species, then each model will still work!
@@ -137,7 +135,7 @@ The script loads parameters from `scripts/cp3d/train/train_config.json`. The two
 #### Model parameters
 ##### SchNet
 
-An example of a `WeightedConformers` config file is `schnet_config.json`. An example of parameters for each of the four models can be found in the `06_cp3d.ipynb` tutorial. The keys required for `WeightedConformers` are as follows:
+An example of a `WeightedConformers` config file is `config/schnet_cov1.json`. An example of parameters for each of the four models can be found in the `06_cp3d.ipynb` tutorial. The keys required for `WeightedConformers` are as follows:
 
 - `mol_basis` (int): Dimension of the molecular fingerprint
 - `dropout_rate` (float) : Dropout rate applied to the convolutional layers
@@ -165,7 +163,7 @@ Note that if `n_atom_basis` is not equal to `mol_basis`, you must supply at leas
         - In this case the same keys are required as for `attention`.
 - `readoutdict` (dict): A dictionary that tells you how to convert the final pooled fingerprint into a prediction. Each key corresponds to the name of a different quantity to predict. Each value is a list of layer dictionaries telling you which layers to apply sequentially. 
 
-In the example given in `schnet_config.json`, a vector of size 900 (3x `mol_basis` because of three attention heads with concatenation) is converted to size 450 through a linear layer. Then a dropout layer and the ReLU activation are applied. Then another linear layer converts it to size 1, and a final dropout layer is applied. Note that this does not have a sigmoid layer because the model is trained with a BCELogits loss, which is equal to cross-entropy loss + sigmoid, but is more stable. At inference time you must remember to put the model into `eval` mode so that a sigmoid layer is applied! 
+In the example given in `schnet_cov1.json`, a vector of size 900 (3x `mol_basis` because of three attention heads with concatenation) is converted to size 450 through a linear layer. Then a dropout layer and the ReLU activation are applied. Then another linear layer converts it to size 1, and a final dropout layer is applied. Note that this does not have a sigmoid layer because the model is trained with a BCELogits loss, which is equal to cross-entropy loss + sigmoid, but is more stable. At inference time you must remember to put the model into `eval` mode so that a sigmoid layer is applied! 
 
 - `classifier` (bool): Whether the model is a classifier. If true, a sigmoid layer will automatically be added when the model is in `eval` mode, but not when it is in `train` mode. 
 - `gauss_embed` (bool): Whether to expand distances in a Gaussian basis, or just use them as they are
@@ -178,14 +176,14 @@ In the example given in `schnet_config.json`, a vector of size 900 (3x `mol_basi
 
 
 ##### SchNetFeatures
-Most of the parameters are the same as in WeightedConformers, with a few notes and additions:
+An example of a SchNetFeatures config file is `config/schnet_feat_cov1.json`. Most of the parameters are the same as in WeightedConformers, with a few notes and additions:
 - `n_atom_basis` (int): This is also present for SchNet conformers. But there it could be any number, and here it must be equal to the dimension of the atomic feature vector generated from the molecular graph. In ChemProp3D that number is 133.
 - `n_atom_hidden` (int): dimension of the atomic hidden vector. The model transforms the atom feature vector from `n_atom_basis` to `n_atom_hidden` (in this case, from 133 to 300).
 - `n_bond_hidden` (int): The dimension of the hidden vector that the bond feature vector is transformed into.
     
 ##### ChemProp3D
 
-An example of a `ChemProp3D` config file is `train_config.json` (this is the default used in `train_parallel.sh` and `train_single.sh`). Most of the keys required for `WeightedConformers` are the same as for weighted SchNet conformers. The remaining keys are as follows:
+An example of a `ChemProp3D` config file is `config/cp3d_cov1.json`. Most of the keys required for `WeightedConformers` are the same as for weighted SchNet conformers. The remaining keys are as follows:
     
 - `n_atom_basis` (int): This is also present for SchNet conformers. But there it could be any number, and here it must be equal to the dimension of the atomic feature vector generated from the molecular graph. In ChemProp3D that number is 133.
 - `cp_input_layers` (list[dict]): layers that convert node and bond features into hidden bond features. There are 133 atom features and 26 bond features, so there must be a total 159 of input features      
@@ -254,7 +252,7 @@ Here  only the bonds are updated, and the updated hidden bond vectors are concat
 
 ## Hyperparameter optimization
 
-`scripts/cp3d/hyperopt/run_hyperopt.sh` is a script that runs Bayesian hyperparameter optimization using the [hyperopt](https://github.com/hyperopt/hyperopt) package. The config file is `scripts/cp3d/hyperopt/search_config.json`. Its keys are:
+`scripts/cp3d/hyperopt/run_hyperopt.sh` is a script that runs Bayesian hyperparameter optimization using the [hyperopt](https://github.com/hyperopt/hyperopt) package. Details for the script are can be found in any of the `JSON` files in `scripts/cp3d/hyperopt/config`. If you want to use a config file with a different name than what is specified in `run_hyperopt.sh`, then you should modify the script accordingly. The keys are:
 - `job_path` (str): The path to the training config file. This file will be modified with different hyperparameters throughout the search.
 - `model_path` (str): The folder that your model lives in.
 - `param_names` (list[str]): Parameters that you want to optimize. You can choose any keys that appear in `model_params` in the training config file. Keys that are nested within `model_params` are more complicated. For example, the script allows you to vary the readout dropout rate, the attention dropout rate, and the number of attention heads, but other nested values are not yet supported. However, it shouldn't be too difficult to add extra options!
@@ -317,7 +315,7 @@ The script `export_to_cp/save_feats.sh` exports the pickle files generated by `m
 ### Training ChemProp models with the fingerprints
 
 The script `run_cp/run_all_tls.sh` runs ChemProp using the features generated above. It can loop through all CP3D models from which you generated features (e.g. model with the best `auc`, model with the best `prc`, etc.), and through combinations of training with features + MPNN and training with features alone. 
-- Details for the script are in `run_cp/all_tls_config.json`. The keys are:
+- Details for the script are in `run_cp/config/all_tls_config.json`. The keys are:
     - `base_config_path` (str): Path to the config file for the ChemProp. All of these parameters will be used for the ChemProp runs, except if you specify `metrics`, `features_path` or `features_only`, as these will change as you loop through the combinations of `metrics`, `feat_options`, and `mpnn_options` below. 
     - `cp_folder` (str): Path to the ChemProp folder on your computer.
     - `feature_folder` (str): Folder in which the features you generated above for ChemProp are saved. 
@@ -329,13 +327,13 @@ The script `run_cp/run_all_tls.sh` runs ChemProp using the features generated ab
     -  `hyp_config_path` (str): Path to the config path that will be used for hyperparameter optimization before training the final model
     - `rerun_hyerpopt` (bool): Do a new hyperparameter optimization even if the results of an optimization are already available in the `hyp_config_path` folder
 
-Examples of the `base_config_path` and `hyp_config_path` files are `run_cp/base_config.json` and `run_cp/base_hyp_config.json`, respectively.
+Examples of the `base_config_path` and `hyp_config_path` files are `run_cp/config/base_config.json` and `run_cp/config/base_hyp_config.json`, respectively.
 
 
 ### Saving the predictions
 Now that we've trained our models we want to get and save their predictions. That way we can do further analysis afterwards. For example, if we've trained a model to maximize the PRC-AUC but we want to also see what the model's ROC-AUC is, we'll have to get its predictions and do the analysis ourselves.
 
-The script that generates predictions is `run_cp/predict.sh`. Details for the script are in `run_cp/predict_config.json`. The keys are:
+The script that generates predictions is `run_cp/predict.sh`. Details for the script are in `run_cp/config/predict_config.json`. The keys are:
 - `cp_folder` (str): Path to the ChemProp folder on your computer.
 - `model_folder_cp` (str): Folder in which you made sub-folders for all your ChemProp models.
 - `device` (str): Device you want to use when calling the model. Can be "cpu" or any integer from 0 to the number of GPUs you have available, if you want to use a GPU.
@@ -344,7 +342,7 @@ The script that generates predictions is `run_cp/predict.sh`. Details for the sc
 
 
 # Training a regular ChemProp model
-We also provide a wrapper around ChemProp, so that a ChemProp model can be easily trained and compared with a 3D model. We used this script to train a 2D model on CoV data and use it to create fingerprints for transfer learning to CoV-2. The main script is `cp3d/chemprop/cp_train.sh`. This script calls `cp_train.py`, which uses details in `cp_train_config.json`. Its keys are:
+We also provide a wrapper around ChemProp, so that a ChemProp model can be easily trained and compared with a 3D model. We used this script to train a 2D model on CoV data and use it to create fingerprints for transfer learning to CoV-2. The main script is `cp3d/chemprop/cp_train.sh`. This script calls `cp_train.py`, which uses details in any of the `JSON` files in `cp3d/chemprop/config`. Its keys are:
 - `base_config_path` (str): Path to the config file for ChemProp
 - `hyp_config_path` (str): Path to the config path that will be used for hyperparameter optimization before training the final model
 - `use_hyperopt` (bool): Perform a hyperparameter optimization before training the model and evaluating on the test set.

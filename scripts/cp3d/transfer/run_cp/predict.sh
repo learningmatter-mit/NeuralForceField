@@ -2,4 +2,9 @@ source deactivate
 source ~/.bashrc
 source activate nff
 
-python predict.py --config_file predict_config.json
+# change to your config files
+CONFIG="config/predict_config.json"
+
+cmd="python predict.py --config_file $CONFIG"
+echo $cmd
+eval $cmd

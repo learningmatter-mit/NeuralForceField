@@ -2,11 +2,16 @@ source deactivate
 source ~/.bashrc
 source activate nff
 
+# change to your config path
+CONFIG="config/schnet_feat_cov1.json"
+
 # change to your location of NeuralForceField
 export NFFDIR="$HOME/repo/nff/covid_clean/NeuralForceField"
 export PYTHONPATH=$NFFDIR:$PYTHON_PATH
 
-python train_single.py train_config.json -nr 0 --gpus 1 --nodes 1 & pid=$!
+cmd="python train_single.py $CONFIG -nr 0 --gpus 1 --nodes 1 & pid=\$!"
+echo $cmd
+eval $cmd
 wait
 
 

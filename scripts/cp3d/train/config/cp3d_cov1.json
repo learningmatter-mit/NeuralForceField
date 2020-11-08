@@ -14,7 +14,6 @@
             "equal_weights": false
         },
         "classifier": true,
-        "cp_dropout": 0,
         "cutoff": 5.0,
         "ext_feat_types": [],
         "extra_features": [],
@@ -80,12 +79,12 @@
          },
 
         "same_filters": true,
-        "schnet_dropout": 0,
         "trainable_gauss": false,
-        "use_mpnn": true
+        "use_mpnn": true,
+        "dropout_rate": 0
     },
     "train_params": {
-        "batch_size": 32,
+        "batch_size": 16,
         "checkpoints_to_keep": 10000,
         "del_grad_interval": 100,
         "log_every_n_epochs": 1,
@@ -97,18 +96,18 @@
         "lr_decay": 0.5,
         "lr_min": 1e-06,
         "lr_patience": 10,
-        "max_epochs": 100,
+        "max_epochs": 10,
         "metric_as_loss": "PrAuc_sars_cov_one_cl_protease_active",
         "metric_objective": "maximize",
         "metrics": [
             "RocAuc",
             "PrAuc"
         ],
-        "mini_batches": 2,
+        "mini_batches": 4,
         "model_kwargs": {
             "sub_batch_size": 3
         },
-        "model_name": "full_dset",
+        "model_name": "reduced_size",
         "mol_loss_norm": true,
         "sampler": {
             "name": "ImbalancedDatasetSampler",

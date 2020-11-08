@@ -4,7 +4,6 @@ source ~/.bashrc
 echo ""
 echo "-----------------------------------------------------------------------------------"
 echo "Making fingerprints using a pre-trained model."
-echo "Using the details specified in get_fps/fp_config.json."
 echo "-----------------------------------------------------------------------------------"
 echo ""
 
@@ -15,7 +14,6 @@ cd - > /dev/null
 echo ""
 echo "-----------------------------------------------------------------------------------"
 echo "Saving the fingerprints to feature files for ChemProp."
-echo "Using the details specified in export_to_cp/feat_config.json."
 echo "-----------------------------------------------------------------------------------"
 echo ""
 
@@ -26,7 +24,6 @@ cd - > /dev/null
 echo ""
 echo "-----------------------------------------------------------------------------------"
 echo "Training ChemProp models with different sets of features and architectures. "
-echo "Using the details specified in run_cp/all_tls_config.json."
 echo "-----------------------------------------------------------------------------------"
 echo ""
 
@@ -36,7 +33,6 @@ bash run_all_tls.sh
 echo ""
 echo "-----------------------------------------------------------------------------------"
 echo "Getting and saving the ChemProp predictions. "
-echo "Using the details specified in run_cp/predict_config.json."
 echo "-----------------------------------------------------------------------------------"
 echo ""
 
