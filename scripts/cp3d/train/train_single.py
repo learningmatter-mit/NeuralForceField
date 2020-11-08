@@ -16,6 +16,7 @@ from nff.data import Dataset, split_train_validation_test, collate_dicts
 from nff.data.loader import ImbalancedDatasetSampler
 from nff.train import metrics, Trainer, get_model, loss, hooks
 from nff.utils.confs import trim_confs
+from nff.utils import fprint
 
 import torch.multiprocessing as mp
 import torch.nn as nn
@@ -71,6 +72,7 @@ def load_dset(path, max_confs):
 
     dset = Dataset.from_file(path)
     if max_confs is not None:
+        fprint("Reducing each species to a maximum of {max_confs} species...")
         dset = trim_confs(dataset=dset,
                           num_confs=max_confs,
                           idx_dic=None)
