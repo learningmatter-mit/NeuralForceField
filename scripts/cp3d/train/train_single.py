@@ -75,7 +75,8 @@ def load_dset(path, max_confs, rank):
     base = (rank == 0)
 
     if max_confs is not None:
-        fprint(f"Reducing each species to a maximum of {max_confs} species...")
+        fprint(("Reducing each species to have a maximum of "
+                f"{max_confs} conformers..."))
         # only track progress if this is the base process
         if base:
             enum_func = tqdm_enum
