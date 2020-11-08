@@ -15,6 +15,7 @@ from torch.optim import Adam
 from nff.data import Dataset, split_train_validation_test, collate_dicts
 from nff.data.loader import ImbalancedDatasetSampler
 from nff.train import metrics, Trainer, get_model, loss, hooks
+from nff.utils.confs import trim_confs
 
 import torch.multiprocessing as mp
 import torch.nn as nn
@@ -57,7 +58,30 @@ def init_parallel(node_rank,
     sys.stdout.flush()
 
 
-def get_gpu_splits(weight_path, rank, world_size, params):
+def load_dset(path, max_confs):
+    """
+    Load a dataset and trim its conformers if requested.
+    Args:
+        path (str): path to the dataset
+        max_confs (int): maximum number of conformers per
+            species.
+    Returns:
+        dset (nff.data.Dataset): loaded dataset
+    """
+
+    dset = Dataset.from_file(path)
+    if max_confs is not None:
+        dset = trim_confs(dataset=dset,
+                          num_confs=max_confs,
+                          idx_dic=None)
+    return dset
+
+
+def get_gpu_splits(weight_path,
+                   rank,
+                   world_size,
+                   params,
+                   max_confs):
     """ 
     Check if there are already datasets in each parallel folder.
     If so, load and return those datasets instead of loading the whole
@@ -68,6 +92,8 @@ def get_gpu_splits(weight_path, rank, world_size, params):
         rank (int): global rank of the current process
         world_size (int): total number number of gpus altogether
         params (dict): training/network parameters
+        max_confs (int): maximum number of conformers per
+            species.
 
     Returns:
         datasets (list): train, val, and test get_datasets if
@@ -104,12 +130,13 @@ def get_gpu_splits(weight_path, rank, world_size, params):
     # if the train/val/test splits are already saved, then load them
 
     if all([os.path.isfile(path) for path in split_paths]):
-        datasets = [Dataset.from_file(path) for path in split_paths]
+        datasets = []
+        datasets = [load_dset(path, max_confs) for path in split_paths]
         return datasets
 
     # otherwise get the dataset, split it, and save it
 
-    dataset = Dataset.from_file(dat_path)
+    dataset = load_dset(dat_path, max_confs)
 
     # split this sub-dataset into train/val/test
 
@@ -267,7 +294,8 @@ def make_all_loaders(weight_path,
                      node_rank,
                      gpu,
                      gpus,
-                     log_train):
+                     log_train,
+                     max_confs):
     """
     Get train, val, and test data loaders.
     Args:
@@ -283,6 +311,8 @@ def make_all_loaders(weight_path,
         gpu (int): local rank of the current gpu
         gpus (int): number of gpus per node
         log_train (Callable): train logger
+        max_confs (int): maximum number of conformers per
+            species.
 
     Returns:
         loaders (list): list of test, train and val loaders
@@ -296,7 +326,8 @@ def make_all_loaders(weight_path,
     gpu_splits = get_gpu_splits(weight_path=weight_path,
                                 rank=rank,
                                 world_size=world_size,
-                                params=params)
+                                params=params,
+                                max_confs=max_confs)
 
     # if not, and if this is the base GPU, we need to either
     # load the dataset or make the dataset and save it to the
@@ -313,9 +344,8 @@ def make_all_loaders(weight_path,
         # the base gpu to initialize.
 
         if base:
-            train, val, test = make_or_get_datasets(params=params,
-                                                    model_name=model_name,
-                                                    weight_path=weight_path)
+            train, val, test = dsets_from_folder(weight_path=weight_path,
+                                                 max_confs=max_confs)
     else:
 
         central_data = False
@@ -334,7 +364,8 @@ def make_all_loaders(weight_path,
     # load the entire dataset from the main folder
 
     if gpu_splits is None and not base:
-        train, val, test = get_datasets(weight_path)
+        train, val, test = dsets_from_folder(weight_path=weight_path,
+                                             max_confs=max_confs)
 
     # record dataset stats
 
@@ -367,13 +398,15 @@ def make_all_loaders(weight_path,
     return loaders
 
 
-def dsets_from_folder(weight_path):
+def dsets_from_folder(weight_path, max_confs):
     """
     Load train, val, and test datasets from the main folder.
     Args:
         weight_path (str): training folder
     Returns:
         datasets (list): train, val, and test datasets
+        max_confs (int): maximum number of conformers per
+            species.
 
     """
 
@@ -381,12 +414,9 @@ def dsets_from_folder(weight_path):
     datasets = []
     for name in names:
         data_path = os.path.join(weight_path, "{}.pth.tar".format(name))
-        if not os.path.isfile(data_path):
-            break
-        datasets.append(Dataset.from_file(data_path))
+        datasets.append(load_dset(data_path, max_confs))
 
-    if len(datasets) == 3:
-        return datasets
+    return datasets
 
 
 def nff_to_splits(dataset, params, weight_path):
@@ -420,43 +450,6 @@ def nff_to_splits(dataset, params, weight_path):
     for d_set, name in zip(datasets, names):
         data_path = os.path.join(weight_path, "{}.pth.tar".format(name))
         d_set.save(data_path)
-
-    return datasets
-
-
-def make_or_get_datasets(model_name, params, weight_path):
-    """
-    Create the nff dataset and split it into train, val, and test.
-    If the dataset is already there (e.g. if you've picked up
-    training where you left off earlier), then load it.
-    Args:
-        params (dict):   training/network parameters
-        model_name (int): neural network database object ID
-        weight_path (str): training folder
-    Returns:
-        datasets (list): train, val and test datasets
-    """
-
-    datasets = dsets_from_folder(weight_path)
-    return datasets
-
-
-def get_datasets(weight_path):
-    """
-    Load the datasets.
-    Args:
-        weight_path (str): training folder
-    Returns:
-        datasets (list): train, val and test datasets
-
-    """
-
-    datasets = []
-    names = ['train', 'val', 'test']
-
-    for name in names:
-        data_path = os.path.join(weight_path, "{}.pth.tar".format(name))
-        datasets.append(Dataset.from_file(data_path))
 
     return datasets
 
@@ -833,7 +826,8 @@ def train(gpu,
           gpus,
           metric_names,
           base_keys,
-          grad_keys):
+          grad_keys,
+          max_confs):
     """
     Train a model in parallel.
     Args:
@@ -842,6 +836,13 @@ def train(gpu,
         world_size (int): total number of gpus
         node_rank (int): index of the current node
         gpus (int): number of gpus per node
+        metric_names (list[str]): metrics to monitor
+        base_keys (list[str]): keys that the model is
+            directly predicting
+        grad_keys (list[str]): gradients of quantities
+            that the model is spredicting
+        max_confs (int): maximum number of conformers per
+            species.
     Returns:
         None
     """
@@ -869,7 +870,8 @@ def train(gpu,
                                node_rank=node_rank,
                                gpu=gpu,
                                gpus=gpus,
-                               log_train=log_train)
+                               log_train=log_train,
+                               max_confs=max_confs)
     train_loader, val_loader, test_loader = loaders
 
     log_train("Created loaders.")
