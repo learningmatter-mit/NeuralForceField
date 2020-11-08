@@ -102,7 +102,9 @@ If you are interested in adding other types of features then you can write your 
 
 ### Reducing the number of conformers
 
-If you've already made a dataset and you want to reduce the number of conformers, you can do that by running the script `scripts/cp3d/make_dset/trim_confs.sh`. The only arguments you need are:
+If you've already made a dataset and you want to reduce the number of conformers, you can do that by running the script `scripts/cp3d/make_dset/trim_confs.sh`. That said, it's much better to make one dataset with all the conformers you'll need at any time. Then, if for a certain model you only want to use 10 of the conformers, you can specify `"max_confs": 10` in your training config file and only 10 will be used for each species. 
+
+However, if you're sure you don't want any more conformers and you want to trim the dataset now, you can use `scripts/cp3d/make_dset/trim_confs.sh`. The only arguments you need are:
 - `from_model_path` (str): The old path to the model and dataset. The script assumes your datasets are in the folders `from_model_path/0`, `from_model_path/1`, ..., etc., as they would be if generated using the `dset_from_pickles.sh`.
 - `to_model_path` (str) The path to the new dataset with fewer conformers
 - `num_confs` (int): Number of conformers that you want in the new dataset
@@ -125,11 +127,14 @@ Now that we have a dataset, we're ready to train a model! The model can be train
 ### The config file
 
 
-Details for the script are can be found in any of the `JSON` files in `scripts/cp3d/train/config`. If you want to use a config file with a different name than what is specified in `train_parallel.sh` or `train_single.sh`, then you should modify the script accordingly. The two main keys in the files are `model_params` and `train_params`.
+Details for the script are can be found in any of the `JSON` files in `scripts/cp3d/train/config`. If you want to use a config file with a different name than what is specified in `train_parallel.sh` or `train_single.sh`, then you should modify the script accordingly. The two main keys in the files are `model_params` and `train_params`. 
 
 - `model_params` (dict): A dictionary with all parameters required to create a model. Its sub-keys are:
     - `model_type` (str): The kind of model you want to make. The currently supported options are `WeightedConformers`, which builds a SchNet model with pooled conformer fingerprints, `SchNetFeatures`, which builds a weighted SchNet model but with added graph-based node and bond features, `ChemProp3D`, which builds a ChemProp3D model with pooled conformers, and `OnlyBondUpdateCP3D`, which is `ChemProp3D` but without updating the distance-based edge features (it only concatenates them with updated graph-based edge features). If your dataset only contains one conformer per species, then each model will still work!
     - An assortment of other keys, which depend on the model type. Below we go through each key for the two different model types.
+- `train_params` (dict): A dictionary with parameters related to training the model, which we will explore in more depth after going through different examples of `model_params`.
+    
+A key feature to be aware of is that you can **train a model on only a subset of the conformers in your dataset**, by specifying `max_confs` in `train_params`.
 
     
 #### Model parameters
@@ -205,6 +210,7 @@ Here  only the bonds are updated, and the updated hidden bond vectors are concat
 
 #### Training parameters
 
+- `max_confs` (int, optional): Maximum number of conformers you want to use. If you don't specify a value then all the conformers in the dataset will be used.
 - `train_params` (dict): A dictionary with information about the training process. The required keys are the same for all model types. They are:
 
     - `use_slurm` (bool): Use slurm when running parallel training. If set to true, the script will use Slurm variables to find the number of GPUs and nodes. 
