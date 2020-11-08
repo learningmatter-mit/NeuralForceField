@@ -75,8 +75,6 @@ def load_dset(path, max_confs, rank):
     base = (rank == 0)
 
     if max_confs is not None:
-        fprint(("Reducing each species to have a maximum of "
-                f"{max_confs} conformers..."))
         # only track progress if this is the base process
         if base:
             enum_func = tqdm_enum
@@ -142,7 +140,9 @@ def get_gpu_splits(weight_path,
     # if the train/val/test splits are already saved, then load them
 
     if all([os.path.isfile(path) for path in split_paths]):
-        datasets = []
+        if max_confs is not None:
+            fprint(("Reducing each species to have a maximum of "
+                    f"{max_confs} conformers..."))
         datasets = [load_dset(path, max_confs, rank) for path in split_paths]
         return datasets
 
