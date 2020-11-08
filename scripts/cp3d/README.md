@@ -1,6 +1,6 @@
 # Running CP3D scripts
 
-This folder contains scripts for doing 3D-based prediction tasks. These include making a dataset out of pickle files with species information, and training a CP3D model using this dataset. Below are some details about how to use the different folders.
+This folder contains scripts for doing 3D-based prediction tasks. These include making a dataset out of pickle files with species information, and training a 3D model using this dataset. Below are some details about how to use the different folders.
 
 ## Table of Contents
 
