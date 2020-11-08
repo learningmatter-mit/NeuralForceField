@@ -342,7 +342,7 @@ The script that generates predictions is `run_cp/predict.sh`. Details for the sc
 
 
 # Training a regular ChemProp model
-We also provide a wrapper around ChemProp, so that a ChemProp model can be easily trained and compared with a 3D model. We used this script to train a 2D model on CoV data and use it to create fingerprints for transfer learning to CoV-2. The main script is `cp3d/chemprop/cp_train.sh`. This script calls `cp_train.py`, which uses details in `cp_train_config.json`. Its keys are:
+We also provide a wrapper around ChemProp, so that a ChemProp model can be easily trained and compared with a 3D model. We used this script to train a 2D model on CoV data and use it to create fingerprints for transfer learning to CoV-2. The main script is `cp3d/chemprop/cp_train.sh`. This script calls `cp_train.py`, which uses details in any of the `JSON` files in `cp3d/chemprop/config`. Its keys are:
 - `base_config_path` (str): Path to the config file for ChemProp
 - `hyp_config_path` (str): Path to the config path that will be used for hyperparameter optimization before training the final model
 - `use_hyperopt` (bool): Perform a hyperparameter optimization before training the model and evaluating on the test set.
