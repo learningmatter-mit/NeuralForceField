@@ -140,9 +140,10 @@ def get_gpu_splits(weight_path,
     # if the train/val/test splits are already saved, then load them
 
     if all([os.path.isfile(path) for path in split_paths]):
-        if max_confs is not None:
+        if max_confs is not None and (rank == 0):
+            conf_str = "conformer" if max_confs == 1 else "conformers"
             fprint(("Reducing each species to have a maximum of "
-                    f"{max_confs} conformers..."))
+                    f"{max_confs} {conf_str}..."))
         datasets = [load_dset(path, max_confs, rank) for path in split_paths]
         return datasets
 
