@@ -16,7 +16,7 @@ from nff.data import Dataset, split_train_validation_test, collate_dicts
 from nff.data.loader import ImbalancedDatasetSampler
 from nff.train import metrics, Trainer, get_model, loss, hooks
 from nff.utils.confs import trim_confs
-from nff.utils import fprint
+from nff.utils import fprint, tqdm_enum
 
 import torch.multiprocessing as mp
 import torch.nn as nn
@@ -59,23 +59,32 @@ def init_parallel(node_rank,
     sys.stdout.flush()
 
 
-def load_dset(path, max_confs):
+def load_dset(path, max_confs, rank):
     """
     Load a dataset and trim its conformers if requested.
     Args:
         path (str): path to the dataset
         max_confs (int): maximum number of conformers per
             species.
+        rank (int): global rank of the current process
     Returns:
         dset (nff.data.Dataset): loaded dataset
     """
 
     dset = Dataset.from_file(path)
+    base = (rank == 0)
+
     if max_confs is not None:
         fprint("Reducing each species to a maximum of {max_confs} species...")
+        # only track progress if this is the base process
+        if base:
+            enum_func = tqdm_enum
+        else:
+            enum_func = enumerate
         dset = trim_confs(dataset=dset,
                           num_confs=max_confs,
-                          idx_dic=None)
+                          idx_dic=None,
+                          enum_func=enum_func)
     return dset
 
 
@@ -133,12 +142,12 @@ def get_gpu_splits(weight_path,
 
     if all([os.path.isfile(path) for path in split_paths]):
         datasets = []
-        datasets = [load_dset(path, max_confs) for path in split_paths]
+        datasets = [load_dset(path, max_confs, rank) for path in split_paths]
         return datasets
 
     # otherwise get the dataset, split it, and save it
 
-    dataset = load_dset(dat_path, max_confs)
+    dataset = load_dset(dat_path, max_confs, rank)
 
     # split this sub-dataset into train/val/test
 
@@ -343,7 +352,8 @@ def make_all_loaders(weight_path,
 
         if base:
             train, val, test = dsets_from_folder(weight_path=weight_path,
-                                                 max_confs=max_confs)
+                                                 max_confs=max_confs,
+                                                 rank=rank)
     else:
 
         central_data = False
@@ -363,7 +373,8 @@ def make_all_loaders(weight_path,
 
     if gpu_splits is None and not base:
         train, val, test = dsets_from_folder(weight_path=weight_path,
-                                             max_confs=max_confs)
+                                             max_confs=max_confs,
+                                             rank=rank)
 
     # record dataset stats
 
@@ -396,11 +407,12 @@ def make_all_loaders(weight_path,
     return loaders
 
 
-def dsets_from_folder(weight_path, max_confs):
+def dsets_from_folder(weight_path, max_confs, rank):
     """
     Load train, val, and test datasets from the main folder.
     Args:
         weight_path (str): training folder
+        rank (int): global rank of the current process
     Returns:
         datasets (list): train, val, and test datasets
         max_confs (int): maximum number of conformers per
@@ -412,7 +424,7 @@ def dsets_from_folder(weight_path, max_confs):
     datasets = []
     for name in names:
         data_path = os.path.join(weight_path, "{}.pth.tar".format(name))
-        datasets.append(load_dset(data_path, max_confs))
+        datasets.append(load_dset(data_path, max_confs, rank))
 
     return datasets
 

@@ -307,7 +307,10 @@ def update_dset(batch, batch_dic, dataset, i):
     return dataset
 
 
-def trim_confs(dataset, num_confs, idx_dic):
+def trim_confs(dataset,
+               num_confs,
+               idx_dic,
+               enum_func=None):
     """
     Trim conformers for the entire dataset.
     Args:
@@ -318,9 +321,15 @@ def trim_confs(dataset, num_confs, idx_dic):
             of the conformers you want to keep. If not specified,
             then the top `num_confs` conformers with the highest
             statistical weight will be used.
+        enum_func (callable, optional): a function with which to 
+            enumerate the dataset. If not given, we use tqdm
+            to track progress. 
     Returns:
         dataset (nff.data.dataset): updated NFF dataset
     """
+
+    if enum_func is None:
+        enum_func = tqdm_enum
 
     for i, batch in tqdm_enum(dataset):
 
