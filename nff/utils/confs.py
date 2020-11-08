@@ -229,6 +229,26 @@ def convert_nbrs(batch_dic, nbrs, nbr_idx):
     return new_nbrs
 
 
+def update_bond_idx(batch, new_nbrs):
+    """
+    Update `bond_idx` (which are the mappings of bonded atom pairs
+    to their locations in the neighbor list) based on the trimming of
+    the neighbor list.
+    Args:
+        batch (dict): Batch dictionary
+        new_nbrs (torch.LongTensor): Trimmed neighbor list
+    Returns:
+        new_bond_idx (torch.LongTensor): updated bond idx.
+
+    """
+    bond_idx = batch["bond_idx"]
+    nbr_shape = new_nbrs.shape[0]
+    mask = bond_idx < nbr_shape
+    new_bond_idx = bond_idx[mask]
+
+    return new_bond_idx
+
+
 def update_dset(batch, batch_dic, dataset, i):
     """
     Update the dataset with the new values for the requested
@@ -266,10 +286,10 @@ def update_dset(batch, batch_dic, dataset, i):
     dataset.props["bonded_nbr_list"][i] = convert_nbrs(batch_dic,
                                                        bond_nbrs,
                                                        bond_nbr_idx)
-
-    dataset.props["nbr_list"][i] = convert_nbrs(batch_dic,
-                                                nbr_list,
-                                                all_nbr_idx)
+    new_nbrs = convert_nbrs(batch_dic,
+                            nbr_list,
+                            all_nbr_idx)
+    dataset.props["nbr_list"][i] = new_nbrs
 
     # get the atom and bond features at the right indices
     dataset.props["bond_features"][i] = bond_feats[bond_nbr_idx]
@@ -278,6 +298,11 @@ def update_dset(batch, batch_dic, dataset, i):
     # renormalize weights
     dataset.props["weights"][i] = update_weights(batch,
                                                  batch_dic)
+
+    # get rid of any entries in `bond_idx` that don't exist anymore
+    if "bond_idx" in dataset.props:
+        dataset.props["bond_idx"][i] = update_bond_idx(batch,
+                                                       new_nbrs)
 
     return dataset
 

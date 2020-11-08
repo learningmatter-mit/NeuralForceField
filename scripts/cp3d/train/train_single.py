@@ -289,13 +289,11 @@ def make_all_loaders(weight_path,
                      world_size,
                      params,
                      base,
-                     model_name,
                      batch_size,
                      node_rank,
                      gpu,
                      gpus,
-                     log_train,
-                     max_confs):
+                     log_train):
     """
     Get train, val, and test data loaders.
     Args:
@@ -305,14 +303,11 @@ def make_all_loaders(weight_path,
         params (dict): training/network parameters
         base (bool): whether this is the base process
         geoms (QuerySet): Geom objects to use when creating the dataset
-        model_name (int): name given to the model
         batch_size (int): per-gpu batch size
         node_rank (int): rank of the node
         gpu (int): local rank of the current gpu
         gpus (int): number of gpus per node
         log_train (Callable): train logger
-        max_confs (int): maximum number of conformers per
-            species.
 
     Returns:
         loaders (list): list of test, train and val loaders
@@ -323,6 +318,7 @@ def make_all_loaders(weight_path,
     # see if the data has been pre-split based on the number
     # of gpus
 
+    max_confs = params.get("max_confs")
     gpu_splits = get_gpu_splits(weight_path=weight_path,
                                 rank=rank,
                                 world_size=world_size,
@@ -826,8 +822,7 @@ def train(gpu,
           gpus,
           metric_names,
           base_keys,
-          grad_keys,
-          max_confs):
+          grad_keys):
     """
     Train a model in parallel.
     Args:
@@ -841,8 +836,6 @@ def train(gpu,
             directly predicting
         grad_keys (list[str]): gradients of quantities
             that the model is spredicting
-        max_confs (int): maximum number of conformers per
-            species.
     Returns:
         None
     """
@@ -865,13 +858,11 @@ def train(gpu,
                                world_size=world_size,
                                params=params,
                                base=base,
-                               model_name=model_name,
                                batch_size=batch_size,
                                node_rank=node_rank,
                                gpu=gpu,
                                gpus=gpus,
-                               log_train=log_train,
-                               max_confs=max_confs)
+                               log_train=log_train)
     train_loader, val_loader, test_loader = loaders
 
     log_train("Created loaders.")
