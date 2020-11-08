@@ -13,7 +13,7 @@ source ~/.bashrc
 source activate nff
 
 # change to your config file
-CONFIG_FILE="files/cov_1.json"
+CONFIG_FILE="config/cov_1.json"
 
 # change to your nff directory
 export NFFDIR="$HOME/repo/nff/covid_clean/NeuralForceField"

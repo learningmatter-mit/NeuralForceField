@@ -16,7 +16,7 @@ source deactivate
 source ~/.bashrc
 
 # change to your config path
-export CONFIG="files/cp3d.json"
+export CONFIG="config/cp3d.json"
 
 # change to the number of GPUs you're using per node
 export SLURM_GPUS_PER_NODE=2

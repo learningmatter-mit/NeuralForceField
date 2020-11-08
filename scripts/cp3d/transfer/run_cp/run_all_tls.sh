@@ -3,7 +3,7 @@ source ~/.bashrc
 source activate nff
 
 # change to your config files
-CONFIG="files/all_tls_config.json"
+CONFIG="config/all_tls_config.json"
 
 cmd="python run_all_tls.py --config_file $CONFIG"
 echo $cmd

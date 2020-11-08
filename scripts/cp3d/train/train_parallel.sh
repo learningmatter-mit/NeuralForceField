@@ -17,7 +17,7 @@ source ~/.bashrc
 source activate nff
 
 # change to your config path
-CONFIG="files/schnet_feat_cov1.json"
+CONFIG="config/schnet_feat_cov1.json"
 
 # change to the number of GPUs you're using per node
 export SLURM_GPUS_PER_NODE=2

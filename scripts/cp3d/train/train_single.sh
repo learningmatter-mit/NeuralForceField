@@ -3,7 +3,7 @@ source ~/.bashrc
 source activate nff
 
 # change to your config path
-CONFIG="files/schnet_feat_cov1.json"
+CONFIG="config/schnet_feat_cov1.json"
 
 # change to your location of NeuralForceField
 export NFFDIR="$HOME/repo/nff/covid_clean/NeuralForceField"
