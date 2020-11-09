@@ -142,7 +142,7 @@ def fps_and_pred(model, batch, **kwargs):
       model (nff.nn.models): original NFF model loaded
       batch (dict): batch of data
     Returns:
-      results (dict): model predictions and its predicted 
+      results (dict): model predictions and its predicted
         fingerprints, conformer weights, etc.
 
     """
@@ -162,11 +162,15 @@ def fps_and_pred(model, batch, **kwargs):
     energy = batch.get("energy")
     boltz_weights = batch.get("weights")
 
-    results.update({"fp": pooled_fp,
+    # with operations to de-batch
+    n_confs = [(n // m).item() for n, m in zip(batch['num_atoms'], batch['mol_size'])]
+    for key, val in results.items():
+        results[key] = [i for i in val]
+    results.update({"fp": [i for i in pooled_fp],
                     "conf_fps": conf_fps,
                     "learned_weights": learned_weights,
-                    "energy": energy,
-                    "boltz_weights": boltz_weights})
+                    "energy": list(torch.split(energy, n_confs)),
+                    "boltz_weights": list(torch.split(boltz_weights, n_confs))})
     return results
 
 
