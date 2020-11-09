@@ -27,6 +27,8 @@ def is_model_path(cp_model_path):
     # get the paths of all the models saved with different initial random seeds
     check_names = [i for i in os.listdir(cp_model_path)
                    if i.startswith("fold_") and i.split("_")[-1].isdigit()]
+    # sort by order
+    check_names = sorted(check_names, key=lambda x: int(x.split("_")[-1]))
     check_paths = [os.path.join(cp_model_path, name, "model_0/model.pt")
                    for name in check_names]
     is_model = len(check_paths) != 0
@@ -48,9 +50,10 @@ def predict(cp_folder,
       device (Union[str, int]): device to evaluate the model on
       check_paths (list[str]): paths to the different model checkpoints
     Returns:
-      real (dict): dictionary of the form {prop: real}, where `real` are the real
-        values of the property `prop`.
-      pred (dict): same as `real` but for predicted.
+      reals (dict):dictionary of the form {prop: real}, where `real`
+          are the real values of the property `prop`.
+      preds (list[dict]): same as `real` but for predicted. One for each
+          model.
     """
 
     script = os.path.join(cp_folder, "predict.py")
@@ -64,30 +67,35 @@ def predict(cp_folder,
         args = json.load(f)
     features_path = args["separate_test_features_path"]
 
-    # make a string for all of the checkpoint paths
-    check_str = " ".join(check_paths)
+    # predictions from different models
+    preds = []
 
-    # make the chemprop command
+    for i, check_path in enumerate(check_paths):
 
-    cmd = (f"source activate chemprop && python {script} "
-           f" --test_path {test_path} --preds_path {preds_path} "
-           f" --checkpoint_paths {check_str} ")
+        # make the chemprop command
 
-    if device == "cpu":
-        cmd += f" --no_cuda"
-    else:
-        cmd += f" --gpu {device} "
+        this_path = preds_path.replace(".csv", f"_{i}.csv")
+        cmd = (f"source activate chemprop && python {script} "
+               f" --test_path {test_path} --preds_path {this_path} "
+               f" --checkpoint_paths {check_path} ")
 
-    if features_path is not None:
-        cmd += f" --features_path {features_path[0]}"
+        if device == "cpu":
+            cmd += f" --no_cuda"
+        else:
+            cmd += f" --gpu {device} "
 
-    p = bash_command(cmd)
-    p.wait()
+        if features_path is not None:
+            cmd += f" --features_path {features_path[0]}"
+
+        p = bash_command(cmd)
+        p.wait()
+
+        pred = read_csv(this_path)
+        preds.append(pred)
 
     real = read_csv(test_path)
-    pred = read_csv(preds_path)
 
-    return real, pred
+    return real, preds
 
 
 def apply_metric(metric, pred, actual):
@@ -126,38 +134,54 @@ def apply_metric(metric, pred, actual):
     return score
 
 
-def get_metrics(actual_dic, pred_dic, metrics, cp_model_path):
+def get_metrics(actual_dic, pred_dics, metrics, cp_model_path):
     """
     Get all requested metric scores for a set of predictions and save
     to a JSON file.
     Args:
-      actual_dic (dict): dictionary of the form {prop: real}, where `real` are the 
+      actual_dic (dict): dictionary of the form {prop: real}, where `real` are the
         real values of the property `prop`.
-      pred_dic (dict): same as `real` but for predicted.
-      metrics (list[str]): metrics to apply 
+      pred_dics (list[dict]): list of dictionaries, each the same as `real` but
+        with values predicted by each different model.
+      metrics (list[str]): metrics to apply
       cp_model_path (str): path to the folder with the model of interest
     Returns:
       None
     """
 
-    metric_dic = {}
-    for prop in pred_dic.keys():
-        if prop == "smiles":
-            continue
-        actual = actual_dic[prop]
-        pred = pred_dic[prop]
+    overall_dic = {}
+    for i, pred_dic in enumerate(pred_dics):
+        metric_dic = {}
+        for prop in pred_dic.keys():
+            if prop == "smiles":
+                continue
+            actual = actual_dic[prop]
+            pred = pred_dic[prop]
 
-        metric_dic[prop] = {}
+            metric_dic[prop] = {}
 
-        for metric in metrics:
-            score = apply_metric(metric, pred, actual)
-            metric_dic[prop][metric] = score
+            for metric in metrics:
+                score = apply_metric(metric, pred, actual)
+                metric_dic[prop][metric] = score
+
+            overall_dic[str(i)] = metric_dic
+
+    props = [prop for prop in pred_dic.keys() if prop != 'smiles']
+    overall_dic['average'] = {prop: {} for prop in props}
+    sub_dics = [val for key, val in overall_dic.items() if key != 'average']
+
+    for prop in props:
+        for key in sub_dics[0][prop].keys():
+            vals = [sub_dic[prop][key] for sub_dic in sub_dics]
+            mean = np.mean(vals).item()
+            std = np.std(vals).item()
+            overall_dic['average'][prop][key] = {"mean": mean, "std": std}
 
     save_path = os.path.join(cp_model_path, f"test_metrics.json")
     with open(save_path, "w") as f:
-        json.dump(metric_dic, f, indent=4, sort_keys=True)
+        json.dump(overall_dic, f, indent=4, sort_keys=True)
 
-    fprint(f"Saved metric score to {save_path}")
+    fprint(f"Saved metric scores to {save_path}")
 
 
 def main(model_folder_cp,
@@ -195,14 +219,14 @@ def main(model_folder_cp,
             continue
 
         # make predictions
-        real, pred = predict(cp_folder=cp_folder,
+        real, preds = predict(cp_folder=cp_folder,
                              test_path=test_path,
                              cp_model_path=cp_model_path,
                              device=device,
                              check_paths=check_paths)
 
         # get and save metric scores
-        get_metrics(real, pred, metrics, cp_model_path)
+        get_metrics(real, preds, metrics, cp_model_path)
 
 
 if __name__ == "__main__":
