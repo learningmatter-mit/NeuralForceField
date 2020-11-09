@@ -2,4 +2,9 @@ source deactivate
 source ~/.bashrc
 source activate nff
 
-python save_feats.py --config_file feat_config.json
+# change to your config path
+export CONFIG="config/schnet_feat_cov1.json"
+
+cmd="python save_feats.py --config_file $CONFIG"
+echo $cmd
+eval $cmd

@@ -1,0 +1,7 @@
+{
+  "feat_folder": "/home/saxelrod/supercloud2/models/cov_2_protease/schnet_feat",
+  "cp_save_folder": "/home/saxelrod/chemprop_cov_2/features/schnet_feat",
+  "smiles_folder": "/home/saxelrod/chemprop_cov_2/scaffold_split",
+  "metrics": ["binary_cross_entropy", "auc", "prc-auc"],
+  "hyper_dset_size": null
+}
