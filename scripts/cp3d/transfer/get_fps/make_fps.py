@@ -153,8 +153,15 @@ def fps_and_pred(model, batch, **kwargs):
     outputs, xyz = model.make_embeddings(batch, xyz=None, **kwargs)
     # pool to get the learned weights and pooled fingerprints
     pooled_fp, learned_weights = model.pool(outputs)
-    # get the final result and add any gradients as necessary
+    # get the final results
     results = model.readout(pooled_fp)
+    # add sigmoid if it's a classifier and not in training mode
+    if model.classifier:
+        keys = list(model.readout.readout.keys())
+        for key in keys:
+            results[key] = torch.sigmoid(results[key])
+
+    # add any required gradients
     results = model.add_grad(batch=batch, results=results, xyz=xyz)
 
     # put into a dictionary
