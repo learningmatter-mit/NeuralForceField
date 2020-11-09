@@ -3,9 +3,9 @@
   "dset_folder": "/home/saxelrod/supercloud2/models/cov_2_protease",
   "feat_save_folder": "/home/saxelrod/supercloud2/models/cov_2_protease/schnet_feat",
   "prop": "sars_cov_one_cl_protease_active",
-  "device": 0,
-  "batch_size": 1,
-  "sub_batch_size": 7,
+  "device": 1,
+  "batch_size": 4,
+  "sub_batch_size": null,
   "test_only": false,
   "metrics": [
     "binary_cross_entropy",
