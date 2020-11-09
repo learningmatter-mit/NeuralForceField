@@ -1,5 +1,5 @@
 {
-  "job_path": "/home/saxelrod/repo/nff/master/NeuralForceField/scripts/cp3d/train/files/ensemble_energy.json",
+  "job_path": "/home/saxelrod/repo/nff/master/NeuralForceField/scripts/cp3d/train/config/ensemble_energy.json",
   "model_path": "/nfs/rafagblab001/saxelrod/dsets/synthetic/ensemble_energy",
   "param_names": [
     "num_heads",
