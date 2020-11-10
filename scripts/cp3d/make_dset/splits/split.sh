@@ -1,9 +1,9 @@
 source deactivate
 source ~/.bashrc
-source activate chemprop
+source activate nff
 
 # change to your config path
-CONFIG="config/cov_1.json"
+CONFIG="config/cov_2_gen.json"
 cmd="python split.py --config_file $CONFIG"
 echo $cmd
 eval $cmd

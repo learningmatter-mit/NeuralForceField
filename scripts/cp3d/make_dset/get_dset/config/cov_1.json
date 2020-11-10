@@ -1,5 +1,5 @@
 {
-  "max_confs": 100,
+  "max_confs": 200,
   "summary_path": "/home/gridsan/saxelrod/models/full_dset/rdkit_folder/summary_drugs.json",
   "dataset_folder": "/home/gridsan/saxelrod/models/full_dset",
   "pickle_folder": "/home/gridsan/saxelrod/models/full_dset/rdkit_folder",
