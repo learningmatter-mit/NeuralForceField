@@ -20,11 +20,11 @@ def clean_up(model_path):
     Returns:
       None
     """
-    cmds = ["rm */*.pickle",
-            "rm -rf check*",
+    cmds = ["rm */grad*.pickle",
+            "rm -r checkpoints",
             "rm */train_len",
-            "rm *.csv",
-            "rm */*.csv",
+            "rm log_human_read.csv",
+            "rm */log_human_read.csv.csv",
             "rm -r best_model",
             "rm */*epoch*"]
 
