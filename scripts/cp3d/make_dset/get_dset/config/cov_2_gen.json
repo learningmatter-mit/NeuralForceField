@@ -3,7 +3,7 @@
   "summary_path": "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/rdkit_folder/summary_drugs.json",
   "dataset_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_gen",
   "pickle_folder": "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/rdkit_folder",
-  "num_threads": 16,
+  "num_threads": 4,
   "csv_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_gen",
   "parallel_feat_threads": 40,
   "strict_conformers": true,
