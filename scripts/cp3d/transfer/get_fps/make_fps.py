@@ -24,7 +24,6 @@ REVERSE_TRANSFORM = {val: key for key, val in CHEMPROP_TRANSFORM.items()}
 # available metrics
 METRIC_LIST = [REVERSE_TRANSFORM.get(metric, metric) for metric in METRICS]
 
-
 def save(results,
          targets,
          feat_save_folder,
@@ -216,14 +215,17 @@ def evaluate(model,
     return all_results, all_batches
 
 
-def get_dsets(full_path, test_only):
+def get_dset_paths(full_path, test_only):
     """
-    Load datasets to evaluate the model on.
+    See where the datasets are located and get their paths.
     Args:
       full_path (str): folder with the data in it
       test_only (bool): only load the test set
     Returns:
-      dsets (list): loaded datasets
+      paths (list): list of paths for each split. Each split
+          gets is own sub-list, which either has a single string
+          to the corresponding path, or a set of strings if the data
+          is broken up into sub-folders.
       dset_names (list[str]): name of the splits
         (e.g. train, val, test)
     """
@@ -233,13 +235,37 @@ def get_dsets(full_path, test_only):
     else:
         dset_names = ["train", "val", "test"]
 
-    dsets = []
-    for name in tqdm(dset_names):
-        new_path = os.path.join(full_path, "{}.pth.tar".format(name))
-        dsets.append(Dataset.from_file(new_path))
+    # see if the datasets are in the main folder
+    main_folder = all([os.path.isfile(os.path.join(full_path, name + ".pth.tar"))
+                      for name in dset_names])
 
-    return dsets, dset_names
+    if main_folder:
+        paths = [[os.path.join(full_path, name + ".pth.tar")] for name in dset_names]
+    else:
+        sub_folders = [i for i in os.listdir(full_path) if i.isdigit()]
+        sub_folders = sorted(sub_folders, key=lambda x: int(x))
+        paths = [[os.path.join(full_path, i, name + ".pth.tar") for i in sub_folders]
+                 for name in dset_names]
 
+    return paths, dset_names
+
+def add_dics(base, new):
+    """
+    Add a new dictionary to an old dictionary, where the values in each dictionary
+    are lists that should be concatenated, and the keys in the new dictionary might
+    not be the same as those in the old one.
+    Args:
+        base (dict): base dictionary to be added to
+        new (dict): new dictionary adding on
+    Returns:
+        base (dict): updated base dictionary
+    """
+    for key, val in new.items():
+        if key in base:
+            base[key] += val
+        else:
+            base[key] = val
+    return base
 
 def main(dset_folder,
          device,
@@ -276,24 +302,29 @@ def main(dset_folder,
                                   model_folder=model_folder,
                                   metric=metric)
 
-    # load the datasets
-    datasets, dset_names = get_dsets(dset_folder, test_only)
+    paths, dset_names = get_dset_paths(model_folder, test_only)
 
     # go through each dataset, create a loader, evaluate the model,
     # and save the predictions
 
     for i in tqdm(range(len(dset_names))):
-        dataset = datasets[i]
+        results = {}
+        targets = {}
+        for path in tqdm(paths[i]):
+            dataset = Dataset.from_file(path)
+            loader = DataLoader(dataset,
+                                batch_size=batch_size,
+                                collate_fn=collate_dicts)
+
+            new_results, new_targets = evaluate(model,
+                                                loader,
+                                                device=device,
+                                                sub_batch_size=sub_batch_size)
+
+            results = add_dics(base=results, new=new_results)
+            targets = add_dics(base=targets, new=new_targets)
+
         name = dset_names[i]
-        loader = DataLoader(dataset,
-                            batch_size=batch_size,
-                            collate_fn=collate_dicts)
-
-        results, targets = evaluate(model,
-                                    loader,
-                                    device=device,
-                                    sub_batch_size=sub_batch_size)
-
         save_name = f"pred_{metric}_{name}.pickle"
         if feat_save_folder is None:
             feat_save_folder = dset_folder
