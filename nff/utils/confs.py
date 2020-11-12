@@ -502,7 +502,7 @@ def fix_nbr_idx(batch,
         # know what's actually not in this batch
         new_idx = -torch.ones_like(old_nbr_list)[:, 0]
         new_idx[mask] = (torch.arange(num_new_nbrs)
-                         .to(num_new_nbrs.device))
+                         .to(mask.device))
         new_idx_list.append(new_idx)
 
     for new_idx, sub_batch in zip(new_idx_list, sub_batches):
