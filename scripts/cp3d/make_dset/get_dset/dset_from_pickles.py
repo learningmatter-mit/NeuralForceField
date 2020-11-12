@@ -961,7 +961,7 @@ def main(max_confs,
          parallel_feat_threads,
          strict_conformers,
          extra_features,
-         add_directed_idx
+         add_directed_idx,
          ** kwargs):
     """
     Sample species, load their pickles, create an NFF dataset, and
