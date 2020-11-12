@@ -121,6 +121,7 @@ class SchNetFeatures(WeightedConformers):
     def convolve_sub_batch(self,
                            batch,
                            xyz=None,
+                           xyz_grad=False,
                            **kwargs):
         """
 
@@ -133,6 +134,7 @@ class SchNetFeatures(WeightedConformers):
             r: new feature vector after the convolutions
             N: list of the number of atoms for each molecule in the batch
             xyz: xyz (with a "requires_grad") for the batch
+            xyz_grad (bool): whether to compute the gradient of the xyz.
         """
 
         # Note: we've given the option to input xyz from another source.
@@ -141,7 +143,7 @@ class SchNetFeatures(WeightedConformers):
 
         if xyz is None:
             xyz = batch["nxyz"][:, 1:4]
-            xyz.requires_grad = True
+            xyz.requires_grad = xyz_grad
 
         a, nbr_was_directed = make_directed(batch["nbr_list"])
         bond_features = self.bond_filter(batch["bond_features"])

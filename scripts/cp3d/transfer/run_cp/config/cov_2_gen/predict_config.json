@@ -1,0 +1,7 @@
+{
+  "cp_folder": "/home/saxelrod/Repo/projects/chemprop/chemprop",
+  "model_folder_cp": "/home/saxelrod/chemprop_cov_2_gen/models",
+  "device": 3,
+  "test_path": "/home/saxelrod/rgb_nfs/dsets/cov_2_gen/csv/test_full.csv",
+  "metrics": ["prc-auc", "auc"]
+}
