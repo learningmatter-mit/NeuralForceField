@@ -216,26 +216,6 @@ class ChemProp3D(WeightedConformers):
 
         return all_grouped_nbrs
 
-    def fix_bond_idx(self, sub_batches):
-        """
-        Fix `bond_idx` when splitting batch into sub-batches.
-        Args:
-            sub_batches (list[dict]): sub-batches of the batch
-        Returns:
-            sub_batches (list[dict]): `sub_batches` with `bond_idx`
-                fixed.
-        """
-
-        old_num_nbrs = 0
-        for i, batch in enumerate(sub_batches):
-            if "bond_idx" not in batch:
-                continue
-            batch["bond_idx"] -= old_num_nbrs
-            sub_batches[i] = batch
-
-            old_num_nbrs += batch["nbr_list"].shape[0]
-        return sub_batches
-
     def add_split_nbrs(self,
                        batch,
                        mol_size,
@@ -328,7 +308,10 @@ class ChemProp3D(WeightedConformers):
 
         for key, val in batch.items():
             val_len = len(val)
-            if key in REINDEX_KEYS:
+
+            # save nbr lists for later and
+            # get rid of `bond_idx` because it's wrong
+            if key in ['bond_idx', *REINDEX_KEYS]:
                 continue
             elif np.mod(val_len, num_confs) != 0 or val_len == 1:
                 if key == "num_atoms":
@@ -362,8 +345,6 @@ class ChemProp3D(WeightedConformers):
                                           num_confs=num_confs,
                                           confs_per_split=confs_per_split,
                                           sub_batches=sub_batches)
-        # fix `bond_idx`
-        sub_batches = self.fix_bond_idx(sub_batches)
 
         return sub_batches
 
@@ -397,7 +378,7 @@ class ChemProp3D(WeightedConformers):
         offsets = batch.get("offsets", 0)
         # to deal with any shape mismatches
         if hasattr(offsets, 'max') and offsets.max() == 0:
-           offsets = 0
+            offsets = 0
 
         # initialize hidden bond features
         h_0 = self.make_h(batch=batch,
@@ -602,7 +583,7 @@ class OnlyBondUpdateCP3D(ChemProp3D):
         offsets = batch.get("offsets", 0)
         # to deal with any shape mismatches
         if offsets.max() == 0:
-           offsets = 0
+            offsets = 0
 
         # get the distances between neighbors
         e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
