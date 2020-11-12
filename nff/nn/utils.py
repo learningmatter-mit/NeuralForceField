@@ -319,28 +319,21 @@ def chemprop_msg_to_node(h,
 
     """
 
-    if angle_list is None:
-        node_idx = torch.arange(num_nodes).to(h.device)
-        nbr_idx = torch.arange(len(nbrs)).to(h.device)
-        # nbr_dim x node_idx matrix, e.g. for nbr_dim = 4, node_dim = 5,
-        # we'd get [[0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3],
-        # [0, 1, 2, 3], [0, 1, 2, 3]]
-        node_nbr_idx = torch.stack([nbr_idx] * len(node_idx))
+    node_idx = torch.arange(num_nodes).to(h.device)
+    nbr_idx = torch.arange(len(nbrs)).to(h.device)
+    # nbr_dim x node_idx matrix, e.g. for nbr_dim = 4, node_dim = 5,
+    # we'd get [[0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3],
+    # [0, 1, 2, 3], [0, 1, 2, 3]]
+    node_nbr_idx = torch.stack([nbr_idx] * len(node_idx))
 
-        # we want neighbours vw for which v is equal to the node index
-        # of interest
-        mask = (nbrs[:, 0] == node_idx[:, None])
-        match_idx = mask.nonzero()[:, 0]
+    # we want neighbours vw for which v is equal to the node index
+    # of interest
+    mask = (nbrs[:, 0] == node_idx[:, None])
+    match_idx = mask.nonzero()[:, 0]
 
-        # get the indices of h to add for each node
-        good_idx = node_nbr_idx[mask]
+    # get the indices of h to add for each node
+    good_idx = node_nbr_idx[mask]
 
-    else:
-        nbr_as_list = nbrs.tolist()
-        good_idx = torch.LongTensor([nbr_as_list.index(idx.tolist())
-                                     for idx in angle_list[:, :2]])
-        match_idx = torch.LongTensor([nbr_as_list.index(idx.tolist())
-                                      for idx in angle_list[:, 1:]])
 
     h_to_add = h[good_idx]
 
