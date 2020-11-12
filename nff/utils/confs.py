@@ -9,6 +9,7 @@ import numpy as np
 from nff.utils.misc import tqdm_enum
 
 REINDEX_KEYS = ["nbr_list", "bonded_nbr_list"]
+NBR_IDX_KEYS = ["kj_idx", "ji_idx", "bond_idx"]
 
 
 def assert_ordered(batch):
@@ -365,16 +366,24 @@ def make_split_nbrs(nbr_list,
     Returns:
         all_grouped_nbrs (list[torch.LongTensor]): list of 
             neighbor lists for each sub-batch.
+        nbr_masks (list(torch.BoolTensor))): masks that tell you which  
+            indices of the combined neighbor list are being used for the  
+            neighbor list of each sub-batch.
     """
 
     # first split by conformer
     new_nbrs = []
+    masks = []
+
     for i in range(num_confs):
+        # mask = (nbr_list[:, 0] <= (i + 1) * mol_size
+        #         ) * (nbr_list[:, 1] <= (i + 1) * mol_size)
+
         mask = (nbr_list[:, 0] <= (i + 1) * mol_size
-                ) * (nbr_list[:, 1] <= (i + 1) * mol_size)
+                ) * (nbr_list[:, 0] > i * mol_size)
 
         new_nbrs.append(nbr_list[mask])
-        nbr_list = nbr_list[torch.bitwise_not(mask)]
+        masks.append(mask)
 
     # regroup in sub-batches and subtract appropriately
 
@@ -389,7 +398,7 @@ def make_split_nbrs(nbr_list,
 
         all_grouped_nbrs.append(grouped_nbrs)
 
-    return all_grouped_nbrs
+    return all_grouped_nbrs, masks
 
 
 def add_split_nbrs(batch,
@@ -409,23 +418,32 @@ def add_split_nbrs(batch,
     Returns:
         sub_batches (list[dict]): list of sub_batches updated with
             their neighbor lists.
+        nbr_masks (list(torch.BoolTensor))): masks that tell you which  
+            indices of the combined neighbor list are being used for the  
+            neighbor list of each sub-batch.
     """
 
     # go through each key that needs to be reindex as a neighbor list
     # (i.e. the neighbor list and the bonded neighbor list)
 
+    nbr_masks = None
+
     for key in REINDEX_KEYS:
         if key not in batch:
             continue
         nbr_list = batch[key]
-        split_nbrs = make_split_nbrs(nbr_list=nbr_list,
-                                     mol_size=mol_size,
-                                     num_confs=num_confs,
-                                     confs_per_split=confs_per_split)
+        split_nbrs, masks = make_split_nbrs(nbr_list=nbr_list,
+                                            mol_size=mol_size,
+                                            num_confs=num_confs,
+                                            confs_per_split=confs_per_split)
+        if key == "nbr_list":
+            nbr_masks = masks
+
         for i, sub_batch in enumerate(sub_batches):
             sub_batch[key] = split_nbrs[i]
             sub_batches[i] = sub_batch
-    return sub_batches
+
+    return sub_batches, nbr_masks
 
 
 def get_confs_per_split(batch,
@@ -456,6 +474,47 @@ def get_confs_per_split(batch,
     confs_per_split = [i // inherent_val_len for i in split_list]
 
     return confs_per_split
+
+
+def fix_nbr_idx(batch,
+                masks,
+                sub_batches):
+    """
+    Fix anything that is defined with respect to positions
+    of pairs in a neighbor list (e.g. `bond_idx`, `kj_idx`,
+    and `ji_idx`).
+    Args:
+        batch (dict): batched sample of species
+        masks (list(torch.BoolTensor))): masks that tell you which  
+            indices of the combined neighbor list are being used for the  
+            neighbor list of each sub-batch.
+        sub_batches (list[dict]): sub batches of the batch
+    Returns:
+        sub_batches (list[dict]): corrected sub batches of the batch
+    """
+
+    old_nbr_list = batch['nbr_list']
+    new_idx_list = []
+
+    for mask in masks:
+        num_new_nbrs = mask.nonzero().reshape(-1).shape[0]
+        # make everything not in this batch equal to -1  so we
+        # know what's actually not in this batch
+        new_idx = -torch.ones_like(old_nbr_list)[:, 0]
+        new_idx[mask] = torch.arange(num_new_nbrs)
+        new_idx_list.append(new_idx)
+
+    for new_idx, sub_batch in zip(new_idx_list, sub_batches):
+        for key in NBR_IDX_KEYS:
+            if key not in batch:
+                continue
+            new_val = new_idx[batch[key]]
+            new_mask = new_val != -1
+            new_val = new_val[new_mask].reshape(-1)
+
+            sub_batch.update({key: new_val})
+
+    return sub_batches
 
 
 def split_batch(batch,
@@ -515,10 +574,15 @@ def split_batch(batch,
                     sub_batch_dic.keys()} for i in range(num_splits)]
 
     # fix neighbor list indexing
-    sub_batches = add_split_nbrs(batch=batch,
-                                 mol_size=mol_size,
-                                 num_confs=num_confs,
-                                 confs_per_split=confs_per_split,
-                                 sub_batches=sub_batches)
+    sub_batches, masks = add_split_nbrs(batch=batch,
+                                        mol_size=mol_size,
+                                        num_confs=num_confs,
+                                        confs_per_split=confs_per_split,
+                                        sub_batches=sub_batches)
+
+    # fix anything that relies on the position of a neighbor list pair
+    sub_batches = fix_nbr_idx(batch=batch,
+                              masks=masks,
+                              sub_batches=sub_batches)
 
     return sub_batches
