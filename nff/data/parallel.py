@@ -16,7 +16,7 @@ from nff.data.features import (make_rd_mols,
                                add_e3fp,
                                BOND_FEAT_TYPES,
                                ATOM_FEAT_TYPES)
-from nff.data.graphs import kj_ji_to_dset
+from nff.data.graphs import kj_ji_to_dset, add_bond_idx
 
 NUM_PROCS = 5
 
@@ -203,6 +203,15 @@ def kj_ji_parallel(dsets):
     return result_dsets
 
 
+def bond_idx_parallel(dsets):
+    kwargs_list = [{"dataset": dataset} for
+                   dataset in dsets]
+
+    result_dsets = gen_parallel(func=add_bond_idx,
+                                kwargs_list=kwargs_list)
+
+    return result_dsets
+
 def summarize_rd(new_sets, first_set):
     """
     Summarize how many RDKit mols were successfully made.
@@ -307,5 +316,12 @@ def add_kj_ji_parallel(dataset, num_procs):
 
     datasets = split_dataset(dataset=dataset, num=num_procs)
     datasets = kj_ji_parallel(datasets)
+    new_props = rejoin_props(datasets)
+    dataset.props = new_props
+
+def add_bond_idx_parallel(dataset, num_procs):
+
+    datasets = split_dataset(dataset=dataset, num=num_procs)
+    datasets = bond_idx_parallel(datasets)
     new_props = rejoin_props(datasets)
     dataset.props = new_props

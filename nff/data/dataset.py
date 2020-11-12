@@ -12,7 +12,8 @@ from torch.utils.data import Dataset as TorchDataset
 from tqdm import tqdm
 
 from nff.data.parallel import (featurize_parallel, NUM_PROCS,
-                               add_e3fp_parallel, add_kj_ji_parallel)
+                               add_e3fp_parallel, add_kj_ji_parallel,
+                               add_bond_idx_parallel)
 from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
 from nff.data.features import add_morgan as external_morgan
 from nff.data.features import featurize_rdkit as external_rdkit
@@ -240,7 +241,7 @@ class Dataset(TorchDataset):
         self.props['offsets'] = offsets
         return
 
-    def generate_bond_idx(self):
+    def generate_bond_idx(self, num_procs):
         """
         For each index in the bond list, get the
         index in the neighbour list that corresponds to the
@@ -252,15 +253,7 @@ class Dataset(TorchDataset):
         """
 
         self.make_all_directed()
-        self.props["bond_idx"] = []
-
-        for i in tqdm(range(len(self))):
-
-            bonded_nbr_list = self.props["bonded_nbr_list"][i]
-            nbr_list = self.props["nbr_list"][i]
-
-            bond_idx = get_bond_idx(bonded_nbr_list, nbr_list)
-            self.props["bond_idx"].append(bond_idx.cpu())
+        add_bond_idx_parallel(self, num_procs)
 
     def copy(self):
         """Copies the current dataset
