@@ -379,8 +379,8 @@ def make_split_nbrs(nbr_list,
         # mask = (nbr_list[:, 0] <= (i + 1) * mol_size
         #         ) * (nbr_list[:, 1] <= (i + 1) * mol_size)
 
-        mask = (nbr_list[:, 0] <= (i + 1) * mol_size
-                ) * (nbr_list[:, 0] > i * mol_size)
+        mask = (nbr_list[:, 0] < (i + 1) * mol_size
+                ) * (nbr_list[:, 0] >= i * mol_size)
 
         new_nbrs.append(nbr_list[mask])
         masks.append(mask)
