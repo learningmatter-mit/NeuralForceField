@@ -82,15 +82,13 @@ class ChemProp3D(WeightedConformers):
     def get_distance_feats(self,
                            batch,
                            xyz,
-                           offsets,
-                           bond_nbrs):
+                           offsets):
         """
         Get distance features.
         Args:
             batch (dict): batched sample of species
             xyz (torch.Tensor): xyz of the batch
             offsets (float): periodic boundary condition offsets
-            bond_nbrs (torch.LongTensor): directed bonded nbr list
         Returns:
             nbr_list (torch.LongTensor): directed neighbor list
             distance_feats (torch.Tensor): distance-based edge features
@@ -116,7 +114,8 @@ class ChemProp3D(WeightedConformers):
                 bond_idx = torch.cat([bond_idx,
                                       bond_idx + nbr_dim // 2])
         else:
-            bond_idx = get_bond_idx(bond_nbrs, nbr_list)
+            bonded_nbr_list = batch["bonded_nbr_list"]
+            bond_idx = get_bond_idx(bonded_nbr_list, nbr_list)
 
         return nbr_list, distance_feats, bond_idx
 
@@ -150,8 +149,7 @@ class ChemProp3D(WeightedConformers):
         nbr_list, distance_feats, bond_idx = self.get_distance_feats(
             batch=batch,
             xyz=xyz,
-            offsets=offsets,
-            bond_nbrs=bond_nbrs)
+            offsets=offsets)
 
         # combine node and bonded edge features to get the bond component
         # of h_0
@@ -393,7 +391,9 @@ class ChemProp3D(WeightedConformers):
         for conv in self.convolutions:
             h_new = conv(h_0=h_0,
                          h_new=h_new,
-                         nbrs=a)
+                         nbrs=a,
+                         kj_idx=batch.get("kj_idx"),
+                         ji_idx=batch.get("ji_idx"))
 
         # convert back to node features
         new_node_feats = self.W_o(r=r,
@@ -609,7 +609,9 @@ class OnlyBondUpdateCP3D(ChemProp3D):
                          all_nbrs=a,
                          bond_nbrs=bond_nbrs,
                          bond_idx=bond_idx,
-                         e=e)
+                         e=e,
+                         kj_idx=batch.get("kj_idx"),
+                         ji_idx=batch.get("ji_idx"))
 
         # convert back to node features
 

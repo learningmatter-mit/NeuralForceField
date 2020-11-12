@@ -16,7 +16,8 @@ from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
 from nff.data.features import add_morgan as external_morgan
 from nff.data.features import featurize_rdkit as external_rdkit
 from nff.data.graphs import (get_bond_idx, reconstruct_atoms, get_neighbor_list, generate_subgraphs,
-                             DISTANCETHRESHOLDICT_Z, get_angle_list, add_ji_kj)
+                             DISTANCETHRESHOLDICT_Z, get_angle_list, add_ji_kj,
+                             make_dset_directed, full_angle_idx)
 
 
 class Dataset(TorchDataset):
@@ -190,7 +191,12 @@ class Dataset(TorchDataset):
 
         return self.props['nbr_list']
 
+    def make_all_directed(self):
+        make_dset_directed(self)
+
     def generate_angle_list(self):
+
+        self.make_all_directed()
         angles, nbrs = get_angle_list(self.props['nbr_list'])
         self.props['nbr_list'] = nbrs
         self.props['angle_list'] = angles
@@ -201,6 +207,25 @@ class Dataset(TorchDataset):
         self.props['kj_idx'] = kj_idx
 
         return angles
+
+    def generate_kj_ji(self):
+        """
+        Generate only the `ji_idx` and `kj_idx` without storing
+        the full angle list.
+        """
+
+        self.make_all_directed()
+
+        all_ji_idx = []
+        all_kj_idx = []
+
+        for batch in tqdm(self):
+            ji_idx, kj_idx = full_angle_idx(batch)
+            all_ji_idx.append(ji_idx)
+            all_kj_idx.append(kj_idx)
+
+        self.props['ji_idx'] = ji_idx
+        self.props['kj_idx'] = kj_idx
 
     def _get_periodic_neighbor_list(self, cutoff, undirected=False):
         from nff.io.ase import AtomsBatch
@@ -234,6 +259,7 @@ class Dataset(TorchDataset):
             None
         """
 
+        self.make_all_directed()
         self.props["bond_idx"] = []
 
         for i in tqdm(range(len(self))):

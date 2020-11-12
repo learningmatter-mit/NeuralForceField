@@ -2,6 +2,7 @@ import numpy as np
 import networkx as nx
 import torch
 from ase import Atoms
+from tqdm import tqdm
 
 
 DISTANCETHRESHOLDICT_SYMBOL = {
@@ -99,29 +100,6 @@ DISTANCETHRESHOLDICT_Z = {
     (8., 35.): 1.70,
     (9., 12.): 1.35}
 
-def make_directed(nbr_list):
-    """
-    Convert an undirected neighbor list into a directed
-    one.
-    Args:
-        nbr_list (torch.Tensor): array with the
-            indices of connected atoms.
-    Returns:
-        nbr_list (torch.Tensor): directed form of the neighbor
-            list.
-        directed (bool): whether it was already directed before
-    """
-
-    gtr_ij = (nbr_list[:, 0] > nbr_list[:, 1]).any().item()
-    gtr_ji = (nbr_list[:, 1] > nbr_list[:, 0]).any().item()
-    directed = gtr_ij and gtr_ji
-
-    if directed:
-        return nbr_list, directed
-
-    new_nbrs = torch.cat([nbr_list, nbr_list.flip(1)], dim=0)
-    return new_nbrs, directed
-
 
 def get_neighbor_list(xyz, cutoff=5, undirected=True):
     """Get neighbor list from xyz positions of atoms.
@@ -194,53 +172,6 @@ def get_bond_idx(bonded_nbr_list, nbr_list):
                                  for pair in bonded_nbr_list])
 
     return bond_idx
-
-
-def get_angle_list(nbr_list):
-
-    nbr_list, _ = make_directed(nbr_list)
-
-    # Condition that the second index of a nbr
-    # list item is equal to the first index of
-    # another item.  Tthe exception is if the
-    # second item is just the first
-    # item reversed (e.g. [0, 1] and [1, 0])
-
-    # e.g. nbr_list = tensor([[0, 1],
-    # [0, 2],
-    # [1, 0],
-    # [1, 2],
-    # [2, 0],
-    # [2, 1]])
-    # then mask  = tensor([[False, False, False,  True, False, False],
-    # [False, False, False, False, False,  True],
-    # [False,  True, False, False, False, False],
-    # [False, False, False, False,  True, False],
-    # [True, False, False, False, False, False],
-    # [False, False,  True, False, False, False]])
-
-    mask = (nbr_list[:, 1, None] == nbr_list[:, 0]) * (
-        nbr_list[:, 0, None] != nbr_list[:, 1])
-
-    # The index of the third atom in each angle.
-    # In this case it would be tensor([2, 1, 2, 0, 1, 0])
-    third_atoms = nbr_list[:, 1].repeat(nbr_list.shape[0], 1)[mask]
-
-    # number of angles for each item in the nbr_list
-    # In this case it would be tensor([1, 1, 1, 1, 1, 1])
-    num_angles = mask.sum(-1)
-
-    # idx = np.arange(nbr_len)
-    # scatter_idx = torch.LongTensor(np.repeat(idx, num_angles.tolist(), axis=0))
-
-    # the nbr list, but with each item repeated num_angle times
-    nbr_repeats = torch.LongTensor(
-        np.repeat(nbr_list.numpy(), num_angles.tolist(), axis=0))
-
-    # the concatenation of `nbr_repeats` with `third_atoms` is the angle list
-    angle_list = torch.cat((nbr_repeats, third_atoms.reshape(-1, 1)), dim=1)
-
-    return angle_list
 
 
 def get_dist_mat(xyz, box_len, unwrap=True):
@@ -384,6 +315,25 @@ def make_directed(nbr_list):
     return new_nbrs, directed
 
 
+def make_nbr_dic(nbr_list):
+    """
+    Make a dictionary that maps each atom to the indices
+    of its neighbors.
+    Args:
+        nbr_list (torch.LongTensor): nbr list for a geometry
+    Returns:
+        nbr_dic (dict): dictionary described above
+    """
+
+    nbr_dic = {}
+    for nbr in nbr_list:
+        nbr_0 = nbr[0].item()
+        if nbr_0 not in nbr_dic:
+            nbr_dic[nbr_0] = []
+        nbr_dic[nbr_0].append(nbr[1].item())
+    return nbr_dic
+
+
 def get_angle_list(nbr_lists):
     """
     Get angle lists from neighbor lists.
@@ -399,53 +349,30 @@ def get_angle_list(nbr_lists):
 
     new_nbrs = []
     angles = []
-    for nbr_list in nbr_lists:
+    num = []
+
+    for nbr_list in tqdm(nbr_lists):
         nbr_list, _ = make_directed(nbr_list)
 
-        # Condition that the second index of a nbr
-        # list item is equal to the first index of
-        # another item.  Tthe exception is if the
-        # second item is just the first
-        # item reversed (e.g. [0, 1] and [1, 0])
-
-        # e.g. nbr_list = tensor([[0, 1],
-        # [0, 2],
-        # [1, 0],
-        # [1, 2],
-        # [2, 0],
-        # [2, 1]])
-        # then mask  = tensor([[False, False, False,  True, False, False],
-        # [False, False, False, False, False,  True],
-        # [False,  True, False, False, False, False],
-        # [False, False, False, False,  True, False],
-        # [True, False, False, False, False, False],
-        # [False, False,  True, False, False, False]])
-
-        mask = (nbr_list[:, 1, None] == nbr_list[:, 0]) * (
-            nbr_list[:, 0, None] != nbr_list[:, 1])
-
-        # The index of the third atom in each angle.
-        # In this case it would be tensor([2, 1, 2, 0, 1, 0])
-        third_atoms = nbr_list[:, 1].repeat(nbr_list.shape[0], 1)[mask]
-
-        # number of angles for each item in the nbr_list
-        # In this case it would be tensor([1, 1, 1, 1, 1, 1])
-        num_angles = mask.sum(-1)
-
-        # idx = np.arange(nbr_len)
-        # scatter_idx = torch.LongTensor(np.repeat(idx, num_angles.tolist(), axis=0))
-
-        # the nbr list, but with each item repeated num_angle times
-        nbr_repeats = torch.LongTensor(
-            np.repeat(nbr_list.numpy(), num_angles.tolist(), axis=0))
-
-        # the concatenation of `nbr_repeats` with
-        # `third_atoms` is the angle list
-        angle_list = torch.cat(
-            (nbr_repeats, third_atoms.reshape(-1, 1)), dim=1)
+        these_angles = []
+        nbr_dic = make_nbr_dic(nbr_list)
+        for nbr in nbr_list:
+            nbr_1 = nbr[1].item()
+            nbr_1_nbrs = torch.LongTensor(nbr_dic[nbr_1]).reshape(-1, 1)
+            nbr_repeat = nbr.repeat(len(nbr_1_nbrs), 1)
+            these_angles += [torch.cat([nbr_repeat,
+                                        nbr_1_nbrs], dim=-1)]
+        these_angles = torch.cat(these_angles)
 
         new_nbrs.append(nbr_list)
-        angles.append(angle_list)
+        angles.append(these_angles)
+        num.append(these_angles.shape[0] - len(nbr_list))
+
+    # take out angles of the form [i, j, i], which aren't really angles
+    angle_tens = torch.cat(angles)
+    mask = angle_tens[:, 0] != angle_tens[:, 2]
+    angles = list(torch.split(angle_tens[mask],
+                              num))
 
     return angles, new_nbrs
 
@@ -562,3 +489,109 @@ def add_ji_kj(angle_lists, nbr_lists):
         kj_idx_list.append(kj_idx)
 
     return ji_idx_list, kj_idx_list
+
+
+def make_dset_directed(dset):
+    """
+    Make everything in the dataset correspond to a directed 
+    neighbor list.
+    Args:
+        dset (nff.data.Dataset): nff dataset
+    Returns:
+        None
+    """
+
+    # make the neighbor list directed
+    for i, batch in enumerate(dset):
+        nbr_list, nbr_was_directed = make_directed(batch['nbr_list'])
+        dset.props['nbr_list'][i] = nbr_list
+
+        # fix bond_idx
+        bond_idx = batch.get("bond_idx")
+        has_bond_idx = (bond_idx is not None)
+        if (not nbr_was_directed) and has_bond_idx:
+            nbr_dim = nbr_list.shape[0]
+            bond_idx = torch.cat([bond_idx,
+                                  bond_idx + nbr_dim // 2])
+            dset.props['bond_idx'][i] = bond_idx
+
+        # make the bonded nbr list directed
+        bond_nbrs = batch.get('bonded_nbr_list')
+        has_bonds = (bond_nbrs is not None)
+        if has_bonds:
+            bond_nbrs, bonds_were_directed = make_directed(bond_nbrs)
+            dset.props['bonded_nbr_list'][i] = bond_nbrs
+
+        # fix the corresponding bond features
+        bond_feats = batch.get('bond_features')
+        has_bond_feats = (bond_feats is not None)
+        if (not bonds_were_directed) and (has_bonds and has_bond_feats):
+            bond_feats = torch.cat([bond_feats] * 2, dim=0)
+            dset.props['bond_features'][i] = bond_feats
+
+
+def batch_angle_idx(nbrs):
+    """
+    Given a neighbor list, find the sets of indices in the neighbor list
+    corresponding to indices. Usually you can only do this for one conformer
+    without running out of memory -- to do it for multiple conformers, use
+    `full_angle_idx` below.
+    Args:
+        nbrs (torch.LongTensor): neighbor list
+    Returns:
+        ji_idx (torch.LongTensor): a set of indices for the neighbor list
+        kj_idx (torch.LongTensor): a set of indices for the neighbor list
+            such that nbrs[kj_idx[n]][0] == nbrs[ji_idx[n]][1] for any
+            value of n.
+    """
+
+    all_idx = torch.stack([torch.arange(len(nbrs))] * len(nbrs)).long()
+    mask = ((nbrs[:, 1] == nbrs[:, 0, None])
+            * (nbrs[:, 0] != nbrs[:, 1, None]))
+    ji_idx = all_idx[mask]
+    kj_idx = mask.nonzero()[:, 0]
+
+    return ji_idx, kj_idx
+
+
+def full_angle_idx(batch):
+    """
+    Create all the kj and ji indices for a batch that may have several conformers.
+    Args:
+        batch (dict): batch of an nff dataset
+    Returns:
+        ji_idx (torch.LongTensor): a set of indices for the neighbor list
+        kj_idx (torch.LongTensor): a set of indices for the neighbor list
+            such that nbrs[kj_idx[n]][0] == nbrs[ji_idx[n]][1] for any
+            value of n.
+    """
+
+    nbr_list = batch['nbr_list']
+    num_atoms = batch['num_atoms']
+    mol_size = batch.get('mol_size', num_atoms)
+    num_confs = num_atoms // mol_size
+
+    all_ji_idx = []
+    all_kj_idx = []
+
+    for i in range(num_confs):
+        max_idx = (i + 1) * mol_size
+        min_idx = (i) * mol_size
+
+        # get only the indices for this conformer
+        conf_mask = ((nbr_list[:, 0] < max_idx) *
+                     (nbr_list[:, 0] >= min_idx))
+        nbrs = nbr_list[conf_mask]
+        # map from indices of these sub-neighbors
+        # to indices in full neighbor list
+        ji_idx, kj_idx = batch_angle_idx(nbrs)
+
+        # map to these indices
+        map_indices = conf_mask.nonzero().reshape(-1)
+        all_ji_idx.append(map_indices[ji_idx])
+        all_kj_idx.append(map_indices[kj_idx])
+
+    all_ji_idx = torch.cat(all_ji_idx)
+    all_kj_idx = torch.cat(all_kj_idx)
+
+    return all_ji_idx, all_kj_idx

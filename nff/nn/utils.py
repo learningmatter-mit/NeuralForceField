@@ -68,7 +68,7 @@ def get_default_readout(n_atom_basis):
         DEFAULT_READOUT (dict)
     """
 
-    DEFAULT_READOUT = {
+    default_readout = {
         'energy': [
             {'name': 'linear', 'param': {'in_features': n_atom_basis,
                                          'out_features': int(n_atom_basis / 2)}},
@@ -78,7 +78,7 @@ def get_default_readout(n_atom_basis):
         ]
     }
 
-    return DEFAULT_READOUT
+    return default_readout
 
 
 def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
@@ -102,7 +102,8 @@ def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
     if any(atomsobject.pbc):
         cell_dim = torch.Tensor(atomsobject.get_cell()).diag().to(device)
 
-        offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + dis_mat.lt(-0.5 * cell_dim).to(torch.float)
+        offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + \
+            dis_mat.lt(-0.5 * cell_dim).to(torch.float)
         dis_mat = dis_mat + offsets * cell_dim
 
     dis_sq = dis_mat.pow(2).sum(-1)
@@ -116,14 +117,18 @@ def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
     ), nbr_list[:, 1].detach().to("cpu").numpy()
 
     if any(atomsobject.pbc):
-        offsets = offsets[nbr_list[:, 0], nbr_list[:, 1], :].detach().to("cpu").numpy()
+        offsets = offsets[nbr_list[:, 0],
+                          nbr_list[:, 1], :].detach().to("cpu").numpy()
     else:
         offsets = np.zeros((nbr_list.shape[0], 3))
 
     return i, j, offsets
 
 
-def chemprop_msg_update(h, nbrs):
+def chemprop_msg_update(h,
+                        nbrs,
+                        ji_idx=None,
+                        kj_idx=None):
     r"""
 
         Function for updating the messages in a GCNN, as implemented in ChemProp
@@ -141,7 +146,13 @@ def chemprop_msg_update(h, nbrs):
                 nbrs (torch.tensor): bond directed neighbor list. It is a 
                         tensor of dimension `edge` x 2. The indices vw of h[j] 
                         for an arbitrary index j are given by nbrs[j].
-        Returns:
+
+                ji_idx (torch.LongTensor, optional): a set of indices for the neighbor list
+                kj_idx (torch.LongTensor, optional): a set of indices for the neighbor list
+                    such that nbrs[kj_idx[n]][0] == nbrs[ji_idx[n]][1] for any
+                    value of n.
+
+            Returns:
                 message (torch.tensor): updated message m_vw =
                  \sum_{k \in N(v) \ w} h_{kv}, of dimension `edge` x `hidden. 
                  More details in the example below.
@@ -192,6 +203,17 @@ def chemprop_msg_update(h, nbrs):
 
     """
 
+    if all([kj_idx is not None, ji_idx is None]):
+        graph_size = h.shape[0]
+        # get the h's of these indices
+        h_to_add = h[ji_idx]
+        message = scatter_add(src=h_to_add,
+                              index=kj_idx,
+                              dim=0,
+                              dim_size=graph_size)
+
+        return message
+
     # nbr_dim x nbr_dim matrix, e.g. for nbr_dim = 4, all_idx =
     # [[0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3]]
     all_idx = torch.stack([torch.arange(0, len(nbrs))] * len(nbrs)).long()
@@ -213,22 +235,25 @@ def chemprop_msg_update(h, nbrs):
     mask = (nbrs[:, 1] == nbrs[:, 0, None]) * (nbrs[:, 0] != nbrs[:, 1, None])
 
     # select the values of all_idx that are allowed by `mask`
-    good_idx = all_idx[mask]
-    # get the h's of these indices
-    h_to_add = h[good_idx]
+    ji_idx = all_idx[mask]
     # map from indices `h_to_add` to the indices of `message`
-    match_idx = mask.nonzero()[:, 0]
+    kj_idx = mask.nonzero()[:, 0]
+
     graph_size = h.shape[0]
+    # get the h's of these indices
+    h_to_add = h[ji_idx]
 
     message = scatter_add(src=h_to_add,
-                          index=match_idx,
+                          index=kj_idx,
                           dim=0,
                           dim_size=graph_size)
 
     return message
 
 
-def chemprop_msg_to_node(h, nbrs, num_nodes):
+def chemprop_msg_to_node(h,
+                         nbrs,
+                         num_nodes):
     r"""
 
         Converts message hidden edge vectors into node messages
@@ -294,20 +319,29 @@ def chemprop_msg_to_node(h, nbrs, num_nodes):
 
     """
 
-    node_idx = torch.arange(num_nodes).to(h.device)
-    nbr_idx = torch.arange(len(nbrs)).to(h.device)
-    # nbr_dim x node_idx matrix, e.g. for nbr_dim = 4, node_dim = 5,
-    # we'd get [[0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3],
-    # [0, 1, 2, 3], [0, 1, 2, 3]]
-    node_nbr_idx = torch.stack([nbr_idx] * len(node_idx))
+    if angle_list is None:
+        node_idx = torch.arange(num_nodes).to(h.device)
+        nbr_idx = torch.arange(len(nbrs)).to(h.device)
+        # nbr_dim x node_idx matrix, e.g. for nbr_dim = 4, node_dim = 5,
+        # we'd get [[0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3],
+        # [0, 1, 2, 3], [0, 1, 2, 3]]
+        node_nbr_idx = torch.stack([nbr_idx] * len(node_idx))
 
-    # we want neighbours vw for which v is equal to the node index
-    # of interest
-    mask = (nbrs[:, 0] == node_idx[:, None])
-    match_idx = mask.nonzero()[:, 0]
+        # we want neighbours vw for which v is equal to the node index
+        # of interest
+        mask = (nbrs[:, 0] == node_idx[:, None])
+        match_idx = mask.nonzero()[:, 0]
 
-    # get the indices of h to add for each node
-    good_idx = node_nbr_idx[mask]
+        # get the indices of h to add for each node
+        good_idx = node_nbr_idx[mask]
+
+    else:
+        nbr_as_list = nbrs.tolist()
+        good_idx = torch.LongTensor([nbr_as_list.index(idx.tolist())
+                                     for idx in angle_list[:, :2]])
+        match_idx = torch.LongTensor([nbr_as_list.index(idx.tolist())
+                                      for idx in angle_list[:, 1:]])
+
     h_to_add = h[good_idx]
 
     # add together
@@ -335,3 +369,5 @@ def remove_bias(layers):
         if layer['name'] == 'linear':
             layer['param'].update({'bias': False})
     return new_layers
+
+
