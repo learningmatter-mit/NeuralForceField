@@ -1,0 +1,11 @@
+{
+  "base_config_path": "/home/saxelrod/Repo/projects/master/NeuralForceField/scripts/cp3d/chemprop/config/cov_1_3cl/bce/base_config.json",
+  "hyp_config_path": "/home/saxelrod/Repo/projects/master/NeuralForceField/scripts/cp3d/chemprop/config/cov_1_3cl/bce/base_hyp_config.json",
+  "use_hyperopt": true,
+  "rerun_hyperopt": false,
+  "metric": "binary_cross_entropy",
+  "train_folder": "/home/saxelrod/chemprop_cov_1/models/cp_cov_bce",
+  "cp_folder": "/home/saxelrod/Repo/projects/chemprop/chemprop",
+  "seed": 0,
+  "max_hyp_specs": 5000
+}

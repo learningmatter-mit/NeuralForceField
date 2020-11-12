@@ -727,18 +727,28 @@ class ChemPropConv(MessagePassingModule):
         )
         self.activation = layer_types[activation]()
 
-    def message(self, h_new, nbrs):
+    def message(self,
+                h_new,
+                nbrs,
+                ji_idx=None,
+                kj_idx=None):
         """
         Get the chemprop MPNN message.
         Args:
             h_new (torch.Tensor): new hidden edge vector
             nbrs (torch.LongTensor): bonded neighbor list
+            ji_idx (torch.LongTensor, optional): a set of indices for the neighbor list
+            kj_idx (torch.LongTensor, optional): a set of indices for the neighbor list
+                such that nbrs[kj_idx[n]][0] == nbrs[ji_idx[n]][1] for any
+                value of n.
         Returns:
             msg (torch.Tensor): message from nearby atoms
         """
 
         msg = chemprop_msg_update(h=h_new,
-                                  nbrs=nbrs)
+                                  nbrs=nbrs,
+                                  ji_idx=ji_idx,
+                                  kj_idx=kj_idx)
         return msg
 
     def update(self, msg, h_0):
@@ -761,7 +771,12 @@ class ChemPropConv(MessagePassingModule):
 
         return update_feats
 
-    def forward(self, h_0, h_new, nbrs):
+    def forward(self,
+                h_0,
+                h_new,
+                nbrs,
+                ji_idx=None,
+                kj_idx=None):
         """
         Apply a convolution layer.
         Args:
@@ -769,13 +784,19 @@ class ChemPropConv(MessagePassingModule):
                 vector.
             h_new (torch.Tensor): latest hidden edge vector
             nbrs (torch.LongTensor): bonded neighbor list
+            ji_idx (torch.LongTensor, optional): a set of indices for the neighbor list
+            kj_idx (torch.LongTensor, optional): a set of indices for the neighbor list
+                such that nbrs[kj_idx[n]][0] == nbrs[ji_idx[n]][1] for any
+                value of n.
         Returns:
             update_feats (torch.Tensor): updated
                 features after convolution.
         """
 
         msg = self.message(h_new=h_new,
-                           nbrs=nbrs)
+                           nbrs=nbrs,
+                           ji_idx=ji_idx,
+                           kj_idx=kj_idx)
         update_feats = self.update(msg=msg,
                                    h_0=h_0)
 
@@ -872,7 +893,9 @@ class CpSchNetConv(ChemPropConv):
                 all_nbrs,
                 bond_nbrs,
                 bond_idx,
-                e):
+                e,
+                ji_idx=None,
+                kj_idx=None):
         """
         Update the edge features.
         Args:
@@ -885,6 +908,11 @@ class CpSchNetConv(ChemPropConv):
             bond_idx (torch.LongTensor): a list that maps a bonded
                 pair to the corresponding index in the neighbor list.
             e (torch.Tensor): distances between atoms
+            ji_idx (torch.LongTensor, optional): a set of indices for the neighbor list
+            kj_idx (torch.LongTensor, optional): a set of indices for the neighbor list
+                such that nbrs[kj_idx[n]][0] == nbrs[ji_idx[n]][1] for any
+                value of n.
+
         Returns:
             final_h (torch.Tensor): new updated version of edge features
         """
@@ -901,7 +929,10 @@ class CpSchNetConv(ChemPropConv):
 
         # get the ChemProp message and update the ChemProp `h`
         cp_msg = self.message(h_new=cp_h,
-                              nbrs=bond_nbrs)
+                              nbrs=bond_nbrs,
+                              ji_idx=ji_idx,
+                              kj_idx=kj_idx)
+        
         h_new_bond = self.update(msg=cp_msg,
                                  h_0=h0_bond)
 

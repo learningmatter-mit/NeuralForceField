@@ -82,15 +82,13 @@ class ChemProp3D(WeightedConformers):
     def get_distance_feats(self,
                            batch,
                            xyz,
-                           offsets,
-                           bond_nbrs):
+                           offsets):
         """
         Get distance features.
         Args:
             batch (dict): batched sample of species
             xyz (torch.Tensor): xyz of the batch
             offsets (float): periodic boundary condition offsets
-            bond_nbrs (torch.LongTensor): directed bonded nbr list
         Returns:
             nbr_list (torch.LongTensor): directed neighbor list
             distance_feats (torch.Tensor): distance-based edge features
@@ -116,7 +114,8 @@ class ChemProp3D(WeightedConformers):
                 bond_idx = torch.cat([bond_idx,
                                       bond_idx + nbr_dim // 2])
         else:
-            bond_idx = get_bond_idx(bond_nbrs, nbr_list)
+            bonded_nbr_list = batch["bonded_nbr_list"]
+            bond_idx = get_bond_idx(bonded_nbr_list, nbr_list)
 
         return nbr_list, distance_feats, bond_idx
 
@@ -150,8 +149,7 @@ class ChemProp3D(WeightedConformers):
         nbr_list, distance_feats, bond_idx = self.get_distance_feats(
             batch=batch,
             xyz=xyz,
-            offsets=offsets,
-            bond_nbrs=bond_nbrs)
+            offsets=offsets)
 
         # combine node and bonded edge features to get the bond component
         # of h_0
@@ -217,26 +215,6 @@ class ChemProp3D(WeightedConformers):
             all_grouped_nbrs.append(grouped_nbrs)
 
         return all_grouped_nbrs
-
-    def fix_bond_idx(self, sub_batches):
-        """
-        Fix `bond_idx` when splitting batch into sub-batches.
-        Args:
-            sub_batches (list[dict]): sub-batches of the batch
-        Returns:
-            sub_batches (list[dict]): `sub_batches` with `bond_idx`
-                fixed.
-        """
-
-        old_num_nbrs = 0
-        for i, batch in enumerate(sub_batches):
-            if "bond_idx" not in batch:
-                continue
-            batch["bond_idx"] -= old_num_nbrs
-            sub_batches[i] = batch
-
-            old_num_nbrs += batch["nbr_list"].shape[0]
-        return sub_batches
 
     def add_split_nbrs(self,
                        batch,
@@ -330,7 +308,10 @@ class ChemProp3D(WeightedConformers):
 
         for key, val in batch.items():
             val_len = len(val)
-            if key in REINDEX_KEYS:
+
+            # save nbr lists for later and
+            # get rid of `bond_idx` because it's wrong
+            if key in ['bond_idx', *REINDEX_KEYS]:
                 continue
             elif np.mod(val_len, num_confs) != 0 or val_len == 1:
                 if key == "num_atoms":
@@ -364,8 +345,6 @@ class ChemProp3D(WeightedConformers):
                                           num_confs=num_confs,
                                           confs_per_split=confs_per_split,
                                           sub_batches=sub_batches)
-        # fix `bond_idx`
-        sub_batches = self.fix_bond_idx(sub_batches)
 
         return sub_batches
 
@@ -399,7 +378,7 @@ class ChemProp3D(WeightedConformers):
         offsets = batch.get("offsets", 0)
         # to deal with any shape mismatches
         if hasattr(offsets, 'max') and offsets.max() == 0:
-           offsets = 0
+            offsets = 0
 
         # initialize hidden bond features
         h_0 = self.make_h(batch=batch,
@@ -412,7 +391,9 @@ class ChemProp3D(WeightedConformers):
         for conv in self.convolutions:
             h_new = conv(h_0=h_0,
                          h_new=h_new,
-                         nbrs=a)
+                         nbrs=a,
+                         kj_idx=batch.get("kj_idx"),
+                         ji_idx=batch.get("ji_idx"))
 
         # convert back to node features
         new_node_feats = self.W_o(r=r,
@@ -604,7 +585,7 @@ class OnlyBondUpdateCP3D(ChemProp3D):
         offsets = batch.get("offsets", 0)
         # to deal with any shape mismatches
         if offsets.max() == 0:
-           offsets = 0
+            offsets = 0
 
         # get the distances between neighbors
         e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
@@ -628,7 +609,9 @@ class OnlyBondUpdateCP3D(ChemProp3D):
                          all_nbrs=a,
                          bond_nbrs=bond_nbrs,
                          bond_idx=bond_idx,
-                         e=e)
+                         e=e,
+                         kj_idx=batch.get("kj_idx"),
+                         ji_idx=batch.get("ji_idx"))
 
         # convert back to node features
 

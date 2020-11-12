@@ -619,7 +619,8 @@ def clean_up_dset(dset,
                   rd_mols_list,
                   nbrlist_cutoff,
                   strict_conformers,
-                  csv_folder):
+                  csv_folder,
+                  add_directed_idx):
     """
     Do various things to clean up the dataset after you've made it.
     Args:
@@ -632,6 +633,9 @@ def clean_up_dset(dset,
             conformers don't all have the same SMILES.
         csv_folder (str): path to folder that contains the csv files
             with the test/val/train smiles.
+        add_directed_idx (bool): whether to calculate and add the kj
+            and ji indices. These indices tell you which edges connect
+            to other edges.
     Returns:
         dset (nff.data.dataset): cleaned up dataset
 
@@ -641,8 +645,9 @@ def clean_up_dset(dset,
 
     # smiles we're getting rid of
     remove_smiles = []
+    total = 3 + int(add_directed_idx)
 
-    with tqdm(total=3) as pbar:
+    with tqdm(total=total) as pbar:
 
         # if requested, get rid of any species whose conformers have different
         # SMILES strings
@@ -663,6 +668,14 @@ def clean_up_dset(dset,
         # bonded atoms
         dset.generate_bond_idx()
         pbar.update(1)
+
+        # Make sure the dataset is directed
+        dset.make_all_directed()
+
+        # add the kj and ji idx if requested
+        if add_directed_idx:
+            dset.generate_kj_ji()
+            pbar.update(1)
 
     # Re-save the train/val/test splits accounting for the fact that some
     # species are no longer there
@@ -733,7 +746,8 @@ def make_nff_dataset(spec_dics,
                      parallel_feat_threads,
                      strict_conformers,
                      csv_folder,
-                     extra_features):
+                     extra_features,
+                     add_directed_idx):
     """
     Make an NFF dataset
     Args:
@@ -747,6 +761,9 @@ def make_nff_dataset(spec_dics,
         csv_folder (str): path to folder that contains the csv files
             with the test/val/train smiles.
         extra_features (list[dict]): list of extra features dictionaries
+        add_directed_idx (bool): whether to calculate and add the kj
+            and ji indices. These indices tell you which edges connect
+            to other edges.
     Returns:
         big_dataset (nff.data.dataset): NFF dataset
 
@@ -775,7 +792,8 @@ def make_nff_dataset(spec_dics,
 
         # number of atoms in the molecule
         mol_size = len(dataset.props["nxyz"][0])
-        dataset.generate_neighbor_list(cutoff=nbrlist_cutoff)
+        dataset.generate_neighbor_list(cutoff=nbrlist_cutoff,
+                                       undirected=False)
 
         # now combine the neighbor lists so that this set
         # of nxyz's can be treated like one big molecule
@@ -838,7 +856,8 @@ def make_nff_dataset(spec_dics,
                                 rd_mols_list=rd_mols_list,
                                 nbrlist_cutoff=nbrlist_cutoff,
                                 strict_conformers=strict_conformers,
-                                csv_folder=csv_folder)
+                                csv_folder=csv_folder,
+                                add_directed_idx=add_directed_idx)
 
     # add any other requested features
     big_dataset = add_features(dset=big_dataset,
@@ -942,7 +961,8 @@ def main(max_confs,
          parallel_feat_threads,
          strict_conformers,
          extra_features,
-         **kwargs):
+         add_directed_idx
+         ** kwargs):
     """
     Sample species, load their pickles, create an NFF dataset, and
     save train/val/test splits.
@@ -969,6 +989,9 @@ def main(max_confs,
         extra_features (list[dict]): list of extra features,
             where each item is a dictionary of the form
             {"name": name, "params": {params needed}}.
+        add_directed_idx (bool): whether to calculate and add the kj
+            and ji indices. These indices tell you which edges connect
+            to other edges.
     Returns:
         None
 
@@ -996,7 +1019,8 @@ def main(max_confs,
                                parallel_feat_threads=parallel_feat_threads,
                                strict_conformers=strict_conformers,
                                csv_folder=csv_folder,
-                               extra_features=extra_features)
+                               extra_features=extra_features,
+                               add_directed_idx=add_directed_idx)
 
     fprint("Creating test/train/val splits...")
     save_splits(dataset=dataset,
@@ -1044,6 +1068,14 @@ if __name__ == "__main__":
                               "feature and any associated parameters. "
                               "If using the command line, "
                               "please provide as a JSON string."))
+    parser.add_argument('--add_directed_idx', action='store_true',
+                        help=("Add the kj and ji indices mapping out edges "
+                              "that are neighbors of other edges. This takes "
+                              "a fair bit of extra time, but if you're "
+                              "training a ChemProp3D model, which uses edge "
+                              "updates, this will save you a lot of time "
+                              "during training."))
+
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "

@@ -9,5 +9,6 @@
   "strict_conformers": false,
   "slurm_parallel": true,
   "nbrlist_cutoff": 5.0,
-  "extra_features": []
+  "extra_features": [],
+  "add_directed_idx": true
 }
