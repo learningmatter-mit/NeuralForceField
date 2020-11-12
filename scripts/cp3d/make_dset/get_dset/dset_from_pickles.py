@@ -615,18 +615,15 @@ def add_missing(props_list):
 
 
 def clean_up_dset(dset,
-                  nbr_list,
-                  rd_mols_list,
                   nbrlist_cutoff,
                   strict_conformers,
                   csv_folder,
-                  add_directed_idx):
+                  add_directed_idx,
+                  num_procs):
     """
     Do various things to clean up the dataset after you've made it.
     Args:
         dset (nff.data.dataset): NFF dataset
-        nbr_list (torch.LongTensor): neighbor list of the dataset
-        rd_mols_list (list): list of rdkit mols for the dataset
         nbrlist_cutoff (float): Cutoff for two atoms to be considered
             neighbors.
         strict_conformers (bool): Whether to exclude any species whose
@@ -636,6 +633,8 @@ def clean_up_dset(dset,
         add_directed_idx (bool): whether to calculate and add the kj
             and ji indices. These indices tell you which edges connect
             to other edges.
+        num_procs (int): how many parallel threads to use when making the 
+            kj and ji indices.
     Returns:
         dset (nff.data.dataset): cleaned up dataset
 
@@ -666,7 +665,7 @@ def clean_up_dset(dset,
 
         # Add the indices of the neighbor list that correspond to
         # bonded atoms
-        dset.generate_bond_idx()
+        dset.generate_bond_idx(num_procs)
         pbar.update(1)
 
         # Make sure the dataset is directed
@@ -674,7 +673,7 @@ def clean_up_dset(dset,
 
         # add the kj and ji idx if requested
         if add_directed_idx:
-            dset.generate_kj_ji()
+            dset.generate_kj_ji(num_procs)
             pbar.update(1)
 
     # Re-save the train/val/test splits accounting for the fact that some
@@ -692,7 +691,7 @@ def clean_up_dset(dset,
                f"{new_num} species, reduced from the original {old_num}, "
                f"because only {new_num} species made it into the final "
                "dataset. This could be because of conformers with bond "
-                "lengths greater than the cutoff distance of %.2f"
+               "lengths greater than the cutoff distance of %.2f"
                ) % nbrlist_cutoff
 
         if strict_conformers:
@@ -852,12 +851,11 @@ def make_nff_dataset(spec_dics,
     # clean up
     fprint("Cleaning up dataset...")
     big_dataset = clean_up_dset(dset=big_dataset,
-                                nbr_list=nbr_list,
-                                rd_mols_list=rd_mols_list,
                                 nbrlist_cutoff=nbrlist_cutoff,
                                 strict_conformers=strict_conformers,
                                 csv_folder=csv_folder,
-                                add_directed_idx=add_directed_idx)
+                                add_directed_idx=add_directed_idx,
+                                num_procs=parallel_feat_threads)
 
     # add any other requested features
     big_dataset = add_features(dset=big_dataset,
