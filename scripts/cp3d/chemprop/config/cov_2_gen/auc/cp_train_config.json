@@ -1,6 +1,6 @@
 {
-  "base_config_path": "/home/saxelrod/Repo/projects/master/NeuralForceField/scripts/cp3d/chemprop/config/cov_2_gen/base_config.json",
-  "hyp_config_path": "/home/saxelrod/Repo/projects/master/NeuralForceField/scripts/cp3d/chemprop/config/cov_2_gen/base_hyp_config.json",
+  "base_config_path": "/home/saxelrod/Repo/projects/master/NeuralForceField/scripts/cp3d/chemprop/config/cov_2_gen/auc/base_config.json",
+  "hyp_config_path": "/home/saxelrod/Repo/projects/master/NeuralForceField/scripts/cp3d/chemprop/config/cov_2_gen/auc/base_hyp_config.json",
   "use_hyperopt": true,
   "rerun_hyperopt": false,
   "metric": "auc",

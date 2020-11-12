@@ -118,13 +118,14 @@ class SchNetFeatures(WeightedConformers):
             bond_idx = get_bond_idx(bonded_nbr_list, nbr_list)
         return bond_idx
 
-    def convolve(self,
-                 batch,
-                 xyz=None,
-                 **kwargs):
+    def convolve_sub_batch(self,
+                           batch,
+                           xyz=None,
+                           xyz_grad=False,
+                           **kwargs):
         """
 
-        Apply the convolutional layers to the batch.
+        Apply the convolutional layers to a sub-batch.
 
         Args:
             batch (dict): dictionary of props
@@ -133,6 +134,7 @@ class SchNetFeatures(WeightedConformers):
             r: new feature vector after the convolutions
             N: list of the number of atoms for each molecule in the batch
             xyz: xyz (with a "requires_grad") for the batch
+            xyz_grad (bool): whether to compute the gradient of the xyz.
         """
 
         # Note: we've given the option to input xyz from another source.
@@ -141,7 +143,7 @@ class SchNetFeatures(WeightedConformers):
 
         if xyz is None:
             xyz = batch["nxyz"][:, 1:4]
-            xyz.requires_grad = True
+            xyz.requires_grad = xyz_grad
 
         a, nbr_was_directed = make_directed(batch["nbr_list"])
         bond_features = self.bond_filter(batch["bond_features"])
@@ -160,7 +162,7 @@ class SchNetFeatures(WeightedConformers):
         offsets = batch.get("offsets", 0)
         # to deal with any shape mismatches
         if hasattr(offsets, 'max') and offsets.max() == 0:
-           offsets = 0
+            offsets = 0
 
         distances = (xyz[a[:, 0]] - xyz[a[:, 1]] -
                      offsets).pow(2).sum(1).sqrt()[:, None]

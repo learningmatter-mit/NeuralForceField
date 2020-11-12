@@ -533,9 +533,9 @@ def make_dset_directed(dset):
 def batch_angle_idx(nbrs):
     """
     Given a neighbor list, find the sets of indices in the neighbor list
-    corresponding to indices. Usually you can only do this for one conformer
-    without running out of memory -- to do it for multiple conformers, use
-    `full_angle_idx` below.
+    corresponding to the kj and ji indices. Usually you can only do this 
+    for one conformer without running out of memory -- to do it for multiple 
+    conformers, use `full_angle_idx` below.
     Args:
         nbrs (torch.LongTensor): neighbor list
     Returns:
@@ -606,13 +606,15 @@ def kj_ji_to_dset(dataset, track):
     Returns:
         dataset (nff.data.Dataset): updated dataset
     """
+
+
     all_ji_idx = []
     all_kj_idx = []
 
     if track:
         iter_func = tqdm
     else:
-        iter_func = lambda x: x
+        def iter_func(x): return x
 
     for batch in iter_func(dataset):
         ji_idx, kj_idx = full_angle_idx(batch)
@@ -621,5 +623,33 @@ def kj_ji_to_dset(dataset, track):
 
     dataset.props['ji_idx'] = all_ji_idx
     dataset.props['kj_idx'] = all_kj_idx
+
+    return dataset
+
+
+def add_bond_idx(dataset, track):
+    """
+    Add indices that tell you which element of the neighbor
+    list corresponds to an index of the bonded neighbor list.
+    Args:
+        dataset (nff.data.Dataset): nff dataset
+        track (bool): whether to track progress
+    Returns:
+        dataset (nff.data.Dataset): updated dataset
+    """
+
+    if track:
+        iter_func = tqdm
+    else:
+        def iter_func(x): return x
+
+    dataset.props["bond_idx"] = []
+
+    for i in iter_func(range(len(dataset))):
+        bonded_nbr_list = dataset.props["bonded_nbr_list"][i]
+        nbr_list = dataset.props["nbr_list"][i]
+
+        bond_idx = get_bond_idx(bonded_nbr_list, nbr_list)
+        dataset.props["bond_idx"].append(bond_idx.cpu())
 
     return dataset
