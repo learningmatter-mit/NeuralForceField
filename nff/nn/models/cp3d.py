@@ -82,13 +82,15 @@ class ChemProp3D(WeightedConformers):
     def get_distance_feats(self,
                            batch,
                            xyz,
-                           offsets):
+                           offsets,
+                           bond_nbrs):
         """
         Get distance features.
         Args:
             batch (dict): batched sample of species
             xyz (torch.Tensor): xyz of the batch
             offsets (float): periodic boundary condition offsets
+            bond_nbrs (torch.LongTensor): directed bonded nbr list
         Returns:
             nbr_list (torch.LongTensor): directed neighbor list
             distance_feats (torch.Tensor): distance-based edge features
@@ -114,8 +116,7 @@ class ChemProp3D(WeightedConformers):
                 bond_idx = torch.cat([bond_idx,
                                       bond_idx + nbr_dim // 2])
         else:
-            bonded_nbr_list = batch["bonded_nbr_list"]
-            bond_idx = get_bond_idx(bonded_nbr_list, nbr_list)
+            bond_idx = get_bond_idx(bond_nbrs, nbr_list)
 
         return nbr_list, distance_feats, bond_idx
 
@@ -149,7 +150,8 @@ class ChemProp3D(WeightedConformers):
         nbr_list, distance_feats, bond_idx = self.get_distance_feats(
             batch=batch,
             xyz=xyz,
-            offsets=offsets)
+            offsets=offsets,
+            bond_nbrs=bond_nbrs)
 
         # combine node and bonded edge features to get the bond component
         # of h_0
