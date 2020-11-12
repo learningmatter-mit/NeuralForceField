@@ -11,13 +11,14 @@ from ase.neighborlist import neighbor_list
 from torch.utils.data import Dataset as TorchDataset
 from tqdm import tqdm
 
-from nff.data.parallel import featurize_parallel, NUM_PROCS, add_e3fp_parallel
+from nff.data.parallel import (featurize_parallel, NUM_PROCS,
+                               add_e3fp_parallel, add_kj_ji_parallel)
 from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
 from nff.data.features import add_morgan as external_morgan
 from nff.data.features import featurize_rdkit as external_rdkit
 from nff.data.graphs import (get_bond_idx, reconstruct_atoms, get_neighbor_list, generate_subgraphs,
                              DISTANCETHRESHOLDICT_Z, get_angle_list, add_ji_kj,
-                             make_dset_directed, full_angle_idx)
+                             make_dset_directed)
 
 
 class Dataset(TorchDataset):
@@ -208,24 +209,15 @@ class Dataset(TorchDataset):
 
         return angles
 
-    def generate_kj_ji(self):
+    def generate_kj_ji(self, num_procs=1):
         """
         Generate only the `ji_idx` and `kj_idx` without storing
         the full angle list.
         """
 
         self.make_all_directed()
-
-        all_ji_idx = []
-        all_kj_idx = []
-
-        for batch in tqdm(self):
-            ji_idx, kj_idx = full_angle_idx(batch)
-            all_ji_idx.append(ji_idx)
-            all_kj_idx.append(kj_idx)
-
-        self.props['ji_idx'] = ji_idx
-        self.props['kj_idx'] = kj_idx
+        add_kj_ji_parallel(self,
+                           num_procs=num_procs)
 
     def _get_periodic_neighbor_list(self, cutoff, undirected=False):
         from nff.io.ase import AtomsBatch

@@ -595,3 +595,31 @@ def full_angle_idx(batch):
     all_kj_idx = torch.cat(all_kj_idx)
 
     return all_ji_idx, all_kj_idx
+
+
+def kj_ji_to_dset(dataset, track):
+    """
+    Add all the kj and ji indices to the dataset
+    Args:
+        dataset (nff.data.Dataset): nff dataset
+        track (bool): whether to track progress
+    Returns:
+        dataset (nff.data.Dataset): updated dataset
+    """
+    all_ji_idx = []
+    all_kj_idx = []
+
+    if track:
+        iter_func = tqdm
+    else:
+        iter_func = lambda x: x
+
+    for batch in iter_func(dataset):
+        ji_idx, kj_idx = full_angle_idx(batch)
+        all_ji_idx.append(ji_idx)
+        all_kj_idx.append(kj_idx)
+
+    dataset.props['ji_idx'] = all_ji_idx
+    dataset.props['kj_idx'] = all_kj_idx
+
+    return dataset
