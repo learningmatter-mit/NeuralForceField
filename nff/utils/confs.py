@@ -406,7 +406,7 @@ def make_split_nbrs(nbr_list,
                                            prev_idx + num)).to(torch.bool)
         sub_batch_masks.append(mask)
 
-    return all_grouped_nbrs, masks
+    return all_grouped_nbrs, sub_batch_masks
 
 
 def add_split_nbrs(batch,
