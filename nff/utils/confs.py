@@ -388,8 +388,11 @@ def make_split_nbrs(nbr_list,
     # regroup in sub-batches and subtract appropriately
 
     all_grouped_nbrs = []
+    sub_batch_masks = []
+
     for i, num in enumerate(confs_per_split):
 
+        # neighbor first
         prev_idx = sum(confs_per_split[:i])
         nbr_idx = list(range(prev_idx, prev_idx + num))
 
@@ -397,6 +400,11 @@ def make_split_nbrs(nbr_list,
         grouped_nbrs -= mol_size * prev_idx
 
         all_grouped_nbrs.append(grouped_nbrs)
+
+        # then add together all the masks
+        mask = sum(masks[i] for i in range(prev_idx,
+                                           prev_idx + num)).to(torch.bool)
+        sub_batch_masks.append(mask)
 
     return all_grouped_nbrs, masks
 
@@ -546,7 +554,7 @@ def split_batch(batch,
 
         # save nbr lists for later and
         # get rid of `bond_idx` because it's wrong
-        if key in ['bond_idx', *REINDEX_KEYS]:
+        if key in [*NBR_IDX_KEYS, *REINDEX_KEYS]:
             continue
         elif np.mod(val_len, num_confs) != 0 or val_len == 1:
             if key == "num_atoms":
