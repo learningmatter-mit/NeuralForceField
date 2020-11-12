@@ -203,7 +203,7 @@ def chemprop_msg_update(h,
 
     """
 
-    if all([kj_idx is not None, ji_idx is None]):
+    if all([kj_idx is not None, ji_idx is not None]):
         graph_size = h.shape[0]
         # get the h's of these indices
         h_to_add = h[ji_idx]
