@@ -59,7 +59,8 @@ class Dataset(TorchDataset):
 
     def __init__(self,
                  props,
-                 units='kcal/mol'):
+                 units='kcal/mol',
+                 check_props=True):
         """Constructor for Dataset class.
 
         Args:
@@ -68,7 +69,10 @@ class Dataset(TorchDataset):
                 all lists have the same length.
             units (str): units of the system.
         """
-        self.props = self._check_dictionary(deepcopy(props))
+        if check_props:
+            self.props = self._check_dictionary(deepcopy(props))
+        else:
+            self.props = props
         self.units = units
         self.to_units('kcal/mol')
 

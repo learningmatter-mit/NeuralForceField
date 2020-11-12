@@ -1,6 +1,6 @@
 {
  "data_path": "/home/saxelrod/chemprop_cov_1/hyperopt_full.csv",
- "num_iters": 10,
+ "num_iters": 100,
  "split_type": "scaffold_balanced",
  "dataset_type": "classification",
  "no_features_scaling": true,

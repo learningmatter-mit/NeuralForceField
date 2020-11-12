@@ -11,6 +11,7 @@ from nff.nn.modules import (
 from nff.nn.graphop import conf_pool
 from nff.nn.utils import construct_sequential
 from nff.utils.scatter import compute_grad
+from nff.utils.confs import split_batch
 
 
 class WeightedConformers(nn.Module):
@@ -244,10 +245,14 @@ class WeightedConformers(nn.Module):
 
         return feats
 
-    def convolve(self, batch, xyz=None, xyz_grad=False, **kwargs):
+    def convolve_sub_batch(self,
+                           batch,
+                           xyz=None,
+                           xyz_grad=False,
+                           **kwargs):
         """
 
-        Apply the convolutional layers to the batch.
+        Apply the convolutional layers to a sub-batch.
 
         Args:
             batch (dict): dictionary of props
@@ -275,7 +280,7 @@ class WeightedConformers(nn.Module):
         offsets = batch.get("offsets", 0)
         # to deal with any shape mismatches
         if hasattr(offsets, 'max') and offsets.max() == 0:
-           offsets = 0
+            offsets = 0
 
         e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
              offsets).pow(2).sum(1).sqrt()[:, None]
@@ -290,6 +295,49 @@ class WeightedConformers(nn.Module):
             r = r + dr
 
         return r, xyz
+
+    def convolve(self,
+                 batch,
+                 sub_batch_size=None,
+                 xyz=None,
+                 xyz_grad=False):
+        """
+        Apply the convolution layers to the batch.
+        Args:
+            batch (dict): batched sample of species
+            sub_batch_size (int): maximum number of conformers
+                in a sub-batch.
+            xyz (torch.Tensor): xyz of the batch
+            xyz_grad (bool): whether to set xyz.requires_grad = True
+        Returns:
+            new_node_feats (torch.Tensor): new node features after
+                the convolutions.
+            xyz (torch.Tensor): xyz of the batch
+        """
+
+        # split batches as necessary
+        if sub_batch_size is None:
+            sub_batches = [batch]
+        else:
+            sub_batches = split_batch(batch, sub_batch_size)
+
+        # go through each sub-batch, get the xyz and node features,
+        # and concatenate them when done
+
+        new_node_feat_list = []
+        xyz_list = []
+
+        for sub_batch in sub_batches:
+
+            new_node_feats, xyz = self.convolve_sub_batch(
+                sub_batch, xyz, xyz_grad)
+            new_node_feat_list.append(new_node_feats)
+            xyz_list.append(xyz)
+
+        new_node_feats = torch.cat(new_node_feat_list)
+        xyz = torch.cat(xyz_list)
+
+        return new_node_feats, xyz
 
     def get_external_3d(self,
                         batch,

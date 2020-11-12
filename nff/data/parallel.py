@@ -6,8 +6,6 @@ import numpy as np
 from concurrent import futures
 import copy
 import torch
-import multiprocessing as mp
-import pdb
 
 from nff.utils import fprint
 from nff.data.features import (make_rd_mols,
@@ -17,6 +15,7 @@ from nff.data.features import (make_rd_mols,
                                BOND_FEAT_TYPES,
                                ATOM_FEAT_TYPES)
 from nff.data.graphs import kj_ji_to_dset, add_bond_idx
+
 
 NUM_PROCS = 5
 
@@ -35,12 +34,6 @@ def split_dataset(dataset, num):
     idx = range(len(dataset))
     splits = np.array_split(idx, num)
 
-    # a reference dataset to copy and assign
-    # new props to
-
-    ref_dset = copy.deepcopy(dataset)
-    ref_dset.props = {key: val[:1] for key, val in dataset.props.items()}
-
     for split in splits:
 
         if len(split) == 0:
@@ -50,8 +43,9 @@ def split_dataset(dataset, num):
         new_props = {key: val[min_split: max_split] for key, val
                      in dataset.props.items()}
 
-        new_dataset = copy.deepcopy(ref_dset)
-        new_dataset.props = new_props
+        new_dataset = dataset.__class__(props=new_props,
+                                        check_props=False,
+                                        units=dataset.units)
         datasets.append(new_dataset)
 
     return datasets
@@ -212,6 +206,7 @@ def bond_idx_parallel(dsets):
 
     return result_dsets
 
+
 def summarize_rd(new_sets, first_set):
     """
     Summarize how many RDKit mols were successfully made.
@@ -314,12 +309,19 @@ def add_e3fp_parallel(dataset,
 
 def add_kj_ji_parallel(dataset, num_procs):
 
+    fprint((f"Adding kj and ji indices with {num_procs} "
+            "parallel processes"))
+
     datasets = split_dataset(dataset=dataset, num=num_procs)
     datasets = kj_ji_parallel(datasets)
     new_props = rejoin_props(datasets)
     dataset.props = new_props
 
+
 def add_bond_idx_parallel(dataset, num_procs):
+
+    fprint((f"Adding bond indices with {num_procs} "
+            "parallel processes"))
 
     datasets = split_dataset(dataset=dataset, num=num_procs)
     datasets = bond_idx_parallel(datasets)

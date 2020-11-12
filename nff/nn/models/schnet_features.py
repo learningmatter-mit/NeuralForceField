@@ -118,13 +118,13 @@ class SchNetFeatures(WeightedConformers):
             bond_idx = get_bond_idx(bonded_nbr_list, nbr_list)
         return bond_idx
 
-    def convolve(self,
-                 batch,
-                 xyz=None,
-                 **kwargs):
+    def convolve_sub_batch(self,
+                           batch,
+                           xyz=None,
+                           **kwargs):
         """
 
-        Apply the convolutional layers to the batch.
+        Apply the convolutional layers to a sub-batch.
 
         Args:
             batch (dict): dictionary of props
@@ -160,7 +160,7 @@ class SchNetFeatures(WeightedConformers):
         offsets = batch.get("offsets", 0)
         # to deal with any shape mismatches
         if hasattr(offsets, 'max') and offsets.max() == 0:
-           offsets = 0
+            offsets = 0
 
         distances = (xyz[a[:, 0]] - xyz[a[:, 1]] -
                      offsets).pow(2).sum(1).sqrt()[:, None]

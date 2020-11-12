@@ -533,9 +533,9 @@ def make_dset_directed(dset):
 def batch_angle_idx(nbrs):
     """
     Given a neighbor list, find the sets of indices in the neighbor list
-    corresponding to indices. Usually you can only do this for one conformer
-    without running out of memory -- to do it for multiple conformers, use
-    `full_angle_idx` below.
+    corresponding to the kj and ji indices. Usually you can only do this 
+    for one conformer without running out of memory -- to do it for multiple 
+    conformers, use `full_angle_idx` below.
     Args:
         nbrs (torch.LongTensor): neighbor list
     Returns:
@@ -606,6 +606,8 @@ def kj_ji_to_dset(dataset, track):
     Returns:
         dataset (nff.data.Dataset): updated dataset
     """
+
+
     all_ji_idx = []
     all_kj_idx = []
 
