@@ -47,6 +47,7 @@ def save(results,
         probas_pred = None
 
     else:
+
         probas_pred = (torch.cat(results[prop])
                        .reshape(-1).numpy())
 
@@ -302,7 +303,7 @@ def main(dset_folder,
                                   model_folder=model_folder,
                                   metric=metric)
 
-    paths, dset_names = get_dset_paths(model_folder, test_only)
+    paths, dset_names = get_dset_paths(dset_folder, test_only)
 
     # go through each dataset, create a loader, evaluate the model,
     # and save the predictions
