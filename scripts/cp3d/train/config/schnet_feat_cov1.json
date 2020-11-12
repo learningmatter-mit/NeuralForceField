@@ -69,7 +69,7 @@
         "use_mpnn": true
     },
     "train_params": {
-        "batch_size": 128,
+        "batch_size": 160,
         "checkpoints_to_keep": 10000,
         "del_grad_interval": 100,
         "log_every_n_epochs": 1,
@@ -81,7 +81,7 @@
         "lr_decay": 0.5,
         "lr_min": 1e-06,
         "lr_patience": 10,
-        "max_epochs": 10,
+        "max_epochs": 30,
         "metric_as_loss": "PrAuc_sars_cov_one_cl_protease_active",
         "metric_objective": "maximize",
         "metrics": [
