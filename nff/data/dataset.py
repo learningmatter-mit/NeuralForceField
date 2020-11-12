@@ -245,7 +245,7 @@ class Dataset(TorchDataset):
         self.props['offsets'] = offsets
         return
 
-    def generate_bond_idx(self, num_procs):
+    def generate_bond_idx(self, num_procs=1):
         """
         For each index in the bond list, get the
         index in the neighbour list that corresponds to the
