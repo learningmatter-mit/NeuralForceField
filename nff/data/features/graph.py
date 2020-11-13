@@ -7,9 +7,6 @@ import numpy as np
 import copy
 from rdkit import Chem
 from rdkit.Chem import AllChem
-from e3fp.pipeline import fprints_from_mol
-import logging
-
 
 from nff.utils.xyz2mol import xyz2mol
 from nff.utils import tqdm_enum
@@ -1055,58 +1052,3 @@ def add_morgan(dataset, vec_length):
         arr_morgan = np.array(list(morgan)).astype('float32')
         morgan_tens = torch.tensor(arr_morgan)
         dataset.props["morgan"].append(morgan_tens)
-
-
-def add_e3fp(rd_dataset,
-             fp_length,
-             verbose=False,
-             track=True):
-    """
-    Add E3FP fingerprints to each conformer in the dataset.
-    Args:
-        rd_dataset (nff.data.dataset): NFF dataset with RDKit mols.
-        fp_length (int): length of each fingerprint
-        verbose (bool): whether to print the progress made
-        track (bool): whether to track progress with tqdm_enum
-    Returns:
-        rd_dataset (nff.data.dataset): NFF dataset updated with E3FP
-    """
-
-    # disable verbose logging from e3fp
-
-    if not verbose:
-        logger = logging.getLogger()
-        logger.disabled = True
-
-    e3fp_list = []
-    enum = get_enum_func(track)
-
-    for i, batch in enum(rd_dataset):
-
-        mols = batch["rd_mols"]
-        smiles = batch["smiles"]
-
-        fps = []
-
-        for mol in mols:
-
-            # need to set "_Name" for the E3FP fingerprint generator to work
-            mol.SetProp("_Name", smiles)
-            # set the params to include the number of bits
-            fprint_params = {"bits": fp_length}
-            # get the fingperint, which includes nonzero indices
-            # through fp.indices, and convert it to a tensor
-            fp = fprints_from_mol(mol, fprint_params=fprint_params)
-            fp_array = np.zeros(len(fp[0]))
-            indices = fp[0].indices
-            fp_array[indices] = 1
-
-            fps.append(torch.Tensor(fp_array))
-
-        e3fp_list.append(torch.stack(fps))
-
-    rd_dataset.props['e3fp'] = e3fp_list
-
-    return rd_dataset
-
-    

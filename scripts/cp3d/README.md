@@ -18,6 +18,7 @@ This folder contains scripts for doing 3D-based prediction tasks. These include 
            * [ChemProp3D](#chemprop3d)
            * [ChemProp3D (only bond update)](#chemprop3d-only-bond-update)
         * [Training parameters](#training-parameters)
+    * [Analysis](#analysis)
 - [Hyperparameter optimization](#hyperparameter-optimization)
 - [Transfer learning](#transfer-learning)
     * [Making a dataset for the new task](#making-a-dataset-for-the-new-task)
@@ -258,6 +259,8 @@ Here  only the bonds are updated, and the updated hidden bond vectors are concat
     
     If you are using PyTorch parallelization then you must save the entire dataset centrally.
 
+### Analysis
+There are some useful files in `nff/analysis` for analyzing model predictions. For example, in `nff/analysis/cp3d.py`, you can find functions for computing the fingerprint similarity among different species. This can be done for species pairs that are contain two hits, two misses, or one hit and one miss for binary classification problems. You can also calculate similarities when conformers are selected randomly and when they are selected from the highest attention weight. This can give an idea of what the attention mechanism is or isn't learning.
 
 ## Hyperparameter optimization
 
