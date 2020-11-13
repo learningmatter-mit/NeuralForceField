@@ -260,7 +260,7 @@ Here  only the bonds are updated, and the updated hidden bond vectors are concat
     If you are using PyTorch parallelization then you must save the entire dataset centrally.
 
 ### Analysis
-If you want to analyze your model predictions, there are some useful files in `nff/analysis`. For example, in `nff/analysis/cp3d.py` you can find functions for computing the similarity of fingerprints for different species. This can be done among species that are both hits, both misses, or contain one hit and one miss. The fingerprints obtained by taking the conformer with the highest attention weight can be compared with the fingerprint from a random conformer in each species.
+If you want to analyze your model predictions, there are some useful files in `nff/analysis`. For example, in `nff/analysis/cp3d.py`, you can find functions for computing the fingerprint similarities of pairs of species. For classification problems, this can be done for species pairs that are contain two hits, two misses, or one hit and one miss. You can also calculate similarities when conformers are selected randomly and when they are selected from the highest attention weight. This can give an idea of what the attention mechanism is or isn't learning.
 
 ## Hyperparameter optimization
 
