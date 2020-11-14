@@ -445,9 +445,9 @@ def report_delta(bare_dic):
         # delta delta is the difference in deltas between random and attention,
         # a measure of how much attention is learning
 
-        delta_delta = delta_att - delta_rand
-        delta_delta_mean = np.mean(delta_delta)
-        delta_delta_std = np.std(delta_delta) / (len(delta_delta)) ** 0.5
+        delta_delta_mean = delta_att_mean - delta_rand_mean
+        delta_delta_std = ((np.var(delta_att) + np.var(delta_rand)) ** 0.5
+                           / (len(delta_att)) ** 0.5)
 
         fprint("Delta att: %.4f +/- %.4f" % (delta_att_mean, delta_att_std))
         fprint("Delta rand: %.4f +/- %.4f" % (delta_rand_mean, delta_rand_std))
