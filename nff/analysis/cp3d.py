@@ -49,6 +49,8 @@ def get_pred_files(model_path):
             continue
         pred_files.append(os.path.join(model_path, file))
 
+        break
+
     return pred_files
 
 
@@ -387,20 +389,33 @@ def attention_sim(dic,
                                fp_kwargs=fp_kwargs)
                 fp_sims.append(sim)
 
-            fp_dics[key][conf_type] = np.mean(fp_sims)
-
-    # also compare the difference between similarity of
-    # positives and similarity between negatives and
-    # positives
-    this_dic = fp_dics
-
-    if "intra_pos" in this_dic and "inter" in this_dic:
-        this_dic["intra_pos_minus_inter"] = {
-            conf_type: this_dic["intra_pos"][conf_type] -
-            this_dic["inter"][conf_type]
-            for conf_type in conf_types}
+            fp_dics[key][conf_type] = np.array(fp_sims)
 
     return fp_dics
+
+
+def analyze_data(bare_data, analysis):
+    """
+    Do analysis of different fingerprints (e.g. mean, standard deviation, 
+    std deviation of the mean). Uses a recursive method to go through 
+    each sub-dictionary until an array is found.
+    Args:
+        bare_data (dict): dictionary with bare fingerprint similarities
+        analysis (dict): same form as `bare_data` but replaces arrays
+            with a dictionary analyzing their properties.
+    Returns:
+        None
+    """
+    for key, val in bare_data.items():
+        if isinstance(val, np.ndarray):
+            analysis[key] = {"mean": np.mean(val),
+                             "std": np.std(val),
+                             "std_of_mean": (np.std(val)
+                                             / val.shape[0] ** 0.5)}
+        else:
+            if key not in analysis:
+                analysis[key] = {}
+            analyze_data(val, analysis[key])
 
 
 def conf_sims_from_files(model_path,
@@ -433,13 +448,15 @@ def conf_sims_from_files(model_path,
     Returns:
         analysis (dict): dictionary of the form {prediction_name:
             similarity_dic} for the name of each prediction file.
+        bare_data (dict): same idea as `analysis` but with the full
+            set of similarities between each molecule.
     """
 
     fprint("Loading pickle files...")
     pred_files = get_pred_files(model_path)
     pred = load_preds(pred_files)
 
-    analysis = {}
+    bare_data = {}
 
     fprint("Calculating fingerprint similarities...")
 
@@ -454,6 +471,10 @@ def conf_sims_from_files(model_path,
                                 summary_path=summary_path,
                                 rd_path=rd_path,
                                 fp_kwargs=fp_kwargs)
-        analysis[key] = fp_dics
+        bare_data[key] = fp_dics
 
-    return analysis
+    # analyze the bare data
+    analysis = {}
+    analyze_data(bare_data, analysis)
+
+    return analysis, bare_data
