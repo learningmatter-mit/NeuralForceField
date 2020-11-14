@@ -416,6 +416,45 @@ def analyze_data(bare_data, analysis):
             analyze_data(val, analysis[key])
 
 
+def report_delta(bare_dic):
+    """
+    For a binary task, report analysis on the difference between 
+        similarity among hits and similarity between hits and misses.
+    Args:
+        bare_dic (dict): bare dictionary of similarities
+    Returns:
+        None
+    """
+    for key, dic in bare_dic.items():
+        fprint(f"Results for {key}")
+        fprint("+/- indicates standard deviation of the mean")
+
+        # attention and random differences in similarity
+        delta_att = dic['intra_pos']['att'] - dic['inter']['att']
+        delta_rand = dic['intra_pos']['random'] - dic['inter']['random']
+
+        # compute mean for attention
+        delta_att_mean = np.mean(delta_att)
+        # std deviation on the mean
+        delta_att_std = np.std(delta_att) / (len(delta_att)) ** 0.5
+
+        # same for random
+        delta_rand_mean = np.mean(delta_rand)
+        delta_rand_std = np.std(delta_rand) / (len(delta_rand)) ** 0.5
+
+        # delta delta is the difference in deltas between random and attention,
+        # a measure of how much attention is learning
+
+        delta_delta = delta_att - delta_rand
+        delta_delta_mean = np.mean(delta_delta)
+        delta_delta_std = np.std(delta_delta) / (len(delta_delta)) ** 0.5
+
+        fprint("Delta att: %.4f +/- %.4f" % (delta_att_mean, delta_att_std))
+        fprint("Delta rand: %.4f +/- %.4f" % (delta_rand_mean, delta_rand_std))
+        fprint("Delta delta: %.4f +/- %.4f" %
+               (delta_delta_mean, delta_delta_std))
+
+
 def conf_sims_from_files(model_path,
                          max_samples,
                          classifier,
@@ -474,5 +513,8 @@ def conf_sims_from_files(model_path,
     # analyze the bare data
     analysis = {}
     analyze_data(bare_data, analysis)
+
+    if classifier:
+        report_delta(bare_data)
 
     return analysis, bare_data
