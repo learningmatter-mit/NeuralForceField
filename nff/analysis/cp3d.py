@@ -49,8 +49,6 @@ def get_pred_files(model_path):
             continue
         pred_files.append(os.path.join(model_path, file))
 
-        break
-
     return pred_files
 
 
