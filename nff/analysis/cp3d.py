@@ -453,6 +453,7 @@ def report_delta(bare_dic):
         fprint("Delta rand: %.4f +/- %.4f" % (delta_rand_mean, delta_rand_std))
         fprint("Delta delta: %.4f +/- %.4f" %
                (delta_delta_mean, delta_delta_std))
+        fprint("\n")
 
 
 def conf_sims_from_files(model_path,
