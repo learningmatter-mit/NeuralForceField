@@ -96,13 +96,13 @@ class ChemProp3D(WeightedConformers):
             nbr_list (torch.LongTensor): directed neighbor list
             distance_feats (torch.Tensor): distance-based edge features
             bond_idx (torch.LongTensor): indices that map bonded atom pairs
-                to their location in the neighbor list. 
+                to their location in the neighbor list.
         """
 
         # get directed neighbor list
         nbr_list, nbr_was_directed = make_directed(batch["nbr_list"])
         # distances
-        distances = (xyz[nbr_list[:, 0]] - xyz[nbr_list[:, 1]] -
+        distances = (xyz[nbr_list[:, 0]][:, 1:] - xyz[nbr_list[:, 1]][:, 1:] -
                      offsets).pow(2).sum(1).sqrt()[:, None]
         # put through Gaussian filter and dense layer to get features
         distance_feats = self.edge_filter(distances)
