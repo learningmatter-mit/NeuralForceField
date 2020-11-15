@@ -5,7 +5,7 @@
   "prop": "sars_cov_one_cl_protease_active",
   "device": 1,
   "batch_size": 1,
-  "sub_batch_size": 10,
+  "sub_batch_size": 1,
   "test_only": true,
   "metrics": [
     "prc-auc"
