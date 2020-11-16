@@ -2,8 +2,10 @@ import json
 import os
 import subprocess
 import pickle
+import time
 import numpy as np
 import argparse
+from tqdm import tqdm
 
 from nff.utils import (METRICS, CHEMPROP_TRANSFORM, parse_args)
 
@@ -28,9 +30,9 @@ def make_base_config(config_file, kwargs, par):
             if key in config:
                 config.pop(key)
 
-    base_path = config.path.replace(".json", "_base.json")
+    base_path = config_file.replace(".json", "_base.json")
     with open(base_path, "w") as f_open:
-        json.dumps(config, f_open)
+        json.dump(config, f_open, indent=4, sort_keys=True)
     return base_path
 
 
@@ -47,10 +49,10 @@ def run_par(base_config_file,
     num_nodes = os.environ["SLURM_NNODES"]
     single_path = get_single_path()
     idx_folder = os.path.join(dset_folder, str(idx))
-    cmd = (f"srun -N 1 python {single_path} --config_file {base_config_file} "
+    cmd = (f"srun -N 1 -n 1 python {single_path} --config_file {base_config_file} "
            f" --dset_folder {idx_folder} --feat_save_folder {idx_folder} ")
 
-    if (idx % num_nodes != 0):
+    if (int(idx) % int(num_nodes) != 0):
         cmd += "--no_track"
 
     p = subprocess.Popen([cmd],
@@ -61,34 +63,54 @@ def run_par(base_config_file,
                          close_fds=True)
     return p
 
+def monitor_results(dset_folder, folders, split_names, metric):
+    monitor_dic = {}
+    for split in split_names:
+        for folder in folders:
+            pickle_name = f"pred_{metric}_{split}.pickle"
+            pickle_path = os.path.join(dset_folder, folder, pickle_name)
+            monitor_dic[pickle_path] = False
+    total = len(monitor_dic)
+    with tqdm(total=total) as pbar:
+        while False in monitor_dic.values():
+            for path in monitor_dic.keys():
+                if os.path.isfile(path) and not monitor_dic[path]:
+                    monitor_dic[path] = True
+                    pbar.update(1)
+            time.sleep(5)
 
-def combine_results(dset_folder, metric):
+def combine_results(dset_folder, metric, split_names):
+
+    folders = sorted([i for i in os.listdir(dset_folder) if i.isdigit()],
+                     key=lambda x: int(x))
+    monitor_results(dset_folder, folders, split_names, metric)
+
     combined_dics = {}
-    for split in ['train', 'val', 'test']:
+
+    for split in split_names:
         pickle_name = f"pred_{metric}_{split}.pickle"
-        folders = sorted([i for i in os.listdir(dset_folder) if i.isdigit()],
-                         key=lambda x: int(x))
         overall = {}
         for folder in folders:
-            pickle_path = os.path.join(dset_folder, folder, pickle_name)
-            try:
-                with open(pickle_path, "rb") as f:
-                    results = pickle.load(f)
-            except (EOFError, FileNotFoundError, pickle.UnpicklingError):
-                continue
-            for key, val in results.items():
-                if key not in overall:
+            while True:
+                pickle_path = os.path.join(dset_folder, folder, pickle_name)
+                try:
+                    with open(pickle_path, "rb") as f:
+                        results = pickle.load(f)
+                except (EOFError, FileNotFoundError, pickle.UnpicklingError):
+                    time.sleep(1)
+                    continue
+                for key, val in results.items():
                     overall[key] = val
-                else:
-                    if isinstance(val, np.ndarray):
-                        overall[key] = np.concatenate([overall[key], val])
-                    elif isinstance(val, list):
-                        overall[key] += val
-                    else:
-                        raise NotImplementedError
+                break
         combined_dics[split] = overall
     return combined_dics
 
+def get_split_names(kwargs):
+    if kwargs.get("test_only"):
+        names = ["test"]
+    else:
+        names = ["train", "val", "test"]
+    return names
 
 def run_all_par(kwargs):
 
@@ -108,10 +130,9 @@ def run_all_par(kwargs):
     for idx in folders:
         p = run_par(base_config_file, dset_folder, idx)
         procs.append(p)
-    for p in procs:
-        p.wait()
 
-    results = combine_results(dset_folder, metric)
+    split_names = get_split_names(kwargs)
+    results = combine_results(dset_folder, metric, split_names)
 
     for split, sub_dic in results.items():
         pickle_name = f"pred_{metric}_{split}.pickle"
@@ -181,6 +202,8 @@ if __name__ == "__main__":
     parser.add_argument('--slurm_parallel', action='store_true',
                         help=("Use slurm to evaluate model predictions "
                               "in parallel over different nodes."))
+    parser.add_argument('--config_file', type=str,
+                        help=("Path to JSON file with arguments."))
 
     args = parse_args(parser)
     kwargs = args.__dict__

@@ -6,6 +6,9 @@ import argparse
 import os
 import pickle
 import numpy as np
+import json
+import sys
+import warnings
 
 import torch
 from torch.utils.data import DataLoader
@@ -16,11 +19,11 @@ from nff.train import load_model
 from nff.data import collate_dicts
 from nff.utils.cuda import batch_to, batch_detach
 from nff.data.dataset import concatenate_dict
-from nff.utils import (parse_args, fprint, parse_score)
+from nff.utils import (parse_args, fprint, parse_score, CHEMPROP_TRANSFORM)
 
-
-
-
+# ignore warnings
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
 
 def save(results,
          targets,
@@ -184,6 +187,7 @@ def fps_and_pred(model, batch, **kwargs):
 def evaluate(model,
              loader,
              device,
+             track,
              **kwargs):
     """
     Evaluate a model on a dataset.
@@ -202,7 +206,9 @@ def evaluate(model,
     all_results = []
     all_batches = []
 
-    for batch in tqdm(loader):
+    iter_func = get_iter_func(track)
+
+    for batch in iter_func(loader):
 
         batch = batch_to(batch, device)
         results = fps_and_pred(model, batch, **kwargs)
@@ -271,6 +277,13 @@ def add_dics(base, new):
             base[key] = val
     return base
 
+def get_iter_func(track, num_track=None):
+    if track and num_track != 1:
+        iter_func = tqdm
+    else:
+        def iter_func(x):
+            return x
+    return iter_func    
 
 def main(dset_folder,
          device,
@@ -314,16 +327,12 @@ def main(dset_folder,
     # go through each dataset, create a loader, evaluate the model,
     # and save the predictions
 
-    if track:
-        iter_func = tqdm
-    else:
-        def iter_func(x):
-            return x
+    iter_func = get_iter_func(track, num_track=len(dset_names))
 
     for i in iter_func(range(len(dset_names))):
         results = {}
         targets = {}
-        for path in tqdm(paths[i]):
+        for path in iter_func(paths[i]):
             dataset = Dataset.from_file(path)
             loader = DataLoader(dataset,
                                 batch_size=batch_size,
@@ -332,7 +341,8 @@ def main(dset_folder,
             new_results, new_targets = evaluate(model,
                                                 loader,
                                                 device=device,
-                                                sub_batch_size=sub_batch_size)
+                                                sub_batch_size=sub_batch_size,
+                                                track=track)
 
             results = add_dics(base=results, new=new_results)
             targets = add_dics(base=targets, new=new_targets)
@@ -351,15 +361,25 @@ def main(dset_folder,
              feat_save_folder=pickle_path,
              prop=prop)
 
-    fprint("Complete!")
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument('--dset_folder', type=str,
+                        help=("Name of the folder with the "
+                              "datasets you want to add "
+                              "fingerprints to"))
+    parser.add_argument('--feat_save_folder', type=str,
+                        help="Path to save pickles")
     parser.add_argument('--no_track', action='store_true',
                         help=("Don't track progress with tqmd "))
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments."))
     args = parse_args(parser)
+    # need to add this explicitly because `parse_args` will only add
+    # the keys that are given as options above
+    with open(args.config_file, "r") as f:
+        config = json.load(f)
+    for key, val in config.items():
+        setattr(args, key, val)
 
     main(**args.__dict__)
