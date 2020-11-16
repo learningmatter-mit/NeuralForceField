@@ -156,6 +156,27 @@ def monitor_results(dset_folder,
             time.sleep(5)
 
 
+def pickle_sub_path(metric,
+                    split,
+                    folder,
+                    dset_folder):
+    """
+    Get path to the pickle file in a dataset sub-folder.
+    Args:
+        metric (str): name of the metric that we're using
+            to evaluate the model.
+        split (str): name of split (train, val or test)
+        folder (str): name of sub-folder
+        dset_folder (str): path to dataset
+    Returns:
+        path (str): path to pickle file
+    """
+    pickle_name = f"pred_{metric}_{split}.pickle"
+    path = os.path.join(dset_folder, folder, pickle_name)
+
+    return path
+
+
 def combine_results(dset_folder,
                     metric,
                     split_names):
@@ -186,13 +207,13 @@ def combine_results(dset_folder,
 
     # go through each split
     for split in split_names:
-        pickle_name = f"pred_{metric}_{split}.pickle"
         overall = {}
         # go through each folder and loop until you've succesfully loaded
         # all pickles
         for folder in folders:
             while True:
-                pickle_path = os.path.join(dset_folder, folder, pickle_name)
+                pickle_path = pickle_sub_path(
+                    metric, split, folder, dset_folder)
                 try:
                     with open(pickle_path, "rb") as f:
                         results = pickle.load(f)
@@ -248,12 +269,16 @@ def run_all_par(kwargs):
                      key=lambda x: int(x))
     procs = []
 
+    split_names = get_split_names(kwargs)
     # submit the parallel command
     for idx in folders:
+        paths = [pickle_sub_path(metric, split, idx, dset_folder)
+                 for split in split_names]
+        if all([os.path.isfile(path) for path in paths]):
+            continue
         p = run_par(base_config_file, dset_folder, idx)
         procs.append(p)
 
-    split_names = get_split_names(kwargs)
     # get the final results
     results = combine_results(dset_folder, metric, split_names)
 
