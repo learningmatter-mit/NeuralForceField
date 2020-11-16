@@ -19,11 +19,30 @@ from nff.train import load_model
 from nff.data import collate_dicts
 from nff.utils.cuda import batch_to, batch_detach
 from nff.data.dataset import concatenate_dict
-from nff.utils import (parse_args, fprint, parse_score, CHEMPROP_TRANSFORM)
+from nff.utils import (parse_args, parse_score, CHEMPROP_TRANSFORM)
 
 # ignore warnings
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
+
+
+def get_iter_func(track, num_track=None):
+    """
+    Get the function to iterate through a process.
+    Args:
+            track (bool): track this process with tqdm
+            num_track (int, optional): number of items
+                    that will come out of this process.
+    Returns:
+            iter_func (callable): iteration function
+    """
+    if track and num_track != 1:
+        iter_func = tqdm
+    else:
+        def iter_func(x):
+            return x
+    return iter_func
+
 
 def save(results,
          targets,
@@ -277,13 +296,6 @@ def add_dics(base, new):
             base[key] = val
     return base
 
-def get_iter_func(track, num_track=None):
-    if track and num_track != 1:
-        iter_func = tqdm
-    else:
-        def iter_func(x):
-            return x
-    return iter_func    
 
 def main(dset_folder,
          device,
