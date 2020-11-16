@@ -511,11 +511,11 @@ def conf_sims_from_files(model_path,
                                 fp_kwargs=fp_kwargs)
         bare_data[key] = fp_dics
 
-    # analyze the bare data
-    analysis = {}
-    analyze_data(bare_data, analysis)
+        # analyze the bare data
+        analysis = {}
+        analyze_data(bare_data, analysis)
 
-    if classifier:
-        report_delta(bare_data)
+        if classifier:
+            report_delta(bare_data)
 
     return analysis, bare_data

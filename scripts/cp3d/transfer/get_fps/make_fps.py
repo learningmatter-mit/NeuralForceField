@@ -293,7 +293,7 @@ def run_single(kwargs):
 def main(kwargs):
     """
     Get the fingerprints and results from the model.
-    Args:  
+    Args:
         kwargs (dict): dictionary of keywords
     Retuns:
         None
