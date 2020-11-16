@@ -303,6 +303,7 @@ The script `get_fps/make_fps.sh` uses a trained 3D model to generate pooled fing
     - `sub_batch_size` (int): Number of sub-batches you want to divide each batch into. For more than about 10 conformers per species, most GPUs won't be able to calculate fingerprints in parallel for all conformers of a species. 7 is usually a good choice for a typical GPU.
     - `test_only` (bool): Only create fingerprints and evaluate the model on the test set. This is useful if you just want the model predictions on the test set and aren't interested in transfer learning.
     - `metrics` (list[str]): The script will loop through each metric and use the model with the best validation score according to that metric. It will create fingerprints and predictions for all of the different models. Any metrics recorded during training can be used here, such as `auc`, `prc-auc`, `binary_cross_entropy`, `mse` and `mae`.
+   - `slurm_parallel` (bool): Use slurm to evaluate model predictions in parallel over different nodes.
 
         
 ### Exporting fingerprints to ChemProp
