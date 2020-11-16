@@ -304,7 +304,7 @@ The script `get_fps/make_fps.sh` uses a trained 3D model to generate pooled fing
     - `test_only` (bool): Only create fingerprints and evaluate the model on the test set. This is useful if you just want the model predictions on the test set and aren't interested in transfer learning.
     - `metrics` (list[str]): The script will loop through each metric and use the model with the best validation score according to that metric. It will create fingerprints and predictions for all of the different models. Any metrics recorded during training can be used here, such as `auc`, `prc-auc`, `binary_cross_entropy`, `mse` and `mae`.
    - `slurm_parallel` (bool): Use slurm to evaluate model predictions in parallel over different nodes.
-   - `max_confs` (int): Maximum number of conformers to use when loading the data and evaluating the model
+   - `max_confs` (int): Maximum number of conformers to use when loading the data and evaluating the model.
 
         
 ### Exporting fingerprints to ChemProp
