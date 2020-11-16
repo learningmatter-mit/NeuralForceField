@@ -410,14 +410,15 @@ class Dataset(TorchDataset):
         """
 
         # to deal with the fact that sparse tensors can't be pickled
-        offsets = self.props['offsets']
+        offsets = self.props.get('offsets', torch.LongTensor([0]))
         old_offsets = copy.deepcopy(offsets)
 
         if isinstance(offsets[0], torch.sparse.FloatTensor):
             self.props['offsets'] = [val.to_dense() for val in offsets]
 
         torch.save(self, path)
-        self.props['offsets'] = old_offsets
+        if "offsets" in self.props:
+            self.props['offsets'] = old_offsets
 
     def gen_bond_stats(self):
 
