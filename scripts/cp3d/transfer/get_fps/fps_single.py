@@ -9,6 +9,7 @@ import numpy as np
 import json
 import sys
 import warnings
+import copy
 
 import torch
 from torch.utils.data import DataLoader
@@ -19,7 +20,7 @@ from nff.train import load_model
 from nff.data import collate_dicts
 from nff.utils.cuda import batch_to, batch_detach
 from nff.data.dataset import concatenate_dict
-from nff.utils import (parse_args, parse_score, CHEMPROP_TRANSFORM)
+from nff.utils import (parse_args, parse_score, CHEMPROP_TRANSFORM, fprint)
 from nff.utils.confs import trim_confs
 
 # ignore warnings
@@ -144,12 +145,29 @@ def model_from_metric(model, model_folder, metric):
     # find the best epoch by reading the csv with the metrics
     best_score, best_epoch = parse_score(model_folder, use_metric)
 
+#    model.eval()
+#    model_2 = copy.deepcopy(model)
+#    for epoch in range(100):
+#        check_path = os.path.join(model_folder, "checkpoints",
+#                              f"checkpoint-{epoch}.pth.tar")
+#        state_dict = torch.load(check_path, map_location="cpu"
+#                            )["model"]
+#        model_2.load_state_dict(state_dict)
+#        model_2.eval()
+#        s0 = model.state_dict()
+#        s1 = model_2.state_dict()
+#        same = all([all(s0[key].reshape(-1) == s1[key].reshape(-1)) for key in s0.keys()])
+
+#        print(f"Epoch {epoch}: {same}")
+
     # load the state dict from the checkpoint of that epoch
+#    best_epoch = str(int(best_epoch) + 1)
     check_path = os.path.join(model_folder, "checkpoints",
                               f"checkpoint-{best_epoch}.pth.tar")
 
     state_dict = torch.load(check_path, map_location="cpu"
                             )["model"]
+    fprint(f"Loading model state dict from {check_path}")
     model.load_state_dict(state_dict)
     model.eval()
 
@@ -333,10 +351,17 @@ def main(dset_folder,
     model = load_model(model_folder)
     # update its state_dict with the checkpoint from the epoch with
     # the best metric score
-    if metric is not None:
+
+    if metric is None:
+        fprint(("WARNING: You have not specified a metric with which "
+                "to choose the best model. Defaulting to whichever was "
+                "chosen as the best model during training "))
+    else:
+        fprint(f"Loading model with best validation {metric}")
         model = model_from_metric(model=model,
                                   model_folder=model_folder,
                                   metric=metric)
+    model.eval()
 
     paths, dset_names = get_dset_paths(dset_folder, test_only)
 
@@ -401,6 +426,7 @@ if __name__ == "__main__":
     # the keys that are given as options above
     with open(args.config_file, "r") as f:
         config = json.load(f)
+
     for key, val in config.items():
         setattr(args, key, val)
 

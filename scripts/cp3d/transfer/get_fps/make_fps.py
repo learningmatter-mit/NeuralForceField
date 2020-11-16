@@ -38,7 +38,10 @@ def make_base_config(config_file, kwargs, par):
 
     # update it with any new values
     for key, val in kwargs.items():
-        if key not in config:
+        # if you put the config file in the dictionary,
+        # but the config file is the original name and
+        # not the new name, it messes things up
+        if key not in config and key != "config_file":
             config[key] = val
 
     # if running in parallel, get rid of these keys because
@@ -82,7 +85,7 @@ def run_par(base_config_file,
             file, which is missing certain keys if we're
             running this in parallel.
         dset_folder (str): path to dataset
-        idx (str): index of the dataset thread we're working 
+        idx (str): index of the dataset thread we're working
             on.
     Returns:
         p: subprocess from executing the parallel command
@@ -265,12 +268,14 @@ def run_all_par(kwargs):
 def run_single(kwargs):
     """
     Make fingerprints in series.
-    Args:  
+    Args:
         kwargs (dict): dictionary of keywords
     Retuns:
         None
     """
     config_file = kwargs["config_file"]
+    metric = kwargs["metric"]
+
     # save the arguments in a config file so we can just specify
     # its path in the command, instead of adding them as command
     # line arguments
@@ -280,7 +285,8 @@ def run_single(kwargs):
     # get the path to `fps_single.py
     single_path = get_single_path()
     # execute the command
-    cmd = f"python {single_path} --config_file {base_config_file}"
+    cmd = (f"python {single_path} --config_file {base_config_file}")
+    print(cmd)
     p = subprocess.Popen([cmd],
                          shell=True,
                          stdin=None,
