@@ -20,6 +20,7 @@ from nff.data import collate_dicts
 from nff.utils.cuda import batch_to, batch_detach
 from nff.data.dataset import concatenate_dict
 from nff.utils import (parse_args, parse_score, CHEMPROP_TRANSFORM)
+from nff.utils.confs import trim_confs
 
 # ignore warnings
 if not sys.warnoptions:
@@ -194,6 +195,7 @@ def fps_and_pred(model, batch, **kwargs):
                for n, m in zip(batch['num_atoms'], batch['mol_size'])]
     for key, val in results.items():
         results[key] = [i for i in val]
+
     results.update({"fp": [i for i in pooled_fp],
                     "conf_fps": conf_fps,
                     "learned_weights": learned_weights,
@@ -307,6 +309,7 @@ def main(dset_folder,
          metric=None,
          test_only=False,
          track=True,
+         max_confs=None,
          **kwargs):
     """
     Get fingerprints and predictions from the model.
@@ -322,7 +325,8 @@ def main(dset_folder,
         taking the model with the best validation loss.
       test_only (bool): only load the test set
       track (bool): Whether to track progress with tqdm
-
+      max_confs (int): Maximum number of conformers to use when evaluating the
+          model
     """
 
     # get the model initially by taken the one saved as "best_model"
@@ -346,6 +350,12 @@ def main(dset_folder,
         targets = {}
         for path in iter_func(paths[i]):
             dataset = Dataset.from_file(path)
+            if max_confs is not None:
+                dataset = trim_confs(dataset=dataset,
+                                     num_confs=max_confs,
+                                     idx_dic=None,
+                                     enum_func=iter_func)
+
             loader = DataLoader(dataset,
                                 batch_size=batch_size,
                                 collate_fn=collate_dicts)

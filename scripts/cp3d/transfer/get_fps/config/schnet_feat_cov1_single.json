@@ -1,0 +1,23 @@
+{
+  "model_folder":  "/home/saxelrod/supercloud2/models/split_16",
+  "dset_folder": "/home/saxelrod/supercloud2/models/reduced_size",
+  "feat_save_folder": "/home/saxelrod/supercloud2/models/split_16",
+  "prop": "sars_cov_one_cl_protease_active",
+  "device": 0,
+  "batch_size": 1,
+  "sub_batch_size": 1,
+  "test_only": true,
+  "metrics": [
+    "prc-auc",
+    "auc",
+    "binary_cross_entropy"
+  ],
+  "slurm_parallel": false,
+  "max_confs": 1
+}
+
+
+
+
+
+

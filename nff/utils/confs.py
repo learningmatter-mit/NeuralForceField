@@ -5,12 +5,13 @@ Tools for manipulating conformer numbers in a dataset.
 import torch
 import math
 import numpy as np
+import copy
 
 from nff.utils.misc import tqdm_enum
 
 REINDEX_KEYS = ["nbr_list", "bonded_nbr_list"]
 NBR_IDX_KEYS = ["kj_idx", "ji_idx", "bond_idx"]
-
+PER_CONF_KEYS = ["energy"]
 
 def assert_ordered(batch):
     """
@@ -200,40 +201,10 @@ def update_weights(batch, batch_dic):
     conf_idx = torch.LongTensor(batch_dic["conf_idx"])
     new_weights = old_weights[conf_idx]
     new_weights /= new_weights.sum()
-    if torch.isnan(new_weights):
+    if torch.isnan(new_weights).any():
         new_weights = torch.ones_like(old_weights[conf_idx])
         new_weights /= new_weights.sum()
     return new_weights
-
-
-def convert_nbrs(batch_dic, nbrs, nbr_idx):
-    """
-    Convert neighbor list to only include neighbors from the conformers
-    we're looking at.
-    Args:
-        batch_dic (dict): Dictionary with extra conformer 
-            information about the batch
-        nbrs (torch.LongTensor): neighbor list
-        nbr_idx (torch.LongTensor): nbr indices of conformers we're
-            keeping. 
-    Returns:
-        new_nbrs (torch.LongTensor): updated neighbor list
-
-    """
-
-    conf_idx = batch_dic["conf_idx"]
-    mol_size = batch_dic["mol_size"]
-    new_nbrs = []
-
-    for i in range(len(conf_idx)):
-        conf_id = conf_idx[i]
-        delta = -conf_id * mol_size + i * mol_size
-        new_nbrs.append(nbrs[nbr_idx] + delta)
-
-    new_nbrs = torch.cat(new_nbrs)
-
-    return new_nbrs
-
 
 def update_bond_idx(batch, new_nbrs):
     """
@@ -254,6 +225,14 @@ def update_bond_idx(batch, new_nbrs):
 
     return new_bond_idx
 
+def update_per_conf(dataset, i, old_num_atoms, new_n_confs):
+    mol_size = dataset.props["mol_size"][i]
+    n_confs = (old_num_atoms / mol_size).item()
+    for key in PER_CONF_KEYS:
+        if key not in dataset.props:
+            continue
+        val = dataset.props[key][i]
+        dataset.props[key][i] = val[:new_n_confs]
 
 def update_dset(batch, batch_dic, dataset, i):
     """
@@ -284,18 +263,14 @@ def update_dset(batch, batch_dic, dataset, i):
     all_nbr_idx = to_nbr_idx(batch_dic, nbr_list)
 
     # change the number of atoms to the proper value
+    old_num_atoms = copy.deepcopy(dataset.props["num_atoms"][i])
     dataset.props["num_atoms"][i] = batch_dic["new_num_atoms"]
     # get the right nxyz
     dataset.props["nxyz"][i] = nxyz[conf_xyz_idx]
 
     # convert the neighbor lists
-    dataset.props["bonded_nbr_list"][i] = convert_nbrs(batch_dic,
-                                                       bond_nbrs,
-                                                       bond_nbr_idx)
-    new_nbrs = convert_nbrs(batch_dic,
-                            nbr_list,
-                            all_nbr_idx)
-    dataset.props["nbr_list"][i] = new_nbrs
+    dataset.props["bonded_nbr_list"][i] = bond_nbrs[bond_nbr_idx]
+    dataset.props["nbr_list"][i] = nbr_list[all_nbr_idx]
 
     # get the atom and bond features at the right indices
     dataset.props["bond_features"][i] = bond_feats[bond_nbr_idx]
@@ -304,6 +279,9 @@ def update_dset(batch, batch_dic, dataset, i):
     # renormalize weights
     dataset.props["weights"][i] = update_weights(batch,
                                                  batch_dic)
+
+    # update anything else that's a per-conformer quantity
+    update_per_conf(dataset, i, old_num_atoms, batch_dic["real_num_confs"])
 
     # get rid of any entries in `bond_idx` that don't exist anymore
     if "bond_idx" in dataset.props:
