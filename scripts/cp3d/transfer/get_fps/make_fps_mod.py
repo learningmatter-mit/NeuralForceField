@@ -49,7 +49,7 @@ def run_par(base_config_file,
     num_nodes = os.environ["SLURM_NNODES"]
     single_path = get_single_path()
     idx_folder = os.path.join(dset_folder, str(idx))
-    cmd = (f"srun -N 1 -n 1 python {single_path} --config_file {base_config_file} "
+    cmd = (f"srun -N 1 -n 1 --exclusive python {single_path} --config_file {base_config_file} "
            f" --dset_folder {idx_folder} --feat_save_folder {idx_folder} ")
 
     if (int(idx) % int(num_nodes) != 0):
