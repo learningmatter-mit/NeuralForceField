@@ -96,7 +96,7 @@ def run_par(base_config_file,
     idx_folder = os.path.join(dset_folder, str(idx))
     cmd = (f"srun -N 1 -n 1 --exclusive python {single_path} "
            f" --config_file {base_config_file} "
-           f" --dset_folder {idx_folder} --feat_save_folder {idx_folder}")
+           f" --dset_folder {idx_folder} --feat_save_folder {idx_folder} ")
 
     # figure out whether we should be tracking progress of this thread
     # or not
