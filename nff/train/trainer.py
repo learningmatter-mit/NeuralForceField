@@ -467,7 +467,7 @@ class Trainer:
 
         return par_folders
 
-    def save_val_loss(self, val_loss):
+    def save_val_loss(self, val_loss, n_val):
         """
         Save the validation loss from this trainer. Necessary for averaging
         validation losses over all parallel trainers.
@@ -485,7 +485,9 @@ class Trainer:
         info_file = os.path.join(
             self_folder, "val_epoch_{}".format(self.epoch))
         with open(info_file, "w") as f:
-            f.write(str(val_loss.item()))
+            loss_float = val_loss.item()
+            string = f"{loss_float},{n_val}"
+            f.write(string)
 
     def load_val_loss(self):
         """
@@ -503,6 +505,7 @@ class Trainer:
         # `None` is no longer in this dictionary.
 
         loaded_vals = {folder: None for folder in self.par_folders}
+        n_vals = {folder: None for folder in self.par_folders}
 
         while None in list(loaded_vals.values()):
             for folder in self.par_folders:
@@ -515,15 +518,19 @@ class Trainer:
                 # try opening the file and getting the value
                 try:
                     with open(val_file, "r") as f:
-                        val_loss = float(f.read())
+                        val_loss = float(f.read().split(",")[0])
+                        num_mols = int(f.read().split(",")[1])
                     loaded_vals[folder] = val_loss
+                    n_vals[folder] = num_mols
                 except (ValueError, FileNotFoundError):
                     continue
 
-        # this isn't quite right for mol_loss_norm
         if self.loss_is_normalized or self.mol_loss_norm:
-            # average the losses
-            avg_loss = np.mean(list(loaded_vals.values()))
+            # average the losses according to number of atoms
+            # or molecules in each 
+            denom = sum(list(n_vals.values()))
+            avg_loss = sum([n_vals[key] * loaded_vals[key]
+                            for key in n_vals.keys()]) / denom
         else:
             # add the losses
             avg_loss = np.sum(list(loaded_vals.values()))
@@ -619,7 +626,8 @@ class Trainer:
         # and pick up the losses from the other processes too
 
         if self.parallel:
-            self.save_val_loss(val_loss)
+            val_loss *= n_val
+            self.save_val_loss(val_loss, n_val)
             val_loss = self.load_val_loss()
 
         for h in self.hooks:
