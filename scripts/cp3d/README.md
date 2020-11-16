@@ -261,7 +261,7 @@ Here  only the bonds are updated, and the updated hidden bond vectors are concat
 
 ### Analysis
 
-You'll want to apply your model to different datasets, and may be interested in analyzing the fingerprints and weights produced. You might also want to apply different "best models", judged according to different scores (e.g. best validation PRC-AUC or best validation ROC-AUC). To learn how to do that, see the [Getting fingerprints, predictions, and learned weights](#getting-fingerprints-predictions-and-learned-weights) section.
+You may want to apply your model to different datasets, and you may be interested in analyzing the fingerprints and weights produced. You might also want to apply different "best models", judged according to different validation scores (e.g. best validation PRC-AUC or best validation ROC-AUC). To learn how to do all of this, see the section [Getting fingerprints, predictions, and learned weights](#getting-fingerprints-predictions-and-learned-weights).
 
 There are also some useful files in `nff/analysis` for analyzing model predictions. For example, in `nff/analysis/cp3d.py`, you can find functions for computing the fingerprint similarity among different species. This can be done for species pairs that are contain two hits, two misses, or one hit and one miss for binary classification problems. You can also calculate similarities when conformers are selected randomly and when they are selected from the highest attention weight. This can give an idea of what the attention mechanism is or isn't learning.
 
