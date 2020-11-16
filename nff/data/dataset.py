@@ -410,7 +410,7 @@ class Dataset(TorchDataset):
         """
 
         # to deal with the fact that sparse tensors can't be pickled
-        offsets = self.props['offsets']
+        offsets = self.props.get('offsets')
         old_offsets = copy.deepcopy(offsets)
 
         if isinstance(offsets[0], torch.sparse.FloatTensor):
