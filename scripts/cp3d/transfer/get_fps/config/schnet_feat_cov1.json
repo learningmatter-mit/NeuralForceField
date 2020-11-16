@@ -1,17 +1,18 @@
 {
-  "model_folder":  "/home/saxelrod/supercloud2/models/saved_models/schnet_feat",
-  "dset_folder": "/home/saxelrod/supercloud2/models/cov_2_protease",
-  "feat_save_folder": "/home/saxelrod/supercloud2/models/cov_2_protease/schnet_feat",
+  "model_folder":  "/nfs/rafagblab001/saxelrod/supercloud_backup/models/saved_models/cov_1_cl/schnet_feat",
+  "dset_folder": "/nfs/rafagblab001/saxelrod/dsets/cov_1_cl",
+  "feat_save_folder": "/nfs/rafagblab001/saxelrod/supercloud_backup/models/saved_models/cov_1_cl/schnet_feat",
   "prop": "sars_cov_one_cl_protease_active",
-  "device": 1,
+  "device": 0,
   "batch_size": 1,
-  "sub_batch_size": null,
-  "test_only": false,
+  "sub_batch_size": 1,
+  "test_only": true,
   "metrics": [
-    "binary_cross_entropy",
     "prc-auc",
-    "auc"
-  ]
+    "auc",
+    "binary_cross_entropy"
+  ],
+  "slurm_parallel": true
 }
 
 
