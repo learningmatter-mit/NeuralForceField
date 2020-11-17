@@ -664,8 +664,10 @@ def clean_up_dset(dset,
         pbar.update(1)
 
         # Add the indices of the neighbor list that correspond to
-        # bonded atoms
-        dset.generate_bond_idx(num_procs)
+        # bonded atoms. Only use one process to avoid running
+        # out of memory
+
+        dset.generate_bond_idx(num_procs=1)
         pbar.update(1)
 
         # Make sure the dataset is directed
