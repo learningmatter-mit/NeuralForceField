@@ -285,6 +285,7 @@ def update_dset(batch, batch_dic, dataset, i):
 
     # get rid of any entries in `bond_idx` that don't exist anymore
     if "bond_idx" in dataset.props:
+        new_nbrs = dataset.props["nbr_list"][i]
         dataset.props["bond_idx"][i] = update_bond_idx(batch,
                                                        new_nbrs)
 
