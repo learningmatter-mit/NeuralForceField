@@ -529,7 +529,7 @@ class Trainer:
 
         if self.loss_is_normalized or self.mol_loss_norm:
             # average the losses according to number of atoms
-            # or molecules in each 
+            # or molecules in each
             denom = sum(list(n_vals.values()))
             avg_loss = sum([n_vals[key] * loaded_vals[key]
                             for key in n_vals.keys()]) / denom
@@ -628,7 +628,6 @@ class Trainer:
         # and pick up the losses from the other processes too
 
         if self.parallel:
-            val_loss *= n_val
             self.save_val_loss(val_loss, n_val)
             val_loss = self.load_val_loss()
 
