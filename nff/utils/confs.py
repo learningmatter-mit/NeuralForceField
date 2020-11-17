@@ -227,7 +227,6 @@ def update_bond_idx(batch, new_nbrs):
 
 def update_per_conf(dataset, i, old_num_atoms, new_n_confs):
     mol_size = dataset.props["mol_size"][i]
-    n_confs = (old_num_atoms / mol_size).item()
     for key in PER_CONF_KEYS:
         if key not in dataset.props:
             continue
