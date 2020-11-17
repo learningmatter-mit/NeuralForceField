@@ -673,7 +673,8 @@ def clean_up_dset(dset,
 
         # add the kj and ji idx if requested
         if add_directed_idx:
-            dset.generate_kj_ji(num_procs)
+            # only use one process to avoid running out of memory
+            dset.generate_kj_ji(num_procs=1)
             pbar.update(1)
 
     # Re-save the train/val/test splits accounting for the fact that some
