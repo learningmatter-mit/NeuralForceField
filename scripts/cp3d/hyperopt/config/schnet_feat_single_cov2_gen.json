@@ -1,0 +1,18 @@
+{
+  "job_path": "/home/saxelrod/repo/nff/master/NeuralForceField/scripts/cp3d/train/config/schnet_feat_single_cov2_gen.json",
+  "model_path": "/nfs/rafagblab001/saxelrod/dsets/cov_2_gen_no_edge_idx",
+  "param_names": [
+    "readout_dropout",
+    "dropout_rate"
+  ],
+  "param_types": [
+    "float",
+    "float"
+  ],
+  "options": [[0, 0.4],
+              [0, 0.4]],
+  "num_samples": 20,
+  "metric": "prc_auc",
+  "prop_name": "sars_cov_two_active",
+  "score_file": "score.json"
+}

@@ -1,16 +1,16 @@
 {
-  "model_folder":  "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_gen/schnet_feat",
-  "dset_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_gen",
-  "feat_save_folder": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_gen/schnet_feat",
+  "model_folder":  "/nfs/rafagblab001/saxelrod/supercloud_backup/models/saved_models/cov_2_gen/schnet_feat",
+  "dset_folder": "/nfs/rafagblab001/saxelrod/dsets/cov_2_gen_no_edge_idx",
+  "feat_save_folder": "/nfs/rafagblab001/saxelrod/supercloud_backup/models/saved_models/cov_2_gen/schnet_feat",
   "prop": "sars_cov_two_active",
-  "device": 1,
+  "device": 0,
   "batch_size": 1,
-  "sub_batch_size": 50,
+  "sub_batch_size": 1,
   "test_only": true,
   "metrics": [
-    "binary_cross_entropy",
     "prc-auc",
-    "auc"
+    "auc",
+    "binary_cross_entropy"
   ]
 }
 

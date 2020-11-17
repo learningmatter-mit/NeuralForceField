@@ -8,9 +8,9 @@
   "sub_batch_size": 1,
   "test_only": true,
   "metrics": [
-    "prc-auc",
+    "binary_cross_entropy",
     "auc",
-    "binary_cross_entropy"
+    "prc-auc"
   ],
   "slurm_parallel": true
 }

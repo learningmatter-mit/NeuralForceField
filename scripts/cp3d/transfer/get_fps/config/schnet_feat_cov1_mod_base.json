@@ -1,0 +1,14 @@
+{
+    "batch_size": 1,
+    "device": 0,
+    "metric": "prc-auc",
+    "metrics": [
+        "prc-auc",
+        "auc",
+        "binary_cross_entropy"
+    ],
+    "model_folder": "/nfs/rafagblab001/saxelrod/supercloud_backup/models/saved_models/cov_1_cl/schnet_feat",
+    "prop": "sars_cov_one_cl_protease_active",
+    "sub_batch_size": 1,
+    "test_only": true
+}
