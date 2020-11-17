@@ -518,8 +518,10 @@ class Trainer:
                 # try opening the file and getting the value
                 try:
                     with open(val_file, "r") as f:
-                        val_loss = float(f.read().split(",")[0])
-                        num_mols = int(f.read().split(",")[1])
+                        text = f.read()
+                    val_loss = float(text.split(",")[0])
+                    num_mols = int(text.split(",")[1])
+
                     loaded_vals[folder] = val_loss
                     n_vals[folder] = num_mols
                 except (IndexError, ValueError, FileNotFoundError):
