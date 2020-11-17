@@ -370,7 +370,7 @@ class OnlyBondUpdateCP3D(ChemProp3D):
         r = batch["atom_features"]
         offsets = batch.get("offsets", 0)
         # to deal with any shape mismatches
-        if offsets.max() == 0:
+        if hasattr(offsets, "max") and offsets.max() == 0:
             offsets = 0
 
         # get the distances between neighbors
