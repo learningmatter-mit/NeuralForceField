@@ -522,7 +522,7 @@ class Trainer:
                         num_mols = int(f.read().split(",")[1])
                     loaded_vals[folder] = val_loss
                     n_vals[folder] = num_mols
-                except (ValueError, FileNotFoundError):
+                except (IndexError, ValueError, FileNotFoundError):
                     continue
 
         if self.loss_is_normalized or self.mol_loss_norm:
