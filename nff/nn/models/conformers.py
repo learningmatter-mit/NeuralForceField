@@ -315,6 +315,10 @@ class WeightedConformers(nn.Module):
             xyz (torch.Tensor): xyz of the batch
         """
 
+        # for backwards compatability
+        if not hasattr(self, "classifier"):
+            self.classifier = True
+
         # split batches as necessary
         if sub_batch_size is None:
             sub_batches = [batch]
