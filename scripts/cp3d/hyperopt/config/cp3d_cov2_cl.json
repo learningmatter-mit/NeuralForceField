@@ -21,7 +21,7 @@
               [0, 0.4],
               ["attention", "linear_attention"]],
   "num_samples": 20,
-  "metric": "prc_auc",
+  "metric": "roc_auc",
   "prop_name": "sars_cov_two_cl_protease_active",
   "score_file": "score.json"
 }
