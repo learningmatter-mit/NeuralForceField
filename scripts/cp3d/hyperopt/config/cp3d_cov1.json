@@ -1,6 +1,6 @@
 {
   "job_path": "/home/gridsan/saxelrod/repo/nff/master/NeuralForceField/scripts/cp3d/train/config/cp3d_cov1.json",
-  "model_path": "/home/gridsan/saxelrod/models/reduced_size",
+  "model_path": "/home/gridsan/saxelrod/models/reduced_size_3A",
   "param_names": [
     "num_heads",
     "attention_dropout",

@@ -9,10 +9,10 @@
             "final_act": "ReLU",
             "head_pool": "concatenate",
             "mol_basis": 300,
-            "num_heads": 4,
+            "num_heads": 1,
             "type": "attention",
             "equal_weights": false,
-            "dropout_rate": 0.0009635534809991754
+            "dropout_rate": 0
         },
         "dropout_rate": 0.01418859415531558,
         "classifier": true,
@@ -72,10 +72,10 @@
         ],
 
         "readoutdict": {"sars_cov_one_cl_protease_active": [
-                  {"name": "linear", "param": {"in_features": 1200, "out_features": 300}},
+                  {"name": "linear", "param": {"in_features": 300, "out_features": 150}},
                   {"name": "Dropout", "param": {"p": 0.029571884145754703}},
                   {"name": "ReLU", "param": {}},
-                  {"name": "linear", "param": {"in_features": 300, "out_features": 1}},
+                  {"name": "linear", "param": {"in_features": 150, "out_features": 1}},
                   {"name": "Dropout", "param": {"p": 0.029571884145754703}}
             ]
          },
