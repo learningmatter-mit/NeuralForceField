@@ -1,0 +1,16 @@
+{
+  "model_folder": "/home/saxelrod/supercloud2/models/saved_models/cov_1/cp3d_no_bond_update/single_geom",
+  "dset_folder": "/home/saxelrod/supercloud2/models/split_32",
+  "feat_save_folder": "/home/saxelrod/supercloud2/models/saved_models/cov_1/cp3d_no_bond_update/single_geom",
+  "prop": "sars_cov_one_cl_protease_active",
+  "device": 1,
+  "batch_size": 20,
+  "sub_batch_size": null,
+  "test_only": false,
+  "metrics": [
+    "binary_cross_entropy",
+    "prc-auc",
+    "auc"
+  ],
+  "max_confs": 1
+}

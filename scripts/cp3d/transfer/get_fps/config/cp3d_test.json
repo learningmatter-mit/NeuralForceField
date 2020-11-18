@@ -1,0 +1,21 @@
+{
+  "model_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_gen",
+  "dset_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_cl",
+  "feat_save_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_gen",
+  "prop": "sars_cov_two_active",
+  "device": 3,
+  "batch_size": 1,
+  "sub_batch_size": 2,
+  "test_only": true,
+  "metrics": [
+    "binary_cross_entropy",
+    "prc-auc",
+    "auc"
+  ]
+}
+
+
+
+
+
+

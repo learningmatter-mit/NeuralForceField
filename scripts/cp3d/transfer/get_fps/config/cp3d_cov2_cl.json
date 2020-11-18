@@ -1,0 +1,15 @@
+{
+  "model_folder":  "/home/saxelrod/rgb_nfs/dsets/cov_2_cl_edge_idx",
+  "dset_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_cl_edge_idx",
+  "feat_save_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_cl_edge_idx",
+  "prop": "sars_cov_two_cl_protease_active",
+  "device": 1,
+  "batch_size": 1,
+  "sub_batch_size": 1,
+  "test_only": true,
+  "metrics": [
+    "binary_cross_entropy",
+    "prc-auc",
+    "auc"
+  ]
+}
