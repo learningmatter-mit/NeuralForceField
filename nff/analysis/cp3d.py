@@ -11,8 +11,10 @@ import json
 import numpy as np
 import torch
 from tqdm import tqdm
+from sklearn.metrics import roc_auc_score, auc, precision_recall_curve
 from sklearn.metrics.pairwise import cosine_similarity as cos_sim
 from rdkit import Chem
+
 
 from nff.utils import fprint
 from nff.data.features import get_e3fp
@@ -25,10 +27,10 @@ FP_FUNCS = {"e3fp": get_e3fp}
 
 def get_pred_files(model_path):
     """
-    Get pickle files with model predictions, fingerprints, 
+    Get pickle files with model predictions, fingerprints,
     learned weights, etc.
     Args:
-        model_path (str): path where the prediction files are 
+        model_path (str): path where the prediction files are
             saved
     Returns:
         pred_files (list[str]): prediction file paths
@@ -47,6 +49,7 @@ def get_pred_files(model_path):
             continue
         if not file.endswith("pickle"):
             continue
+
         pred_files.append(os.path.join(model_path, file))
 
     return pred_files
@@ -116,7 +119,7 @@ def annotate_confs(dic):
     Annotate conformers with "head_weights" (the attention weights assigned
     to each conformer, split up by head, and also summed over conformer pairs
     if using pairwise attention), "max_weight_conf" (the conformer with the
-    highest attention weight of any conformer among all heads), and 
+    highest attention weight of any conformer among all heads), and
     "max_weight_head" (the head that gave this conformer its weight)/
     Args:
         dic (dict): prediction dictionary
@@ -164,7 +167,7 @@ def choices_from_pickle(paths):
         paths (list[str]): conformer path for each of the two
             molecules being compared.
     Returns:
-        fp_choices (list[list[rdkit.Chem.rdchem.Mol]]): 
+        fp_choices (list[list[rdkit.Chem.rdchem.Mol]]):
             RDKit mol choices for each of the two molecules.
     """
     fps_choices = []
@@ -187,8 +190,8 @@ def funcs_for_external(external_fp_fn,
     of pickle paths for each smiles, and the external
     fingerprinting function.
     Args:
-        external_fp_fn (str): name of the fingerprinting function 
-            you want to use 
+        external_fp_fn (str): name of the fingerprinting function
+            you want to use
         summary_path (str): path of the file with the summary
             dictionary of species properties, their pickle
             paths, etc.
@@ -325,13 +328,13 @@ def attention_sim(dic,
                   fp_kwargs=None):
     """
     Calculate similarities of the conformer fingerprints of different
-    pairs of species. 
+    pairs of species.
     Args:
         dic (dict): prediction dictionary
         max_samples (int): maximum number of pairs to compare
         classifier (bool): whether your model is a classifier
         seed (int): random seed
-        external_fp_fn (str, optional): name of the fingerprinting 
+        external_fp_fn (str, optional): name of the fingerprinting
             function you want to use. If none is provided then the model's
             generated fingerprint will be used.
         summary_path (str, optional): path of the file with the summary
@@ -394,8 +397,8 @@ def attention_sim(dic,
 
 def analyze_data(bare_data, analysis):
     """
-    Do analysis of different fingerprints (e.g. mean, standard deviation, 
-    std deviation of the mean). Uses a recursive method to go through 
+    Do analysis of different fingerprints (e.g. mean, standard deviation,
+    std deviation of the mean). Uses a recursive method to go through
     each sub-dictionary until an array is found.
     Args:
         bare_data (dict): dictionary with bare fingerprint similarities
@@ -418,7 +421,7 @@ def analyze_data(bare_data, analysis):
 
 def report_delta(bare_dic):
     """
-    For a binary task, report analysis on the difference between 
+    For a binary task, report analysis on the difference between
         similarity among hits and similarity between hits and misses.
     Args:
         bare_dic (dict): bare dictionary of similarities
@@ -473,7 +476,7 @@ def conf_sims_from_files(model_path,
         max_samples (int): maximum number of pairs to compare
         classifier (bool): whether your model is a classifier
         seed (int): random seed
-        external_fp_fn (str, optional): name of the fingerprinting 
+        external_fp_fn (str, optional): name of the fingerprinting
             function you want to use. If none is provided then the model's
             generated fingerprint will be used.
         summary_path (str, optional): path of the file with the summary
@@ -519,3 +522,45 @@ def conf_sims_from_files(model_path,
             report_delta(bare_data)
 
     return analysis, bare_data
+
+
+def get_scores(path):
+    """
+    Load pickle files that contain predictions and actual values, using
+    models evaluated by different validation metrics, and use the predictions
+    to calculate and save PRC and AUC scores.
+    Args:
+            path (str): path to the saved model folder, which contains the pickle
+                    files.
+    Returns:
+            scores (list): list of dictionaries containing the split being used,
+                    the validation metric used to get the model, and the PRC and AUC
+                    scores.
+    """
+    files = [i for i in os.listdir(path) if i.endswith(".pickle")
+             and i.startswith("pred")]
+    scores = []
+    for file in files:
+        with open(os.path.join(path, file), "rb") as f:
+            dic = pickle.load(f)
+        split = file.split(".pickle")[0].split("_")[-1]
+        from_metric = file.split("pred_")[-1].split(f"_{split}")[0]
+
+        pred = [sub_dic['pred'] for sub_dic in dic.values()]
+        true = [sub_dic['true'] for sub_dic in dic.values()]
+
+        auc_score = roc_auc_score(y_true=true, y_score=pred)
+        precision, recall, thresholds = precision_recall_curve(
+            y_true=true, probas_pred=pred)
+        prc_score = auc(recall, precision)
+
+        scores.append({"split": split,
+                       "from_metric": from_metric,
+                       "auc": auc_score,
+                       "prc": prc_score})
+
+    save_path = os.path.join(path, "scores_from_metrics.json")
+    with open(save_path, "w") as f:
+        json.dump(scores, f, indent=4, sort_keys=True)
+
+    return scores
