@@ -530,15 +530,17 @@ def get_scores(path):
     models evaluated by different validation metrics, and use the predictions
     to calculate and save PRC and AUC scores.
     Args:
-            path (str): path to the saved model folder, which contains the pickle
-                    files.
+            path (str): path to the saved model folder, which contains the
+                    pickle files.
     Returns:
-            scores (list): list of dictionaries containing the split being used,
-                    the validation metric used to get the model, and the PRC and AUC
-                    scores.
+            scores (list): list of dictionaries containing the split being
+                    used, the validation metric used to get the model, and
+                    the PRC and AUC scores.
     """
     files = [i for i in os.listdir(path) if i.endswith(".pickle")
              and i.startswith("pred")]
+    if not files:
+        return
     scores = []
     for file in files:
         with open(os.path.join(path, file), "rb") as f:
@@ -548,6 +550,10 @@ def get_scores(path):
 
         pred = [sub_dic['pred'] for sub_dic in dic.values()]
         true = [sub_dic['true'] for sub_dic in dic.values()]
+
+        # then it's not a binary classification problem
+        if any([i not in [0, 1] for i in true]):
+            return
 
         auc_score = roc_auc_score(y_true=true, y_score=pred)
         precision, recall, thresholds = precision_recall_curve(
@@ -559,8 +565,49 @@ def get_scores(path):
                        "auc": auc_score,
                        "prc": prc_score})
 
+    all_auc = [score["auc"] for score in scores]
+    all_prc = [score["prc"] for score in scores]
+    avg_auc = {"mean": np.mean(all_auc),
+               "std": np.std(all_auc)}
+    avg_prc = {"mean": np.mean(all_prc),
+               "std": np.std(all_prc)}
+    scores.append({"from_metric": "average",
+                   "auc": avg_auc,
+                   "prc": avg_prc})
+
     save_path = os.path.join(path, "scores_from_metrics.json")
     with open(save_path, "w") as f:
         json.dump(scores, f, indent=4, sort_keys=True)
 
     return scores
+
+
+def recursive_scoring(base_path):
+    """
+    Recursively search in a base directory to find sub-folders that
+    have pickle files that can be used for scoring. Apply `get_scores`
+    to these sub-folders.
+    Args:
+            base_path (str): base folder to search in
+    Returns:
+            None
+    """
+    for direc in os.listdir(base_path):
+        direc_path = os.path.join(base_path, direc)
+        if not os.path.isdir(direc_path):
+            continue
+        files = [i for i in os.listdir(direc_path) if i.endswith(".pickle")
+                 and i.startswith("pred")]
+        if files:
+            print(f"Analyzing {direc_path}")
+            get_scores(direc_path)
+            continue
+
+        folders = [os.path.join(direc_path, i) for i in
+                   os.listdir(direc_path)]
+        folders = [i for i in folders if os.path.isdir(i)]
+
+        if not folders:
+            return
+        for folder in folders:
+            recursive_scoring(folder)
