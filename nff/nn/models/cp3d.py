@@ -259,10 +259,6 @@ class OnlyBondUpdateCP3D(ChemProp3D):
         # dimension of the hidden bond vector
         self.n_bond_hidden = modelparams["n_bond_hidden"]
 
-        # for backwards compatability
-        if not hasattr(self, "classifier"):
-            self.classifier = True
-
     def make_convs(self, modelparams):
         """
         Make the convolution layers.
