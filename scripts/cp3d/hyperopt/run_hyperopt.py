@@ -24,7 +24,7 @@ def clean_up(model_path):
             "rm -r checkpoints",
             "rm */train_len",
             "rm log_human_read.csv",
-            "rm */log_human_read.csv.csv",
+            "rm */log_human_read.csv",
             "rm -r best_model",
             "rm */*epoch*"]
 
