@@ -4,6 +4,7 @@ This folder contains scripts for doing 3D-based prediction tasks. These include 
 
 ## Table of Contents
 
+- [Getting started](#getting-started)
 - [Making a dataset](#making-a-dataset)
     * [Splitting the data](#splitting-the-data)
     * [Generating the dataset from splits and pickles](#generating-the-dataset-from-splits-and-pickles)
@@ -30,6 +31,9 @@ This folder contains scripts for doing 3D-based prediction tasks. These include 
     * [Saving the predictions](#saving-the-predictions)
  - [Training a regular ChemProp model](#training-a-regular-chemprop-model)
 
+## Getting started
+- Make sure to download `jq` by running `cd scripts/cp3d && bash download_jq.sh`. `jq` is used to read JSON files in some of the bash scripts. 
+- Make sure that Neural Force Field is in your path somehow, either by exporting to your python path in `~/.bashrc` (e.g. `export NFFDIR=/home/saxelrod/NeuralForceField && export PYTHONPATH="$NFFDIR:$PYTHONPATH"`), downloading NFF as a package, or manually changing the NFF directory in each of the bash scripts (not recommended!).
 
 ## Making a dataset
 
