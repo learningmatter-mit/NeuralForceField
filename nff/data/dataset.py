@@ -413,8 +413,13 @@ class Dataset(TorchDataset):
         offsets = self.props.get('offsets', torch.LongTensor([0]))
         old_offsets = copy.deepcopy(offsets)
 
-        if isinstance(offsets[0], torch.sparse.FloatTensor):
-            self.props['offsets'] = [val.to_dense() for val in offsets]
+        # check if it's a sparse tensor. The first two conditions
+        # Are needed for backwards compatability in case it's a float
+        # or empty list
+
+        if all([hasattr(offsets, "__len__"), len(offsets) > 0]):
+                if isinstance(offsets[0], torch.sparse.FloatTensor):
+                    self.props['offsets'] = [val.to_dense() for val in offsets]
 
         torch.save(self, path)
         if "offsets" in self.props:
