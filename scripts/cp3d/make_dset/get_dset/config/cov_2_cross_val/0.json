@@ -1,0 +1,14 @@
+{
+  "max_confs": 1,
+  "summary_path": "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/rdkit_folder/summary_drugs.json",
+  "dataset_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_gen/cross_val_splits/0",
+  "pickle_folder": "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/rdkit_folder",
+  "num_threads": 1,
+  "csv_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_gen/cross_val_splits/0",
+  "parallel_feat_threads": 1,
+  "strict_conformers": false,
+  "slurm_parallel": false,
+  "nbrlist_cutoff": 5.0,
+  "extra_features": [],
+  "add_directed_idx": false
+}

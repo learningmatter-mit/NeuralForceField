@@ -592,6 +592,13 @@ def recursive_scoring(base_path):
     Returns:
             None
     """
+
+    files = [i for i in os.listdir(base_path) if i.endswith(".pickle")
+             and i.startswith("pred")]
+    if files:
+        print(f"Analyzing {base_path}")
+        get_scores(base_path)
+
     for direc in os.listdir(base_path):
         direc_path = os.path.join(base_path, direc)
         if not os.path.isdir(direc_path):
@@ -608,6 +615,6 @@ def recursive_scoring(base_path):
         folders = [i for i in folders if os.path.isdir(i)]
 
         if not folders:
-            return
+            continue
         for folder in folders:
             recursive_scoring(folder)
