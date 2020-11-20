@@ -282,7 +282,7 @@ def get_dset_paths(full_path,
 
     dset_names = get_split_names(train_only=train_only,
                                  val_only=val_only,
-                                 test_only)
+                                 test_only=test_only)
 
     # see if the datasets are in the main folder
     main_folder = all([os.path.isfile(os.path.join(full_path, name
