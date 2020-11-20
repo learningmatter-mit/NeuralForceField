@@ -149,8 +149,8 @@ def monitor_results(dset_folder,
     total = len(monitor_dic)
     with tqdm(total=total) as pbar:
         while False in monitor_dic.values():
-            for path in monitor_dic.keys():
-                if os.path.isfile(path) and not monitor_dic[path]:
+            for path, val in monitor_dic.items():
+                if os.path.isfile(path) and not val:
                     monitor_dic[path] = True
                     pbar.update(1)
             time.sleep(5)
@@ -234,20 +234,29 @@ def get_split_names(kwargs):
         kwargs (dict): dictionary of keywords
     Returns:
         names (list[str]): names of splits
-            (train, val, and/or test) that we're 
+            (train, val, and/or test) that we're
             monitoring.
     """
-    if kwargs.get("test_only"):
-        names = ["test"]
+
+    only_opts = ["test_only", "val_only", "train_only"]
+    requested = [i for i in only_opts if kwargs.get(i)]
+    if len(requested) > 1:
+        string = ", ".join(requested)
+        msg = (f"Requested {string}, which are mutually exclusive")
+        raise Exception(msg)
+
+    if len(requested) != 0:
+        names = requested
     else:
         names = ["train", "val", "test"]
+
     return names
 
 
 def run_all_par(kwargs):
     """
     Run all the parallel processes.
-    Args:  
+    Args:
         kwargs (dict): dictionary of keywords
     Retuns:
         None
@@ -367,6 +376,14 @@ if __name__ == "__main__":
                         help=("Only evaluate model "
                               "and generate fingerprints for "
                               "the test set"))
+    parser.add_argument('--train_only', action='store_true',
+                        help=("Only evaluate model "
+                              "and generate fingerprints for "
+                              "the training set"))
+    parser.add_argument('--val_only', action='store_true',
+                        help=("Only evaluate model "
+                              "and generate fingerprints for "
+                              "the validation set"))
     parser.add_argument('--slurm_parallel', action='store_true',
                         help=("Use slurm to evaluate model predictions "
                               "in parallel over different nodes."))
