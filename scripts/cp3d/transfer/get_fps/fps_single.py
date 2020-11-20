@@ -261,8 +261,8 @@ def evaluate(model,
     return all_results, all_batches
 
 def get_dset_paths(full_path,
-                   train_only
-                   val_only
+                   train_only,
+                   val_only,
                    test_only):
     """
     See where the datasets are located and get their paths.
