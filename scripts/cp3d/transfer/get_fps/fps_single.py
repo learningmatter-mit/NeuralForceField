@@ -20,7 +20,7 @@ from nff.train import load_model
 from nff.data import collate_dicts
 from nff.utils.cuda import batch_to, batch_detach
 from nff.data.dataset import concatenate_dict
-from nff.utils import (parse_args, parse_score, CHEMPROP_TRANSFORM, fprint)
+from nff.utils import (parse_args, parse_score, CHEMPROP_TRANSFORM, fprint, get_split_names)
 from nff.utils.confs import trim_confs
 
 # ignore warnings
@@ -260,12 +260,16 @@ def evaluate(model,
 
     return all_results, all_batches
 
-
-def get_dset_paths(full_path, test_only):
+def get_dset_paths(full_path,
+                   train_only
+                   val_only
+                   test_only):
     """
     See where the datasets are located and get their paths.
     Args:
       full_path (str): folder with the data in it
+      train_only (bool): only load the training set
+      val_only (bool): only load the validation set
       test_only (bool): only load the test set
     Returns:
       paths (list): list of paths for each split. Each split
@@ -276,10 +280,9 @@ def get_dset_paths(full_path, test_only):
         (e.g. train, val, test)
     """
 
-    if test_only:
-        dset_names = ['test']
-    else:
-        dset_names = ["train", "val", "test"]
+    dset_names = get_split_names(train_only=train_only,
+                                 val_only=val_only,
+                                 test_only)
 
     # see if the datasets are in the main folder
     main_folder = all([os.path.isfile(os.path.join(full_path, name
@@ -325,6 +328,8 @@ def main(dset_folder,
          sub_batch_size,
          feat_save_folder,
          metric=None,
+         val_only=False,
+         train_only=False,
          test_only=False,
          track=True,
          max_confs=None,
@@ -341,6 +346,8 @@ def main(dset_folder,
       feat_save_folder (str): folder in which we're saving teh features
       metric (str): name of metric to use. If not given, this defaults to
         taking the model with the best validation loss.
+      train_only (bool): only load the training set
+      val_only (bool): only load the validation set
       test_only (bool): only load the test set
       track (bool): Whether to track progress with tqdm
       max_confs (int): Maximum number of conformers to use when evaluating the
@@ -363,7 +370,8 @@ def main(dset_folder,
                                   metric=metric)
     model.eval()
 
-    paths, dset_names = get_dset_paths(dset_folder, test_only)
+    paths, dset_names = get_dset_paths(dset_folder, train_only=train_only,
+                                       val_only=val_only, test_only=test_only)
 
     # go through each dataset, create a loader, evaluate the model,
     # and save the predictions

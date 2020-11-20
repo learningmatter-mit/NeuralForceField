@@ -309,3 +309,37 @@ def prop_split(max_specs,
         keep_smiles = keep_smiles[:max_specs]
 
     return keep_smiles
+
+
+def get_split_names(train_only,
+                    val_only,
+                    test_only):
+    """
+    Get names of dataset splits.
+    Args:
+      train_only (bool): only load the training set
+      val_only (bool): only load the validation set
+      test_only (bool): only load the test set
+    Returns:
+        names (list[str]): names of splits
+            (train, val, and/or test) that we're
+            monitoring.
+    """
+
+    only_dic = {"train": train_only,
+                "val": val_only,
+                "test": test_only}
+
+    requested = [name for name, only in only_dic.items()
+                 if only]
+    if len(requested) > 1:
+        string = ", ".join(requested)
+        msg = (f"Requested {string}, which are mutually exclusive")
+        raise Exception(msg)
+
+    if len(requested) != 0:
+        names = requested
+    else:
+        names = ["train", "val", "test"]
+
+    return names

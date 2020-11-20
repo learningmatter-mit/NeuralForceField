@@ -10,7 +10,7 @@ import time
 import argparse
 from tqdm import tqdm
 
-from nff.utils import (METRICS, CHEMPROP_TRANSFORM, parse_args)
+from nff.utils import (METRICS, CHEMPROP_TRANSFORM, parse_args, get_split_names)
 
 # dictionary that transforms our metric syntax to chemprop's
 REVERSE_TRANSFORM = {val: key for key, val in CHEMPROP_TRANSFORM.items()}
@@ -226,33 +226,6 @@ def combine_results(dset_folder,
         combined_dics[split] = overall
     return combined_dics
 
-
-def get_split_names(kwargs):
-    """
-    Get names of dataset splits.
-    Args:
-        kwargs (dict): dictionary of keywords
-    Returns:
-        names (list[str]): names of splits
-            (train, val, and/or test) that we're
-            monitoring.
-    """
-
-    only_opts = ["test_only", "val_only", "train_only"]
-    requested = [i for i in only_opts if kwargs.get(i)]
-    if len(requested) > 1:
-        string = ", ".join(requested)
-        msg = (f"Requested {string}, which are mutually exclusive")
-        raise Exception(msg)
-
-    if len(requested) != 0:
-        names = requested
-    else:
-        names = ["train", "val", "test"]
-
-    return names
-
-
 def run_all_par(kwargs):
     """
     Run all the parallel processes.
@@ -278,7 +251,9 @@ def run_all_par(kwargs):
                      key=lambda x: int(x))
     procs = []
 
-    split_names = get_split_names(kwargs)
+    split_names = get_split_names(train_only=kwargs.get("train_only"),
+                                  val_only=kwargs.get("val_only"),
+                                  test_only=kwargs.get("test_only"))
     # submit the parallel command
     for idx in folders:
         paths = [pickle_sub_path(metric, split, idx, dset_folder)
