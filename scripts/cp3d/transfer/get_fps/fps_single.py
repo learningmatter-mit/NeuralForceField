@@ -314,8 +314,7 @@ def add_dics(base, new, is_first):
                   base.keys()]
 
     for key in extra_keys:
-        arb_key = list(base.keys())[0]
-        dim = len(base[arb_key])
+        dim = len(base["smiles"])
         old_val = [torch.tensor(float("nan"))
                    for _ in range(dim)]
         new_val = old_val + new[key]
@@ -326,8 +325,7 @@ def add_dics(base, new, is_first):
                     new.keys()]
 
     for key in missing_keys:
-        arb_key = list(new.keys())[0]
-        dim = len(new[arb_key])
+        dim = len(new["smiles"])
         base[key] += [torch.tensor(float('nan')) for _ in range(dim)]
 
     return base
