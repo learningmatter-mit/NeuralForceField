@@ -994,17 +994,6 @@ def add_args(all_params):
 
     return args
 
-def pdb_wrap(func):
-    def fn(*args, **kwargs):
-        try: 
-            return func(*args, **kwargs)
-        except Exception as e:
-            print(e)
-            import pdb
-            pdb.post_mortem()
-    return fn
-
-@pdb_wrap
 def main():
 
     parser = argparse.ArgumentParser(description="Trains a neural potential")
