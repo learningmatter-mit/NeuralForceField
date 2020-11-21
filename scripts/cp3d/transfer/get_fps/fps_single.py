@@ -20,7 +20,8 @@ from nff.train import load_model
 from nff.data import collate_dicts
 from nff.utils.cuda import batch_to, batch_detach
 from nff.data.dataset import concatenate_dict
-from nff.utils import (parse_args, parse_score, CHEMPROP_TRANSFORM, fprint, get_split_names)
+from nff.utils import (parse_args, parse_score,
+                       CHEMPROP_TRANSFORM, fprint, get_split_names)
 from nff.utils.confs import trim_confs
 
 # ignore warnings
@@ -73,7 +74,7 @@ def save(results,
         probas_pred = (torch.cat(results[prop])
                        .reshape(-1).numpy())
 
-        if prop in targets:
+        if prop in targets and targets.get(prop, []):
             y_true = torch.stack(targets[prop]).numpy()
 
         else:
@@ -242,6 +243,7 @@ def evaluate(model,
 
     return all_results, all_batches
 
+
 def get_dset_paths(full_path,
                    train_only,
                    val_only,
@@ -283,7 +285,7 @@ def get_dset_paths(full_path,
     return paths, dset_names
 
 
-def add_dics(base, new):
+def add_dics(base, new, is_first):
     """
     Add a new dictionary to an old dictionary, where the values in each dictionary
     are lists that should be concatenated, and the keys in the new dictionary might
@@ -291,14 +293,37 @@ def add_dics(base, new):
     Args:
         base (dict): base dictionary to be added to
         new (dict): new dictionary adding on
+        is_first (bool): whether this is the first batch we've loaded
     Returns:
         base (dict): updated base dictionary
     """
+
+    import pdb
+    pdb.set_trace()
+
     for key, val in new.items():
-        if key in base:
-            base[key] += val
-        else:
+        if is_first:
             base[key] = val
+        else:
+            if key in base:
+                base[key] += val
+    if is_first:
+        return base
+
+    # any keys that are new to the dictionary despite this not being
+    # the first batch added (i.e. they're in this batch but weren't
+    # in previous batches)
+    extra_keys = [key for key in new.keys() if key not in
+                  base.keys()]
+
+    for key in extra_keys:
+        arb_key = list(new.keys())[0]
+        dim = len(base[arb_key])
+        old_val = [torch.Tensor([float("nan")])
+                   for _ in range(dim)]
+        new_val = old_val + new[key]
+        base[key] = new_val
+
     return base
 
 
@@ -363,6 +388,7 @@ def main(dset_folder,
     for i in iter_func(range(len(dset_names))):
         results = {}
         targets = {}
+        j = 0
         for path in iter_func(paths[i]):
             dataset = Dataset.from_file(path)
             if max_confs is not None:
@@ -381,8 +407,15 @@ def main(dset_folder,
                                                 sub_batch_size=sub_batch_size,
                                                 track=track)
 
-            results = add_dics(base=results, new=new_results)
-            targets = add_dics(base=targets, new=new_targets)
+            is_first = (j == 0)
+            results = add_dics(base=results,
+                               new=new_results,
+                               is_first=is_first)
+            targets = add_dics(base=targets,
+                               new=new_targets,
+                               is_first=is_first)
+
+            j += 1
 
         name = dset_names[i]
         save_name = f"pred_{metric}_{name}.pickle"
