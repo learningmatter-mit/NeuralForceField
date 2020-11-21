@@ -304,7 +304,6 @@ def run_single(kwargs):
                          close_fds=True)
     p.wait()
 
-
 def main(kwargs):
     """
     Get the fingerprints and results from the model.
