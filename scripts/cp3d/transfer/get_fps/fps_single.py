@@ -395,7 +395,7 @@ def main(dset_folder,
         results = {}
         targets = {}
         j = 0
-        for path in iter_func(paths[i]):
+        for path in tqdm(paths[i]):
             dataset = Dataset.from_file(path)
             if max_confs is not None:
                 dataset = trim_confs(dataset=dataset,
