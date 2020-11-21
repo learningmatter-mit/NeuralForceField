@@ -298,9 +298,6 @@ def add_dics(base, new, is_first):
         base (dict): updated base dictionary
     """
 
-    import pdb
-    pdb.set_trace()
-
     for key, val in new.items():
         if is_first:
             base[key] = val
@@ -317,12 +314,21 @@ def add_dics(base, new, is_first):
                   base.keys()]
 
     for key in extra_keys:
-        arb_key = list(new.keys())[0]
+        arb_key = list(base.keys())[0]
         dim = len(base[arb_key])
-        old_val = [torch.Tensor([float("nan")])
+        old_val = [torch.tensor(float("nan"))
                    for _ in range(dim)]
         new_val = old_val + new[key]
         base[key] = new_val
+
+    # same idea for keys that were here before and aren't now
+    missing_keys = [key for key in base.keys() if key not in 
+                    new.keys()]
+
+    for key in missing_keys:
+        arb_key = list(new.keys())[0]
+        dim = len(new[arb_key])
+        base[key] += [torch.tensor(float('nan')) for _ in range(dim)]
 
     return base
 
