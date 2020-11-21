@@ -144,24 +144,6 @@ def model_from_metric(model, model_folder, metric):
 
     # find the best epoch by reading the csv with the metrics
     best_score, best_epoch = parse_score(model_folder, use_metric)
-
-#    model.eval()
-#    model_2 = copy.deepcopy(model)
-#    for epoch in range(100):
-#        check_path = os.path.join(model_folder, "checkpoints",
-#                              f"checkpoint-{epoch}.pth.tar")
-#        state_dict = torch.load(check_path, map_location="cpu"
-#                            )["model"]
-#        model_2.load_state_dict(state_dict)
-#        model_2.eval()
-#        s0 = model.state_dict()
-#        s1 = model_2.state_dict()
-#        same = all([all(s0[key].reshape(-1) == s1[key].reshape(-1)) for key in s0.keys()])
-
-#        print(f"Epoch {epoch}: {same}")
-
-    # load the state dict from the checkpoint of that epoch
-#    best_epoch = str(int(best_epoch) + 1)
     check_path = os.path.join(model_folder, "checkpoints",
                               f"checkpoint-{best_epoch}.pth.tar")
 
