@@ -6,12 +6,12 @@
         ],
         "boltzmann_dict": {
             "boltz_basis": 10,
-            "dropout_rate": 0.003767480129302063,
+            "dropout_rate": 0.00011931321413580162,
             "equal_weights": false,
             "final_act": "ReLU",
             "head_pool": "concatenate",
             "mol_basis": 300,
-            "num_heads": 3,
+            "num_heads": 4,
             "type": "linear_attention"
         },
         "classifier": true,
@@ -29,7 +29,7 @@
             }
         ],
         "cutoff": 5.0,
-        "dropout_rate": 0.0006039329293110907,
+        "dropout_rate": 0.0025058366076613913,
         "ext_feat_types": [],
         "extra_features": [],
         "gauss_embed": true,
@@ -61,14 +61,14 @@
                 {
                     "name": "linear",
                     "param": {
-                        "in_features": 900,
+                        "in_features": 1200,
                         "out_features": 300
                     }
                 },
                 {
                     "name": "Dropout",
                     "param": {
-                        "p": 0.000708453460566953
+                        "p": 0.2818693351165638
                     }
                 },
                 {
@@ -85,7 +85,7 @@
                 {
                     "name": "Dropout",
                     "param": {
-                        "p": 0.000708453460566953
+                        "p": 0.2818693351165638
                     }
                 }
             ]
@@ -108,7 +108,7 @@
         "use_mpnn": true
     },
     "train_params": {
-        "batch_size": 4,
+        "batch_size": 1,
         "checkpoints_to_keep": 10000,
         "del_grad_interval": 100,
         "log_every_n_epochs": 1,
@@ -120,12 +120,12 @@
         "lr_decay": 0.5,
         "lr_min": 1e-06,
         "lr_patience": 10,
-        "max_epochs": 500,
+        "max_epochs": 15,
         "metrics": [
             "PrAuc",
             "RocAuc"
         ],
-        "mini_batches": 16,
+        "mini_batches": 64,
         "model_kwargs": {
             "sub_batch_size": 1
         },

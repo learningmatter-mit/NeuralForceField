@@ -360,6 +360,29 @@ def make_all_loaders(weight_path,
 
         central_data = False
         train, val, test = gpu_splits
+#        for d_set in [train, val, test]:
+#            import numpy as np
+#            print(all([batch['nbr_list'].max() + 1 == batch['mol_size'].item() for batch in d_set]))
+#            print(all([batch['bonded_nbr_list'].max() + 1 == batch['mol_size'].item() for batch in d_set]))
+#            lst = []
+#            nbr_sub_5 = []
+#            bond_lens = []
+#            for batch in d_set:
+#                for j, idx in enumerate(batch['bond_idx']):
+#                    start_bond = batch['bonded_nbr_list'][j][0]
+#                    end_bond = batch['bonded_nbr_list'][j][1]
+#                    start_nbr =  batch['nbr_list'][idx][0]
+#                    end_nbr = batch['nbr_list'][idx][1]
+#                    lst.append((start_bond == start_nbr and end_bond == end_nbr))
+#                    bond_len = (batch['nxyz'][:, 1:][start_nbr] - batch['nxyz'][:, 1:][end_nbr]).norm()
+#                    bond_lens.append(bond_len)
+#                nbr_list = batch['nbr_list']
+#                nbr_sub_5.append((((batch['nxyz'][:, 1:][nbr_list[:, 0]] - batch['nxyz'][:, 1:][nbr_list[:,1]]) ** 2
+#                                  ).sum(-1) ** 0.5 <= 5).all())
+#            print(all(lst))
+#            print(np.max(bond_lens))
+#            print(np.mean(bond_lens))
+#            print(all(nbr_sub_5))
 
     # initalize parallelizaiton
 
@@ -971,7 +994,17 @@ def add_args(all_params):
 
     return args
 
+def pdb_wrap(func):
+    def fn(*args, **kwargs):
+        try: 
+            return func(*args, **kwargs)
+        except Exception as e:
+            print(e)
+            import pdb
+            pdb.post_mortem()
+    return fn
 
+@pdb_wrap
 def main():
 
     parser = argparse.ArgumentParser(description="Trains a neural potential")

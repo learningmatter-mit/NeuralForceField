@@ -20,8 +20,8 @@
               [0, 0.4],
               [0, 0.4],
               ["attention", "linear_attention"]],
-  "num_samples": 20,
-  "metric": "prc_auc",
+  "num_samples": 10,
+  "metric": "roc_auc",
   "prop_name": "sars_cov_two_active",
   "score_file": "score.json"
 }
