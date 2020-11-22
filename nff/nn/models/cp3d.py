@@ -390,14 +390,20 @@ class OnlyBondUpdateCP3D(ChemProp3D):
 
         for conv in self.convolutions:
 
+            # don't use any kj_idx or ji_idx
+            # because they are only relevant when
+            # you're doing updates with all neighbors, 
+            # not with just the bonded neighbors like
+            # we do here
+            
             h_new = conv(h_0=h_0,
                          h_new=h_new,
                          all_nbrs=a,
                          bond_nbrs=bond_nbrs,
                          bond_idx=bond_idx,
                          e=e,
-                         kj_idx=batch.get("kj_idx"),
-                         ji_idx=batch.get("ji_idx"))
+                         kj_idx=None,
+                         ji_idx=None)
 
         # convert back to node features
 
