@@ -14,6 +14,7 @@ from tqdm import tqdm
 from nff.utils.cuda import batch_to, batch_detach
 from nff.train.evaluate import evaluate
 from nff.train.parallel import update_optim
+from nff.train.hooks.scheduling import ReduceLROnPlateauHook
 
 MAX_EPOCHS = 100
 PAR_INFO_FILE = "info.json"
@@ -632,6 +633,11 @@ class Trainer:
             val_loss = self.load_val_loss()
 
         for h in self.hooks:
+            # delay this until after we know what the real
+            # val loss is (e.g. if it's from a metric)
+            if isinstance(h, ReduceLROnPlateauHook):
+                continue
+
             h.on_validation_end(self, val_loss)
             metric_dic = getattr(h, "metric_dic", None)
             if metric_dic is None:
@@ -640,6 +646,11 @@ class Trainer:
                 val_loss = metric_dic[self.metric_as_loss]
                 if self.metric_objective.lower() == "maximize":
                     val_loss *= -1
+
+        for h in self.hooks:
+            if not isinstance(h, ReduceLROnPlateauHook):
+                continue
+            h.on_validation_end(self, val_loss)
 
         if self.best_loss > val_loss:
             self.best_loss = val_loss
