@@ -206,24 +206,44 @@ def update_weights(batch, batch_dic):
         new_weights /= new_weights.sum()
     return new_weights
 
-def update_bond_idx(batch, new_nbrs):
+def update_nbr_idx_keys(dset, batch, i, old_nbrs, num_confs):
     """
-    Update `bond_idx` (which are the mappings of bonded atom pairs
-    to their locations in the neighbor list) based on the trimming of
-    the neighbor list.
+    When trimming a dataset to a certain number of conformers,
+    update any quantities that depend on indices of the nbr list
+    (e.g. bond_idx, kj_idx and ji_idx).
     Args:
-        batch (dict): Batch dictionary
-        new_nbrs (torch.LongTensor): Trimmed neighbor list
+        dset (nff.data.Dataset): nff dataset
+        batch (dict): batch of the dataset
+        i (int): index of the current batch in the dataset
+        old_nbrs (torch.LongTensor): old neighbor list of this
+            batch before trimming
+        num_confs (int): number of conformers we're trimming the
+            dataset to.
     Returns:
-        new_bond_idx (torch.LongTensor): updated bond idx.
-
+        None
     """
-    bond_idx = batch["bond_idx"]
-    nbr_shape = new_nbrs.shape[0]
-    mask = bond_idx < nbr_shape
-    new_bond_idx = bond_idx[mask]
+    
+    # make a mask for the neighbor list indices that are being kept
 
-    return new_bond_idx
+    mol_size = batch['mol_size']
+    for j in range(num_confs):
+        mask = (old_nbrs[:, 0] < (j + 1) * mol_size
+                    ) * (old_nbrs[:, 0] >= j * mol_size)
+        if j == 0:
+            total_mask = copy.deepcopy(mask)
+        else:
+            total_mask += copy.deepcopy(mask)
+
+    # go through each neighbor list index-dependent key and fix
+    total_mask = total_mask.to(torch.bool)
+    for key in NBR_IDX_KEYS:
+        if key not in dset.props:
+            continue
+        # the indices that we're keeping are determined by `total_mask`.
+        # Since the values of this quantity are neighbor list indices,
+        # we can just select the corresponding indices of `total_mask`.
+        keep_idx = total_mask[batch[key]]
+        dset.props[key][i] = batch[key][keep_idx]
 
 def update_per_conf(dataset, i, old_num_atoms, new_n_confs):
     mol_size = dataset.props["mol_size"][i]
@@ -282,11 +302,12 @@ def update_dset(batch, batch_dic, dataset, i):
     # update anything else that's a per-conformer quantity
     update_per_conf(dataset, i, old_num_atoms, batch_dic["real_num_confs"])
 
-    # get rid of any entries in `bond_idx` that don't exist anymore
-    if "bond_idx" in dataset.props:
-        new_nbrs = dataset.props["nbr_list"][i]
-        dataset.props["bond_idx"][i] = update_bond_idx(batch,
-                                                       new_nbrs)
+    # update anything that depends on the indexing of the nbr list
+    update_nbr_idx_keys(dset=dataset, 
+                        batch=batch, 
+                        i=i, 
+                        old_nbrs=nbr_list,
+                        num_confs=batch_dic["real_num_confs"])
 
     return dataset
 
