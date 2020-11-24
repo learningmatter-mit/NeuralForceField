@@ -16,11 +16,10 @@ source $HOME/.bashrc
 source activate nff
 
 # change to your config path
-CONFIG="config/schnet_feat_cov1.json"
+CONFIG="config/cp3d_ndu_single_cov2_cl.json"
+# CONFIG="config/bond_update_k1_single_cov1.json"
 
-# `jq` allows you to read a JSON file in bash. Here we are using it to get the number of threads from the config file.
-#  If you don't have `jq` installed, you can download it by running `bash ../download_jq.sh`
-metrics_lst=$(cat $CONFIG | $jq ".metrics")
+metrics_lst=$(cat $CONFIG | jq ".metrics")
 
 # get rid of the square brackets and commas
 metric_str="${metrics_lst/[/}"
@@ -30,6 +29,8 @@ metric_str="${metric_str//,/ }"
 # convert string to bash array
 metrics=($metric_str)
 
+echo $metric
+
 for metric in ${metrics[@]}; do
 
 	cmd="python make_fps.py --metric $metric --config_file $CONFIG "
@@ -38,5 +39,4 @@ for metric in ${metrics[@]}; do
 	echo $cmd
 	eval $cmd
 	echo ""
-
 done

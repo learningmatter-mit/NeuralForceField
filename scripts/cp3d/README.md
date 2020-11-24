@@ -32,14 +32,13 @@ This folder contains scripts for doing 3D-based prediction tasks. These include 
  - [Training a regular ChemProp model](#training-a-regular-chemprop-model)
 
 ## Getting started
-- Make sure to download `jq` by running `cd scripts/cp3d && bash download_jq.sh`. `jq` is used to read JSON files in some of the bash scripts. 
 - Make sure that Neural Force Field is in your path somehow, either by exporting to your python path in `~/.bashrc` (e.g. `export NFFDIR=/home/saxelrod/NeuralForceField && export PYTHONPATH="$NFFDIR:$PYTHONPATH"`), downloading NFF as a package, or manually changing the NFF directory in each of the bash scripts (not recommended!).
 
 ## Making a dataset
 
 The scripts for making a dataset assume that you have a set of pickle files in a folder, one for each species, each of which contains all the 3D information about the conformers. It also assumes that you have one summary `JSON` file, which tells you all the properties of each species (except for its 3D information), and also has the path to the pickle file. This follows the organization of the GEOM dataset. More information about this organization can be found [here](https://github.com/learningmatter-mit/geom/blob/master/tutorials/02_loading_rdkit_mols.ipynb). 
 
-The script `scripts/cp3d/make_dset/make_dset.sh` first generates training, validation and test splits from your summary file. It interfaces with ChemProp to do so, so that you can use functionality like ChemProp's scaffold split. It then uses the splits you've generated, together with the pickle files, to create train, validation, and test datasets complete with all the 3D information. The following two sections discuss the two functions that `make_dset.sh` calls. You can run `make_dset.sh` or you can run the individual scripts themselves. Before getting started make sure to install `jq` by running `bash download_jq.sh`. `jq` is a program that reads JSON files through bash, and is used in some of the scripts.
+The script `scripts/cp3d/make_dset/make_dset.sh` first generates training, validation and test splits from your summary file. It interfaces with ChemProp to do so, so that you can use functionality like ChemProp's scaffold split. It then uses the splits you've generated, together with the pickle files, to create train, validation, and test datasets complete with all the 3D information. The following two sections discuss the two functions that `make_dset.sh` calls. You can run `make_dset.sh` or you can run the individual scripts themselves. 
 
 ### Splitting the data
 The script `scripts/cp3d/make_dset/splits/split.sh` uses your summary file to get information about the data, generates a CSV of the data for ChemProp to read, and uses ChemProp to split the data. 
