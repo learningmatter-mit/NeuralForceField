@@ -5,7 +5,7 @@ predictions from a random forest classifier.
 
 import json
 import argparse
-
+import os
 
 import copy
 from hyperopt import fmin, hp, tpe
@@ -87,7 +87,11 @@ def make_rf_space(HYPERPARAMS):
     return space
 
 
-def run_rf(space, test_or_val, seed, data):
+def run_rf(space,
+           test_or_val,
+           seed,
+           data,
+           use_val_in_train):
 
     rf_hyperparams = {key: val for key, val in space.items()
                       if key not in MORGAN_HYPER_KEYS}
@@ -98,9 +102,13 @@ def run_rf(space, test_or_val, seed, data):
                                  random_state=seed,
                                  **rf_hyperparams)
 
+    train_splits = ["train"]
+    if use_val_in_train:
+        train_splits.append(["val"])
+
     x_train, y_train = make_mol_rep(fp_len=morgan_hyperparams["fp_len"],
                                     data=data,
-                                    splits=["train"],
+                                    splits=train_splits,
                                     radius=morgan_hyperparams["radius"])
 
     x_val, y_val = make_mol_rep(fp_len=morgan_hyperparams["fp_len"],
@@ -141,7 +149,8 @@ def make_rf_objective(data, metric_name, seed):
         pred, real, clf = run_rf(space,
                                  test_or_val="val",
                                  seed=seed,
-                                 data=data)
+                                 data=data,
+                                 use_val_in_train=False)
         metrics = get_metrics(pred, real, [metric_name])
         score = -metrics[metric_name]
 
@@ -200,18 +209,27 @@ def hyper_and_train(train_path,
                     hyper_metric,
                     seed,
                     score_metrics,
+                    hyper_save_path,
+                    rerun_hyper,
                     **kwargs):
 
     data = load_data(train_path, val_path, test_path)
-    objective = make_rf_objective(data, hyper_metric, seed)
-    space = make_rf_space(HYPERPARAMS)
 
-    best_params = fmin(objective,
-                       space,
-                       algo=tpe.suggest,
-                       max_evals=num_samples)
+    if os.path.isfile(hyper_save_path) and not rerun_hyper:
+        with open(hyper_save_path, "r") as f:
+            translate_params = json.load(f)
+    else:
+        objective = make_rf_objective(data, hyper_metric, seed)
+        space = make_rf_space(HYPERPARAMS)
 
-    translate_params = translate_best_params(best_params)
+        best_params = fmin(objective,
+                           space,
+                           algo=tpe.suggest,
+                           max_evals=num_samples)
+
+        translate_params = translate_best_params(best_params)
+        with open(hyper_save_path, "w") as f:
+            json.dump(translate_params, f, indent=4, sort_keys=True)
 
     print("\n")
     print(f"Best parameters: {translate_params}")
@@ -219,9 +237,10 @@ def hyper_and_train(train_path,
     pred, real, clf = run_rf(translate_params,
                              test_or_val="test",
                              seed=seed,
-                             data=data)
-    metrics = get_metrics(pred=pred, real=real, 
-      score_metrics=score_metrics)
+                             data=data,
+                             use_val_in_train=True)
+    metrics = get_metrics(pred=pred, real=real,
+                          score_metrics=score_metrics)
 
     print("\n")
     print(f"Test scores: {metrics}")
@@ -253,6 +272,11 @@ if __name__ == "__main__":
                               "to try."))
     parser.add_argument("--hyper_metric", type=str,
                         help=("Metric to use for hyperparameter scoring."))
+    parser.add_argument("--hyper_save_path", type=str,
+                        help=("JSON file in which to store hyperparameters"))
+    parser.add_argument("--rerun_hyper", action='store_true',
+                        help=("Rerun hyperparameter optimization even "
+                              "if it has already been done previously."))
     parser.add_argument("--score_metrics", type=str, nargs="+",
                         help=("Metric scores to report on test set."),
                         choices=CHEMPROP_METRICS)
