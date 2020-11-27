@@ -9,7 +9,7 @@
   "hyper_score_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_1_cl/rf/hyper_scores_prc.json",
   "rerun_hyper": false,
   "num_samples": 200,
-  "hyper_metric": "auc",
+  "hyper_metric": "prc-auc",
   "score_metrics": ["auc", "prc-auc"],
   "test_folds": 10,
   "seed": 0

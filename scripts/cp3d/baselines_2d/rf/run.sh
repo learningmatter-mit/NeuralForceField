@@ -2,7 +2,7 @@ source deactivate
 source activate nff
 
 export PYTHONPATH="/home/saxelrod/Repo/projects/master/NeuralForceField:$PYTHONPATH"
-CONFIG="config/cov_1_cl_auc.json"
+CONFIG="config/cov_1_cl_prc.json"
 
 cmd="python run.py --config_file $CONFIG"
 echo $cmd
