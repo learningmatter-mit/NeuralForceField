@@ -5,6 +5,9 @@ from rdkit import Chem
 import os
 from scipy.linalg import sqrtm
 from tqdm import tqdm
+from torch import cos, sin
+import copy
+
 
 from nff.utils.constants import HARDNESS_AU_MAT, BOHR_RADIUS
 from nff.data.orb_net.xtb import run_xtb
@@ -17,13 +20,30 @@ PERIODICTABLE = Chem.GetPeriodicTable()
 GAMMA_J = 4
 GAMMA_K = 10
 
+# cutoffs
+CUTOFF_NAMES = ["f", "j", "k", "p", "s", "h"]
+CUTOFFS = [8, 1.6, 20, 14, 8, 8]
+
+
 """
+
+Percentage kept: {"f": 59.19008875739645, 
+                  "j": 11.390532544378699, 
+                  "k": 51.60872781065089, 
+                  "p": 99.86131656804734, 
+                  "s": 60.32729289940828,
+                  "h": 59.19008875739645}
+                  
+ * is this reasonable?
+
 1. Check transformations
 2. Are the expressions for J and K in the paper consistent with 
 the x transformations in the gradient paper?
 3. Why does our density disagree with loaded density?
-4. Add D and don'd transofmr it
-5. Generate edge feature neighbor lists
+4. Add D and don't transform it - but I don't think 
+   we have the info from the results to make D because we
+   don't have the AO dipole matrix.
+
 """
 
 
@@ -38,6 +58,7 @@ def get_results(path):
     with open(path, "r") as f:
         dic = json.load(f)
     results = dic["result"]
+
     return results
 
 
@@ -103,6 +124,9 @@ def get_p_ao(results):
     # density matrix
     p = 2 * np.matmul(reduced_orbs, reduced_orbs.transpose())
 
+    # 99.9% get kept even when using `results["density"]`
+    # p = np.array(results["density"])
+
     return p
 
 
@@ -131,10 +155,13 @@ def get_x_or_y(shells,
         l_idx[l].append([start_idx, end_idx])
 
     # stack them to vectorize eigenvector calculation
-    p_tilde_by_l = {key: np.stack(val) for key, val in p_tilde_by_l.items()}
+    p_tilde_by_l = {key: np.stack(val) for key, val in
+                    p_tilde_by_l.items()}
+
     # calculate the stacked eigenvectors for each value of l, except l = 0
     eig_blocks = {key: np.linalg.eigh(val)[1] for key, val in
                   p_tilde_by_l.items() if key != 0}
+
     # 1 for l = 0
     eig_blocks[0] = p_tilde_by_l[0] / p_tilde_by_l[0]
 
@@ -363,7 +390,9 @@ def get_dist_z(batch):
 
     nxyz = batch["nxyz"]
     xyz = nxyz[:, 1:]
-    xyz.requires_grad = True
+
+    # will probably have to add this in later anyway
+    # xyz.requires_grad = True
 
     n = xyz.shape[0]
     dist_sq = (((xyz.expand(n, n, 3) -
@@ -393,6 +422,7 @@ def make_ops(batch):
     ops = [batch["f_saao"],
            j, k,
            batch["p_saao"],
+           batch["s_saao"],
            batch["h_saao"]]
 
     return ops
@@ -421,6 +451,64 @@ def featurize_dset(dset):
     return dset
 
 
+def generate_neighbors(dset,
+                       cutoffs,
+                       cutoff_names):
+
+    edge_feats_0 = dset.props["edge_features"][0]
+    assert len(cutoffs) == edge_feats_0.shape[-1]
+
+    props = {f"{name}_nbr_list": [] for
+             name in cutoff_names}
+
+    for batch in dset:
+        edge_feats = batch["edge_features"]
+        pcts = [[] for _ in range(len(cutoffs))]
+        for i, name in enumerate(cutoff_names):
+            mask = edge_feats[:, :, i] <= cutoffs[i]
+            nbrs = mask.nonzero()
+            props[f"{name}_nbr_list"].append(nbrs)
+
+            pct_kept = (nbrs.shape[0] /
+                        edge_feats.shape[0] ** 2) * 100
+            pcts[i].append(pct_kept)
+
+    pcts = [np.mean(pct) for pct in pcts]
+    print(f"Percentage kept: {pcts}")
+
+    dset.props.update(props)
+    return dset
+
+
+def test_rotate(dset):
+    new_dset = copy.deepcopy(dset)
+    new_nxyz = []
+    for batch in dset:
+        xyz = batch["nxyz"][:, 1:]
+        z = batch["nxyz"][:, 0]
+        alpha, beta, gamma = torch.rand(3)
+        rot = torch.Tensor([[cos(alpha) * cos(beta),
+                             cos(alpha) * sin(beta) * sin(gamma)
+                             - sin(alpha) * cos(gamma), cos(alpha) *
+                             sin(beta) * cos(gamma)
+                             + sin(alpha) * sin(gamma)],
+                            [sin(alpha) * cos(beta),
+                             sin(alpha) * sin(beta) * sin(gamma)
+                             + cos(alpha) * cos(gamma), sin(alpha) *
+                             sin(beta) * cos(gamma)
+                             - cos(alpha) * sin(gamma)],
+                            [-sin(beta), cos(beta) * sin(gamma),
+                             cos(beta) * cos(gamma)]
+                            ])
+
+        new_xyz = torch.stack([torch.matmul(rot, i) for i in xyz])
+        new_nxyz.append(torch.cat([z.reshape(-1, 1), new_xyz],
+                                  dim=-1))
+    new_dset.props["nxyz"] = new_nxyz
+
+    return new_dset
+
+
 def test_batch_featurize(job_dir="."):
 
     dset_path = ("/home/saxelrod/Repo/projects/ax_autopology"
@@ -431,7 +519,21 @@ def test_batch_featurize(job_dir="."):
     # dset.save(dset_path)
     dset = Dataset.from_file(dset_path)
 
-    featurize_dset(dset)
+    dset = featurize_dset(dset)
+    dset = generate_neighbors(dset,
+                              cutoffs=CUTOFFS,
+                              cutoff_names=CUTOFF_NAMES)
+
+    # new_dset = test_rotate(dset)
+    # # gives same features!
+    # new_dset = featurize_dset(new_dset)
+    # new_dset = generate_neighbors(new_dset,
+    #                               cutoffs=CUTOFFS,
+    #                               cutoff_names=CUTOFF_NAMES)
+
+    dset.save(dset_path)
+
+    return dset
 
 
 if __name__ == "__main__":
