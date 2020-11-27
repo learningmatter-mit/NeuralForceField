@@ -1,7 +1,3 @@
-# %%timeit
-# 179 ms ± 5.48 ms
-
-
 import json
 import numpy as np
 import torch
@@ -21,24 +17,15 @@ PERIODICTABLE = Chem.GetPeriodicTable()
 GAMMA_J = 4
 GAMMA_K = 10
 
+"""
+1. Check transformations
+2. Are the expressions for J and K in the paper consistent with 
+the x transformations in the gradient paper?
+3. Why does our density disagree with loaded density?
+4. Add D and don'd transofmr it
+5. Generate edge feature neighbor lists
+"""
 
-# 2. Need to check the transformation of various operators into the
-# SAAO basis because I'm not sure it's right (part of this is the fact
-# that the padding thing is probably wrong)
-
-# 3. Are the ranges still off? I do see a few P's > 14 so it's
-# possible it's fine
-
-# 4. How do we reconcile the expressions for J and K in the paper
-# with the transformation matrices needed for the gradients?
-# --> Have to deal with this now or else we can't trust expressions
-# for h0 and Fock in the SAAO basis
-# --> I think we use Y instead of Yprime because that's the transformation
-# eqn they give in the paper?
-
-# 5. Why does our density disagree with the loaded density?
-
-# 6. Add D and don't transform it
 
 def get_results(path):
     """
@@ -113,6 +100,7 @@ def get_p_ao(results):
     n_total = len(orbs)
     reduced_orbs = orbs[:n_total, :n_occ]
 
+    # density matrix
     p = 2 * np.matmul(reduced_orbs, reduced_orbs.transpose())
 
     return p
@@ -200,7 +188,10 @@ def get_p_saao(p_ao, x):
     return p_saao
 
 
-def make_q(y_mat, s, n_at, starts_by_at):
+def make_q(y_mat,
+           s,
+           n_at,
+           starts_by_at):
 
     y_prime = np.matmul(y_mat, sqrtm(s))
     n_orb = y_prime.shape[0]
@@ -279,27 +270,30 @@ def make_gamma_ab(gamma, d_au_sq, z):
 
     flat_z = z.reshape(-1)
     n = flat_z.reshape(-1).shape[0]
-    eta_A = HARDNESS_AU_MAT[flat_z].expand(n, n).to(d_au_sq.device)
+    eta_A = (HARDNESS_AU_MAT[flat_z]
+             .expand(n, n)
+             .to(d_au_sq.device))
     eta_B = eta_A.transpose(0, 1)
     eta_avg = 1/2 * (eta_A + eta_B)
 
     assert gamma % 2 == 0
     gam_by_2 = gamma // 2
 
-    gamma_ab = torch.pow(torch.pow(d_au_sq, gam_by_2) + eta_avg ** (-gamma),
+    gamma_ab = torch.pow(torch.pow(d_au_sq, gam_by_2)
+                         + eta_avg ** (-gamma),
                          -1 / gamma)
 
     return gamma_ab
 
 
-def make_j(q, gamma_j, xyz):
+def make_j(q, gamma_j):
 
     results = torch.einsum('ppa,qqb,ab->pq', q, q, gamma_j)
 
     return results
 
 
-def make_k(q, gamma_k, xyz):
+def make_k(q, gamma_k):
 
     results = torch.einsum('pqa,pqb,ab->pq', q, q, gamma_k)
 
@@ -358,24 +352,14 @@ def normalize_edge_feats(props):
     for i in range(len(props["edge_features"])):
 
         feats = props["edge_features"][i]
-        # TO-DO:
-        # exlcude D from this
-        # props["edge_features"][i][:, :, :-1] = - \
-        #     torch.log(abs(feats[:, :, :-1]))
-
         props["edge_features"][i] = - torch.log(abs(feats))
 
         # get rid of infinities
         nan_mask = props["edge_features"][i] == float("inf")
         props["edge_features"][i][nan_mask] = 0
 
-        # for j in range(5):
-        #     print(abs(props["edge_features"][i]
-        #               [:, :, j]).detach().max().item())
-        # print("\n")
 
-
-def make_ops(batch):
+def get_dist_z(batch):
 
     nxyz = batch["nxyz"]
     xyz = nxyz[:, 1:]
@@ -386,10 +370,16 @@ def make_ops(batch):
                  xyz.expand(n, n, 3)
                  .transpose(0, 1)) ** 2)
                .sum(-1))
-    d_au_sq = dist_sq / BOHR_RADIUS ** 2
 
+    d_au_sq = dist_sq / BOHR_RADIUS ** 2
     z = nxyz[:, 0].long()
 
+    return d_au_sq, z
+
+
+def make_ops(batch):
+
+    d_au_sq, z = get_dist_z(batch)
     gamma_j_ab = make_gamma_ab(gamma=GAMMA_J,
                                d_au_sq=d_au_sq,
                                z=z)
@@ -397,15 +387,13 @@ def make_ops(batch):
                                d_au_sq=d_au_sq,
                                z=z)
 
-    q_mat = batch["q_mat"]
-    p = batch["p_saao"]
-    h = batch["h_saao"]
-    f = batch["f_saao"]
+    j = make_j(batch["q_mat"], gamma_j_ab)
+    k = make_k(batch["q_mat"], gamma_k_ab)
 
-    j = make_j(q_mat, gamma_j_ab, xyz)
-    k = make_k(q_mat, gamma_k_ab, xyz)
-
-    ops = [f, j, k, p, h]
+    ops = [batch["f_saao"],
+           j, k,
+           batch["p_saao"],
+           batch["h_saao"]]
 
     return ops
 
@@ -423,10 +411,6 @@ def featurize_dset(dset):
 
         props["node_features"].append(node_feats)
         props["edge_features"].append(edge_feats)
-
-        # next up:
-        # 1. Make the D operator (eq. 26 in SM of paper 2)
-        # 2. Generate neighbor lists for each feature
 
     # normalize
     normalize_node_feats(props)
