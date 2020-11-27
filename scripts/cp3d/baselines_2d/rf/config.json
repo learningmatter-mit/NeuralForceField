@@ -1,0 +1,6 @@
+{
+"direc": "/home/saxelrod/chemprop_cov_2/scaffold_split",
+ "num_samples": 200,
+ "hyper_metric": "auc",
+ "seed": 0
+}
