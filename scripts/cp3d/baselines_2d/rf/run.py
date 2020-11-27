@@ -139,7 +139,27 @@ def get_metrics(pred, real, score_metrics):
     return metric_scores
 
 
-def make_rf_objective(data, metric_name, seed, classifier):
+def update_saved_scores(score_path,
+                        space,
+                        metrics):
+    if os.path.isfile(score_path):
+        with open(score_path, "r") as f:
+            scores = json.load(f)
+    else:
+        scores = []
+
+    scores.append({**space, **metrics})
+
+    with open(score_path, "w") as f:
+        json.dump(scores, f, indent=4, sort_keys=True)
+
+
+def make_rf_objective(data,
+                      metric_name,
+                      seed,
+                      classifier,
+                      hyper_score_path):
+
     param_type_dic = {name: sub_dic["type"] for name, sub_dic
                       in HYPERPARAMS.items()}
 
@@ -159,6 +179,7 @@ def make_rf_objective(data, metric_name, seed, classifier):
                                  classifier=classifier)
         metrics = get_metrics(pred, real, [metric_name])
         score = -metrics[metric_name]
+        update_saved_scores(hyper_score_path, space, metrics)
 
         return score
 
@@ -227,16 +248,20 @@ def get_or_load_hypers(hyper_save_path,
                        hyper_metric,
                        seed,
                        classifier,
-                       num_samples):
+                       num_samples,
+                       hyper_score_path):
 
     if os.path.isfile(hyper_save_path) and not rerun_hyper:
         with open(hyper_save_path, "r") as f:
             translate_params = json.load(f)
     else:
+
         objective = make_rf_objective(data=data,
                                       metric_name=hyper_metric,
                                       seed=seed,
-                                      classifier=classifier)
+                                      classifier=classifier,
+                                      hyper_score_path=hyper_score_path)
+
         space = make_rf_space(HYPERPARAMS)
 
         best_params = fmin(objective,
@@ -328,6 +353,7 @@ def hyper_and_train(train_path,
                     rerun_hyper,
                     classifier,
                     test_folds,
+                    hyper_score_path,
                     **kwargs):
 
     data = load_data(train_path, val_path, test_path)
@@ -339,7 +365,8 @@ def hyper_and_train(train_path,
         hyper_metric=hyper_metric,
         seed=seed,
         classifier=classifier,
-        num_samples=num_samples)
+        num_samples=num_samples,
+        hyper_score_path=hyper_score_path)
 
     ensemble_preds, ensemble_scores = get_ensemble_preds(
         test_folds=test_folds,
@@ -376,6 +403,9 @@ if __name__ == "__main__":
                         help=("Metric to use for hyperparameter scoring."))
     parser.add_argument("--hyper_save_path", type=str,
                         help=("JSON file in which to store hyperparameters"))
+    parser.add_argument("--hyper_score_path", type=str,
+                        help=("JSON file in which to store scores of "
+                              "different hyperparameter combinations"))
     parser.add_argument("--rerun_hyper", action='store_true',
                         help=("Rerun hyperparameter optimization even "
                               "if it has already been done previously."))
