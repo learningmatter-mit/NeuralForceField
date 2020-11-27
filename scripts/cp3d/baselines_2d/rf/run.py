@@ -1,6 +1,6 @@
 """
 Script for running hyperparameter optimization getting
-predictions from a random forest classifier.
+predictions from a random forest classifier or regressor.
 """
 
 import json
@@ -12,7 +12,7 @@ from hyperopt import fmin, hp, tpe
 from rdkit import Chem
 from rdkit.Chem import AllChem
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
 from nff.utils import parse_args, apply_metric, CHEMPROP_METRICS
 
@@ -52,15 +52,14 @@ def load_data(train_path, val_path, test_path):
 
 
 def make_mol_rep(fp_len, data, splits, radius):
-
     fps = []
     vals = []
+
     for split in splits:
         for smiles, val in data[split].items():
             mol = Chem.MolFromSmiles(smiles)
             fp = AllChem.GetMorganFingerprintAsBitVect(
                 mol, radius, nBits=fp_len)
-
             vals.append(val)
             fps.append(fp)
 
@@ -91,20 +90,26 @@ def run_rf(space,
            test_or_val,
            seed,
            data,
-           use_val_in_train):
+           use_val_in_train,
+           classifier):
 
     rf_hyperparams = {key: val for key, val in space.items()
                       if key not in MORGAN_HYPER_KEYS}
     morgan_hyperparams = {key: val for key, val in space.items()
                           if key in MORGAN_HYPER_KEYS}
 
-    clf = RandomForestClassifier(class_weight="balanced",
-                                 random_state=seed,
-                                 **rf_hyperparams)
+    if classifier:
+        pref_fn = RandomForestClassifier(class_weight="balanced",
+                                         random_state=seed,
+                                         **rf_hyperparams)
+    else:
+        pref_fn = RandomForestRegressor(class_weight="balanced",
+                                        random_state=seed,
+                                        **rf_hyperparams)
 
     train_splits = ["train"]
     if use_val_in_train:
-        train_splits.append(["val"])
+        train_splits.append("val")
 
     x_train, y_train = make_mol_rep(fp_len=morgan_hyperparams["fp_len"],
                                     data=data,
@@ -116,10 +121,10 @@ def run_rf(space,
                                 splits=[test_or_val],
                                 radius=morgan_hyperparams["radius"])
 
-    clf.fit(x_train, y_train)
-    pred_val = clf.predict(x_val)
+    pref_fn.fit(x_train, y_train)
+    pred_val = pref_fn.predict(x_val)
 
-    return pred_val, y_val, clf
+    return pred_val, y_val, pref_fn
 
 
 def get_metrics(pred, real, score_metrics):
@@ -134,7 +139,7 @@ def get_metrics(pred, real, score_metrics):
     return metric_scores
 
 
-def make_rf_objective(data, metric_name, seed):
+def make_rf_objective(data, metric_name, seed, classifier):
     param_type_dic = {name: sub_dic["type"] for name, sub_dic
                       in HYPERPARAMS.items()}
 
@@ -150,7 +155,8 @@ def make_rf_objective(data, metric_name, seed):
                                  test_or_val="val",
                                  seed=seed,
                                  data=data,
-                                 use_val_in_train=False)
+                                 use_val_in_train=False,
+                                 classifier=classifier)
         metrics = get_metrics(pred, real, [metric_name])
         score = -metrics[metric_name]
 
@@ -175,7 +181,12 @@ def translate_best_params(best_params):
     return translate_params
 
 
-def get_preds(clf, data, fp_len, radius, score_metrics):
+def get_preds(pred_fn,
+              data,
+              fp_len,
+              radius,
+              score_metrics):
+
     results = {}
     for name in ["train", "val", "test"]:
 
@@ -184,7 +195,7 @@ def get_preds(clf, data, fp_len, radius, score_metrics):
                                splits=[name],
                                radius=radius)
 
-        pred = clf.predict(x)
+        pred = pred_fn.predict(x)
         metrics = get_metrics(pred=pred,
                               real=real,
                               score_metrics=score_metrics)
@@ -195,31 +206,37 @@ def get_preds(clf, data, fp_len, radius, score_metrics):
     return results
 
 
-def save_preds(results, save_path):
-    with open(save_path, "w") as f:
-        json.dump(results, f, indent=4, sort_keys=True)
-    print(f"All predictions saved to {save_path}")
+def save_preds(ensemble_preds,
+               ensemble_scores,
+               pred_save_path,
+               score_save_path):
+
+    with open(score_save_path, "w") as f:
+        json.dump(ensemble_scores, f, indent=4, sort_keys=True)
+
+    with open(pred_save_path, "w") as f:
+        json.dump(ensemble_preds, f, indent=4, sort_keys=True)
+
+    print(f"Predictions saved to {pred_save_path}")
+    print(f"Scores saved to {score_save_path}")
 
 
-def hyper_and_train(train_path,
-                    val_path,
-                    test_path,
-                    save_path,
-                    num_samples,
-                    hyper_metric,
-                    seed,
-                    score_metrics,
-                    hyper_save_path,
-                    rerun_hyper,
-                    **kwargs):
-
-    data = load_data(train_path, val_path, test_path)
+def get_or_load_hypers(hyper_save_path,
+                       rerun_hyper,
+                       data,
+                       hyper_metric,
+                       seed,
+                       classifier,
+                       num_samples):
 
     if os.path.isfile(hyper_save_path) and not rerun_hyper:
         with open(hyper_save_path, "r") as f:
             translate_params = json.load(f)
     else:
-        objective = make_rf_objective(data, hyper_metric, seed)
+        objective = make_rf_objective(data=data,
+                                      metric_name=hyper_metric,
+                                      seed=seed,
+                                      classifier=classifier)
         space = make_rf_space(HYPERPARAMS)
 
         best_params = fmin(objective,
@@ -234,39 +251,124 @@ def hyper_and_train(train_path,
     print("\n")
     print(f"Best parameters: {translate_params}")
 
-    pred, real, clf = run_rf(translate_params,
-                             test_or_val="test",
-                             seed=seed,
-                             data=data,
-                             use_val_in_train=True)
-    metrics = get_metrics(pred=pred, real=real,
-                          score_metrics=score_metrics)
+    return translate_params
 
-    print("\n")
-    print(f"Test scores: {metrics}")
 
-    results = get_preds(clf=clf,
-                        data=data,
-                        fp_len=translate_params["fp_len"],
-                        radius=translate_params["radius"],
-                        score_metrics=score_metrics)
+def get_ensemble_preds(test_folds,
+                       translate_params,
+                       data,
+                       classifier,
+                       score_metrics):
+    ensemble_preds = {}
+    ensemble_scores = {}
 
-    save_preds(results, save_path)
+    splits = ["train", "val", "test"]
 
-    return best_params, metrics
+    for seed in range(test_folds):
+        pred, real, pred_fn = run_rf(translate_params,
+                                     test_or_val="test",
+                                     seed=seed,
+                                     data=data,
+                                     use_val_in_train=True,
+                                     classifier=classifier)
+        metrics = get_metrics(pred=pred,
+                              real=real,
+                              score_metrics=score_metrics)
+
+        print(f"Fold {seed} test scores: {metrics}")
+
+        results = get_preds(pred_fn=pred_fn,
+                            data=data,
+                            fp_len=translate_params["fp_len"],
+                            radius=translate_params["radius"],
+                            score_metrics=score_metrics)
+
+        these_preds = {}
+        these_scores = {}
+
+        for split in splits:
+            these_scores.update({split: {key: val for key, val
+                                         in results[split].items()
+                                         if key not in ["true", "pred"]}})
+            these_preds.update({split: {key: val for key, val
+                                        in results[split].items()
+                                        if key in ["true", "pred"]}})
+
+        ensemble_preds[str(seed)] = these_preds
+        ensemble_scores[str(seed)] = these_scores
+
+    avg = {split: {} for split in splits}
+
+    for split in splits:
+
+        score_dics = [sub_dic[split] for sub_dic in ensemble_scores.values()]
+
+        for key in score_metrics:
+
+            all_vals = [score_dic[key] for score_dic in score_dics]
+            mean = np.mean(all_vals)
+            std = np.std(all_vals)
+            avg[split][key] = {"mean": mean, "std": std}
+
+    ensemble_scores["average"] = avg
+
+    return ensemble_preds, ensemble_scores
+
+
+def hyper_and_train(train_path,
+                    val_path,
+                    test_path,
+                    pred_save_path,
+                    score_save_path,
+                    num_samples,
+                    hyper_metric,
+                    seed,
+                    score_metrics,
+                    hyper_save_path,
+                    rerun_hyper,
+                    classifier,
+                    test_folds,
+                    **kwargs):
+
+    data = load_data(train_path, val_path, test_path)
+
+    translate_params = get_or_load_hypers(
+        hyper_save_path=hyper_save_path,
+        rerun_hyper=rerun_hyper,
+        data=data,
+        hyper_metric=hyper_metric,
+        seed=seed,
+        classifier=classifier,
+        num_samples=num_samples)
+
+    ensemble_preds, ensemble_scores = get_ensemble_preds(
+        test_folds=test_folds,
+        translate_params=translate_params,
+        data=data,
+        classifier=classifier,
+        score_metrics=score_metrics)
+
+    save_preds(ensemble_preds=ensemble_preds,
+               ensemble_scores=ensemble_scores,
+               pred_save_path=pred_save_path,
+               score_save_path=score_save_path)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
+    parser.add_argument("--classifier", type=bool,
+                        help=("Whether you're training a classifier"))
     parser.add_argument("--train_path", type=str,
                         help=("Directory to the csv with the training data"))
     parser.add_argument("--val_path", type=str,
                         help=("Directory to the csv with the validation data"))
     parser.add_argument("--test_path", type=str,
                         help=("Directory to the csv with the test data"))
-    parser.add_argument("--save_path", type=str,
+    parser.add_argument("--pred_save_path", type=str,
                         help=("JSON file in which to store predictions"))
+    parser.add_argument("--score_save_path", type=str,
+                        help=("JSON file in which to store scores."))
     parser.add_argument("--num_samples", type=int,
                         help=("Number of hyperparameter combinatinos "
                               "to try."))
@@ -280,8 +382,12 @@ if __name__ == "__main__":
     parser.add_argument("--score_metrics", type=str, nargs="+",
                         help=("Metric scores to report on test set."),
                         choices=CHEMPROP_METRICS)
-    parser.add_argument("--seed", type=int, default=0,
+    parser.add_argument("--seed", type=int,
                         help=("Random seed to use."))
+    parser.add_argument("--test_folds", type=int, default=0,
+                        help=("Number of different seeds to use for getting "
+                              "average performance of the model on the "
+                              "test set."))
 
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "

@@ -7,11 +7,9 @@ import os
 import json
 import argparse
 import numpy as np
-from sklearn.metrics import (roc_auc_score, auc, precision_recall_curve,
-                             r2_score, accuracy_score, log_loss)
 
 from nff.utils import (bash_command, parse_args, read_csv,
-                       fprint, CHEMPROP_METRICS)
+                       fprint, CHEMPROP_METRICS, apply_metric)
 
 
 def is_model_path(cp_model_path):
@@ -96,42 +94,6 @@ def predict(cp_folder,
     real = read_csv(test_path)
 
     return real, preds
-
-
-def apply_metric(metric, pred, actual):
-    """
-    Apply a metric to a set of predictions.
-    Args:
-      metric (str): name of metric
-      pred (iterable): predicted values
-      actual (iterable): actual values
-    Returns:
-      score (float): metric score
-    """
-    if metric == "auc":
-        score = roc_auc_score(y_true=actual, y_score=pred)
-    elif metric == "prc-auc":
-        precision, recall, thresholds = precision_recall_curve(
-            y_true=actual, probas_pred=pred)
-        score = auc(recall, precision)
-    elif metric == "mse":
-        score = ((np.array(pred) - np.array(actual)) ** 2).mean()
-    elif metric == "rmse":
-        score = ((np.array(pred) - np.array(actual)) ** 2).mean() ** 0.5
-    elif metric == "mae":
-        score = (abs(np.array(pred) - np.array(actual))).mean()
-    elif metric == "r2":
-        score = r2_score(y_true=actual, y_pred=pred)
-    elif metric == "accuracy":
-        np_pred = np.array(pred)
-        mask = np_pred >= 0.5
-        np_pred[mask] = 1
-        np_pred[np.bitwise_not(mask)] = 0
-        score = accuracy_score(y_true=actual, y_pred=np_pred)
-    elif metric in ["cross_entropy", "binary_cross_entropy"]:
-        score = log_loss(y_true=actual, y_pred=np_pred)
-
-    return score
 
 
 def get_metrics(actual_dic, pred_dics, metrics, cp_model_path):
@@ -220,10 +182,10 @@ def main(model_folder_cp,
 
         # make predictions
         real, preds = predict(cp_folder=cp_folder,
-                             test_path=test_path,
-                             cp_model_path=cp_model_path,
-                             device=device,
-                             check_paths=check_paths)
+                              test_path=test_path,
+                              cp_model_path=cp_model_path,
+                              device=device,
+                              check_paths=check_paths)
 
         # get and save metric scores
         get_metrics(real, preds, metrics, cp_model_path)
