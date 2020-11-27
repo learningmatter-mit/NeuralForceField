@@ -1,22 +1,20 @@
 """
-Script for running hyperparameter optimization getting 
+Script for running hyperparameter optimization getting
 predictions from a random forest classifier.
 """
 
-import os
 import json
 import argparse
 
 
 import copy
 from hyperopt import fmin, hp, tpe
-from sklearn.metrics import roc_auc_score, precision_recall_curve, auc
 from rdkit import Chem
 from rdkit.Chem import AllChem
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 
-from nff.utils import parse_args
+from nff.utils import parse_args, apply_metric, CHEMPROP_METRICS
 
 MORGAN_HYPER_KEYS = ["fp_len", "radius"]
 
@@ -39,18 +37,17 @@ HYPERPARAMS = {"n_estimators": {"vals": [20, 300], "type": "int"},
                "radius": {"vals": [1, 4], "type": "int"}}
 
 
-def load_data(direc):
+def load_data(train_path, val_path, test_path):
     data = {}
-    for name in ["train", "val", "test"]:
-        path = os.path.join(direc, name + "_full.csv")
+    paths = [train_path, val_path, test_path]
+    names = ["train", "val", "test"]
+    for name, path in zip(names, paths):
         with open(path, "r") as f:
             lines = f.readlines()[1:]
-        smiles_list = [line.strip().split(",")[0] for line
-                       in lines]
-        val_list = [float(line.strip().split(",")[1]) for line
-                    in lines]
-        data[name] = {smiles: val for smiles, val in zip(
-            smiles_list, val_list)}
+            smiles_list = [line.strip().split(",")[0] for line in lines]
+            val_list = [float(line.strip().split(",")[1]) for line in lines]
+            data[name] = {smiles: val for smiles,
+                          val in zip(smiles_list, val_list)}
     return data
 
 
@@ -117,16 +114,16 @@ def run_rf(space, test_or_val, seed, data):
     return pred_val, y_val, clf
 
 
-def get_metrics(pred, real):
+def get_metrics(pred, real, score_metrics):
 
-    auc_score = roc_auc_score(y_true=real, y_score=pred)
-    precision, recall, thresholds = precision_recall_curve(
-        y_true=real, probas_pred=pred)
-    prc_score = auc(recall, precision)
+    metric_scores = {}
+    for metric in score_metrics:
+        score = apply_metric(metric=metric,
+                             pred=pred,
+                             actual=real)
+        metric_scores[metric] = float(score)
 
-    metrics = {"prc-auc": float(prc_score), "auc": float(auc_score)}
-
-    return metrics
+    return metric_scores
 
 
 def make_rf_objective(data, metric_name, seed):
@@ -145,7 +142,7 @@ def make_rf_objective(data, metric_name, seed):
                                  test_or_val="val",
                                  seed=seed,
                                  data=data)
-        metrics = get_metrics(pred, real)
+        metrics = get_metrics(pred, real, [metric_name])
         score = -metrics[metric_name]
 
         return score
@@ -169,7 +166,7 @@ def translate_best_params(best_params):
     return translate_params
 
 
-def get_preds(clf, data, fp_len, radius):
+def get_preds(clf, data, fp_len, radius, score_metrics):
     results = {}
     for name in ["train", "val", "test"]:
 
@@ -179,7 +176,9 @@ def get_preds(clf, data, fp_len, radius):
                                radius=radius)
 
         pred = clf.predict(x)
-        metrics = get_metrics(pred=pred, real=real)
+        metrics = get_metrics(pred=pred,
+                              real=real,
+                              score_metrics=score_metrics)
 
         results[name] = {"true": real.tolist(), "pred": pred.tolist(),
                          **metrics}
@@ -193,13 +192,17 @@ def save_preds(results, save_path):
     print(f"All predictions saved to {save_path}")
 
 
-def hyper_and_train(direc,
+def hyper_and_train(train_path,
+                    val_path,
+                    test_path,
+                    save_path,
                     num_samples,
                     hyper_metric,
                     seed,
+                    score_metrics,
                     **kwargs):
 
-    data = load_data(direc)
+    data = load_data(train_path, val_path, test_path)
     objective = make_rf_objective(data, hyper_metric, seed)
     space = make_rf_space(HYPERPARAMS)
 
@@ -217,7 +220,8 @@ def hyper_and_train(direc,
                              test_or_val="test",
                              seed=seed,
                              data=data)
-    metrics = get_metrics(pred=pred, real=real)
+    metrics = get_metrics(pred=pred, real=real, 
+      score_metrics=score_metrics)
 
     print("\n")
     print(f"Test scores: {metrics}")
@@ -225,9 +229,9 @@ def hyper_and_train(direc,
     results = get_preds(clf=clf,
                         data=data,
                         fp_len=translate_params["fp_len"],
-                        radius=translate_params["radius"])
+                        radius=translate_params["radius"],
+                        score_metrics=score_metrics)
 
-    save_path = os.path.join(direc, "rf_preds.json")
     save_preds(results, save_path)
 
     return best_params, metrics
@@ -236,17 +240,22 @@ def hyper_and_train(direc,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--direc", type=str,
-                        help=("Directory with train, val and test "
-                              "csv files."))
-
+    parser.add_argument("--train_path", type=str,
+                        help=("Directory to the csv with the training data"))
+    parser.add_argument("--val_path", type=str,
+                        help=("Directory to the csv with the validation data"))
+    parser.add_argument("--test_path", type=str,
+                        help=("Directory to the csv with the test data"))
+    parser.add_argument("--save_path", type=str,
+                        help=("JSON file in which to store predictions"))
     parser.add_argument("--num_samples", type=int,
                         help=("Number of hyperparameter combinatinos "
                               "to try."))
-
     parser.add_argument("--hyper_metric", type=str,
                         help=("Metric to use for hyperparameter scoring."))
-
+    parser.add_argument("--score_metrics", type=str, nargs="+",
+                        help=("Metric scores to report on test set."),
+                        choices=CHEMPROP_METRICS)
     parser.add_argument("--seed", type=int, default=0,
                         help=("Random seed to use."))
 
