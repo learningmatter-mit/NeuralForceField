@@ -394,4 +394,5 @@ We also provide some scripts for training 2D-based models with scikit learn, suc
 - `num_samples` (int): how many hyperparameter combinations to try
 - `hyper_metric` (str): Metric to use for hyperparameter scoring
 - `score_metrics` (list[str]): Metric scores to report on test set
+- `test_folds` (int): Number of different seeds to use for getting average performance of the model on the test set.
 - `seed` (int): random seed for the training
