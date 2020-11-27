@@ -382,7 +382,7 @@ Note that the data paths are in the `base_config` and `hyp_config` paths. You ca
 
     
 # 2D baselines
-We also provide some scripts for training 2D-based models with scikit learn, such as random forest. These scripts run hyperparameter optimization and model training using Morgan fingerprints as input. Each folder is named for the model type, and each has files `run.sh`, `run.py`, and `config.json`. The config file has the following keys:
+We also provide some scripts for training 2D-based models with scikit learn, such as random forest. These scripts run hyperparameter optimization and model training using Morgan fingerprints as input. Each folder is named for the model type, and each has files `run.sh`, `run.py`, and a path of your choice for the config file. The config file has the following keys:
 - `train_path` (str): path to the training set csv
 - `val_path` (str): path to the validation set csv
 - `test_path` (str): path to the test set csv
