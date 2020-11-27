@@ -391,6 +391,7 @@ We also provide some scripts for training 2D-based models with scikit learn, suc
 - `pred_save_path` (str): JSON file in which to store predictions
 - `score_save_path` (str): JSON file in which to store scores
 - `hyper_save_path` (str): JSON file in which to store hyperparameters
+- `hyper_score_path"` (str): JSON file in which to store scores of different hyperparameter combinations
 - `rerun_hyper` (bool): Rerun hyperparameter optimization even if it has already been done previously               
 - `num_samples` (int): how many hyperparameter combinations to try
 - `hyper_metric` (str): Metric to use for hyperparameter scoring
