@@ -387,6 +387,9 @@ We also provide some scripts for training 2D-based models with scikit learn, suc
 - `val_path` (str): path to the validation set csv
 - `test_path` (str): path to the test set csv
 - `save_path` (str): JSON file in which to store predictions
-- `score_metrics` (list[str]): Metric scores to report on test set
+- `hyper_save_path` (str): JSON file in which to store hyperparameters
+- `rerun_hyper` (bool): Rerun hyperparameter optimization even if it has already been done previously               
 - `num_samples` (int): how many hyperparameter combinations to try
+- `hyper_metric` (str): Metric to use for hyperparameter scoring.
+- `score_metrics` (list[str]): Metric scores to report on test set
 - `seed` (int): random seed for the training
