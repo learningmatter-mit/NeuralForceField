@@ -30,6 +30,8 @@ This folder contains scripts for doing 3D-based prediction tasks. These include 
     * [Training ChemProp models with the fingerprints](#training-chemprop-models-with-the-fingerprints)
     * [Saving the predictions](#saving-the-predictions)
  - [Training a regular ChemProp model](#training-a-regular-chemprop-model)
+ - [2D baselines](#2d-baselines)
+
 
 ## Getting started
 - Make sure that Neural Force Field is in your path somehow, either by exporting to your python path in `~/.bashrc` (e.g. `export NFFDIR=/home/saxelrod/NeuralForceField && export PYTHONPATH="$NFFDIR:$PYTHONPATH"`), downloading NFF as a package, or manually changing the NFF directory in each of the bash scripts (not recommended!).
@@ -379,3 +381,10 @@ We also provide a wrapper around ChemProp, so that a ChemProp model can be easil
 Note that the data paths are in the `base_config` and `hyp_config` paths. You can generate the training and hyperopt splits and csvs using `scripts/cp3d/make_dset/splits/split.sh`
 
     
+# 2D baselines
+We also provide some scripts for training 2D-based models with scikit learn, such as random forest. These scripts run hyperparameter optimization and model training using Morgan fingerprints as input. Each folder is named for the model type, and each has files `run.sh`, `run.py`, and `config.json`. The config file has the following keys:
+- `train_path` (str): path to the training set csv
+- `val_path` (str): path to the validation set csv
+- `test_path` (str): path to the test set csv
+- `num_samples` (int): how many hyperparameter combinations to try
+- `seed` (int): random seed for the training
