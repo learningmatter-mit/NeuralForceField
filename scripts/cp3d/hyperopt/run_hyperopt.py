@@ -236,7 +236,7 @@ def get_space(options, param_types, names):
                                        low=low,
                                        high=high)
             elif param_type == "float":
-                sample = hp.quniform(name, low=min_val, high=max_val)
+                sample = hp.uniform(name, low=min_val, high=max_val)
             elif param_type == "int":
                 sample = hp.quniform(name, low=min_val, high=max_val, q=1)
 
@@ -386,6 +386,7 @@ def main(job_path,
          param_names,
          prop_name,
          param_types,
+         seed,
          **kwargs):
     """
     Sample hyperparmeters and save scores for each combination.
@@ -400,6 +401,7 @@ def main(job_path,
       prop_name (str): Name of property you're predicting
       param_types (list[str]): what kind of value each parameter
         is (categorical, int or float)
+      seed (int): random seed to use in hyperparameter optimization
     Returns:
       None
     """
@@ -424,7 +426,8 @@ def main(job_path,
     fmin(objective,
          space,
          algo=tpe.suggest,
-         max_evals=num_samples)
+         max_evals=num_samples,
+         rstate=np.random.RandomState(seed))
 
     # save best results
     save_best(dic_path, metric, model_path)
@@ -466,6 +469,8 @@ if __name__ == "__main__":
                         help=("Name of property that you're predicting"))
     parser.add_argument('--score_file', type=str, default='score.json',
                         help=("Name of json file in which to save scores"))
+    parser.add_argument('--seed', type=int, default=0,
+                        help=("Random seed to use in hyperparameter optimization"))
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "
