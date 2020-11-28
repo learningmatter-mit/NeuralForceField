@@ -13,6 +13,7 @@ from sklearn.metrics import (roc_auc_score, auc, precision_recall_curve,
 
 METRIC_DIC = {"pr_auc": "maximize",
               "roc_auc": "maximize",
+              "r2": "maximize",
               "class_loss": "minimize",
               "regress_loss": "minimize",
               "mae": "minimize",
@@ -349,6 +350,25 @@ def get_split_names(train_only,
     return names
 
 
+def preprocess_class(pred):
+    """
+    Preprocess classifier predictions. This applies,
+    for example, if you train an sklearn regressor
+    rather than classifier, which doesn't necessarily
+    predict a value between 0 and 1.
+    Args:
+        pred (np.array or torch.Tensor): predictions
+    Returns:
+        pred (np.array or torch.Tensor): predictions
+            with max 1 and min 0.
+    """
+    # make sure the min and max are 0 and 1
+    pred[pred < 0] = 0
+    pred[pred > 1] = 1
+
+    return pred
+
+
 def apply_metric(metric, pred, actual):
     """
     Apply a metric to a set of predictions.
@@ -360,11 +380,13 @@ def apply_metric(metric, pred, actual):
       score (float): metric score
     """
     if metric == "auc":
+        pred = preprocess_class(pred)
         if max(pred) == 0:
             score = 0
         else:
             score = roc_auc_score(y_true=actual, y_score=pred)
     elif metric == "prc-auc":
+        pred = preprocess_class(pred)
         if max(pred) == 0:
             score = 0
         else:

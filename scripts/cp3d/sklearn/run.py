@@ -6,7 +6,6 @@ predictions from an sklearn model.
 import json
 import argparse
 import os
-from tqdm import tqdm
 
 import copy
 from hyperopt import fmin, hp, tpe
@@ -16,7 +15,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
 from nff.utils import (parse_args, apply_metric, CHEMPROP_METRICS,
-                       read_csv)
+                       METRIC_DIC, read_csv, convert_metric)
 
 
 # load hyperparameter options for different sklearn regressors and
@@ -166,7 +165,7 @@ def get_splits(space,
                           if key in MORGAN_HYPER_KEYS}
 
     xy_dic = {}
-    for name in tqdm(["train", "val", "test"]):
+    for name in ["train", "val", "test"]:
 
         x, y = make_mol_rep(fp_len=morgan_hyperparams["fp_len"],
                             data=data,
@@ -346,7 +345,11 @@ def make_objective(data,
                               [metric_name],
                               props=props)
 
-        score = -np.mean([metrics[prop][metric_name] for prop in props])
+        score = np.mean([metrics[prop][metric_name] for prop in props])
+        metric_obj = METRIC_DIC[convert_metric(metric_name)]
+        if metric_obj == "maximize":
+            score *= -1
+
         update_saved_scores(hyper_score_path, space, metrics)
 
         return score
