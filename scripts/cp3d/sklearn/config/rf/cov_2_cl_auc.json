@@ -8,7 +8,7 @@
   "score_save_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_cl/rf/scores_auc.json",
   "hyper_save_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_cl/rf/best_params_auc.json",
   "hyper_score_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_cl/rf/hyper_scores_auc.json",
-  "rerun_hyper": true,
+  "rerun_hyper": false,
   "num_samples": 200,
   "hyper_metric": "auc",
   "score_metrics": ["auc", "prc-auc"],
