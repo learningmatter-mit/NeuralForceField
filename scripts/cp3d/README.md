@@ -391,11 +391,11 @@ We also provide the script `scripts/cp3d/sklearn/run.sh`, which is a wrapper aro
 - `test_path` (str): path to the test set csv
 - `pred_save_path` (str): JSON file in which to store predictions
 - `score_save_path` (str): JSON file in which to store scores
-- `hyper_save_path` (str): JSON file in which to store hyperparameters
-- `hyper_score_path"` (str): JSON file in which to store scores of different hyperparameter combinations
+- `hyper_save_path` (str): JSON file in which to store the best hyperparameters
+- `hyper_score_path` (str): JSON file in which to store scores of different hyperparameter combinations
 - `rerun_hyper` (bool): Rerun hyperparameter optimization even if it has already been done previously               
 - `num_samples` (int): how many hyperparameter combinations to try
 - `hyper_metric` (str): Metric to use for hyperparameter scoring
 - `score_metrics` (list[str]): Metric scores to report on test set
 - `test_folds` (int): Number of different seeds to use for getting average performance of the model on the test set
-- `seed` (int): random seed for the training
+- `seed` (int): random seed for initializing the models during hyperparameter optimization
