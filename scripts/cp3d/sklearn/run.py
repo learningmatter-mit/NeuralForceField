@@ -36,6 +36,15 @@ def load_data(train_path,
               test_path):
     """
     Load data from csvs into a dictionary for the different splits.
+    Args:
+      train_path (str): path to csv with training data
+      val_path (str): path to csv with validation data
+      test_path (str): path to csv with test data
+    Returns:
+      data (dict): dictionary of the form {split: sub_dic} for each
+        split, where sub_dic contains SMILES strings and values for
+        each property.
+
     """
     data = {}
     paths = [train_path, val_path, test_path]
@@ -51,6 +60,20 @@ def make_mol_rep(fp_len,
                  splits,
                  radius,
                  props):
+    """
+    Make representations for each molecule through Morgan fingerprints,
+    and combine all the labels into an array.
+    Args:
+      fp_len (int): number of bits in fingerprint
+      data (dict): dictionary with data for each split
+      splits (list[str]): name of the splits to use (e.g. train, val, test)
+      radius (int): radius of the fingerprint to create
+      props (list[str]): properties you'll want to predict with the model.
+    Returns:
+      fps (np.array): fingerprints
+      vals (np.array): values to predict
+    """
+
     fps = []
     vals = []
 
@@ -63,8 +86,7 @@ def make_mol_rep(fp_len,
                 mol, radius, nBits=fp_len)
 
             val_list = [data[split][prop][i] for prop in props]
-            # val_list = [data[split][prop][i] for prop in [props[0],
-            #                                               props[0]]]
+
             vals.append(np.array(val_list))
             fps.append(fp)
 
@@ -78,26 +100,48 @@ def make_mol_rep(fp_len,
 
 
 def get_hyperparams(model_type, classifier):
+    """
+    Get hyperparameters and ranges to be optimized for a 
+    given model type.
+    Args:
+      model_type (str): name of model (e.g. random_forest)
+      classifier (bool): whether or not it's a classifier
+    Returns:
+      hyperparams (dict): dictionary with hyperparameters, their
+        types, and their ranges.
+    """
     class_or_reg = "classification" if classifier else "regression"
     hyperparams = HYPERPARAMS[class_or_reg][model_type]
     return hyperparams
 
 
 def make_space(model_type, classifier):
+    """
+    Make `hyperopt` space of hyperparameters.
+    Args:
+      model_type (str): name of model (e.g. random_forest)
+      classifier (bool): whether or not it's a classifier
+    Returns:
+      space (dict): hyperopt` space of hyperparameters
+    """
 
     space = {}
     hyperparams = get_hyperparams(model_type, classifier)
 
     for name, sub_dic in hyperparams.items():
+
         val_type = sub_dic["type"]
         vals = sub_dic["vals"]
+
         if val_type == "categorical":
             sample = hp.choice(name, vals)
         elif val_type == "float":
-            sample = hp.uniform(name, low=float(min(vals)),
+            sample = hp.uniform(name,
+                                low=float(min(vals)),
                                 high=float(max(vals)))
         elif val_type == "int":
-            sample = hp.quniform(name, low=min(vals),
+            sample = hp.quniform(name,
+                                 low=min(vals),
                                  high=max(vals), q=1)
         space[name] = sample
     return space
@@ -106,6 +150,17 @@ def make_space(model_type, classifier):
 def get_splits(space,
                data,
                props):
+    """
+    Get representations and values of the data given a certain
+    set of Morgan hyperparameters.
+    Args:
+      space (dict): hyperopt` space of hyperparameters
+      data (dict): dictionary with data for each split
+      props (list[str]): properties you'll want to predict with the model.
+    Returns:
+      xy_dic (dict): dictionary of the form {split: [x, y]} for each split,
+        where x and y are arrays of the input and output.
+    """
 
     morgan_hyperparams = {key: val for key, val in space.items()
                           if key in MORGAN_HYPER_KEYS}
@@ -132,6 +187,22 @@ def run_sklearn(space,
                 y_train,
                 x_test,
                 y_test):
+    """
+    Train an sklearn model.
+    Args:
+      space (dict): hyperopt` space of hyperparameters
+      seed (int): random seed
+      model_type (str): name of model (e.g. random_forest)
+      classifier (bool): whether or not it's a classifier
+      x_train (np.array): input in training set
+      y_train (np.array): output in training set
+      x_test (np.array): input in test set
+      y_test (np.array): output in test set
+    Returns:
+      pred_test (np.array): predicted test set values
+      y_test (np.array): output in test set
+      pred_fn (callable): trained regressor or classifier
+    """
 
     sk_hyperparams = {key: val for key, val in space.items()
                       if key not in MORGAN_HYPER_KEYS}
@@ -161,6 +232,18 @@ def get_metrics(pred,
                 real,
                 score_metrics,
                 props):
+    """
+    Get scores on various metrics.
+    Args:
+      pred (np.array): predicted values
+      real (np.array): real values
+      score_metrics (list[str]): metrics to use
+      props (list[str]): properties being predicted.
+    Returns:
+      metric_scores (dict): dictionary of the form
+        {prop: sub_dic} for each property, where sub_dic
+        has the form {metric: score} for each metric.
+    """
 
     if len(props) == 1:
         pred = pred.reshape(-1, 1)
@@ -186,6 +269,15 @@ def get_metrics(pred,
 def update_saved_scores(score_path,
                         space,
                         metrics):
+    """
+    Update saved hyperparameter scores with new results.
+    Args:
+      score_path (str): path to JSON file with scores
+      space (dict): hyperopt` space of hyperparameters
+      metrics (dict): scores on various metrics.
+    Returns:
+      None
+    """
     if os.path.isfile(score_path):
         with open(score_path, "r") as f:
             scores = json.load(f)
@@ -205,6 +297,20 @@ def make_objective(data,
                    hyper_score_path,
                    model_type,
                    props):
+    """
+    Make objective function for `hyperopt`.
+    Args:
+      data (dict): dictionary with data for each split
+      metric_name (str): metric to optimize
+      seed (int): random seed
+      classifier (bool): whether the model is a classifier
+      hyper_score_path (str): path to JSON file to save hyperparameter
+        scores.
+      model_type (str): name of model type to be trained.
+      props (list[str]): properties you'll want to predict with themodel.
+    Returns:
+      objective (callable): objective function for use in `hyperopt`.
+    """
 
     hyperparams = get_hyperparams(model_type, classifier)
     param_type_dic = {name: sub_dic["type"] for name, sub_dic
@@ -212,7 +318,7 @@ def make_objective(data,
 
     def objective(space):
 
-        # Convert hyperparams from float to int when necessary
+        # Convert hyperparams from float to int or bool when necessary
         for key, typ in param_type_dic.items():
             if typ == "int":
                 space[key] = int(space[key])
@@ -248,7 +354,19 @@ def make_objective(data,
     return objective
 
 
-def translate_best_params(best_params, model_type, classifier):
+def translate_best_params(best_params,
+                          model_type,
+                          classifier):
+    """
+    Translate the hyperparameters outputted by hyperopt.
+    Args:
+      best_params (dict): parameters outputted by hyperopt
+      model_type (str): name of model type to be trained.
+      classifier (bool): whether the model is a classifier
+    Returns:
+      translate_params (dict): translated parameters
+    """
+
     hyperparams = get_hyperparams(model_type, classifier)
     param_type_dic = {name: sub_dic["type"] for name, sub_dic
                       in hyperparams.items()}
@@ -269,6 +387,19 @@ def get_preds(pred_fn,
               score_metrics,
               xy_dic,
               props):
+    """
+    Get predictions and scores from a model.
+    Args:
+      pred_fn (callable): trained model
+      score_metrics (list[str]): metrics to evaluate
+      xy_dic (dict): dictionary of inputs and outputs for
+        each split
+      props (list[str]): properties to predict
+    Returns:
+      results (dict): dictionary of the form {prop: sub_dic}
+        for each prop, where sub_dic has the form {split: 
+        metric_scores} for each split of the dataset.
+    """
 
     results = {prop: {} for prop in props}
     for name in ["train", "val", "test"]:
@@ -293,6 +424,18 @@ def save_preds(ensemble_preds,
                ensemble_scores,
                pred_save_path,
                score_save_path):
+    """
+    Save predictions.
+    Args:
+      ensemble_preds (dict): predictions
+      ensemble_scores (dict): scores
+      pred_save_path (str): path to JSON file in which to save
+        predictions.
+      score_save_path (str): path to JSON file in which to save
+        scores.
+    Returns:
+      None
+    """
 
     with open(score_save_path, "w") as f:
         json.dump(ensemble_scores, f, indent=4, sort_keys=True)
@@ -314,6 +457,25 @@ def get_or_load_hypers(hyper_save_path,
                        hyper_score_path,
                        model_type,
                        props):
+    """
+    Optimize hyperparameters or load hyperparameters if
+    they've already been otpimized.
+    Args:
+      hyper_save_path (str): path to best hyperparameters
+      rerun_hyper (bool): rerun the hyperparameter optimization
+        even if `hyper_save_path` exists.
+      data (dict): dictionary with data for each split
+      hyper_metric (str): metric to use for optimizing hyperparameters
+      seed (int): random seed
+      classifier (bool): whether the model is a classifier
+      num_samples (int): number of hyperparameter combinations to try
+      hyper_score_path (str): path to scores of different
+        hyperparameter combinations.
+      model_type (str): name of model type to be trained
+      props (list[str]): properties you'll want to predict with the model
+    Returns:
+      translate_params (dict): translated version of the best hyperparameters
+    """
 
     if os.path.isfile(hyper_save_path) and not rerun_hyper:
         with open(hyper_save_path, "r") as f:
@@ -355,6 +517,21 @@ def get_ensemble_preds(test_folds,
                        score_metrics,
                        model_type,
                        props):
+    """
+    Get ensemble-averaged predictions from a model.
+    Args:
+      test_folds (int): number of different models to train
+        and evaluate on the test set
+      translate_params (dict): best hyperparameters
+      data (dict): dictionary with data for each split
+      classifier (bool): whether the model is a classifier
+      score_metrics (list[str]): metrics to apply to the test set
+      model_type (str): name of model type to be trained
+      props (list[str]): properties you'll want to predict with the model
+    Returns:
+      ensemble_preds (dict): predictions
+      ensemble_scores (dict): scores
+    """
 
     ensemble_preds = {}
     ensemble_scores = {}
@@ -444,6 +621,35 @@ def hyper_and_train(train_path,
                     model_type,
                     props,
                     **kwargs):
+    """
+    Run hyperparameter optimization and train an ensemble of models.
+    Args:
+      train_path (str): path to csv with training data
+      val_path (str): path to csv with validation data
+      test_path (str): path to csv with test data
+      pred_save_path (str): path to JSON file in which to save
+        predictions.
+      score_save_path (str): path to JSON file in which to save
+        scores.
+      num_samples (int): number of hyperparameter combinations to try
+      hyper_metric (str): metric to use for optimizing hyperparameters
+      seed (int): random seed
+      score_metrics (list[str]): metrics to apply to the test set
+      hyper_save_path (str): path to best hyperparameters
+      rerun_hyper (bool): rerun the hyperparameter optimization
+        even if `hyper_save_path` exists.
+      classifier (bool): whether the model is a classifier
+      test_folds (int): number of different models to train
+        and evaluate on the test set
+      hyper_score_path (str): path to scores of different
+        hyperparameter combinations.
+      model_type (str): name of model type to be trained
+      props (list[str]): properties you'll want to predict with the model
+
+    Returns:
+      None
+
+    """
 
     data = load_data(train_path, val_path, test_path)
 
