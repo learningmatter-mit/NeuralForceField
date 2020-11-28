@@ -153,13 +153,6 @@
                     300
                 ]
             },
-            "oob_score": {
-                "type": "categorical",
-                "vals": [
-                    true,
-                    false
-                ]
-            },
             "radius": {
                 "type": "int",
                 "vals": [

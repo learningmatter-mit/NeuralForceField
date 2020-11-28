@@ -62,7 +62,7 @@ def make_mol_rep(fp_len, data, splits, radius):
 
 
 def get_hyperparams(model_type, classifier):
-    class_or_reg = "classifier" if classifier else "regression"
+    class_or_reg = "classification" if classifier else "regression"
     hyperparams = HYPERPARAMS[class_or_reg][model_type]
     return hyperparams
 
