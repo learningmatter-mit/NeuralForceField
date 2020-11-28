@@ -414,16 +414,20 @@ def main(dset_folder,
                                                 sub_batch_size=sub_batch_size,
                                                 track=track)
 
+            del dataset
+
             is_first = (j == 0)
             results = add_dics(base=results,
                                new=new_results,
                                is_first=is_first)
+            del new_results
+
             targets = add_dics(base=targets,
                                new=new_targets,
                                is_first=is_first)
+            del new_targets
 
             j += 1
-            del dataset
 
         name = dset_names[i]
         save_name = f"pred_{metric}_{name}.pickle"
