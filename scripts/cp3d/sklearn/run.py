@@ -6,6 +6,7 @@ predictions from an sklearn model.
 import json
 import argparse
 import os
+from tqdm import tqdm
 
 import copy
 from hyperopt import fmin, hp, tpe
@@ -14,7 +15,8 @@ from rdkit.Chem import AllChem
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
-from nff.utils import parse_args, apply_metric, CHEMPROP_METRICS
+from nff.utils import (parse_args, apply_metric, CHEMPROP_METRICS,
+                       read_csv)
 
 
 # load hyperparameter options for different sklearn regressors and
@@ -29,33 +31,47 @@ MODEL_TYPES = list(set(list(HYPERPARAMS["classification"].keys())
                        + list(HYPERPARAMS["regression"].keys())))
 
 
-def load_data(train_path, val_path, test_path):
+def load_data(train_path,
+              val_path,
+              test_path):
+    """
+    Load data from csvs into a dictionary for the different splits.
+    """
     data = {}
     paths = [train_path, val_path, test_path]
     names = ["train", "val", "test"]
     for name, path in zip(names, paths):
-        with open(path, "r") as f:
-            lines = f.readlines()[1:]
-            smiles_list = [line.strip().split(",")[0] for line in lines]
-            val_list = [float(line.strip().split(",")[1]) for line in lines]
-            data[name] = {smiles: val for smiles,
-                          val in zip(smiles_list, val_list)}
+        data[name] = read_csv(path)
+
     return data
 
 
-def make_mol_rep(fp_len, data, splits, radius):
+def make_mol_rep(fp_len,
+                 data,
+                 splits,
+                 radius,
+                 props):
     fps = []
     vals = []
 
     for split in splits:
-        for smiles, val in data[split].items():
+        smiles_list = data[split]["smiles"]
+
+        for i, smiles in enumerate(smiles_list):
             mol = Chem.MolFromSmiles(smiles)
             fp = AllChem.GetMorganFingerprintAsBitVect(
                 mol, radius, nBits=fp_len)
-            vals.append(val)
+
+            val_list = [data[split][prop][i] for prop in props]
+            # val_list = [data[split][prop][i] for prop in [props[0],
+            #                                               props[0]]]
+            vals.append(np.array(val_list))
             fps.append(fp)
 
-    vals = np.array(vals)
+    vals = np.stack(vals)
+    # make into a 1D array if only predicting one property
+    if vals.shape[-1] == 1:
+        vals = vals.reshape(-1)
     fps = np.array(fps)
 
     return fps, vals
@@ -88,18 +104,20 @@ def make_space(model_type, classifier):
 
 
 def get_splits(space,
-               data):
+               data,
+               props):
 
     morgan_hyperparams = {key: val for key, val in space.items()
                           if key in MORGAN_HYPER_KEYS}
 
     xy_dic = {}
-    for name in ["train", "val", "test"]:
+    for name in tqdm(["train", "val", "test"]):
 
         x, y = make_mol_rep(fp_len=morgan_hyperparams["fp_len"],
                             data=data,
                             splits=[name],
-                            radius=morgan_hyperparams["radius"])
+                            radius=morgan_hyperparams["radius"],
+                            props=props)
 
         xy_dic[name] = [x, y]
 
@@ -139,14 +157,28 @@ def run_sklearn(space,
     return pred_test, y_test, pref_fn
 
 
-def get_metrics(pred, real, score_metrics):
+def get_metrics(pred,
+                real,
+                score_metrics,
+                props):
+
+    if len(props) == 1:
+        pred = pred.reshape(-1, 1)
+        real = real.reshape(-1, 1)
 
     metric_scores = {}
-    for metric in score_metrics:
-        score = apply_metric(metric=metric,
-                             pred=pred,
-                             actual=real)
-        metric_scores[metric] = float(score)
+    for i, prop in enumerate(props):
+
+        metric_scores[prop] = {}
+
+        for metric in score_metrics:
+
+            this_pred = pred[:, i]
+            this_real = real[:, i]
+            score = apply_metric(metric=metric,
+                                 pred=this_pred,
+                                 actual=this_real)
+            metric_scores[prop][metric] = float(score)
 
     return metric_scores
 
@@ -171,7 +203,8 @@ def make_objective(data,
                    seed,
                    classifier,
                    hyper_score_path,
-                   model_type):
+                   model_type,
+                   props):
 
     hyperparams = get_hyperparams(model_type, classifier)
     param_type_dic = {name: sub_dic["type"] for name, sub_dic
@@ -187,7 +220,8 @@ def make_objective(data,
                 space[key] = bool(space[key])
 
         xy_dic = get_splits(space=space,
-                            data=data)
+                            data=data,
+                            props=props)
 
         x_val, y_val = xy_dic["val"]
         x_train, y_train = xy_dic["train"]
@@ -201,8 +235,12 @@ def make_objective(data,
                                     x_test=x_val,
                                     y_test=y_val)
 
-        metrics = get_metrics(pred, real, [metric_name])
-        score = -metrics[metric_name]
+        metrics = get_metrics(pred,
+                              real,
+                              [metric_name],
+                              props=props)
+
+        score = -np.mean([metrics[prop][metric_name] for prop in props])
         update_saved_scores(hyper_score_path, space, metrics)
 
         return score
@@ -229,9 +267,10 @@ def translate_best_params(best_params, model_type, classifier):
 
 def get_preds(pred_fn,
               score_metrics,
-              xy_dic):
+              xy_dic,
+              props):
 
-    results = {}
+    results = {prop: {} for prop in props}
     for name in ["train", "val", "test"]:
 
         x, real = xy_dic[name]
@@ -239,10 +278,13 @@ def get_preds(pred_fn,
         pred = pred_fn.predict(x)
         metrics = get_metrics(pred=pred,
                               real=real,
-                              score_metrics=score_metrics)
+                              score_metrics=score_metrics,
+                              props=props)
 
-        results[name] = {"true": real.tolist(), "pred": pred.tolist(),
-                         **metrics}
+        for prop in props:
+            results[prop][name] = {"true": real.tolist(),
+                                   "pred": pred.tolist(),
+                                   **metrics[prop]}
 
     return results
 
@@ -270,7 +312,8 @@ def get_or_load_hypers(hyper_save_path,
                        classifier,
                        num_samples,
                        hyper_score_path,
-                       model_type):
+                       model_type,
+                       props):
 
     if os.path.isfile(hyper_save_path) and not rerun_hyper:
         with open(hyper_save_path, "r") as f:
@@ -282,7 +325,8 @@ def get_or_load_hypers(hyper_save_path,
                                    seed=seed,
                                    classifier=classifier,
                                    hyper_score_path=hyper_score_path,
-                                   model_type=model_type)
+                                   model_type=model_type,
+                                   props=props)
 
         space = make_space(model_type, classifier)
 
@@ -309,13 +353,16 @@ def get_ensemble_preds(test_folds,
                        data,
                        classifier,
                        score_metrics,
-                       model_type):
+                       model_type,
+                       props):
+
     ensemble_preds = {}
     ensemble_scores = {}
 
     splits = ["train", "val", "test"]
     xy_dic = get_splits(space=translate_params,
-                        data=data)
+                        data=data,
+                        props=props)
 
     x_train, y_train = xy_dic["train"]
     x_test, y_test = xy_dic["test"]
@@ -332,40 +379,48 @@ def get_ensemble_preds(test_folds,
 
         metrics = get_metrics(pred=pred,
                               real=real,
-                              score_metrics=score_metrics)
+                              score_metrics=score_metrics,
+                              props=props)
 
         print(f"Fold {seed} test scores: {metrics}")
 
         results = get_preds(pred_fn=pred_fn,
                             score_metrics=score_metrics,
-                            xy_dic=xy_dic)
+                            xy_dic=xy_dic,
+                            props=props)
 
-        these_preds = {}
-        these_scores = {}
+        these_preds = {prop: {} for prop in props}
+        these_scores = {prop: {} for prop in props}
 
-        for split in splits:
-            these_scores.update({split: {key: val for key, val
-                                         in results[split].items()
-                                         if key not in ["true", "pred"]}})
-            these_preds.update({split: {key: val for key, val
-                                        in results[split].items()
-                                        if key in ["true", "pred"]}})
+        for prop in props:
+            for split in splits:
+                these_results = results[prop][split]
+                these_scores[prop].update({split: {key: val for key, val
+                                                   in these_results.items()
+                                                   if key not in
+                                                   ["true", "pred"]}})
+                these_preds[prop].update({split: {key: val for key, val
+                                                  in these_results.items()
+                                                  if key in ["true", "pred"]}})
 
         ensemble_preds[str(seed)] = these_preds
         ensemble_scores[str(seed)] = these_scores
 
-    avg = {split: {} for split in splits}
+    avg = {prop: {split: {} for split in splits} for prop in props}
 
-    for split in splits:
+    for prop in props:
 
-        score_dics = [sub_dic[split] for sub_dic in ensemble_scores.values()]
+        for split in splits:
 
-        for key in score_metrics:
+            score_dics = [sub_dic[prop][split] for sub_dic in
+                          ensemble_scores.values()]
 
-            all_vals = [score_dic[key] for score_dic in score_dics]
-            mean = np.mean(all_vals)
-            std = np.std(all_vals)
-            avg[split][key] = {"mean": mean, "std": std}
+            for key in score_metrics:
+
+                all_vals = [score_dic[key] for score_dic in score_dics]
+                mean = np.mean(all_vals)
+                std = np.std(all_vals)
+                avg[prop][split][key] = {"mean": mean, "std": std}
 
     ensemble_scores["average"] = avg
 
@@ -387,6 +442,7 @@ def hyper_and_train(train_path,
                     test_folds,
                     hyper_score_path,
                     model_type,
+                    props,
                     **kwargs):
 
     data = load_data(train_path, val_path, test_path)
@@ -400,7 +456,8 @@ def hyper_and_train(train_path,
         classifier=classifier,
         num_samples=num_samples,
         hyper_score_path=hyper_score_path,
-        model_type=model_type)
+        model_type=model_type,
+        props=props)
 
     ensemble_preds, ensemble_scores = get_ensemble_preds(
         test_folds=test_folds,
@@ -408,7 +465,8 @@ def hyper_and_train(train_path,
         data=data,
         classifier=classifier,
         score_metrics=score_metrics,
-        model_type=model_type)
+        model_type=model_type,
+        props=props)
 
     save_preds(ensemble_preds=ensemble_preds,
                ensemble_scores=ensemble_scores,
@@ -425,6 +483,8 @@ if __name__ == "__main__":
                         choices=MODEL_TYPES)
     parser.add_argument("--classifier", type=bool,
                         help=("Whether you're training a classifier"))
+    parser.add_argument("--props", type=str, nargs="+",
+                        help=("Properties for the model to predict"))
     parser.add_argument("--train_path", type=str,
                         help=("Directory to the csv with the training data"))
     parser.add_argument("--val_path", type=str,

@@ -1,5 +1,6 @@
 {
   "classifier": true,
+  "props": ["sars_cov_two_active"],
   "train_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_gen/train_full.csv",
   "val_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_gen/val_full.csv",
   "test_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_gen/test_full.csv",

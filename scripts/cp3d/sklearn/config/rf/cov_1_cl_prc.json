@@ -1,5 +1,6 @@
 {
   "classifier": true,
+  "props": ["sars_cov_one_cl_protease_active"],
   "train_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_1_cl/train_full.csv",
   "val_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_1_cl/val_full.csv",
   "test_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_1_cl/test_full.csv",
