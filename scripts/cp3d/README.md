@@ -401,3 +401,4 @@ We also provide the script `scripts/cp3d/sklearn/run.sh`, which is a wrapper aro
 - `score_metrics` (list[str]): Metric scores to report on test set
 - `test_folds` (int): Number of different seeds to use for getting average performance of the model on the test set
 - `seed` (int): random seed for initializing the models during hyperparameter optimization. Seeds 0 to `test_folds-1` are used for training the final model.
+- `max_specs` (int): Maximum number of species to use in hyperparameter optimization
