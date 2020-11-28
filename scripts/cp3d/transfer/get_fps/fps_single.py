@@ -96,9 +96,6 @@ def save(results,
     alpha_ij_att = all([w.reshape(-1).shape[0] == conf_fp.shape[0] ** 2
                         for w, conf_fp in zip(learned_weights, all_conf_fps)])
 
-    import pdb
-    pdb.set_trace()
-
     for i, smiles in enumerate(smiles_list):
 
         conf_fps = all_conf_fps[i].numpy()
@@ -239,7 +236,12 @@ def evaluate(model,
         results = fps_and_pred(model, batch, **kwargs)
 
         all_results.append(batch_detach(results))
-        all_batches.append(batch_detach(batch))
+
+        # don't overload memory with unnecessary keys
+        reduced_batch = {key: val for key, val in batch.items()
+                         if key not in ['bond_idx', 'ji_idx', 'kj_idx',
+                         'nbr_list', 'bonded_nbr_list']}
+        all_batches.append(batch_detach(reduced_batch))
 
     all_results = concatenate_dict(*all_results)
     all_batches = concatenate_dict(*all_batches)
@@ -414,19 +416,14 @@ def main(dset_folder,
                                                 sub_batch_size=sub_batch_size,
                                                 track=track)
 
-            del dataset
-
             is_first = (j == 0)
             results = add_dics(base=results,
                                new=new_results,
                                is_first=is_first)
-            del new_results
 
             targets = add_dics(base=targets,
                                new=new_targets,
                                is_first=is_first)
-            del new_targets
-
             j += 1
 
         name = dset_names[i]
