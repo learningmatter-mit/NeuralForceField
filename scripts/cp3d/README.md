@@ -284,6 +284,7 @@ The file also provides a function for getting and saving model scores on test se
 - `metric` (str): metric with which to evaluate model performance. Can be `prc-auc`, `auc`, `loss`, or `mae`.
 - `prop_name` (str): Name of the property whose performance you want to optimize. If you're using `metric=loss` then this won't matter.
 - `score_file` (str): Name of the `JSON` file in which you store the model performance for each hyperparameter set. The scores will be saved in `model_path/score_file`.
+- `seed` (int): random seed to use in hyperparameter optimization
 
 Note that the hyperparamer optimization uses *validation* scores, rather than test scores, to judge each model's performance. This avoids cheating: if you used test scores to optimize hyperparameters, and then compared your model's test performance to someone else's, then yours would look better than it really is!
 
@@ -382,20 +383,20 @@ Note that the data paths are in the `base_config` and `hyp_config` paths. You ca
 
     
 # Scikit Learn models
-We also provide some scripts for training 2D-based models with scikit learn, such as random forest. These scripts run hyperparameter optimization and model training using Morgan fingerprints as input. Each folder is named for the model type, and each has files `run.sh`, `run.py`, and a path of your choice for the config file. The config file has the following keys:
+We also provide the script `scripts/cp3d/sklearn/run.sh`, which is a wrapper around scikit learn models. These models use Morgan fingerprints as input to make predictions. The script both optimizes hyperparameters and trains models. The config file has the following keys:
 
-- `model_type` (str): type of model you want to train
+- `model_type` (str): type of model you want to train (e.g. random forest)
 - `classifier` (bool): whether you're training a classifier
 - `train_path` (str): path to the training set csv
 - `val_path` (str): path to the validation set csv
 - `test_path` (str): path to the test set csv
 - `pred_save_path` (str): JSON file in which to store predictions
 - `score_save_path` (str): JSON file in which to store scores
-- `hyper_save_path` (str): JSON file in which to store hyperparameters
-- `hyper_score_path"` (str): JSON file in which to store scores of different hyperparameter combinations
+- `hyper_save_path` (str): JSON file in which to store the best hyperparameters
+- `hyper_score_path` (str): JSON file in which to store scores of different hyperparameter combinations
 - `rerun_hyper` (bool): Rerun hyperparameter optimization even if it has already been done previously               
 - `num_samples` (int): how many hyperparameter combinations to try
 - `hyper_metric` (str): Metric to use for hyperparameter scoring
 - `score_metrics` (list[str]): Metric scores to report on test set
-- `test_folds` (int): Number of different seeds to use for getting average performance of the model on the test set.
-- `seed` (int): random seed for the training
+- `test_folds` (int): Number of different seeds to use for getting average performance of the model on the test set
+- `seed` (int): random seed for initializing the models during hyperparameter optimization
