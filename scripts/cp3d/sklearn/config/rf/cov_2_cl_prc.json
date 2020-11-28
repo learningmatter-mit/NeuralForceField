@@ -6,7 +6,7 @@
   "pred_save_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_cl/rf/pred_prc.json",
   "score_save_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_cl/rf/scores_prc.json",
   "hyper_save_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_cl/rf/best_params_prc.json",
-  "hyper_score_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_cl/rf/hypre_scores_prc.json",
+  "hyper_score_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_cl/rf/hyper_scores_prc.json",
   "rerun_hyper": false,
   "num_samples": 200,
   "hyper_metric": "prc-auc",
