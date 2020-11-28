@@ -387,6 +387,7 @@ We also provide the script `scripts/cp3d/sklearn/run.sh`, which is a wrapper aro
 
 - `model_type` (str): type of model you want to train (e.g. random forest)
 - `classifier` (bool): whether you're training a classifier
+- `props` (list[str]): Properties for the model to predict
 - `train_path` (str): path to the training set csv
 - `val_path` (str): path to the validation set csv
 - `test_path` (str): path to the test set csv
