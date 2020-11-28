@@ -178,6 +178,28 @@ def get_splits(space,
     return xy_dic
 
 
+def balance_weights(y_train):
+    """
+    Make balanced weights. This can apply to a classification
+    model being fit by a classifier or by a regressor.
+    Args:
+      y_train (np.array): training labels
+    Returns:
+      sample_weight (np.array): weights for each 
+        item.
+    """
+    pos_idx = (y_train == 1).nonzero()[0]
+    neg_idx = (y_train == 0).nonzero()[0]
+    num_pos = pos_idx.shape[0]
+    num_neg = neg_idx.shape[0]
+    sample_weight = np.ones_like(y_train).astype('float')
+
+    sample_weight[pos_idx] = 1 / (2 * num_pos)
+    sample_weight[neg_idx] = 1 / (2 * num_neg)
+
+    return sample_weight
+
+
 def run_sklearn(space,
                 seed,
                 model_type,
@@ -215,13 +237,22 @@ def run_sklearn(space,
             raise NotImplementedError
     else:
         if model_type == "random_forest":
+            kwargs = {}
+            # if it's a regressor but all the outputs are binary,
+            # then use weight balancing
+
             pref_fn = RandomForestRegressor(random_state=seed,
-                                            **sk_hyperparams)
+                                            **sk_hyperparams,
+                                            **kwargs)
 
         else:
             raise NotImplementedError
 
-    pref_fn.fit(x_train, y_train)
+    sample_weight = None
+    if all([i in [0, 1] for i in y_train]):
+        sample_weight = balance_weights(y_train)
+
+    pref_fn.fit(x_train, y_train, sample_weight=sample_weight)
     pred_test = pref_fn.predict(x_test)
 
     return pred_test, y_test, pref_fn
