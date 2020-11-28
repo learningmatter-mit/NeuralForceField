@@ -12,5 +12,6 @@
   "hyper_metric": "prc-auc",
   "score_metrics": ["auc", "prc-auc"],
   "test_folds": 10,
-  "seed": 0
+  "seed": 0,
+  "model_type": "random_forest"
 }

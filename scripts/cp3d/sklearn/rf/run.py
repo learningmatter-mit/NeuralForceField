@@ -18,23 +18,25 @@ from nff.utils import parse_args, apply_metric, CHEMPROP_METRICS
 
 MORGAN_HYPER_KEYS = ["fp_len", "radius"]
 
-HYPERPARAMS = {"n_estimators": {"vals": [20, 300], "type": "int"},
-               "criterion": {"vals": ["gini", "entropy"],
-                             "type": "categorical"},
-               "min_samples_split": {"vals": [2, 10], "type": "int"},
-               "min_samples_leaf": {"vals": [1, 5],
-                                    "type": "int"},
-               "min_weight_fraction_leaf": {"vals": [0.0, 0.5],
-                                            "type": "float"},
-               "max_features": {"vals": ["auto", "sqrt", "log2"],
+RF_HYPERPARAMS = {"n_estimators": {"vals": [20, 300], "type": "int"},
+                  "criterion": {"vals": ["gini", "entropy"],
                                 "type": "categorical"},
-               "min_impurity_decrease": {"vals": [0.0, 0.5],
-                                         "type": "float"},
-               "max_samples": {"vals": [1e-5, 1 - 1e-5],
-                               "type": "float"},
-               "fp_len": {"vals": [64, 128, 256, 1024, 2048],
-                          "type": "categorical"},
-               "radius": {"vals": [1, 4], "type": "int"}}
+                  "min_samples_split": {"vals": [2, 10], "type": "int"},
+                  "min_samples_leaf": {"vals": [1, 5],
+                                       "type": "int"},
+                  "min_weight_fraction_leaf": {"vals": [0.0, 0.5],
+                                               "type": "float"},
+                  "max_features": {"vals": ["auto", "sqrt", "log2"],
+                                   "type": "categorical"},
+                  "min_impurity_decrease": {"vals": [0.0, 0.5],
+                                            "type": "float"},
+                  "max_samples": {"vals": [1e-5, 1 - 1e-5],
+                                  "type": "float"},
+                  "fp_len": {"vals": [64, 128, 256, 1024, 2048],
+                             "type": "categorical"},
+                  "radius": {"vals": [1, 4], "type": "int"}}
+
+HYPERPARAMS = {"random_forest": RF_HYPERPARAMS}
 
 
 def load_data(train_path, val_path, test_path):
@@ -69,9 +71,12 @@ def make_mol_rep(fp_len, data, splits, radius):
     return fps, vals
 
 
-def make_rf_space(HYPERPARAMS):
+def make_space(model_type):
+
     space = {}
-    for name, sub_dic in HYPERPARAMS.items():
+    hyperparams = HYPERPARAMS[model_type]
+
+    for name, sub_dic in hyperparams.items():
         val_type = sub_dic["type"]
         vals = sub_dic["vals"]
         if val_type == "categorical":
@@ -86,26 +91,33 @@ def make_rf_space(HYPERPARAMS):
     return space
 
 
-def run_rf(space,
-           test_or_val,
-           seed,
-           data,
-           use_val_in_train,
-           classifier):
+def run_sklearn(space,
+                test_or_val,
+                seed,
+                data,
+                use_val_in_train,
+                model_type,
+                classifier):
 
-    rf_hyperparams = {key: val for key, val in space.items()
+    sk_hyperparams = {key: val for key, val in space.items()
                       if key not in MORGAN_HYPER_KEYS}
     morgan_hyperparams = {key: val for key, val in space.items()
                           if key in MORGAN_HYPER_KEYS}
 
     if classifier:
-        pref_fn = RandomForestClassifier(class_weight="balanced",
-                                         random_state=seed,
-                                         **rf_hyperparams)
+        if model_type == "random_forest":
+            pref_fn = RandomForestClassifier(class_weight="balanced",
+                                             random_state=seed,
+                                             **sk_hyperparams)
+        else:
+            raise NotImplementedError
     else:
-        pref_fn = RandomForestRegressor(class_weight="balanced",
-                                        random_state=seed,
-                                        **rf_hyperparams)
+        if model_type == "random_forest":
+            pref_fn = RandomForestRegressor(random_state=seed,
+                                            **sk_hyperparams)
+
+        else:
+            raise NotImplementedError
 
     train_splits = ["train"]
     if use_val_in_train:
@@ -154,29 +166,33 @@ def update_saved_scores(score_path,
         json.dump(scores, f, indent=4, sort_keys=True)
 
 
-def make_rf_objective(data,
-                      metric_name,
-                      seed,
-                      classifier,
-                      hyper_score_path):
+def make_objective(data,
+                   metric_name,
+                   seed,
+                   classifier,
+                   hyper_score_path,
+                   model_type):
 
+    hyperparams = HYPERPARAMS[model_type]
     param_type_dic = {name: sub_dic["type"] for name, sub_dic
-                      in HYPERPARAMS.items()}
+                      in hyperparams.items()}
 
     def objective(space):
-        # Convert HYPERPARAMS from float to int when necessary
+
+        # Convert hyperparams from float to int when necessary
         for key, typ in param_type_dic.items():
             if typ == "int":
                 space[key] = int(space[key])
-            if type(HYPERPARAMS[key]["vals"][0]) is bool:
+            if type(hyperparams[key]["vals"][0]) is bool:
                 space[key] = bool(space[key])
 
-        pred, real, clf = run_rf(space,
-                                 test_or_val="val",
-                                 seed=seed,
-                                 data=data,
-                                 use_val_in_train=False,
-                                 classifier=classifier)
+        pred, real, clf = run_sklearn(space,
+                                      test_or_val="val",
+                                      seed=seed,
+                                      data=data,
+                                      use_val_in_train=False,
+                                      model_type=model_type,
+                                      classifier=classifier)
         metrics = get_metrics(pred, real, [metric_name])
         score = -metrics[metric_name]
         update_saved_scores(hyper_score_path, space, metrics)
@@ -186,17 +202,18 @@ def make_rf_objective(data,
     return objective
 
 
-def translate_best_params(best_params):
+def translate_best_params(best_params, model_type):
+    hyperparams = HYPERPARAMS[model_type]
     param_type_dic = {name: sub_dic["type"] for name, sub_dic
-                      in HYPERPARAMS.items()}
+                      in hyperparams.items()}
     translate_params = copy.deepcopy(best_params)
 
     for key, typ in param_type_dic.items():
         if typ == "int":
             translate_params[key] = int(best_params[key])
         if typ == "categorical":
-            translate_params[key] = HYPERPARAMS[key]["vals"][best_params[key]]
-        if type(HYPERPARAMS[key]["vals"][0]) is bool:
+            translate_params[key] = hyperparams[key]["vals"][best_params[key]]
+        if type(hyperparams[key]["vals"][0]) is bool:
             translate_params[key] = bool(best_params[key])
 
     return translate_params
@@ -249,27 +266,29 @@ def get_or_load_hypers(hyper_save_path,
                        seed,
                        classifier,
                        num_samples,
-                       hyper_score_path):
+                       hyper_score_path,
+                       model_type):
 
     if os.path.isfile(hyper_save_path) and not rerun_hyper:
         with open(hyper_save_path, "r") as f:
             translate_params = json.load(f)
     else:
 
-        objective = make_rf_objective(data=data,
-                                      metric_name=hyper_metric,
-                                      seed=seed,
-                                      classifier=classifier,
-                                      hyper_score_path=hyper_score_path)
+        objective = make_objective(data=data,
+                                   metric_name=hyper_metric,
+                                   seed=seed,
+                                   classifier=classifier,
+                                   hyper_score_path=hyper_score_path,
+                                   model_type=model_type)
 
-        space = make_rf_space(HYPERPARAMS)
+        space = make_space(model_type)
 
         best_params = fmin(objective,
                            space,
                            algo=tpe.suggest,
                            max_evals=num_samples)
 
-        translate_params = translate_best_params(best_params)
+        translate_params = translate_best_params(best_params, model_type)
         with open(hyper_save_path, "w") as f:
             json.dump(translate_params, f, indent=4, sort_keys=True)
 
@@ -283,19 +302,22 @@ def get_ensemble_preds(test_folds,
                        translate_params,
                        data,
                        classifier,
-                       score_metrics):
+                       score_metrics,
+                       model_type):
     ensemble_preds = {}
     ensemble_scores = {}
 
     splits = ["train", "val", "test"]
 
     for seed in range(test_folds):
-        pred, real, pred_fn = run_rf(translate_params,
-                                     test_or_val="test",
-                                     seed=seed,
-                                     data=data,
-                                     use_val_in_train=True,
-                                     classifier=classifier)
+        pred, real, pred_fn = run_sklearn(translate_params,
+                                          test_or_val="test",
+                                          seed=seed,
+                                          data=data,
+                                          use_val_in_train=True,
+                                          model_type=model_type,
+                                          classifier=classifier)
+
         metrics = get_metrics(pred=pred,
                               real=real,
                               score_metrics=score_metrics)
@@ -354,6 +376,7 @@ def hyper_and_train(train_path,
                     classifier,
                     test_folds,
                     hyper_score_path,
+                    model_type,
                     **kwargs):
 
     data = load_data(train_path, val_path, test_path)
@@ -366,14 +389,16 @@ def hyper_and_train(train_path,
         seed=seed,
         classifier=classifier,
         num_samples=num_samples,
-        hyper_score_path=hyper_score_path)
+        hyper_score_path=hyper_score_path,
+        model_type=model_type)
 
     ensemble_preds, ensemble_scores = get_ensemble_preds(
         test_folds=test_folds,
         translate_params=translate_params,
         data=data,
         classifier=classifier,
-        score_metrics=score_metrics)
+        score_metrics=score_metrics,
+        model_type=model_type)
 
     save_preds(ensemble_preds=ensemble_preds,
                ensemble_scores=ensemble_scores,
@@ -382,8 +407,12 @@ def hyper_and_train(train_path,
 
 
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser()
 
+    parser.add_argument("--model_type", type=str,
+                        help=("Type of model you want to train"),
+                        choices=list(HYPERPARAMS.keys()))
     parser.add_argument("--classifier", type=bool,
                         help=("Whether you're training a classifier"))
     parser.add_argument("--train_path", type=str,
