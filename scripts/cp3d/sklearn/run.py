@@ -87,18 +87,36 @@ def make_space(model_type, classifier):
     return space
 
 
+def get_splits(space,
+               data):
+
+    morgan_hyperparams = {key: val for key, val in space.items()
+                          if key in MORGAN_HYPER_KEYS}
+
+    xy_dic = {}
+    for name in ["train", "val", "test"]:
+
+        x, y = make_mol_rep(fp_len=morgan_hyperparams["fp_len"],
+                            data=data,
+                            splits=[name],
+                            radius=morgan_hyperparams["radius"])
+
+        xy_dic[name] = [x, y]
+
+    return xy_dic
+
+
 def run_sklearn(space,
-                test_or_val,
                 seed,
-                data,
-                use_val_in_train,
                 model_type,
-                classifier):
+                classifier,
+                x_train,
+                y_train,
+                x_test,
+                y_test):
 
     sk_hyperparams = {key: val for key, val in space.items()
                       if key not in MORGAN_HYPER_KEYS}
-    morgan_hyperparams = {key: val for key, val in space.items()
-                          if key in MORGAN_HYPER_KEYS}
 
     if classifier:
         if model_type == "random_forest":
@@ -115,24 +133,10 @@ def run_sklearn(space,
         else:
             raise NotImplementedError
 
-    train_splits = ["train"]
-    if use_val_in_train:
-        train_splits.append("val")
-
-    x_train, y_train = make_mol_rep(fp_len=morgan_hyperparams["fp_len"],
-                                    data=data,
-                                    splits=train_splits,
-                                    radius=morgan_hyperparams["radius"])
-
-    x_val, y_val = make_mol_rep(fp_len=morgan_hyperparams["fp_len"],
-                                data=data,
-                                splits=[test_or_val],
-                                radius=morgan_hyperparams["radius"])
-
     pref_fn.fit(x_train, y_train)
-    pred_val = pref_fn.predict(x_val)
+    pred_test = pref_fn.predict(x_test)
 
-    return pred_val, y_val, pref_fn
+    return pred_test, y_test, pref_fn
 
 
 def get_metrics(pred, real, score_metrics):
@@ -182,13 +186,21 @@ def make_objective(data,
             if isinstance(hyperparams[key]["vals"][0], bool):
                 space[key] = bool(space[key])
 
-        pred, real, _ = run_sklearn(space,
-                                    test_or_val="val",
+        xy_dic = get_splits(space=space,
+                            data=data)
+
+        x_val, y_val = xy_dic["val"]
+        x_train, y_train = xy_dic["train"]
+
+        pred, real, _ = run_sklearn(space=space,
                                     seed=seed,
-                                    data=data,
-                                    use_val_in_train=False,
                                     model_type=model_type,
-                                    classifier=classifier)
+                                    classifier=classifier,
+                                    x_train=x_train,
+                                    y_train=y_train,
+                                    x_test=x_val,
+                                    y_test=y_val)
+
         metrics = get_metrics(pred, real, [metric_name])
         score = -metrics[metric_name]
         update_saved_scores(hyper_score_path, space, metrics)
@@ -216,18 +228,13 @@ def translate_best_params(best_params, model_type, classifier):
 
 
 def get_preds(pred_fn,
-              data,
-              fp_len,
-              radius,
-              score_metrics):
+              score_metrics,
+              xy_dic):
 
     results = {}
     for name in ["train", "val", "test"]:
 
-        x, real = make_mol_rep(fp_len=fp_len,
-                               data=data,
-                               splits=[name],
-                               radius=radius)
+        x, real = xy_dic[name]
 
         pred = pred_fn.predict(x)
         metrics = get_metrics(pred=pred,
@@ -307,15 +314,21 @@ def get_ensemble_preds(test_folds,
     ensemble_scores = {}
 
     splits = ["train", "val", "test"]
+    xy_dic = get_splits(space=translate_params,
+                        data=data)
+
+    x_train, y_train = xy_dic["train"]
+    x_test, y_test = xy_dic["test"]
 
     for seed in range(test_folds):
         pred, real, pred_fn = run_sklearn(translate_params,
-                                          test_or_val="test",
                                           seed=seed,
-                                          data=data,
-                                          use_val_in_train=True,
                                           model_type=model_type,
-                                          classifier=classifier)
+                                          classifier=classifier,
+                                          x_train=x_train,
+                                          y_train=y_train,
+                                          x_test=x_test,
+                                          y_test=y_test)
 
         metrics = get_metrics(pred=pred,
                               real=real,
@@ -324,10 +337,8 @@ def get_ensemble_preds(test_folds,
         print(f"Fold {seed} test scores: {metrics}")
 
         results = get_preds(pred_fn=pred_fn,
-                            data=data,
-                            fp_len=translate_params["fp_len"],
-                            radius=translate_params["radius"],
-                            score_metrics=score_metrics)
+                            score_metrics=score_metrics,
+                            xy_dic=xy_dic)
 
         these_preds = {}
         these_scores = {}
