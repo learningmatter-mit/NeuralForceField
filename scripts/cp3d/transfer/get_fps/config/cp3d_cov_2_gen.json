@@ -11,7 +11,7 @@
     ],
     "model_folder": "/nfs/rafagblab001/saxelrod/dsets/cov_2_gen",
     "prop": "sars_cov_two_active",
-    "slurm_parallel": false,
+    "slurm_parallel": true,
     "sub_batch_size": 1,
-    "test_only": false
+    "test_only": true
 }

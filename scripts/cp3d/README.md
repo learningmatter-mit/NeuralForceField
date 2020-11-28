@@ -30,6 +30,8 @@ This folder contains scripts for doing 3D-based prediction tasks. These include 
     * [Training ChemProp models with the fingerprints](#training-chemprop-models-with-the-fingerprints)
     * [Saving the predictions](#saving-the-predictions)
  - [Training a regular ChemProp model](#training-a-regular-chemprop-model)
+ - [Scikit learn models](#scikit-learn-models)
+
 
 ## Getting started
 - Make sure that Neural Force Field is in your path somehow, either by exporting to your python path in `~/.bashrc` (e.g. `export NFFDIR=/home/saxelrod/NeuralForceField && export PYTHONPATH="$NFFDIR:$PYTHONPATH"`), downloading NFF as a package, or manually changing the NFF directory in each of the bash scripts (not recommended!).
@@ -282,6 +284,7 @@ The file also provides a function for getting and saving model scores on test se
 - `metric` (str): metric with which to evaluate model performance. Can be `prc-auc`, `auc`, `loss`, or `mae`.
 - `prop_name` (str): Name of the property whose performance you want to optimize. If you're using `metric=loss` then this won't matter.
 - `score_file` (str): Name of the `JSON` file in which you store the model performance for each hyperparameter set. The scores will be saved in `model_path/score_file`.
+- `seed` (int): random seed to use in hyperparameter optimization
 
 Note that the hyperparamer optimization uses *validation* scores, rather than test scores, to judge each model's performance. This avoids cheating: if you used test scores to optimize hyperparameters, and then compared your model's test performance to someone else's, then yours would look better than it really is!
 
@@ -379,3 +382,23 @@ We also provide a wrapper around ChemProp, so that a ChemProp model can be easil
 Note that the data paths are in the `base_config` and `hyp_config` paths. You can generate the training and hyperopt splits and csvs using `scripts/cp3d/make_dset/splits/split.sh`
 
     
+# Scikit Learn models
+We also provide the script `scripts/cp3d/sklearn/run.sh`, which is a wrapper around scikit learn models. These models use Morgan fingerprints as input to make predictions. The script both optimizes hyperparameters and trains models. The config file has the following keys:
+
+- `model_type` (str): type of model you want to train (e.g. random forest)
+- `classifier` (bool): whether you're training a classifier
+- `props` (list[str]): Properties for the model to predict
+- `train_path` (str): path to the training set csv
+- `val_path` (str): path to the validation set csv
+- `test_path` (str): path to the test set csv
+- `pred_save_path` (str): JSON file in which to store predictions
+- `score_save_path` (str): JSON file in which to store scores
+- `hyper_save_path` (str): JSON file in which to store the best hyperparameters
+- `hyper_score_path` (str): JSON file in which to store scores of different hyperparameter combinations
+- `rerun_hyper` (bool): Rerun hyperparameter optimization even if it has already been done previously               
+- `num_samples` (int): how many hyperparameter combinations to try
+- `hyper_metric` (str): Metric to use for hyperparameter scoring
+- `score_metrics` (list[str]): Metric scores to report on test set
+- `test_folds` (int): Number of different seeds to use for getting average performance of the model on the test set
+- `seed` (int): random seed for initializing the models during hyperparameter optimization. Seeds 0 to `test_folds-1` are used for training the final model.
+- `max_specs` (int): Maximum number of species to use in hyperparameter optimization. If the proportion of species in the training split is `x`, then the number of training species in hyperparameter optimization will be `x * max_specs`, and similarly for validation.

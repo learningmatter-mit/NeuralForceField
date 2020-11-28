@@ -1,0 +1,18 @@
+{
+  "classifier": false,
+  "props": ["sars_cov_two_active"],
+  "train_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_gen/train_full.csv",
+  "val_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_gen/val_full.csv",
+  "test_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_gen/test_full.csv",
+  "pred_save_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_gen/rf/pred_r2.json",
+  "score_save_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_gen/rf/scores_r2.json",
+  "hyper_save_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_gen/rf/best_params_r2.json",
+  "hyper_score_path": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_gen/rf/hyper_scores_r2.json",
+  "rerun_hyper": false,
+  "num_samples": 200,
+  "hyper_metric": "r2",
+  "score_metrics": ["r2", "auc", "prc-auc"],
+  "test_folds": 10,
+  "seed": 0,
+  "model_type": "random_forest"
+}

@@ -4,11 +4,16 @@ import json
 import subprocess
 import os
 import random
+import numpy as np
+from sklearn.metrics import (roc_auc_score, auc, precision_recall_curve,
+                             r2_score, accuracy_score, log_loss)
+
 
 # optimization goal for various metrics
 
 METRIC_DIC = {"pr_auc": "maximize",
               "roc_auc": "maximize",
+              "r2": "maximize",
               "class_loss": "minimize",
               "regress_loss": "minimize",
               "mae": "minimize",
@@ -343,3 +348,66 @@ def get_split_names(train_only,
         names = ["train", "val", "test"]
 
     return names
+
+
+def preprocess_class(pred):
+    """
+    Preprocess classifier predictions. This applies,
+    for example, if you train an sklearn regressor
+    rather than classifier, which doesn't necessarily
+    predict a value between 0 and 1.
+    Args:
+        pred (np.array or torch.Tensor): predictions
+    Returns:
+        pred (np.array or torch.Tensor): predictions
+            with max 1 and min 0.
+    """
+    # make sure the min and max are 0 and 1
+    pred[pred < 0] = 0
+    pred[pred > 1] = 1
+
+    return pred
+
+
+def apply_metric(metric, pred, actual):
+    """
+    Apply a metric to a set of predictions.
+    Args:
+      metric (str): name of metric
+      pred (iterable): predicted values
+      actual (iterable): actual values
+    Returns:
+      score (float): metric score
+    """
+    if metric == "auc":
+        pred = preprocess_class(pred)
+        if max(pred) == 0:
+            score = 0
+        else:
+            score = roc_auc_score(y_true=actual, y_score=pred)
+    elif metric == "prc-auc":
+        pred = preprocess_class(pred)
+        if max(pred) == 0:
+            score = 0
+        else:
+            precision, recall, _ = precision_recall_curve(
+                y_true=actual, probas_pred=pred)
+            score = auc(recall, precision)
+    elif metric == "mse":
+        score = ((np.array(pred) - np.array(actual)) ** 2).mean()
+    elif metric == "rmse":
+        score = ((np.array(pred) - np.array(actual)) ** 2).mean() ** 0.5
+    elif metric == "mae":
+        score = (abs(np.array(pred) - np.array(actual))).mean()
+    elif metric == "r2":
+        score = r2_score(y_true=actual, y_pred=pred)
+    elif metric == "accuracy":
+        np_pred = np.array(pred)
+        mask = np_pred >= 0.5
+        np_pred[mask] = 1
+        np_pred[np.bitwise_not(mask)] = 0
+        score = accuracy_score(y_true=actual, y_pred=np_pred)
+    elif metric in ["cross_entropy", "binary_cross_entropy"]:
+        score = log_loss(y_true=actual, y_pred=np_pred)
+
+    return score
