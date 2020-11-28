@@ -30,7 +30,7 @@ This folder contains scripts for doing 3D-based prediction tasks. These include 
     * [Training ChemProp models with the fingerprints](#training-chemprop-models-with-the-fingerprints)
     * [Saving the predictions](#saving-the-predictions)
  - [Training a regular ChemProp model](#training-a-regular-chemprop-model)
- - [2D baselines](#2d-baselines)
+ - [Scikit learn models](#scikit-learn-models)
 
 
 ## Getting started
@@ -381,9 +381,10 @@ We also provide a wrapper around ChemProp, so that a ChemProp model can be easil
 Note that the data paths are in the `base_config` and `hyp_config` paths. You can generate the training and hyperopt splits and csvs using `scripts/cp3d/make_dset/splits/split.sh`
 
     
-# 2D baselines
+# Scikit Learn models
 We also provide some scripts for training 2D-based models with scikit learn, such as random forest. These scripts run hyperparameter optimization and model training using Morgan fingerprints as input. Each folder is named for the model type, and each has files `run.sh`, `run.py`, and a path of your choice for the config file. The config file has the following keys:
 
+- `model_type` (str): type of model you want to train
 - `classifier` (bool): whether you're training a classifier
 - `train_path` (str): path to the training set csv
 - `val_path` (str): path to the validation set csv
