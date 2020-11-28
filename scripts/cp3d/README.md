@@ -382,9 +382,9 @@ Note that the data paths are in the `base_config` and `hyp_config` paths. You ca
 
     
 # Scikit Learn models
-We also provide some scripts for training 2D-based models with scikit learn, such as random forest. These scripts run hyperparameter optimization and model training using Morgan fingerprints as input. Each folder is named for the model type, and each has files `run.sh`, `run.py`, and a path of your choice for the config file. The config file has the following keys:
+We also provide the script `scripts/cp3d/sklearn/run.sh`, which is a wrapper around scikit learn models. These models use Morgan fingerprints as input to make predictions. The script both optimizes hyperparameters and trains models. The config file has the following keys:
 
-- `model_type` (str): type of model you want to train
+- `model_type` (str): type of model you want to train (e.g. random forest)
 - `classifier` (bool): whether you're training a classifier
 - `train_path` (str): path to the training set csv
 - `val_path` (str): path to the validation set csv
@@ -397,5 +397,5 @@ We also provide some scripts for training 2D-based models with scikit learn, suc
 - `num_samples` (int): how many hyperparameter combinations to try
 - `hyper_metric` (str): Metric to use for hyperparameter scoring
 - `score_metrics` (list[str]): Metric scores to report on test set
-- `test_folds` (int): Number of different seeds to use for getting average performance of the model on the test set.
+- `test_folds` (int): Number of different seeds to use for getting average performance of the model on the test set
 - `seed` (int): random seed for the training
