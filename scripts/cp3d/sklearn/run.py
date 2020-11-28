@@ -282,7 +282,8 @@ def get_or_load_hypers(hyper_save_path,
         best_params = fmin(objective,
                            space,
                            algo=tpe.suggest,
-                           max_evals=num_samples)
+                           max_evals=num_samples,
+                           rstate=np.random.RandomState(seed))
 
         translate_params = translate_best_params(best_params=best_params,
                                                  model_type=model_type,
