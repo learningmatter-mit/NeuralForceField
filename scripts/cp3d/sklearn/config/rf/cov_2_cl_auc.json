@@ -1,5 +1,5 @@
 {
-  "classifier": true,
+  "classifier": false,
   "train_path": "/home/saxelrod/chemprop_cov_2/scaffold_split/train_full.csv",
   "val_path": "/home/saxelrod/chemprop_cov_2/scaffold_split/val_full.csv",
   "test_path": "/home/saxelrod/chemprop_cov_2/scaffold_split/test_full.csv",

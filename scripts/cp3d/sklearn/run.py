@@ -1,6 +1,6 @@
 """
-Script for running hyperparameter optimization getting
-predictions from a random forest classifier or regressor.
+Script for running hyperparameter optimization and getting
+predictions from an sklearn model.
 """
 
 import json
@@ -16,27 +16,17 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
 from nff.utils import parse_args, apply_metric, CHEMPROP_METRICS
 
+
+# load hyperparameter options for different sklearn regressors and
+# classifiers
+
+HYPER_PATH = os.path.join(os.path.abspath("."), "hyp_options.json")
+with open(HYPER_PATH, "r") as f:
+    HYPERPARAMS = json.load(f)
+
 MORGAN_HYPER_KEYS = ["fp_len", "radius"]
-
-RF_HYPERPARAMS = {"n_estimators": {"vals": [20, 300], "type": "int"},
-                  "criterion": {"vals": ["gini", "entropy"],
-                                "type": "categorical"},
-                  "min_samples_split": {"vals": [2, 10], "type": "int"},
-                  "min_samples_leaf": {"vals": [1, 5],
-                                       "type": "int"},
-                  "min_weight_fraction_leaf": {"vals": [0.0, 0.5],
-                                               "type": "float"},
-                  "max_features": {"vals": ["auto", "sqrt", "log2"],
-                                   "type": "categorical"},
-                  "min_impurity_decrease": {"vals": [0.0, 0.5],
-                                            "type": "float"},
-                  "max_samples": {"vals": [1e-5, 1 - 1e-5],
-                                  "type": "float"},
-                  "fp_len": {"vals": [64, 128, 256, 1024, 2048],
-                             "type": "categorical"},
-                  "radius": {"vals": [1, 4], "type": "int"}}
-
-HYPERPARAMS = {"random_forest": RF_HYPERPARAMS}
+MODEL_TYPES = list(set(list(HYPERPARAMS["classification"].keys())
+                       + list(HYPERPARAMS["regression"].keys())))
 
 
 def load_data(train_path, val_path, test_path):
@@ -71,10 +61,16 @@ def make_mol_rep(fp_len, data, splits, radius):
     return fps, vals
 
 
-def make_space(model_type):
+def get_hyperparams(model_type, classifier):
+    class_or_reg = "classifier" if classifier else "regression"
+    hyperparams = HYPERPARAMS[class_or_reg][model_type]
+    return hyperparams
+
+
+def make_space(model_type, classifier):
 
     space = {}
-    hyperparams = HYPERPARAMS[model_type]
+    hyperparams = get_hyperparams(model_type, classifier)
 
     for name, sub_dic in hyperparams.items():
         val_type = sub_dic["type"]
@@ -173,7 +169,7 @@ def make_objective(data,
                    hyper_score_path,
                    model_type):
 
-    hyperparams = HYPERPARAMS[model_type]
+    hyperparams = get_hyperparams(model_type, classifier)
     param_type_dic = {name: sub_dic["type"] for name, sub_dic
                       in hyperparams.items()}
 
@@ -183,16 +179,16 @@ def make_objective(data,
         for key, typ in param_type_dic.items():
             if typ == "int":
                 space[key] = int(space[key])
-            if type(hyperparams[key]["vals"][0]) is bool:
+            if isinstance(hyperparams[key]["vals"][0], bool):
                 space[key] = bool(space[key])
 
-        pred, real, clf = run_sklearn(space,
-                                      test_or_val="val",
-                                      seed=seed,
-                                      data=data,
-                                      use_val_in_train=False,
-                                      model_type=model_type,
-                                      classifier=classifier)
+        pred, real, _ = run_sklearn(space,
+                                    test_or_val="val",
+                                    seed=seed,
+                                    data=data,
+                                    use_val_in_train=False,
+                                    model_type=model_type,
+                                    classifier=classifier)
         metrics = get_metrics(pred, real, [metric_name])
         score = -metrics[metric_name]
         update_saved_scores(hyper_score_path, space, metrics)
@@ -202,8 +198,8 @@ def make_objective(data,
     return objective
 
 
-def translate_best_params(best_params, model_type):
-    hyperparams = HYPERPARAMS[model_type]
+def translate_best_params(best_params, model_type, classifier):
+    hyperparams = get_hyperparams(model_type, classifier)
     param_type_dic = {name: sub_dic["type"] for name, sub_dic
                       in hyperparams.items()}
     translate_params = copy.deepcopy(best_params)
@@ -281,14 +277,16 @@ def get_or_load_hypers(hyper_save_path,
                                    hyper_score_path=hyper_score_path,
                                    model_type=model_type)
 
-        space = make_space(model_type)
+        space = make_space(model_type, classifier)
 
         best_params = fmin(objective,
                            space,
                            algo=tpe.suggest,
                            max_evals=num_samples)
 
-        translate_params = translate_best_params(best_params, model_type)
+        translate_params = translate_best_params(best_params=best_params,
+                                                 model_type=model_type,
+                                                 classifier=classifier)
         with open(hyper_save_path, "w") as f:
             json.dump(translate_params, f, indent=4, sort_keys=True)
 
@@ -412,7 +410,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--model_type", type=str,
                         help=("Type of model you want to train"),
-                        choices=list(HYPERPARAMS.keys()))
+                        choices=MODEL_TYPES)
     parser.add_argument("--classifier", type=bool,
                         help=("Whether you're training a classifier"))
     parser.add_argument("--train_path", type=str,

@@ -1,0 +1,172 @@
+{
+    "classification": {
+        "random_forest": {
+            "criterion": {
+                "type": "categorical",
+                "vals": [
+                    "gini",
+                    "entropy"
+                ]
+            },
+            "fp_len": {
+                "type": "categorical",
+                "vals": [
+                    64,
+                    128,
+                    256,
+                    1024,
+                    2048
+                ]
+            },
+            "max_features": {
+                "type": "categorical",
+                "vals": [
+                    "auto",
+                    "sqrt",
+                    "log2"
+                ]
+            },
+            "max_samples": {
+                "type": "float",
+                "vals": [
+                    1e-05,
+                    0.99999
+                ]
+            },
+            "min_impurity_decrease": {
+                "type": "float",
+                "vals": [
+                    0.0,
+                    0.5
+                ]
+            },
+            "min_samples_leaf": {
+                "type": "int",
+                "vals": [
+                    1,
+                    5
+                ]
+            },
+            "min_samples_split": {
+                "type": "int",
+                "vals": [
+                    2,
+                    10
+                ]
+            },
+            "min_weight_fraction_leaf": {
+                "type": "float",
+                "vals": [
+                    0.0,
+                    0.5
+                ]
+            },
+            "n_estimators": {
+                "type": "int",
+                "vals": [
+                    20,
+                    300
+                ]
+            },
+            "radius": {
+                "type": "int",
+                "vals": [
+                    1,
+                    4
+                ]
+            }
+        }
+    },
+    "regression": {
+        "random_forest": {
+            "criterion": {
+                "type": "categorical",
+                "vals": [
+                    "mae",
+                    "mse"
+                ]
+            },
+            "fp_len": {
+                "type": "categorical",
+                "vals": [
+                    64,
+                    128,
+                    256,
+                    1024,
+                    2048
+                ]
+            },
+            "max_depth": {
+                "type": "int",
+                "vals": [
+                    1,
+                    30
+                ]
+            },
+            "max_features": {
+                "type": "categorical",
+                "vals": [
+                    "auto",
+                    "sqrt",
+                    "log2"
+                ]
+            },
+            "max_samples": {
+                "type": "float",
+                "vals": [
+                    1e-05,
+                    0.99999
+                ]
+            },
+            "min_impurity_decrease": {
+                "type": "float",
+                "vals": [
+                    0.0,
+                    0.5
+                ]
+            },
+            "min_samples_leaf": {
+                "type": "int",
+                "vals": [
+                    1,
+                    5
+                ]
+            },
+            "min_samples_split": {
+                "type": "int",
+                "vals": [
+                    2,
+                    10
+                ]
+            },
+            "min_weight_fraction_leaf": {
+                "type": "float",
+                "vals": [
+                    0.0,
+                    0.5
+                ]
+            },
+            "n_estimators": {
+                "type": "int",
+                "vals": [
+                    20,
+                    300
+                ]
+            },
+            "oob_score": {
+                "type": "categorical",
+                "vals": [
+                    true,
+                    false
+                ]
+            },
+            "radius": {
+                "type": "int",
+                "vals": [
+                    1,
+                    4
+                ]
+            }
+        }
+    }
+}
