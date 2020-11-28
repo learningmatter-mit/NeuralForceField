@@ -238,15 +238,18 @@ def run_sklearn(space,
     else:
         if model_type == "random_forest":
             kwargs = {}
-            # if it's a regressor but all the outputs are binary,
-            # then use weight balancing
-
             pref_fn = RandomForestRegressor(random_state=seed,
                                             **sk_hyperparams,
                                             **kwargs)
 
         else:
             raise NotImplementedError
+
+    # weight balancing applies if the outputs are binary,
+    # which may be true even if we're training a regressor
+    # (e.g. if you want to compare prc/auc with another model,
+    # it doesn't make sense to train a binary classifier
+    # because areas under the curve wouldn't make sense)
 
     sample_weight = None
     if all([i in [0, 1] for i in y_train]):
