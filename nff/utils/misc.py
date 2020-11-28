@@ -348,6 +348,7 @@ def get_split_names(train_only,
 
     return names
 
+
 def apply_metric(metric, pred, actual):
     """
     Apply a metric to a set of predictions.
@@ -359,11 +360,17 @@ def apply_metric(metric, pred, actual):
       score (float): metric score
     """
     if metric == "auc":
-        score = roc_auc_score(y_true=actual, y_score=pred)
+        if max(pred) == 0:
+            score = 0
+        else:
+            score = roc_auc_score(y_true=actual, y_score=pred)
     elif metric == "prc-auc":
-        precision, recall, thresholds = precision_recall_curve(
-            y_true=actual, probas_pred=pred)
-        score = auc(recall, precision)
+        if max(pred) == 0:
+            score = 0
+        else:
+            precision, recall, _ = precision_recall_curve(
+                y_true=actual, probas_pred=pred)
+            score = auc(recall, precision)
     elif metric == "mse":
         score = ((np.array(pred) - np.array(actual)) ** 2).mean()
     elif metric == "rmse":
