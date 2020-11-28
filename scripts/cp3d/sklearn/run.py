@@ -15,7 +15,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
 from nff.utils import (parse_args, apply_metric, CHEMPROP_METRICS,
-                       METRIC_DIC, read_csv, convert_metric)
+                       METRIC_DIC, read_csv, convert_metric, prop_split)
 
 
 # load hyperparameter options for different sklearn regressors and
@@ -100,7 +100,7 @@ def make_mol_rep(fp_len,
 
 def get_hyperparams(model_type, classifier):
     """
-    Get hyperparameters and ranges to be optimized for a 
+    Get hyperparameters and ranges to be optimized for a
     given model type.
     Args:
       model_type (str): name of model (e.g. random_forest)
@@ -146,9 +146,76 @@ def make_space(model_type, classifier):
     return space
 
 
+def make_sample_data(max_specs,
+                     data,
+                     props,
+                     seed):
+    """
+    Get a sample of the data for hyperopt.
+    Args:
+      max_specs (int, optional): maximum number of species to use in hyperopt
+      data (dict): dictionary with data for each split
+      props (list[str]): properties you'll want to predict with the model.
+      seed (int, optional): seed to use if we take a subsample of the data
+    Returns:
+      sample_data (dict): sub sample of `data`
+    """
+    if max_specs is None:
+        sample_data = data
+        return sample_data
+
+    sample_data = {}
+
+    # get the maximum number of species per split,
+    # equal to their intiial proportions times max_specs
+
+    sample_key = list(data["train"].keys())[0]
+    old_num_per_split = {split: len(sub_dic[sample_key])
+                         for split, sub_dic in data.items()}
+    total_num = sum(old_num_per_split.values())
+    new_num_per_split = {split: int(num / total_num * max_specs)
+                         for split, num in old_num_per_split.items()}
+
+    # sample from each
+
+    for split, num in new_num_per_split.items():
+        sample_dic = {}
+        for i, smiles in enumerate(data[split]["smiles"]):
+            sub_dic = {prop: data[split][prop][i] for prop in props}
+            sample_dic.update({smiles: sub_dic})
+
+        # even if we're doing a regression task
+        if all([i in [0, 1] for i in data[split][props[0]]]):
+            dataset_type = "classification"
+        else:
+            dataset_type = "regression"
+
+        smiles_idx = {smiles: i for i, smiles in enumerate(
+            data[split]["smiles"])}
+        keep_smiles = prop_split(max_specs=num,
+                                 dataset_type=dataset_type,
+                                 props=props,
+                                 sample_dic=sample_dic,
+                                 seed=seed)
+
+        sample_data[split] = {key: [] for key in
+                              data[split].keys()}
+
+        for smiles in keep_smiles:
+            sample_data[split]["smiles"].append(smiles)
+            idx = smiles_idx[smiles]
+            for prop in props:
+                val = data[split][prop][idx]
+                sample_data[split][prop].append(val)
+
+    return sample_data
+
+
 def get_splits(space,
                data,
-               props):
+               props,
+               max_specs=None,
+               seed=None):
     """
     Get representations and values of the data given a certain
     set of Morgan hyperparameters.
@@ -156,6 +223,8 @@ def get_splits(space,
       space (dict): hyperopt` space of hyperparameters
       data (dict): dictionary with data for each split
       props (list[str]): properties you'll want to predict with the model.
+      max_specs (int, optional): maximum number of species to use in hyperopt
+      seed (int, optional): seed to use if we take a subsample of the data
     Returns:
       xy_dic (dict): dictionary of the form {split: [x, y]} for each split,
         where x and y are arrays of the input and output.
@@ -164,11 +233,18 @@ def get_splits(space,
     morgan_hyperparams = {key: val for key, val in space.items()
                           if key in MORGAN_HYPER_KEYS}
 
+    # sample species
+    sample_data = make_sample_data(max_specs=max_specs,
+                                   data=data,
+                                   props=props,
+                                   seed=seed)
+
     xy_dic = {}
+
     for name in ["train", "val", "test"]:
 
         x, y = make_mol_rep(fp_len=morgan_hyperparams["fp_len"],
-                            data=data,
+                            data=sample_data,
                             splits=[name],
                             radius=morgan_hyperparams["radius"],
                             props=props)
@@ -329,7 +405,8 @@ def make_objective(data,
                    classifier,
                    hyper_score_path,
                    model_type,
-                   props):
+                   props,
+                   max_specs):
     """
     Make objective function for `hyperopt`.
     Args:
@@ -341,6 +418,7 @@ def make_objective(data,
         scores.
       model_type (str): name of model type to be trained.
       props (list[str]): properties you'll want to predict with themodel.
+      max_specs (int): maximum number of species to use in hyperopt
     Returns:
       objective (callable): objective function for use in `hyperopt`.
     """
@@ -360,7 +438,9 @@ def make_objective(data,
 
         xy_dic = get_splits(space=space,
                             data=data,
-                            props=props)
+                            props=props,
+                            max_specs=max_specs,
+                            seed=seed)
 
         x_val, y_val = xy_dic["val"]
         x_train, y_train = xy_dic["train"]
@@ -493,7 +573,8 @@ def get_or_load_hypers(hyper_save_path,
                        num_samples,
                        hyper_score_path,
                        model_type,
-                       props):
+                       props,
+                       max_specs):
     """
     Optimize hyperparameters or load hyperparameters if
     they've already been otpimized.
@@ -510,6 +591,7 @@ def get_or_load_hypers(hyper_save_path,
         hyperparameter combinations.
       model_type (str): name of model type to be trained
       props (list[str]): properties you'll want to predict with the model
+      max_specs (int): maximum number of species to use in hyperopt
     Returns:
       translate_params (dict): translated version of the best hyperparameters
     """
@@ -525,7 +607,8 @@ def get_or_load_hypers(hyper_save_path,
                                    classifier=classifier,
                                    hyper_score_path=hyper_score_path,
                                    model_type=model_type,
-                                   props=props)
+                                   props=props,
+                                   max_specs=max_specs)
 
         space = make_space(model_type, classifier)
 
@@ -657,6 +740,7 @@ def hyper_and_train(train_path,
                     hyper_score_path,
                     model_type,
                     props,
+                    max_specs,
                     **kwargs):
     """
     Run hyperparameter optimization and train an ensemble of models.
@@ -682,6 +766,7 @@ def hyper_and_train(train_path,
         hyperparameter combinations.
       model_type (str): name of model type to be trained
       props (list[str]): properties you'll want to predict with the model
+      max_specs (int): maximum number of species to use in hyperopt
 
     Returns:
       None
@@ -700,7 +785,8 @@ def hyper_and_train(train_path,
         num_samples=num_samples,
         hyper_score_path=hyper_score_path,
         model_type=model_type,
-        props=props)
+        props=props,
+        max_specs=max_specs)
 
     ensemble_preds, ensemble_scores = get_ensemble_preds(
         test_folds=test_folds,
@@ -760,7 +846,9 @@ if __name__ == "__main__":
                         help=("Number of different seeds to use for getting "
                               "average performance of the model on the "
                               "test set."))
-
+    parser.add_argument("--max_specs", type=int,
+                        help=("Maximum number of species to use in "
+                              "hyperparameter optimization."))
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "
