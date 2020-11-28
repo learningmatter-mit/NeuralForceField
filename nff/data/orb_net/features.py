@@ -179,7 +179,8 @@ def get_x_or_y(shells,
 
 def get_x(shells, orbitals, s, p_ao, starts):
 
-    p_tilde = np.matmul(s, np.matmul(p_ao, s))
+    # p_tilde = np.matmul(s, np.matmul(p_ao, s))
+    p_tilde = p_ao
     return get_x_or_y(shells, orbitals, p_tilde, starts)
 
 
@@ -245,6 +246,8 @@ def qm_from_xtb(nxyz, results):
     y_mat = get_y(shells, orbitals, p_ao, starts)
     x_mat = get_x(shells, orbitals, s, p_ao, starts)
 
+    print(x_mat[:5, :5])
+
     q_mat = make_q(y_mat=y_mat,
                    s=s,
                    n_at=len(nxyz),
@@ -275,9 +278,8 @@ def get_qm_quants(nxyz, job_dir):
     return out_dic
 
 
-def qm_to_dset(dset_path, job_dir):
+def qm_to_dset(dset, job_dir):
 
-    dset = Dataset.from_file(dset_path)
     props = {}
 
     for i in tqdm(range(len(dset.props["nxyz"]))):
@@ -508,28 +510,28 @@ def test_rotate(dset):
 
     return new_dset
 
-
 def test_batch_featurize(job_dir="."):
 
     dset_path = ("/home/saxelrod/Repo/projects/ax_autopology"
                  "/NeuralForceField/tutorials/data/"
                  "switch_demonstration.pth.tar")
 
-    # dset = qm_to_dset(dset_path, job_dir)
-    # dset.save(dset_path)
     dset = Dataset.from_file(dset_path)
+    dset = qm_to_dset(dset, job_dir)
+    # dset.save(dset_path)
 
     dset = featurize_dset(dset)
     dset = generate_neighbors(dset,
                               cutoffs=CUTOFFS,
                               cutoff_names=CUTOFF_NAMES)
 
-    # new_dset = test_rotate(dset)
-    # # gives same features!
-    # new_dset = featurize_dset(new_dset)
-    # new_dset = generate_neighbors(new_dset,
-    #                               cutoffs=CUTOFFS,
-    #                               cutoff_names=CUTOFF_NAMES)
+    new_dset = test_rotate(dset)
+    new_dset = qm_to_dset(new_dset, job_dir)
+
+    new_dset = featurize_dset(new_dset)
+    new_dset = generate_neighbors(new_dset,
+                                  cutoffs=CUTOFFS,
+                                  cutoff_names=CUTOFF_NAMES)
 
     dset.save(dset_path)
 
