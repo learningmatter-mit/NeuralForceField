@@ -96,6 +96,9 @@ def save(results,
     alpha_ij_att = all([w.reshape(-1).shape[0] == conf_fp.shape[0] ** 2
                         for w, conf_fp in zip(learned_weights, all_conf_fps)])
 
+    import pdb
+    pdb.set_trace()
+
     for i, smiles in enumerate(smiles_list):
 
         conf_fps = all_conf_fps[i].numpy()
@@ -420,6 +423,7 @@ def main(dset_folder,
                                is_first=is_first)
 
             j += 1
+            del dataset
 
         name = dset_names[i]
         save_name = f"pred_{metric}_{name}.pickle"
