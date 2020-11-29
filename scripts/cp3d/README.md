@@ -387,6 +387,7 @@ We also provide the script `scripts/cp3d/sklearn/run.sh`, which is a wrapper aro
 
 - `model_type` (str): type of model you want to train (e.g. random forest)
 - `classifier` (bool): whether you're training a classifier
+- `props` (list[str]): Properties for the model to predict
 - `train_path` (str): path to the training set csv
 - `val_path` (str): path to the validation set csv
 - `test_path` (str): path to the test set csv
@@ -400,3 +401,4 @@ We also provide the script `scripts/cp3d/sklearn/run.sh`, which is a wrapper aro
 - `score_metrics` (list[str]): Metric scores to report on test set
 - `test_folds` (int): Number of different seeds to use for getting average performance of the model on the test set
 - `seed` (int): random seed for initializing the models during hyperparameter optimization. Seeds 0 to `test_folds-1` are used for training the final model.
+- `max_specs` (int): Maximum number of species to use in hyperparameter optimization. If the proportion of species in the training split is `x`, then the number of training species in hyperparameter optimization will be `x * max_specs`, and similarly for validation.

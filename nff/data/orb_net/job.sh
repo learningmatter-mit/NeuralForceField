@@ -1,1 +1,0 @@
-entos -f json xtb.inp > xtb.json
