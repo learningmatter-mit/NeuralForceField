@@ -5,7 +5,6 @@ The transfer learning module provides functions to fine tune
     or best models using the Trainer class.
 """
 
-import torch
 
 
 def freeze_parameters(model):

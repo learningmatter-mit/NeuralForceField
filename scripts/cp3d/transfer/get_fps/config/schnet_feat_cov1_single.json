@@ -1,0 +1,23 @@
+{
+  "model_folder":  "/nfs/rafagblab001/saxelrod/supercloud_backup/models/saved_models/cov_1_cl/schnet_feat_single",
+  "dset_folder": "/nfs/rafagblab001/saxelrod/dsets/cov_1_cl",
+  "feat_save_folder": "/nfs/rafagblab001/saxelrod/supercloud_backup/models/saved_models/cov_1_cl/schnet_feat_single",
+  "prop": "sars_cov_one_cl_protease_active",
+  "device": 0,
+  "batch_size": 10,
+  "sub_batch_size": null,
+  "test_only": true,
+  "metrics": [
+    "binary_cross_entropy",
+    "prc-auc",
+    "auc"
+  ],
+  "slurm_parallel": false,
+  "max_confs": 1
+}
+
+
+
+
+
+

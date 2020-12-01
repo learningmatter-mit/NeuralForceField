@@ -1,0 +1,16 @@
+{
+  "summary_path": "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/rdkit_folder/summary_drugs.json",
+  "csv_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_gen/csv",
+  "cp_folder": "/home/saxelrod/Repo/projects/chemprop/chemprop",
+  "props": ["sars_cov_two_active"],
+  "split_sizes": [
+    0.6,
+    0.2,
+    0.2
+  ],
+ "split_type": "scaffold_balanced",
+ "max_specs": null,
+ "max_atoms": 100,
+ "dataset_type": "classification",
+ "seed": 0
+}

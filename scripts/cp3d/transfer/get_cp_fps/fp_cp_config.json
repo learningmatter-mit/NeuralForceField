@@ -1,0 +1,15 @@
+{
+  "cp_folder": "/home/saxelrod/Repo/projects/chemprop/chemprop",
+  "feature_folder": "/home/saxelrod/chemprop_cov_2/features/from_cp",
+  "model_folder_paths": ["/home/saxelrod/chemprop_cov_1/models/cp_cov_auc",
+                         "/home/saxelrod/chemprop_cov_1/models/cp_cov_prc",
+                         "/home/saxelrod/chemprop_cov_1/models/cp_cov_bce"],
+  "metrics": ["auc", "prc-auc", "binary_cross_entropy"],
+  "device": 0,
+  "smiles_folder": "/home/saxelrod/chemprop_cov_2/scaffold_split",
+  "hyper_dset_size": null
+}
+
+
+
+

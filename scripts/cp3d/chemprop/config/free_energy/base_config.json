@@ -1,0 +1,16 @@
+{
+ "data_path": "/home/saxelrod/synthetic/free_energy/train_full.csv",
+ "separate_val_path": "/home/saxelrod/synthetic/free_energy/val_full.csv",
+ "separate_test_path": "/home/saxelrod/synthetic/free_energy/test_full.csv",
+ "dataset_type": "regression",
+ "no_features_scaling": true,
+ "quiet": true,
+ "gpu": 1,
+ "num_folds": 10,
+ "epochs": 30,
+ "dropout": 0.2,
+ "depth": 4,
+ "ffn_num_layers": 2,
+ "hidden_size": 500
+}
+

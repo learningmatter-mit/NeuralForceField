@@ -1,8 +1,4 @@
-import numpy as np
-
-import torch
 import torch.nn as nn
-
 from nff.utils.scatter import scatter_add
 
 
@@ -30,9 +26,9 @@ class MessagePassingModule(nn.Module):
     def aggregate(self, message, index, size):
         # pdb.set_trace()
         new_r = scatter_add(src=message,
-                        index=index,
-                        dim=0,
-                        dim_size=size)
+                            index=index,
+                            dim=0,
+                            dim_size=size)
         return new_r
 
     def update(self, r):
@@ -84,7 +80,7 @@ class EdgeUpdateModule(nn.Module):
             TYPE: Description
         """
         aggregated_edge_feature = message[neighborlist[:, 0]
-            ] + message[neighborlist[:, 1]]
+                                          ] + message[neighborlist[:, 1]]
         return aggregated_edge_feature
 
     def update(self, e):
@@ -114,4 +110,3 @@ class TopologyOperations(nn.Module):
 
     def __init__(self):
         super(TopologyOperations, self).__init__()
-

@@ -2,23 +2,28 @@ import torch
 import numbers
 import numpy as np
 import copy
-import itertools
 import nff.utils.constants as const
 from copy import deepcopy
-from collections.abc import Iterable
 from sklearn.utils import shuffle as skshuffle
 from sklearn.model_selection import train_test_split
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 from torch.utils.data import Dataset as TorchDataset
-from nff.data.sparse import sparsify_tensor
-from nff.data.graphs import (reconstruct_atoms, get_neighbor_list, generate_subgraphs,
-                             DISTANCETHRESHOLDICT_Z, get_angle_list, add_ji_kj)
+from tqdm import tqdm
+
+from nff.data.parallel import (featurize_parallel, NUM_PROCS,
+                               add_e3fp_parallel, add_kj_ji_parallel,
+                               add_bond_idx_parallel)
+from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
+from nff.data.features import add_morgan as external_morgan
+from nff.data.features import featurize_rdkit as external_rdkit
+from nff.data.graphs import (get_bond_idx, reconstruct_atoms, get_neighbor_list, generate_subgraphs,
+                             DISTANCETHRESHOLDICT_Z, get_angle_list, add_ji_kj,
+                             make_dset_directed)
 
 
 class Dataset(TorchDataset):
-    """Dataset to deal with NFF calculations. Can be expanded to retrieve calculations
-         from the cluster later.
+    """Dataset to deal with NFF calculations.
 
     Attributes:
         props (list of dicts): list of dictionaries containing all properties of the system.
@@ -54,7 +59,8 @@ class Dataset(TorchDataset):
 
     def __init__(self,
                  props,
-                 units='kcal/mol'):
+                 units='kcal/mol',
+                 check_props=True):
         """Constructor for Dataset class.
 
         Args:
@@ -63,7 +69,10 @@ class Dataset(TorchDataset):
                 all lists have the same length.
             units (str): units of the system.
         """
-        self.props = self._check_dictionary(deepcopy(props))
+        if check_props:
+            self.props = self._check_dictionary(deepcopy(props))
+        else:
+            self.props = props
         self.units = units
         self.to_units('kcal/mol')
 
@@ -98,9 +107,22 @@ class Dataset(TorchDataset):
         if other.units != self.units:
             other = other.copy().to_units(self.units)
 
-        props = concatenate_dict(self.props, other.props)
+        new_props = self.props
+        keys = list(new_props.keys())
+        for key in keys:
+            if key not in other.props:
+                new_props.pop(key)
+                continue
+            val = other.props[key]
+            if type(val) is list:
+                new_props[key] += val
+            else:
+                old_val = new_props[key]
+                new_props[key] = torch.cat([old_val,
+                                            val.to(old_val.dtype)])
+        self.props = new_props
 
-        return Dataset(props, units=self.units)
+        return copy.deepcopy(self)
 
     def _check_dictionary(self, props):
         """Check the dictionary or properties to see if it has the
@@ -175,7 +197,12 @@ class Dataset(TorchDataset):
 
         return self.props['nbr_list']
 
+    def make_all_directed(self):
+        make_dset_directed(self)
+
     def generate_angle_list(self):
+
+        self.make_all_directed()
         angles, nbrs = get_angle_list(self.props['nbr_list'])
         self.props['nbr_list'] = nbrs
         self.props['angle_list'] = angles
@@ -186,6 +213,16 @@ class Dataset(TorchDataset):
         self.props['kj_idx'] = kj_idx
 
         return angles
+
+    def generate_kj_ji(self, num_procs=1):
+        """
+        Generate only the `ji_idx` and `kj_idx` without storing
+        the full angle list.
+        """
+
+        self.make_all_directed()
+        add_kj_ji_parallel(self,
+                           num_procs=num_procs)
 
     def _get_periodic_neighbor_list(self, cutoff, undirected=False):
         from nff.io.ase import AtomsBatch
@@ -208,6 +245,20 @@ class Dataset(TorchDataset):
         self.props['offsets'] = offsets
         return
 
+    def generate_bond_idx(self, num_procs=1):
+        """
+        For each index in the bond list, get the
+        index in the neighbour list that corresponds to the
+        same directed pair of atoms.
+        Args:
+            None
+        Returns:
+            None
+        """
+
+        self.make_all_directed()
+        add_bond_idx_parallel(self, num_procs)
+
     def copy(self):
         """Copies the current dataset
 
@@ -217,8 +268,8 @@ class Dataset(TorchDataset):
         return Dataset(self.props, self.units)
 
     def to_units(self, target_unit):
-        """Converts the dataset to the desired unit. Modifies the dictionary of properties
-            in place.
+        """Converts the dataset to the desired unit. Modifies the dictionary 
+        of properties in place.
 
         Args:
             target_unit (str): unit to use as final one
@@ -260,9 +311,71 @@ class Dataset(TorchDataset):
         """
         idx = list(range(len(self)))
         reindex = skshuffle(idx)
-        self.props = {key: val[reindex] for key, val in self.props.items()}
+        for key, val in self.props.items():
+            if isinstance(val, list):
+                self.props[key] = [val[i] for i in reindex]
+            else:
+                self.props[key] = val[reindex]
 
         return
+
+    def featurize(self,
+                  num_procs=NUM_PROCS,
+                  bond_feats=BOND_FEAT_TYPES,
+                  atom_feats=ATOM_FEAT_TYPES):
+        """
+        Featurize dataset with atom and bond features.
+        Args:
+            num_procs (int): number of parallel processes
+            bond_feats (list[str]): names of bond features
+            atom_feats (list[str]): names of atom features
+        Returns:
+            None
+        """
+
+        featurize_parallel(self,
+                           num_procs=num_procs,
+                           bond_feats=bond_feats,
+                           atom_feats=atom_feats)
+
+    def add_morgan(self, vec_length):
+        """
+        Add Morgan fingerprints to each species in the dataset.
+        Args:
+            vec_length (int): length of fingerprint
+        Returns:
+            None
+        """
+        external_morgan(self, vec_length)
+
+    def add_e3fp(self,
+                 fp_length,
+                 num_procs=NUM_PROCS):
+        """
+        Add E3FP fingerprints for each conformer of each species
+        in the dataset.
+        Args:
+            fp_length (int): length of fingerprint
+            num_procs (int): number of processes to use when
+                featurizing.
+        Returns:
+            None
+        """
+
+        add_e3fp_parallel(self,
+                          fp_length,
+                          num_procs)
+
+    def featurize_rdkit(self, method):
+        """
+        Add 3D-based RDKit fingerprints for each conformer of
+        each species in the dataset.
+        Args:
+            method (str): name of RDKit feature method to use
+        Returns:
+            None
+        """
+        external_rdkit(self, method=method)
 
     def unwrap_xyz(self, mol_dic):
         """
@@ -276,11 +389,11 @@ class Dataset(TorchDataset):
 
         for i in range(len(self.props['nxyz'])):
             # makes atoms object
+
             atoms = AtomsBatch(positions=self.props['nxyz'][i][:, 1:4],
                                numbers=self.props['nxyz'][i][:, 0],
                                cell=self.props["cell"][i],
-                               pbc=True
-                               )
+                               pbc=True)
 
             # recontruct coordinates based on subgraphs index
             if self.props['smiles']:
@@ -295,7 +408,22 @@ class Dataset(TorchDataset):
         Args:
             path (TYPE): Description
         """
+
+        # to deal with the fact that sparse tensors can't be pickled
+        offsets = self.props.get('offsets', torch.LongTensor([0]))
+        old_offsets = copy.deepcopy(offsets)
+
+        # check if it's a sparse tensor. The first two conditions
+        # Are needed for backwards compatability in case it's a float
+        # or empty list
+
+        if all([hasattr(offsets, "__len__"), len(offsets) > 0]):
+                if isinstance(offsets[0], torch.sparse.FloatTensor):
+                    self.props['offsets'] = [val.to_dense() for val in offsets]
+
         torch.save(self, path)
+        if "offsets" in self.props:
+            self.props['offsets'] = old_offsets
 
     def gen_bond_stats(self):
 
@@ -454,17 +582,42 @@ def force_to_energy_grad(dataset):
         return True
 
 
+def convert_nan(x):
+    """
+    If a list has any elements that contain nan, convert its contents 
+    to the right form so that it can eventually be converted to a tensor. 
+    Args:
+        x (list): any list with floats, ints, or Tensors.
+    Returns:
+        new_x (list): updated version of `x`
+    """
+
+    new_x = []
+    # whether any of the contents have nan
+    has_nan = any([np.isnan(y).any() for y in x])
+    for y in x:
+
+        if has_nan:
+            # if one is nan then they will have to become float tensors
+            if type(y) in [int, float]:
+                new_x.append(torch.Tensor([y]))
+            elif isinstance(y, torch.Tensor):
+                new_x.append(y.float())
+        else:
+            # otherwise they can be kept as is
+            new_x.append(y)
+
+    return new_x
+
+
 def to_tensor(x, stack=False):
     """
     Converts input `x` to torch.Tensor.
-
     Args:
         x (list of lists): input to be converted. Can be: number, string, list, array, tensor
         stack (bool): if True, concatenates torch.Tensors in the batching dimension
-
     Returns:
         torch.Tensor or list, depending on the type of x
-
     Raises:
         TypeError: Description
     """
@@ -478,6 +631,10 @@ def to_tensor(x, stack=False):
 
     if isinstance(x, torch.Tensor):
         return x
+
+    if type(x) is list and type(x[0]) != str:
+        if not isinstance(x[0], torch.sparse.FloatTensor):
+            x = convert_nan(x)
 
     # all objects in x are tensors
     if isinstance(x, list) and all([isinstance(y, torch.Tensor) for y in x]):
@@ -521,7 +678,6 @@ def concatenate_dict(*dicts):
     """Concatenates dictionaries as long as they have the same keys.
         If one dictionary has one key that the others do not have,
         the dictionaries lacking the key will have that key replaced by None.
-
     Args:
         *dicts: Description
         *dicts (any number of dictionaries)
@@ -535,10 +691,8 @@ def concatenate_dict(*dicts):
                     'energy': [...]
                 }
                 dicts = [dict_1, dict_2]
-
     Returns:
         TYPE: Description
-
     """
 
     assert all([type(d) == dict for d in dicts]), \
@@ -613,23 +767,64 @@ def concatenate_dict(*dicts):
     return joint_dict
 
 
-def split_train_test(dataset, test_size=0.2):
+def binary_split(dataset, targ_name, test_size):
+    """
+    Split the dataset with proportional amounts of a binary label in each.
+    Args:
+        dataset (nff.data.dataset): NFF dataset
+        targ_name (str, optional): name of the binary label to use
+            in splitting.
+        test_size (float, optional): fraction of dataset for test
+    Returns:
+        idx_train (list[int]): indices of species in the training set
+        idx_test (list[int]): indices of species in the test set
+    """
+
+    # get indices of positive and negative values
+    pos_idx = [i for i, targ in enumerate(dataset.props[targ_name])
+               if targ]
+    neg_idx = [i for i in range(len(dataset)) if i not in pos_idx]
+
+    # split the positive and negative indices separately
+    pos_idx_train, pos_idx_test = train_test_split(pos_idx,
+                                                   test_size=test_size)
+    neg_idx_train, neg_idx_test = train_test_split(neg_idx,
+                                                   test_size=test_size)
+
+    # combine the negative and positive test idx to get the test idx
+    # do the same for train
+
+    idx_train = pos_idx_train + neg_idx_train
+    idx_test = pos_idx_test + neg_idx_test
+
+    return idx_train, idx_test
+
+
+def split_train_test(dataset,
+                     test_size=0.2,
+                     binary=False,
+                     targ_name=None):
     """Splits the current dataset in two, one for training and
     another for testing.
 
     Args:
-        dataset (TYPE): Description
-        test_size (float, optional): Description
-
+        dataset (nff.data.dataset): NFF dataset
+        test_size (float, optional): fraction of dataset for test
+        binary (bool, optional): whether to split the dataset with
+            proportional amounts of a binary label in each.
+        targ_name (str, optional): name of the binary label to use
+            in splitting.
     Returns:
         TYPE: Description
     """
 
-    idx = list(range(len(dataset)))
-    idx_train, idx_test = train_test_split(idx, test_size=test_size)
-
-    props = {key: [val[i] for i in idx_train]
-             for key, val in dataset.props.items()}
+    if binary:
+        idx_train, idx_test = binary_split(dataset=dataset,
+                                           targ_name=targ_name,
+                                           test_size=test_size)
+    else:
+        idx = list(range(len(dataset)))
+        idx_train, idx_test = train_test_split(idx, test_size=test_size)
 
     train = Dataset(
         props={key: [val[i] for i in idx_train]
@@ -645,7 +840,10 @@ def split_train_test(dataset, test_size=0.2):
     return train, test
 
 
-def split_train_validation_test(dataset, val_size=0.2, test_size=0.2):
+def split_train_validation_test(dataset,
+                                val_size=0.2,
+                                test_size=0.2,
+                                **kwargs):
     """Summary
 
     Args:
@@ -656,7 +854,11 @@ def split_train_validation_test(dataset, val_size=0.2, test_size=0.2):
     Returns:
         TYPE: Description
     """
-    train, validation = split_train_test(dataset, test_size=val_size)
-    train, test = split_train_test(train, test_size=test_size / (1 - val_size))
+    train, validation = split_train_test(dataset,
+                                         test_size=val_size,
+                                         **kwargs)
+    train, test = split_train_test(train,
+                                   test_size=test_size / (1 - val_size),
+                                   **kwargs)
 
     return train, validation, test

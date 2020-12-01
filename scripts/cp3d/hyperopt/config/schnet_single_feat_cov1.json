@@ -1,0 +1,18 @@
+{
+  "job_path": "/home/gridsan/saxelrod/repo/nff/master/NeuralForceField/scripts/cp3d/train/config/schnet_feat_single_cov1.json",
+  "model_path": "/home/gridsan/saxelrod/models/reduced_size",
+  "param_names": [
+    "readout_dropout",
+    "dropout_rate"
+  ],
+  "param_types": [
+    "float",
+    "float"
+  ],
+  "options": [[0, 0.4],
+              [0, 0.4]],
+  "num_samples": 20,
+  "metric": "prc_auc",
+  "prop_name": "sars_cov_one_cl_protease_active",
+  "score_file": "score.json"
+}

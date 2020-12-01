@@ -1,0 +1,27 @@
+{
+  "job_path": "/home/saxelrod/repo/nff/master/NeuralForceField/scripts/cp3d/train/files/free_energy.json",
+  "model_path": "/nfs/rafagblab001/saxelrod/dsets/synthetic/free_energy",
+  "param_names": [
+    "num_heads",
+    "attention_dropout",
+    "readout_dropout",
+    "dropout_rate",
+    "attention_type"
+  ],
+  "param_types": [
+    "int",
+    "float",
+    "float",
+    "float",
+    "categorical"
+  ],
+  "options": [[1, 5],
+              [0, 0.4],
+              [0, 0.4],
+              [0, 0.4],
+              ["attention", "linear_attention"]],
+  "num_samples": 20,
+  "metric": "mae",
+  "prop_name": "ensemblefreeenergy",
+  "score_file": "score.json"
+}

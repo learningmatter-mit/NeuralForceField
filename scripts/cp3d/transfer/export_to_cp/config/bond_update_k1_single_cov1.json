@@ -1,0 +1,7 @@
+{
+  "feat_folder": "/home/saxelrod/chemprop_cov_2/features/cp3d_ndu_single",
+  "cp_save_folder": "/home/saxelrod/chemprop_cov_2/features/cp3d_ndu_single",
+  "smiles_folder": "/home/saxelrod/chemprop_cov_2/scaffold_split",
+  "metrics": ["binary_cross_entropy", "auc", "prc-auc"],
+  "hyper_dset_size": null
+}

@@ -13,7 +13,9 @@ from torch.nn import ModuleDict, Sequential
 from nff.nn.activations import shifted_softplus, Swish
 from nff.nn.layers import Dense
 
-
+import numpy as np
+import torch
+import torch.nn.functional as F
 
 __all__ = [
     "set_random_seed",
@@ -23,38 +25,45 @@ __all__ = [
 ]
 
 layer_types = {
-                "linear": torch.nn.Linear,
-                "Tanh": torch.nn.Tanh,
-                "ReLU": torch.nn.ReLU,
-                "Dense": Dense,
-                "shifted_softplus": shifted_softplus,
-                "swish": Swish
-              }
+    "linear": torch.nn.Linear,
+    "Tanh": torch.nn.Tanh,
+    "ReLU": torch.nn.ReLU,
+    "Dense": Dense,
+    "shifted_softplus": shifted_softplus,
+    "sigmoid": torch.nn.Sigmoid,
+    "Dropout": torch.nn.Dropout,
+    "LeakyReLU": torch.nn.LeakyReLU,
+    "ELU":  torch.nn.ELU,
+    "swish": Swish
+}
 
 
 def construct_Sequential(layers):
     """Construct a sequential model from list of params 
-    
+
     Args:
         layers (list): list to describe the stacked layer params 
                         example:    [
                                         {'name': 'linear', 'param' : {'in_features': 10, 'out_features': 20}},
                                         {'name': 'linear', 'param' : {'in_features': 10, 'out_features': 1}}
                                     ]
-    
+
     Returns:
         Sequential: Stacked Sequential Model 
     """
-    return Sequential(collections.OrderedDict([ layer['name']+str(i), 
-                                               layer_types[layer['name']](**layer['param'])
-                                              ] for i, layer in enumerate(layers)))
+
+    return Sequential(collections.OrderedDict([layer['name']+str(i),
+                                               layer_types[layer['name']](
+                                                   **layer['param'])
+                                               ] for i, layer in enumerate(layers)))
+
 
 def construct_ModuleDict(moduledict):
     """construct moduledict from a dictionary of layers
-    
+
     Args:
         moduledict (dict): Description
-    
+
     Returns:
         ModuleDict: Description
     """
@@ -62,6 +71,7 @@ def construct_ModuleDict(moduledict):
     for key in moduledict:
         models[key] = construct_Sequential(moduledict[key])
     return models
+
 
 def set_random_seed(seed):
     """
@@ -133,4 +143,18 @@ def read_from_json(jsonpath):
         dict = json.loads(handle.read())
         namespace_dict = Namespace(**dict)
     return namespace_dict
+
+
+def make_directed(nbr_list):
+
+    gtr_ij = (nbr_list[:, 0] > nbr_list[:, 1]).any().item()
+    gtr_ji = (nbr_list[:, 1] > nbr_list[:, 0]).any().item()
+    directed = gtr_ij and gtr_ji
+
+    if directed:
+        return nbr_list, directed
+
+    new_nbrs = torch.cat([nbr_list, nbr_list.flip(1)], dim=0)
+    return new_nbrs, directed
+
 

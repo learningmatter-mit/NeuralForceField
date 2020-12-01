@@ -1,0 +1,22 @@
+{
+  "model_folder":  "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_1_cl/cp3d_single",
+  "dset_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_cl",
+  "feat_save_folder": "/home/saxelrod/chemprop_cov_2/features/cp3d_single",
+  "prop": "sars_cov_one_cl_protease_active",
+  "device": 1,
+  "batch_size": 1,
+  "sub_batch_size": 1,
+  "test_only": false,
+  "metrics": [
+    "binary_cross_entropy",
+    "auc",
+    "prc-auc"
+  ],
+  "slurm_parallel": false
+}
+
+
+
+
+
+

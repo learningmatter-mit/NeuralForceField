@@ -1,0 +1,16 @@
+{
+  "model_folder":  "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_gen/schnet_feat_single",
+  "dset_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_cl",
+  "feat_save_folder": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_2_gen/schnet_feat_single",
+  "prop": "sars_cov_two_active",
+  "device": 1,
+  "batch_size": 10,
+  "sub_batch_size": null,
+  "test_only": true,
+  "metrics": [
+    "binary_cross_entropy",
+    "prc-auc",
+    "auc"
+  ],
+  "max_confs": 1
+}

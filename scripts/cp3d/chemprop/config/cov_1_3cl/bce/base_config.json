@@ -1,0 +1,16 @@
+{
+ "data_path": "/home/saxelrod/chemprop_cov_1/train_full.csv",
+ "separate_val_path": "/home/saxelrod/chemprop_cov_1/val_full.csv",
+ "separate_test_path": "/home/saxelrod/chemprop_cov_1/test_full.csv",
+ "dataset_type": "classification",
+ "no_features_scaling": true,
+ "quiet": true,
+ "gpu": 0,
+ "num_folds": 1,
+ "class_balance": true,
+ "epochs": 10000,
+ "dropout": 0.2,
+ "depth": 4,
+ "ffn_num_layers": 2,
+ "hidden_size": 500
+}

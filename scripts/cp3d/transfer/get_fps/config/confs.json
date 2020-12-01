@@ -1,0 +1,19 @@
+{
+  "model_folder":  "/home/saxelrod/rgb_nfs/dsets/synthetic/confs",
+  "dset_folder": "/home/saxelrod/rgb_nfs/dsets/synthetic/confs",
+  "feat_save_folder": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/confs/schnet_feat",
+  "prop": "log_uniqueconfs",
+  "device": 2,
+  "batch_size": 4,
+  "sub_batch_size": null,
+  "test_only": true,
+  "metrics": [
+    "mae"
+  ]
+}
+
+
+
+
+
+

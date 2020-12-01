@@ -1,0 +1,20 @@
+{
+    "batch_size": 50,
+    "device": 0,
+    "dset_folder": "/nfs/rafagblab001/saxelrod/dsets/cov_2_gen_untested",
+    "feat_save_folder": "/nfs/rafagblab001/saxelrod/supercloud_backup/models/saved_models/cov_2_gen/schnet_single_cross_val/3/screening",
+    "max_confs": 1,
+    "metric": "auc",
+    "metrics": [
+        "binary_cross_entropy",
+        "prc-auc",
+        "auc"
+    ],
+    "model_folder": "/nfs/rafagblab001/saxelrod/supercloud_backup/models/saved_models/cov_2_gen/schnet_single_cross_val/3",
+    "prop": "sars_cov_two_active",
+    "slurm_parallel": false,
+    "sub_batch_size": null,
+    "test_only": false,
+    "train_only": true,
+    "val_only": false
+}

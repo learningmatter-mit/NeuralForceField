@@ -13,7 +13,10 @@ def get_grad(optimizer):
     for group in optimizer.param_groups:
         grad_list.append([])
         for param in group['params']:
-            grad_list[-1].append(param.grad.detach().cpu())
+            if param.grad is None:
+                grad_list[-1].append(param.grad)
+            else:
+                grad_list[-1].append(param.grad.detach().cpu())
     return grad_list
 
 
@@ -42,11 +45,18 @@ def add_grads(optimizer,
               epoch,
               device):
 
-    # paths to all pickle files but this one
+    # Set the optimizer to have zero gradient and then load in all
+    # the grads. This ensures no differences in the gradients between the
+    # different processes, which would occur due to loss of precision
+    # if the numbers were added in different orders.
+
+    optimizer.zero_grad()
+
+    # paths to all pickle files
 
     paths = [os.path.join(weight_path, str(index),
                           "grad_{}_{}.pickle".format(epoch, batch_num))
-             for index in range(world_size) if index != rank]
+             for index in range(world_size)]
 
     loaded_grads = {path: None for path in paths}
 
@@ -57,17 +67,19 @@ def add_grads(optimizer,
             try:
                 with open(path, "rb") as f:
                     loaded_grads[path] = pickle.load(f)
-            except (EOFError, FileNotFoundError):
+            except (EOFError, FileNotFoundError, pickle.UnpicklingError):
                 continue
 
-    # total size is this size + all other sizes
+    # total size is the sum of all sizes from each process
     total_size = sum([grad_dic["loss_size"] for
                       grad_dic in loaded_grads.values()]
-                     ) + loss_size
+                     )
 
     for k, grad_dic in enumerate(loaded_grads.values()):
         for i, group in enumerate(optimizer.param_groups):
             for j, param in enumerate(group['params']):
+                if param.grad is None:
+                    continue
                 param.grad += grad_dic["grad"][i][j].to(device)
 
                 # if you're at the last grad_dic, divide

@@ -1,0 +1,21 @@
+{
+  "job_path": "/home/saxelrod/repo/nff/master/NeuralForceField/scripts/cp3d/train/config/cp3d_ndu_single_cov2_cl.json",
+  "model_path": "/nfs/rafagblab001/saxelrod/dsets/cov_2_cl_edge_idx",
+  "param_names": [
+    "readout_dropout",
+    "schnet_dropout",
+    "cp_dropout"
+  ],
+  "param_types": [
+    "float",
+    "float",
+    "float"
+  ],
+  "options": [[0, 0.4],
+              [0, 0.4],
+              [0, 0.4]],
+  "num_samples": 20,
+  "metric": "roc_auc",
+  "prop_name": "sars_cov_two_cl_protease_active",
+  "score_file": "score.json"
+}

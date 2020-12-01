@@ -1,18 +1,14 @@
-import torch
 import torch.nn as nn
-import copy
-import torch.nn.functional as F
 
-from nff.nn.layers import Dense, GaussianSmearing, DEFAULT_DROPOUT_RATE
+from nff.nn.layers import DEFAULT_DROPOUT_RATE
 from nff.nn.modules import (
     SchNetConv,
     SchNetEdgeUpdate,
-    NodeMultiTaskReadOut,
+    NodeMultiTaskReadOut
 )
-
-from nff.nn.activations import shifted_softplus
 from nff.nn.graphop import batch_and_sum, get_atoms_inside_cell
 from nff.nn.utils import get_default_readout
+from nff.nn.activations import shifted_softplus
 from nff.utils.scatter import compute_grad
 import numpy as np
 
@@ -83,7 +79,8 @@ class SchNet(nn.Module):
 
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
 
-        readoutdict = modelparams.get("readoutdict", get_default_readout(n_atom_basis))
+        readoutdict = modelparams.get(
+            "readoutdict", get_default_readout(n_atom_basis))
         post_readout = modelparams.get("post_readout", None)
 
         # convolutions
@@ -136,7 +133,8 @@ class SchNet(nn.Module):
         # offsets take care of periodic boundary conditions
         offsets = batch.get("offsets", 0)
 
-        e = (xyz[a[:, 0]] - xyz[a[:, 1]] - offsets).pow(2).sum(1).sqrt()[:, None]
+        e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
+             offsets).pow(2).sum(1).sqrt()[:, None]
 
         # ensuring image atoms have the same vectors of their corresponding
         # atom inside the unit cell
@@ -149,7 +147,7 @@ class SchNet(nn.Module):
 
         return r, N, xyz
 
-    def forward(self, batch, xyz=None):
+    def forward(self, batch, xyz=None, **kwargs):
         """Summary
 
         Args:

@@ -1,0 +1,24 @@
+{
+  "base_config_path": "/home/saxelrod/Repo/projects/master/NeuralForceField/scripts/cp3d/transfer/run_cp/config/from_cp/base_config.json",
+  "cp_folder": "/home/saxelrod/Repo/projects/chemprop/chemprop",
+  "feature_folder": "/home/saxelrod/chemprop_cov_2/features/from_cp",
+  "model_folder_cp": "/home/saxelrod/rgb_nfs/supercloud_backup/models/saved_models/cov_1_cl/chemprop",
+  "metrics": [
+    "binary_cross_entropy",
+    "auc",
+    "prc-auc"
+  ],
+  "feat_options": [
+    true,
+    false
+  ],
+  "mpnn_options": [
+    true,
+    false
+  ],
+
+  "hyp_config_path": "/home/saxelrod/Repo/projects/master/NeuralForceField/scripts/cp3d/transfer/run_cp/config/from_cp/base_hyp_config.json",
+  "use_hyperopt": true,
+  "rerun_hyperopt": false
+
+}

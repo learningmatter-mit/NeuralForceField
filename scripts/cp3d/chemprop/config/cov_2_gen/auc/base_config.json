@@ -1,0 +1,16 @@
+{
+ "data_path": "/home/saxelrod/rgb_nfs/dsets/cov_2_gen/csv/train_full.csv",
+ "separate_val_path": "/home/saxelrod/rgb_nfs/dsets/cov_2_gen/csv/val_full.csv",
+ "separate_test_path": "/home/saxelrod/rgb_nfs/dsets/cov_2_gen/csv/test_full.csv",
+ "dataset_type": "classification",
+ "no_features_scaling": true,
+ "quiet": true,
+ "gpu": 3,
+ "num_folds": 10,
+ "class_balance": true,
+ "epochs": 2000,
+ "dropout": 0.2,
+ "depth": 4,
+ "ffn_num_layers": 2,
+ "hidden_size": 500
+}

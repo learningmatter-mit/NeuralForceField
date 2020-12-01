@@ -1,0 +1,7 @@
+{
+  "feat_folder": "/home/saxelrod/supercloud2/models/cov_2_protease/fps_from_att_k1_yes_prob",
+  "cp_save_folder": "/home/saxelrod/chemprop_cov_2/features/fps_from_att_k1_yes_prob",
+  "smiles_folder": "/home/saxelrod/chemprop_cov_2/scaffold_split",
+  "metrics": ["binary_cross_entropy", "auc", "prc-auc"],
+  "hyper_dset_size": null
+}

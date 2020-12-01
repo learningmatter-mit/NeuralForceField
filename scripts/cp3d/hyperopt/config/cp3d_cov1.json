@@ -1,0 +1,27 @@
+{
+  "job_path": "/home/gridsan/saxelrod/repo/nff/master/NeuralForceField/scripts/cp3d/train/config/cp3d_cov1.json",
+  "model_path": "/home/gridsan/saxelrod/models/reduced_size_3A",
+  "param_names": [
+    "num_heads",
+    "attention_dropout",
+    "readout_dropout",
+    "dropout_rate",
+    "attention_type"
+  ],
+  "param_types": [
+    "int",
+    "float",
+    "float",
+    "float",
+    "categorical"
+  ],
+  "options": [[1, 5],
+              [0, 0.4],
+              [0, 0.4],
+              [0, 0.4],
+              ["attention", "linear_attention"]],
+  "num_samples": 10,
+  "metric": "prc_auc",
+  "prop_name": "sars_cov_one_cl_protease_active",
+  "score_file": "score.json"
+}

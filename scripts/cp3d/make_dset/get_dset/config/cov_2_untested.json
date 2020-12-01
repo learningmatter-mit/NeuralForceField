@@ -1,0 +1,14 @@
+{
+  "max_confs": 1,
+  "summary_path": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/rdkit_folder/summary_drugs.json",
+  "dataset_folder": "/nfs/rafagblab001/saxelrod/dsets/cov_2_gen_untested",
+  "pickle_folder": "/nfs/rafagblab001/saxelrod/GEOM_DATA_ROUND_2/rdkit_folder",
+  "num_threads": 10,
+  "csv_folder": "/nfs/rafagblab001/saxelrod/dsets/cov_2_gen_untested",
+  "parallel_feat_threads": 1,
+  "strict_conformers": false,
+  "slurm_parallel": false,
+  "nbrlist_cutoff": 5.0,
+  "extra_features": [],
+  "add_directed_idx": false
+}
