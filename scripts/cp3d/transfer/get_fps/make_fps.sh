@@ -10,7 +10,7 @@
 #SBATCH -p sched_mit_rafagb_amd,sched_mit_rafagb
 
 source $HOME/.bashrc
-source activate nff_consistent
+source activate nff
 
 # change to your config path
 CONFIG="config/cov2_cl_test.json"

@@ -11,7 +11,7 @@
 
 source deactivate
 source ~/.bashrc
-source activate nff_consistent
+source activate nff
 
 CONFIG="config/cp3d_ndu_cov2_gen.json"
 # CONFIG="config/cp3d_single_cov2_gen.json"

@@ -1,0 +1,7 @@
+{
+  "cp_folder": "/home/saxelrod/Repo/projects/chemprop/chemprop",
+  "model_folder_cp": "/home/saxelrod/cov2_transfer_test",
+  "device": 1,
+  "test_path": "/home/saxelrod/rgb_nfs/models/cov_2_cl/test_full.csv",
+  "metrics": ["prc-auc", "auc"]
+}
