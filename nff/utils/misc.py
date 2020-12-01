@@ -357,14 +357,23 @@ def preprocess_class(pred):
     rather than classifier, which doesn't necessarily
     predict a value between 0 and 1.
     Args:
-        pred (np.array or torch.Tensor): predictions
+        pred (np.array or torch.Tensor or list): predictions
     Returns:
-        pred (np.array or torch.Tensor): predictions
+        pred (np.array or torch.Tensor or list): predictions
             with max 1 and min 0.
     """
+
+    to_list = False
+    if type(pred) is list:
+        pred = np.array(pred)
+        to_list = True
+
     # make sure the min and max are 0 and 1
     pred[pred < 0] = 0
     pred[pred > 1] = 1
+
+    if to_list:
+        pred = pred.tolist()
 
     return pred
 
