@@ -129,7 +129,7 @@
         "model_kwargs": {
             "sub_batch_size": 1
         },
-        "model_name": "cov_2_cl_edge_idx_2",
+        "model_name": "cov_2_cl",
         "mol_loss_norm": true,
         "seed": 1,
         "torch_par": false,

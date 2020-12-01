@@ -524,7 +524,7 @@ def conf_sims_from_files(model_path,
     return analysis, bare_data
 
 
-def get_scores(path):
+def get_scores(path, avg_metrics=['auc', 'prc-auc']):
     """
     Load pickle files that contain predictions and actual values, using
     models evaluated by different validation metrics, and use the predictions
@@ -532,6 +532,7 @@ def get_scores(path):
     Args:
             path (str): path to the saved model folder, which contains the
                     pickle files.
+            avg_metrics (list[str]): metrics to use in score averaging
     Returns:
             scores (list): list of dictionaries containing the split being
                     used, the validation metric used to get the model, and
@@ -565,15 +566,21 @@ def get_scores(path):
                        "auc": auc_score,
                        "prc": prc_score})
 
-    all_auc = [score["auc"] for score in scores]
-    all_prc = [score["prc"] for score in scores]
+    if avg_metrics is None:
+        avg_metrics = [score["from_metric"] for score in scores]
+
+    all_auc = [score["auc"] for score in scores if score['from_metric']
+               in avg_metrics]
+    all_prc = [score["prc"] for score in scores if score['from_metric']
+               in avg_metrics]
     avg_auc = {"mean": np.mean(all_auc),
                "std": np.std(all_auc)}
     avg_prc = {"mean": np.mean(all_prc),
                "std": np.std(all_prc)}
     scores.append({"from_metric": "average",
                    "auc": avg_auc,
-                   "prc": avg_prc})
+                   "prc": avg_prc,
+                   "avg_metrics": avg_metrics})
 
     save_path = os.path.join(path, "scores_from_metrics.json")
     with open(save_path, "w") as f:
@@ -582,13 +589,15 @@ def get_scores(path):
     return scores
 
 
-def recursive_scoring(base_path):
+def recursive_scoring(base_path, avg_metrics=['auc', 'prc-auc']):
     """
     Recursively search in a base directory to find sub-folders that
     have pickle files that can be used for scoring. Apply `get_scores`
     to these sub-folders.
     Args:
             base_path (str): base folder to search in
+            avg_metrics (list[str]): metrics to use in score averaging
+
     Returns:
             None
     """
@@ -597,7 +606,7 @@ def recursive_scoring(base_path):
              and i.startswith("pred")]
     if files:
         print(f"Analyzing {base_path}")
-        get_scores(base_path)
+        get_scores(base_path, avg_metrics)
 
     for direc in os.listdir(base_path):
         direc_path = os.path.join(base_path, direc)
@@ -607,7 +616,7 @@ def recursive_scoring(base_path):
                  and i.startswith("pred")]
         if files:
             print(f"Analyzing {direc_path}")
-            get_scores(direc_path)
+            get_scores(direc_path, avg_metrics)
             continue
 
         folders = [os.path.join(direc_path, i) for i in
