@@ -44,6 +44,5 @@ for i in $(seq 0 $END); do
     echo $cmd
     eval $cmd
 
-    break
 done
 
