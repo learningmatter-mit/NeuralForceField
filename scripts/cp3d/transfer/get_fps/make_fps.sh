@@ -13,7 +13,7 @@ source $HOME/.bashrc
 source activate nff_consistent
 
 # change to your config path
-CONFIG="config/cp3d_ndu_single_cov2_gen.json"
+CONFIG="config/cov2_cl_test.json"
 
 
 export NFFDIR=/home/saxelrod/repo/nff/master/NeuralForceField
