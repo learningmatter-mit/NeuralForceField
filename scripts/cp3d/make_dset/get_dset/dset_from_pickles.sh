@@ -17,7 +17,7 @@ source activate nff
 CONFIG="config/cov_2_3cl_test.json"
 
 # change to your nff directory
-export NFFDIR="$HOME/Repo/projects/master/NeuralForceField/nff"
+export NFFDIR="$HOME/Repo/projects/master/NeuralForceField"
 export PYTHONPATH="$NFFDIR:$PYTHONPATH"
 
 NUM_THREADS=$(cat $CONFIG | jq ".num_threads")
