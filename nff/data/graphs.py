@@ -525,7 +525,7 @@ def make_dset_directed(dset):
         # fix the corresponding bond features
         bond_feats = batch.get('bond_features')
         has_bond_feats = (bond_feats is not None)
-        if (not bonds_were_directed) and (has_bonds and has_bond_feats):
+        if (has_bonds and has_bond_feats) and (not bonds_were_directed):
             bond_feats = torch.cat([bond_feats] * 2, dim=0)
             dset.props['bond_features'][i] = bond_feats
 
