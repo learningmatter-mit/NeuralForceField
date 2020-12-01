@@ -14,13 +14,10 @@ source activate nff
 
 # change to your config file
 
-for i in $(seq 1 1); do
-
-# CONFIG="config/cov_2_cross_val/$i.json"
-CONFIG="config/cov_2_untested.json"
+CONFIG="config/cov_2_3cl_test.json"
 
 # change to your nff directory
-export NFFDIR="$HOME/repo/nff/covid_clean/NeuralForceField"
+export NFFDIR="$HOME/Repo/projects/master/NeuralForceField/nff"
 export PYTHONPATH="$NFFDIR:$PYTHONPATH"
 
 NUM_THREADS=$(cat $CONFIG | jq ".num_threads")
@@ -50,6 +47,3 @@ for i in $(seq 0 $END); do
     break
 done
 
-wait
-
-done
