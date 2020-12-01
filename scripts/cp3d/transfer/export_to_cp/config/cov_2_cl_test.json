@@ -1,0 +1,7 @@
+{
+  "feat_folder": "/home/saxelrod/Repo/projects/public_nff/NeuralForceField/tutorials/cov_2_cl_feats",
+  "cp_save_folder": "/home/saxelrod/Repo/projects/public_nff/NeuralForceField/tutorials/cov_2_cl_feat_for_chemprop",
+  "smiles_folder": "/home/saxelrod/rgb_nfs/models/cov_2_cl",
+  "metrics": ["binary_cross_entropy", "auc", "prc-auc"],
+  "hyper_dset_size": null
+}
