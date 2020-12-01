@@ -11,7 +11,8 @@
     "prc-auc",
     "auc",
     "binary_cross_entropy"
-  ]
+  ],
+  "max_confs": 1
 }
 
 

@@ -1,0 +1,21 @@
+{
+  "model_folder":  "/nfs/rafagblab001/saxelrod/dsets/cov_2_gen_2",
+  "dset_folder": "/nfs/rafagblab001/saxelrod/dsets/cov_2_gen_2",
+  "feat_save_folder": "/nfs/rafagblab001/saxelrod/dsets/cov_2_gen_2",
+  "prop": "sars_cov_two_active",
+  "device": 0,
+  "batch_size": 1,
+  "sub_batch_size": 1,
+  "test_only": true,
+  "metrics": [
+    "prc-auc",
+    "auc",
+    "binary_cross_entropy"
+  ]
+}
+
+
+
+
+
+

@@ -2,25 +2,32 @@
     "model_params": {
         "activation": "ReLU",
         "base_keys": [
-            "sars_cov_two_active"
+            "sars_cov_two_cl_protease_active"
         ],
         "boltzmann_dict": {
             "boltz_basis": 10,
-            "dropout_rate": 0.00048762681753717805,
+            "dropout_rate": 0.0002923269447290024,
             "equal_weights": false,
             "final_act": "ReLU",
             "head_pool": "concatenate",
             "mol_basis": 300,
-            "num_heads": 5,
+            "num_heads": 4,
             "type": "linear_attention"
         },
         "classifier": true,
-        "cp_input_layers": [
+        "cp_dropout": 0.0365707000149309,
+        "cutoff": 5.0,
+        "dropout_rate": 0,
+        "ext_feat_types": [],
+        "extra_features": [],
+        "gauss_embed": true,
+        "grad_keys": [],
+        "input_layers": [
             {
                 "name": "linear",
                 "param": {
                     "in_features": 159,
-                    "out_features": 150
+                    "out_features": 300
                 }
             },
             {
@@ -28,13 +35,7 @@
                 "param": {}
             }
         ],
-        "cutoff": 5.0,
-        "dropout_rate": 0.00011529123431329071,
-        "ext_feat_types": [],
-        "extra_features": [],
-        "gauss_embed": true,
-        "grad_keys": [],
-        "model_type": "ChemProp3D",
+        "model_type": "OnlyBondUpdateCP3D",
         "mol_basis": 300,
         "mol_fp_layers": [],
         "n_atom_basis": 133,
@@ -47,7 +48,7 @@
             {
                 "name": "linear",
                 "param": {
-                    "in_features": 433,
+                    "in_features": 497,
                     "out_features": 300
                 }
             },
@@ -57,18 +58,18 @@
             }
         ],
         "readoutdict": {
-            "sars_cov_two_active": [
+            "sars_cov_two_cl_protease_active": [
                 {
                     "name": "linear",
                     "param": {
-                        "in_features": 1500,
+                        "in_features": 1200,
                         "out_features": 300
                     }
                 },
                 {
                     "name": "Dropout",
                     "param": {
-                        "p": 0.00022307810780526667
+                        "p": 0.005855903912643793
                     }
                 },
                 {
@@ -85,36 +86,24 @@
                 {
                     "name": "Dropout",
                     "param": {
-                        "p": 0.00022307810780526667
+                        "p": 0.005855903912643793
                     }
                 }
             ]
         },
         "same_filters": true,
-        "schnet_input_layers": [
-            {
-                "name": "linear",
-                "param": {
-                    "in_features": 197,
-                    "out_features": 150
-                }
-            },
-            {
-                "name": "ReLU",
-                "param": {}
-            }
-        ],
+        "schnet_dropout": 0.005037671897737626,
         "trainable_gauss": false,
         "use_mpnn": true
     },
     "train_params": {
-        "batch_size": 4,
+        "batch_size": 1,
         "checkpoints_to_keep": 10000,
         "del_grad_interval": 100,
         "log_every_n_epochs": 1,
         "loss": "logits_cross_entropy",
         "loss_coef": {
-            "sars_cov_two_active": 1
+            "sars_cov_two_cl_protease_active": 1
         },
         "lr": 0.0001,
         "lr_decay": 0.5,
@@ -122,20 +111,20 @@
         "lr_patience": 10,
         "max_epochs": 500,
         "metrics": [
-            "PrAuc",
-            "RocAuc"
+            "RocAuc",
+            "PrAuc"
         ],
-        "mini_batches": 16,
+        "mini_batches": 64,
         "model_kwargs": {
             "sub_batch_size": 1
         },
-        "model_name": "cov_2_gen",
+        "model_name": "cov_2_cl_edge_idx",
         "mol_loss_norm": true,
         "seed": 1,
         "torch_par": false,
         "use_slurm": true,
         "weightpath": "/nfs/rafagblab001/saxelrod/dsets",
-        "metric_as_loss": "RocAuc_sars_cov_two_active",
+        "metric_as_loss": "PrAuc_sars_cov_two_cl_protease_active",
         "metric_objective": "maximize"
     }
 }

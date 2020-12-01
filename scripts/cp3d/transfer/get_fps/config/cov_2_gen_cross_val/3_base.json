@@ -4,7 +4,7 @@
     "dset_folder": "/nfs/rafagblab001/saxelrod/dsets/cov_2_gen_untested",
     "feat_save_folder": "/nfs/rafagblab001/saxelrod/supercloud_backup/models/saved_models/cov_2_gen/schnet_single_cross_val/3/screening",
     "max_confs": 1,
-    "metric": "binary_cross_entropy",
+    "metric": "auc",
     "metrics": [
         "binary_cross_entropy",
         "prc-auc",
