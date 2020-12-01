@@ -14,13 +14,10 @@ source activate nff
 
 # change to your config file
 
-for i in $(seq 1 1); do
-
-# CONFIG="config/cov_2_cross_val/$i.json"
-CONFIG="config/cov_2_untested.json"
+CONFIG="config/cov_2_3cl_test.json"
 
 # change to your nff directory
-export NFFDIR="$HOME/repo/nff/covid_clean/NeuralForceField"
+export NFFDIR="$HOME/Repo/projects/master/NeuralForceField/nff"
 export PYTHONPATH="$NFFDIR:$PYTHONPATH"
 
 NUM_THREADS=$(cat $CONFIG | jq ".num_threads")
@@ -31,7 +28,7 @@ END=$((NUM_THREADS-1))
 ulimit -n 50000
 
 for i in $(seq 0 $END); do
-    cmd='python -W"ignore" dset_from_pickles.py --thread '$i' --config_file '$CONFIG' '
+    cmd='python dset_from_pickles.py --thread '$i' --config_file '$CONFIG' '
 
     # if parallelizing over nodes with slurm, use srun and let everything run together
     if [ $SLURM_PAR = 'true' ]; then
@@ -50,6 +47,3 @@ for i in $(seq 0 $END); do
     break
 done
 
-wait
-
-done
