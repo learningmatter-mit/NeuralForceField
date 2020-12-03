@@ -871,7 +871,7 @@ if __name__ == "__main__":
                         help=("Maximum number of species to use in "
                               "hyperparameter optimization."))
     parser.add_argument("--custom_hyps", type=str, help=("Custom hyperparameter"
-                        " ranges to override the feault. Please provide as a JSON"
+                        " ranges to override the default. Please provide as a JSON"
                         " string if not using a config file"))
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
