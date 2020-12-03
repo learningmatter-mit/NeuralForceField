@@ -97,20 +97,27 @@ def make_mol_rep(fp_len,
 
     return fps, vals
 
-
-def get_hyperparams(model_type, classifier):
+def get_hyperparams(model_type, classifier, custom_hyps=None):
     """
     Get hyperparameters and ranges to be optimized for a
     given model type.
     Args:
       model_type (str): name of model (e.g. random_forest)
       classifier (bool): whether or not it's a classifier
+      custom_hyps (dict): Dictionary of the form {hyperparam: new_vals}
+          for each hyperparameter, where `new_vals` is the range you want
+          for each.
     Returns:
       hyperparams (dict): dictionary with hyperparameters, their
         types, and their ranges.
     """
     class_or_reg = "classification" if classifier else "regression"
     hyperparams = HYPERPARAMS[class_or_reg][model_type]
+    if custom_hyps is not None:
+        for key, vals in custom_hyps.items():
+            if key in hyperparams:
+                hyperparams[key]["vals"] = vals
+
     return hyperparams
 
 
@@ -406,7 +413,8 @@ def make_objective(data,
                    hyper_score_path,
                    model_type,
                    props,
-                   max_specs):
+                   max_specs,
+                   custom_hyps):
     """
     Make objective function for `hyperopt`.
     Args:
@@ -419,11 +427,14 @@ def make_objective(data,
       model_type (str): name of model type to be trained.
       props (list[str]): properties you'll want to predict with themodel.
       max_specs (int): maximum number of species to use in hyperopt
+      custom_hyps (dict): Dictionary of the form {hyperparam: new_vals}
+          for each hyperparameter, where `new_vals` is the range you want
+          for each.
     Returns:
       objective (callable): objective function for use in `hyperopt`.
     """
 
-    hyperparams = get_hyperparams(model_type, classifier)
+    hyperparams = get_hyperparams(model_type, classifier, custom_hyps)
     param_type_dic = {name: sub_dic["type"] for name, sub_dic
                       in hyperparams.items()}
 
@@ -574,7 +585,8 @@ def get_or_load_hypers(hyper_save_path,
                        hyper_score_path,
                        model_type,
                        props,
-                       max_specs):
+                       max_specs,
+                       custom_hyps):
     """
     Optimize hyperparameters or load hyperparameters if
     they've already been otpimized.
@@ -592,6 +604,10 @@ def get_or_load_hypers(hyper_save_path,
       model_type (str): name of model type to be trained
       props (list[str]): properties you'll want to predict with the model
       max_specs (int): maximum number of species to use in hyperopt
+      custom_hyps (dict): Dictionary of the form {hyperparam: new_vals}
+          for each hyperparameter, where `new_vals` is the range you want
+          for each.
+
     Returns:
       translate_params (dict): translated version of the best hyperparameters
     """
@@ -608,7 +624,8 @@ def get_or_load_hypers(hyper_save_path,
                                    hyper_score_path=hyper_score_path,
                                    model_type=model_type,
                                    props=props,
-                                   max_specs=max_specs)
+                                   max_specs=max_specs,
+                                   custom_hyps=custom_hyps)
 
         space = make_space(model_type, classifier)
 
@@ -741,6 +758,7 @@ def hyper_and_train(train_path,
                     model_type,
                     props,
                     max_specs,
+                    custom_hyps,
                     **kwargs):
     """
     Run hyperparameter optimization and train an ensemble of models.
@@ -767,7 +785,9 @@ def hyper_and_train(train_path,
       model_type (str): name of model type to be trained
       props (list[str]): properties you'll want to predict with the model
       max_specs (int): maximum number of species to use in hyperopt
-
+      custom_hyps (dict): Dictionary of the form {hyperparam: new_vals}
+          for each hyperparameter, where `new_vals` is the range you want
+          for each.
     Returns:
       None
 
@@ -786,7 +806,8 @@ def hyper_and_train(train_path,
         hyper_score_path=hyper_score_path,
         model_type=model_type,
         props=props,
-        max_specs=max_specs)
+        max_specs=max_specs,
+        custom_hyps=custom_hyps)
 
     ensemble_preds, ensemble_scores = get_ensemble_preds(
         test_folds=test_folds,
@@ -849,10 +870,15 @@ if __name__ == "__main__":
     parser.add_argument("--max_specs", type=int,
                         help=("Maximum number of species to use in "
                               "hyperparameter optimization."))
+    parser.add_argument("--custom_hyps", type=str, help=("Custom hyperparameter"
+                        " ranges to override the feault. Please provide as a JSON"
+                        " string if not using a config file"))
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "
                               "line arguments."))
 
     args = parse_args(parser)
+    if isinstance(args.custom_hyps, str):
+        args.custom_hyps = json.loads(args.custom_hyps)
     hyper_and_train(**args.__dict__)
