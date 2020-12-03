@@ -402,3 +402,4 @@ We also provide the script `scripts/cp3d/sklearn/run.sh`, which is a wrapper aro
 - `test_folds` (int): Number of different seeds to use for getting average performance of the model on the test set
 - `seed` (int): random seed for initializing the models during hyperparameter optimization. Seeds 0 to `test_folds-1` are used for training the final model.
 - `max_specs` (int): Maximum number of species to use in hyperparameter optimization. If the proportion of species in the training split is `x`, then the number of training species in hyperparameter optimization will be `x * max_specs`, and similarly for validation.
+- `custom_hyps` (str or dictionary): Custom hyperparameter ranges to override the default. Please provide as a JSON string if not using a config file
