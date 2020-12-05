@@ -1,25 +1,16 @@
 {
-  "job_path": "/home/saxelrod/repo/nff/master/NeuralForceField/scripts/cp3d/train/config/confs_single.json",
-  "model_path": "/nfs/rafagblab001/saxelrod/dsets/synthetic/confs_single",
+  "job_path": "/home/gridsan/saxelrod/repo/nff/master/NeuralForceField/scripts/cp3d/train/config/confs_single.json",
+  "model_path": "/home/gridsan/saxelrod/models/dsets/synthetic/confs_single",
   "param_names": [
-    "num_heads",
-    "attention_dropout",
     "readout_dropout",
-    "dropout_rate",
-    "attention_type"
+    "dropout_rate"
   ],
   "param_types": [
-    "int",
     "float",
-    "float",
-    "float",
-    "categorical"
+    "float"
   ],
-  "options": [[1, 5],
-              [0, 0.4],
-              [0, 0.4],
-              [0, 0.4],
-              ["attention", "linear_attention"]],
+  "options": [[0, 0.4],
+              [0, 0.4]],
   "num_samples": 20,
   "metric": "mae",
   "prop_name": "log_uniqueconfs",
