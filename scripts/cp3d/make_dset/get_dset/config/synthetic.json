@@ -1,14 +1,13 @@
 {
-  "max_confs": 10,
-  "summary_path": "/home/gridsan/saxelrod/models/full_dset/rdkit_folder/summary_drugs.json",
-  "dataset_folder": "/home/gridsan/saxelrod/models/synthetic",
-  "pickle_folder": "/home/gridsan/saxelrod/models/full_dset/rdkit_folder",
-  "num_threads": 16,
-  "csv_folder": "/home/gridsan/saxelrod/synthetic",
+  "summary_path": "/nfs/rafagblab001/saxelrod/GEOM_BACKUP/rdkit_folder/summary_drugs.json",
+  "dataset_folder": "/nfs/rafagblab001/saxelrod/synthetic/dsets",
+  "pickle_folder": "/nfs/rafagblab001/saxelrod/GEOM_BACKUP/rdkit_folder",
+  "num_threads": 1,
+  "csv_folder": "/nfs/rafagblab001/saxelrod/synthetic/dsets/free_energy",
   "parallel_feat_threads": 1,
   "strict_conformers": false,
-  "slurm_parallel": true,
+  "slurm_parallel": false,
   "nbrlist_cutoff": 5.0,
   "extra_features": [],
-  "add_directed_idx": true
+  "max_confs": 1
 }
