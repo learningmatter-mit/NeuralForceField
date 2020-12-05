@@ -12,7 +12,7 @@
   "num_samples": 200,
   "hyper_metric": "mae",
   "score_metrics": ["mse", "mae"],
-  "test_folds": 10,
+  "test_folds": 1,
   "seed": 0,
   "model_type": "random_forest",
   "max_specs": 10000,
