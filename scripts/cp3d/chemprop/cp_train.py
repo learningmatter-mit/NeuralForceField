@@ -126,7 +126,7 @@ def main(base_config_path,
                           metric=metric,
                           hyp_feat_path=None,
                           hyp_folder=hyp_folder,
-                          features_only=False,
+                          features_only=None,
                           no_features=False)
 
         make_hyp_csvs(base_config_path=base_config_path,
