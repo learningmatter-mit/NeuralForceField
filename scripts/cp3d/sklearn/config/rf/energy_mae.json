@@ -1,0 +1,20 @@
+{
+  "classifier": false,
+  "props": ["ensembleenergy"],
+  "train_path": "/home/saxelrod/rgb_nfs/synthetic/dsets/ensemble_energy/train_full.csv",
+  "val_path": "/home/saxelrod/rgb_nfs/synthetic/dsets/ensemble_energy/val_full.csv",
+  "test_path": "/home/saxelrod/rgb_nfs/synthetic/dsets/ensemble_energy/test_full.csv",
+  "pred_save_path": "/home/saxelrod/rgb_nfs/synthetic/models/ensemble_energy/rf/pred_auc.json",
+  "score_save_path": "/home/saxelrod/rgb_nfs/synthetic/models/ensemble_energy/rf/scores_auc.json",
+  "hyper_save_path": "/home/saxelrod/rgb_nfs/synthetic/models/ensemble_energy/rf/best_params_auc.json",
+  "hyper_score_path": "/home/saxelrod/rgb_nfs/synthetic/models/ensemble_energy/rf/hyper_scores_auc.json",
+  "rerun_hyper": false,
+  "num_samples": 200,
+  "hyper_metric": "mae",
+  "score_metrics": ["mse", "mae"],
+  "test_folds": 10,
+  "seed": 0,
+  "model_type": "random_forest",
+  "max_specs": 10000,
+  "custom_hyps": {"fp_len": [64, 128, 256, 512]}
+}
