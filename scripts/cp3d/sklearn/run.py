@@ -13,6 +13,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.kernel_ridge import KernelRidge
 
 from nff.utils import (parse_args, apply_metric, CHEMPROP_METRICS,
                        METRIC_DIC, read_csv, convert_metric, prop_split)
@@ -97,6 +98,7 @@ def make_mol_rep(fp_len,
 
     return fps, vals
 
+
 def get_hyperparams(model_type, classifier, custom_hyps=None):
     """
     Get hyperparameters and ranges to be optimized for a
@@ -113,6 +115,7 @@ def get_hyperparams(model_type, classifier, custom_hyps=None):
     """
     class_or_reg = "classification" if classifier else "regression"
     hyperparams = HYPERPARAMS[class_or_reg][model_type]
+
     if custom_hyps is not None:
         for key, vals in custom_hyps.items():
             if key in hyperparams:
@@ -320,10 +323,10 @@ def run_sklearn(space,
             raise NotImplementedError
     else:
         if model_type == "random_forest":
-            kwargs = {}
             pref_fn = RandomForestRegressor(random_state=seed,
-                                            **sk_hyperparams,
-                                            **kwargs)
+                                            **sk_hyperparams)
+        elif model_type == "kernel_ridge":
+            pref_fn = KernelRidge(**sk_hyperparams)
 
         else:
             raise NotImplementedError
@@ -870,9 +873,10 @@ if __name__ == "__main__":
     parser.add_argument("--max_specs", type=int,
                         help=("Maximum number of species to use in "
                               "hyperparameter optimization."))
-    parser.add_argument("--custom_hyps", type=str, help=("Custom hyperparameter"
-                        " ranges to override the default. Please provide as a JSON"
-                        " string if not using a config file"))
+    parser.add_argument("--custom_hyps", type=str,
+                        help=("Custom hyperparameter ranges to override"
+                              " the default. Please provide as a JSON string"
+                              " if not using a config file"))
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "
