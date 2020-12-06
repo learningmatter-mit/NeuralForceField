@@ -1,0 +1,18 @@
+{
+  "job_path": "/home/gridsan/saxelrod/repo/nff/master/NeuralForceField/scripts/cp3d/train/config/energy_single.json",
+  "model_path": "/home/gridsan/saxelrod/models/dsets/synthetic/energy_single",
+  "param_names": [
+    "readout_dropout",
+    "dropout_rate"
+  ],
+  "param_types": [
+    "float",
+    "float"
+  ],
+  "options": [[0, 0.4],
+              [0, 0.4]],
+  "num_samples": 20,
+  "metric": "mae",
+  "prop_name": "ensembleenergy",
+  "score_file": "score.json"
+}
