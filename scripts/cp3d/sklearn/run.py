@@ -6,6 +6,7 @@ predictions from an sklearn model.
 import json
 import argparse
 import os
+import pickle
 
 import copy
 from hyperopt import fmin, hp, tpe
