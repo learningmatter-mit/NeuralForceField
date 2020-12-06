@@ -554,9 +554,10 @@ def get_preds(pred_fn,
 def save_preds(ensemble_preds,
                ensemble_scores,
                pred_save_path,
-               score_save_path):
+               score_save_path,
+               pred_fns):
     """
-    Save predictions.
+    Save predictions and models.
     Args:
       ensemble_preds (dict): predictions
       ensemble_scores (dict): scores
@@ -564,6 +565,8 @@ def save_preds(ensemble_preds,
         predictions.
       score_save_path (str): path to JSON file in which to save
         scores.
+      pred_fns (dict): Dictionary of fitted models for each seed
+
     Returns:
       None
     """
@@ -574,9 +577,13 @@ def save_preds(ensemble_preds,
     with open(pred_save_path, "w") as f:
         json.dump(ensemble_preds, f, indent=4, sort_keys=True)
 
+    model_save_path = pred_save_path.replace(".json", "_models.pickle")
+    with open(model_save_path, "wb") as f:
+        pickle.dump(pred_fns, f)
+
     print(f"Predictions saved to {pred_save_path}")
     print(f"Scores saved to {score_save_path}")
-
+    print(f"Models saved to {model_save_path}")
 
 def get_or_load_hypers(hyper_save_path,
                        rerun_hyper,
@@ -671,6 +678,7 @@ def get_ensemble_preds(test_folds,
     Returns:
       ensemble_preds (dict): predictions
       ensemble_scores (dict): scores
+      pred_fns (dict): Dictionary of fitted models for each seed
     """
 
     ensemble_preds = {}
@@ -683,6 +691,7 @@ def get_ensemble_preds(test_folds,
 
     x_train, y_train = xy_dic["train"]
     x_test, y_test = xy_dic["test"]
+    pred_fns = {}
 
     for seed in range(test_folds):
         pred, real, pred_fn = run_sklearn(translate_params,
@@ -693,6 +702,7 @@ def get_ensemble_preds(test_folds,
                                           y_train=y_train,
                                           x_test=x_test,
                                           y_test=y_test)
+        pred_fns[seed] = pred_fn
 
         metrics = get_metrics(pred=pred,
                               real=real,
@@ -741,7 +751,7 @@ def get_ensemble_preds(test_folds,
 
     ensemble_scores["average"] = avg
 
-    return ensemble_preds, ensemble_scores
+    return ensemble_preds, ensemble_scores, pred_fns
 
 
 def hyper_and_train(train_path,
@@ -812,7 +822,7 @@ def hyper_and_train(train_path,
         max_specs=max_specs,
         custom_hyps=custom_hyps)
 
-    ensemble_preds, ensemble_scores = get_ensemble_preds(
+    ensemble_preds, ensemble_scores, pred_fns = get_ensemble_preds(
         test_folds=test_folds,
         translate_params=translate_params,
         data=data,
@@ -824,7 +834,8 @@ def hyper_and_train(train_path,
     save_preds(ensemble_preds=ensemble_preds,
                ensemble_scores=ensemble_scores,
                pred_save_path=pred_save_path,
-               score_save_path=score_save_path)
+               score_save_path=score_save_path,
+               pred_fns=pred_fns)
 
 
 if __name__ == "__main__":
