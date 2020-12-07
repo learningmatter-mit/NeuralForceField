@@ -160,6 +160,55 @@
                     4
                 ]
             }
+        },
+        "kernel_ridge": {
+            "alpha": {
+                "type": "float",
+                "vals": [
+                    0,
+                    5
+                ]},
+            "kernel": {
+                "type": "categorical",
+                "vals": ["additive_chi2",
+                        "chi2",
+                        "linear",
+                        "polynomial",
+                        "poly",
+                        "rbf",
+                        "laplacian",
+                        "sigmoid",
+                        "cosine"]
+                },
+            "gamma": {
+                "type": "float",
+                "vals": [1e-4, 2]
+                },
+            "degree": {
+                "type": "int",
+                "vals": [1, 5]
+                },
+            "coef0": {
+                "type": "float",
+                "vals": [0.2, 2]
+                },
+            "fp_len": {
+                "type": "categorical",
+                "vals": [
+                    64,
+                    128,
+                    256,
+                    1024,
+                    2048
+                ]
+            },
+            "radius": {
+                "type": "int",
+                "vals": [
+                    1,
+                    4
+                ]
+            }
         }
     }
 }
