@@ -12,6 +12,7 @@
  "depth": 4,
  "ffn_num_layers": 2,
  "hidden_size": 500,
- "features_only": true
+ "features_only": true,
+ "features_generator": ["morgan"]
 }
 
