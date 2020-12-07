@@ -15,6 +15,5 @@
   "test_folds": 1,
   "seed": 0,
   "model_type": "random_forest",
-  "max_specs": 10000,
-  "custom_hyps": {"fp_len": [64, 128, 256, 512]}
+  "max_specs": 10000
 }
