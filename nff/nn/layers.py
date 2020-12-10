@@ -9,6 +9,7 @@ from nff.utils import bessel_basis, real_sph_harm
 
 zeros_initializer = partial(constant_, val=0.0)
 DEFAULT_DROPOUT_RATE = 0.0
+EPS = 1e-15
 
 
 def gaussian_smearing(distances, offset, widths, centered=False):
@@ -271,11 +272,11 @@ class DimeNetRadialBasis(nn.Module):
     """
     Radial basis layer for DimeNet.
     """
+
     def __init__(self,
                  n_rbf,
                  cutoff,
                  envelope_p):
-
         """
         Args:
             n_rbf (int): number of radial basis functions
@@ -287,7 +288,7 @@ class DimeNetRadialBasis(nn.Module):
 
         super().__init__()
         n = torch.arange(1, n_rbf + 1).float()
-        # initialize k_n but let it be learnable 
+        # initialize k_n but let it be learnable
         self.k_n = nn.Parameter(n * np.pi / cutoff)
         self.envelope = Envelope(envelope_p)
         self.cutoff = cutoff
@@ -302,3 +303,78 @@ class DimeNetRadialBasis(nn.Module):
         u = self.envelope(d / self.cutoff)
 
         return pref * arg * u
+
+
+class Diagonalize(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    def _generate_inputs(self, inputs):
+        if inputs.shape[-2:] == torch.Size([2, 2]):
+            if not all(inputs[:, 1][:, 0] == inputs[:, 0][:, 1]):
+                raise Exception("Matrix must be Hermitian")
+            d0 = inputs[:, 0, 0]
+            d1 = inputs[:, 1, 1]
+            lam = inputs[:, 0, 1]
+        elif inputs.shape[-1] == 3:
+            d0 = inputs[:, 0]
+            d1 = inputs[:, 1]
+            lam = inputs[:, 2]
+        elif inputs.shape[0] == 3:
+            d0 = inputs[0, :]
+            d1 = inputs[1, :]
+            lam = inputs[2, :]
+        else:
+            raise NotImplementedError(
+                "Only implemented for 2x2 matrix diagonalization")
+
+        return d0, d1, lam
+
+    def compute_v(self, d0, d1, lam, e0, state):
+
+        term_1 = -d0 + d1
+        term_2 = (d0 ** 2 - 2 * d0 * d1 + d1 ** 2 + 4 * lam ** 2 + EPS) ** 0.5
+        denom = 2 * lam
+
+        if state == 'lower':
+            v_element_0 = -(term_1 + term_2) / denom
+        elif state == 'upper':
+            v_element_0 = -(term_1 - term_2) / denom
+
+        v_element_0 = v_element_0.reshape(*e0.shape)
+        v_crude = torch.stack(
+            [v_element_0, torch.ones_like(v_element_0)], dim=-1)
+        v_norm = torch.norm(v_crude, dim=-1).reshape(-1, 1)
+        v = v_crude / v_norm
+
+        return v
+
+    def compute_U(self, d0, d1, lam, e0):
+
+        v_list = []
+        for state in ['lower', 'upper']:
+            v = self.compute_v(d0=d0,
+                               d1=d1,
+                               lam=lam,
+                               e0=e0,
+                               state=state)
+            v_list.append(v)
+
+        U_inv = torch.cat([v_list[0], v_list[1]], dim=-1).reshape(-1, 2, 2)
+        U = U_inv.transpose(1, 2)
+
+        return U
+
+    def forward(self, inputs, return_U=False):
+
+        d0, d1, lam = self._generate_inputs(inputs)
+        e0 = 1 / 2 * (d0 + d1 - ((d0 - d1) ** 2 + 4 * lam ** 2 + EPS) ** 0.5)
+        e1 = 1 / 2 * (d0 + d1 + ((d0 - d1) ** 2 + 4 * lam ** 2 + EPS) ** 0.5)
+
+        eigs = torch.stack([e0, e1], dim=-1)
+        U = self.compute_U(d0=d0,
+                           d1=d1,
+                           lam=lam,
+                           e0=e0)
+        return eigs, U
