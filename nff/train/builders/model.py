@@ -9,7 +9,7 @@ from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import ChemProp3D, OnlyBondUpdateCP3D
-from nff.nn.models.dimenet import DimeNet
+from nff.nn.models.dimenet import DimeNet, DimeNetDiabat
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -116,6 +116,23 @@ PARAMS_TYPE = {"SchNet":
                    "output_keys": list,
                    "grad_keys": list
 
+               },
+
+               "DimeNetDiabat": 
+               {
+                   "n_rbf": int,
+                   "cutoff": float,
+                   "envelope_p": int,
+                   "n_spher": int,
+                   "l_spher": int,
+                   "atom_embed_dim": int,
+                   "n_bilinear": int,
+                   "activation": str,
+                   "n_convolutions": int,
+                   "output_keys": list,
+                   "grad_keys": list,
+                   "diabat_keys": list
+
                }
 }
 
@@ -126,7 +143,8 @@ MODEL_DICT = {
     "SchNetFeatures": SchNetFeatures,
     "ChemProp3D": ChemProp3D,
     "OnlyBondUpdateCP3D": OnlyBondUpdateCP3D,
-    "DimeNet": DimeNet
+    "DimeNet": DimeNet,
+    "DimeNetDiabat": DimeNetDiabat
 }
 
 

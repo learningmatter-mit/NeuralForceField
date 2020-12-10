@@ -266,3 +266,156 @@ class DimeNet(nn.Module):
             results[key] = grad
 
         return results
+
+
+class DimeNetDiabat(DimeNet):
+
+    def __init__(self, modelparams):
+        """
+        Diabat keys has the shape of a 2x2 matrix
+        """
+
+        energy_keys = modelparams["output_keys"]
+        diabat_keys = modelparams["diabat_keys"]
+        new_out_keys = list(set(np.array(diabat_keys).reshape(-1)
+                                .tolist()))
+        modelparams.update({"output_keys": new_out_keys})
+
+        super().__init__(modelparams)
+
+        self.diag = Diagonalize()
+        self.diabat_keys = diabat_keys
+        self.grad_keys = modelparams["grad_keys"]
+        self.energy_keys = energy_keys
+
+    def add_grad(self, results, xyz):
+
+        for grad_key in self.grad_keys:
+            base_key = grad_key.replace("_grad", "")
+            output = results[base_key]
+            grad = compute_grad(inputs=xyz, output=output)
+
+            results[grad_key] = grad
+
+        return results
+
+    def get_nacv(self, U, stack_xyz):
+
+        # must be a vectorized way of doing this
+        # Use loop for now
+        # Also not exactly sure if this will work for the
+        # batched case of different molecules
+
+        num_geoms = stack_xyz.shape[0]
+        num_atoms = stack_xyz.shape[1] // 3
+        num_states = U.shape[2]
+        U_grad = torch.zeros(num_geoms, num_states, num_states, num_atoms, 3
+                             ).to(stack_xyz.device)
+
+        for i in range(U.shape[1]):
+            for j in range(U.shape[2]):
+                if i == j:
+                    continue
+                this_grad = compute_grad(inputs=stack_xyz,
+                                         output=U[:, i, j]).detach()
+                this_grad = this_grad.reshape(num_geoms, -1, 3)
+                U_grad[:, i, j, :, :] = this_grad
+
+        U = U.detach()
+
+        # m, l, and s are state indices that get summed out
+        # i and j are state indices that don't get summed out
+        # n = N_j is the number of geometries
+        # a = N_at is the number of atoms
+        # t = 3 is the number of directions for each atom
+
+        nacv = torch.einsum('nim, nsjat, nlm, nsl -> nijat', U, U_grad, U, U)
+
+        return nacv
+
+    def add_nacv(self, results, U, stack_xyz, N):
+
+        nacv = self.get_nacv(U=U, stack_xyz=stack_xyz)
+        num_states = nacv.shape[1]
+        for i in range(num_states):
+            for j in range(num_states):
+                if i == j:
+                    continue
+                this_nacv = nacv[:, i, j, :, :]
+                lst_nacvs = torch.split(this_nacv, [1] * this_nacv.shape[0])
+                trimmed_nacvs = torch.cat(
+                    [geom_nacv[:n].reshape(-1, 3) for
+                     geom_nacv, n in zip(lst_nacvs, N)])
+                results[f"nacv_{i}{j}"] = trimmed_nacvs
+        return results
+
+    def add_diag(self, results, N, stack_xyz):
+
+        diabat_keys = [self.diabat_keys[0][0],
+                       self.diabat_keys[1][1],
+                       self.diabat_keys[0][1]]
+
+        inputs = torch.stack([results[key] for key in diabat_keys])
+        ad_energies, U = self.diag(inputs)
+
+        results.update({key: ad_energies[:, i].reshape(-1, 1)
+                        for i, key in enumerate(self.energy_keys)})
+        results = self.add_nacv(results=results,
+                                U=U,
+                                stack_xyz=stack_xyz,
+                                N=N)
+
+        return results
+
+    def add_gap(self, results):
+
+        bottom_key = self.diabat_keys[0][0]
+        top_key = self.diabat_keys[1][1]
+        gap = results[top_key] - results[bottom_key]
+        results.update({"abs_diabat_gap": abs(gap)})
+
+        return results
+
+    def pad(self, batch):
+
+        nxyz = batch["nxyz"]
+        N = batch["num_atoms"].tolist()
+
+        nan = float(np.nan)
+        split = torch.split(nxyz, N)
+        reshaped = [i.reshape(-1) for i in split]
+        max_dim = max([i.shape[0] for i in reshaped])
+        stacked = torch.stack([F.pad(i, [0, max_dim - i.shape[0]],
+                                     value=nan)
+                               for i in reshaped])
+
+        num_batch = stacked.shape[0]
+        mask = torch.ones_like(stacked).reshape(-1, 4)
+        mask[:, 0] = 0
+        mask = mask.reshape(*stacked.shape).to(torch.bool)
+
+        stack_xyz = stacked[mask].reshape(num_batch, -1)
+        stack_xyz.requires_grad = True
+
+        xyz = stack_xyz.reshape(-1, 3)
+
+        return batch, stack_xyz, xyz
+
+    def forward(self, batch, xyz=None):
+
+        batch, stack_xyz, xyz = self.pad(batch)
+        out, xyz = self.atomwise(batch, xyz)
+        N = batch["num_atoms"].detach().cpu().tolist()
+        results = {}
+
+        for key, val in out.items():
+            # split the outputs into those of each molecule
+            split_val = torch.split(val, N)
+            # sum the results for each molecule
+            results[key] = torch.stack([i.sum() for i in split_val])
+
+        results = self.add_diag(results, N, stack_xyz)
+        results = self.add_grad(results, xyz)
+        results = self.add_gap(results)
+
+        return results
