@@ -247,7 +247,7 @@ def build_zhu_loss(loss_dict):
     if loss_key == "mse":
         loss_type = mse_operation
     elif loss_key == "cross_entropy":
-        loss_key = cross_entropy_sum
+        loss_type = cross_entropy_sum
 
     coef = loss_dict["coef"]
 
