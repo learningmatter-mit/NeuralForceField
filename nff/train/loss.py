@@ -109,7 +109,7 @@ def cross_entropy(targ, pred):
 
 def cross_entropy_sum(targ, pred):
 
-    loss_fn = BCELoss(reduction='sum')
+    loss_fn = torch.nn.BCELoss(reduction='sum')
     loss = loss_fn(pred, targ)
 
     return loss
