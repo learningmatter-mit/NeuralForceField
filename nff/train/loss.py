@@ -282,7 +282,13 @@ def build_zhu_grad_loss(loss_dict):
     expec_gap = loss_dict["params"]["expected_gap"] * \
         const.AU_TO_KCAL["energy"]
     loss_key = loss_dict["params"].get("loss_type", "mse")
-    loss_type = get_loss_func(loss_key)
+
+    if loss_key == "mse":
+        loss_type = mse_operation
+    elif loss_key == "cross_entropy":
+        loss_type = cross_entropy_sum
+    else:
+        raise NotImplementedError
 
     coef = loss_dict["coef"]
 
