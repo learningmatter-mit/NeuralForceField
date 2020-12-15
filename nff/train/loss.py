@@ -1,6 +1,5 @@
 import torch
-from nff.utils import const
-ants as const
+from nff.utils import constants as const
 
 __all__ = ["build_mse_loss"]
 
