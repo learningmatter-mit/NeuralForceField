@@ -5,9 +5,11 @@ import subprocess
 import os
 import random
 import numpy as np
+import torch
 from sklearn.metrics import (roc_auc_score, auc, precision_recall_curve,
                              r2_score, accuracy_score, log_loss)
 
+from nff.data.graphs import make_directed
 
 # optimization goal for various metrics
 
@@ -420,3 +422,36 @@ def apply_metric(metric, pred, actual):
         score = log_loss(y_true=actual, y_pred=np_pred)
 
     return score
+
+
+def avg_distances(dset):
+    """
+    Args:
+        dset (nff.nn.data.Dataset): NFF dataset where all the geometries are
+            different conformers for one species.
+    """
+
+    # Get the neighbor list that includes the neighbor list of each conformer
+
+    all_nbrs = []
+    for nbrs in dset.props['nbr_list']:
+        for pair in nbrs:
+            all_nbrs.append(tuple(pair.tolist()))
+    all_nbrs_tuple = list(set(tuple(all_nbrs)))
+
+    all_nbrs = torch.LongTensor([list(i) for i in all_nbrs_tuple])
+    all_nbrs = make_directed(all_nbrs)
+
+    num_confs = len(dset)
+    all_distances = torch.zeros(num_confs, all_nbrs.shape[0])
+
+    for i, batch in enumerate(dset):
+        xyz = batch["nxyz"][:, 1:]
+        all_distances[i] = ((xyz[all_nbrs[:, 0]] - xyz[all_nbrs[:, 1]])
+                            .pow(2).sum(1).sqrt()[:, None])
+
+    weights = torch.cat(dset.props["weights"]).reshape(-1, 1)
+    avg_d = (all_distances * weights).sum(0)
+
+    return all_nbrs, avg_d
+

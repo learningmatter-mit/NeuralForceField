@@ -164,8 +164,11 @@ class SchNetFeatures(WeightedConformers):
         if hasattr(offsets, 'max') and offsets.max() == 0:
             offsets = 0
 
-        distances = (xyz[a[:, 0]] - xyz[a[:, 1]] -
-                     offsets).pow(2).sum(1).sqrt()[:, None]
+        if "distances" in batch:
+            distances = batch["distances"][:, None]
+        else:
+            distances = (xyz[a[:, 0]] - xyz[a[:, 1]] -
+                         offsets).pow(2).sum(1).sqrt()[:, None]
         distance_feats = self.distance_filter(distances)
 
         e = torch.cat([bond_edge_features, distance_feats],
