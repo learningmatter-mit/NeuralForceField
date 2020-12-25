@@ -445,7 +445,7 @@ def avg_distances(dset):
     for i, batch in enumerate(dset):
         xyz = batch["nxyz"][:, 1:]
         all_distances[i] = ((xyz[all_nbrs[:, 0]] - xyz[all_nbrs[:, 1]])
-                            .pow(2).sum(1).sqrt()[:, None])
+                            .pow(2).sum(1).sqrt())
 
     weights = torch.cat(dset.props["weights"]).reshape(-1, 1)
     avg_d = (all_distances * weights).sum(0)
