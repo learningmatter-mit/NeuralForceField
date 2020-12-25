@@ -28,7 +28,7 @@ END=$((NUM_THREADS-1))
 ulimit -n 50000
 
 for i in $(seq 0 $END); do
-    cmd='python -W"ignore" dset_from_pickles.py --thread '$i' --config_file '$CONFIG' '
+    cmd='python dset_from_pickles.py --thread '$i' --config_file '$CONFIG' '
 
     # if parallelizing over nodes with slurm, use srun and let everything run together
     if [ $SLURM_PAR = 'true' ]; then
@@ -38,11 +38,19 @@ for i in $(seq 0 $END); do
         if (( $i % $SLURM_NNODES != 0)); then
             cmd=$cmd" > /dev/null 2>&1"
         fi
+        j=$(( i + 1 ))
+        cmd=$cmd" & pids[${j}]=\$!"
 
-        cmd=$cmd" &"
     fi
+
     echo $cmd
     eval $cmd
 
 done
 
+# wait for all pids
+for pid in ${pids[*]}; do
+    cmd="wait $pid"
+    echo $cmd
+    eval $cmd
+done
