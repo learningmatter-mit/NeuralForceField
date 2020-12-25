@@ -9,8 +9,6 @@ import torch
 from sklearn.metrics import (roc_auc_score, auc, precision_recall_curve,
                              r2_score, accuracy_score, log_loss)
 
-from nff.data.graphs import make_directed
-
 # optimization goal for various metrics
 
 METRIC_DIC = {"pr_auc": "maximize",
@@ -440,7 +438,6 @@ def avg_distances(dset):
     all_nbrs_tuple = list(set(tuple(all_nbrs)))
 
     all_nbrs = torch.LongTensor([list(i) for i in all_nbrs_tuple])
-    all_nbrs = make_directed(all_nbrs)
 
     num_confs = len(dset)
     all_distances = torch.zeros(num_confs, all_nbrs.shape[0])
