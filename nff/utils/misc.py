@@ -184,8 +184,9 @@ def parse_score(model_path, metric):
         splits = [i.strip() for i in line.split("|")]
         try:
             score = float(splits[idx])
-        except ValueError:
+        except (ValueError, IndexError):
             continue
+
         if any([(optim == "minimize" and score < best_score),
                 (optim == "maximize" and score > best_score)]):
             best_score = score
@@ -445,10 +446,24 @@ def avg_distances(dset):
     for i, batch in enumerate(dset):
         xyz = batch["nxyz"][:, 1:]
         all_distances[i] = ((xyz[all_nbrs[:, 0]] - xyz[all_nbrs[:, 1]])
-                            .pow(2).sum(1).sqrt()[:, None])
+                            .pow(2).sum(1).sqrt())
 
-    weights = torch.cat(dset.props["weights"]).reshape(-1, 1)
+    weights = dset.props["weights"].reshape(-1, 1)
     avg_d = (all_distances * weights).sum(0)
 
     return all_nbrs, avg_d
+
+def cat_props(props):
+
+    new_props = {}
+    for key, val in props.items():
+        if type(val) is list and type(val[0]) is torch.Tensor:
+            if len(val[0].shape) == 0:
+                new_props[key] = torch.stack(val)
+            else:
+                new_props[key] = torch.cat(val)
+        elif type(val) is torch.Tensor:
+            new_props[key] = val
+
+    return new_props
 

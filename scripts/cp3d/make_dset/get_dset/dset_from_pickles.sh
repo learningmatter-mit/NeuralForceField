@@ -14,7 +14,9 @@ source activate nff
 
 # change to your config file
 
-CONFIG="config/cov_2_3cl_test.json"
+# CONFIG="config/cov_2_3cl_test.json"
+# CONFIG="config/cov_2_3cl_avg.json"
+CONFIG="config/cov_2_gen_avg.json"
 
 # change to your nff directory
 export NFFDIR="$HOME/Repo/projects/master/NeuralForceField"
@@ -38,11 +40,23 @@ for i in $(seq 0 $END); do
         if (( $i % $SLURM_NNODES != 0)); then
             cmd=$cmd" > /dev/null 2>&1"
         fi
+        j=$(( i + 1 ))
+        cmd=$cmd" & pids[${j}]=\$!"
 
-        cmd=$cmd" &"
     fi
+
     echo $cmd
     eval $cmd
 
 done
+
+# wait for all pids
+for pid in ${pids[*]}; do
+    cmd="wait $pid"
+    echo $cmd
+    eval $cmd
+done
+
+
+
 

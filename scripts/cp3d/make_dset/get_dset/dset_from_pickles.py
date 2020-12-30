@@ -858,7 +858,7 @@ def make_avg_dataset(spec_dics,
         all_nbrs, avg_d = avg_distances(dataset)
 
         these_props = {"nbr_list": all_nbrs,
-                       "distances": avg_d,
+                       "distances": [avg_d],
                        "rd_mols": spec_dic["rd_mols"][0],
                        # we won't use the nxyz but it needs
                        # to be in an NFF dataset
@@ -872,7 +872,17 @@ def make_avg_dataset(spec_dics,
         for key, val in dataset.props.items():
             if key in exclude:
                 continue
+
+            per_conf = ((isinstance(val, list) or
+                         isinstance(val, torch.Tensor))
+                        and len(val) != 1)
+            if per_conf:
+                val = val[1]
             these_props[key] = val
+
+        these_props.update({"num_atoms": len(spec_dic["nxyz"][0]),
+                            "mol_size": len(spec_dic["nxyz"][0]),
+                            "weights": torch.Tensor([1])})
 
         props_list.append(these_props)
 
@@ -880,10 +890,15 @@ def make_avg_dataset(spec_dics,
     props_list = add_missing(props_list)
     # convert the list of dicationaries into a dicationary of lists / tensors
     props_dic = concatenate_dict(*props_list)
+
+    rd_mols = copy.deepcopy(props_dic["rd_mols"])
+    props_dic.pop("rd_mols")
+
     # make a combined dataset where the species look like they're
     # one big molecule
     final_dataset = Dataset(props_dic, units='kcal/mol')
     # generate atom and bond features
+    final_dataset.props["rd_mols"] = [[i] for i in rd_mols]
     final_dataset.featurize(num_procs=parallel_feat_threads)
 
     return final_dataset
