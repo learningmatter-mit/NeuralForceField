@@ -1,13 +1,15 @@
 #!/bin/bash
-#SBATCH -N 1
-#SBATCH -t 4300
-#SBATCH --gres=gpu:1
+#SBATCH -N 8
+#SBATCH -t 30240
 #SBATCH --mem=300G
 #SBATCH --no-requeue
 #SBATCH --signal=B:2@300
-#SBATCH --ntasks-per-node 1
-#SBATCH --cpus-per-task 32
-#SBATCH -p sched_mit_rafagb_amd,sched_mit_rafagb
+#SBATCH --ntasks-per-node 2
+#SBATCH --cpus-per-task 20
+#SBATCH --gres=gpu:volta:1
+#SBATCH --qos=high
+#SBATCH -p normal
+#SBATCH --constraint=xeon-g6
 
 source $HOME/.bashrc
 source activate nff
@@ -15,10 +17,8 @@ source activate nff
 # change to your config path
 CONFIG="config/cov2_cl_test.json"
 
-
 export NFFDIR=/home/saxelrod/repo/nff/master/NeuralForceField
 export PYTHONPATH="$NFFDIR:$PYTHONPATH"
-
 
 metrics_lst=$(cat $CONFIG | jq ".metrics")
 
@@ -31,6 +31,16 @@ metric_str="${metric_str//,/ }"
 metrics=($metric_str)
 
 echo $metric
+
+# If using slurm parallel, delete any old
+# prediction pickle files in the separate folders
+# of the dataset path, as these will mess up the
+# prediction.
+
+dset_folder=$(echo $(cat $CONFIG | jq ".dset_folder") | sed -e 's/^"//' -e 's/"$//')
+old_preds=$(ls $dset_folder/*/pred_*.pickle)
+echo "Removing old files: $old_preds"
+rm $old_preds
 
 for metric in ${metrics[@]}; do
 
