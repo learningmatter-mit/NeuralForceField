@@ -9,7 +9,7 @@ from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import ChemProp3D, OnlyBondUpdateCP3D
-from nff.nn.models.dimenet import DimeNet, DimeNetDiabat
+from nff.nn.models.dimenet import DimeNet, DimeNetDiabat, DimeNetDiabatDelta, DimeNetDelta
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -133,7 +133,44 @@ PARAMS_TYPE = {"SchNet":
                    "grad_keys": list,
                    "diabat_keys": list
 
+               },
+
+               "DimeNetDiabatDelta":
+               {
+                   "n_rbf": int,
+                   "cutoff": float,
+                   "envelope_p": int,
+                   "n_spher": int,
+                   "l_spher": int,
+                   "atom_embed_dim": int,
+                   "n_bilinear": int,
+                   "activation": str,
+                   "n_convolutions": int,
+                   "output_keys": list,
+                   "grad_keys": list,
+                   "diabat_keys": list
+
+               },
+
+               "DimeNetDelta":
+               {
+                   "n_rbf": int,
+                   "cutoff": float,
+                   "envelope_p": int,
+                   "n_spher": int,
+                   "l_spher": int,
+                   "atom_embed_dim": int,
+                   "n_bilinear": int,
+                   "activation": str,
+                   "n_convolutions": int,
+                   "output_keys": list,
+                   "grad_keys": list,
+                   "diabat_keys": list
+
                }
+
+
+
 }
 
 MODEL_DICT = {
@@ -144,7 +181,10 @@ MODEL_DICT = {
     "ChemProp3D": ChemProp3D,
     "OnlyBondUpdateCP3D": OnlyBondUpdateCP3D,
     "DimeNet": DimeNet,
-    "DimeNetDiabat": DimeNetDiabat
+    "DimeNetDiabat": DimeNetDiabat,
+    "DimeNetDiabatDelta": DimeNetDiabatDelta,
+    "DimeNetDelta": DimeNetDelta
+
 }
 
 
@@ -186,20 +226,40 @@ def get_model(params, model_type="SchNet", **kwargs):
     return model
 
 
-def load_model(path):
+def load_model(path, params=None, model_type=None, **kwargs):
     """Load pretrained model from the path. If no epoch is specified,
         load the best model.
 
     Args:
         path (str): path where the model was trained.
-
+        params (dict, optional): Any parameters you need to instantiate
+            a model before loading its state dict. This is required for DimeNet,
+            in which you can't pickle the model directly.
+        model_type (str, optional): name of the model to be used
     Returns:
         model
     """
 
-    if os.path.isdir(path):
-        return torch.load(os.path.join(path, "best_model"), map_location="cpu")
-    elif os.path.exists(path):
-        return torch.load(path, map_location="cpu")
-    else:
-        raise FileNotFoundError("{} was not found".format(path))
+    try:
+        if os.path.isdir(path):
+            return torch.load(os.path.join(path, "best_model"), map_location="cpu")
+        elif os.path.exists(path):
+            return torch.load(path, map_location="cpu")
+        else:
+            raise FileNotFoundError("{} was not found".format(path))
+    except (FileNotFoundError, EOFError, RuntimeError):
+
+        assert params is not None, "Must specify params if you want to load the state dict"
+        assert model_type is not None, "Must specify the model type if you want to load the state dict"
+
+        model = get_model(params, model_type=model_type, **kwargs)
+
+        if os.path.isdir(path):
+            state_dict = torch.load(os.path.join(path, "best_model.pth.tar"), map_location="cpu")
+        elif os.path.exists(path):
+            state_dict = torch.load(path, map_location="cpu")
+        else:
+            raise FileNotFoundError("{} was not found".format(path))
+
+        model.load_state_dict(state_dict["model"])
+        return model
