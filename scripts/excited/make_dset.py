@@ -206,13 +206,13 @@ def main(group_name,
     if not overall_dict:
         return
 
-        save_dset(overall_dict=overall_dict,
-                  required_keys=required_keys,
-                  save_dir=save_dir,
-                  idx=i,
-                  val_size=val_size,
-                  test_size=test_size,
-                  seed=split_seed)
+    save_dset(overall_dict=overall_dict,
+              required_keys=required_keys,
+              save_dir=save_dir,
+              idx=i,
+              val_size=val_size,
+              test_size=test_size,
+              seed=split_seed)
 
 
 if __name__ == "__main__":
