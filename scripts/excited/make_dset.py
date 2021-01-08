@@ -24,7 +24,6 @@ import torch
 import json
 
 
-
 CONFIG_DIC = {"bhhlyp_6-31gs_sf_engrad":
               {"name": "sf_tddft_bhhlyp",
                "description": "GAMESS bhhlyp/6-31G* spin flip tddft"},
@@ -202,13 +201,16 @@ def main(group_name,
             if geom_count >= max_geoms:
                 break
 
-        if not overall_dict:
-            return
+    if not overall_dict:
+        return
 
         save_dset(overall_dict=overall_dict,
                   required_keys=required_keys,
                   save_dir=save_dir,
-                  idx=i)
+                  idx=i,
+                  val_size=val_size,
+                  test_size=test_size,
+                  seed=split_seed)
 
 
 if __name__ == "__main__":
