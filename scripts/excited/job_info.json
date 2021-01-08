@@ -6,7 +6,7 @@
                   "nxyz", "smiles"],
 "max_geoms": null,
 "max_geoms_per_dset": 50000,
-"save_dir": "/home/saxelrod/rgb_nfs/dset_test",
+"save_dir": "/nfs/rafagblab001/saxelrod/dsets_switches",
 "val_size": 0.1,
 "test_size": 0.1,
 "split_seed": 0,
