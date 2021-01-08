@@ -14,4 +14,9 @@ source deactivate
 source ~/.bashrc
 source activate htvs
 
+# change as necessary
+export HTVSDIR="/home/saxelrod/repo/htvs/master/htvs"
+export DJANGOCHEMDIR="/home/saxelrod/repo/htvs/ax/htvs/djangochem"
+export NFFDIR="/home/saxelrod/repo/nff/master/NeuralForceField"
+
 python make_dset.py

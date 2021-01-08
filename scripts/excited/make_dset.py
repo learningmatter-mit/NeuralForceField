@@ -3,10 +3,15 @@ import os
 import django
 
 HOME = os.environ["HOME"]
-sys.path.insert(0, f"{HOME}/htvs")
-sys.path.insert(0, f"{HOME}/htvs/djangochem")
-os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
+HTVS_DIR = os.environ.get("HTVSDIR", f"{HOME}/htvs")
+DJANGOCHEMDIR = os.environ.get("DJANGOCHEMDIR", f"{HOME}/htvs/djangochem")
+NFFDIR = os.environ.get("NFFDIR", f"{HOME}/Repo/projects/master/NeuralForceField")
 
+sys.path.insert(0, HTVS_DIR)
+sys.path.insert(0, DJANGOCHEMDIR)
+sys.path.insert(0, NFFDIR)
+
+os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
 django.setup()
 
 import argparse
@@ -17,6 +22,7 @@ from jobs.models import Job, JobConfig
 from tqdm import tqdm
 import torch
 import json
+
 
 
 CONFIG_DIC = {"bhhlyp_6-31gs_sf_engrad":
