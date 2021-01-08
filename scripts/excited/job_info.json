@@ -1,0 +1,15 @@
+{
+"group_name": "switches",
+"method_name": "sf_tddft_bhhlyp",
+"method_description": "GAMESS bhhlyp/6-31G* spin flip tddft",
+"required_keys": ["energy_0", "energy_1", "energy_0_grad", "energy_1_grad",
+                  "nxyz", "smiles"],
+"max_geoms": null,
+"max_geoms_per_dset": 50000,
+"save_dir": "/home/saxelrod/rgb_nfs/dset_test",
+"val_size": 0.1,
+"test_size": 0.1,
+"split_seed": 0,
+"molsets": null,
+"chunk_size": 1000
+}
