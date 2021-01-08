@@ -5,11 +5,13 @@ import django
 HOME = os.environ["HOME"]
 HTVS_DIR = os.environ.get("HTVSDIR", f"{HOME}/htvs")
 DJANGOCHEMDIR = os.environ.get("DJANGOCHEMDIR", f"{HOME}/htvs/djangochem")
-NFFDIR = os.environ.get("NFFDIR", f"{HOME}/Repo/projects/master/NeuralForceField")
+NFFDIR = os.environ.get("NFFDIR",
+                        f"{HOME}/Repo/projects/master/NeuralForceField")
 
 sys.path.insert(0, HTVS_DIR)
 sys.path.insert(0, DJANGOCHEMDIR)
 sys.path.insert(0, NFFDIR)
+
 
 os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
 django.setup()
