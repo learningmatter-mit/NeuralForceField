@@ -1,14 +1,6 @@
-from nff.data import Dataset, concatenate_dict, split_train_validation_test
-from pgmols.models import Calc
-from jobs.models import Job, JobConfig
-from tqdm import tqdm
-import torch
+import sys
 import os
 import django
-import json
-
-import sys
-import argparse
 
 HOME = os.environ["HOME"]
 sys.path.insert(0, f"{HOME}/htvs")
@@ -16,6 +8,15 @@ sys.path.insert(0, f"{HOME}/htvs/djangochem")
 os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
 
 django.setup()
+
+import argparse
+
+from nff.data import Dataset, concatenate_dict, split_train_validation_test
+from pgmols.models import Calc
+from jobs.models import Job, JobConfig
+from tqdm import tqdm
+import torch
+import json
 
 
 CONFIG_DIC = {"bhhlyp_6-31gs_sf_engrad":
