@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
+import copy
 
 from nff.nn.modules.dimenet import (EmbeddingBlock, InteractionBlock,
                                     OutputBlock)
@@ -167,7 +168,8 @@ class DimeNet(nn.Module):
         z = nxyz[:, 0].long()
         if xyz is None:
             xyz = nxyz[:, 1:]
-            xyz.requires_grad = True
+            if xyz.is_leaf:
+                xyz.requires_grad = True
 
         ji_idx = batch["ji_idx"]
         kj_idx = batch["kj_idx"]
@@ -238,7 +240,7 @@ class DimeNet(nn.Module):
 
         return out, xyz
 
-    def forward(self, batch):
+    def forward(self, batch, xyz=None):
         """
         Call the model
         Args:
@@ -247,7 +249,7 @@ class DimeNet(nn.Module):
             results (dict): dictionary of predictions
         """
 
-        out, xyz = self.atomwise(batch)
+        out, xyz = self.atomwise(batch, xyz)
         N = batch["num_atoms"].detach().cpu().tolist()
         results = {}
 
@@ -279,9 +281,10 @@ class DimeNetDiabat(DimeNet):
         diabat_keys = modelparams["diabat_keys"]
         new_out_keys = list(set(np.array(diabat_keys).reshape(-1)
                                 .tolist()))
-        modelparams.update({"output_keys": new_out_keys})
 
-        super().__init__(modelparams)
+        new_modelparams = copy.deepcopy(modelparams)
+        new_modelparams.update({"output_keys": new_out_keys})
+        super().__init__(new_modelparams)
 
         self.diag = Diagonalize()
         self.diabat_keys = diabat_keys
@@ -376,9 +379,14 @@ class DimeNetDiabat(DimeNet):
 
         return results
 
-    def pad(self, batch):
+    def pad(self, batch, xyz=None):
 
-        nxyz = batch["nxyz"]
+        if xyz is not None:
+            z = batch["nxyz"][:, 0]
+            nxyz = torch.cat([z.reshape(-1, 1),
+                              xyz], dim=-1)
+        else:
+            nxyz = batch["nxyz"]
         N = batch["num_atoms"].tolist()
 
         nan = float(np.nan)
@@ -395,7 +403,8 @@ class DimeNetDiabat(DimeNet):
         mask = mask.reshape(*stacked.shape).to(torch.bool)
 
         stack_xyz = stacked[mask].reshape(num_batch, -1)
-        stack_xyz.requires_grad = True
+        if stack_xyz.is_leaf:
+            stack_xyz.requires_grad = True
 
         xyz = stack_xyz.reshape(-1, 3)
 
@@ -403,7 +412,7 @@ class DimeNetDiabat(DimeNet):
 
     def forward(self, batch, xyz=None):
 
-        batch, stack_xyz, xyz = self.pad(batch)
+        batch, stack_xyz, xyz = self.pad(batch, xyz)
         out, xyz = self.atomwise(batch, xyz)
         N = batch["num_atoms"].detach().cpu().tolist()
         results = {}
@@ -417,5 +426,66 @@ class DimeNetDiabat(DimeNet):
         results = self.add_diag(results, N, stack_xyz)
         results = self.add_grad(results, xyz)
         results = self.add_gap(results)
+
+        return results
+
+
+class DimeNetDiabatDelta(DimeNetDiabat):
+
+    def __init__(self, modelparams):
+        super().__init__(modelparams)
+
+    def forward(self, batch, xyz=None):
+
+        batch, stack_xyz, xyz = self.pad(batch, xyz)
+        out, xyz = self.atomwise(batch, xyz)
+        N = batch["num_atoms"].detach().cpu().tolist()
+        results = {}
+
+        for key, val in out.items():
+            # split the outputs into those of each molecule
+            split_val = torch.split(val, N)
+            # sum the results for each molecule
+            results[key] = torch.stack([i.sum() for i in split_val])
+
+        diag_diabat_keys = np.diag(np.array(self.diabat_keys))
+        diabat_0 = diag_diabat_keys[0]
+
+        for key in diag_diabat_keys[1:]:
+            results[key] += results[diabat_0]
+
+        results = self.add_diag(results, N, stack_xyz)
+        results = self.add_grad(results, xyz)
+        results = self.add_gap(results)
+
+        return results
+
+
+class DimeNetDelta(DimeNet):
+
+    def __init__(self, modelparams):
+        super().__init__(modelparams)
+
+    def forward(self, batch, xyz=None):
+        out, xyz = self.atomwise(batch, xyz)
+        N = batch["num_atoms"].detach().cpu().tolist()
+        results = {}
+
+        for key, val in out.items():
+            # split the outputs into those of each molecule
+            split_val = torch.split(val, N)
+            # sum the results for each molecule
+            results[key] = torch.stack([i.sum() for i in split_val])
+
+        for key in self.out_keys[1:]:
+            results[key] += results[self.out_keys[0]]
+
+        # compute gradients
+
+        for key in self.grad_keys:
+            output = results[key.replace("_grad", "")]
+            grad = compute_grad(output=output,
+                                inputs=xyz)
+            results[key] = grad
 
         return results
