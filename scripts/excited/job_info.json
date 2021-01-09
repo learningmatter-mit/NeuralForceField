@@ -11,5 +11,10 @@
 "test_size": 0.1,
 "split_seed": 0,
 "molsets": null,
-"chunk_size": 1000
+"chunk_size": 1000,
+"custom_name": "azo_switches",
+"max_std_en": 3,
+"max_std_force": 3,
+"max_val_en": 250,
+"max_val_force": 250
 }

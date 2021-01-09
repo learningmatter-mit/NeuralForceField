@@ -16,14 +16,14 @@ sys.path.insert(0, NFFDIR)
 os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
 django.setup()
 
-import argparse
-
-from nff.data import Dataset, concatenate_dict, split_train_validation_test
-from pgmols.models import Calc
-from jobs.models import Job, JobConfig
-from tqdm import tqdm
-import torch
 import json
+import torch
+from tqdm import tqdm
+from analysis.metalation_energy import custom_stoich
+from jobs.models import Job, JobConfig
+from pgmols.models import Calc
+from nff.data import Dataset, concatenate_dict, split_train_validation_test
+import argparse
 
 
 CONFIG_DIC = {"bhhlyp_6-31gs_sf_engrad":
@@ -51,13 +51,132 @@ def trim_overall(overall_dict, required_keys):
     return overall_dict
 
 
+def en_trim(good_idx_dic,
+            sub_dic,
+            key,
+            max_std_en,
+            max_val_en):
+    val = torch.stack(sub_dic[key])
+    std = val.std()
+    mean = val.mean()
+
+    bad_idx = ((abs(val - mean) > max_std_en * std).nonzero()
+               .reshape(-1).tolist())
+
+    for i in bad_idx:
+        good_idx_dic[i] *= 0
+
+    bad_idx = ((abs(val - mean) > max_val_en).nonzero()
+               .reshape(-1).tolist())
+
+    for i in bad_idx:
+        good_idx_dic[i] *= 0
+    return good_idx_dic
+
+
+def grad_trim(good_idx_dic,
+              sub_dic,
+              key,
+              max_std_force,
+              max_val_force):
+
+    val = torch.stack(sub_dic[key])
+    std = val.std(0)
+    mean = val.mean(0)
+
+    bad_idx = ((abs(val - mean) > max_std_force * std).nonzero()
+               [:, 0]).tolist()
+
+    for i in bad_idx:
+        good_idx_dic[i] *= 0
+
+    bad_idx = ((abs(val - mean) > max_val_force).nonzero()
+               [:, 0]).tolist()
+
+    for i in bad_idx:
+        good_idx_dic[i] *= 0
+    return good_idx_dic
+
+
+def init_outlier_dic(dset, en_keys, grad_keys):
+
+    all_smiles = list(set([rm_stereo(i) for i in dset.props['smiles']]))
+    en_outlier_dic = {smiles: {key: [] for key in ['idx', *en_keys]} for smiles
+                      in all_smiles}
+    grad_outlier_dic = {smiles: {key: [] for key in ['idx', *grad_keys]}
+                        for smiles in all_smiles}
+    for i, batch in enumerate(dset):
+
+        smiles = rm_stereo(batch['smiles'])
+
+        en_outlier_dic[smiles]['idx'].append(i)
+        grad_outlier_dic[smiles]['idx'].append(i)
+
+        for key in en_keys:
+            en_outlier_dic[smiles][key].append(batch[key])
+        for key in grad_keys:
+            grad_outlier_dic[smiles][key].append(batch[key])
+
+    return en_outlier_dic, grad_outlier_dic
+
+
+def remove_outliers(dset,
+                    max_std_en,
+                    max_std_force,
+                    max_val_en,
+                    max_val_force):
+
+    en_keys = [key for key in dset.props.keys() if 'energy' in key
+               and 'grad' not in key]
+    grad_keys = [key for key in dset.props.keys() if 'energy' in key
+                 and 'grad' in key]
+
+    en_outlier_dic, grad_outlier_dic = init_outlier_dic(
+        dset=dset,
+        en_keys=en_keys,
+        grad_keys=grad_keys)
+
+    good_idx_dic = {i: 1 for i in range(len(dset))}
+
+    for smiles, sub_dic in en_outlier_dic.items():
+        for key in en_keys:
+            good_idx_dic = en_trim(good_idx_dic=good_idx_dic,
+                                   sub_dic=sub_dic,
+                                   key=key,
+                                   max_std_en=max_std_en,
+                                   max_val_en=max_val_en)
+
+    for smiles, sub_dic in grad_outlier_dic.items():
+        for key in grad_keys:
+            good_idx_dic = grad_trim(good_idx_dic=good_idx_dic,
+                                     sub_dic=sub_dic,
+                                     key=key,
+                                     max_std_force=max_std_force,
+                                     max_val_force=max_val_force)
+
+    final_idx = torch.LongTensor([i for i, val in good_idx_dic.items()
+                                  if val == 1])
+
+    for key, val in dset.props.items():
+        if isinstance(val, list):
+            dset.props[key] = [val[i] for i in final_idx]
+        else:
+            dset.props[key] = val[final_idx]
+
+    return dset
+
+
 def save_dset(overall_dict,
               required_keys,
               save_dir,
               idx,
               val_size,
               test_size,
-              seed):
+              seed,
+              max_std_en,
+              max_std_force,
+              max_val_en,
+              max_val_force):
 
     overall_dict = trim_overall(overall_dict, required_keys)
     props = concatenate_dict(*list(overall_dict.values()))
@@ -66,10 +185,17 @@ def save_dset(overall_dict,
     if not os.path.isdir(save_folder):
         os.makedirs(save_folder)
 
+    dset = remove_outliers(dset=dset,
+                           max_std_en=max_std_en,
+                           max_std_force=max_std_force,
+                           max_val_en=max_val_en,
+                           max_val_force=max_val_force)
+
     splits = split_train_validation_test(dset,
                                          val_size=val_size,
                                          test_size=test_size,
                                          seed=seed)
+
     names = ["train", "val", "test"]
     for split, name in zip(splits, names):
         save_path = os.path.join(save_folder, f"{name}.pth.tar")
@@ -117,8 +243,26 @@ def get_job_query(job_pks, chunk_size, group_name, molsets):
     return job_query
 
 
-def update_overall(overall_dict, calc_pk):
-    calc = Calc.objects.get(pk=calc_pk)
+def update_stoich(stoich_dict, geom, custom_name):
+    formula = geom.stoichiometry.formula
+    if formula in stoich_dict:
+        return stoich_dict, formula
+
+    stoich_en = custom_stoich(formula, custom_name)
+    stoich_dict[formula] = stoich_en
+
+    return stoich_dict, formula
+
+
+def update_overall(overall_dict,
+                   stoich_dict,
+                   calc_pk,
+                   custom_name):
+
+    calc = Calc.objects.filter(pk=calc_pk).first()
+    if not calc:
+        return overall_dict, stoich_dict
+
     geom = calc.geoms.first()
     geom_id = geom.id
     props = calc.props
@@ -126,6 +270,11 @@ def update_overall(overall_dict, calc_pk):
     if geom_id not in overall_dict:
         overall_dict[geom_id] = {"nxyz": geom.xyz,
                                  "smiles": geom.species.smiles}
+
+    stoich_dict, formula = update_stoich(stoich_dict=stoich_dict,
+                                         geom=geom,
+                                         custom_name=custom_name)
+    stoich_en = stoich_dict[formula]
 
     if props is None:
         jacobian = calc.jacobian
@@ -138,12 +287,17 @@ def update_overall(overall_dict, calc_pk):
     else:
         force_1 = props['excitedstates'][0]['forces']
         overall_dict[geom_id].update(
-            {"energy_0": props['totalenergy'],
-             "energy_1": props['excitedstates'][0]['energy'],
+            {"energy_0": props['totalenergy'] - stoich_en,
+             "energy_1": props['excitedstates'][0]['energy'] - stoich_en,
              "energy_1_grad": (-torch.Tensor(force_1)).tolist()
              }
         )
-    return overall_dict
+    return overall_dict, stoich_dict
+
+
+def rm_stereo(smiles):
+    new_smiles = smiles.replace("/", "").replace("\\", "")
+    return new_smiles
 
 
 def main(group_name,
@@ -153,6 +307,11 @@ def main(group_name,
          max_geoms,
          max_geoms_per_dset,
          save_dir,
+         custom_name,
+         max_std_en,
+         max_std_force,
+         max_val_en,
+         max_val_force,
          val_size=0.1,
          test_size=0.1,
          split_seed=0,
@@ -172,6 +331,7 @@ def main(group_name,
     i = 0
 
     overall_dict = {}
+    stoich_dict = {}
 
     while job_pks:
         print("%d remaining..." % (len(job_pks)))
@@ -184,17 +344,26 @@ def main(group_name,
         calc_pks = list(job_query.values_list('childcalcs', flat=True))
         for calc_pk in tqdm(calc_pks):
 
-            overall_dict = update_overall(overall_dict=overall_dict,
-                                          calc_pk=calc_pk)
+            overall_dict, stoich_dict = update_overall(
+                overall_dict=overall_dict,
+                stoich_dict=stoich_dict,
+                calc_pk=calc_pk,
+                custom_name=custom_name)
 
             if len(overall_dict) >= max_geoms_per_dset:
+
                 save_dset(overall_dict=overall_dict,
                           required_keys=required_keys,
                           save_dir=save_dir,
                           idx=i,
                           val_size=val_size,
                           test_size=test_size,
-                          seed=split_seed)
+                          seed=split_seed,
+                          max_std_en=max_std_en,
+                          max_std_force=max_std_force,
+                          max_val_en=max_val_en,
+                          max_val_force=max_val_force
+                          )
 
                 geom_count += len(overall_dict)
                 i += 1
@@ -202,6 +371,8 @@ def main(group_name,
 
             if geom_count >= max_geoms:
                 break
+        if geom_count >= max_geoms:
+            break
 
     if not overall_dict:
         return
