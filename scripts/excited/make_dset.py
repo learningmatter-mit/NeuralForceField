@@ -335,6 +335,7 @@ def main(group_name,
 
     while job_pks:
         print("%d remaining..." % (len(job_pks)))
+        sys.stdout.flush()
 
         job_query = get_job_query(job_pks=job_pks,
                                   chunk_size=chunk_size,
@@ -383,7 +384,12 @@ def main(group_name,
               idx=i,
               val_size=val_size,
               test_size=test_size,
-              seed=split_seed)
+              seed=split_seed,
+              max_std_en=max_std_en,
+              max_std_force=max_std_force,
+              max_val_en=max_val_en,
+              max_val_force=max_val_force
+              )
 
 
 if __name__ == "__main__":
