@@ -120,6 +120,45 @@ def init_outlier_dic(dset, en_keys, grad_keys):
     return en_outlier_dic, grad_outlier_dic
 
 
+def rm_global_outliers(dset,
+                       en_keys,
+                       grad_keys,
+                       max_std_en,
+                       max_std_force,
+                       max_val_en,
+                       max_val_force,
+                       good_idx_dic):
+
+    bad_idx = []
+    for key in grad_keys:
+        f_to_idx = torch.cat([torch.ones(batch[key].shape[0]) * i for i, batch
+                              in enumerate(dset)])
+        global_f = torch.cat(dset.props[key])
+        mean = global_f.mean()
+        std = global_f.std()
+
+        bad_idx += list(set(f_to_idx[(abs(global_f - mean)
+                                      > max_val_force).any(-1)].tolist()))
+        bad_idx += list(set(f_to_idx[(abs(global_f - mean)
+                                      > max_std_force * std
+                                      ).any(-1)].tolist()))
+
+    for key in en_keys:
+        global_en = torch.stack(dset.props[key]).reshape(-1)
+        mean = global_en.mean()
+        std = global_en.std()
+
+        bad_idx += list(set((abs(global_en - mean) > max_val_en).tolist()))
+        bad_idx += list(set((abs(global_en - mean) >
+                             max_std_en * std).tolist()))
+
+    bad_idx = list(set(bad_idx))
+    for idx in bad_idx:
+        good_idx_dic[idx] = 0
+
+    return good_idx_dic
+
+
 def remove_outliers(dset,
                     max_std_en,
                     max_std_force,
@@ -138,7 +177,7 @@ def remove_outliers(dset,
 
     good_idx_dic = {i: 1 for i in range(len(dset))}
 
-    for smiles, sub_dic in en_outlier_dic.items():
+    for sub_dic in en_outlier_dic.values():
         for key in en_keys:
             good_idx_dic = en_trim(good_idx_dic=good_idx_dic,
                                    sub_dic=sub_dic,
@@ -146,13 +185,22 @@ def remove_outliers(dset,
                                    max_std_en=max_std_en,
                                    max_val_en=max_val_en)
 
-    for smiles, sub_dic in grad_outlier_dic.items():
+    for sub_dic in grad_outlier_dic.values():
         for key in grad_keys:
             good_idx_dic = grad_trim(good_idx_dic=good_idx_dic,
                                      sub_dic=sub_dic,
                                      key=key,
                                      max_std_force=max_std_force,
                                      max_val_force=max_val_force)
+
+    good_idx_dic = rm_global_outliers(dset=dset,
+                                      en_keys=en_keys,
+                                      grad_keys=grad_keys,
+                                      max_std_en=max_std_en,
+                                      max_std_force=max_std_force,
+                                      max_val_en=max_val_en,
+                                      max_val_force=max_val_force,
+                                      good_idx_dic=good_idx_dic)
 
     final_idx = torch.LongTensor([i for i, val in good_idx_dic.items()
                                   if val == 1])
@@ -363,8 +411,7 @@ def main(group_name,
                           max_std_en=max_std_en,
                           max_std_force=max_std_force,
                           max_val_en=max_val_en,
-                          max_val_force=max_val_force
-                          )
+                          max_val_force=max_val_force)
 
                 geom_count += len(overall_dict)
                 i += 1
@@ -388,8 +435,7 @@ def main(group_name,
               max_std_en=max_std_en,
               max_std_force=max_std_force,
               max_val_en=max_val_en,
-              max_val_force=max_val_force
-              )
+              max_val_force=max_val_force)
 
 
 if __name__ == "__main__":
