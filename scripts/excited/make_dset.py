@@ -139,10 +139,10 @@ def rm_global_outliers(dset,
 
         bad_idx += list(set(f_to_idx[(abs(global_f - mean)
                                       > max_val_force).any(-1)
-                                     ].long().tolist()))
+                                     ].tolist()))
         bad_idx += list(set(f_to_idx[(abs(global_f - mean)
                                       > max_std_force * std
-                                      ).any(-1)].long().tolist()))
+                                      ).any(-1)].tolist()))
 
     for key in en_keys:
         global_en = torch.stack(dset.props[key]).reshape(-1)
@@ -150,9 +150,9 @@ def rm_global_outliers(dset,
         std = global_en.std()
 
         bad_idx += list(set((abs(global_en - mean) >
-                             max_val_en).long().tolist()))
+                             max_val_en).nonzero().reshape(-1).tolist()))
         bad_idx += list(set((abs(global_en - mean) >
-                             max_std_en * std).long().tolist()))
+                             max_std_en * std).nonzero().reshape(-1).tolist()))
 
     bad_idx = list(set(bad_idx))
     for idx in bad_idx:
@@ -376,6 +376,13 @@ def main(group_name,
 
     job_pks = get_job_pks(method_name=method_name,
                           method_description=method_description)
+
+    ####
+    # job_pks = list(Job.objects.filter(parentgeom__parentjob__config__name__contains='bp86',
+    # 	pk__in=job_pks).values_list('pk', flat=True))
+    ####
+
+
     geom_count = 0
     i = 0
 
