@@ -5,7 +5,7 @@
 "required_keys": ["energy_0", "energy_1", "energy_0_grad", "energy_1_grad",
                   "nxyz", "smiles"],
 "max_geoms": null,
-"max_geoms_per_dset": 50000,
+"max_geoms_per_dset": null,
 "save_dir": "/nfs/rafagblab001/saxelrod/dsets_switches",
 "val_size": 0.1,
 "test_size": 0.1,
