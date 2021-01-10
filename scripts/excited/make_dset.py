@@ -138,7 +138,8 @@ def rm_global_outliers(dset,
         std = global_f.std()
 
         bad_idx += list(set(f_to_idx[(abs(global_f - mean)
-                                      > max_val_force).any(-1)].long().tolist()))
+                                      > max_val_force).any(-1)
+                                     ].long().tolist()))
         bad_idx += list(set(f_to_idx[(abs(global_f - mean)
                                       > max_std_force * std
                                       ).any(-1)].long().tolist()))
@@ -148,7 +149,8 @@ def rm_global_outliers(dset,
         mean = global_en.mean()
         std = global_en.std()
 
-        bad_idx += list(set((abs(global_en - mean) > max_val_en).long().tolist()))
+        bad_idx += list(set((abs(global_en - mean) >
+                             max_val_en).long().tolist()))
         bad_idx += list(set((abs(global_en - mean) >
                              max_std_en * std).long().tolist()))
 
@@ -374,11 +376,6 @@ def main(group_name,
 
     job_pks = get_job_pks(method_name=method_name,
                           method_description=method_description)
-    ##
-    job_pks = list(Job.objects.filter(parentgeom__parentjob__config__name__contains='bp86',
-    	pk__in=job_pks).values_list('pk', flat=True))
-    ##
-
     geom_count = 0
     i = 0
 
