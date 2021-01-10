@@ -26,7 +26,7 @@ from nff.data import Dataset, concatenate_dict, split_train_validation_test
 import argparse
 
 
-CONFIG_DIC = {"bhhlyp_6-31gs_sf_engrad":
+CONFIG_DIC = {"bhhlyp_6-31gs_sf_tddft_engrad":
               {"name": "sf_tddft_bhhlyp",
                "description": "GAMESS bhhlyp/6-31G* spin flip tddft"},
               "bhhlyp_6-31gs_sf_hop":
