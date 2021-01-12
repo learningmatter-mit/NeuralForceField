@@ -99,7 +99,7 @@ while experiment.progress.observation_count < experiment.observation_budget:
     ]
 
     DEVICE = params['device']
-    OUTDIR = './{}/{}/sandbox'.format(params['logdir'], suggestion.id)
+    OUTDIR = '{}/{}/sandbox'.format(params['logdir'], suggestion.id)
 
     print(OUTDIR)
 
