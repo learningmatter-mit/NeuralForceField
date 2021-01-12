@@ -367,4 +367,10 @@ if __name__ == "__main__":
     args = parse_args(parser)
     kwargs = args.__dict__
 
-    main(kwargs)
+    try:
+        main(kwargs)
+    except Exception as e:
+        print(e)
+        import pdb
+        pdb.post_mortem()
+

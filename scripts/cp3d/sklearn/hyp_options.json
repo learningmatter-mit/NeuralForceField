@@ -8,16 +8,6 @@
                     "entropy"
                 ]
             },
-            "fp_len": {
-                "type": "categorical",
-                "vals": [
-                    64,
-                    128,
-                    256,
-                    1024,
-                    2048
-                ]
-            },
             "max_features": {
                 "type": "categorical",
                 "vals": [
@@ -67,13 +57,6 @@
                     20,
                     300
                 ]
-            },
-            "radius": {
-                "type": "int",
-                "vals": [
-                    1,
-                    4
-                ]
             }
         }
     },
@@ -84,16 +67,6 @@
                 "vals": [
                     "mae",
                     "mse"
-                ]
-            },
-            "fp_len": {
-                "type": "categorical",
-                "vals": [
-                    64,
-                    128,
-                    256,
-                    1024,
-                    2048
                 ]
             },
             "max_depth": {
@@ -152,13 +125,6 @@
                     20,
                     300
                 ]
-            },
-            "radius": {
-                "type": "int",
-                "vals": [
-                    1,
-                    4
-                ]
             }
         },
         "kernel_ridge": {
@@ -191,8 +157,10 @@
             "coef0": {
                 "type": "float",
                 "vals": [0.2, 2]
-                },
-            "fp_len": {
+                }
+        }
+    },
+    "morgan": {"fp_len": {
                 "type": "categorical",
                 "vals": [
                     64,
@@ -207,8 +175,16 @@
                 "vals": [
                     1,
                     4
+                ]}},
+
+    "atom_pair": {"fp_len": {
+                "type": "categorical",
+                "vals": [
+                    64,
+                    128,
+                    256,
+                    1024,
+                    2048
                 ]
-            }
-        }
-    }
+                }}
 }
