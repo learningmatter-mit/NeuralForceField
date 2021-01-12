@@ -20,6 +20,8 @@ This folder contains scripts for doing 3D-based prediction tasks. These include 
            * [ChemProp3D (only bond update)](#chemprop3d-only-bond-update)
         * [Training parameters](#training-parameters)
     * [Analysis](#analysis)
+    * [Plots](#plots)
+      * [ROCE](#roce)
 - [Hyperparameter optimization](#hyperparameter-optimization)
 - [Transfer learning](#transfer-learning)
     * [Making a dataset for the new task](#making-a-dataset-for-the-new-task)
@@ -82,6 +84,9 @@ Details for the script are can be found in any of the `JSON` files in `scripts/c
 - `slurm_parallel` (bool): Whether to parallelize over nodes using slurm. If you're submitting to >= 1 node using slurm and set this to true, then the script will create the different chunks of the dataset in parallel over the nodes. The number of nodes does not have to be equal to `num_threads`.
 - `extra_features` (list): List of dictionaries, each of which contains information about features you want to add. Each dictionary should have the keys "name", for the name of the feature, and "params", for a sub-dictionary with any necessary parameters. For example, if you want to add Morgan fingerprints, whim fingerprints, and E3FP fingerprints you would set `extra_features = [{"name": "Morgan", "params": {"length": 256"}}, {"name": "e3fp", "params": {"length": 256}}, {"name": whim", "params": {}}]` (the name is not case-sensitive). If using the command line, please supply this as a JSON string.
 - `add_directed_idx` (bool): Add the kj and ji indices. These are defined such that nbr_list[ji_idx[n]][1] = nbr_list[kj_idx[n]][0] for any n. That is, these are pairs of indices that together generate a set of three atoms, such that the second is a neighbor of the first, and the third is a neighbor of the second. If we replaced `nbr_list` with `bonded_nbr_list`, this would give three atoms that form a bond angle.
+- `average_nbrs` (bool): whether to use one effective structure with interatomic distances averaged over conformers. This
+   allows us to use message-passing on an averaged representation of the conformers, without having to do it on all the
+   conformers together.
 
    Adding these indices takes a fair bit of extra time, and costs a huge amount of extra memory (for example, it increases the memory footprint of the CoV-2 dataset by a factor of 8, using a neighbor list cutoff of 5 Angstroms). It's probably infeasible to add these indices for large datasets, but if you're training a ChemProp3D model on a small dataset, this will save you a lot of time during training. 
 
@@ -272,6 +277,10 @@ There are also some useful files in `nff/analysis` for analyzing model predictio
 
 The file also provides a function for getting and saving model scores on test sets, using models chosen by different validation metrics. Assuming you've already used `make_fps.sh` (see [Getting fingerprints, predictions, and learned weights]#getting-fingerprints-predictions-and-learned weights), the function `get_scores` loads each of the pickle files to get PRC and AUC scores of each model on the test set.
 
+### Plots
+#### ROCE
+The script `nff/analysis/roce.py` makes ROCE (receiver operator characteristic enrichment) plots for different models and different targets. To see how to make a config file for this script, please see the example config file `nff/analysis/config/plot_info.json`
+
 ## Hyperparameter optimization
 
 `scripts/cp3d/hyperopt/run_hyperopt.sh` is a script that runs Bayesian hyperparameter optimization using the [hyperopt](https://github.com/hyperopt/hyperopt) package. Details for the script are can be found in any of the `JSON` files in `scripts/cp3d/hyperopt/config`. If you want to use a config file with a different name than what is specified in `run_hyperopt.sh`, then you should modify the script accordingly. The keys are:
@@ -403,3 +412,5 @@ We also provide the script `scripts/cp3d/sklearn/run.sh`, which is a wrapper aro
 - `seed` (int): random seed for initializing the models during hyperparameter optimization. Seeds 0 to `test_folds-1` are used for training the final model.
 - `max_specs` (int): Maximum number of species to use in hyperparameter optimization. If the proportion of species in the training split is `x`, then the number of training species in hyperparameter optimization will be `x * max_specs`, and similarly for validation.
 - `custom_hyps` (str or dictionary): Custom hyperparameter ranges to override the default. Please provide as a JSON string if not using a config file
+- `fp_type` (str): type of fingerprint to use. Defaults to Morgan, and can currently be chosen from either Morgan or atom-pair fingerpints.
+
