@@ -10,6 +10,8 @@ import math
 
 import argparse
 from matplotlib import pyplot as plt
+from matplotlib import rcParams
+
 import numpy as np
 
 from nff.utils import read_csv
@@ -24,6 +26,16 @@ DELTA = 0.2
 
 # keys for specifying text attributes
 TEXT_KEYS = ['fontsize']
+
+
+# use the same defaults as in iPython notebooks
+# to avoid an unhappy surprise after testing your plots
+# in a notebook
+
+rcParams['figure.figsize'] = (6.0, 4.0)
+rcParams['font.size'] = 10
+rcParams['savefig.dpi'] = 72
+rcParams['figure.subplot.bottom'] = 0.125
 
 
 def compute_roce(fpr, preds, real):
