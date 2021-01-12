@@ -14,7 +14,14 @@ from sklearn.utils import shuffle
 
 def get_MD17data(mol):
 
-    data_url = {'ethanol_ccsd': 'http://quantum-machine.org/gdml/data/npz/ethanol_dft.npz'}
+    data_url = {'ethanol_dft': 'http://quantum-machine.org/gdml/data/npz/ethanol_dft.npz',
+                'aspirin_dft': 'http://quantum-machine.org/gdml/data/npz/aspirin_dft.npz',
+                'benzene_dft': 'http://quantum-machine.org/gdml/data/npz/benzene_old_dft.npz',
+                'uracil_dft': 'http://quantum-machine.org/gdml/data/npz/uracil_dft.npz',
+                'naphthalene': 'http://quantum-machine.org/gdml/data/npz/naphthalene_dft.npz',
+                'salicylic_dft': 'http://quantum-machine.org/gdml/data/npz/salicylic_dft.npz', 
+                'malonaldehyde_dft': 'http://quantum-machine.org/gdml/data/npz/malonaldehyde_dft.npz',
+                'toluene_dft': 'http://quantum-machine.org/gdml/data/npz/toluene_dft.npz'}
     
     mol = 'ethanol_ccsd'
     fname = './{}.npz'.format(mol)
