@@ -23,7 +23,6 @@ def get_MD17data(mol):
                 'malonaldehyde_dft': 'http://quantum-machine.org/gdml/data/npz/malonaldehyde_dft.npz',
                 'toluene_dft': 'http://quantum-machine.org/gdml/data/npz/toluene_dft.npz'}
     
-    mol = 'ethanol_ccsd'
     fname = './{}.npz'.format(mol)
     
     if not os.path.isfile(fname):
