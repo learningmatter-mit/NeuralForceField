@@ -48,7 +48,6 @@ if params['id'] == None:
         name=logdir,
         metrics=[dict(name='loss', objective='minimize')],
         parameters=[
-            dict(name='n_gaussains', type='int', bounds=dict(min=32, max=128)),
             dict(name='n_atom_basis', type='int', bounds=dict(min=32, max=128)),
             dict(name='n_edge_basis', type='int', bounds=dict(min=32, max=128)),
             dict(name='n_filters', type='int', bounds=dict(min=32, max=128)),
@@ -75,7 +74,7 @@ while experiment.progress.observation_count < experiment.observation_budget:
     print(trainparam)
 
     # get data 
-    data = get_MD17data('ethanol_ccsd')
+    data = get_MD17data(params['data'])
     dataset = pack_MD17data(data, 2000)
 
     train, val, test = split_train_validation_test(dataset, val_size=0.25, test_size=0.25)
