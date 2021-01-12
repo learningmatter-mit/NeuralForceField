@@ -524,7 +524,7 @@ def base_plot(roce_scores,
     Returns:
         axis (maplotlib.axes._subplots.AxesSubplot): axis of the base
             plot, to be used later for adding additional features to
-            the plot. 
+            the plot.
     """
 
     # make the axis and set the x tick labels
@@ -612,6 +612,32 @@ def set_plot_ylim(max_scale,
     return ylim
 
 
+def set_tick_sizes(x_axis_dic,
+                   y_axis_dic):
+    """
+    Set plot tick sizes.
+    Args:
+        x_axis_dic (dict): dictionary with information about
+            the x-axis.
+        y_axis_dic (dict): dictionary with information about
+            the y-axis.
+    Returns:
+        None
+    """
+
+   # x-axis tick font size
+    if "ticks" in x_axis_dic:
+        tick_dic = x_axis_dic["ticks"]
+        if "fontsize" in tick_dic:
+            plt.rc('xtick', labelsize=tick_dic["fontsize"])
+
+    # y-axis tick font size
+    if "ticks" in y_axis_dic:
+        tick_dic = y_axis_dic["ticks"]
+        if "fontsize" in tick_dic:
+            plt.rc('ytick', labelsize=tick_dic["fontsize"])
+
+
 def label_plot(fpr_vals,
                legend_dic,
                x_axis_dic,
@@ -640,8 +666,9 @@ def label_plot(fpr_vals,
 
     kwargs = {key: legend_dic[key] for key in
               [*TEXT_KEYS, 'loc', 'ncol'] if key in legend_dic}
-    plt.legend([f'{string}%' for string in fpr_str],
-               **kwargs)
+    if legend_dic.get("use_legend", True):
+        plt.legend([f'{string}%' for string in fpr_str],
+                   **kwargs)
 
     # y-axis font size and label
     ylabel_kwargs = {}
@@ -651,18 +678,6 @@ def label_plot(fpr_vals,
             ylabel_kwargs["fontsize"] = label_dic["fontsize"]
 
     plt.ylabel("ROCE", **ylabel_kwargs)
-
-    # x-axis tick font size
-    if "ticks" in x_axis_dic:
-        tick_dic = x_axis_dic["ticks"]
-        if "fontsize" in tick_dic:
-            plt.rc('xtick', labelsize=tick_dic["fontsize"])
-
-    # y-axis tick font size
-    if "ticks" in y_axis_dic:
-        tick_dic = y_axis_dic["ticks"]
-        if "fontsize" in tick_dic:
-            plt.rc('ytick', labelsize=tick_dic["fontsize"])
 
     # x-axis label font sizes
     if 'labels' in x_axis_dic:
@@ -753,7 +768,7 @@ def plot(plot_dic):
         plot_dic (dict): the dictionary with information about
             the different plots.
     Returns:
-        None 
+        None
     """
 
     # basic information that applies to all models in the plot
@@ -765,6 +780,13 @@ def plot(plot_dic):
     (roce_scores, roce_no_overlap,
         fpr_colors, labels, bar_height) = vals_for_plot(plot_dic=plot_dic)
 
+    # set tick sizes - this has to come before making the plot
+    x_axis_dic = plot_info.get("x_axis", {})
+    y_axis_dic = plot_info.get("y_axis", {})
+
+    set_tick_sizes(x_axis_dic=x_axis_dic,
+                   y_axis_dic=y_axis_dic)
+
     # make the base plot
     axis = base_plot(roce_scores=roce_scores,
                      roce_no_overlap=roce_no_overlap,
@@ -772,17 +794,17 @@ def plot(plot_dic):
                      fpr_colors=fpr_colors,
                      bar_height=bar_height)
 
+    # add labels
+    label_plot(fpr_vals=base_info["fpr_vals"],
+               legend_dic=plot_info.get("legend", {}),
+               x_axis_dic=x_axis_dic,
+               y_axis_dic=y_axis_dic,
+               axis=axis)
+
     # set the y limits
     ylim = set_plot_ylim(max_scale=plot_info.get("max_height_scale", 1.2),
                          roce_no_overlap=roce_no_overlap,
                          bar_height=bar_height)
-
-    # add labels
-    label_plot(fpr_vals=base_info["fpr_vals"],
-               legend_dic=plot_info.get("legend", {}),
-               x_axis_dic=plot_info.get("x_axis", {}),
-               y_axis_dic=plot_info.get("y_axis", {}),
-               axis=axis)
 
     # add decorations
     decorate_plot(labels=labels,
