@@ -20,6 +20,8 @@ This folder contains scripts for doing 3D-based prediction tasks. These include 
            * [ChemProp3D (only bond update)](#chemprop3d-only-bond-update)
         * [Training parameters](#training-parameters)
     * [Analysis](#analysis)
+    * [Plots](#plots)
+      * [ROCE](#roce)
 - [Hyperparameter optimization](#hyperparameter-optimization)
 - [Transfer learning](#transfer-learning)
     * [Making a dataset for the new task](#making-a-dataset-for-the-new-task)
@@ -271,6 +273,10 @@ You may want to apply your model to different datasets, and you may be intereste
 There are also some useful files in `nff/analysis` for analyzing model predictions. For example, in `nff/analysis/cp3d.py`, you can find functions for computing the fingerprint similarity among different species. This can be done for species pairs that are contain two hits, two misses, or one hit and one miss for binary classification problems. You can also calculate similarities when conformers are selected randomly and when they are selected from the highest attention weight. This can give an idea of what the attention mechanism is or isn't learning. 
 
 The file also provides a function for getting and saving model scores on test sets, using models chosen by different validation metrics. Assuming you've already used `make_fps.sh` (see [Getting fingerprints, predictions, and learned weights]#getting-fingerprints-predictions-and-learned weights), the function `get_scores` loads each of the pickle files to get PRC and AUC scores of each model on the test set.
+
+### Plots
+#### ROCE
+The script `nff/analysis/roce.py` makes ROCE (receiver operator characteristic enrichment) plots for different models and different targets. To see how to make a config file for this script, please see the example config file `nff/analysis/config/plot_info.json`
 
 ## Hyperparameter optimization
 
