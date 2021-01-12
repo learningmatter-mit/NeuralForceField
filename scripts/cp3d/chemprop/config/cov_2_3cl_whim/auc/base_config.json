@@ -1,0 +1,28 @@
+{
+ "data_path": "/home/saxelrod/chemprop_cov_2/scaffold_split/train_full.csv",
+ "separate_val_path": "/home/saxelrod/chemprop_cov_2/scaffold_split/val_full.csv",
+ "separate_test_path": "/home/saxelrod/chemprop_cov_2/scaffold_split/test_full.csv",
+ "dataset_type": "classification",
+ "no_features_scaling": false,
+ "quiet": true,
+ "gpu": 0,
+ "num_folds": 10,
+ "class_balance": true,
+ "epochs": 300,
+ "dropout": 0.2,
+ "depth": 4,
+ "ffn_num_layers": 2,
+ "hidden_size": 500,
+ "separate_test_features_path": [
+        "/home/saxelrod/chemprop_cov_2/features/whim/test_whim_mean.npz",
+        "/home/saxelrod/chemprop_cov_2/features/whim/test_whim_std.npz"
+    ],
+ "separate_val_features_path": [
+        "/home/saxelrod/chemprop_cov_2/features/whim/val_whim_mean.npz",
+        "/home/saxelrod/chemprop_cov_2/features/whim/val_whim_std.npz"
+    ],
+ "features_path": [
+        "/home/saxelrod/chemprop_cov_2/features/whim/train_whim_mean.npz",
+        "/home/saxelrod/chemprop_cov_2/features/whim/train_whim_std.npz"
+    ]
+}

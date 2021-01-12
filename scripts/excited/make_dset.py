@@ -382,7 +382,6 @@ def main(group_name,
     # 	pk__in=job_pks).values_list('pk', flat=True))
     ####
 
-
     geom_count = 0
     i = 0
 

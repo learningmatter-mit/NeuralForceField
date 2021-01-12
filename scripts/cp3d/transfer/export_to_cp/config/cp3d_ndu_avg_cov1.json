@@ -1,0 +1,7 @@
+{
+  "feat_folder": "/home/saxelrod/chemprop_cov_2/features/cp3d_ndu_avg",
+  "cp_save_folder": "/home/saxelrod/chemprop_cov_2/features/cp3d_ndu_avg",
+  "smiles_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_cl",
+  "metrics": ["binary_cross_entropy", "auc", "prc-auc"],
+  "hyper_dset_size": null
+}
