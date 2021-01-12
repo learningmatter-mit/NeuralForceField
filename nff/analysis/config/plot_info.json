@@ -498,7 +498,8 @@
                 "loc": [
                     0.63,
                     0.58
-                ]
+                ],
+                "ncol": 2
             },
             "max_height_scale": 1.2,
             "save_path": "/home/saxelrod/plots/cov_2_cl_transfer_roce.eps",
