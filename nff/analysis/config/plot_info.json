@@ -308,7 +308,7 @@
                 ]
             },
             {
-                "plot_name": "CND Avg TL",
+                "plot_name": "CND avg TL",
                 "pred_paths": [
                     "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_cl/transfer/models/cp3d_ndu_avg_feats_mpnn_from_prc-auc/test_pred_0.csv",
                     "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_cl/transfer/models/cp3d_ndu_avg_feats_mpnn_from_prc-auc/test_pred_1.csv",
@@ -353,7 +353,7 @@
                 ]
             },
             {
-                "plot_name": "CP 3D Avg TL",
+                "plot_name": "CP 3D avg TL",
                 "pred_paths": [
                     "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_cl/transfer/models/cp3d_avg_feats_mpnn_from_prc-auc/test_pred_0.csv",
                     "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_cl/transfer/models/cp3d_avg_feats_mpnn_from_prc-auc/test_pred_1.csv",
@@ -398,7 +398,7 @@
                 ]
             },
             {
-                "plot_name": "Schn Feat Avg TL",
+                "plot_name": "Schn Feat avg TL",
                 "pred_paths": [
                     "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_cl/transfer/models/schnet_feat_avg_feats_mpnn_from_prc-auc/test_pred_0.csv",
                     "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_cl/transfer/models/schnet_feat_avg_feats_mpnn_from_prc-auc/test_pred_1.csv",
@@ -443,7 +443,7 @@
                 ]
             },
             {
-                "plot_name": "Chem Prop WHIM TL",
+                "plot_name": "CP WHIM TL",
                 "pred_paths": [
                     "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_cl/transfer/models/from_cp_whim_feats_mpnn_from_prc-auc/test_pred_0.csv",
                     "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_cl/transfer/models/from_cp_whim_feats_mpnn_from_prc-auc/test_pred_1.csv",
