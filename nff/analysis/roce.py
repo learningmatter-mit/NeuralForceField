@@ -768,7 +768,12 @@ def plot(plot_dic):
         plot_dic (dict): the dictionary with information about
             the different plots.
     Returns:
-        None
+        roce_scores (np.array): mean ROCE scores for each model type
+            and each fpr value. Has dimension `num_models` x
+            `num_fpr`, where `num_models` is the number of different
+            model types and `num_fpr` is the number of preset
+            false positive rates.
+        labels (list[str]): labels given to each of the different models.
     """
 
     # basic information that applies to all models in the plot
@@ -818,6 +823,8 @@ def plot(plot_dic):
 
     plt.show()
 
+    return roce_scores, labels
+
 
 def plot_all(plot_dics):
     """
@@ -826,10 +833,18 @@ def plot_all(plot_dics):
         plot_dics (list[dict]): different dictionaries with information
             about the different plots.
     Returns:
-        None
+        roce (list): ROCE scores and labels of each model from each of the plots
     """
+
+    roces = []
+
     for plot_dic in plot_dics:
-        plot(plot_dic)
+        roce_scores, labels = plot(plot_dic)
+        roces.append([{"label": label.replace("\n", ""),
+                       "roces": roce.tolist()}
+                      for label, roce in zip(labels, roce_scores)])
+
+    return roces
 
 
 def main():
@@ -842,12 +857,18 @@ def main():
                         help=("Path to JSON file with plot information. "
                               "Please see config/plot_info.json for an "
                               "example."))
+    parser.add_argument('--save_path', type=str,
+                        help=("Path to JSON file with saved ROCE scores."),
+                        default='roce.json')
+
     args = parser.parse_args()
     config_file = args.config_file
     with open(config_file, "r") as f_open:
         plot_dics = json.load(f_open)
 
-    plot_all(plot_dics=plot_dics)
+    roces = plot_all(plot_dics=plot_dics)
+    with open(args.save_path, 'w') as f_open:
+        json.dump(roces, f_open, indent=4, sort_keys=True)
 
 
 if __name__ == "__main__":
