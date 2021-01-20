@@ -774,6 +774,7 @@ def plot(plot_dic):
             model types and `num_fpr` is the number of preset
             false positive rates.
         labels (list[str]): labels given to each of the different models.
+        fpr_vals (np.array): pre-set false positive rates
     """
 
     # basic information that applies to all models in the plot
@@ -823,7 +824,49 @@ def plot(plot_dic):
 
     plt.show()
 
-    return roce_scores, labels
+    fpr_vals = plot_dic["base_info"]["fpr_vals"]
+    return roce_scores, labels, fpr_vals
+
+
+def get_perform_info(fprs,
+                     roce_scores,
+                     labels):
+    """
+    Summarize the information about model performances so it
+    can be saved in a JSON.
+
+    Args:
+        fprs (np.array): pre-set false positive rates
+        roce_scores (np.array): mean ROCE scores for each model type
+            and each fpr value. Has dimension `num_models` x
+            `num_fpr`, where `num_models` is the number of different
+            model types and `num_fpr` is the number of preset
+            false positive rates.
+        labels (list[str]): labels given to each of the different models.
+
+    Returns:
+        info (list[dict]): list of dictionaries, each of which says the FPR
+            value and the ROCE scores/model names of each model.
+    """
+
+    info = []
+
+    for i, fpr in enumerate(fprs):
+        scores = roce_scores[:, i].reshape(-1)
+        sort_idx = np.argsort(-scores)
+        sort_scores = scores[sort_idx].tolist()
+        sort_labels = np.array(labels)[sort_idx].tolist()
+
+        score_list = [{"rank": i + 1,
+                       "model": sort_labels[i].replace("\n", " "),
+                       "roce": score, }
+                      for i, score in enumerate(sort_scores)]
+
+        this_info = {"fpr": fpr,
+                     "scores": score_list}
+        info.append(this_info)
+
+    return info
 
 
 def plot_all(plot_dics):
@@ -839,10 +882,11 @@ def plot_all(plot_dics):
     roces = []
 
     for plot_dic in plot_dics:
-        roce_scores, labels = plot(plot_dic)
-        roces.append([{"label": label.replace("\n", ""),
-                       "roces": roce.tolist()}
-                      for label, roce in zip(labels, roce_scores)])
+        roce_scores, labels, fprs = plot(plot_dic)
+        info = get_perform_info(fprs=fprs,
+                                roce_scores=roce_scores,
+                                labels=labels)
+        roces.append(info)
 
     return roces
 
@@ -867,8 +911,11 @@ def main():
         plot_dics = json.load(f_open)
 
     roces = plot_all(plot_dics=plot_dics)
-    with open(args.save_path, 'w') as f_open:
+    save_path = args.save_path
+    with open(save_path, 'w') as f_open:
         json.dump(roces, f_open, indent=4, sort_keys=True)
+
+    print(f"Saved ROCE score information to {save_path}")
 
 
 if __name__ == "__main__":
