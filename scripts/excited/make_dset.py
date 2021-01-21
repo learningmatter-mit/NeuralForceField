@@ -379,7 +379,7 @@ def main(group_name,
 
     ####
     # job_pks = list(Job.objects.filter(parentgeom__parentjob__config__name__contains='bp86',
-    # 	pk__in=job_pks).values_list('pk', flat=True))
+    #  	pk__in=job_pks).values_list('pk', flat=True))
     ####
 
     geom_count = 0

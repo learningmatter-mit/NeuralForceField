@@ -859,7 +859,7 @@ def get_perform_info(fprs,
 
         score_list = [{"rank": i + 1,
                        "model": sort_labels[i].replace("\n", " "),
-                       "roce": score, }
+                       "roce": score}
                       for i, score in enumerate(sort_scores)]
 
         this_info = {"fpr": fpr,
