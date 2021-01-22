@@ -16,13 +16,13 @@ def get_spec_dic(props):
     Find the indices of geoms in the dataset that correspond
     to each species.
     Args:
-                    props (dict): dataset properties
+        props (dict): dataset properties
     Returns:
-                    spec_dic (dict): dictionary of the form
-                                    {smiles: idx}, where smiles is the smiles
-                                    of a species without cis/trans indicators,
-                                    and idx are the indices of geoms in that
-                                    species in the dataset.
+        spec_dic (dict): dictionary of the form
+                {smiles: idx}, where smiles is the smiles
+                of a species without cis/trans indicators,
+                and idx are the indices of geoms in that
+                species in the dataset.
     """
 
     spec_dic = {}
@@ -45,11 +45,11 @@ def compute_zhu(props,
     Compute the approximate Zhu-Nakamura hopping probabilities for
     each geom in the dataset.
     Args:
-                    props (dict): dataset properties
-                    zhu_kwargs (dict): dictionary with information about how
-                                                                                                                                                    to calculate the hopping rates.
+            props (dict): dataset properties
+            zhu_kwargs (dict): dictionary with information about how
+                to calculate the hopping rates.
     Returns:
-                    zhu_p (torch.Tensor): hopping probabilities
+        zhu_p (torch.Tensor): hopping probabilities
     """
 
     upper_key = zhu_kwargs["upper_key"]
@@ -76,13 +76,13 @@ def balanced_spec_zhu(spec_dic,
     = p_zhu(i) / p_zhu(j), where i and j are geometries in
     species A and p_zhu is the Zhu-Nakamura hopping probability.
     Args:
-                    spec_dic (dict): dictionary with indices of geoms in each
-                                    species
-                    zhu_p (torch.Tensor): Zhu-Nakamura hopping probabilities
-                                    for each geom.
+        spec_dic (dict): dictionary with indices of geoms in each
+                    species
+        zhu_p (torch.Tensor): Zhu-Nakamura hopping probabilities
+                    for each geom.
     Returns:
-                    all_weights (torch.Tensor): sampling weights for each
-                                    geom in the dataset, normalized to 1.
+                all_weights (torch.Tensor): sampling weights for each
+                                geom in the dataset, normalized to 1.
     """
 
     num_geoms = sum([len(i) for i in spec_dic.values()])
@@ -117,11 +117,11 @@ def imbalanced_spec_zhu(zhu_p):
     more often.
 
     Args:
-                    zhu_p (torch.Tensor): Zhu-Nakamura hopping probabilities
-                                    for each geom
+            zhu_p (torch.Tensor): Zhu-Nakamura hopping probabilities
+                            for each geom
     Returns:
-                    all_weights (torch.Tensor): sampling weights for each
-                                    geom in the dataset, normalized to 1
+            all_weights (torch.Tensor): sampling weights for each
+                            geom in the dataset, normalized to 1
     """
 
     all_weights = zhu_p / zhu_p.sum()
@@ -135,22 +135,22 @@ def per_spec_config_weights(spec_nxyz,
     Get weights to evenly sample different regions of phase
     space for a given species
     Args:
-                    spec_nxyz (list[torch.Tensor]): list of nxyz's for this
-                                    species.
-                    ref_nxyzs (list[torch.Tensor]): the reference xyz's that
-                                    you want to include in your sampling (e.g. cis,
-                                    trans, and CI). Every xyz will be assigned to the
-                                    one of these three states that it is closest to.
-                                    These three states will then be evenly sampled.
-                    ref_idx_lst (list[torch.LongTensor]): list of atom indices
-                                            to consider in the RMSD computation between reference
-                                            nxyz and geom nxyz. For example, if you want to associate
-                                            a geometry to a cis or trans cluster, you only really want
-                                            the RMSD of the CNNC atoms with respect to those in the
-                                            converged cis or trans geoms.
+        spec_nxyz (list[torch.Tensor]): list of nxyz's for this
+            species.
+        ref_nxyzs (list[torch.Tensor]): the reference xyz's that
+            you want to include in your sampling (e.g. cis,
+            trans, and CI). Every xyz will be assigned to the
+            one of these three states that it is closest to.
+            These three states will then be evenly sampled.
+        ref_idx_lst (list[torch.LongTensor]): list of atom indices
+            to consider in the RMSD computation between reference
+            nxyz and geom nxyz. For example, if you want to associate
+            a geometry to a cis or trans cluster, you only really want
+            the RMSD of the CNNC atoms with respect to those in the
+            converged cis or trans geoms.
     Returns:
-                    geom_weights(torch.Tensor): weights for each geom of this species,
-                                    normalized to 1.
+        geom_weights(torch.Tensor): weights for each geom of this species,
+                        normalized to 1.
 
 
     """
@@ -200,21 +200,21 @@ def all_spec_config_weights(props,
     the weights chosen to evenly sample each cluster
     for each species.
     Args:
-                    props (dict): dataset properties
-                    ref_nxyz_dic (dict): dictionary of the form
-                                                    {smiles: [{"nxyz": ref_nxyz,
-                                                    "idx": idx}]}, where smiles is
-                                                    the smiles without cis/trans info, the
-                                                    ref_nxyzs are the reference nxyz's
-                                                    for that species, and idx are the indices
-                                                    of the atoms in the RMSD computation
-                                                    with respect to the reference.
-                    spec_dic (dict): dictionary with indices of geoms in each
-                            species
+        props (dict): dataset properties
+        ref_nxyz_dic (dict): dictionary of the form
+            {smiles: [{"nxyz": ref_nxyz,
+            "idx": idx}]}, where smiles is
+            the smiles without cis/trans info, the
+            ref_nxyzs are the reference nxyz's
+            for that species, and idx are the indices
+            of the atoms in the RMSD computation
+            with respect to the reference.
+        spec_dic (dict): dictionary with indices of geoms in each
+                species
     Returns:
-                    weight_dic(dict): dictionary of the form {smiles: geom_weights},
-                                    where geom_weights are the set of normalized weights for each
-                                    geometry in that species.
+        weight_dic(dict): dictionary of the form {smiles: geom_weights},
+            where geom_weights are the set of normalized weights for each
+            geometry in that species.
 
     """
 
@@ -240,11 +240,12 @@ def balanced_spec_config(weight_dic,
     species [p(A, c1) = p(A, c2), where c1 and c2 are two different
     clusters in species A].
     Args:
-                    spec_dic (dict): dictionary with indices of geoms in each
-                                                                                                                                                                                                                    species
-                     weight_dic (dict): dictionary of the form {smiles: geom_weights},
-                                    where geom_weights are the set of normalized weights for each
-                                    geometry in that species.
+        spec_dic (dict): dictionary with indices of geoms in each species.
+        weight_dic (dict): dictionary of the form {smiles: geom_weights},
+                where geom_weights are the set of normalized weights for each
+                geometry in that species.
+        Returns:
+                all_weights (torch.Tensor): normalized set of weights
     """
 
     num_geoms = sum([i.shape[0] for i in weight_dic.values()])
@@ -260,6 +261,19 @@ def balanced_spec_config(weight_dic,
 
 def imbalanced_spec_config(weight_dic,
                            spec_dic):
+    """
+        Generate weights for geoms such that there is no balance with respect
+        to species [p(A) != p(B)], but there is with respect to clusters in
+        each species [p(A, c1) = p(A, c2), where c1 and c2 are two different
+        clusters in species A].
+        Args:
+            spec_dic (dict): dictionary with indices of geoms in each species.
+            weight_dic (dict): dictionary of the form {smiles: geom_weights},
+                    where geom_weights are the set of normalized weights for
+                    each geometry in that species.
+            Returns:
+                    all_weights (torch.Tensor): normalized set of weights
+    """
 
     num_geoms = sum([i.shape[0] for i in weight_dic.values()])
     all_weights = torch.zeros(num_geoms)
@@ -274,9 +288,19 @@ def imbalanced_spec_config(weight_dic,
 
 
 def get_rand_weights(spec_dic):
-
-    # import pdb
-    # pdb.set_trace()
+    """
+    Generate weights for random sampling of geoms - i.e., equal weights
+    for every geometry.
+    Args:
+        spec_dic (dict): dictionary with indices of geoms in each species.
+    Returns:
+        balanced_spec_weights (torch.Tensor): weights generated so that
+                P(A) = P(B) for species A and B, and p(A, i) = p(A, j)
+                for any geoms within A.
+        imbalanced_spec_weights (torch.Tensor): weights generated so that
+                P(A) != P(B) in general for species A and B, and p(i) = p(j)
+                for any geoms.
+    """
 
     num_geoms = sum([len(i) for i in spec_dic.values()])
 
@@ -306,25 +330,56 @@ def combine_weights(balanced_config,
                     config_weight,
                     zhu_weight):
     """
-    Notes: 
-    (a) `config_weight` + `zhu_weight` <= 1
-    - If equal to 1, then all geometries are sampled
-    according to their configuration group and zhu weight,
-    and possibly their species
-    - If not equal to 1, then the remainder get sampled randomly
-    (b) spec_weight <= 1 is the weight assigned to evenly sampling
-    the species.
+    Combine config weights, Zhu-Nakamura weights, and random
+    weights to get the final weights for each geom.
+    Args:
+        balanced_config (torch.Tensor): config weights with
+                species balancing
+        imbalanced_config (torch.Tensor): config weights without
+                species balancing
+        balanced_zhu (torch.Tensor): Zhu weights with
+                species balancing
+        imbalanced_zhu (torch.Tensor): Zhu weights without
+                species balancing
+        balanced_rand (torch.Tensor): equal weights with
+                species balancing
+        imbalanced_rand (torch.Tensor): equal weights without
+                species balancing
+        spec_weight (float): weight given to equal species balancing.
+                If equal to 1, then p(A) = p(B) for all species. If equal
+                to 0, species are not considered at all for balancing.
+                Intermediate values reflect the extent to which you care
+                about balancing species during sampling.
+        config_weight (float): the weight given to balance among
+                configurations. Must be <= 1.
+        zhu_weight (float): the weight given to sampling high-hopping rate.
+                geoms. Must be <= 1 and satisfy `config_weight` + `zhu_weight`
+                <= 1. Thedifference, 1 - config_weight - zhu_weight, is the
+                weight given to purely random sampling.
+    Returns:
+        final_weights (torch.Tensor): final weights for all geoms, normalized
+                to 1.
     """
+
+    # combination of zhu weights that are balanced and imbalanced with respect
+    # to species
 
     weighted_zhu = (balanced_zhu * zhu_weight * spec_weight
                     + imbalanced_zhu * zhu_weight * (1 - spec_weight))
+
+    # combination of config weights that are balanced and imbalanced with
+    # respect to species
     weighted_config = (balanced_config * config_weight * spec_weight
-                       + imbalanced_config * config_weight
-                                       * (1 - spec_weight))
+                       + imbalanced_config * config_weight * (1 - spec_weight))
+
+    # combination of random weights that are balanced and imbalanced with
+    # respect to species
 
     rand_weight = (1 - zhu_weight - config_weight)
     weighted_rand = (balanced_rand * rand_weight * spec_weight
                      + imbalanced_rand * rand_weight * (1 - spec_weight))
+
+    # final weights
 
     final_weights = weighted_zhu + weighted_config + weighted_rand
 
@@ -337,7 +392,28 @@ def spec_config_zhu_balance(props,
                             spec_weight,
                             config_weight,
                             zhu_weight):
-
+    """
+    Generate weights that combine balancing of species,
+    configurations, and Zhu-Nakamura hopping rates.
+    Args:
+        props (dict): dataset properties
+                zhu_kwargs (dict): dictionary with information about how
+                to calculate the hopping rates.
+        spec_weight (float): weight given to equal species balancing.
+                If equal to 1, then p(A) = p(B) for all species. If equal
+                to 0, species are not considered at all for balancing.
+                Intermediate values reflect the extent to which you care
+                about balancing species during sampling.
+        config_weight (float): the weight given to balance among configurations.
+                Must be <= 1.
+        zhu_weight (float): the weight given to sampling high-hopping rate geoms.
+                Must be <= 1 and satisfy `config_weight` + `zhu_weight` <= 1. The
+                difference, 1 - config_weight - zhu_weight, is the weight given to
+                purely random sampling.
+    Returns:
+        final_weights (torch.Tensor): final weights for all geoms,
+            normalized to 1.
+    """
     spec_dic = get_spec_dic(props)
 
     # get the species-balanced and species-imbalanced
@@ -350,6 +426,7 @@ def spec_config_zhu_balance(props,
     balanced_config = balanced_spec_config(
         weight_dic=config_weight_dic,
         spec_dic=spec_dic)
+
     imbalanced_config = imbalanced_spec_config(
         weight_dic=config_weight_dic,
         spec_dic=spec_dic)
