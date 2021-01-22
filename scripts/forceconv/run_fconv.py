@@ -51,7 +51,7 @@ if params['id'] == None:
             dict(name='n_atom_basis', type='int', bounds=dict(min=32, max=512)),
             dict(name='n_edge_basis', type='int', bounds=dict(min=32, max=512)),
             dict(name='n_filters', type='int', bounds=dict(min=32, max=256)),
-            dict(name='n_convolutions', type='int', bounds=dict(min=4, max=8)),
+            dict(name='n_convolutions', type='int', bounds=dict(min=3, max=6)),
             dict(name='n_gaussians', type='int', bounds=dict(min=8, max=512)),
             dict(name='batch_size', type='int', bounds=dict(min=16, max=64)),
             dict(name='cutoff', type='double', bounds=dict(min=2.0, max=6.0)),

@@ -21,8 +21,8 @@ nlr_dict =  {
     'ReLU6':nn.ReLU6(),
     'SELU': nn.SELU(),
     'CELU': nn.CELU(),
-    'Tanhshrink': nn.Tanhshrink()，
-    'ssf'： shifted_softplus()
+    'Tanhshrink': nn.Tanhshrink(),
+    'ssf': shifted_softplus()
 }
 
 class EdgeConv(MessagePassingModule):
