@@ -266,8 +266,8 @@ class BalancedFFSampler(torch.utils.data.sampler.Sampler):
             cluster = np.argmin(rmsds)
             cluster_dic[cluster].append(i)
 
-        num_geoms = len(spec_nxyz["nxyz"])
-        geom_weights = np.zeros(num_geoms)
+        num_geoms = len(spec_nxyz)
+        geom_weights = torch.zeros(num_geoms)
 
         for idx in cluster_dic.values():
             if len(idx) == 0:

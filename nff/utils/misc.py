@@ -453,17 +453,20 @@ def avg_distances(dset):
 
     return all_nbrs, avg_d
 
+
 def cat_props(props):
 
     new_props = {}
     for key, val in props.items():
-        if isinstance(val, list) and isinstance(val[0], torch.Tensor):
-            if len(val[0].shape) == 0:
-                new_props[key] = torch.stack(val)
+        if isinstance(val, list):
+            if isinstance(val[0], torch.Tensor):
+                if len(val[0].shape) == 0:
+                    new_props[key] = torch.stack(val)
+                else:
+                    new_props[key] = torch.cat(val)
             else:
-                new_props[key] = torch.cat(val)
+                new_props[key] = val
         elif isinstance(val, torch.Tensor):
             new_props[key] = val
 
     return new_props
-
