@@ -10,6 +10,20 @@ from nff.nn.activations import shifted_softplus
 from nff.nn.graphconv import MessagePassingModule
 from nff.utils.scatter import scatter_add
 from torch.nn import ModuleDict
+from torch import nn
+
+
+nlr_dict =  {
+    'ReLU': nn.ReLU(), 
+    'ELU': nn.ELU(),
+    'Tanh': nn.Tanh(),
+    'LeakyReLU': nn.LeakyReLU(),
+    'ReLU6':nn.ReLU6(),
+    'SELU': nn.SELU(),
+    'CELU': nn.CELU(),
+    'Tanhshrink': nn.Tanhshrink()，
+    'ssf'： shifted_softplus()
+}
 
 class EdgeConv(MessagePassingModule):
 
@@ -26,11 +40,10 @@ class EdgeConv(MessagePassingModule):
         atom_filter_depth,
         edge_filter_depth,
         atom_update_depth,
-        edge_update_depth
+        edge_update_depth,
 
     ):
         super(EdgeConv, self).__init__()
-
 
         # construct edge filter networks 
         edge_filter = [Dense(in_features=n_edge_basis, out_features=n_edge_basis), shifted_softplus()]
