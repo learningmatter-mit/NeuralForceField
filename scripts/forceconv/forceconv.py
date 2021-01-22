@@ -23,55 +23,50 @@ class EdgeConv(MessagePassingModule):
         n_atom_basis,
         n_edge_basis,
         n_filters,
+        atom_filter_depth,
+        edge_filter_depth,
+        atom_update_depth,
+        edge_update_depth
+
     ):
         super(EdgeConv, self).__init__()
+
+
+        # construct edge filter networks 
+        edge_filter = [Dense(in_features=n_edge_basis, out_features=n_edge_basis), shifted_softplus()]
+        for i in range(edge_filter_depth):
+            edge_filter.append( Dense(in_features=n_edge_basis, out_features=n_edge_basis))
+            edge_filter.append(shifted_softplus())
+
+        edge_filter.append(Dense(in_features=n_edge_basis, out_features=n_filters))
+
+        # construct atom filter networks
+        atom_filter = [Dense(in_features=n_atom_basis, out_features=n_atom_basis), shifted_softplus()]
+        for i in range(atom_filter_depth):
+            atom_filter.append(Dense(in_features=n_atom_basis, out_features=n_atom_basis))
+            atom_filter.append(shifted_softplus())
+        atom_filter.append(Dense(in_features=n_atom_basis, out_features=n_filters))
+
+        # construct edge update networks
+        edge_update = [Dense(in_features=n_filters, out_features=n_filters), shifted_softplus()]
+        for i in range(edge_update_depth):
+            edge_update.append(Dense(in_features=n_filters, out_features=n_filters))
+            edge_update.append(shifted_softplus())
+        edge_update.append(Dense(in_features=n_filters, out_features=n_edge_basis))
+
+        # construct atom update networks
+        atom_update = [Dense(in_features=n_filters, out_features=n_filters), shifted_softplus()]
+        for i in range(atom_update_depth):
+            atom_update.append(Dense(in_features=n_filters, out_features=n_filters))
+            atom_update.append(shifted_softplus())
+        atom_update.append(Dense(in_features=n_filters, out_features=n_atom_basis))
+
         self.moduledict = ModuleDict(
             {
-                "edge_filter": Sequential(
-                    Dense(
-                        in_features=n_edge_basis,
-                        out_features=n_edge_basis,
-                    ),
-                    shifted_softplus(),
-                    Dense(
-                        in_features=n_edge_basis,
-                        out_features=n_filters,
-                    )
-                ),
-                "atom_filter": Sequential(
-                    Dense(
-                        in_features=n_atom_basis,
-                        out_features=n_atom_basis,
-                    ),
-                    shifted_softplus(),
-                    Dense(
-                        in_features=n_atom_basis,
-                        out_features=n_filters,
-                    ),
-                ),
-                "atom_update_function": Sequential(
-                    Dense(
-                        in_features=n_filters,
-                        out_features=n_atom_basis,
-                    ),
-                    shifted_softplus(),
-                    Dense(
-                        in_features=n_atom_basis,
-                        out_features=n_atom_basis,
-                    ),
-                
-                ),
-                "edge_update_function": Sequential(
-                    Dense(
-                        in_features=n_filters,
-                        out_features=n_edge_basis,
-                    ),
-                    shifted_softplus(),
-                    Dense(
-                        in_features=n_edge_basis,
-                        out_features=n_edge_basis,
-                    )
-                )
+                "edge_filter": Sequential(*edge_filter),
+                "atom_filter": Sequential(*atom_filter),
+                "atom_update_function": Sequential(*atom_update),
+                "edge_update_function": Sequential(*edge_update),
             }
         )
 
@@ -112,7 +107,8 @@ class EdgeConv(MessagePassingModule):
     
 class ForceConvolve(torch.nn.Module):
     
-    def __init__(self, n_convolutions, n_edge_basis, n_atom_basis, n_filters, n_gaussians, cutoff):
+    def __init__(self, n_convolutions, n_edge_basis, n_atom_basis, n_filters, n_gaussians, cutoff,
+                    edge_filter_depth, atom_filter_depth, edge_update_depth, atom_update_depth):
         torch.nn.Module.__init__(self)
         # atom transform
         self.atom_filter = Embedding(100, n_atom_basis)
@@ -127,7 +123,13 @@ class ForceConvolve(torch.nn.Module):
         
         # convolutions 
         self.conv = torch.nn.ModuleList(
-            [ EdgeConv(n_atom_basis=n_atom_basis, n_edge_basis=n_edge_basis, n_filters=n_filters)
+            [ EdgeConv(n_atom_basis=n_atom_basis,
+                        n_edge_basis=n_edge_basis, 
+                        n_filters=n_filters,
+                        edge_filter_depth=edge_filter_depth,
+                        atom_filter_depth=atom_filter_depth,
+                        edge_update_depth=edge_update_depth,
+                        atom_update_depth=atom_update_depth)
                 for _ in range(n_convolutions)
             ]
         )
@@ -142,7 +144,7 @@ class ForceConvolve(torch.nn.Module):
     def forward(self, batch, xyz=None):
         if xyz is None:
             xyz = batch["nxyz"][:, 1:4]
-            xyz.requires_grad = True
+            xyz.requires_grad = False
         
         r = batch["nxyz"][:, 0]
         a = batch["nbr_list"]

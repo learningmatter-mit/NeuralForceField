@@ -48,14 +48,18 @@ if params['id'] == None:
         name=logdir,
         metrics=[dict(name='loss', objective='minimize')],
         parameters=[
-            dict(name='n_atom_basis', type='int', bounds=dict(min=32, max=128)),
-            dict(name='n_edge_basis', type='int', bounds=dict(min=32, max=128)),
-            dict(name='n_filters', type='int', bounds=dict(min=32, max=128)),
-            dict(name='n_convolutions', type='int', bounds=dict(min=3, max=6)),
-            dict(name='n_gaussians', type='int', bounds=dict(min=32, max=64)),
-            dict(name='batch_size', type='int', bounds=dict(min=8, max=64)),
-            dict(name='cutoff', type='double', bounds=dict(min=2.0, max=5.0)),
+            dict(name='n_atom_basis', type='int', bounds=dict(min=32, max=512)),
+            dict(name='n_edge_basis', type='int', bounds=dict(min=32, max=512)),
+            dict(name='n_filters', type='int', bounds=dict(min=32, max=256)),
+            dict(name='n_convolutions', type='int', bounds=dict(min=4, max=8)),
+            dict(name='n_gaussians', type='int', bounds=dict(min=8, max=512)),
+            dict(name='batch_size', type='int', bounds=dict(min=16, max=64)),
+            dict(name='cutoff', type='double', bounds=dict(min=2.0, max=6.0)),
             dict(name='lr', type='double', bounds=dict(min=1e-4, max=1e-3)),
+            dict(name='edge_filter_depth', type='int', bounds=dict(min=0, max=1)),
+            dict(name='atom_filter_depth', type='int', bounds=dict(min=0, max=1)),
+            dict(name='edge_update_depth', type='int', bounds=dict(min=0, max=1)),
+            dict(name='atom_update_depth', type='int', bounds=dict(min=0, max=1)),
         ],
         observation_budget=n_obs, # how many iterations to run for the optimization
         parallel_bandwidth=10,
@@ -75,9 +79,9 @@ while experiment.progress.observation_count < experiment.observation_budget:
 
     # get data 
     data = get_MD17data(params['data'])
-    dataset = pack_MD17data(data, 2000)
+    dataset = pack_MD17data(data, 10000)
 
-    train, val, test = split_train_validation_test(dataset, val_size=0.25, test_size=0.25)
+    train, val, test = split_train_validation_test(dataset, val_size=0.05, test_size=0.85)
     train_loader = DataLoader(train, batch_size=trainparam['batch_size'], collate_fn=collate_dicts)
     val_loader = DataLoader(val, batch_size=trainparam['batch_size'], collate_fn=collate_dicts)
     test_loader = DataLoader(test, batch_size=trainparam['batch_size'], collate_fn=collate_dicts)
@@ -88,7 +92,11 @@ while experiment.progress.observation_count < experiment.observation_budget:
                           n_atom_basis=trainparam['n_atom_basis'], 
                           n_filters=trainparam['n_filters'], 
                           n_gaussians=trainparam['n_gaussians'], 
-                          cutoff=trainparam['cutoff'])
+                          cutoff=trainparam['cutoff'],
+                          edge_update_depth=trainparam['edge_update_depth'],
+                          atom_update_depth=trainparam['atom_update_depth'],
+                          edge_filter_depth=trainparam['edge_filter_depth'],
+                          atom_filter_depth=trainparam['atom_filter_depth'])
 
     loss_fn = loss.build_mse_loss(loss_coef={'energy_grad': 1})
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
@@ -145,7 +153,13 @@ while experiment.progress.observation_count < experiment.observation_budget:
     print("Start training ")
     T.train(device=DEVICE, n_epochs=n_epochs)
 
-    # evaluate model 
+    # evaluate model
+
+    # get new data  
+    # data = get_MD17data(params['data'])
+    # dataset = pack_MD17data(data, 1000)
+    # test_loader =  DataLoader(dataset, batch_size=trainparam['batch_size'], collate_fn=collate_dicts)
+
     results, targets, val_loss = evaluate(T.get_best_model(), test_loader, loss_fn, device=DEVICE)
     key = 'energy_grad'
     pred = torch.stack(results[key][:-1], dim=0).view(-1).detach().cpu().numpy()
