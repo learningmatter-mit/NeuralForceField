@@ -22,7 +22,7 @@ TYPE_KEYS = {
 
 
 def collate_dicts(dicts):
-    """Collates dictionaries within a single batch. Automatically reindexes 
+    """Collates dictionaries within a single batch. Automatically reindexes
         neighbor lists and periodic boundary conditions to deal with the batch.
 
     Args:
@@ -224,7 +224,7 @@ class BalancedFFSampler(torch.utils.data.sampler.Sampler):
         the probability of getting any geom i in the dataset
         is related to the probability of getting any geom j
         through p(i) / p(j) = p_zhu(i) / p_zhu(j),
-        p_zhu is the Zhu-Nakamura hopping probability. This 
+        p_zhu is the Zhu-Nakamura hopping probability. This
         is not balanced with respect to species, so a species
         that has more geoms with high p_zhu will get sampled
         more often.
@@ -242,7 +242,7 @@ class BalancedFFSampler(torch.utils.data.sampler.Sampler):
         Args:
             props (dict): props
             ref_nxyzs (list[torch.Tensor]): the reference xyz's that
-                you want to include in your sampling (e.g. cis, 
+                you want to include in your sampling (e.g. cis,
                 trans, and CI). Every xyz will be assigned to the one
                 of these three states that it is closest to. These
                 three states will then be evenly sampled.
@@ -326,11 +326,36 @@ class BalancedFFSampler(torch.utils.data.sampler.Sampler):
 
         return all_weights
 
+    def get_rand_weights(self,
+                         spec_dic):
+
+        # import pdb
+        # pdb.set_trace()
+
+        num_geoms = sum([len(i) for i in spec_dic.values()])
+
+        imbalanced_spec_weights = torch.ones(num_geoms)
+        imbalanced_spec_weights /= imbalanced_spec_weights.sum()
+
+        balanced_spec_weights = torch.zeros(num_geoms)
+        for idx in spec_dic.values():
+            if len(idx) == 0:
+                continue
+            balanced_spec_weights[idx] = 1 / len(idx)
+
+        total = balanced_spec_weights.sum()
+        if total != 0:
+            balanced_spec_weights /= total
+
+        return balanced_spec_weights, imbalanced_spec_weights
+
     def combine_weights(self,
                         balanced_config,
                         imbalanced_config,
                         balanced_zhu,
                         imbalanced_zhu,
+                        balanced_rand,
+                        imbalanced_rand,
                         spec_weight,
                         config_weight,
                         zhu_weight):
@@ -351,11 +376,11 @@ class BalancedFFSampler(torch.utils.data.sampler.Sampler):
                            + imbalanced_config * config_weight
                            * (1 - spec_weight))
 
-        remaining_weight = 1 - (weighted_zhu + weighted_config).sum()
-        num_geoms = balanced_config.shape[0]
-        rand = torch.ones(num_geoms) / num_geoms * remaining_weight
+        rand_weight = (1 - zhu_weight - config_weight)
+        weighted_rand = (balanced_rand * rand_weight * spec_weight
+                         + imbalanced_rand * rand_weight * (1 - spec_weight))
 
-        final_weights = weighted_zhu + weighted_config + rand
+        final_weights = weighted_zhu + weighted_config + weighted_rand
 
         return final_weights
 
@@ -392,6 +417,10 @@ class BalancedFFSampler(torch.utils.data.sampler.Sampler):
                                               zhu_p=zhu_p)
         imbalanced_zhu = self.imbalanced_spec_zhu(zhu_p=zhu_p)
 
+        # get the random weights
+        balanced_rand, imbalanced_rand = self.get_rand_weights(
+            spec_dic=spec_dic)
+
         # combine them all together
 
         final_weights = self.combine_weights(
@@ -399,6 +428,8 @@ class BalancedFFSampler(torch.utils.data.sampler.Sampler):
             imbalanced_config=imbalanced_config,
             balanced_zhu=balanced_zhu,
             imbalanced_zhu=imbalanced_zhu,
+            balanced_rand=balanced_rand,
+            imbalanced_rand=imbalanced_rand,
             spec_weight=spec_weight,
             config_weight=config_weight,
             zhu_weight=zhu_weight)
