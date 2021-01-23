@@ -137,11 +137,14 @@ def per_spec_config_weights(spec_nxyz,
     Args:
         spec_nxyz (list[torch.Tensor]): list of nxyz's for this
             species.
-        ref_nxyzs (list[torch.Tensor]): the reference xyz's that
+        ref_nxyzs (list[list[torch.Tensor]]): the reference xyz's that
             you want to include in your sampling (e.g. cis,
             trans, and CI). Every xyz will be assigned to the
             one of these three states that it is closest to.
             These three states will then be evenly sampled.
+            Note that each state gets its own list of tensors,
+            because one state can have more than one geom (e.g. there
+            might be multiple distinct CI geoms).
         ref_idx_lst (list[torch.LongTensor]): list of atom indices
             to consider in the RMSD computation between reference
             nxyz and geom nxyz. For example, if you want to associate
@@ -165,8 +168,19 @@ def per_spec_config_weights(spec_nxyz,
 
     for i, nxyz in enumerate(spec_nxyz):
         rmsds = []
-        for idx, ref_nxyz in zip(ref_idx_lst, ref_nxyzs):
-            rmsd = compute_rmsd(targ_nxyz=ref_nxyz[idx], this_nxyz=nxyz[idx])
+
+        # ref_nxyzs have the form [[xyz_0, xyz_1],
+        # [xyz_2, xyz_3, xyz_4], [xyz_5], ...], so that
+        # each different configuration can have more than
+        # one nxyz assigned to it (e.g. for CI there might be
+        # multiple geoms but we want to count them in the general
+        # group of "CI" so we don't completely dominate the cis
+        # and trans configs, too)
+
+        for idx, ref_nxyz_lst in zip(ref_idx_lst, ref_nxyzs):
+            rmsd = min([compute_rmsd(targ_nxyz=ref_nxyz[idx],
+                                     this_nxyz=nxyz[idx])
+                        for ref_nxyz in ref_nxyz_lst])
             rmsds.append(rmsd)
 
         cluster = np.argmin(rmsds)
