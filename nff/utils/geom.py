@@ -104,7 +104,7 @@ def minimize_rotation_and_translation(targ_nxyz, this_nxyz):
     return new_p, p0, R
 
 
-def compute_rmsd(targ_nxyz, this_nxyz, rdkit=False):
+def compute_rmsd(targ_nxyz, this_nxyz):
 
     targ_nxyz = torch.Tensor(targ_nxyz).reshape(1, -1, 4)
     this_nxyz = torch.Tensor(this_nxyz).reshape(1, -1, 4)
@@ -125,39 +125,6 @@ def compute_rmsd(targ_nxyz, this_nxyz, rdkit=False):
     distances = (((delta_sq.sum((1, 2)) / num_atoms) ** 0.5)
                  .reshape(num_mols_0, num_mols_1)
                  .cpu().reshape(-1).item())
-
-
-    if rdkit:
-      smiles = "CN=NC"
-
-      from rdkit import Chem
-      import copy
-      from rdkit.Chem.rdMolAlign import AlignMol
-
-
-      # smiles = "c1ccc(N=Nc2ccccc2)cc1"
-      mol_0 = Chem.MolFromSmiles(smiles)
-      # mol_0 = Chem.AddHs(mol_0)
-
-      mol_1 = copy.deepcopy(mol_0)
-
-      conformer = Chem.Conformer(len(targ_nxyz[0]))
-      for i, pos in enumerate(targ_nxyz[0]):
-          conformer.SetAtomPosition(int(i), pos[1:].tolist())
-      mol_0.AddConformer(conformer)
-
-      conformer = Chem.Conformer(len(this_nxyz[0]))
-      for i, pos in enumerate(this_nxyz[0]):
-          conformer.SetAtomPosition(int(i), pos[1:].tolist())
-      mol_1.AddConformer(conformer)
-
-      rmsd = AlignMol(mol_0, mol_1)
-
-
-      print(rmsd)
-      print(distances)
-      print('\n')
-
 
     return distances
 

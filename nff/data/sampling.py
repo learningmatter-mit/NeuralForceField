@@ -192,34 +192,6 @@ def assign_clusters(ref_idx,
     rmsds, _ = compute_distances(dataset=dset_0,
                                  device=device,
                                  dataset_1=dset_1)
-    checks = []
-    i_mx = min([len(dset_0), 5])
-    j_mx = min([len(dset_1), 5])
-
-    start_i = len(dset_0) - i_mx
-    start_j = len(dset_1) - j_mx
-
-    for i in range(i_mx):
-        check = []
-        for j in range(j_mx):
-            targ_nxyz = dset_0.props['nxyz'][start_i + i]
-            this_nxyz = dset_1.props['nxyz'][start_j + j]
-            rmsd = compute_rmsd(targ_nxyz=targ_nxyz,
-                                this_nxyz=this_nxyz,
-                                rdkit=True)
-            check.append(rmsd)
-        checks.append(check)
-
-    checks = torch.Tensor(checks)
-    import pdb
-    # pdb.set_trace()
-
-    rmsds = rmsds[:, :len(dset_1)]
-
-    print(start_i)
-    print(start_j)
-    print(abs(rmsds[-i_mx:, -j_mx:] - checks).max())
-    # print(checks)
 
     # take the minimum rmsd with respect to the set of reference
     # nxyz's in each cluster
