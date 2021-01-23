@@ -9,6 +9,8 @@ from nff.train.loss import batch_zhu_p
 from nff.utils.geom import compute_rmsd
 from nff.utils import constants as const
 from nff.utils.misc import cat_props
+from nff.data import Dataset
+from nff.utils.geom import compute_distances
 
 
 def get_spec_dic(props):
@@ -128,9 +130,93 @@ def imbalanced_spec_zhu(zhu_p):
     return all_weights
 
 
+def assign_clusters(ref_idx,
+                    spec_nxyz,
+                    ref_nxyzs,
+                    device):
+    """
+    Assign each geom to a cluster.
+
+    Args:
+        ref_idx (torch.LongTensor): atom indices
+            to consider in the RMSD computation between reference
+            nxyz and geom nxyz. For example, if you want to associate
+            a geometry to a cis or trans cluster, you only really want
+            the RMSD of the CNNC atoms with respect to those in the
+            converged cis or trans geoms.
+        spec_nxyz (list[torch.Tensor]): list of nxyz's for this
+            species.
+        ref_nxyzs (list[list[torch.Tensor]]): the reference xyz's that
+            you want to include in your sampling (e.g. cis,
+            trans, and CI). Every xyz will be assigned to the
+            one of these three states that it is closest to.
+            These three states will then be evenly sampled.
+            Note that each state gets its own list of tensors,
+            because one state can have more than one geom (e.g. there
+            might be multiple distinct CI geoms).
+         device (str): device on which to do the RMSD calculations
+    Returns:
+        cluster_dic (dict): dictionary of the form {cluster: idx},
+            where cluster is the cluster number and idx is the set of
+            indices of geoms that belong to that cluster.
+    """
+    # assign a cluster to each nxyz by computing its RMSD with respect
+    # to each reference nxyz and selecting the one with the smallest
+    # distance
+
+    # we'll make datasets so we can use them as input to the torch
+    # parallelized distance computation
+
+    # the first is just the set of geom nxy's
+    props_1 = {"nxyz": [i[ref_idx] for i in spec_nxyz]}
+    # the second is the reference dataset
+    props_0 = {"nxyz": []}
+
+    # use `cluster_idx` to keep track of which reference geoms belong
+    # to which cluster, because  one cluster can have many reference
+    # geoms
+
+    cluster_idx = {}
+    for i, ref_nxyz_lst in enumerate(ref_nxyzs):
+        cluster_idx[i] = torch.arange(len(ref_nxyz_lst))
+        if i != 0:
+            cluster_idx[i] += cluster_idx[i - 1][-1] + 1
+
+        for ref_nxyz in ref_nxyz_lst:
+            props_0["nxyz"].append(ref_nxyz[ref_idx])
+
+    # compute the rmsds
+    dset_0 = Dataset(props=props_0)
+    dset_1 = Dataset(props=props_1)
+
+    rmsds, _ = compute_distances(dataset=dset_0,
+                                 device=device,
+                                 dataset_1=dset_1)
+    rmsds = rmsds[:, :len(dset_1)]
+
+    # take the minimum rmsd with respect to the set of reference
+    # nxyz's in each cluster
+    num_clusters = len(ref_nxyzs)
+    min_rmsds = torch.zeros(len(spec_nxyz), num_clusters)
+
+    for cluster, idx in cluster_idx.items():
+        these_rmsds = rmsds[idx]
+        these_mins, _ = these_rmsds.min(0)
+        min_rmsds[:, cluster] = these_mins
+
+    # assign a cluster to each species and record in `cluster_dic`
+    clusters = min_rmsds.argmin(-1)
+    cluster_dic = {i: [] for i in range(num_clusters)}
+    for spec_idx, cluster in enumerate(clusters):
+        cluster_dic[cluster.item()].append(spec_idx)
+
+    return cluster_dic
+
+
 def per_spec_config_weights(spec_nxyz,
                             ref_nxyzs,
-                            ref_idx_lst):
+                            ref_idx,
+                            device='cpu'):
     """
     Get weights to evenly sample different regions of phase
     space for a given species
@@ -145,12 +231,13 @@ def per_spec_config_weights(spec_nxyz,
             Note that each state gets its own list of tensors,
             because one state can have more than one geom (e.g. there
             might be multiple distinct CI geoms).
-        ref_idx_lst (list[torch.LongTensor]): list of atom indices
+        ref_idx (torch.LongTensor): atom indices
             to consider in the RMSD computation between reference
             nxyz and geom nxyz. For example, if you want to associate
             a geometry to a cis or trans cluster, you only really want
             the RMSD of the CNNC atoms with respect to those in the
             converged cis or trans geoms.
+         device (str): device on which to do the RMSD calculations
     Returns:
         geom_weights(torch.Tensor): weights for each geom of this species,
                         normalized to 1.
@@ -158,33 +245,11 @@ def per_spec_config_weights(spec_nxyz,
 
     """
 
-    num_clusters = len(ref_nxyzs)
     # a dictionary that tells you which geoms are in each cluster
-    cluster_dic = {i: [] for i in range(num_clusters)}
-
-    # assign a cluster to each nxyz by computing its RMSD with respect
-    # to each reference nxyz and selecting the one with the smallest
-    # distance
-
-    for i, nxyz in enumerate(spec_nxyz):
-        rmsds = []
-
-        # ref_nxyzs have the form [[xyz_0, xyz_1],
-        # [xyz_2, xyz_3, xyz_4], [xyz_5], ...], so that
-        # each different configuration can have more than
-        # one nxyz assigned to it (e.g. for CI there might be
-        # multiple geoms but we want to count them in the general
-        # group of "CI" so we don't completely dominate the cis
-        # and trans configs, too)
-
-        for idx, ref_nxyz_lst in zip(ref_idx_lst, ref_nxyzs):
-            rmsd = min([compute_rmsd(targ_nxyz=ref_nxyz[idx],
-                                     this_nxyz=nxyz[idx])
-                        for ref_nxyz in ref_nxyz_lst])
-            rmsds.append(rmsd)
-
-        cluster = np.argmin(rmsds)
-        cluster_dic[cluster].append(i)
+    cluster_dic = assign_clusters(ref_idx=ref_idx,
+                                  spec_nxyz=spec_nxyz,
+                                  ref_nxyzs=ref_nxyzs,
+                                  device=device)
 
     # assign weights to each geom equal to 1 / (num geoms in cluster),
     # so that the probability of sampling any one cluster is equal to
@@ -208,7 +273,8 @@ def per_spec_config_weights(spec_nxyz,
 
 def all_spec_config_weights(props,
                             ref_nxyz_dic,
-                            spec_dic):
+                            spec_dic,
+                            device):
     """
     Get the "configuration weights" for each geom, i.e.
     the weights chosen to evenly sample each cluster
@@ -225,6 +291,7 @@ def all_spec_config_weights(props,
             with respect to the reference.
         spec_dic (dict): dictionary with indices of geoms in each
                 species
+        device (str): device on which to do the RMSD calculations
     Returns:
         weight_dic(dict): dictionary of the form {smiles: geom_weights},
             where geom_weights are the set of normalized weights for each
@@ -234,13 +301,14 @@ def all_spec_config_weights(props,
 
     weight_dic = {}
     for spec, idx in spec_dic.items():
-        ref_nxyzs = [i['nxyz'] for i in ref_nxyz_dic[spec]]
-        ref_idx_lst = [i['idx'] for i in ref_nxyz_dic[spec]]
+        ref_nxyzs = ref_nxyz_dic[spec]['nxyz']
+        ref_idx = ref_nxyz_dic[spec]['idx']
         spec_nxyz = [props['nxyz'][i] for i in idx]
         geom_weights = per_spec_config_weights(
             spec_nxyz=spec_nxyz,
             ref_nxyzs=ref_nxyzs,
-            ref_idx_lst=ref_idx_lst)
+            ref_idx=ref_idx,
+            device=device)
         weight_dic[spec] = geom_weights
 
     return weight_dic
@@ -405,7 +473,8 @@ def spec_config_zhu_balance(props,
                             zhu_kwargs,
                             spec_weight,
                             config_weight,
-                            zhu_weight):
+                            zhu_weight,
+                            device='cpu'):
     """
     Generate weights that combine balancing of species,
     configurations, and Zhu-Nakamura hopping rates.
@@ -424,6 +493,7 @@ def spec_config_zhu_balance(props,
                 Must be <= 1 and satisfy `config_weight` + `zhu_weight` <= 1. The
                 difference, 1 - config_weight - zhu_weight, is the weight given to
                 purely random sampling.
+        device (str): device on which to do the RMSD calculations
     Returns:
         final_weights (torch.Tensor): final weights for all geoms,
             normalized to 1.
@@ -436,7 +506,8 @@ def spec_config_zhu_balance(props,
     config_weight_dic = all_spec_config_weights(
         props=props,
         ref_nxyz_dic=ref_nxyz_dic,
-        spec_dic=spec_dic)
+        spec_dic=spec_dic,
+        device=device)
     balanced_config = balanced_spec_config(
         weight_dic=config_weight_dic,
         spec_dic=spec_dic)
