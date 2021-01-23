@@ -208,11 +208,8 @@ def assign_clusters(ref_idx,
     clusters = min_rmsds.argmin(-1)
     cluster_dic = {i: [] for i in range(num_clusters)}
 
-
-
     for spec_idx, cluster in enumerate(clusters):
         cluster_dic[cluster.item()].append(spec_idx)
-
 
     return cluster_dic
 
@@ -273,7 +270,7 @@ def per_spec_config_weights(spec_nxyz,
     # return normalized weights
     geom_weights /= geom_weights.sum()
 
-    return geom_weights # , cluster_dic
+    return geom_weights
 
 
 def all_spec_config_weights(props,
@@ -305,7 +302,6 @@ def all_spec_config_weights(props,
     """
 
     weight_dic = {}
-    # cluster_dics = {}
     for spec, idx in spec_dic.items():
         ref_nxyzs = ref_nxyz_dic[spec]['nxyz']
         ref_idx = ref_nxyz_dic[spec]['idx']
@@ -317,9 +313,7 @@ def all_spec_config_weights(props,
             device=device)
         weight_dic[spec] = geom_weights
 
-        # cluster_dics[spec] = cluster_dic
-
-    return weight_dic # , cluster_dics
+    return weight_dic
 
 
 def balanced_spec_config(weight_dic,
@@ -517,7 +511,6 @@ def spec_config_zhu_balance(props,
         spec_dic=spec_dic,
         device=device)
 
-
     balanced_config = balanced_spec_config(
         weight_dic=config_weight_dic,
         spec_dic=spec_dic)
@@ -552,6 +545,4 @@ def spec_config_zhu_balance(props,
         config_weight=config_weight,
         zhu_weight=zhu_weight)
 
-
-
-    return final_weights # , cluster_dics
+    return final_weights

@@ -143,25 +143,6 @@ class BalancedFFSampler(torch.utils.data.sampler.Sampler):
             raise NotImplementedError
 
         self.all_weights = balance_fn(**kwargs)
-        # self.clusters = torch.zeros(len(self.all_weights))
-
-        # reverse_dic = {}
-        # for key, sub_dic in cluster_dics.items():
-        #     reverse_dic[key] = {}
-        #     for cluster, idx in sub_dic.items():
-        #         for i in idx:
-        #             reverse_dic[key][int(i)] = cluster
-
-        # count_dic = {smiles: 0 for smiles in reverse_dic.keys()}
-
-        # for i, smiles in enumerate(kwargs['props']['smiles']):
-        #     no_stereo = smiles.replace("\\", "").replace("/", "")
-        #     for key, val in count_dic.items():
-        #         if key != no_stereo:
-        #             count_dic[key] += 1
-        #     cluster = reverse_dic[no_stereo][int(i) - count_dic[no_stereo]]
-        #     self.clusters[i] = cluster
-
         self.data_length = len(self.all_weights)
 
     def __iter__(self):
