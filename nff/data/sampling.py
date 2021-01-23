@@ -3,10 +3,8 @@ Tools for balanced sampling of a dataset
 """
 
 import torch
-import numpy as np
 
 from nff.train.loss import batch_zhu_p
-from nff.utils.geom import compute_rmsd
 from nff.utils import constants as const
 from nff.utils.misc import cat_props
 from nff.data import Dataset
