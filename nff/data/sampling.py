@@ -6,7 +6,7 @@ import torch
 import numpy as np
 
 from nff.train.loss import batch_zhu_p
-from nff.utils.geom import compute_rmsd
+# from nff.utils.geom import compute_rmsd
 from nff.utils import constants as const
 from nff.utils.misc import cat_props
 from nff.data import Dataset
@@ -207,8 +207,12 @@ def assign_clusters(ref_idx,
     # assign a cluster to each species and record in `cluster_dic`
     clusters = min_rmsds.argmin(-1)
     cluster_dic = {i: [] for i in range(num_clusters)}
+
+
+
     for spec_idx, cluster in enumerate(clusters):
         cluster_dic[cluster.item()].append(spec_idx)
+
 
     return cluster_dic
 
@@ -262,13 +266,14 @@ def per_spec_config_weights(spec_nxyz,
         if len(idx) == 0:
             continue
         geom_weight = 1 / len(idx)
+        # print(geom_weight)
         torch_idx = torch.LongTensor(idx)
         geom_weights[torch_idx] = geom_weight
 
     # return normalized weights
     geom_weights /= geom_weights.sum()
 
-    return geom_weights
+    return geom_weights # , cluster_dic
 
 
 def all_spec_config_weights(props,
@@ -300,6 +305,7 @@ def all_spec_config_weights(props,
     """
 
     weight_dic = {}
+    # cluster_dics = {}
     for spec, idx in spec_dic.items():
         ref_nxyzs = ref_nxyz_dic[spec]['nxyz']
         ref_idx = ref_nxyz_dic[spec]['idx']
@@ -311,7 +317,9 @@ def all_spec_config_weights(props,
             device=device)
         weight_dic[spec] = geom_weights
 
-    return weight_dic
+        # cluster_dics[spec] = cluster_dic
+
+    return weight_dic # , cluster_dics
 
 
 def balanced_spec_config(weight_dic,
@@ -508,6 +516,8 @@ def spec_config_zhu_balance(props,
         ref_nxyz_dic=ref_nxyz_dic,
         spec_dic=spec_dic,
         device=device)
+
+
     balanced_config = balanced_spec_config(
         weight_dic=config_weight_dic,
         spec_dic=spec_dic)
@@ -542,4 +552,6 @@ def spec_config_zhu_balance(props,
         config_weight=config_weight,
         zhu_weight=zhu_weight)
 
-    return final_weights
+
+
+    return final_weights # , cluster_dics
