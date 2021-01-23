@@ -12,53 +12,52 @@ BATCH_SIZE = 3000
 
 def quaternion_to_matrix(q):
 
-    q_0 = q[:, 0]
-    q_1 = q[:, 1]
-    q_2 = q[:, 2]
-    q_3 = q[:, 3]
+    q0 = q[:, 0]
+    q1 = q[:, 1]
+    q2 = q[:, 2]
+    q3 = q[:, 3]
 
-    r_q = torch.stack([q_0 ** 2 + q_1 ** 2 - q_2 ** 2 - q_3 ** 2,
-                       2 * (q_1 * q_2 - q_0 * q_3),
-                       2 * (q_1 * q_3 + q_0 * q_2),
-                       2 * (q_1 * q_2 + q_0 * q_3),
-                       q_0 ** 2 - q_1 ** 2 + q_2 ** 2 - q_3 ** 2,
-                       2 * (q_2 * q_3 - q_0 * q_1),
-                       2 * (q_1 * q_3 - q_0 * q_2),
-                       2 * (q_2 * q_3 + q_0 * q_1),
-                       q_0 ** 2 - q_1 ** 2 - q_2 ** 2 + q_3 ** 2]
+    R_q = torch.stack([q0**2 + q1**2 - q2**2 - q3**2,
+                       2 * (q1 * q2 - q0 * q3),
+                       2 * (q1 * q3 + q0 * q2),
+                       2 * (q1 * q2 + q0 * q3),
+                       q0**2 - q1**2 + q2**2 - q3**2,
+                       2 * (q2 * q3 - q0 * q1),
+                       2 * (q1 * q3 - q0 * q2),
+                       2 * (q2 * q3 + q0 * q1),
+                       q0**2 - q1**2 - q2**2 + q3**2]
                       ).transpose(0, 1).reshape(-1, 3, 3)
 
-    return r_q
+    return R_q
 
 
 def rotation_matrix_from_points(m0, m1):
 
-    v_0 = torch.clone(m0)[:, None, :, :]
-    v_1 = torch.clone(m1)
+    v0 = torch.clone(m0)[:, None, :, :]
+    v1 = torch.clone(m1)
 
-    out_0 = (v_0 * v_1).sum(-1).reshape(-1, 3)
-    r_11 = out_0[:, 0]
-    r_22 = out_0[:, 1]
-    r_33 = out_0[:, 2]
+    out_0 = (v0 * v1).sum(-1).reshape(-1, 3)
+    R11 = out_0[:, 0]
+    R22 = out_0[:, 1]
+    R33 = out_0[:, 2]
 
-    out_1 = torch.sum(v_0 * torch.roll(v_1, -1, dims=1), dim=-1
+    out_1 = torch.sum(v0 * torch.roll(v1, -1, dims=1), dim=-1
                       ).reshape(-1, 3)
-    r_12 = out_1[:, 0]
-    r_23 = out_1[:, 1]
-    r_32 = out_1[:, 2]
+    R12 = out_1[:, 0]
+    R23 = out_1[:, 1]
+    R31 = out_1[:, 2]
 
-    out_2 = torch.sum(v_0 * torch.roll(v_1, -2, dims=1), dim=-1
+    out_2 = torch.sum(v0 * torch.roll(v1, -2, dims=1), dim=-1
                       ).reshape(-1, 3)
-    r_13 = out_2[:, 0]
-    r_21 = out_2[:, 1]
-    r_32 = out_2[:, 2]
+    R13 = out_2[:, 0]
+    R21 = out_2[:, 1]
+    R32 = out_2[:, 2]
 
-    f_torch = torch.stack(
-        [r_11 + r_22 + r_33, r_23 - r_32, r_32 - r_13, r_12 - r_21,
-         r_23 - r_32, r_11 - r_22 - r_33, r_12 + r_21, r_13 + r_32,
-         r_32 - r_13, r_12 + r_21, -r_11 + r_22 - r_33, r_23 + r_32,
-         r_12 - r_21, r_13 + r_32, r_23 + r_32, -r_11 - r_22 + r_33]
-    ).transpose(0, 1).reshape(-1, 4, 4)
+    f = torch.stack([R11 + R22 + R33, R23 - R32, R31 - R13, R12 - R21,
+                     R23 - R32, R11 - R22 - R33, R12 + R21, R13 + R31,
+                     R31 - R13, R12 + R21, -R11 + R22 - R33, R23 + R32,
+                     R12 - R21, R13 + R31, R23 + R32, -R11 - R22 + R33]
+                    ).transpose(0, 1).reshape(-1, 4, 4)
 
     # Really slow on a GPU / with torch for some reason.
     # See https://github.com/pytorch/pytorch/issues/22573:
@@ -67,42 +66,42 @@ def rotation_matrix_from_points(m0, m1):
 
     # Use numpy on cpu instead
 
-    # w, V = torch.symeig(f_torch, eigenvectors=True)
+    # w, V = torch.symeig(f, eigenvectors=True)
 
-    f_np = f_torch.detach().cpu().numpy()
-    eigs, vecs = np.linalg.eigh(f_np)
-    eigs = torch.Tensor(eigs).to(f_torch.device)
-    vecs = torch.Tensor(vecs).to(f_torch.device)
+    f_np = f.detach().cpu().numpy()
+    w, V = np.linalg.eigh(f_np)
+    w = torch.Tensor(w).to(f.device)
+    V = torch.Tensor(V).to(f.device)
 
-    arg = eigs.argmax(dim=1)
+    arg = w.argmax(dim=1)
     idx = list(range(len(arg)))
-    q_mat = vecs[idx, :, arg]
+    q = V[idx, :, arg]
 
-    r_mat = quaternion_to_matrix(q_mat)
+    R = quaternion_to_matrix(q)
 
-    return r_mat
+    return R
 
 
 def minimize_rotation_and_translation(targ_nxyz, this_nxyz):
 
-    pos = this_nxyz[:, :, 1:]
-    pos_0 = targ_nxyz[:, :, 1:]
+    p = this_nxyz[:, :, 1:]
+    p0 = targ_nxyz[:, :, 1:]
 
-    com = pos.mean(1).reshape(-1, 1, 3)
-    pos -= com
+    c = p.mean(1).reshape(-1, 1, 3)
+    p -= c
 
-    com_0 = pos_0.mean(1).reshape(-1, 1, 3)
-    pos_0 -= com_0
+    c0 = p0.mean(1).reshape(-1, 1, 3)
+    p0 -= c0
 
-    r_mat = rotation_matrix_from_points(pos.transpose(1, 2),
-                                        pos_0.transpose(1, 2))
+    R = rotation_matrix_from_points(p.transpose(1, 2),
+                                    p0.transpose(1, 2))
 
     num_repeats = targ_nxyz.shape[0]
-    p_repeat = torch.repeat_interleave(pos, num_repeats, dim=0)
+    p_repeat = torch.repeat_interleave(p, num_repeats, dim=0)
 
-    new_p = torch.einsum("ijk,ilk->ijl", p_repeat, r_mat)
+    new_p = torch.einsum("ijk,ilk->ijl", p_repeat, R)
 
-    return new_p, pos_0, r_mat
+    return new_p, p0, R
 
 
 def compute_rmsd(targ_nxyz, this_nxyz):
@@ -110,7 +109,8 @@ def compute_rmsd(targ_nxyz, this_nxyz):
     targ_nxyz = torch.Tensor(targ_nxyz).reshape(1, -1, 4)
     this_nxyz = torch.Tensor(this_nxyz).reshape(1, -1, 4)
 
-    new_atom, new_targ, _ = minimize_rotation_and_translation(
+    (new_atom, new_targ, _
+     ) = minimize_rotation_and_translation(
         targ_nxyz=targ_nxyz,
         this_nxyz=this_nxyz)
     xyz_0 = new_atom
@@ -131,7 +131,8 @@ def compute_rmsd(targ_nxyz, this_nxyz):
 
 def compute_distance(targ_nxyz, atom_nxyz):
 
-    new_atom, new_targ, r_mat = minimize_rotation_and_translation(
+    (new_atom, new_targ, R
+     ) = minimize_rotation_and_translation(
         targ_nxyz=targ_nxyz,
         this_nxyz=atom_nxyz)
 
@@ -146,9 +147,9 @@ def compute_distance(targ_nxyz, atom_nxyz):
     num_atoms = delta_sq.shape[1]
     distances = ((delta_sq.sum((1, 2)) / num_atoms) **
                  0.5).reshape(num_mols_0, num_mols_1).cpu()
-    r_mat = r_mat.cpu()
+    R = R.cpu()
 
-    return distances, r_mat
+    return distances, R
 
 
 def compute_distances(dataset,
@@ -162,7 +163,7 @@ def compute_distances(dataset,
     from nff.data import collate_dicts
 
     distance_mat = torch.zeros((len(dataset), len(dataset_1)))
-    r_mat = torch.zeros((*distance_mat.shape, 3, 3))
+    R_mat = torch.zeros((*distance_mat.shape, 3, 3))
 
     loader_0 = DataLoader(dataset,
                           batch_size=batch_size,
@@ -188,7 +189,7 @@ def compute_distances(dataset,
             atom_nxyz = batch_1["nxyz"].reshape(
                 num_mols_1, -1, 4).to(device)
 
-            distances, this_r = compute_distance(
+            distances, R = compute_distance(
                 targ_nxyz=targ_nxyz,
                 atom_nxyz=atom_nxyz)
 
@@ -201,11 +202,11 @@ def compute_distances(dataset,
             distance_mat[all_indices[:, 0],
                          all_indices[:, 1]] = distances.reshape(-1)
 
-            r_mat[all_indices[:, 0],
-                  all_indices[:, 1]] = this_r
+            R_mat[all_indices[:, 0],
+                  all_indices[:, 1]] = R
 
             j_start += num_mols_1
 
         i_start += num_mols_0
 
-    return distance_mat, r_mat
+    return distance_mat, R_mat
