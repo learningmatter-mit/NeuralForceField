@@ -162,9 +162,8 @@ def compute_distances(dataset,
 
     from nff.data import collate_dicts
 
-    num_mols = max([len(dataset), len(dataset_1)])
-    distance_mat = torch.zeros((num_mols, num_mols))
-    R_mat = torch.zeros((num_mols, num_mols, 3, 3))
+    distance_mat = torch.zeros((len(dataset), len(dataset_1)))
+    R_mat = torch.zeros((*distance_mat.shape, 3, 3))
 
     loader_0 = DataLoader(dataset,
                           batch_size=batch_size,
@@ -211,4 +210,3 @@ def compute_distances(dataset,
         i_start += num_mols_0
 
     return distance_mat, R_mat
-
