@@ -142,13 +142,16 @@ class BalancedFFSampler(torch.utils.data.sampler.Sampler):
         else:
             raise NotImplementedError
 
-        self.all_weights = balance_fn(**kwargs)
-        self.data_length = len(self.all_weights)
+        balance_dict = balance_fn(**kwargs)
+        self.balance_dict = balance_dict
+        self.data_length = len(self.balance_dict["weights"])
 
     def __iter__(self):
 
         return (i for i in torch.multinomial(
-            self.all_weights, self.data_length, replacement=True))
+            self.balance_dict["weights"],
+            self.data_length,
+            replacement=True))
 
     def __len__(self):
         return self.data_length

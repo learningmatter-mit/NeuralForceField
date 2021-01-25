@@ -157,6 +157,10 @@ def assign_clusters(ref_idx,
         cluster_dic (dict): dictionary of the form {cluster: idx},
             where cluster is the cluster number and idx is the set of
             indices of geoms that belong to that cluster.
+        min_rmsds (torch.Tensor): the RMSDs between each species
+            and its clusters. Returning this is useful for
+            when we want to assign diabatic states to geoms later
+            on.
     """
     # assign a cluster to each nxyz by computing its RMSD with respect
     # to each reference nxyz and selecting the one with the smallest
@@ -201,14 +205,17 @@ def assign_clusters(ref_idx,
         these_mins, _ = these_rmsds.min(0)
         min_rmsds[:, cluster] = these_mins
 
-    # assign a cluster to each species and record in `cluster_dic`
+    # assign a cluster to each species and compute the rmsd
+    # to that cluster
     clusters = min_rmsds.argmin(-1)
+
+    # record clusters in `cluster_dic`
     cluster_dic = {i: [] for i in range(num_clusters)}
 
     for spec_idx, cluster in enumerate(clusters):
         cluster_dic[cluster.item()].append(spec_idx)
 
-    return cluster_dic
+    return cluster_dic, min_rmsds
 
 
 def per_spec_config_weights(spec_nxyz,
@@ -239,15 +246,19 @@ def per_spec_config_weights(spec_nxyz,
     Returns:
         geom_weights(torch.Tensor): weights for each geom of this species,
                         normalized to 1.
+        cluster_rmsds (torch.Tensor): the RMSD between each species
+                    and its closest cluster. Returning this is useful for
+                    when we want to assign diabatic states to geoms later
+                    on.
 
 
     """
 
     # a dictionary that tells you which geoms are in each cluster
-    cluster_dic = assign_clusters(ref_idx=ref_idx,
-                                  spec_nxyz=spec_nxyz,
-                                  ref_nxyzs=ref_nxyzs,
-                                  device=device)
+    cluster_dic, cluster_rmsds = assign_clusters(ref_idx=ref_idx,
+                                                 spec_nxyz=spec_nxyz,
+                                                 ref_nxyzs=ref_nxyzs,
+                                                 device=device)
 
     # assign weights to each geom equal to 1 / (num geoms in cluster),
     # so that the probability of sampling any one cluster is equal to
@@ -267,7 +278,7 @@ def per_spec_config_weights(spec_nxyz,
     # return normalized weights
     geom_weights /= geom_weights.sum()
 
-    return geom_weights
+    return geom_weights, cluster_rmsds
 
 
 def all_spec_config_weights(props,
@@ -295,22 +306,32 @@ def all_spec_config_weights(props,
         weight_dic(dict): dictionary of the form {smiles: geom_weights},
             where geom_weights are the set of normalized weights for each
             geometry in that species.
+        cluster_rmsds (torch.Tensor): RMSD between geom and its species'
+            clusters for each geom in the dataset.
 
     """
 
     weight_dic = {}
+    num_geoms = len(props['nxyz'])
+    cluster_rmsds = torch.zeros(num_geoms)
+
     for spec, idx in spec_dic.items():
         ref_nxyzs = ref_nxyz_dic[spec]['nxyz']
         ref_idx = ref_nxyz_dic[spec]['idx']
         spec_nxyz = [props['nxyz'][i] for i in idx]
-        geom_weights = per_spec_config_weights(
+        geom_weights, these_rmsds = per_spec_config_weights(
             spec_nxyz=spec_nxyz,
             ref_nxyzs=ref_nxyzs,
             ref_idx=ref_idx,
             device=device)
+
+        # assign weights to each species
         weight_dic[spec] = geom_weights
 
-    return weight_dic
+        # record the rmsds to the clusters for each geom
+        cluster_rmsds[idx] = these_rmsds
+
+    return weight_dic, cluster_rmsds
 
 
 def balanced_spec_config(weight_dic,
@@ -494,15 +515,15 @@ def spec_config_zhu_balance(props,
                 purely random sampling.
         device (str): device on which to do the RMSD calculations
     Returns:
-        final_weights (torch.Tensor): final weights for all geoms,
-            normalized to 1.
+        results (dict): dictionary with final weights and also config weights for
+            future use.
     """
     spec_dic = get_spec_dic(props)
 
     # get the species-balanced and species-imbalanced
     # configuration weights
 
-    config_weight_dic = all_spec_config_weights(
+    config_weight_dic, cluster_rmsds = all_spec_config_weights(
         props=props,
         ref_nxyz_dic=ref_nxyz_dic,
         spec_dic=spec_dic,
@@ -542,4 +563,8 @@ def spec_config_zhu_balance(props,
         config_weight=config_weight,
         zhu_weight=zhu_weight)
 
-    return final_weights
+    # put relevant info in a dictionary
+    results = {"weights": final_weights,
+               "cluster_rmsds": cluster_rmsds}
+
+    return results

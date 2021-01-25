@@ -303,6 +303,20 @@ class Dataset(TorchDataset):
         self.units = target_unit
         return
 
+    def change_idx(self, idx):
+        """
+        Change the dataset so that the properties are ordered by the
+        indices `idx`. If `idx` does not contain all of the original
+        indices in the dataset, then this will reduce the size of the
+        dataset.
+        """
+
+        for key, val in self.props.items():
+            if isinstance(val, list):
+                self.props[key] = [val[i] for i in idx]
+            else:
+                self.props[key] = val[idx]
+
     def shuffle(self):
         """Summary
 
@@ -311,13 +325,7 @@ class Dataset(TorchDataset):
         """
         idx = list(range(len(self)))
         reindex = skshuffle(idx)
-        for key, val in self.props.items():
-            if isinstance(val, list):
-                self.props[key] = [val[i] for i in reindex]
-            else:
-                self.props[key] = val[reindex]
-
-        return
+        self.change_idx(reindex)
 
     def featurize(self,
                   num_procs=NUM_PROCS,
@@ -418,8 +426,8 @@ class Dataset(TorchDataset):
         # or empty list
 
         if all([hasattr(offsets, "__len__"), len(offsets) > 0]):
-                if isinstance(offsets[0], torch.sparse.FloatTensor):
-                    self.props['offsets'] = [val.to_dense() for val in offsets]
+            if isinstance(offsets[0], torch.sparse.FloatTensor):
+                self.props['offsets'] = [val.to_dense() for val in offsets]
 
         torch.save(self, path)
         if "offsets" in self.props:
