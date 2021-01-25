@@ -303,6 +303,92 @@ def norm_test_size(train_name, test_name, split_sizes):
     return norm_test
 
 
+def one_preset_split(dset,
+                     present_dic,
+                     spec_dic,
+                     split_sizes,
+                     seed):
+
+    # the one split that's present
+    present_split = [key for key, val in present_dic.items()
+                     if val][0]
+    # the two that are missing
+    missing_splits = [key for key, val in present_dic.items()
+                      if not val]
+
+    # for one specified we get the indices by matching the smiles
+    # to the requested smiles in `spec_dic`
+    present_idx = idx_in_smiles_list(dset,
+                                     specs=spec_dic[present_split],
+                                     present=True)
+
+    # for the two missing we get every geom whose smiles isn't in
+    #  `spec_dic[present_split]` (specified by present=False)
+    missing_idx = idx_in_smiles_list(dset,
+                                     specs=spec_dic[present_split],
+                                     present=False)
+
+    # the normalized size of the second split without species
+
+    missing_size_1 = norm_test_size(train_name=missing_splits[0],
+                                    test_name=missing_splits[1],
+                                    split_sizes=split_sizes)
+
+    # the indices of the missing splits
+    missing_idx_0, missing_idx_1 = train_test_split(
+        missing_idx,
+        test_size=missing_size_1,
+        random_state=seed)
+
+    # assign to a dictionary
+    split_idx = {present_split: present_idx,
+                 missing_splits[0]: missing_idx_0,
+                 missing_splits[1]: missing_idx_1}
+
+    return split_idx
+
+
+def two_preset_split(dset,
+                     present_dic,
+                     spec_dic,
+                     split_sizes,
+                     seed):
+
+    # the two splits that are present
+    present_splits = [key for key, val in present_dic.items()
+                      if val]
+    # the one that's missing
+    missing_split = [key for key, val in present_dic.items()
+                     if not val][0]
+
+    # the two that are present just get matched by species
+    split_idx = {split: idx_in_smiles_list(dset,
+                                           specs=spec_dic[split],
+                                           present=True)
+                 for split in present_splits}
+
+    # the one that's not present gets anti-matched by the union
+    # of the two present sets of species
+
+    exclude_specs = (spec_dic[present_splits[0]]
+                     + spec_dic[present_splits[1]])
+    split_idx.update({missing_split:
+                      idx_in_smiles_list(dset,
+                                         specs=exclude_specs,
+                                         present=False)})
+
+    return split_idx
+
+
+def three_preset_split(dset, spec_dic):
+    # if all three are present then they all just get matched
+    split_idx = {split: idx_in_smiles_list(dset,
+                                           specs=specs,
+                                           present=True)
+                 for split, specs in spec_dic.items()}
+    return split_idx
+
+
 def split_by_species(dset,
                      species_splits,
                      split_sizes,
@@ -347,79 +433,22 @@ def split_by_species(dset,
     # weren't specified)
     spec_dic = {name: species_splits.get(name, []) for name in names}
 
-    # number of splits for which the species were specified
-    one_present = sum(present_dic.values()) == 1
-    two_present = sum(present_dic.values()) == 2
-    three_present = sum(present_dic.values()) == 3
+    if sum(present_dic.values()) == 1:
+        split_idx = one_preset_split(dset=dset,
+                                     present_dic=present_dic,
+                                     spec_dic=spec_dic,
+                                     split_sizes=split_sizes,
+                                     seed=seed)
 
-    if one_present:
+    elif sum(present_dic.values()) == 2:
+        split_idx = two_preset_split(dset=dset,
+                                     present_dic=present_dic,
+                                     spec_dic=spec_dic,
+                                     split_sizes=split_sizes,
+                                     seed=seed)
 
-        # the one split that's present
-        present_split = [key for key, val in present_dic.items()
-                         if val][0]
-        # the two that are missing
-        missing_splits = [key for key, val in present_dic.items()
-                          if not val]
-
-        # for one specified we get the indices by matching the smiles
-        # to the requested smiles in `spec_dic`
-        present_idx = idx_in_smiles_list(dset,
-                                         specs=spec_dic[present_split],
-                                         present=True)
-
-        # for the two missing we get every geom whose smiles isn't in
-        #  `spec_dic[present_split]` (specified by present=False)
-        missing_idx = idx_in_smiles_list(dset,
-                                         specs=spec_dic[present_split],
-                                         present=False)
-
-        # the normalized size of the second split without species
-
-        missing_size_1 = norm_test_size(train_name=missing_splits[0],
-                                        test_name=missing_splits[1],
-                                        split_sizes=split_sizes)
-
-        # the indices of the missing splits
-        missing_idx_0, missing_idx_1 = train_test_split(
-            missing_idx,
-            test_size=missing_size_1,
-            random_state=seed)
-
-        # assign to a dictionary
-        split_idx = {present_split: present_idx,
-                     missing_splits[0]: missing_idx_0,
-                     missing_splits[1]: missing_idx_1}
-
-    elif two_present:
-        # the two splits that are present
-        present_splits = [key for key, val in present_dic.items()
-                          if val]
-        # the one that's missing
-        missing_split = [key for key, val in present_dic.items()
-                         if not val][0]
-
-        # the two that are present just get matched by species
-        split_idx = {split: idx_in_smiles_list(dset,
-                                               specs=spec_dic[split],
-                                               present=True)
-                     for split in present_splits}
-
-        # the one that's not present gets anti-matched by the union
-        # of the two present sets of species
-
-        exclude_specs = (spec_dic[present_splits[0]]
-                         + spec_dic[present_splits[1]])
-        split_idx.update({missing_split:
-                          idx_in_smiles_list(dset,
-                                             specs=exclude_specs,
-                                             present=False)})
-
-    elif three_present:
-        # if all three are present then they all just get matched
-        split_idx = {split: idx_in_smiles_list(dset,
-                                               specs=specs,
-                                               present=True)
-                     for split, specs in spec_dic.items()}
+    elif sum(present_dic.values()) == 3:
+        split_idx = three_preset_split(dset=dset, spec_dic=spec_dic)
 
     # extract split indices from the dictionary
     train_idx = split_idx["train"]
