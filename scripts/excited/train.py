@@ -1,10 +1,11 @@
-import torch
 import copy
-import numpy as np
 import random
 import os
 import json
+import argparse
 
+import torch
+import numpy as np
 from rdkit import Chem
 from sklearn.model_selection import train_test_split
 
@@ -222,69 +223,29 @@ def save_sample_weights(sampler, job_info):
     return save_path
 
 
-def make_split(dset, job_info):
-    """
-    Need to make sure the holdouts go in a different split than the
-    non-holdouts, if we do the holdout thing.
-    """
+def make_random_split(dset, split_sizes, seed):
 
-    splits = split_train_validation_test(dset,
-                                         val_size=job_info["val_size"],
-                                         test_size=job_info["test_size"],
-                                         seed=job_info["seed"])
+    frac_split_sizes = {}
+    for name in ["val", "test"]:
+        size = copy.deepcopy(split_sizes[name])
 
-    split_keys = ["train", "validation", "test"]
-    split_dic = {key: {"dset": split}
-                 for key, split in zip(split_keys, splits)}
+        # If it's greater than one then that means
+        # it's telling you the total number to use,
+        # not the percentage. In this case divide
+        # by the total size of the dataset so you can
+        # use a percentage below.
 
-    return split_dic
+        if size > 1:
+            size /= len(dset)
+        frac_split_sizes[name] = size
 
+    train, val, test = split_train_validation_test(
+        dset,
+        val_size=frac_split_sizes["val_size"],
+        test_size=frac_split_sizes["test_size"],
+        seed=seed)
 
-def split_and_sample(dset, job_info):
-
-    split_dic = make_split(dset=dset, job_info=job_info)
-
-    for key, sub_dic in split_dic.items():
-
-        this_dset = sub_dic["dset"]
-        sampler_kwargs = {"props": this_dset.props,
-                          **job_info["sampler_kwargs"]}
-        sampler, cluster_rmsds = sampler_and_rmsds(
-            sampler_kwargs=sampler_kwargs)
-        this_dset = add_diabat(cluster_rmsds=cluster_rmsds,
-                               max_rmsd=job_info["max_rmsd"],
-                               num_states=job_info["num_states"],
-                               assignments=job_info["assignments"],
-                               dset=this_dset,
-                               diabatic_keys=job_info["diabatic_keys"])
-
-        split_dic[key] = {"dset": this_dset, "sampler": sampler}
-    return split_dic
-
-
-def save_as_chunks(split_dic, job_info):
-
-    model_path = job_info["model_path"]
-    dset_chunks = {split: make_parallel_chunks(
-        dset=sub_dic["dset"],
-        num_chunks=job_info["num_parallel"],
-        sampler=sub_dic["sampler"]) for split, sub_dic in split_dic.items()}
-
-    for split, chunk_dics in dset_chunks.items():
-        for i, chunk_dic in enumerate(chunk_dics):
-
-            direc = os.path.join(model_path, str(i))
-            if not os.path.isdir(direc):
-                os.makedirs(direc)
-
-            dset_chunk = chunk_dic["dset"]
-            dset_path = os.path.join(direc, f"{split}.pth.tar")
-            dset_chunk.save(dset_path)
-
-            weights = chunk_dic["weights"].reshape(-1).tolist()
-            weight_path = os.path.join(direc, f"{split}_weights.json")
-            with open(weight_path, "w") as f_open:
-                json.dump(weights, f_open)
+    return train, val, test
 
 
 def idx_in_smiles_list(dset, specs, present):
@@ -350,9 +311,7 @@ def one_preset_split(dset,
 
 def two_preset_split(dset,
                      present_dic,
-                     spec_dic,
-                     split_sizes,
-                     seed):
+                     spec_dic):
 
     # the two splits that are present
     present_splits = [key for key, val in present_dic.items()
@@ -443,9 +402,7 @@ def split_by_species(dset,
     elif sum(present_dic.values()) == 2:
         split_idx = two_preset_split(dset=dset,
                                      present_dic=present_dic,
-                                     spec_dic=spec_dic,
-                                     split_sizes=split_sizes,
-                                     seed=seed)
+                                     spec_dic=spec_dic)
 
     elif sum(present_dic.values()) == 3:
         split_idx = three_preset_split(dset=dset, spec_dic=spec_dic)
@@ -456,6 +413,89 @@ def split_by_species(dset,
     test_idx = split_idx["test"]
 
     return (train_idx, val_idx, test_idx)
+
+
+def make_split(dset, job_info):
+
+    names = ["train", "val", "test"]
+    species_splits = {name: job_info[f"{name}_species"]
+                      for name in names if
+                      f"{name}_species" in job_info}
+
+    # `split_sizes` is a dictionary of the form
+    # {train: 0.8, val: 0.2}
+    split_sizes = job_info["split_sizes"]
+    seed = job_info["seed"]
+
+    if species_splits:
+        splits = split_by_species(dset=dset,
+                                  species_splits=species_splits,
+                                  split_sizes=split_sizes,
+                                  seed=seed)
+    else:
+        splits = make_random_split(dset=dset,
+                                   split_sizes=split_sizes,
+                                   seed=seed)
+    split_dic = {}
+    for name, split in zip(names, splits):
+        split_dic[name] = {"dset": split}
+
+    return split_dic
+
+
+def split_and_sample(dset, job_info):
+
+    split_dic = make_split(dset=dset, job_info=job_info)
+
+    for key, sub_dic in split_dic.items():
+
+        this_dset = sub_dic["dset"]
+        sampler_kwargs = {"props": this_dset.props,
+                          **job_info["sampler_kwargs"]}
+        sampler, cluster_rmsds = sampler_and_rmsds(
+            sampler_kwargs=sampler_kwargs)
+        this_dset = add_diabat(cluster_rmsds=cluster_rmsds,
+                               max_rmsd=job_info["max_rmsd"],
+                               num_states=job_info["num_states"],
+                               assignments=job_info["assignments"],
+                               dset=this_dset,
+                               diabatic_keys=job_info["diabatic_keys"])
+        split_dic[key] = {"dset": this_dset, "sampler": sampler}
+
+    return split_dic
+
+
+def get_model_path(job_info):
+    weightpath = job_info["weightpath"]
+    if not os.path.isdir(weightpath):
+        weightpath = job_info["mounted_weightpath"]
+    model_path = os.path.join(weightpath, job_info["nnid"])
+    return model_path
+
+
+def save_as_chunks(split_dic, job_info):
+
+    model_path = get_model_path(job_info)
+    dset_chunks = {split: make_parallel_chunks(
+        dset=sub_dic["dset"],
+        num_chunks=job_info["num_parallel"],
+        sampler=sub_dic["sampler"]) for split, sub_dic in split_dic.items()}
+
+    for split, chunk_dics in dset_chunks.items():
+        for i, chunk_dic in enumerate(chunk_dics):
+
+            direc = os.path.join(model_path, str(i))
+            if not os.path.isdir(direc):
+                os.makedirs(direc)
+
+            dset_chunk = chunk_dic["dset"]
+            dset_path = os.path.join(direc, f"{split}.pth.tar")
+            dset_chunk.save(dset_path)
+
+            weights = chunk_dic["weights"].reshape(-1).tolist()
+            weight_path = os.path.join(direc, f"{split}_weights.json")
+            with open(weight_path, "w") as f_open:
+                json.dump(weights, f_open)
 
 
 def diabat_and_weights(dset, job_info):
@@ -476,5 +516,39 @@ def set_seed(seed):
     torch.manual_seed(seed)
 
 
-def main(seed):
-    set_seed(seed)
+def flatten_dict(job_info):
+    cat_info = {}
+    for key, val in job_info.items():
+        if isinstance(val, dict):
+            cat_info.update(val)
+        else:
+            cat_info[key] = val
+    return cat_info
+
+
+def parse_job_info():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config_file', type=str,
+                        help="file containing all details",
+                        default="distort.json")
+
+    args = parser.parse_args()
+    config_file = args.config_file
+    with open(config_file, "r") as f:
+        job_info = json.load(f)
+    if "details" in job_info:
+        job_info = flatten_dict(job_info)
+
+    return job_info
+
+
+def main():
+
+    job_info = parse_job_info()
+    set_seed(job_info["seed"])
+    dset = Dataset.from_file(job_info["dset_path"])
+    diabat_and_weights(dset=dset, job_info=job_info)
+
+
+if __name__ == "__main__":
+    main()
