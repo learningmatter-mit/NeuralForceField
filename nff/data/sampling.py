@@ -3,6 +3,7 @@ Tools for balanced sampling of a dataset
 """
 
 import torch
+from tqdm import tqdm
 
 from nff.train.loss import batch_zhu_p
 from nff.utils import constants as const
@@ -131,7 +132,8 @@ def imbalanced_spec_zhu(zhu_p):
 def assign_clusters(ref_idx,
                     spec_nxyz,
                     ref_nxyzs,
-                    device):
+                    device,
+                    num_clusters):
     """
     Assign each geom to a cluster.
 
@@ -153,6 +155,8 @@ def assign_clusters(ref_idx,
             because one state can have more than one geom (e.g. there
             might be multiple distinct CI geoms).
          device (str): device on which to do the RMSD calculations
+         num_clusters (int): number of clusters a geom could be a
+            part of.
     Returns:
         cluster_dic (dict): dictionary of the form {cluster: idx},
             where cluster is the cluster number and idx is the set of
@@ -196,9 +200,10 @@ def assign_clusters(ref_idx,
                                  dataset_1=dset_1)
 
     # take the minimum rmsd with respect to the set of reference
-    # nxyz's in each cluster
-    num_clusters = len(ref_nxyzs)
-    min_rmsds = torch.zeros(len(spec_nxyz), num_clusters)
+    # nxyz's in each cluster. Put infinity if a species is missing a 
+    # reference for a certain cluster.
+
+    min_rmsds = torch.zero(len(spec_nxyz), num_clusters)
 
     for cluster, idx in cluster_idx.items():
         these_rmsds = rmsds[idx]
@@ -221,6 +226,7 @@ def assign_clusters(ref_idx,
 def per_spec_config_weights(spec_nxyz,
                             ref_nxyzs,
                             ref_idx,
+                            num_clusters,
                             device='cpu'):
     """
     Get weights to evenly sample different regions of phase
@@ -243,6 +249,8 @@ def per_spec_config_weights(spec_nxyz,
             the RMSD of the CNNC atoms with respect to those in the
             converged cis or trans geoms.
          device (str): device on which to do the RMSD calculations
+         num_clusters (int): number of clusters a geom could be a
+            part of.
     Returns:
         geom_weights(torch.Tensor): weights for each geom of this species,
                         normalized to 1.
@@ -258,7 +266,8 @@ def per_spec_config_weights(spec_nxyz,
     cluster_dic, cluster_rmsds = assign_clusters(ref_idx=ref_idx,
                                                  spec_nxyz=spec_nxyz,
                                                  ref_nxyzs=ref_nxyzs,
-                                                 device=device)
+                                                 device=device,
+                                                 num_clusters=num_clusters)
 
     # assign weights to each geom equal to 1 / (num geoms in cluster),
     # so that the probability of sampling any one cluster is equal to
@@ -313,9 +322,12 @@ def all_spec_config_weights(props,
 
     weight_dic = {}
     num_geoms = len(props['nxyz'])
-    cluster_rmsds = torch.zeros(num_geoms)
+    num_clusters = max([len(ref_dic['nxyz']) for
+                        ref_dic in ref_nxyz_dic.values()])
+    cluster_rmsds = torch.zeros(num_geoms, num_clusters)
 
-    for spec, idx in spec_dic.items():
+    for spec in tqdm(list(spec_dic.keys())):
+        idx = spec_dic[spec]
         ref_nxyzs = ref_nxyz_dic[spec]['nxyz']
         ref_idx = ref_nxyz_dic[spec]['idx']
         spec_nxyz = [props['nxyz'][i] for i in idx]
@@ -323,6 +335,7 @@ def all_spec_config_weights(props,
             spec_nxyz=spec_nxyz,
             ref_nxyzs=ref_nxyzs,
             ref_idx=ref_idx,
+            num_clusters=num_clusters,
             device=device)
 
         # assign weights to each species
