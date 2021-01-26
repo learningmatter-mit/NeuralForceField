@@ -8,15 +8,38 @@ import torch
 import numpy as np
 from rdkit import Chem
 from sklearn.model_selection import train_test_split
-
+from tqdm import tqdm
 
 from nff.data.loader import BalancedFFSampler
 from nff.data import Dataset, split_train_validation_test
+from nff.utils.misc import tqdm_enum
 
 
-def sampler_and_rmsds(sampler_kwargs):
+import django
+# django.setup()
+from neuralnet.utils.data import convg_and_ci_geoms
 
-    sampler = BalancedFFSampler(**sampler_kwargs)
+# if you sub-divide your job_info with these names, then their contents
+# will be read in. Any other division will be left as is
+
+ALLOWED_DIVIDER_NAMES = ["pruning", "balanced_sampling", "diabatization",
+                         "splitting"]
+
+
+def get_ref_dic(ref_config_type, **kwargs):
+
+    if ref_config_type == "convg_and_ci":
+        ref_dic = convg_and_ci_geoms(**kwargs)
+    else:
+        raise NotImplementedError
+
+    return ref_dic
+
+
+def sampler_and_rmsds(balance_type, sampler_kwargs):
+
+    sampler = BalancedFFSampler(balance_type=balance_type,
+                                **sampler_kwargs)
 
     balance_dict = sampler.balance_dict
     cluster_rmsds = balance_dict["cluster_rmsds"]
@@ -33,8 +56,8 @@ def add_diabat(cluster_rmsds,
     """
     Example:
         Here 0 is cis and 1 is trans:
-            assignments = {0: ["energy_0", "energy_1"],
-                           1: ["energy_1", "energy_0"]}
+            assignments = {"0": ["energy_0", "energy_1"],
+                           "1": ["energy_1", "energy_0"]}
 
     """
 
@@ -50,20 +73,23 @@ def add_diabat(cluster_rmsds,
     are_diabats = ref_rmsds.min(-1) <= max_rmsd
 
     # assignment of diabatic energies
-    diabat_props = {key: [] for key in diabatic_keys}
+    diag_diabat = (np.array(diabatic_keys)
+                   .diagonal().reshape(-1)
+                   .tolist())
+    diabat_props = {key: [] for key in diag_diabat}
 
     for i, batch in enumerate(dset):
 
         closest_ref = closest_refs[i]
         is_diabat = are_diabats[i]
-        adiabats = assignments[int(closest_ref)]
+        adiabats = assignments[str(closest_ref)]
 
         if is_diabat:
-            for diabat_key, adiabat in zip(diabatic_keys, adiabats):
+            for diabat_key, adiabat in zip(diag_diabat, adiabats):
                 diabat_props[diabat_key].append(batch[adiabat])
         else:
             nan = batch[adiabats[0]] * float('nan')
-            for diabat_key in diabatic_keys:
+            for diabat_key in diag_diabat:
                 diabat_props[diabat_key].append(nan)
 
     for key, val in diabat_props.items():
@@ -150,6 +176,9 @@ def prune_by_substruc(dset,
 
     """
 
+    if not substruc_smiles:
+        return dset
+
     keep_idx = []
     substruc_mols = substrucs_to_mols(smiles_list=substruc_smiles,
                                       keep_stereo=keep_stereo)
@@ -204,17 +233,25 @@ def make_parallel_chunks(dset, num_chunks, sampler):
     return dset_chunks
 
 
-def load_dset(job_info):
-    base_dset_path = job_info["base_dset_path"]
-    dset = Dataset.from_file(base_dset_path)
+def get_model_path(job_info):
+    if "model_path" in job_info:
+        return job_info["model_path"]
 
-    return dset
+    weightpath = job_info["weightpath"]
+    if not os.path.isdir(weightpath):
+        weightpath = job_info["mounted_weightpath"]
+    model_path = os.path.join(weightpath, job_info["nnid"])
+    return model_path
 
 
 def save_sample_weights(sampler, job_info):
 
     weights = sampler.balance_dict["weights"].reshape(-1).tolist()
-    model_path = job_info["model_path"]
+    model_path = get_model_path(job_info)
+
+    if not os.path.isdir(model_path):
+        os.makedirs(model_path)
+
     save_path = os.path.join(model_path, "sample_weights.json")
 
     with open(save_path, "w") as f_open:
@@ -443,34 +480,63 @@ def make_split(dset, job_info):
     return split_dic
 
 
+def get_sampler_kwargs(this_dset, job_info):
+    sampler_kwargs = {"props": this_dset.props,
+                      **job_info["sampler_kwargs"]}
+
+    ref_config_dict = job_info.get("ref_config")
+
+    if ref_config_dict:
+
+        ref_config_type = ref_config_dict["type"]
+        ref_config_kwargs = ref_config_dict["kwargs"]
+        balance_type = job_info["balance_type"]
+
+        if balance_type == "spec_config_zhu_balance":
+            ref_config_kwargs.update({"props": this_dset.props})
+
+        print("Generating reference structures...")
+        ref_dic = get_ref_dic(ref_config_type, **ref_config_kwargs)
+        print("Completed generating reference structures.")
+
+        if balance_type == "spec_config_zhu_balance":
+            sampler_kwargs.update({"ref_nxyz_dic": ref_dic})
+        else:
+            raise NotImplementedError
+
+    return sampler_kwargs
+
+
 def split_and_sample(dset, job_info):
 
+    print("Splitting dataset...")
     split_dic = make_split(dset=dset, job_info=job_info)
 
-    for key, sub_dic in split_dic.items():
+    print("Creating samplers and diabatic values for each split...")
 
+    for key in tqdm(list(split_dic.keys())):
+
+        sub_dic = split_dic[key]
         this_dset = sub_dic["dset"]
-        sampler_kwargs = {"props": this_dset.props,
-                          **job_info["sampler_kwargs"]}
+
+        # we need ref_nxyz_dic here!!!
+
+        sampler_kwargs = get_sampler_kwargs(this_dset=this_dset,
+                                            job_info=job_info)
+
         sampler, cluster_rmsds = sampler_and_rmsds(
+            balance_type=job_info["balance_type"],
             sampler_kwargs=sampler_kwargs)
+
         this_dset = add_diabat(cluster_rmsds=cluster_rmsds,
-                               max_rmsd=job_info["max_rmsd"],
-                               num_states=job_info["num_states"],
-                               assignments=job_info["assignments"],
+                               max_rmsd=job_info["max_diabat_rmsd"],
+                               num_states=job_info["num_diabat_states"],
+                               assignments=job_info["diabat_assignments"],
                                dset=this_dset,
                                diabatic_keys=job_info["diabatic_keys"])
         split_dic[key] = {"dset": this_dset, "sampler": sampler}
 
     return split_dic
-
-
-def get_model_path(job_info):
-    weightpath = job_info["weightpath"]
-    if not os.path.isdir(weightpath):
-        weightpath = job_info["mounted_weightpath"]
-    model_path = os.path.join(weightpath, job_info["nnid"])
-    return model_path
 
 
 def save_as_chunks(split_dic, job_info):
@@ -501,11 +567,14 @@ def save_as_chunks(split_dic, job_info):
 def diabat_and_weights(dset, job_info):
 
     dset = prune_by_substruc(dset=dset,
-                             substruc_smiles=job_info["substruc_smiles"],
-                             keep_stereo=job_info["keep_stereo"])
+                             substruc_smiles=job_info.get("substruc_smiles"),
+                             keep_stereo=job_info.get("stereo_in_substruc",
+                                                      False))
     dset.shuffle()
 
     split_dic = split_and_sample(dset=dset, job_info=job_info)
+
+    print("Saving...")
     save_as_chunks(split_dic=split_dic,
                    job_info=job_info)
 
@@ -526,6 +595,41 @@ def flatten_dict(job_info):
     return cat_info
 
 
+def load_dset(job_info):
+    dset_path = job_info["dset_path"]
+    if os.path.isfile(dset_path):
+        print("Loading dataset...")
+        dset = Dataset.from_file(dset_path)
+        print("Loaded!")
+
+        return dset
+
+    if not os.path.isdir(dset_path):
+        msg = (f"Path {dset_path} is neither a "
+               "directory nor file.")
+        raise Exception(msg)
+
+    dset_dir = job_info["dset_path"]
+    dset_path = os.path.join(dset_dir, "dataset.pth.tar")
+
+    if not os.path.isfile(dset_path):
+        sub_paths = []
+        for name in ["train", "val", "test"]:
+            sub_path = os.path.join(dset_dir, f"{name}.pth.tar")
+        if not os.path.isfile(sub_path):
+            raise Exception("Can't find the dataset.")
+        sub_paths.append(sub_path)
+
+        print("Loading dataset...")
+        for i, path in tqdm_enum(sub_paths):
+            if i == 0:
+                dset = Dataset.from_file(path)
+            else:
+                dset += Dataset.from_file(path)
+        print("Loaded!")
+    return dset
+
+
 def parse_job_info():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_file', type=str,
@@ -534,10 +638,15 @@ def parse_job_info():
 
     args = parser.parse_args()
     config_file = args.config_file
-    with open(config_file, "r") as f:
-        job_info = json.load(f)
+    with open(config_file, "r") as f_open:
+        job_info = json.load(f_open)
     if "details" in job_info:
         job_info = flatten_dict(job_info)
+
+    for name in ALLOWED_DIVIDER_NAMES:
+        if name in job_info:
+            job_info.update(job_info[name])
+            job_info.pop(name)
 
     return job_info
 
@@ -546,8 +655,10 @@ def main():
 
     job_info = parse_job_info()
     set_seed(job_info["seed"])
-    dset = Dataset.from_file(job_info["dset_path"])
+    dset = load_dset(job_info)
     diabat_and_weights(dset=dset, job_info=job_info)
+
+    print("Complete!")
 
 
 if __name__ == "__main__":
