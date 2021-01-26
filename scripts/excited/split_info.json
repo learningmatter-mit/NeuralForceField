@@ -3,7 +3,7 @@
 		    "dset_path": "/nfs/rafagblab001/saxelrod/dsets_switches/0",
 			"model_path": "/nfs/rafagblab001/saxelrod/big_train_random_split",
 
-			"pruning": {"substruc_smiles": "N(=N/c1ccccc1)\\c2ccccc2",
+			"pruning": {"substruc_smiles": [["N(=N/c1ccccc1)\\c2ccccc2"]],
 						"stereo_in_substruc": false},
 
 			"balanced_sampling": {
