@@ -280,7 +280,7 @@ class ForceDime(nn.Module):
 
         xyz = nxyz[:, 1:]
         z = nxyz[:, 0].long()
-        xyz.requires_grad = True
+        xyz.requires_grad = False
 
         ji_idx = batch["ji_idx"]
         kj_idx = batch["kj_idx"]
