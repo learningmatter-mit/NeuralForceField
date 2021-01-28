@@ -69,7 +69,11 @@ def rotation_matrix_from_points(m0, m1):
     # w, V = torch.symeig(f, eigenvectors=True)
 
     f_np = f.detach().cpu().numpy()
-    w, V = np.linalg.eigh(f_np)
+    nan_idx = np.isnan(f_np).any(-1).any(-1)
+    good_idx = np.bitwise_not(nan_idx)
+    f_good = f_np[good_idx]
+
+    w, V = np.linalg.eigh(f_good)
     w = torch.Tensor(w).to(f.device)
     V = torch.Tensor(V).to(f.device)
 
@@ -79,7 +83,18 @@ def rotation_matrix_from_points(m0, m1):
 
     R = quaternion_to_matrix(q)
 
-    return R
+    counter = 0
+    r_with_nan = []
+
+    for i, is_nan in enumerate(nan_idx):
+        if is_nan:
+            r_with_nan.append(torch.diag(torch.ones(3)))
+            counter += 1
+        else:
+            r_with_nan.append(R[i - counter])
+    r_with_nan = torch.stack(r_with_nan)
+
+    return r_with_nan
 
 
 def minimize_rotation_and_translation(targ_nxyz, this_nxyz):

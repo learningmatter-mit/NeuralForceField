@@ -133,7 +133,9 @@ def assign_clusters(ref_idx,
                     spec_nxyz,
                     ref_nxyzs,
                     device,
-                    num_clusters):
+                    num_clusters,
+                    extra_category,
+                    extra_rmsd):
     """
     Assign each geom to a cluster.
 
@@ -157,6 +159,12 @@ def assign_clusters(ref_idx,
          device (str): device on which to do the RMSD calculations
          num_clusters (int): number of clusters a geom could be a
             part of.
+        extra_category (bool, optional): whether to add an extra category for the
+            cluster assignment, occupied by any geoms not close enough to a geom
+            in `ref_nxyz_dic`
+        extra_rmsd (float, optional): if using `extra_category`, this is the RMSD
+            beyond which a geom will be assigned to an extra category.
+
     Returns:
         cluster_dic (dict): dictionary of the form {cluster: idx},
             where cluster is the cluster number and idx is the set of
@@ -173,7 +181,7 @@ def assign_clusters(ref_idx,
     # we'll make datasets so we can use them as input to the torch
     # parallelized distance computation
 
-    # the first is just the set of geom nxy's
+    # the first is just the set of geom nxyz's
     props_1 = {"nxyz": [i[ref_idx] for i in spec_nxyz]}
     # the second is the reference dataset
     props_0 = {"nxyz": []}
@@ -200,10 +208,10 @@ def assign_clusters(ref_idx,
                                  dataset_1=dset_1)
 
     # take the minimum rmsd with respect to the set of reference
-    # nxyz's in each cluster. Put infinity if a species is missing a 
+    # nxyz's in each cluster. Put infinity if a species is missing a
     # reference for a certain cluster.
 
-    min_rmsds = torch.zero(len(spec_nxyz), num_clusters)
+    min_rmsds = torch.zeros(len(spec_nxyz), num_clusters)
 
     for cluster, idx in cluster_idx.items():
         these_rmsds = rmsds[idx]
@@ -212,13 +220,23 @@ def assign_clusters(ref_idx,
 
     # assign a cluster to each species and compute the rmsd
     # to that cluster
+    min_rmsds[torch.isnan(min_rmsds)] = float("inf")
+
+
     clusters = min_rmsds.argmin(-1)
 
+    if extra_category:
+        in_extra = min_rmsds.min(-1)[0] >= extra_rmsd
+        clusters[in_extra] = num_clusters
+
     # record clusters in `cluster_dic`
-    cluster_dic = {i: [] for i in range(num_clusters)}
+    cluster_dic = {i: [] for i in
+                   range(num_clusters + int(extra_category))}
 
     for spec_idx, cluster in enumerate(clusters):
         cluster_dic[cluster.item()].append(spec_idx)
+
+
 
     return cluster_dic, min_rmsds
 
@@ -227,6 +245,8 @@ def per_spec_config_weights(spec_nxyz,
                             ref_nxyzs,
                             ref_idx,
                             num_clusters,
+                            extra_category,
+                            extra_rmsd,
                             device='cpu'):
     """
     Get weights to evenly sample different regions of phase
@@ -248,9 +268,15 @@ def per_spec_config_weights(spec_nxyz,
             a geometry to a cis or trans cluster, you only really want
             the RMSD of the CNNC atoms with respect to those in the
             converged cis or trans geoms.
-         device (str): device on which to do the RMSD calculations
          num_clusters (int): number of clusters a geom could be a
             part of.
+        extra_category (bool, optional): whether to add an extra category for the
+            cluster assignment, occupied by any geoms not close enough to a geom
+            in `ref_nxyz_dic`
+        extra_rmsd (float, optional): if using `extra_category`, this is the RMSD
+            beyond which a geom will be assigned to an extra category.
+        device (str): device on which to do the RMSD calculations
+
     Returns:
         geom_weights(torch.Tensor): weights for each geom of this species,
                         normalized to 1.
@@ -258,6 +284,9 @@ def per_spec_config_weights(spec_nxyz,
                     and its closest cluster. Returning this is useful for
                     when we want to assign diabatic states to geoms later
                     on.
+        cluster_dic (dict): dictionary of the form {cluster: idx},
+            where cluster is the cluster number and idx is the set of
+            indices of geoms that belong to that cluster.
 
 
     """
@@ -267,7 +296,9 @@ def per_spec_config_weights(spec_nxyz,
                                                  spec_nxyz=spec_nxyz,
                                                  ref_nxyzs=ref_nxyzs,
                                                  device=device,
-                                                 num_clusters=num_clusters)
+                                                 num_clusters=num_clusters,
+                                                 extra_category=extra_category,
+                                                 extra_rmsd=extra_rmsd)
 
     # assign weights to each geom equal to 1 / (num geoms in cluster),
     # so that the probability of sampling any one cluster is equal to
@@ -287,13 +318,16 @@ def per_spec_config_weights(spec_nxyz,
     # return normalized weights
     geom_weights /= geom_weights.sum()
 
-    return geom_weights, cluster_rmsds
+
+    return geom_weights, cluster_rmsds, cluster_dic
 
 
 def all_spec_config_weights(props,
                             ref_nxyz_dic,
                             spec_dic,
-                            device):
+                            device,
+                            extra_category,
+                            extra_rmsd):
     """
     Get the "configuration weights" for each geom, i.e.
     the weights chosen to evenly sample each cluster
@@ -311,12 +345,18 @@ def all_spec_config_weights(props,
         spec_dic (dict): dictionary with indices of geoms in each
                 species
         device (str): device on which to do the RMSD calculations
+        extra_category (bool, optional): whether to add an extra category for the
+            cluster assignment, occupied by any geoms not close enough to a geom
+            in `ref_nxyz_dic`
+        extra_rmsd (float, optional): if using `extra_category`, this is the RMSD
+            beyond which a geom will be assigned to an extra category.
     Returns:
         weight_dic(dict): dictionary of the form {smiles: geom_weights},
             where geom_weights are the set of normalized weights for each
             geometry in that species.
         cluster_rmsds (torch.Tensor): RMSD between geom and its species'
             clusters for each geom in the dataset.
+        cluster_assgn (torch.Tensor): assignment of each geom to a cluster
 
     """
 
@@ -324,19 +364,23 @@ def all_spec_config_weights(props,
     num_geoms = len(props['nxyz'])
     num_clusters = max([len(ref_dic['nxyz']) for
                         ref_dic in ref_nxyz_dic.values()])
+
     cluster_rmsds = torch.zeros(num_geoms, num_clusters)
+    cluster_assgn = torch.zeros(num_geoms)
 
     for spec in tqdm(list(spec_dic.keys())):
         idx = spec_dic[spec]
         ref_nxyzs = ref_nxyz_dic[spec]['nxyz']
         ref_idx = ref_nxyz_dic[spec]['idx']
         spec_nxyz = [props['nxyz'][i] for i in idx]
-        geom_weights, these_rmsds = per_spec_config_weights(
+        geom_weights, these_rmsds, cluster_dic = per_spec_config_weights(
             spec_nxyz=spec_nxyz,
             ref_nxyzs=ref_nxyzs,
             ref_idx=ref_idx,
             num_clusters=num_clusters,
-            device=device)
+            device=device,
+            extra_category=extra_category,
+            extra_rmsd=extra_rmsd)
 
         # assign weights to each species
         weight_dic[spec] = geom_weights
@@ -344,7 +388,12 @@ def all_spec_config_weights(props,
         # record the rmsds to the clusters for each geom
         cluster_rmsds[idx] = these_rmsds
 
-    return weight_dic, cluster_rmsds
+        # record the cluster assignments for each geom
+
+        for cluster, base_idx in cluster_dic.items():
+            cluster_assgn[idx[base_idx]] = cluster
+
+    return weight_dic, cluster_rmsds, cluster_assgn
 
 
 def balanced_spec_config(weight_dic,
@@ -507,6 +556,8 @@ def spec_config_zhu_balance(props,
                             spec_weight,
                             config_weight,
                             zhu_weight,
+                            extra_category=False,
+                            extra_rmsd=None,
                             device='cpu'):
     """
     Generate weights that combine balancing of species,
@@ -526,21 +577,29 @@ def spec_config_zhu_balance(props,
                 Must be <= 1 and satisfy `config_weight` + `zhu_weight` <= 1. The
                 difference, 1 - config_weight - zhu_weight, is the weight given to
                 purely random sampling.
+        extra_category (bool, optional): whether to add an extra category for the
+            cluster assignment, occupied by any geoms not close enough to a geom
+            in `ref_nxyz_dic`
+        extra_rmsd (float, optional): if using `extra_category`, this is the RMSD
+            beyond which a geom will be assigned to an extra category.
         device (str): device on which to do the RMSD calculations
     Returns:
         results (dict): dictionary with final weights and also config weights for
             future use.
     """
+
     spec_dic = get_spec_dic(props)
 
     # get the species-balanced and species-imbalanced
     # configuration weights
 
-    config_weight_dic, cluster_rmsds = all_spec_config_weights(
+    config_weight_dic, cluster_rmsds, cluster_assgn = all_spec_config_weights(
         props=props,
         ref_nxyz_dic=ref_nxyz_dic,
         spec_dic=spec_dic,
-        device=device)
+        device=device,
+        extra_category=extra_category,
+        extra_rmsd=extra_rmsd)
 
     balanced_config = balanced_spec_config(
         weight_dic=config_weight_dic,
@@ -578,6 +637,7 @@ def spec_config_zhu_balance(props,
 
     # put relevant info in a dictionary
     results = {"weights": final_weights,
-               "cluster_rmsds": cluster_rmsds}
+               "cluster_rmsds": cluster_rmsds,
+               "clusters": cluster_assgn}
 
     return results
