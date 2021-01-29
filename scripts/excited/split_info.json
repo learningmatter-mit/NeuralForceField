@@ -8,7 +8,7 @@
 
 			"balanced_sampling": {
 									"balance_type": "spec_config_zhu_balance",
-									"ref_config": {"type": "equil_and_non_equil",
+									"ref_config": {"type": "equil",
 												  "kwargs": {"substruc_smiles": "N(=N/c1ccccc1)\\c2ccccc2",
 												  			 "substruc_idx": [3, 4, 5, 6],
 												  			 "group_name": "switches",

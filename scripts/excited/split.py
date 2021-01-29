@@ -17,7 +17,7 @@ from nff.utils.misc import tqdm_enum
 
 import django
 # django.setup()
-from neuralnet.utils.data import convg_and_ci_geoms
+from neuralnet.utils.data import convg_and_ci_geoms, equil_geoms
 
 # if you sub-divide your job_info with these names, then their contents
 # will be read in. Any other division will be left as is
@@ -30,6 +30,8 @@ def get_ref_dic(ref_config_type, **kwargs):
 
     if ref_config_type == "convg_and_ci":
         ref_dic = convg_and_ci_geoms(**kwargs)
+    elif ref_config_type == "equil":
+        ref_dic = equil_geoms(**kwargs)
     else:
         raise NotImplementedError
 
@@ -70,7 +72,8 @@ def add_diabat(cluster_rmsds,
     closest_refs = ref_rmsds.argmin(-1)
     # whether it's really close enough for an adiabatic
     # state to be considered equal to the diabatic state
-    are_diabats = ref_rmsds.min(-1) <= max_rmsd
+
+    are_diabats = ref_rmsds.min(-1)[0] <= max_rmsd
 
     # assignment of diabatic energies
     diag_diabat = (np.array(diabatic_keys)
@@ -82,7 +85,7 @@ def add_diabat(cluster_rmsds,
 
         closest_ref = closest_refs[i]
         is_diabat = are_diabats[i]
-        adiabats = assignments[str(closest_ref)]
+        adiabats = assignments[str(closest_ref.item())]
 
         if is_diabat:
             for diabat_key, adiabat in zip(diag_diabat, adiabats):
@@ -136,13 +139,16 @@ def substrucs_to_mols(smiles_list,
 
 
 def sub_mol_present(batch_mol,
-                    substruc_mols):
+                    substruc_mols,
+                    use_chirality):
 
     present = False
     for mol_list in substruc_mols:
         are_substrucs = []
         for ref_mol in mol_list:
-            is_substruc = batch_mol.HasSubstructMatch(ref_mol)
+            is_substruc = batch_mol.HasSubstructMatch(
+                ref_mol,
+                useChirality=use_chirality)
             are_substrucs.append(is_substruc)
 
         # "and" comparison
@@ -188,7 +194,8 @@ def prune_by_substruc(dset,
                              add_hs=False,
                              keep_stereo=keep_stereo)
         keep = sub_mol_present(batch_mol=batch_mol,
-                               substruc_mols=substruc_mols)
+                               substruc_mols=substruc_mols,
+                               use_chirality=keep_stereo)
         if keep:
             keep_idx.append(i)
 
@@ -278,8 +285,8 @@ def make_random_split(dset, split_sizes, seed):
 
     train, val, test = split_train_validation_test(
         dset,
-        val_size=frac_split_sizes["val_size"],
-        test_size=frac_split_sizes["test_size"],
+        val_size=frac_split_sizes["val"],
+        test_size=frac_split_sizes["test"],
         seed=seed)
 
     return train, val, test
@@ -518,9 +525,6 @@ def split_and_sample(dset, job_info):
 
         sub_dic = split_dic[key]
         this_dset = sub_dic["dset"]
-
-        # we need ref_nxyz_dic here!!!
-
         sampler_kwargs = get_sampler_kwargs(this_dset=this_dset,
                                             job_info=job_info)
 
@@ -630,14 +634,7 @@ def load_dset(job_info):
     return dset
 
 
-def parse_job_info():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config_file', type=str,
-                        help="file containing all details",
-                        default="distort.json")
-
-    args = parser.parse_args()
-    config_file = args.config_file
+def read_info_file(config_file):
     with open(config_file, "r") as f_open:
         job_info = json.load(f_open)
     if "details" in job_info:
@@ -647,6 +644,19 @@ def parse_job_info():
         if name in job_info:
             job_info.update(job_info[name])
             job_info.pop(name)
+
+    return job_info
+
+
+def parse_job_info():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config_file', type=str,
+                        help="file containing all details",
+                        default="distort.json")
+
+    args = parser.parse_args()
+    config_file = args.config_file
+    job_info = read_info_file(config_file)
 
     return job_info
 
