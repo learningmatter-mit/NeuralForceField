@@ -28,7 +28,7 @@
 																	  "expec_gap": 0.00551},
 													   "spec_weight": 0.6,
 													   "config_weight": 0.5,
-													   "zhu_weight": 0.4,
+													   "zhu_weight": 0.5,
 													   "device": "cpu",
 													   "extra_category": true,
 													   "extra_rmsd": 0.25}
