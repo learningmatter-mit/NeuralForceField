@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -N 1
-#SBATCH -t 10000
+#SBATCH -t 2000
 #SBATCH --mem=300G
 #SBATCH --no-requeue
 #SBATCH --signal=B:2@300
