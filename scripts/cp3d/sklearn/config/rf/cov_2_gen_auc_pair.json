@@ -1,0 +1,19 @@
+{
+  "classifier": false,
+  "props": ["sars_cov_two_active"],
+  "train_path": "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_gen/train_full.csv",
+  "val_path": "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_gen/val_full.csv",
+  "test_path": "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_gen/test_full.csv",
+  "pred_save_path": "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_gen/rf/pred_auc_pair.json",
+  "score_save_path": "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_gen/rf/scores_auc_pair.json",
+  "hyper_save_path": "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_gen/rf/best_params_auc_pair.json",
+  "hyper_score_path": "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_gen/rf/hyper_scores_auc_pair.json",
+  "rerun_hyper": false,
+  "num_samples": 200,
+  "hyper_metric": "auc",
+  "score_metrics": ["auc", "prc-auc"],
+  "test_folds": 10,
+  "seed": 0,
+  "model_type": "random_forest",
+  "fp_type": "atom_pair"
+}

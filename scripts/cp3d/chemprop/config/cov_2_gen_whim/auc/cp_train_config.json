@@ -1,0 +1,11 @@
+{
+  "base_config_path": "/home/saxelrod/Repo/projects/master/NeuralForceField/scripts/cp3d/chemprop/config/cov_2_gen_whim/auc/base_config.json",
+  "hyp_config_path": "/home/saxelrod/Repo/projects/master/NeuralForceField/scripts/cp3d/chemprop/config/cov_2_gen_whim/auc/base_hyp_config.json",
+  "use_hyperopt": true,
+  "rerun_hyperopt": false,
+  "metric": "auc",
+  "train_folder": "/home/saxelrod/chemprop_cov_2_gen/models/from_whim",
+  "cp_folder": "/home/saxelrod/Repo/projects/chemprop/chemprop",
+  "seed": 0,
+  "max_hyp_specs": 10000
+}

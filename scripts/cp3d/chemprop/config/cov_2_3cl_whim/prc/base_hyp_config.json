@@ -1,0 +1,21 @@
+{
+ "data_path": "/home/saxelrod/chemprop_cov_2/scaffold_split/hyperopt_full.csv",
+ "num_iters": 100,
+ "split_type": "scaffold_balanced",
+ "dataset_type": "classification",
+ "no_features_scaling": false,
+ "quiet": true,
+ "gpu": 0,
+ "num_folds": 1,
+ "class_balance": true,
+ "epochs": 300,
+ "dropout": 0.2,
+ "depth": 4,
+ "ffn_num_layers": 2,
+ "hidden_size": 500,
+ "features_path": [
+        "/home/saxelrod/chemprop_cov_2/features/whim/whim_mean_hyp.npz",
+        "/home/saxelrod/chemprop_cov_2/features/whim/whim_std_hyp.npz"
+    ]
+}
+

@@ -1,6 +1,6 @@
 {
   "model_folder":  "/home/saxelrod/Repo/projects/public_nff/NeuralForceField/tutorials/test",
-  "dset_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_cl",
+  "dset_folder": "/home/saxelrod/rgb_nfs/models/cov_2_cl",
   "feat_save_folder": "/home/saxelrod/Repo/projects/public_nff/NeuralForceField/tutorials/cov_2_cl_feats",
   "prop": "sars_cov_two_cl_protease_active",
   "device": 1,

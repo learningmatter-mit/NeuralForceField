@@ -1,0 +1,14 @@
+{
+  "model_folder":  "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_gen/schnet_feat_avg_distances",
+  "dset_folder": "/home/saxelrod/test/avg_distances/cov_2_gen_cp3d",
+  "feat_save_folder": "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_2_gen/schnet_feat_avg_distances",
+  "prop": "sars_cov_two_active",
+  "device": 1,
+  "batch_size": 1,
+  "test_only": true,
+  "metrics": [
+    "binary_cross_entropy",
+    "prc-auc",
+    "auc"
+  ]
+}

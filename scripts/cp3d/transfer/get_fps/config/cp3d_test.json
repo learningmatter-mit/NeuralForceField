@@ -1,7 +1,7 @@
 {
-  "model_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_gen",
-  "dset_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_cl",
-  "feat_save_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_gen",
+  "model_folder": "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/dsets/cov_2_gen",
+  "dset_folder": "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/dsets/cov_2_cl",
+  "feat_save_folder": "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/dsets/cov_2_gen",
   "prop": "sars_cov_two_active",
   "device": 3,
   "batch_size": 1,

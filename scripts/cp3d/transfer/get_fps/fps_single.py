@@ -70,7 +70,6 @@ def save(results,
         probas_pred = None
 
     else:
-
         probas_pred = (torch.cat(results[prop])
                        .reshape(-1).numpy())
 
@@ -83,7 +82,7 @@ def save(results,
     fps = torch.stack(results["fp"]).numpy()
     all_conf_fps = results["conf_fps"]
     learned_weights = results["learned_weights"]
-    energy = results["energy"]
+    energy = results.get("energy")
     boltz_weights = results["boltz_weights"]
 
     smiles_list = targets["smiles"]
@@ -109,8 +108,9 @@ def save(results,
         dic[smiles] = {"fp": fps[i].reshape(-1),
                        "conf_fps": conf_fps,
                        "learned_weights": these_weights,
-                       "energy": energy[i].reshape(-1).numpy(),
                        "boltz_weights": boltz_weights[i].reshape(-1).numpy()}
+        if energy is not None:
+            dic[smiles].update({"energy": energy[i].reshape(-1).numpy()})
 
         if y_true is not None and probas_pred is not None:
             dic[smiles].update({"true": y_true[i],
@@ -200,9 +200,12 @@ def fps_and_pred(model, batch, **kwargs):
     results.update({"fp": [i for i in pooled_fp],
                     "conf_fps": conf_fps,
                     "learned_weights": learned_weights,
-                    "energy": list(torch.split(energy, n_confs)),
                     "boltz_weights": (list(torch.split
                                            (boltz_weights, n_confs)))})
+
+    if energy is not None:
+        results.update({"energy": list(torch.split(energy, n_confs))})
+
     return results
 
 

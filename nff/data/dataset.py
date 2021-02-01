@@ -303,6 +303,20 @@ class Dataset(TorchDataset):
         self.units = target_unit
         return
 
+    def change_idx(self, idx):
+        """
+        Change the dataset so that the properties are ordered by the
+        indices `idx`. If `idx` does not contain all of the original
+        indices in the dataset, then this will reduce the size of the
+        dataset.
+        """
+
+        for key, val in self.props.items():
+            if isinstance(val, list):
+                self.props[key] = [val[i] for i in idx]
+            else:
+                self.props[key] = val[idx]
+
     def shuffle(self):
         """Summary
 
@@ -311,13 +325,7 @@ class Dataset(TorchDataset):
         """
         idx = list(range(len(self)))
         reindex = skshuffle(idx)
-        for key, val in self.props.items():
-            if isinstance(val, list):
-                self.props[key] = [val[i] for i in reindex]
-            else:
-                self.props[key] = val[reindex]
-
-        return
+        self.change_idx(reindex)
 
     def featurize(self,
                   num_procs=NUM_PROCS,
@@ -418,8 +426,8 @@ class Dataset(TorchDataset):
         # or empty list
 
         if all([hasattr(offsets, "__len__"), len(offsets) > 0]):
-                if isinstance(offsets[0], torch.sparse.FloatTensor):
-                    self.props['offsets'] = [val.to_dense() for val in offsets]
+            if isinstance(offsets[0], torch.sparse.FloatTensor):
+                self.props['offsets'] = [val.to_dense() for val in offsets]
 
         torch.save(self, path)
         if "offsets" in self.props:
@@ -767,7 +775,7 @@ def concatenate_dict(*dicts):
     return joint_dict
 
 
-def binary_split(dataset, targ_name, test_size):
+def binary_split(dataset, targ_name, test_size, seed):
     """
     Split the dataset with proportional amounts of a binary label in each.
     Args:
@@ -787,9 +795,11 @@ def binary_split(dataset, targ_name, test_size):
 
     # split the positive and negative indices separately
     pos_idx_train, pos_idx_test = train_test_split(pos_idx,
-                                                   test_size=test_size)
+                                                   test_size=test_size,
+                                                   random_state=seed)
     neg_idx_train, neg_idx_test = train_test_split(neg_idx,
-                                                   test_size=test_size)
+                                                   test_size=test_size,
+                                                   random_state=seed)
 
     # combine the negative and positive test idx to get the test idx
     # do the same for train
@@ -803,7 +813,8 @@ def binary_split(dataset, targ_name, test_size):
 def split_train_test(dataset,
                      test_size=0.2,
                      binary=False,
-                     targ_name=None):
+                     targ_name=None,
+                     seed=None):
     """Splits the current dataset in two, one for training and
     another for testing.
 
@@ -821,10 +832,12 @@ def split_train_test(dataset,
     if binary:
         idx_train, idx_test = binary_split(dataset=dataset,
                                            targ_name=targ_name,
-                                           test_size=test_size)
+                                           test_size=test_size,
+                                           seed=seed)
     else:
         idx = list(range(len(dataset)))
-        idx_train, idx_test = train_test_split(idx, test_size=test_size)
+        idx_train, idx_test = train_test_split(idx, test_size=test_size,
+                                               random_state=seed)
 
     train = Dataset(
         props={key: [val[i] for i in idx_train]
@@ -843,6 +856,7 @@ def split_train_test(dataset,
 def split_train_validation_test(dataset,
                                 val_size=0.2,
                                 test_size=0.2,
+                                seed=None,
                                 **kwargs):
     """Summary
 
@@ -856,9 +870,11 @@ def split_train_validation_test(dataset,
     """
     train, validation = split_train_test(dataset,
                                          test_size=val_size,
+                                         seed=seed,
                                          **kwargs)
     train, test = split_train_test(train,
                                    test_size=test_size / (1 - val_size),
+                                   seed=seed,
                                    **kwargs)
 
     return train, validation, test

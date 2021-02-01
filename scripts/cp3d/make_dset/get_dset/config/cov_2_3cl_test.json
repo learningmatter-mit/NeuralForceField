@@ -1,8 +1,8 @@
 {
   "max_confs": 200,
-  "summary_path": "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/rdkit_folder/summary_drugs.json",
+  "summary_path": "/home/saxelrod/rgb_nfs/GEOM_BACKUP/rdkit_folder/summary_drugs.json",
   "dataset_folder": "/home/saxelrod/rgb_nfs/models/cov_2_cl",
-  "pickle_folder": "/home/saxelrod/rgb_nfs/GEOM_DATA_ROUND_2/rdkit_folder",
+  "pickle_folder": "/home/saxelrod/rgb_nfs/GEOM_BACKUP/rdkit_folder",
   "num_threads": 2,
   "csv_folder": "/home/saxelrod/rgb_nfs/models/cov_2_cl",
   "parallel_feat_threads": 40,

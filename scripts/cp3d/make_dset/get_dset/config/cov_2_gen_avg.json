@@ -1,0 +1,15 @@
+{
+  "max_confs": 200,
+  "summary_path": "/home/saxelrod/rgb_nfs/GEOM_BACKUP/rdkit_folder/summary_drugs.json",
+  "dataset_folder": "/home/saxelrod/test/avg_distances/cov_2_gen_schnet_feat",
+  "pickle_folder": "/home/saxelrod/rgb_nfs/GEOM_BACKUP/rdkit_folder",
+  "num_threads": 1,
+  "csv_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_gen",
+  "parallel_feat_threads": 1,
+  "strict_conformers": true,
+  "slurm_parallel": false,
+  "nbrlist_cutoff": 5.0,
+  "extra_features": [],
+  "add_directed_idx": true,
+  "average_nbrs": true
+}

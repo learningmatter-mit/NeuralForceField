@@ -83,7 +83,8 @@ def predict(cp_folder,
             cmd += f" --gpu {device} "
 
         if features_path is not None:
-            cmd += f" --features_path {features_path[0]}"
+            feat_str = " ".join(features_path)
+            cmd += f" --features_path {feat_str}"
 
         p = bash_command(cmd)
         p.wait()

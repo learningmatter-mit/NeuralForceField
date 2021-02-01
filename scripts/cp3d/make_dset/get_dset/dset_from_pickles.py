@@ -16,7 +16,7 @@ from datetime import datetime
 import shutil
 
 from nff.data import Dataset, concatenate_dict
-from nff.utils import tqdm_enum, parse_args, fprint, read_csv
+from nff.utils import tqdm_enum, parse_args, fprint, read_csv, avg_distances
 import copy
 
 
@@ -743,35 +743,9 @@ def add_features(dset,
     return dset
 
 
-def make_nff_dataset(spec_dics,
+def make_big_dataset(spec_dics,
                      nbrlist_cutoff,
-                     parallel_feat_threads,
-                     strict_conformers,
-                     csv_folder,
-                     extra_features,
-                     add_directed_idx):
-    """
-    Make an NFF dataset
-    Args:
-        spec_dics (list[dict]): a dictionary with data for each species
-        nbr_list_cutoff (float): Cutoff for two atoms to be considered
-            neighbors.
-        parallel_feat_threads (int): how many parallel threads
-            to use when making the efeatures.
-        strict_conformers (bool): Whether to exclude any species whose
-            conformers don't all have the same SMILES.
-        csv_folder (str): path to folder that contains the csv files
-            with the test/val/train smiles.
-        extra_features (list[dict]): list of extra features dictionaries
-        add_directed_idx (bool): whether to calculate and add the kj
-            and ji indices. These indices tell you which edges connect
-            to other edges.
-    Returns:
-        big_dataset (nff.data.dataset): NFF dataset
-
-    """
-
-    fprint("Making dataset with %d species" % (len(spec_dics)))
+                     parallel_feat_threads):
 
     props_list = []
     nbr_list = []
@@ -850,6 +824,126 @@ def make_nff_dataset(spec_dics,
 
     # generate atom and bond features
     big_dataset.featurize(num_procs=parallel_feat_threads)
+
+    return big_dataset
+
+
+def make_avg_dataset(spec_dics,
+                     nbrlist_cutoff,
+                     parallel_feat_threads,
+                     strict_conformers):
+
+    if not strict_conformers:
+        raise NotImplementedError
+
+    props_list = []
+
+    for j, spec_dic in tqdm_enum(spec_dics):
+
+        # Exclude keys related to individual conformers. These
+        # include conformer features, in case you've already put
+        # those in your pickle files. If not we'll generate them
+        # below
+
+        small_spec_dic = {key: val for key, val in spec_dic.items()
+                          if key not in CONF_KEYS}
+
+        # Treat each species' data like a regular dataset
+        # and use it to generate neighbor lists
+
+        dataset = Dataset(small_spec_dic, units='kcal/mol')
+        dataset.generate_neighbor_list(cutoff=nbrlist_cutoff,
+                                       undirected=False)
+
+        all_nbrs, avg_d = avg_distances(dataset)
+
+        these_props = {"nbr_list": all_nbrs,
+                       "distances": [avg_d],
+                       "rd_mols": spec_dic["rd_mols"][0],
+                       # we won't use the nxyz but it needs
+                       # to be in an NFF dataset
+                       # so we'll just use the first one
+                       "nxyz": spec_dic["nxyz"][0]}
+
+        exclude = ["weights", "degeneracy", "energy", "num_atoms",
+                   "nbr_list", "distances", "rd_mols",
+                   "nxyz",  *EXCLUDE_KEYS, *CONF_KEYS]
+
+        for key, val in dataset.props.items():
+            if key in exclude:
+                continue
+
+            per_conf = ((isinstance(val, list) or
+                         isinstance(val, torch.Tensor))
+                        and len(val) != 1)
+            if per_conf:
+                val = val[1]
+            these_props[key] = val
+
+        these_props.update({"num_atoms": len(spec_dic["nxyz"][0]),
+                            "mol_size": len(spec_dic["nxyz"][0]),
+                            "weights": torch.Tensor([1])})
+
+        props_list.append(these_props)
+
+    # Add props that are in some datasets but not others
+    props_list = add_missing(props_list)
+    # convert the list of dicationaries into a dicationary of lists / tensors
+    props_dic = concatenate_dict(*props_list)
+
+    rd_mols = copy.deepcopy(props_dic["rd_mols"])
+    props_dic.pop("rd_mols")
+
+    # make a combined dataset where the species look like they're
+    # one big molecule
+    final_dataset = Dataset(props_dic, units='kcal/mol')
+    # generate atom and bond features
+    final_dataset.props["rd_mols"] = [[i] for i in rd_mols]
+    final_dataset.featurize(num_procs=parallel_feat_threads)
+
+    return final_dataset
+
+
+def make_nff_dataset(spec_dics,
+                     nbrlist_cutoff,
+                     parallel_feat_threads,
+                     strict_conformers,
+                     csv_folder,
+                     extra_features,
+                     add_directed_idx,
+                     average_nbrs=False):
+    """
+    Make an NFF dataset
+    Args:
+        spec_dics (list[dict]): a dictionary with data for each species
+        nbr_list_cutoff (float): Cutoff for two atoms to be considered
+            neighbors.
+        parallel_feat_threads (int): how many parallel threads
+            to use when making the efeatures.
+        strict_conformers (bool): Whether to exclude any species whose
+            conformers don't all have the same SMILES.
+        csv_folder (str): path to folder that contains the csv files
+            with the test/val/train smiles.
+        extra_features (list[dict]): list of extra features dictionaries
+        add_directed_idx (bool): whether to calculate and add the kj
+            and ji indices. These indices tell you which edges connect
+            to other edges.
+    Returns:
+        big_dataset (nff.data.dataset): NFF dataset
+
+    """
+
+    fprint("Making dataset with %d species" % (len(spec_dics)))
+
+    if average_nbrs:
+        big_dataset = make_avg_dataset(spec_dics=spec_dics,
+                                       nbrlist_cutoff=nbrlist_cutoff,
+                                       parallel_feat_threads=parallel_feat_threads,
+                                       strict_conformers=strict_conformers)
+    else:
+        big_dataset = make_big_dataset(spec_dics=spec_dics,
+                                       nbrlist_cutoff=nbrlist_cutoff,
+                                       parallel_feat_threads=parallel_feat_threads)
 
     # clean up
     fprint("Cleaning up dataset...")
@@ -963,7 +1057,8 @@ def main(max_confs,
          strict_conformers,
          extra_features,
          add_directed_idx,
-         ** kwargs):
+         average_nbrs,
+         **kwargs):
     """
     Sample species, load their pickles, create an NFF dataset, and
     save train/val/test splits.
@@ -1021,7 +1116,8 @@ def main(max_confs,
                                strict_conformers=strict_conformers,
                                csv_folder=csv_folder,
                                extra_features=extra_features,
-                               add_directed_idx=add_directed_idx)
+                               add_directed_idx=add_directed_idx,
+                               average_nbrs=average_nbrs)
 
     fprint("Creating test/train/val splits...")
     save_splits(dataset=dataset,
@@ -1076,6 +1172,10 @@ if __name__ == "__main__":
                               "training a ChemProp3D model, which uses edge "
                               "updates, this will save you a lot of time "
                               "during training."))
+
+    parser.add_argument('--average_nbrs', action='store_true',
+                        help=("Use one effective structure with interatomic distances "
+                              "averaged over conformers"))
 
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "

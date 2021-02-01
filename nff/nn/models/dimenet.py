@@ -1,10 +1,14 @@
+import numpy as np
 import torch
 from torch import nn
+import torch.nn.functional as F
+import copy
 
 from nff.nn.modules.dimenet import (EmbeddingBlock, InteractionBlock,
                                     OutputBlock)
 from nff.nn.layers import DimeNetRadialBasis as RadialBasis
 from nff.nn.layers import DimeNetSphericalBasis as SphericalBasis
+from nff.nn.graphop import batch_and_sum
 from nff.utils.scatter import compute_grad
 
 
@@ -114,7 +118,10 @@ class DimeNet(nn.Module):
                              activation=modelparams["activation"],
                              n_spher=modelparams["n_spher"],
                              l_spher=modelparams["l_spher"],
-                             n_bilinear=modelparams["n_bilinear"])
+                             n_bilinear=modelparams.get("n_bilinear"),
+                             int_dim=modelparams.get("int_dim"),
+                             basis_emb_dim=modelparams.get("basis_emb_dim"),
+                             use_pp=modelparams.get("use_pp", False))
             for _ in range(modelparams["n_convolutions"])
         ])
 
@@ -122,7 +129,9 @@ class DimeNet(nn.Module):
             {key: nn.ModuleList([
                 OutputBlock(embed_dim=modelparams["embed_dim"],
                             n_rbf=modelparams["n_rbf"],
-                            activation=modelparams["activation"])
+                            activation=modelparams["activation"],
+                            use_pp=modelparams.get("use_pp"),
+                            out_dim=modelparams.get("out_dim"))
                 for _ in range(modelparams["n_convolutions"] + 1)
             ])
                 for key in modelparams["output_keys"]})
@@ -130,7 +139,7 @@ class DimeNet(nn.Module):
         self.out_keys = modelparams["output_keys"]
         self.grad_keys = modelparams["grad_keys"]
 
-    def get_prelims(self, batch):
+    def get_prelims(self, batch, xyz=None):
         """
         Get some quantities that we'll need for model prediction.
         Args:
@@ -155,9 +164,11 @@ class DimeNet(nn.Module):
         nxyz = batch["nxyz"]
         num_atoms = batch["num_atoms"].sum()
 
-        xyz = nxyz[:, 1:]
         z = nxyz[:, 0].long()
-        xyz.requires_grad = True
+        if xyz is None:
+            xyz = nxyz[:, 1:]
+            if xyz.is_leaf:
+                xyz.requires_grad = True
 
         ji_idx = batch["ji_idx"]
         kj_idx = batch["kj_idx"]
@@ -178,7 +189,7 @@ class DimeNet(nn.Module):
         return (xyz, e_rbf, a_sbf, nbr_list, angle_list, num_atoms,
                 z, kj_idx, ji_idx)
 
-    def atomwise(self, batch):
+    def atomwise(self, batch, xyz=None):
         """
         Get atomwise outputs for each quantity.
         Args:
@@ -188,8 +199,11 @@ class DimeNet(nn.Module):
             xyz (torch.Tensor): atom coordinates
         """
 
-        (xyz, e_rbf, a_sbf, nbr_list, angle_list,
-         num_atoms, z, kj_idx, ji_idx) = self.get_prelims(batch)
+        (new_xyz, e_rbf, a_sbf, nbr_list, angle_list,
+         num_atoms, z, kj_idx, ji_idx) = self.get_prelims(batch, xyz)
+
+        if xyz is None:
+            xyz = new_xyz
 
         # embed edge vectors
         m_ji = self.embedding_block(e_rbf=e_rbf,
@@ -225,7 +239,7 @@ class DimeNet(nn.Module):
 
         return out, xyz
 
-    def forward(self, batch):
+    def forward(self, batch, xyz=None):
         """
         Call the model
         Args:
@@ -234,7 +248,7 @@ class DimeNet(nn.Module):
             results (dict): dictionary of predictions
         """
 
-        out, xyz = self.atomwise(batch)
+        out, xyz = self.atomwise(batch, xyz)
         N = batch["num_atoms"].detach().cpu().tolist()
         results = {}
 

@@ -282,8 +282,11 @@ class WeightedConformers(nn.Module):
         if hasattr(offsets, 'max') and offsets.max() == 0:
             offsets = 0
 
-        e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
-             offsets).pow(2).sum(1).sqrt()[:, None]
+        if "distances" in batch:
+            e = batch["distances"][:, None]
+        else:
+            e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
+                 offsets).pow(2).sum(1).sqrt()[:, None]
 
         # ensuring image atoms have the same vectors of their corresponding
         # atom inside the unit cell

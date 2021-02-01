@@ -1,0 +1,11 @@
+{
+  "base_config_path": "/home/saxelrod/Repo/projects/master/NeuralForceField/scripts/cp3d/chemprop/config/cov_1_cl_whim/auc_crest_weights/base_config.json",
+  "hyp_config_path": "/home/saxelrod/Repo/projects/master/NeuralForceField/scripts/cp3d/chemprop/config/cov_1_cl_whim/auc_crest_weights/base_hyp_config.json",
+  "use_hyperopt": true,
+  "rerun_hyperopt": false,
+  "metric": "auc",
+  "train_folder": "/home/saxelrod/chemprop_cov_1/models/from_whim_crest_weights_auc",
+  "cp_folder": "/home/saxelrod/Repo/projects/chemprop/chemprop",
+  "seed": 0,
+  "max_hyp_specs": 10000
+}

@@ -12,6 +12,7 @@ import copy
 from hyperopt import fmin, hp, tpe
 from rdkit import Chem
 from rdkit.Chem import AllChem
+from rdkit.Chem.rdMolDescriptors import GetHashedAtomPairFingerprintAsBitVect as atom_pair_fp
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.kernel_ridge import KernelRidge
@@ -28,9 +29,10 @@ with open(HYPER_PATH, "r") as f:
     HYPERPARAMS = json.load(f)
 
 MORGAN_HYPER_KEYS = ["fp_len", "radius"]
+PAIR_FP_HYPER_KEYS = ["fp_len"]
+FP_CHOICES = ["morgan", "atom_pair"]
 MODEL_TYPES = list(set(list(HYPERPARAMS["classification"].keys())
                        + list(HYPERPARAMS["regression"].keys())))
-
 
 def load_data(train_path,
               val_path,
@@ -56,20 +58,20 @@ def load_data(train_path,
     return data
 
 
-def make_mol_rep(fp_len,
-                 data,
+def make_mol_rep(data,
                  splits,
-                 radius,
-                 props):
+                 props,
+                 fp_type,
+                 fp_kwargs):
     """
     Make representations for each molecule through Morgan fingerprints,
     and combine all the labels into an array.
     Args:
-      fp_len (int): number of bits in fingerprint
       data (dict): dictionary with data for each split
       splits (list[str]): name of the splits to use (e.g. train, val, test)
-      radius (int): radius of the fingerprint to create
       props (list[str]): properties you'll want to predict with the model.
+      fp_type (str): type of fingerprint
+      fp_kwargs (dict): kwargs for making the fingerprint
     Returns:
       fps (np.array): fingerprints
       vals (np.array): values to predict
@@ -83,8 +85,13 @@ def make_mol_rep(fp_len,
 
         for i, smiles in enumerate(smiles_list):
             mol = Chem.MolFromSmiles(smiles)
-            fp = AllChem.GetMorganFingerprintAsBitVect(
-                mol, radius, nBits=fp_len)
+            if fp_type == "morgan":
+                fp = AllChem.GetMorganFingerprintAsBitVect(mol,
+                     fp_kwargs["radius"], nBits=fp_kwargs["fp_len"])
+            elif fp_type == "atom_pair":
+                fp = atom_pair_fp(mol, nBits=fp_kwargs["fp_len"])
+            else:
+                raise NotImplementedError
 
             val_list = [data[split][prop][i] for prop in props]
 
@@ -100,7 +107,10 @@ def make_mol_rep(fp_len,
     return fps, vals
 
 
-def get_hyperparams(model_type, classifier, custom_hyps=None):
+def get_hyperparams(model_type,
+                    classifier,
+                    custom_hyps=None,
+                    fp_type="morgan"):
     """
     Get hyperparameters and ranges to be optimized for a
     given model type.
@@ -110,12 +120,16 @@ def get_hyperparams(model_type, classifier, custom_hyps=None):
       custom_hyps (dict): Dictionary of the form {hyperparam: new_vals}
           for each hyperparameter, where `new_vals` is the range you want
           for each.
+      fp_type (str, optional): type of fingerprint to use
+
     Returns:
       hyperparams (dict): dictionary with hyperparameters, their
         types, and their ranges.
     """
+
     class_or_reg = "classification" if classifier else "regression"
     hyperparams = HYPERPARAMS[class_or_reg][model_type]
+    hyperparams.update(HYPERPARAMS[fp_type])
 
     if custom_hyps is not None:
         for key, vals in custom_hyps.items():
@@ -125,18 +139,19 @@ def get_hyperparams(model_type, classifier, custom_hyps=None):
     return hyperparams
 
 
-def make_space(model_type, classifier):
+def make_space(model_type, classifier, fp_type="morgan"):
     """
     Make `hyperopt` space of hyperparameters.
     Args:
       model_type (str): name of model (e.g. random_forest)
       classifier (bool): whether or not it's a classifier
+      fp_type (str, optional): type of fingerprint to use
     Returns:
       space (dict): hyperopt` space of hyperparameters
     """
 
     space = {}
-    hyperparams = get_hyperparams(model_type, classifier)
+    hyperparams = get_hyperparams(model_type, classifier, fp_type=fp_type)
 
     for name, sub_dic in hyperparams.items():
 
@@ -226,7 +241,8 @@ def get_splits(space,
                data,
                props,
                max_specs=None,
-               seed=None):
+               seed=None,
+               fp_type="morgan"):
     """
     Get representations and values of the data given a certain
     set of Morgan hyperparameters.
@@ -236,13 +252,21 @@ def get_splits(space,
       props (list[str]): properties you'll want to predict with the model.
       max_specs (int, optional): maximum number of species to use in hyperopt
       seed (int, optional): seed to use if we take a subsample of the data
+      fp_type (str, optional): type of fingerprint to use
     Returns:
       xy_dic (dict): dictionary of the form {split: [x, y]} for each split,
         where x and y are arrays of the input and output.
     """
 
-    morgan_hyperparams = {key: val for key, val in space.items()
-                          if key in MORGAN_HYPER_KEYS}
+    # get fingerprint arguments
+
+    if fp_type == "morgan":
+        fp_hyper_keys = MORGAN_HYPER_KEYS
+    elif fp_type == "atom_pair":
+        fp_hyper_keys = PAIR_FP_HYPER_KEYS
+
+    fp_kwargs = {key: val for key, val in space.items()
+                 if key in fp_hyper_keys}
 
     # sample species
     sample_data = make_sample_data(max_specs=max_specs,
@@ -253,12 +277,11 @@ def get_splits(space,
     xy_dic = {}
 
     for name in ["train", "val", "test"]:
-
-        x, y = make_mol_rep(fp_len=morgan_hyperparams["fp_len"],
-                            data=sample_data,
+        x, y = make_mol_rep(data=sample_data,
                             splits=[name],
-                            radius=morgan_hyperparams["radius"],
-                            props=props)
+                            props=props,
+                            fp_type=fp_type,
+                            fp_kwargs=fp_kwargs)
 
         xy_dic[name] = [x, y]
 
@@ -418,7 +441,8 @@ def make_objective(data,
                    model_type,
                    props,
                    max_specs,
-                   custom_hyps):
+                   custom_hyps,
+                   fp_type="morgan"):
     """
     Make objective function for `hyperopt`.
     Args:
@@ -434,11 +458,12 @@ def make_objective(data,
       custom_hyps (dict): Dictionary of the form {hyperparam: new_vals}
           for each hyperparameter, where `new_vals` is the range you want
           for each.
+      fp_type (str, optional): type of fingerprint to use
     Returns:
       objective (callable): objective function for use in `hyperopt`.
     """
 
-    hyperparams = get_hyperparams(model_type, classifier, custom_hyps)
+    hyperparams = get_hyperparams(model_type, classifier, custom_hyps, fp_type=fp_type)
     param_type_dic = {name: sub_dic["type"] for name, sub_dic
                       in hyperparams.items()}
 
@@ -455,7 +480,8 @@ def make_objective(data,
                             data=data,
                             props=props,
                             max_specs=max_specs,
-                            seed=seed)
+                            seed=seed,
+                            fp_type=fp_type)
 
         x_val, y_val = xy_dic["val"]
         x_train, y_train = xy_dic["train"]
@@ -488,18 +514,20 @@ def make_objective(data,
 
 def translate_best_params(best_params,
                           model_type,
-                          classifier):
+                          classifier,
+                          fp_type="morgan"):
     """
     Translate the hyperparameters outputted by hyperopt.
     Args:
       best_params (dict): parameters outputted by hyperopt
       model_type (str): name of model type to be trained.
       classifier (bool): whether the model is a classifier
+      fp_type (str, optional): type of fingerprint to use
     Returns:
       translate_params (dict): translated parameters
     """
 
-    hyperparams = get_hyperparams(model_type, classifier)
+    hyperparams = get_hyperparams(model_type, classifier, fp_type=fp_type)
     param_type_dic = {name: sub_dic["type"] for name, sub_dic
                       in hyperparams.items()}
     translate_params = copy.deepcopy(best_params)
@@ -597,7 +625,8 @@ def get_or_load_hypers(hyper_save_path,
                        model_type,
                        props,
                        max_specs,
-                       custom_hyps):
+                       custom_hyps,
+                       fp_type="morgan"):
     """
     Optimize hyperparameters or load hyperparameters if
     they've already been otpimized.
@@ -618,10 +647,12 @@ def get_or_load_hypers(hyper_save_path,
       custom_hyps (dict): Dictionary of the form {hyperparam: new_vals}
           for each hyperparameter, where `new_vals` is the range you want
           for each.
+      fp_type (str, optional): type of fingerprint to use
 
     Returns:
       translate_params (dict): translated version of the best hyperparameters
     """
+
 
     if os.path.isfile(hyper_save_path) and not rerun_hyper:
         with open(hyper_save_path, "r") as f:
@@ -636,9 +667,10 @@ def get_or_load_hypers(hyper_save_path,
                                    model_type=model_type,
                                    props=props,
                                    max_specs=max_specs,
-                                   custom_hyps=custom_hyps)
+                                   custom_hyps=custom_hyps,
+                                   fp_type=fp_type)
 
-        space = make_space(model_type, classifier)
+        space = make_space(model_type, classifier, fp_type)
 
         best_params = fmin(objective,
                            space,
@@ -648,7 +680,8 @@ def get_or_load_hypers(hyper_save_path,
 
         translate_params = translate_best_params(best_params=best_params,
                                                  model_type=model_type,
-                                                 classifier=classifier)
+                                                 classifier=classifier,
+                                                 fp_type=fp_type)
         with open(hyper_save_path, "w") as f:
             json.dump(translate_params, f, indent=4, sort_keys=True)
 
@@ -664,7 +697,8 @@ def get_ensemble_preds(test_folds,
                        classifier,
                        score_metrics,
                        model_type,
-                       props):
+                       props,
+                       fp_type="morgan"):
     """
     Get ensemble-averaged predictions from a model.
     Args:
@@ -676,6 +710,7 @@ def get_ensemble_preds(test_folds,
       score_metrics (list[str]): metrics to apply to the test set
       model_type (str): name of model type to be trained
       props (list[str]): properties you'll want to predict with the model
+      fp_type (str, optional): type of fingerprint to use
     Returns:
       ensemble_preds (dict): predictions
       ensemble_scores (dict): scores
@@ -688,7 +723,8 @@ def get_ensemble_preds(test_folds,
     splits = ["train", "val", "test"]
     xy_dic = get_splits(space=translate_params,
                         data=data,
-                        props=props)
+                        props=props,
+                        fp_type=fp_type)
 
     x_train, y_train = xy_dic["train"]
     x_test, y_test = xy_dic["test"]
@@ -773,6 +809,7 @@ def hyper_and_train(train_path,
                     props,
                     max_specs,
                     custom_hyps,
+                    fp_type,
                     **kwargs):
     """
     Run hyperparameter optimization and train an ensemble of models.
@@ -802,6 +839,7 @@ def hyper_and_train(train_path,
       custom_hyps (dict): Dictionary of the form {hyperparam: new_vals}
           for each hyperparameter, where `new_vals` is the range you want
           for each.
+      fp_type (str, optional): type of fingerprint to use
     Returns:
       None
 
@@ -821,7 +859,8 @@ def hyper_and_train(train_path,
         model_type=model_type,
         props=props,
         max_specs=max_specs,
-        custom_hyps=custom_hyps)
+        custom_hyps=custom_hyps,
+        fp_type=fp_type)
 
     ensemble_preds, ensemble_scores, pred_fns = get_ensemble_preds(
         test_folds=test_folds,
@@ -830,7 +869,8 @@ def hyper_and_train(train_path,
         classifier=classifier,
         score_metrics=score_metrics,
         model_type=model_type,
-        props=props)
+        props=props,
+        fp_type=fp_type)
 
     save_preds(ensemble_preds=ensemble_preds,
                ensemble_scores=ensemble_scores,
@@ -889,6 +929,10 @@ if __name__ == "__main__":
                         help=("Custom hyperparameter ranges to override"
                               " the default. Please provide as a JSON string"
                               " if not using a config file"))
+    parser.add_argument("--fp_type", type=str,
+                        help=("Type of fingerprint to use"),
+                        choices=FP_CHOICES,
+                        default="morgan")
     parser.add_argument('--config_file', type=str,
                         help=("Path to JSON file with arguments. If given, "
                               "any arguments in the file override the command "
@@ -897,4 +941,5 @@ if __name__ == "__main__":
     args = parse_args(parser)
     if isinstance(args.custom_hyps, str):
         args.custom_hyps = json.loads(args.custom_hyps)
+
     hyper_and_train(**args.__dict__)

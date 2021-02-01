@@ -1,0 +1,15 @@
+{
+  "model_folder":  "/home/saxelrod/rgb_nfs/GEOM_NON_TAR/models/cov_1_cl/cp3d_avg_distances",
+  "dset_folder": "/home/saxelrod/rgb_nfs/dsets/cov_2_cl_avg_2",
+  "feat_save_folder": "/home/saxelrod/chemprop_cov_2/features/cp3d_avg",
+  "prop": "sars_cov_one_cl_protease_active",
+  "device": 2,
+  "batch_size": 3,
+  "sub_batch_size": null,
+  "test_only": false,
+  "metrics": [
+    "binary_cross_entropy",
+    "prc-auc",
+    "auc"
+  ]
+}
