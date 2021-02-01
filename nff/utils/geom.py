@@ -73,15 +73,21 @@ def rotation_matrix_from_points(m0, m1):
     good_idx = np.bitwise_not(nan_idx)
     f_good = f_np[good_idx]
 
-    w, V = np.linalg.eigh(f_good)
-    w = torch.Tensor(w).to(f.device)
-    V = torch.Tensor(V).to(f.device)
+    if f_good.shape[0] != 0:
+        # Only do this if we have any good idx
+        # Otherwise we'll run into issues with
+        # taking the argmax of an empty 
+        # sequence
 
-    arg = w.argmax(dim=1)
-    idx = list(range(len(arg)))
-    q = V[idx, :, arg]
+        w, V = np.linalg.eigh(f_good)
+        w = torch.Tensor(w).to(f.device)
+        V = torch.Tensor(V).to(f.device)
 
-    R = quaternion_to_matrix(q)
+        arg = w.argmax(dim=1)
+        idx = list(range(len(arg)))
+        q = V[idx, :, arg]
+
+        R = quaternion_to_matrix(q)
 
     counter = 0
     r_with_nan = []
