@@ -16,7 +16,7 @@ from nff.utils.misc import tqdm_enum
 
 
 import django
-# django.setup()
+django.setup()
 from neuralnet.utils.data import convg_and_ci_geoms, equil_geoms
 
 # if you sub-divide your job_info with these names, then their contents
@@ -262,7 +262,7 @@ def save_sample_weights(sampler, job_info):
     save_path = os.path.join(model_path, "sample_weights.json")
 
     with open(save_path, "w") as f_open:
-        json.dump(weights, f_open)
+        json.dump(weights, f_open, indent=4, sort_keys=True)
 
     return save_path
 
@@ -600,37 +600,31 @@ def flatten_dict(job_info):
 
 
 def load_dset(job_info):
-    dset_path = job_info["dset_path"]
-    if os.path.isfile(dset_path):
-        print("Loading dataset...")
-        dset = Dataset.from_file(dset_path)
-        print("Loaded!")
 
-        return dset
+    if os.path.isfile(job_info["dset_path"]):
+        dset_path = job_info["dset_path"]
+        paths = [dset_path]
 
-    if not os.path.isdir(dset_path):
-        msg = (f"Path {dset_path} is neither a "
-               "directory nor file.")
-        raise Exception(msg)
+    elif os.path.isdir(job_info["dset_path"]):
+        name_choices = [['dataset.pth.tar'], ['train.pth.tar', 'test.pth.tar', 'val.pth.tar']]
+        exists = False
+        for names in name_choices:
+            paths = [os.path.join(job_info["dset_path"], name) for name in names]
+            if any([os.path.isfile(path) for path in paths]):
+                exists = True
+                break
+        if not exists:
+            msg = (f"Path {job_info['dset_path']} is neither a "
+                   "directory nor file.")
+            raise Exception(msg)
 
-    dset_dir = job_info["dset_path"]
-    dset_path = os.path.join(dset_dir, "dataset.pth.tar")
-
-    if not os.path.isfile(dset_path):
-        sub_paths = []
-        for name in ["train", "val", "test"]:
-            sub_path = os.path.join(dset_dir, f"{name}.pth.tar")
-        if not os.path.isfile(sub_path):
-            raise Exception("Can't find the dataset.")
-        sub_paths.append(sub_path)
-
-        print("Loading dataset...")
-        for i, path in tqdm_enum(sub_paths):
-            if i == 0:
-                dset = Dataset.from_file(path)
-            else:
-                dset += Dataset.from_file(path)
-        print("Loaded!")
+    print("Loading dataset...")
+    for i, path in tqdm_enum(paths):
+        if i == 0:
+            dset = Dataset.from_file(path)
+        else:
+            dset += Dataset.from_file(path)
+    print("Loaded!")
     return dset
 
 
