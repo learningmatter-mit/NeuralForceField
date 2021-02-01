@@ -134,8 +134,14 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
 class BalancedFFSampler(torch.utils.data.sampler.Sampler):
 
     def __init__(self,
-                 balance_type,
+                 balance_type=None,
+                 weights=None,
                  **kwargs):
+
+        if weights is not None:
+            self.balance_dict = {"weights": weights}
+            self.data_length = len(self.balance_dict["weights"])
+            return
 
         if balance_type == "spec_config_zhu_balance":
             balance_fn = spec_config_zhu_balance
