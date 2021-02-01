@@ -150,7 +150,7 @@ def main(base_config_path,
                   val_feat_path=None,
                   test_feat_path=None,
                   train_folder=train_folder,
-                  features_only=False,
+                  features_only=None,
                   hyp_params=hyp_params,
                   no_features=False)
 
