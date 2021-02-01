@@ -44,7 +44,11 @@
 
         	"splitting": {"num_parallel": 4,
         				 "seed": 0,
-        				 "split_sizes": {"val": 10000, "test": 10000}}
+        				 "split_sizes": {"val": 10000, "test": 10000}},
+
+        	"needs_nbrs": true,
+        	"needs_angles": true,
+        	"cutoff": 5.0
 
 	}
 }

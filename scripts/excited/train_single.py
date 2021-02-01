@@ -180,10 +180,10 @@ def load_ff_sampler(weight_path,
     full_path = os.path.join(weight_path, str(rank), prob_path)
     if full_path.endswith("json"):
         with open(full_path, "r") as f_open:
-            probs = json.load(f_open)
+            probs = torch.Tensor(json.load(f_open))
     elif full_path.endswith("pickle"):
         with open(full_path, "rb") as f_open:
-            probs = pickle.load(f_open)
+            probs = torch.Tensor(pickle.load(f_open))
     else:
         raise NotImplementedError
 

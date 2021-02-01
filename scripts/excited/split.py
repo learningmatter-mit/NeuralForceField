@@ -1,3 +1,4 @@
+from neuralnet.utils.data import convg_and_ci_geoms, equil_geoms
 import copy
 import random
 import os
@@ -17,7 +18,6 @@ from nff.utils.misc import tqdm_enum
 
 import django
 django.setup()
-from neuralnet.utils.data import convg_and_ci_geoms, equil_geoms
 
 # if you sub-divide your job_info with these names, then their contents
 # will be read in. Any other division will be left as is
@@ -538,6 +538,22 @@ def split_and_sample(dset, job_info):
                                assignments=job_info["diabat_assignments"],
                                dset=this_dset,
                                diabatic_keys=job_info["diabatic_keys"])
+
+        needs_nbrs = job_info.get("needs_nbrs", False)
+        needs_angles = job_info.get("needs_angles", False)
+        cutoff = job_info.get("cutoff", 5.0)
+
+        if needs_nbrs or (needs_angles and
+                          ("nbr_list" not in this_dset.props)):
+            print(("Generating neighbor list with cutoff %.2f A"
+                   % cutoff))
+            this_dset.generate_neighbor_list(cutoff, undirected=False)
+
+        if needs_angles:
+            print("Generating angle list and directed indices")
+            this_dset.generate_angle_list()
+            print("Completed generating angle list.")
+
         split_dic[key] = {"dset": this_dset, "sampler": sampler}
 
     return split_dic
@@ -606,10 +622,12 @@ def load_dset(job_info):
         paths = [dset_path]
 
     elif os.path.isdir(job_info["dset_path"]):
-        name_choices = [['dataset.pth.tar'], ['train.pth.tar', 'test.pth.tar', 'val.pth.tar']]
+        name_choices = [['dataset.pth.tar'], [
+            'train.pth.tar', 'test.pth.tar', 'val.pth.tar']]
         exists = False
         for names in name_choices:
-            paths = [os.path.join(job_info["dset_path"], name) for name in names]
+            paths = [os.path.join(job_info["dset_path"], name)
+                     for name in names]
             if any([os.path.isfile(path) for path in paths]):
                 exists = True
                 break
