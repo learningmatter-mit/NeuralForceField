@@ -1,56 +1,92 @@
-{"details": 
-	{
-		    "dset_path": "/nfs/rafagblab001/saxelrod/dsets_switches/ref_big_dataset/0",
-			"model_path": "/nfs/rafagblab001/saxelrod/dset_switches/big_random_split",
-
-			"pruning": {"substruc_smiles": [["N(=N/c1ccccc1)\\c2ccccc2"]],
-						"stereo_in_substruc": false},
-
-			"balanced_sampling": {
-									"balance_type": "spec_config_zhu_balance",
-									"ref_config": {"type": "equil",
-												  "kwargs": {"substruc_smiles": "N(=N/c1ccccc1)\\c2ccccc2",
-												  			 "substruc_idx": [3, 4, 5, 6],
-												  			 "group_name": "switches",
-												  			 "method_names": ["dft_d3_gga_bp86", "dft_hyb_bhhlyp",
-												  			 				  "sf_tddft_bhhlyp"],
-						    								 "method_descrips": ["Orca bp86/def2-SVP D3 DFT RI", 
-						    								 					 "Orca BHHLYP/6-31G* DFT",
-						    								 					 "GAMESS bhhlyp/6-31G* spin flip tddft"],
-						    								 "pref_method_idx": 0,
-						    								 "device": "cpu",
-						    								 "ref_smiles_list": ["N(=N/c1ccccc1)\\c2ccccc2",
-						    								 					 "N(=N/c1ccccc1)/c2ccccc2"]}
-						    						},
-
-									"sampler_kwargs": {"zhu_kwargs": {"upper_key": "energy_1",
-																	  "lower_key": "energy_0",
-																	  "expec_gap": 0.00551},
-													   "spec_weight": 0.6,
-													   "config_weight": 0.5,
-													   "zhu_weight": 0.5,
-													   "device": "cpu",
-													   "extra_category": true,
-													   "extra_rmsd": 0.25}
-			},
-
-			"diabatization": {
-							"max_diabat_rmsd": 0.15,
-							"num_diabat_states": 2,
-							"diabat_assignments": {"0": ["energy_0", "energy_1"],
-				                           		   "1": ["energy_1", "energy_0"]},
-				            "diabatic_keys": [["d0", "lam"], ["lam", "d1"]]
-        	},
-
-        	"splitting": {"num_parallel": 8,
-        				 "seed": 0,
-        				 "split_sizes": {"val": 10000, "test": 10000}},
-
-        	"needs_nbrs": true,
-        	"needs_angles": true,
-        	"cutoff": 5.0
-
-	}
+{
+    "dset_path": "/nfs/rafagblab001/saxelrod/dsets_switches/ref_big_dataset/0",
+    "model_path": "/nfs/rafagblab001/saxelrod/dset_switches/big_random_split",
+    "pruning": {
+        "substruc_smiles": [
+            [
+                "N(=N/c1ccccc1)\\c2ccccc2"
+            ]
+        ],
+        "stereo_in_substruc": false
+    },
+    "balanced_sampling": {
+        "balance_type": "spec_config_zhu_balance",
+        "ref_config": {
+            "type": "equil",
+            "kwargs": {
+                "substruc_smiles": "N(=N/c1ccccc1)\\c2ccccc2",
+                "substruc_idx": [
+                    3,
+                    4,
+                    5,
+                    6
+                ],
+                "group_name": "switches",
+                "method_names": [
+                    "dft_d3_gga_bp86",
+                    "dft_hyb_bhhlyp",
+                    "sf_tddft_bhhlyp"
+                ],
+                "method_descrips": [
+                    "Orca bp86/def2-SVP D3 DFT RI",
+                    "Orca BHHLYP/6-31G* DFT",
+                    "GAMESS bhhlyp/6-31G* spin flip tddft"
+                ],
+                "pref_method_idx": 0,
+                "device": "cpu",
+                "ref_smiles_list": [
+                    "N(=N/c1ccccc1)\\c2ccccc2",
+                    "N(=N/c1ccccc1)/c2ccccc2"
+                ]
+            }
+        },
+        "sampler_kwargs": {
+            "zhu_kwargs": {
+                "upper_key": "energy_1",
+                "lower_key": "energy_0",
+                "expec_gap": 0.00551
+            },
+            "spec_weight": 0.6,
+            "config_weight": 0.5,
+            "zhu_weight": 0.5,
+            "device": "cpu",
+            "extra_category": true,
+            "extra_rmsd": 0.25
+        }
+    },
+    "diabatization": {
+        "max_diabat_rmsd": 0.15,
+        "num_diabat_states": 2,
+        "diabat_assignments": {
+            "0": [
+                "energy_0",
+                "energy_1"
+            ],
+            "1": [
+                "energy_1",
+                "energy_0"
+            ]
+        },
+        "diabatic_keys": [
+            [
+                "d0",
+                "lam"
+            ],
+            [
+                "lam",
+                "d1"
+            ]
+        ]
+    },
+    "splitting": {
+        "num_parallel": 8,
+        "seed": 0,
+        "split_sizes": {
+            "val": 10000,
+            "test": 10000
+        }
+    },
+    "needs_nbrs": true,
+    "needs_angles": true,
+    "cutoff": 5.0
 }
-
-
