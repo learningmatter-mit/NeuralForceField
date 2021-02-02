@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-from nff.data.sampling import spec_config_zhu_balance
 
 REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'bonded_nbr_list', 'angle_list']
 NBR_LIST_KEYS = ['bond_idx', 'kj_idx', 'ji_idx']
@@ -137,6 +136,8 @@ class BalancedFFSampler(torch.utils.data.sampler.Sampler):
                  balance_type=None,
                  weights=None,
                  **kwargs):
+
+        from nff.data.sampling import spec_config_zhu_balance
 
         if weights is not None:
             self.balance_dict = {"weights": weights}

@@ -4,7 +4,7 @@
 import os
 import numpy as np
 import torch
-from nff.nn.models.schnet import SchNet
+from nff.nn.models.schnet import SchNet, SchNetDiabat
 from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.models.schnet_features import SchNetFeatures
@@ -167,7 +167,20 @@ PARAMS_TYPE = {"SchNet":
                    "grad_keys": list,
                    "diabat_keys": list
 
-               }
+               },
+
+               "SchNetDiabat":
+               {
+                   'n_atom_basis': int,
+                   'n_filters': int,
+                   'n_gaussians': int,
+                   'n_convolutions': int,
+                   'cutoff': float,
+                   'bond_par': float,
+                   'trainable_gauss': bool,
+                   'box_size': np.array,
+                   'dropout_rate': float
+               },
 
 
 
@@ -175,6 +188,7 @@ PARAMS_TYPE = {"SchNet":
 
 MODEL_DICT = {
     "SchNet": SchNet,
+    "SchNetDiabat": SchNetDiabat,
     "HybridGraphConv": HybridGraphConv,
     "WeightedConformers": WeightedConformers,
     "SchNetFeatures": SchNetFeatures,

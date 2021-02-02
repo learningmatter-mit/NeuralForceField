@@ -5,6 +5,7 @@ from torch.nn import Sequential, Linear, ReLU, LeakyReLU, ModuleDict
 from torch.nn import Softmax
 from torch.nn.functional import softmax
 
+import numpy as np
 import unittest
 
 from nff.nn.layers import Dense, GaussianSmearing
@@ -17,6 +18,7 @@ from nff.nn.graphconv import (
 from nff.nn.utils import (construct_sequential, construct_module_dict,
                           chemprop_msg_update, chemprop_msg_to_node,
                           remove_bias)
+from nff.nn.layers import Diagonalize
 from nff.utils.tools import layer_types
 
 
@@ -932,7 +934,7 @@ class CpSchNetConv(ChemPropConv):
                               nbrs=bond_nbrs,
                               ji_idx=ji_idx,
                               kj_idx=kj_idx)
-        
+
         h_new_bond = self.update(msg=cp_msg,
                                  h_0=h0_bond)
 
@@ -1030,6 +1032,102 @@ class ChemPropInit(nn.Module):
 
         return hidden_feats
 
+
+class DiabaticReadout(nn.Module):
+    def __init__(self,
+                 diabat_keys,
+                 grad_keys,
+                 energy_keys):
+        nn.Module.__init__(self)
+
+        self.diag = Diagonalize()
+        self.diabat_keys = diabat_keys
+        self.grad_keys = grad_keys
+        self.energy_keys = energy_keys
+
+    def add_nacv(self, results, u, xyz, N):
+
+        nacv = self.get_nacv(u=u, xyz=xyz, N=N)
+        num_states = nacv.shape[0]
+        for i in range(num_states):
+            for j in range(num_states):
+                if i == j:
+                    continue
+                this_nacv = nacv[i, j, :, :]
+                results[f"nacv_{i}{j}"] = this_nacv
+        return results
+
+    def add_diag(self,
+                 results,
+                 N,
+                 xyz,
+                 add_nacv):
+
+        diabat_keys = np.array(self.diabat_keys)
+        dim = diabat_keys.shape[0]
+        num_geoms = len(N)
+        diabat_ham = torch.zeros(num_geoms, dim, dim
+                                 ).to(xyz.device)
+        for i in range(dim):
+            for j in range(dim):
+                key = diabat_keys[i, j]
+                diabat_ham[:, i, j] = results[key]
+
+        ad_energies, u = self.diag(diabat_ham)
+
+        results.update({key: ad_energies[:, i].reshape(-1, 1)
+                        for i, key in enumerate(self.energy_keys)})
+        if add_nacv:
+            results = self.add_nacv(results=results,
+                                    u=u,
+                                    xyz=xyz,
+                                    N=N)
+
+        return results
+
+    def add_grad(self, results, xyz):
+
+        for grad_key in self.grad_keys:
+            base_key = grad_key.replace("_grad", "")
+            output = results[base_key]
+            grad = compute_grad(inputs=xyz, output=output)
+
+            results[grad_key] = grad
+
+        return results
+
+    def add_gap(self, results):
+
+        bottom_key = self.diabat_keys[0][0]
+        top_key = self.diabat_keys[1][1]
+        gap = results[top_key] - results[bottom_key]
+        results.update({"abs_diabat_gap": abs(gap)})
+
+        return results
+
+    def forward(self,
+                batch,
+                output,
+                xyz,
+                add_nacv=False):
+
+        N = batch["num_atoms"].detach().cpu().tolist()
+        results = {}
+
+        for key, val in output.items():
+            # split the outputs into those of each molecule
+            split_val = torch.split(val, N)
+            # sum the results for each molecule
+            results[key] = torch.stack([i.sum() for i in split_val])
+
+        results = self.add_diag(results=results,
+                                N=N,
+                                xyz=xyz,
+                                add_nacv=add_nacv)
+        results = self.add_grad(results, xyz)
+        results = self.add_gap(results)
+
+        return results
 
 # Test
 

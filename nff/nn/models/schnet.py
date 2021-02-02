@@ -1,11 +1,16 @@
+import copy
 import torch.nn as nn
 
-from nff.nn.layers import DEFAULT_DROPOUT_RATE
+from nff.nn.layers import DEFAULT_DROPOUT_RATE, Diagonalize
+
 from nff.nn.modules import (
     SchNetConv,
     SchNetEdgeUpdate,
-    NodeMultiTaskReadOut
+    NodeMultiTaskReadOut,
+    DiabaticReadout
 )
+
+
 from nff.nn.graphop import batch_and_sum, get_atoms_inside_cell
 from nff.nn.utils import get_default_readout
 from nff.nn.activations import shifted_softplus
@@ -162,5 +167,31 @@ class SchNet(nn.Module):
         r, N, xyz = self.convolve(batch, xyz)
         r = self.atomwisereadout(r)
         results = batch_and_sum(r, N, list(batch.keys()), xyz)
+
+        return results
+
+
+class SchNetDiabat(SchNet):
+    def __init__(self, modelparams):
+
+        super().__init__(modelparams)
+
+        self.diag = Diagonalize()
+        self.diabatic_readout = DiabaticReadout(
+            diabat_keys=modelparams["diabat_keys"],
+            grad_keys=modelparams["grad_keys"],
+            energy_keys=modelparams["output_keys"])
+
+    def forward(self, batch,
+                xyz=None,
+                add_nacv=False,
+                **kwargs):
+
+        r, N, xyz = self.convolve(batch, xyz)
+        output = self.atomwisereadout(r)
+        results = self.diabatic_readout(batch=batch,
+                                        output=output,
+                                        xyz=xyz,
+                                        add_nacv=add_nacv)
 
         return results
