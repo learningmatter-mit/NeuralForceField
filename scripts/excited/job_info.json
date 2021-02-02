@@ -16,5 +16,6 @@
 "max_std_en": 3,
 "max_std_force": 3,
 "max_val_en": 300,
-"max_val_force": 300
+"max_val_force": 300,
+"make_splits": false
 }

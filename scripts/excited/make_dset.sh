@@ -12,11 +12,11 @@
 
 source deactivate
 source ~/.bashrc
-source activate htvs
+source activate nff
 
 # change as necessary
 export HTVSDIR="/home/saxelrod/repo/htvs/master/htvs"
 export DJANGOCHEMDIR="/home/saxelrod/repo/htvs/master/htvs/djangochem"
 export NFFDIR="/home/saxelrod/repo/nff/master/NeuralForceField"
 
-python make_dset.py
+python make_dset.py --config_file job_info.json

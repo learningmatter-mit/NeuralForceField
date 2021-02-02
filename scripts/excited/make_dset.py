@@ -226,7 +226,8 @@ def save_dset(overall_dict,
               max_std_en,
               max_std_force,
               max_val_en,
-              max_val_force):
+              max_val_force,
+              make_splits=False):
 
     overall_dict = trim_overall(overall_dict, required_keys)
     props = concatenate_dict(*list(overall_dict.values()))
@@ -241,12 +242,16 @@ def save_dset(overall_dict,
                            max_val_en=max_val_en,
                            max_val_force=max_val_force)
 
-    splits = split_train_validation_test(dset,
-                                         val_size=val_size,
-                                         test_size=test_size,
-                                         seed=seed)
+    if make_splits:
+        names = ["train", "val", "test"]
+        splits = split_train_validation_test(dset,
+                                             val_size=val_size,
+                                             test_size=test_size,
+                                             seed=seed)
+    else:
+        names = ["dataset"]
+        splits = [dset]
 
-    names = ["train", "val", "test"]
     for split, name in zip(splits, names):
         save_path = os.path.join(save_folder, f"{name}.pth.tar")
         split.save(save_path)
@@ -367,6 +372,7 @@ def main(group_name,
          split_seed=0,
          molsets=None,
          chunk_size=CHUNK_SIZE,
+         make_splits=False,
          **kwargs):
 
     max_geoms, max_geoms_per_dset, molsets = parse_optional(
@@ -407,7 +413,7 @@ def main(group_name,
                 custom_name=custom_name)
 
             if len(overall_dict) >= max_geoms_per_dset:
-
+                geom_count += len(overall_dict)
                 save_dset(overall_dict=overall_dict,
                           required_keys=required_keys,
                           save_dir=save_dir,
@@ -418,9 +424,9 @@ def main(group_name,
                           max_std_en=max_std_en,
                           max_std_force=max_std_force,
                           max_val_en=max_val_en,
-                          max_val_force=max_val_force)
+                          max_val_force=max_val_force,
+                          make_splits=make_splits)
 
-                geom_count += len(overall_dict)
                 i += 1
                 overall_dict = {}
 
