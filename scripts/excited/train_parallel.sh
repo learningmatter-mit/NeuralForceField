@@ -13,8 +13,11 @@ source deactivate
 source ~/.bashrc
 source activate nff
 
-CONFIG="config/cp3d_ndu_cov2_gen.json"
-# CONFIG="config/cp3d_single_cov2_gen.json"
+# CONFIG="train_config/dimenet_holdout_train.json"
+CONFIG="train_config/dimenet_rand_train.json"
+# CONFIG="train_config/schnet_holdout_train.json"
+# CONFIG="train_config/schnet_random_train.json"
+
 
 # change to the number of GPUs you're using per node
 export SLURM_GPUS_PER_NODE=1
@@ -24,9 +27,8 @@ export LD_LIBRARY_PATH=lib/$CONDA_PREFIX/:$LD_LIBRARY_PATH
 export NFFDIR="$HOME/repo/nff/master/NeuralForceField"
 export PYTHONPATH=$NFFDIR:$PYTHON_PATH
 
-cmd="python $NFFDIR/scripts/cp3d/train/train_parallel.py $CONFIG  " # & pid=\$!"
+cmd="python $NFFDIR/scripts/cp3d/train/train_parallel.py $CONFIG  "
 echo $cmd
 eval $cmd
-# wait
 
 

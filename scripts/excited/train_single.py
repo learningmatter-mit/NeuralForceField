@@ -1001,7 +1001,7 @@ def add_args(all_params):
     params = {**all_params['train_params'],
               **all_params['model_params']}
     metric_names = params.get("metrics", [DEFAULT_METRIC])
-    base_keys = params.get("base_keys", ["energy"])
+    base_keys = params.get("base_keys", params.get("output_keys", ["energy"]))
     grad_keys = params.get("grad_keys", ["energy_grad"])
 
     args = [metric_names,
