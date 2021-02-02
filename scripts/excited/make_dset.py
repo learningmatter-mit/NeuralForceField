@@ -276,8 +276,15 @@ def get_job_pks(method_name,
     config_names = [key for key, val in CONFIG_DIC.items() if
                     val['name'] == method_name and
                     val['description'] == method_description]
+ 
+    config_str = ", ".join(config_names[:-1])
+    if len(config_names) >= 2:
+        config_str += f" or {config_names[-1]}"
+    
+    print(f"Querying all jobs with config {config_str}...")
     job_pks = list(JobConfig.objects.filter(name__in=config_names)
                    .order_by("?").values_list('job__pk', flat=True))
+    print("Completed query!")
 
     return job_pks
 
@@ -395,7 +402,7 @@ def main(group_name,
     stoich_dict = {}
 
     while job_pks:
-        print("%d remaining..." % (len(job_pks)))
+        print("%d jobs remaining..." % (len(job_pks)))
         sys.stdout.flush()
 
         job_query = get_job_query(job_pks=job_pks,
