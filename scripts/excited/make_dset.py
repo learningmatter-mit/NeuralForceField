@@ -330,7 +330,8 @@ def update_overall(overall_dict,
     props = calc.props
 
     if geom_id not in overall_dict:
-        overall_dict[geom_id] = {"nxyz": geom.xyz,
+        overall_dict[geom_id] = {"geom_id": geom_id,
+                                 "nxyz": geom.xyz,
                                  "smiles": geom.species.smiles}
 
     stoich_dict, formula = update_stoich(stoich_dict=stoich_dict,
