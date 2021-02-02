@@ -53,9 +53,6 @@ def make_splits(split_config,
     with open(split_config, "r") as f_open:
         info = json.load(f_open)
 
-    # Need to save the clusters also! Probably best to save
-    # the full balance dict as a json rather than just the weights.
-
     for new_dset_path, num_samples in zip(new_dset_paths,
                                           num_samples_list):
         info["dset_path"] = new_dset_path
