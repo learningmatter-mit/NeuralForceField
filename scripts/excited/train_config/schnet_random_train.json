@@ -1,11 +1,16 @@
 {
-
     "model_params": {
         "model_type": "SchNetDiabat",
         "cutoff": 5.0,
         "diabat_keys": [
-            ["d0", "lam"],
-            ["lam", "d1"]
+            [
+                "d0",
+                "lam"
+            ],
+            [
+                "lam",
+                "d1"
+            ]
         ],
         "dropout_rate": 0.0,
         "grad_keys": [
@@ -22,50 +27,82 @@
         ],
         "readoutdict": {
             "d0": [
-                    {"name": "linear",
-                    "param": {"in_features": 256,
-                             "out_features": 128}},
-                    {"name": "shifted_softplus",
-                    "param": {}},
-                    {"name": "linear",
-                     "param": {"in_features": 128,
-                               "out_features": 1}}
+                {
+                    "name": "linear",
+                    "param": {
+                        "in_features": 256,
+                        "out_features": 128
+                    }
+                },
+                {
+                    "name": "shifted_softplus",
+                    "param": {}
+                },
+                {
+                    "name": "linear",
+                    "param": {
+                        "in_features": 128,
+                        "out_features": 1
+                    }
+                }
             ],
             "d1": [
-                    {"name": "linear",
-                    "param": {"in_features": 256,
-                             "out_features": 128}},
-                    {"name": "shifted_softplus",
-                    "param": {}},
-                    {"name": "linear",
-                     "param": {"in_features": 128,
-                               "out_features": 1}}
+                {
+                    "name": "linear",
+                    "param": {
+                        "in_features": 256,
+                        "out_features": 128
+                    }
+                },
+                {
+                    "name": "shifted_softplus",
+                    "param": {}
+                },
+                {
+                    "name": "linear",
+                    "param": {
+                        "in_features": 128,
+                        "out_features": 1
+                    }
+                }
             ],
             "lam": [
-                    {"name": "linear",
-                    "param": {"in_features": 256,
-                             "out_features": 128}},
-                    {"name": "shifted_softplus",
-                    "param": {}},
-                    {"name": "linear",
-                     "param": {"in_features": 128,
-                               "out_features": 1}}
-            ],
+                {
+                    "name": "linear",
+                    "param": {
+                        "in_features": 256,
+                        "out_features": 128
+                    }
+                },
+                {
+                    "name": "shifted_softplus",
+                    "param": {}
+                },
+                {
+                    "name": "linear",
+                    "param": {
+                        "in_features": 128,
+                        "out_features": 1
+                    }
+                }
+            ]
         },
         "trainable_gauss": true
     },
-
-
     "train_params": {
         "sampler": {
-                       "name": "BalancedFFSampler",
-                       "apply_to": ["train", "val", "test"],
-                       "prob_paths": {"train": "train_weights.json",
-                                      "val": "val_weights.json",
-                                      "test": "test_weights.json"}
-                    },
-
-
+            "name": "BalancedFFSampler",
+            "apply_to": [
+                "train",
+                "val",
+                "test"
+            ],
+            "prob_paths": {
+                "train": "train_weights.json",
+                "val": "val_weights.json",
+                "test": "test_weights.json"
+            }
+        },
         "batch_size": 16,
         "mini_batches": 1,
         "checkpoints_to_keep": 3,
@@ -73,26 +110,26 @@
         "log_every_n_epochs": 1,
         "loss": "mse",
         "loss_coef": {
-                        "d0": 0.01,
-                        "d1": 0.01,
-                        "energy_0": 0.1,
-                        "energy_0_grad": 1,
-                        "energy_1": 0.1,
-                        "energy_1_grad": 1
-                    },
-        "lr": 3e-4,
+            "d0": 0.01,
+            "d1": 0.01,
+            "energy_0": 0.1,
+            "energy_0_grad": 1,
+            "energy_1": 0.1,
+            "energy_1_grad": 1
+        },
+        "lr": 0.0003,
         "lr_decay": 0.5,
         "lr_min": 5e-06,
         "lr_patience": 10,
         "max_epochs": 1000,
-        "metrics": ["MeanAbsoluteError"],
-
-
+        "metrics": [
+            "MeanAbsoluteError"
+        ],
         "weightpath": "/home/gridsan/saxelrod/models/switches",
         "model_name": "schnet_random",
         "mol_loss_norm": true,
         "seed": 0,
         "torch_par": false,
-        "use_slurm": true,
+        "use_slurm": true
     }
 }
