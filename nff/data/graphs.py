@@ -4,6 +4,7 @@ import torch
 from ase import Atoms
 from tqdm import tqdm
 
+from nff.utils.misc import tqdm_enum
 
 DISTANCETHRESHOLDICT_SYMBOL = {
     ("H", "H"): 1.00,
@@ -475,7 +476,8 @@ def add_ji_kj(angle_lists, nbr_lists):
 
     ji_idx_list = []
     kj_idx_list = []
-    for angle_list, nbr_list in zip(angle_lists, nbr_lists):
+    for i, nbr_list in tqdm_enum(nbr_lists):
+        angle_list = angle_lists[i]
         ji_idx = m_idx_of_angles(angle_list=angle_list,
                                  nbr_list=nbr_list,
                                  angle_start=1,
