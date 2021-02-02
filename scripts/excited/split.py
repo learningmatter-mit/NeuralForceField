@@ -1,23 +1,20 @@
 
+from nff.utils.misc import tqdm_enum
+from nff.data import Dataset, split_train_validation_test
+from nff.data.loader import BalancedFFSampler
+from tqdm import tqdm
+from sklearn.model_selection import train_test_split
+from rdkit import Chem
+import numpy as np
+import torch
+import argparse
+import json
+import os
+import random
+import copy
+from neuralnet.utils.data import convg_and_ci_geoms, equil_geoms
 import django
 django.setup()
-
-from neuralnet.utils.data import convg_and_ci_geoms, equil_geoms
-import copy
-import random
-import os
-import json
-import argparse
-
-import torch
-import numpy as np
-from rdkit import Chem
-from sklearn.model_selection import train_test_split
-from tqdm import tqdm
-
-from nff.data.loader import BalancedFFSampler
-from nff.data import Dataset, split_train_validation_test
-from nff.utils.misc import tqdm_enum
 
 
 # if you sub-divide your job_info with these names, then their contents
@@ -252,20 +249,18 @@ def get_model_path(job_info):
     return model_path
 
 
-def save_sample_weights(sampler, job_info):
+def to_json(dic):
+    for key, val in dic.items():
+        if isinstance(val, dict):
+            dic[key] = to_json(val)
+        else:
+            if hasattr(val, "tolist"):
+                dic[key] = val.tolist()
+            else:
+                dic[key] = val
+    return dic
 
-    weights = sampler.balance_dict["weights"].reshape(-1).tolist()
-    model_path = get_model_path(job_info)
 
-    if not os.path.isdir(model_path):
-        os.makedirs(model_path)
-
-    save_path = os.path.join(model_path, "sample_weights.json")
-
-    with open(save_path, "w") as f_open:
-        json.dump(weights, f_open, indent=4, sort_keys=True)
-
-    return save_path
 
 
 def make_random_split(dset, split_sizes, seed):
@@ -580,7 +575,8 @@ def save_as_chunks(split_dic, job_info):
             dset_chunk.save(dset_path)
 
             weights = chunk_dic["weights"].reshape(-1).tolist()
-            weight_path = os.path.join(direc, f"{split}_weights.json")
+            weight_path = os.path.join(direc, f"{split}_sample_dict.json")
+            
             with open(weight_path, "w") as f_open:
                 json.dump(weights, f_open)
 

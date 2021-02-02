@@ -8,6 +8,7 @@ import json
 import sys
 import copy
 import pickle
+import numpy as np
 
 import torch
 from torch.utils.data import DataLoader
@@ -172,22 +173,37 @@ def get_gpu_splits(weight_path,
     return datasets
 
 
+def dic_to_tensor(dic):
+    for key, val in dic.items():
+        if isinstance(val, dict):
+            dic[key] = dic_to_tensor(val)
+        else:
+            if isinstance(val, list) or isinstance(val, np.ndarray):
+                if all([not isinstance(sub_val, str)
+                        for sub_val in val]):
+                    dic[key] = torch.tensor(val)
+                else:
+                    dic[key] = val
+            else:
+                dic[key] = val
+    return dic
+
+
 def load_ff_sampler(weight_path,
                     rank,
-                    dset_name,
-                    prob_path):
+                    sampler_path):
 
-    full_path = os.path.join(weight_path, str(rank), prob_path)
+    full_path = os.path.join(weight_path, str(rank), sampler_path)
     if full_path.endswith("json"):
         with open(full_path, "r") as f_open:
-            probs = torch.Tensor(json.load(f_open))
+            balance_dict = dic_to_tensor(json.load(f_open))
     elif full_path.endswith("pickle"):
         with open(full_path, "rb") as f_open:
-            probs = torch.Tensor(pickle.load(f_open))
+            balance_dict = dic_to_tensor(pickle.load(f_open))
     else:
         raise NotImplementedError
 
-    sampler = BalancedFFSampler(weights=probs)
+    sampler = BalancedFFSampler(balance_dict=balance_dict)
 
     return sampler
 
@@ -236,17 +252,16 @@ def get_sampler(params,
 
         elif sample_params.get("name") == "BalancedFFSampler":
 
-            prob_path = sample_params.get("prob_paths",
-                                          {}).get(dset_name)
-            if not prob_path:
+            sampler_path = sample_params.get("sampler_paths",
+                                             {}).get(dset_name)
+            if not sampler_path:
                 msg = (f"BalancedFFSampler must have pre-set sample "
                        "probabilities when doing parallel training.")
                 raise Exception(msg)
 
             sampler = load_ff_sampler(weight_path=weight_path,
                                       rank=rank,
-                                      dset_name=dset_name,
-                                      prob_path=prob_path)
+                                      sampler_path=sampler_path)
 
         elif sample_params.get("name") == "ImbalancedDatasetSampler":
             target_name = sample_params["target_name"]

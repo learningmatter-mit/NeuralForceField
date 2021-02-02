@@ -37,10 +37,10 @@
                 "val",
                 "test"
             ],
-            "prob_paths": {
-                "train": "train_weights.json",
-                "val": "val_weights.json",
-                "test": "test_weights.json"
+            "sampler_paths": {
+                "train": "train_sample_dict.json",
+                "val": "val_sample_dict.json",
+                "test": "test_sample_dict.json"
             }
         },
         "batch_size": 16,
