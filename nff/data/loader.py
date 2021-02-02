@@ -135,22 +135,26 @@ class BalancedFFSampler(torch.utils.data.sampler.Sampler):
     def __init__(self,
                  balance_type=None,
                  weights=None,
+                 balance_dict=None,
                  **kwargs):
 
         from nff.data.sampling import spec_config_zhu_balance
 
         if weights is not None:
             self.balance_dict = {"weights": weights}
-            self.data_length = len(self.balance_dict["weights"])
-            return
 
-        if balance_type == "spec_config_zhu_balance":
-            balance_fn = spec_config_zhu_balance
+        elif balance_dict is not None:
+            self.balance_dict = balance_dict
+
         else:
-            raise NotImplementedError
+            if balance_type == "spec_config_zhu_balance":
+                balance_fn = spec_config_zhu_balance
+            else:
+                raise NotImplementedError
 
-        balance_dict = balance_fn(**kwargs)
-        self.balance_dict = balance_dict
+            balance_dict = balance_fn(**kwargs)
+            self.balance_dict = balance_dict
+
         self.data_length = len(self.balance_dict["weights"])
 
     def __iter__(self):
