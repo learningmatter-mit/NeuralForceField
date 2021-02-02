@@ -43,10 +43,11 @@
         	},
 
         	"splitting": {"num_parallel": 8,
-        				 "seed": 0,
-        				 "split_sizes": {"val": 10000},
-                              "species_splits": {
-                              	"test": [
+        				  "seed": 0,
+        				  "split_sizes": {"val": 10000},
+                          "species_splits": 
+                          	{
+                          		"test": [
 										    "Nc1ccccc1/N=N/c1ccccc1NCc1ccccn1",
 										    "c1ccc(CNc2ccccc2/N=N/c2ccccc2NCc2ccccn2)nc1",
 										    "Cc1cc(/N=N/c2ccccc2N(C)Cc2ccccn2)c(N(C)Cc2ccccn2)cc1O",
@@ -87,7 +88,8 @@
 										    "CC(C)c1cc(C(C)C)c(/N=N\\c2c(C(C)C)cc(C(C)C)cc2C(C)C)c(C(C)C)c1",
 										    "CC(=O)Oc1cc(N(C)Cc2ccccn2)c(/N=N/c2ccccc2N(C)Cc2ccccn2)cc1C"
 								]
-                          }},
+                        	}
+                      },
         	"needs_nbrs": true,
         	"needs_angles": true,
         	"cutoff": 5.0
