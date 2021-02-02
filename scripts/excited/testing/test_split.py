@@ -56,13 +56,16 @@ def make_splits(split_config,
     for new_dset_path, num_samples in zip(new_dset_paths,
                                           num_samples_list):
         info["dset_path"] = new_dset_path
-        info["model_path"] = os.path.join(new_dset_dir,
-                                          f"splits_{num_samples}")
+        model_path = os.path.join(new_dset_dir,
+                                  f"splits_{num_samples}")
+        if not os.path.isdir(model_path):
+            os.makedirs(model_path)
+        info["model_path"] = model_path
 
         with open(split_config, "w") as f_open:
             json.dump(info, f_open, indent=4)
 
-        cmd = f"python split.py --config_file {split_config}"
+        cmd = f"python ../split.py --config_file {split_config}"
         os.system(cmd)
 
 
