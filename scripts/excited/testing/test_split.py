@@ -17,17 +17,20 @@ def trim(dset, num_samples):
 def make_copies(dset_path,
                 new_dset_dir,
                 num_samples_list,
+                overwrite,
                 **kwargs):
 
     dset = Dataset.from_file(dset_path)
     new_dset_paths = []
 
     for num_samples in tqdm(num_samples_list):
-        new_dset = trim(dset, num_samples)
         new_dset_path = os.path.join(new_dset_dir,
                                      f"{num_samples}_samples.pth.tar")
+        if os.path.isfile(new_dset_path) and (not overwrite):
+            new_dset_paths.append(new_dset_path)
+            continue
+        new_dset = trim(dset, num_samples)
         new_dset.save(new_dset_path)
-        new_dset_paths.append(new_dset_path)
     return new_dset_paths
 
 

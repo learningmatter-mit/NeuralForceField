@@ -1,6 +1,6 @@
 {
-    "dset_path": "",
-    "model_path": "",
+    "dset_path": "/nfs/rafagblab001/saxelrod/dsets_switches/testing/20000_samples.pth.tar",
+    "model_path": "/nfs/rafagblab001/saxelrod/dsets_switches/testing/splits_20000",
     "pruning": {
         "substruc_smiles": [
             [

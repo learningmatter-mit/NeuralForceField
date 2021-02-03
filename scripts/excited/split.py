@@ -1,3 +1,5 @@
+import django
+django.setup()
 
 from nff.utils.misc import tqdm_enum
 from nff.data import Dataset, split_train_validation_test
@@ -13,8 +15,6 @@ import os
 import random
 import copy
 from neuralnet.utils.data import convg_and_ci_geoms, equil_geoms
-import django
-django.setup()
 
 
 # if you sub-divide your job_info with these names, then their contents
