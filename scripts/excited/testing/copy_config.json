@@ -1,5 +1,5 @@
 {"dset_path": "/nfs/rafagblab001/saxelrod/dsets_switches/ref_big_dataset/0/dataset.pth.tar",
  "new_dset_dir": "/nfs/rafagblab001/saxelrod/dsets_switches/testing",
- "num_samples_list": [500, 2000, 20000],
+ "num_samples_list": [10000, 50000],
  "split_config": "split_config.json",
  "overwrite": false}
