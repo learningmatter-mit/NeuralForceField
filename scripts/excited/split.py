@@ -509,17 +509,19 @@ def make_split(dset, job_info):
     seed = job_info["seed"]
 
     if species_splits:
-        splits = split_by_species(dset=dset,
+        splits_idx = split_by_species(dset=dset,
                                   species_splits=species_splits,
                                   split_sizes=split_sizes,
                                   seed=seed)
     else:
-        splits = make_random_split(dset=dset,
+        splits_idx = make_random_split(dset=dset,
                                    split_sizes=split_sizes,
                                    seed=seed)
     split_dic = {}
-    for name, split in zip(names, splits):
-        split_dic[name] = {"dset": split}
+    for name, split_idx in zip(names, splits_idx):
+        this_dset = copy.deepcopy(dset)
+        this_dset.change_idx(split_idx)
+        split_dic[name] = {"dset": this_dset}
 
     return split_dic
 
