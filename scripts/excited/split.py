@@ -298,9 +298,51 @@ def idx_in_smiles_list(dset, specs, present):
     return idx
 
 
-def norm_test_size(train_name, test_name, split_sizes):
-    norm_test = split_sizes[test_name] / (split_sizes[test_name]
-                                          + split_sizes[train_name])
+def norm_test_size(train_name, 
+                   test_name, 
+                   split_sizes,
+                   length):
+
+    base_message = ("You specified a dataset proportion "
+                    "for the {present} set but not the {missing} set. "
+                    "It's ambiguous whether this means that "
+       	       	    "{missing}_proportion = 1 - {present}_proportion or "
+       	       	    "{missing}_proportion = 1 - {present}_proportion - "
+                    "third_split_proportion.	Please specify a proportion "
+       	       	    "for the {missing} set. ")
+
+    if train_name in split_sizes:
+        train_size = split_sizes[train_name]
+        if train_size > 1:
+            train_size /= length
+            test_size = 1 - train_size
+        else:
+            if test_name in split_sizes:
+                test_size = split_sizes[test_name]
+            else:
+       	       	err_msg	= base_message.format(present=train_name,
+       	       	       	       	       	      absent=test_name)
+       	       	raise Exception(err_msg)
+
+    elif test_name in split_sizes:
+        test_size = split_sizes[test_name]
+        if test_size > 1:
+            test_size /= length
+            train_size = 1 - test_size
+        else:
+            if train_name in split_sizes:
+                train_size = split_sizes[train_name]
+            else:
+                err_msg = base_message.format(present=test_name,
+                                              absent=train_name)
+                raise Exception(err_msg)
+    else:
+        err_msg = ("Neither {train_name} nor {test_name} "
+                   "proportions were specified.")
+        raise Exception(err_msg)
+        
+    norm_test = test_size / (test_size + train_size)
+
     return norm_test
 
 
@@ -333,7 +375,8 @@ def one_preset_split(dset,
 
     missing_size_1 = norm_test_size(train_name=missing_splits[0],
                                     test_name=missing_splits[1],
-                                    split_sizes=split_sizes)
+                                    split_sizes=split_sizes,
+                                    length=len(missing_idx))
 
     # the indices of the missing splits
     missing_idx_0, missing_idx_1 = train_test_split(
@@ -458,9 +501,7 @@ def split_by_species(dset,
 def make_split(dset, job_info):
 
     names = ["train", "val", "test"]
-    species_splits = {name: job_info[f"{name}_species"]
-                      for name in names if
-                      f"{name}_species" in job_info}
+    species_splits = job_info.get("species_splits", {})
 
     # `split_sizes` is a dictionary of the form
     # {train: 0.8, val: 0.2}
