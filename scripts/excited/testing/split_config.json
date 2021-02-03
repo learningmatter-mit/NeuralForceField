@@ -1,6 +1,6 @@
 {
-    "dset_path": "/nfs/rafagblab001/saxelrod/dsets_switches/testing/20000_samples.pth.tar",
-    "model_path": "/nfs/rafagblab001/saxelrod/dsets_switches/testing/splits_20000",
+    "dset_path": "/nfs/rafagblab001/saxelrod/dsets_switches/testing/10000_samples.pth.tar",
+    "model_path": "/nfs/rafagblab001/saxelrod/dsets_switches/testing/splits_10000",
     "pruning": {
         "substruc_smiles": [
             [
@@ -46,7 +46,7 @@
                 "lower_key": "energy_0",
                 "expec_gap": 0.00551
             },
-            "spec_weight": 0.6,
+            "spec_weight": 0.4,
             "config_weight": 0.5,
             "zhu_weight": 0.5,
             "device": "cpu",
