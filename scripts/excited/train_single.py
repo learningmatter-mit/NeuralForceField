@@ -26,6 +26,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 DEFAULTPARAMSFILE = 'job_info.json'
 DEFAULT_METRIC = "MeanAbsoluteError"
+DEFAULT_CUTOFF = 5.0
 
 
 def init_parallel(node_rank,
@@ -60,7 +61,12 @@ def init_parallel(node_rank,
     sys.stdout.flush()
 
 
-def load_dset(path, max_confs, rank):
+def load_dset(path,
+              max_confs,
+              rank,
+              needs_nbrs,
+              needs_angles,
+              cutoff):
     """
     Load a dataset and trim its conformers if requested.
     Args:
@@ -75,6 +81,25 @@ def load_dset(path, max_confs, rank):
     dset = Dataset.from_file(path)
     base = (rank == 0)
 
+    gen_nbrs = ((needs_nbrs or needs_angles)
+                and "nbr_list" not in dset.props)
+    gen_angles = (needs_angles and "angle_list"
+                  not in dset.props)
+    save = (gen_nbrs or gen_angles)
+    gprint = fprint if base else lambda x: None
+
+    if gen_nbrs:
+        gprint(("Generating neighbor list with cutoff "
+                "%.2f Angstroms..." % cutoff))
+        dset.generate_neighbor_list(cutoff, directed=True)
+        gprint("Completed neighbor list generation!")
+
+    if gen_angles:
+        gprint(("Generating angle list and directed "
+                "indices..." % cutoff))
+        dset.generate_angle_list()
+        gprint("Completed angle list generation!")
+
     if max_confs is not None:
         # only track progress if this is the base process
         if base:
@@ -85,6 +110,12 @@ def load_dset(path, max_confs, rank):
                           num_confs=max_confs,
                           idx_dic=None,
                           enum_func=enum_func)
+
+    if save:
+        gprint("Saving dataset...")
+        dset.save(path)
+        gprint("Done saving dataset!")
+
     return dset
 
 
@@ -92,7 +123,10 @@ def get_gpu_splits(weight_path,
                    rank,
                    world_size,
                    params,
-                   max_confs):
+                   max_confs,
+                   needs_nbrs,
+                   needs_angles,
+                   cutoff):
     """ 
     Check if there are already datasets in each parallel folder.
     If so, load and return those datasets instead of loading the whole
@@ -145,7 +179,16 @@ def get_gpu_splits(weight_path,
             conf_str = "conformer" if max_confs == 1 else "conformers"
             fprint(("Reducing each species to have a maximum of "
                     f"{max_confs} {conf_str}..."))
-        datasets = [load_dset(path, max_confs, rank) for path in split_paths]
+        datasets = []
+        for path in split_paths:
+            dset = load_dset(path=path,
+                             max_confs=max_confs,
+                             rank=rank,
+                             needs_nbrs=needs_nbrs,
+                             needs_angles=needs_angles,
+                             cutoff=cutoff)
+            datasets.append(dset)
+
         return datasets
 
     # otherwise get the dataset, split it, and save it
@@ -359,7 +402,10 @@ def make_all_loaders(weight_path,
                      node_rank,
                      gpu,
                      gpus,
-                     log_train):
+                     log_train,
+                     needs_nbrs,
+                     needs_angles,
+                     cutoff):
     """
     Get train, val, and test data loaders.
     Args:
@@ -389,7 +435,10 @@ def make_all_loaders(weight_path,
                                 rank=rank,
                                 world_size=world_size,
                                 params=params,
-                                max_confs=max_confs)
+                                max_confs=max_confs,
+                                needs_nbrs=needs_nbrs,
+                                needs_angles=needs_angles,
+                                cutoff=cutoff)
 
     # if not, and if this is the base GPU, we need to either
     # load the dataset or make the dataset and save it to the
@@ -892,7 +941,10 @@ def train(gpu,
           gpus,
           metric_names,
           base_keys,
-          grad_keys):
+          grad_keys,
+          needs_nbrs,
+          needs_angles,
+          cutoff):
     """
     Train a model in parallel.
     Args:
@@ -932,7 +984,11 @@ def train(gpu,
                                node_rank=node_rank,
                                gpu=gpu,
                                gpus=gpus,
-                               log_train=log_train)
+                               log_train=log_train,
+                               needs_nbrs=needs_nbrs,
+                               needs_angles=needs_angles,
+                               cutoff=cutoff)
+
     train_loader, val_loader, test_loader = loaders
 
     log_train("Created loaders.")
@@ -1018,10 +1074,16 @@ def add_args(all_params):
     metric_names = params.get("metrics", [DEFAULT_METRIC])
     base_keys = params.get("base_keys", params.get("output_keys", ["energy"]))
     grad_keys = params.get("grad_keys", ["energy_grad"])
+    needs_nbrs = params.get("needs_nbrs", True)
+    needs_angles = params.get("needs_angles", False)
+    cutoff = params.get("cutoff", DEFAULT_CUTOFF)
 
     args = [metric_names,
             base_keys,
-            grad_keys]
+            grad_keys,
+            needs_nbrs,
+            needs_angles,
+            cutoff]
 
     return args
 

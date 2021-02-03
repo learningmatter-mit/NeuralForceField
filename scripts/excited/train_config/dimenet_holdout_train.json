@@ -70,6 +70,9 @@
         "mol_loss_norm": true,
         "seed": 0,
         "torch_par": false,
-        "use_slurm": true
+        "use_slurm": true,
+        "needs_nbrs": true,
+        "needs_angles": true,
+        "cutoff": 5.0
     }
 }
