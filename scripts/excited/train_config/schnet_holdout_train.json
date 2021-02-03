@@ -125,11 +125,11 @@
         "metrics": [
             "MeanAbsoluteError"
         ],
-        "weightpath": "/home/gridsan/saxelrod/models/switches",
+        "weightpath": "/nfs/rafagblab001/saxelrod/dsets_switches",
         "model_name": "schnet_holdout",
         "mol_loss_norm": true,
         "seed": 0,
-        "torch_par": true,
+        "torch_par": false,
         "use_slurm": true,
         "needs_nbrs": true,
         "needs_angles": false,
