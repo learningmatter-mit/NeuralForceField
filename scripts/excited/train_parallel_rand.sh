@@ -3,9 +3,9 @@
 #SBATCH -t 10000
 #SBATCH --no-requeue
 #SBATCH --signal=B:2@300
-#SBATCH --ntasks-per-node 2
+#SBATCH --ntasks-per-node 1
 #SBATCH --cpus-per-task 8
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:1
 #SBATCH --mem-per-cpu=5G
 #SBATCH -p sched_mit_rafagb_amd,sched_mit_rafagb
 
@@ -21,7 +21,7 @@ source activate nff
 CONFIG="train_config/schnet_random_train.json"
 
 # change to the number of GPUs you're using per node
-export SLURM_GPUS_PER_NODE=2
+export SLURM_GPUS_PER_NODE=1
 export LD_LIBRARY_PATH=lib/$CONDA_PREFIX/:$LD_LIBRARY_PATH
 
 # change to your location of NeuralForceField
