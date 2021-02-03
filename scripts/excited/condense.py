@@ -74,10 +74,7 @@ def aggr_all(base_dir,
         folders = new_groups[i]
         balances, dsets = aggregate(base_dir=base_dir,
                                     folders=folders)
-        if num_new == 1:
-            new_folder = base_dir
-        else:
-            new_folder = os.path.join(new_dir, str(i))
+        new_folder = os.path.join(new_dir, str(i))
         if os.path.isdir(new_folder):
             if replace:
                 backup_path = os.path.join(new_dir, f"{i}_backup")
