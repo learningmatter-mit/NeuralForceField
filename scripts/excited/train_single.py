@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from torch.optim import Adam
 from nff.data import Dataset, split_train_validation_test, collate_dicts
 from nff.data.loader import ImbalancedDatasetSampler, BalancedFFSampler
-from nff.train import metrics, Trainer, get_model, loss, hooks
+from nff.train import metrics, Trainer, load_model, get_model, loss, hooks
 from nff.utils.confs import trim_confs
 from nff.utils import fprint, tqdm_enum
 
@@ -91,12 +91,12 @@ def load_dset(path,
     if gen_nbrs:
         gprint(("Generating neighbor list with cutoff "
                 "%.2f Angstroms..." % cutoff))
-        dset.generate_neighbor_list(cutoff, directed=True)
+        dset.generate_neighbor_list(cutoff, undirected=False)
         gprint("Completed neighbor list generation!")
 
     if gen_angles:
         gprint(("Generating angle list and directed "
-                "indices..." % cutoff))
+                "indices..."))
         dset.generate_angle_list()
         gprint("Completed angle list generation!")
 
@@ -714,7 +714,9 @@ def make_stats(T,
     # get best model and put into eval mode
     while True:
         try:
-            model = torch.load(T.best_model, map_location="cpu")
+            model = load_model(weight_path,
+                               params=params,
+                               model_type=params["model_type"])
             break
         except (EOFError, FileNotFoundError, pickle.UnpicklingError):
             continue

@@ -82,7 +82,7 @@ def submit_slurm_job(node,
 
     cmd = (f"srun -N1 --nodelist {node} --ntasks 1  "
            f"--cpus-per-task {cpus_per_task} "
-           f"python $NFFDIR/scripts/cp3d/train/train_single.py "
+           f"python $NFFDIR/scripts/excited/train_single.py "
            f"{params_file} -nr {node_index} "
            f"--gpus {num_gpus} --nodes {num_nodes}")
 
