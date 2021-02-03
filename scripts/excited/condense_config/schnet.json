@@ -1,4 +1,4 @@
 {"base_dir": "/nfs/rafagblab001/saxelrod/dsets_switches/big_holdout_split",
-"num_new": 4,
+"num_new": 2,
 "new_dir": "/nfs/rafagblab001/saxelrod/dsets_switches/schnet_holdout",
 "replace": true}
