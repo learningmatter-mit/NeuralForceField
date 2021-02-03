@@ -50,6 +50,9 @@ __pycache__
 *.mpg
 *.traj
 
+# slurm output files
+slurm*.out
+
 # directory 
 log/
 debug/
