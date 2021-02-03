@@ -1,6 +1,6 @@
 {
     "dset_path": "/nfs/rafagblab001/saxelrod/dsets_switches/ref_big_dataset/0",
-    "model_path": "/nfs/rafagblab001/saxelrod/dset_switches/big_random_split",
+    "model_path": "/nfs/rafagblab001/saxelrod/dsets_switches/big_random_split",
     "pruning": {
         "substruc_smiles": [
             [

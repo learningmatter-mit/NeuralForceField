@@ -129,7 +129,7 @@
         "model_name": "schnet_holdout",
         "mol_loss_norm": true,
         "seed": 0,
-        "torch_par": false,
+        "torch_par": true,
         "use_slurm": true,
         "needs_nbrs": true,
         "needs_angles": false,
