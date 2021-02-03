@@ -21,7 +21,7 @@
         ],
         "l_spher": 7,
         "n_bilinear": 8,
-        "n_convolutions": 3,
+        "n_convolutions": 4,
         "n_rbf": 6,
         "n_spher": 6,
         "output_keys": [
