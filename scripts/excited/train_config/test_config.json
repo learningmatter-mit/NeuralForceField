@@ -43,7 +43,7 @@
                 "test": "test_sample_dict.json"
             }
         },
-        "batch_size": 32,
+        "batch_size": 64,
         "mini_batches": 1,
         "checkpoints_to_keep": 3,
         "del_grad_interval": 100,
@@ -60,7 +60,7 @@
         "lr": 0.0003,
         "lr_decay": 0.5,
         "lr_min": 5e-06,
-        "lr_patience": 10,
+        "lr_patience": 5,
         "max_epochs": 40,
         "metrics": [
             "MeanAbsoluteError"
