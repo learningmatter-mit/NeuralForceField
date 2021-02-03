@@ -31,6 +31,7 @@ def make_copies(dset_path,
             continue
         new_dset = trim(dset, num_samples)
         new_dset.save(new_dset_path)
+        new_dset_paths.append(new_dset_path)
     return new_dset_paths
 
 
