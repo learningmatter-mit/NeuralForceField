@@ -215,7 +215,7 @@ def make_parallel_chunks(dset, num_chunks, sampler):
 
     sample_split = np.array_split(list(range(len(dset))), num_chunks)
     geoms_in_splits = [len(i) for i in sample_split]
-    weights = copy.deepcopy(sampler.balance_dict["weights"]).reshape(-1)
+    balance_dict = copy.deepcopy(sampler.balance_dict)
 
     dset_chunks = []
 
@@ -226,13 +226,16 @@ def make_parallel_chunks(dset, num_chunks, sampler):
             new_props[key] = copy.deepcopy(val[:geoms_per_split])
             dset.props[key] = val[geoms_per_split:]
 
-        these_weights = weights[:geoms_per_split]
-        weights = weights[geoms_per_split:]
-        analyze_split(these_weights=these_weights,
+        this_balance = {key: val[:geoms_per_split] for key, val
+                        in balance_dict.items()}
+        balance_dict = {key: val[geoms_per_split:] for key, val
+       	       	       	in balance_dict.items()}
+ 
+        analyze_split(these_weights=this_balance['weights'],
                       num_chunks=num_chunks)
 
         dset_chunk = Dataset(props=new_props, check_props=False)
-        chunk_dic = {"dset": dset_chunk, "weights": these_weights}
+        chunk_dic = {"dset": dset_chunk, "balance_dict": this_balance}
         dset_chunks.append(chunk_dic)
 
     return dset_chunks
@@ -259,9 +262,6 @@ def to_json(dic):
             else:
                 dic[key] = val
     return dic
-
-
-
 
 def make_random_split(dset, split_sizes, seed):
 
@@ -617,11 +617,11 @@ def save_as_chunks(split_dic, job_info):
             dset_path = os.path.join(direc, f"{split}.pth.tar")
             dset_chunk.save(dset_path)
 
-            weights = chunk_dic["weights"].reshape(-1).tolist()
-            weight_path = os.path.join(direc, f"{split}_sample_dict.json")
+            balance_dict = to_json(chunk_dic["balance_dict"])
+            balance_path = os.path.join(direc, f"{split}_sample_dict.json")
             
-            with open(weight_path, "w") as f_open:
-                json.dump(weights, f_open)
+            with open(balance_path, "w") as f_open:
+                json.dump(balance_dict, f_open, indent=4)
 
 
 def diabat_and_weights(dset, job_info):
