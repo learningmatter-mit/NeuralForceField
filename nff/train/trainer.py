@@ -351,7 +351,7 @@ class Trainer:
                 else:
                     raise err
 
-        return batch, results, mini_loss
+        return batch, results, mini_loss, use_device
 
     def train(self, device, n_epochs=MAX_EPOCHS):
         """Train the model for the given number of epochs on a specified
@@ -393,7 +393,7 @@ class Trainer:
                     for h in self.hooks:
                         h.on_batch_begin(self, batch)
 
-                    batch, results, mini_loss = self.call_and_loss(
+                    batch, results, mini_loss, _ = self.call_and_loss(
                         batch=batch,
                         device=device,
                         calc_loss=True)
@@ -621,13 +621,13 @@ class Trainer:
                 vsize = val_batch['nxyz'].size(0)
 
             n_val += vsize
-            val_batch, results, mini_loss = self.call_and_loss(
+            val_batch, results, mini_loss, use_device = self.call_and_loss(
                 batch=val_batch,
                 device=device,
                 calc_loss=False)
 
             # detach from the graph
-            results = batch_detach(results)
+            results = batch_to(batch_detach(results), use_device)
 
             val_batch_loss = self.loss_fn(
                 val_batch, results).data.cpu().numpy()
