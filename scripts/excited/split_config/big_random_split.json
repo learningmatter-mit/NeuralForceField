@@ -1,6 +1,6 @@
 {
-    "dset_path": "/nfs/rafagblab001/saxelrod/dsets_switches/ref_big_dataset/0",
-    "model_path": "/nfs/rafagblab001/saxelrod/dset_switches/big_random_split",
+    "dset_path": "/home/saxelrod/rgb_nfs/dsets_switches/ref_big_dataset/0",
+    "model_path": "/home/saxelrod/rgb_nfs/dsets_switches/big_random_split",
     "pruning": {
         "substruc_smiles": [
             [
@@ -79,7 +79,7 @@
         ]
     },
     "splitting": {
-        "num_parallel": 16,
+        "num_parallel": 1,
         "seed": 0,
         "split_sizes": {
             "val": 10000,

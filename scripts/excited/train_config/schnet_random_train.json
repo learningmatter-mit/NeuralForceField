@@ -103,7 +103,7 @@
                 "test": "test_sample_dict.json"
             }
         },
-        "batch_size": 64,
+        "batch_size": 48,
         "mini_batches": 1,
         "checkpoints_to_keep": 3,
         "del_grad_interval": 100,
@@ -125,7 +125,7 @@
         "metrics": [
             "MeanAbsoluteError"
         ],
-        "weightpath": "/home/gridsan/saxelrod/models/switches",
+        "weightpath": "/nfs/rafagblab001/saxelrod/dsets_switches",
         "model_name": "schnet_random",
         "mol_loss_norm": true,
         "seed": 0,

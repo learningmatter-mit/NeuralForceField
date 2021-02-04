@@ -457,7 +457,10 @@ def make_all_loaders(weight_path,
         if base:
             train, val, test = dsets_from_folder(weight_path=weight_path,
                                                  max_confs=max_confs,
-                                                 rank=rank)
+                                                 rank=rank,
+                                                 needs_nbrs=needs_nbrs,
+                                                 needs_angles=needs_angles,
+                                                 cutoff=cutoff)
     else:
 
         central_data = False
@@ -512,7 +515,12 @@ def make_all_loaders(weight_path,
     return loaders
 
 
-def dsets_from_folder(weight_path, max_confs, rank):
+def dsets_from_folder(weight_path, 
+                      max_confs, 
+                      rank,
+                      needs_nbrs,
+                      needs_angles,
+                      cutoff):
     """
     Load train, val, and test datasets from the main folder.
     Args:
@@ -529,7 +537,13 @@ def dsets_from_folder(weight_path, max_confs, rank):
     datasets = []
     for name in names:
         data_path = os.path.join(weight_path, "{}.pth.tar".format(name))
-        datasets.append(load_dset(data_path, max_confs, rank))
+        dset = load_dset(path=path,
+                         max_confs=max_confs,
+                         rank=rank,
+                         needs_nbrs=needs_nbrs,
+                         needs_angles=needs_angles,
+                         cutoff=cutoff)
+        datasets.append(dset)
 
     return datasets
 

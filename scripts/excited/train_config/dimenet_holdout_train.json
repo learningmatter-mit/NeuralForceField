@@ -43,7 +43,7 @@
                 "test": "test_sample_dict.json"
             }
         },
-        "batch_size": 64,
+        "batch_size": 48,
         "mini_batches": 1,
         "checkpoints_to_keep": 3,
         "del_grad_interval": 100,
