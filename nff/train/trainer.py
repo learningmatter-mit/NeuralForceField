@@ -6,7 +6,6 @@ Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/s
 import os
 import numpy as np
 import torch
-import sys
 import copy
 import pickle
 from tqdm import tqdm
@@ -31,12 +30,12 @@ class Trainer:
        model (torch.Module): model to be trained.
        loss_fn (callable): training loss function.
        optimizer (torch.optim.optimizer.Optimizer): training optimizer.
-       train_loader (torch.utils.data.DataLoader): data loader for 
+       train_loader (torch.utils.data.DataLoader): data loader for
          training set.
-       validation_loader (torch.utils.data.DataLoader): data loader for 
+       validation_loader (torch.utils.data.DataLoader): data loader for
          validation set.
        checkpoints_to_keep (int, optional): number of saved checkpoints.
-       checkpoint_interval (int, optional): intervals after which checkpoints 
+       checkpoint_interval (int, optional): intervals after which checkpoints
          is saved.
        hooks (list, optional): hooks to customize training process.
        loss_is_normalized (bool, optional): if True, the loss per data point will be
@@ -60,7 +59,7 @@ class Trainer:
        metric_objective (str, optional): if metric_as_loss is specified, metric_objective indicates
             whether the goal is to maximize or minimize `metric_as_loss`.
        epoch_cutoff (int, optional): cut off an epoch after `epoch_cutoff` batches.
-            This is useful if you want to validate the model more often than after 
+            This is useful if you want to validate the model more often than after
             going through all data points once.
    """
 
@@ -149,12 +148,12 @@ class Trainer:
     def tqdm_enum(self, iter):
         i = 0
         if self.base:
-            for y in tqdm(iter):
-                yield i, y
+            for y_val in tqdm(iter):
+                yield i, y_val
                 i += 1
         else:
-            for y in iter:
-                yield i, y
+            for y_val in iter:
+                yield i, y_val
                 i += 1
 
     def to(self, device):
@@ -446,8 +445,8 @@ class Trainer:
                 if (self.epoch % self.validation_interval == 0 or self._stop):
                     self.validate(device)
 
-                for h in self.hooks:
-                    h.on_epoch_end(self)
+                for hook in self.hooks:
+                    hook.on_epoch_end(self)
 
             # Training Ends
             # run hooks & store checkpoint
@@ -459,8 +458,8 @@ class Trainer:
                 self.store_checkpoint()
 
         except Exception as e:
-            for h in self.hooks:
-                h.on_train_failed(self)
+            for hook in self.hooks:
+                hook.on_train_failed(self)
 
             raise e
 
@@ -468,7 +467,7 @@ class Trainer:
         """
         Get the folders inside the model folder that contain information
         about the other parallel training processes.
-        Args: 
+        Args:
             None
         Returns:
             par_folders (list): paths to the folders of all parallel
@@ -507,10 +506,10 @@ class Trainer:
 
         info_file = os.path.join(
             self_folder, "val_epoch_{}".format(self.epoch))
-        with open(info_file, "w") as f:
+        with open(info_file, "w") as f_open:
             loss_float = val_loss.item()
             string = f"{loss_float},{n_val}"
-            f.write(string)
+            f_open.write(string)
 
     def load_val_loss(self):
         """
@@ -540,8 +539,8 @@ class Trainer:
                     folder, "val_epoch_{}".format(self.epoch))
                 # try opening the file and getting the value
                 try:
-                    with open(val_file, "r") as f:
-                        text = f.read()
+                    with open(val_file, "r") as f_open:
+                        text = f_open.read()
                     val_loss = float(text.split(",")[0])
                     num_mols = int(text.split(",")[1])
 
@@ -602,16 +601,16 @@ class Trainer:
 
         self._model.eval()
 
-        for h in self.hooks:
-            h.on_validation_begin(self)
+        for hook in self.hooks:
+            hook.on_validation_begin(self)
 
         val_loss = 0.0
         n_val = 0
 
         for val_batch in self.validation_loader:
 
-            for h in self.hooks:
-                h.on_validation_batch_begin(self)
+            for hook in self.hooks:
+                hook.on_validation_batch_begin(self)
 
             # append batch_size
             if self.mol_loss_norm:
@@ -621,7 +620,7 @@ class Trainer:
                 vsize = val_batch['nxyz'].size(0)
 
             n_val += vsize
-            val_batch, results, mini_loss, use_device = self.call_and_loss(
+            val_batch, results, _, use_device = self.call_and_loss(
                 batch=val_batch,
                 device=device,
                 calc_loss=False)
@@ -637,8 +636,8 @@ class Trainer:
 
             else:
                 val_loss += val_batch_loss
-            for h in self.hooks:
-                h.on_validation_batch_end(self, val_batch, results)
+            for hook in self.hooks:
+                hook.on_validation_batch_end(self, val_batch, results)
 
         if test:
             return
