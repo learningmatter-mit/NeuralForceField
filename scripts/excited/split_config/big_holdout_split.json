@@ -128,7 +128,8 @@
 			"Cc1cc(C)c(/N=N/c2ccccc2)c(C)c1",
 			"c1ccc(/N=N/c2cccc3ccccc23)cc1",
 			"c1ccc(/N=N\\c2cccc3ccccc23)cc1"
-				]
+			]
+        }
     },
     "needs_nbrs": false,
     "needs_angles": false
