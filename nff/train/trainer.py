@@ -19,7 +19,6 @@ from nff.train.hooks.scheduling import ReduceLROnPlateauHook
 MAX_EPOCHS = 100
 PAR_INFO_FILE = "info.json"
 
-
 class Trainer:
     r"""Class to train a model.
 
@@ -198,6 +197,15 @@ class Trainer:
 
         return model(batch, **self.model_kwargs)
 
+    def call_model(self, batch, train):
+
+        if (self.torch_parallel and self.parallel) and not train:
+            model = copy.deepcopy(self._model.module)
+        else:
+            model = self._model
+
+        return model(batch, **self.model_kwargs)
+
     @property
     def state_dict(self):
         state_dict = {
@@ -321,38 +329,6 @@ class Trainer:
         if not self.grad_is_nan():
             self.optimizer.step()
 
-    def call_and_loss(self,
-                      batch,
-                      device,
-                      calc_loss):
-
-        use_device = device
-
-        while True:
-            try:
-                batch = batch_to(batch, use_device)
-                if use_device != device:
-                    self.to(use_device)
-                results = self.call_model(batch, train=True)
-                mini_loss = self.get_loss(batch, results)
-                if calc_loss:
-                    self.loss_backward(mini_loss)
-
-                if use_device != device:
-                    self.to(device)
-                break
-
-            except RuntimeError as err:
-                if 'CUDA out of memory' in str(err):
-                    print(("CUDA out of memory. Doing this batch "
-                           "on cpu."))
-                    use_device = "cpu"
-                    torch.cuda.empty_cache()
-                else:
-                    raise err
-
-        return batch, results, mini_loss
-
     def train(self, device, n_epochs=MAX_EPOCHS):
         """Train the model for the given number of epochs on a specified
         device.
@@ -390,14 +366,15 @@ class Trainer:
                     break
 
                 for j, batch in self.tqdm_enum(self.train_loader):
+
+                    batch = batch_to(batch, device)
+
                     for h in self.hooks:
                         h.on_batch_begin(self, batch)
 
-                    batch, results, mini_loss = self.call_and_loss(
-                        batch=batch,
-                        device=device,
-                        calc_loss=True)
-
+                    results = self.call_model(batch, train=True)
+                    mini_loss = self.get_loss(batch, results)
+                    self.loss_backward(mini_loss)
                     if not torch.isnan(mini_loss):
                         loss += mini_loss.cpu().detach().to(device)
 
@@ -610,8 +587,7 @@ class Trainer:
 
         for val_batch in self.validation_loader:
 
-            for h in self.hooks:
-                h.on_validation_batch_begin(self)
+            val_batch = batch_to(val_batch, device)
 
             # append batch_size
             if self.mol_loss_norm:
@@ -621,13 +597,13 @@ class Trainer:
                 vsize = val_batch['nxyz'].size(0)
 
             n_val += vsize
-            val_batch, results, mini_loss = self.call_and_loss(
-                batch=val_batch,
-                device=device,
-                calc_loss=False)
 
+            for h in self.hooks:
+                h.on_validation_batch_begin(self)
+
+            results = self.call_model(val_batch, train=False)
             # detach from the graph
-            results = batch_detach(results)
+            results = batch_to(batch_detach(results), device)
 
             val_batch_loss = self.loss_fn(
                 val_batch, results).data.cpu().numpy()
@@ -637,6 +613,7 @@ class Trainer:
 
             else:
                 val_loss += val_batch_loss
+
             for h in self.hooks:
                 h.on_validation_batch_end(self, val_batch, results)
 
