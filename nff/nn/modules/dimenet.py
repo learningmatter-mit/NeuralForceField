@@ -171,7 +171,7 @@ class ResidualBlock(nn.Module):
         Args:
             m_ji (torch.Tensor): edge vector
         Returns:
-            residual + m_ji (torch.Tensor): 
+            residual + m_ji (torch.Tensor):
                 the edge vector plus the residual
 
         """
@@ -304,6 +304,86 @@ class DirectedMessage(nn.Module):
         return out
 
 
+class DirectedMessagePP(nn.Module):
+    def __init__(self,
+                 activation,
+                 embed_dim,
+                 n_rbf,
+                 n_spher,
+                 l_spher,
+                 int_dim,
+                 basis_emb_dim):
+
+        super().__init__()
+
+        self.m_kj_dense = get_dense(embed_dim,
+                                    embed_dim,
+                                    activation=activation,
+                                    bias=True)
+        self.e_dense = nn.Sequential(get_dense(n_rbf,
+                                               basis_emb_dim,
+                                               activation=None,
+                                               bias=False),
+                                     get_dense(basis_emb_dim,
+                                               embed_dim,
+                                               activation=None,
+                                               bias=False))
+
+        self.a_dense = nn.Sequential(get_dense(n_spher * l_spher,
+                                               basis_emb_dim,
+                                               activation=None,
+                                               bias=False),
+                                     get_dense(basis_emb_dim,
+                                               int_dim,
+                                               activation=None,
+                                               bias=False))
+
+        self.down_conv = get_dense(embed_dim,
+                                   int_dim,
+                                   activation=activation,
+                                   bias=False)
+
+        self.up_conv = get_dense(int_dim,
+                                 embed_dim,
+                                 activation=activation,
+                                 bias=False)
+
+    def forward(self,
+                m_ji,
+                e_rbf,
+                a_sbf,
+                kj_idx,
+                ji_idx):
+        """
+        Args:
+            m_ji (torch.Tensor): edge vector
+            e_rbf (torch.Tensor): radial basis representation
+                of the distances
+            a_sbf (torch.Tensor): spherical basis representation
+                of the distances and angles
+            kj_idx (torch.LongTensor): nbr_list indices corresponding
+                to the k,j indices in the angle list.
+            ji_idx (torch.LongTensor): nbr_list indices corresponding
+                to the j,i indices in the angle list.
+        Returns:
+            out (torch.Tensor): aggregated angle and distance information
+                to be added to m_ji.
+        """
+
+        e_ji = self.e_dense(e_rbf[ji_idx])
+        m_kj = self.m_kj_dense(m_ji[kj_idx])
+        a = self.a_dense(a_sbf)
+
+        edge_message = self.down_conv(m_kj * e_ji)
+        aggr = edge_message * a
+        out = self.up_conv(scatter_add(aggr.transpose(0, 1),
+                                       ji_idx,
+                                       dim_size=m_ji.shape[0]
+                                       ).transpose(0, 1))
+
+        return out
+
+
 class InteractionBlock(nn.Module):
     """
     Block for aggregating distance and angle information
@@ -315,7 +395,10 @@ class InteractionBlock(nn.Module):
                  activation,
                  n_spher,
                  l_spher,
-                 n_bilinear):
+                 n_bilinear,
+                 int_dim=None,
+                 basis_emb_dim=None,
+                 use_pp=False):
         """
         Args:
             embed_dim (int): embedding size
@@ -343,13 +426,25 @@ class InteractionBlock(nn.Module):
         )
 
         # make a block for getting the directed messages
-        self.directed_block = DirectedMessage(
-            activation=activation,
-            embed_dim=embed_dim,
-            n_rbf=n_rbf,
-            n_spher=n_spher,
-            l_spher=l_spher,
-            n_bilinear=n_bilinear)
+
+        if use_pp:
+            self.directed_block = DirectedMessagePP(
+                activation=activation,
+                embed_dim=embed_dim,
+                n_rbf=n_rbf,
+                n_spher=n_spher,
+                l_spher=l_spher,
+                int_dim=int_dim,
+                basis_emb_dim=basis_emb_dim)
+
+        else:
+            self.directed_block = DirectedMessage(
+                activation=activation,
+                embed_dim=embed_dim,
+                n_rbf=n_rbf,
+                n_spher=n_spher,
+                l_spher=l_spher,
+                n_bilinear=n_bilinear)
 
         # dense layers for m_ji and for what comes after
         # the residual blocks
@@ -414,7 +509,9 @@ class OutputBlock(nn.Module):
     def __init__(self,
                  embed_dim,
                  n_rbf,
-                 activation):
+                 activation,
+                 use_pp=False,
+                 out_dim=None):
         """
         Args:
             embed_dim (int): embedding size
@@ -431,20 +528,25 @@ class OutputBlock(nn.Module):
                                     embed_dim,
                                     activation=None,
                                     bias=False)
-        # dense layers
-        self.dense_layers = nn.ModuleList(
-            [
-                get_dense(embed_dim,
-                          embed_dim,
-                          activation=activation,
-                          bias=True)
-                for _ in range(3)
-            ])
-        # final dense layer without bias or activation
-        self.dense_layers.append(get_dense(embed_dim,
-                                           embed_dim,
-                                           activation=None,
-                                           bias=False))
+        out_dense = []
+        if use_pp:
+            out_dense.append(get_dense(embed_dim,
+                                       out_dim,
+                                       activation=None,
+                                       bias=False))
+        else:
+            out_dim = embed_dim
+
+        out_dense += [get_dense(out_dim,
+                                out_dim,
+                                activation=activation,
+                                bias=True)
+                      for _ in range(3)]
+        out_dense.append(get_dense(out_dim,
+                                   out_dim,
+                                   activation=None,
+                                   bias=False))
+        self.out_dense = nn.Sequential(*out_dense)
 
     def forward(self, m_ji, e_rbf, nbr_list, num_atoms):
 
@@ -464,10 +566,7 @@ class OutputBlock(nn.Module):
         node_feats = scatter_add(prod.transpose(0, 1),
                                  nbr_list[:, 1],
                                  dim_size=num_atoms).transpose(0, 1)
-
         # Apply the dense layers
-
-        for dense in self.dense_layers:
-            node_feats = dense(node_feats)
+        node_feats = self.out_dense(node_feats)
 
         return node_feats
