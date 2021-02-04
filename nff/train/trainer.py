@@ -204,7 +204,7 @@ class Trainer:
             "step": self.step,
             "best_loss": self.best_loss,
             "optimizer": self.optimizer.state_dict(),
-            "hooks": [h.state_dict for h in self.hooks],
+            "hooks": [hook.state_dict for hook in self.hooks],
         }
         if self.torch_parallel:
             state_dict["model"] = self._model.module.state_dict()
@@ -220,8 +220,8 @@ class Trainer:
         self.optimizer.load_state_dict(state_dict["optimizer"])
         self._load_model_state_dict(state_dict["model"])
 
-        for h, s in zip(self.hooks, self.state_dict["hooks"]):
-            h.state_dict = s
+        for hook, state in zip(self.hooks, self.state_dict["hooks"]):
+            hook.state_dict = state
 
     def store_checkpoint(self):
         chkpt = os.path.join(
@@ -371,10 +371,10 @@ class Trainer:
         self.optimizer.zero_grad()
         self.save_as_best()
 
-        for h in self.hooks:
-            h.on_train_begin(self)
-            if hasattr(h, "mini_batches"):
-                h.mini_batches = self.mini_batches
+        for hook in self.hooks:
+            hook.on_train_begin(self)
+            if hasattr(hook, "mini_batches"):
+                hook.mini_batches = self.mini_batches
 
         try:
             for _ in range(n_epochs):
@@ -382,15 +382,15 @@ class Trainer:
                 self._model.train()
                 self.epoch += 1
 
-                for h in self.hooks:
-                    h.on_epoch_begin(self)
+                for hook in self.hooks:
+                    hook.on_epoch_begin(self)
 
                 if self._stop:
                     break
 
                 for j, batch in self.tqdm_enum(self.train_loader):
-                    for h in self.hooks:
-                        h.on_batch_begin(self, batch)
+                    for hook in self.hooks:
+                        hook.on_batch_begin(self, batch)
 
                     batch, results, mini_loss, _ = self.call_and_loss(
                         batch=batch,
@@ -414,8 +414,8 @@ class Trainer:
                         self.optim_step(batch_num=eff_batches,
                                         device=device)
 
-                        for h in self.hooks:
-                            h.on_batch_end(self, batch, results, loss)
+                        for hook in self.hooks:
+                            hook.on_batch_end(self, batch, results, loss)
 
                         # reset loss and the optimizer grad
 
@@ -451,8 +451,8 @@ class Trainer:
             # Training Ends
             # run hooks & store checkpoint
 
-            for h in self.hooks:
-                h.on_train_ends(self)
+            for hook in self.hooks:
+                hook.on_train_ends(self)
 
             if self.base:
                 self.store_checkpoint()
@@ -653,14 +653,14 @@ class Trainer:
             self.save_val_loss(val_loss, n_val)
             val_loss = self.load_val_loss()
 
-        for h in self.hooks:
+        for hook in self.hooks:
             # delay this until after we know what the real
             # val loss is (e.g. if it's from a metric)
-            if isinstance(h, ReduceLROnPlateauHook):
+            if isinstance(hook, ReduceLROnPlateauHook):
                 continue
 
-            h.on_validation_end(self, val_loss)
-            metric_dic = getattr(h, "metric_dic", None)
+            hook.on_validation_end(self, val_loss)
+            metric_dic = getattr(hook, "metric_dic", None)
             if metric_dic is None:
                 continue
             if self.metric_as_loss in metric_dic:
@@ -668,10 +668,10 @@ class Trainer:
                 if self.metric_objective.lower() == "maximize":
                     val_loss *= -1
 
-        for h in self.hooks:
-            if not isinstance(h, ReduceLROnPlateauHook):
+        for hook in self.hooks:
+            if not isinstance(hook, ReduceLROnPlateauHook):
                 continue
-            h.on_validation_end(self, val_loss)
+            hook.on_validation_end(self, val_loss)
 
         if self.best_loss > val_loss:
             self.best_loss = val_loss
