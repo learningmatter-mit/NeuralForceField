@@ -1036,7 +1036,8 @@ def train_sequential(weight_path,
                      base_keys,
                      grad_keys,
                      base,
-                     device):
+                     device,
+                     reset_trainer):
 
     train_params, num_types = get_train_params(params)
     loss_coefs = train_params.get("loss_coefs", [None] * num_types)
@@ -1076,7 +1077,7 @@ def train_sequential(weight_path,
             global_rank=rank,
             **trainer_kwargs)
 
-        if i != 0:
+        if i != 0 or reset_trainer:
             trainer = update_trainer(
                 trainer,
                 optimizer=optimizer,
@@ -1099,7 +1100,8 @@ def train(gpu,
           grad_keys,
           needs_nbrs,
           needs_angles,
-          cutoff):
+          cutoff,
+          reset_trainer):
     """
     Train a model in parallel.
     Args:
@@ -1178,7 +1180,8 @@ def train(gpu,
                                base_keys=base_keys,
                                grad_keys=grad_keys,
                                base=base,
-                               device=device)
+                               device=device,
+                               reset_trainer=reset_trainer)
 
     log_train('model saved in ' + weight_path)
 
@@ -1210,13 +1213,15 @@ def add_args(all_params):
     needs_nbrs = params.get("needs_nbrs", True)
     needs_angles = params.get("needs_angles", False)
     cutoff = params.get("cutoff", DEFAULT_CUTOFF)
+    reset_trainer = params.get("reset_trainer", False)
 
     args = [metric_names,
             base_keys,
             grad_keys,
             needs_nbrs,
             needs_angles,
-            cutoff]
+            cutoff,
+            reset_trainer]
 
     return args
 
