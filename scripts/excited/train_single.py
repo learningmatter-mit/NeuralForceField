@@ -804,13 +804,9 @@ def optim_loss_hooks(model,
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
     optimizer = Adam(trainable_params, lr=lr)
 
-    if loss_coef is not None:
-        loss_builder = getattr(loss, "build_{}_loss".format(loss_type))
-        loss_fn = loss_builder(loss_coef=loss_coef)
-    elif multi_loss_dict is not None:
-        loss_fn = loss.build_multi_loss(multi_loss_dict)
-    else:
-        raise Exception("Must specify either `loss_coef` or `multi_loss_dict`")
+    loss_fn = build_loss(loss_coef=loss_coef,
+                         loss_type=loss_type,
+                         multi_loss_dict=multi_loss_dict)
 
     # make the train metrics
     train_metrics = []
@@ -949,11 +945,27 @@ def load_params(file):
     return out
 
 
+def build_loss(loss_coef,
+               loss_type,
+               multi_loss_dict):
+
+    if loss_coef is not None:
+        loss_builder = getattr(loss, "build_{}_loss".format(loss_type))
+        loss_fn = loss_builder(loss_coef=loss_coef)
+    elif multi_loss_dict is not None:
+        loss_fn = loss.build_multi_loss(multi_loss_dict)
+    else:
+        raise Exception("Must specify either `loss_coef` or `multi_loss_dict`")
+
+    return loss_fn
+
+
 def update_trainer(trainer,
                    optimizer,
                    new_lr,
                    loss_type,
-                   loss_coef):
+                   loss_coef,
+                   multi_loss_dict):
     """
     Change the loss function after a model has been trained for
     a few epochs. Useful e.g. for conical intersection models where
@@ -969,8 +981,10 @@ def update_trainer(trainer,
     trainer.optimizer = optimizer
 
     # build and set the new loss function
-    loss_builder = getattr(loss, "build_{}_loss".format(loss_type))
-    loss_fn = loss_builder(loss_coef=loss_coef)
+
+    loss_fn = build_loss(loss_coef=loss_coef,
+                         loss_type=loss_type,
+                         multi_loss_dict=multi_loss_dict)
     trainer.loss_fn = loss_fn
 
     # You want to set up the parameters of the trainer so that
@@ -987,7 +1001,7 @@ def update_trainer(trainer,
 
 def get_train_params(params):
 
-    main_keys = ['loss_type',
+    main_keys = ['loss',
                  'loss_coef',
                  'multi_loss_dict']
 
@@ -1005,10 +1019,16 @@ def get_train_params(params):
         val = params[key]
         if key == 'loss_coef' and isinstance(key, str):
             val = json.loads(val)
-        if isinstance(val, list):
-            train_params[f"{key}s"] = val
+
+        if key.endswith("s"):
+            plural_key = key + "es"
         else:
-            train_params[f"{key}s"] = [val]
+            plural_key = key + "s"
+
+        if isinstance(val, list):
+            train_params[plural_key] = val
+        else:
+            train_params[plural_key] = [val]
 
     use_key = [key for key in main_keys if key in
                train_params][0]
@@ -1041,7 +1061,7 @@ def train_sequential(weight_path,
 
     train_params, num_types = get_train_params(params)
     loss_coefs = train_params.get("loss_coefs", [None] * num_types)
-    loss_types = train_params.get("loss_types", [None] * num_types)
+    loss_types = train_params.get("losses", [None] * num_types)
     multi_loss_dicts = train_params.get("multi_loss_dicts",
                                         [None] * num_types)
 
@@ -1082,8 +1102,9 @@ def train_sequential(weight_path,
                 trainer,
                 optimizer=optimizer,
                 new_lr=train_params["lr"][i],
-                loss_type=train_params["loss_types"][i],
-                loss_coef=train_params["loss_coefs"][i])
+                loss_type=loss_types[i],
+                loss_coef=loss_coefs[i],
+                multi_loss_dict=multi_loss_dicts[i])
 
         trainer.train(device=device,
                       n_epochs=train_params["max_epochs"][i])
