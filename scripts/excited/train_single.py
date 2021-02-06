@@ -965,7 +965,8 @@ def update_trainer(trainer,
                    new_lr,
                    loss_type,
                    loss_coef,
-                   multi_loss_dict):
+                   multi_loss_dict,
+                   train_hooks):
     """
     Change the loss function after a model has been trained for
     a few epochs. Useful e.g. for conical intersection models where
@@ -995,6 +996,10 @@ def update_trainer(trainer,
     # loss function)
 
     trainer.best_loss = float("inf")
+
+    # new hooks or else the other ones might cause you to end early or other
+    # weird things from the previous iteration
+    trainer.hooks = train_hooks
 
     return trainer
 
@@ -1106,7 +1111,8 @@ def train_sequential(weight_path,
                 new_lr=train_params["lr"][i],
                 loss_type=loss_types[i],
                 loss_coef=loss_coefs[i],
-                multi_loss_dict=multi_loss_dicts[i])
+                multi_loss_dict=multi_loss_dicts[i],
+                train_hooks=train_hooks)
 
         trainer.train(device=device,
                       n_epochs=train_params["max_epochs"][i])
