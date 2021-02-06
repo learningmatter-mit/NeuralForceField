@@ -14,11 +14,11 @@ source deactivate
 source ~/.bashrc
 source activate nff
 
-# CONFIG="train_config/test_config.json"
-# CONFIG="train_config/dimenet_holdout_train.json"
-# CONFIG="train_config/dimenet_rand_train.json"
-CONFIG="train_config/schnet_holdout_train.json"
-# CONFIG="train_config/schnet_random_train.json"
+# CONFIG="../train_config/ test_config.json"
+# CONFIG="../train_config/ dimenet_holdout_train.json"
+# CONFIG="../train_config/ dimenet_rand_train.json"
+CONFIG="../train_config/ schnet_holdout_train.json"
+# CONFIG="../train_config/ schnet_random_train.json"
 
 # change to the number of GPUs you're using per node
 export SLURM_GPUS_PER_NODE=1
