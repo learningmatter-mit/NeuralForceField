@@ -772,12 +772,13 @@ def optim_loss_hooks(model,
                      base,
                      rank,
                      world_size,
-                     loss_type,
-                     loss_coef,
                      lr,
                      lr_patience,
                      lr_decay,
-                     lr_min):
+                     lr_min,
+                     loss_type=None,
+                     loss_coef=None,
+                     multi_loss_dict=None):
     """
     Make the optimizer, the loss function, and the custom hooks for the trainer.
     Args:
@@ -803,8 +804,13 @@ def optim_loss_hooks(model,
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
     optimizer = Adam(trainable_params, lr=lr)
 
-    loss_builder = getattr(loss, "build_{}_loss".format(loss_type))
-    loss_fn = loss_builder(loss_coef=loss_coef)
+    if loss_coef is not None:
+        loss_builder = getattr(loss, "build_{}_loss".format(loss_type))
+        loss_fn = loss_builder(loss_coef=loss_coef)
+    elif multi_loss_dict is not None:
+        loss_fn = loss.build_multi_loss(multi_loss_dict)
+    else:
+        raise Exception("Must specify either `loss_coef` or `multi_loss_dict`")
 
     # make the train metrics
     train_metrics = []
@@ -982,7 +988,8 @@ def update_trainer(trainer,
 def get_train_params(params):
 
     main_keys = ['loss_type',
-                 'loss_coef']
+                 'loss_coef',
+                 'multi_loss_dict']
 
     other_keys = ['lr',
                   'lr_patience',
@@ -993,6 +1000,8 @@ def get_train_params(params):
     train_params = {}
 
     for key in main_keys:
+        if key not in params:
+            continue
         val = params[key]
         if key == 'loss_coef' and isinstance(key, str):
             val = json.loads(val)
@@ -1001,7 +1010,9 @@ def get_train_params(params):
         else:
             train_params[f"{key}s"] = [val]
 
-    num_types = len(train_params['loss_coefs'])
+    use_key = [key for key in main_keys if key in
+               train_params][0]
+    num_types = len(train_params[use_key])
 
     for key in other_keys:
         val = params[key]
@@ -1028,6 +1039,10 @@ def train_sequential(weight_path,
                      device):
 
     train_params, num_types = get_train_params(params)
+    loss_coefs = train_params.get("loss_coefs", [None] * num_types)
+    loss_types = train_params.get("loss_types", [None] * num_types)
+    multi_loss_dicts = train_params.get("multi_loss_dicts",
+                                        [None] * num_types)
 
     for i in range(num_types):
 
@@ -1041,12 +1056,13 @@ def train_sequential(weight_path,
             base=base,
             rank=rank,
             world_size=world_size,
-            loss_type=train_params["loss_types"][i],
-            loss_coef=train_params["loss_coefs"][i],
             lr=train_params["lr"][i],
             lr_patience=train_params["lr_patience"][i],
             lr_decay=train_params["lr_decay"][i],
-            lr_min=train_params["lr_min"][i])
+            lr_min=train_params["lr_min"][i],
+            loss_type=loss_types[i],
+            loss_coef=loss_coefs[i],
+            multi_loss_dict=multi_loss_dicts[i])
 
         trainer = Trainer(
             model_path=weight_path,
