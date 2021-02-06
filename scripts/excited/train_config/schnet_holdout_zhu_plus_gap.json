@@ -139,7 +139,7 @@
         ],
 
         "weightpath": "/nfs/rafagblab001/saxelrod/dsets_switches",
-        "model_name": "schnet_holdout",
+        "model_name": "schnet_holdout_plus_gap",
         "mol_loss_norm": true,
         "seed": 0,
         "torch_par": false,
