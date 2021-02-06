@@ -14,7 +14,7 @@ source deactivate
 source ~/.bashrc
 source activate nff
 
-CONFIG="../train_config/ schnet_holdout_zhu.json"
+CONFIG="../train_config/schnet_holdout_zhu.json"
 
 # change to the number of GPUs you're using per node
 export SLURM_GPUS_PER_NODE=1
