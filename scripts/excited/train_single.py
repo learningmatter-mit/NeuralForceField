@@ -25,7 +25,7 @@ import torch.distributed as dist
 from torch.utils.data.distributed import DistributedSampler
 
 DEFAULTPARAMSFILE = 'job_info.json'
-DEFAULT_METRIC = "MeanAbsoluteError"
+DEFAULT_METRICS = ["MeanAbsoluteError"]
 DEFAULT_CUTOFF = 5.0
 
 
@@ -515,8 +515,8 @@ def make_all_loaders(weight_path,
     return loaders
 
 
-def dsets_from_folder(weight_path, 
-                      max_confs, 
+def dsets_from_folder(weight_path,
+                      max_confs,
                       rank,
                       needs_nbrs,
                       needs_angles,
@@ -688,18 +688,11 @@ def init_quants(node_rank, gpu, gpus, world_size, params):
     return rank, batch_size, base, log_train
 
 
-def make_stats(T,
+def make_stats(trainer,
                test_loader,
-               loss_fn,
                params,
                weight_path,
-               global_rank,
-               base,
-               world_size,
                device,
-               base_keys,
-               grad_keys,
-               trainer_kwargs,
                val_loader,
                log_train):
     """
@@ -723,7 +716,7 @@ def make_stats(T,
     """
 
     # old model
-    old_model = copy.deepcopy(T._model.to("cpu"))
+    old_model = copy.deepcopy(trainer._model.to("cpu"))
 
     # get best model and put into eval mode
     while True:
@@ -736,48 +729,55 @@ def make_stats(T,
             continue
 
     model.eval()
-    T._model = model.to(device)
+    trainer._model = model.to(device)
 
     # set the trainer validation loader to the test
     # loader so you can use its metrics to get the
     # performance on the test set
 
-    T.validation_loader = test_loader
+    trainer.validation_loader = test_loader
 
     # validate on test loader
-    T.validate(device, test=True)
+    trainer.validate(device, test=True)
 
     # get the metric performance
 
-    log_hook = [h for h in T.hooks if isinstance(h, hooks.PrintingHook)][0]
-    final_stats = log_hook.aggregate(T, test=True)
+    log_hook = [h for h in trainer.hooks if isinstance(
+        h, hooks.PrintingHook)][0]
+    final_stats = log_hook.aggregate(trainer, test=True)
 
     stat_path = os.path.join(weight_path, "test_stats.json")
     param_path = os.path.join(weight_path, "params.json")
 
-    with open(stat_path, 'w') as f:
-        json.dump(final_stats, f, sort_keys=True, indent=4)
+    with open(stat_path, 'w') as f_open:
+        json.dump(final_stats, f_open, sort_keys=True, indent=4)
 
-    with open(param_path, 'w') as f:
-        json.dump(params, f, sort_keys=True, indent=4)
+    with open(param_path, 'w') as f_open:
+        json.dump(params, f_open, sort_keys=True, indent=4)
 
     log_train(f"Test stats saved in {stat_path}")
     log_train(f"Model and training details saved in {param_path}")
 
     # put the validation loader and the old model back
-    T.validation_loader = val_loader
-    T._model = old_model.to(device)
+    trainer.validation_loader = val_loader
+    trainer._model = old_model.to(device)
 
 
-def optim_loss_hooks(params,
-                     model,
+def optim_loss_hooks(model,
+                     max_epochs,
                      metric_names,
                      base_keys,
                      grad_keys,
                      weight_path,
                      base,
                      rank,
-                     world_size):
+                     world_size,
+                     loss_type,
+                     loss_coef,
+                     lr,
+                     lr_patience,
+                     lr_decay,
+                     lr_min):
     """
     Make the optimizer, the loss function, and the custom hooks for the trainer.
     Args:
@@ -785,9 +785,9 @@ def optim_loss_hooks(params,
         model (nff.nn.models): NFF model
         metric_names (list[str]): names of the metrics you want to monitor
         base_keys (list[str]): names of properties the network is predicting
-        grad_keys (list[str]): names of any gradients of properites it's 
+        grad_keys (list[str]): names of any gradients of properites it's
             predicting. Should have the form [key + "_grad"] for all the keys
-            you want the gradient of. 
+            you want the gradient of.
         weight_path (str): path to the folder that the model is being trained in
         base (bool): whether this training process has global rank 0
         rank (int): local rank on the node
@@ -801,15 +801,8 @@ def optim_loss_hooks(params,
     """
 
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
-    optimizer = Adam(trainable_params, lr=params['lr'])
+    optimizer = Adam(trainable_params, lr=lr)
 
-    # loss function and training metrics
-    loss_coef = params['loss_coef']
-    if isinstance(loss_coef, str):
-        loss_coef = json.loads(loss_coef)
-
-    # build the loss functions
-    loss_type = params.get("loss", "mse")
     loss_builder = getattr(loss, "build_{}_loss".format(loss_type))
     loss_fn = loss_builder(loss_coef=loss_coef)
 
@@ -823,12 +816,12 @@ def optim_loss_hooks(params,
     # make the train hooks
 
     train_hooks = [
-        hooks.MaxEpochHook(params['max_epochs']),
+        hooks.MaxEpochHook(max_epochs),
         hooks.ReduceLROnPlateauHook(
             optimizer=optimizer,
-            patience=params.get('lr_patience'),
-            factor=params.get('lr_decay'),
-            min_lr=params.get('lr_min'),
+            patience=lr_patience,
+            factor=lr_decay,
+            min_lr=lr_min,
             window_length=1,
             stop_after_min=True
         )
@@ -945,9 +938,139 @@ def load_params(file):
     Returns:
         out (dict): config dictionary
     """
-    with open(file, "r") as f:
-        out = json.load(f)
+    with open(file, "r") as f_open:
+        out = json.load(f_open)
     return out
+
+
+def update_trainer(trainer,
+                   optimizer,
+                   new_lr,
+                   loss_type,
+                   loss_coef):
+    """
+    Change the loss function after a model has been trained for
+    a few epochs. Useful e.g. for conical intersection models where
+    you want to train with an energy/force MSE loss first to learn
+    the general features of the PES, and then add a term later that
+    strongly emphasizes getitng the gap right when it's small.
+    """
+
+    # new optimizer
+    model = trainer._model
+    trainable_params = filter(lambda p: p.requires_grad, model.parameters())
+    optimizer = Adam(trainable_params, lr=new_lr)
+    trainer.optimizer = optimizer
+
+    # build and set the new loss function
+    loss_builder = getattr(loss, "build_{}_loss".format(loss_type))
+    loss_fn = loss_builder(loss_coef=loss_coef)
+    trainer.loss_fn = loss_fn
+
+    # You want to set up the parameters of the trainer so that
+    # only models that come after the loss update can be the best
+    # ones (you don't want it giving you a model with the best value
+    # of the previous loss, because if you've changed the loss function
+    # then that means you want the model with the best value of *this*
+    # loss function)
+
+    trainer.best_loss = float("inf")
+
+    return trainer
+
+
+def get_train_params(params):
+
+    main_keys = ['loss_type',
+                 'loss_coef']
+
+    other_keys = ['lr',
+                  'lr_patience',
+                  'lr_decay',
+                  'lr_min'
+                  'max_epochs']
+
+    train_params = {}
+
+    for key in main_keys:
+        val = params[key]
+        if key == 'loss_coef' and isinstance(key, str):
+            val = json.loads(val)
+        if isinstance(val, list):
+            train_params[f"{key}s"] = val
+        else:
+            train_params[f"{key}s"] = [val]
+
+    num_types = len(train_params['loss_coefs'])
+
+    for key in other_keys:
+        val = params[key]
+        if isinstance(val, list):
+            train_params[key] = val
+        else:
+            train_params[key] = [val] * num_types
+
+    return train_params, num_types
+
+
+def train_sequential(weight_path,
+                     model,
+                     train_loader,
+                     val_loader,
+                     world_size,
+                     rank,
+                     trainer_kwargs,
+                     params,
+                     metric_names,
+                     base_keys,
+                     grad_keys,
+                     base,
+                     device):
+
+    train_params, num_types = get_train_params(params)
+
+    for i in range(num_types):
+
+        loss_fn, optimizer, train_hooks = optim_loss_hooks(
+            model,
+            max_epochs=train_params["max_epochs"][i],
+            metric_names=metric_names,
+            base_keys=base_keys,
+            grad_keys=grad_keys,
+            weight_path=weight_path,
+            base=base,
+            rank=rank,
+            world_size=world_size,
+            loss_type=train_params["loss_types"][i],
+            loss_coef=train_params["loss_coefs"][i],
+            lr=train_params["lr"][i],
+            lr_patience=train_params["lr_patience"][i],
+            lr_decay=train_params["lr_decay"][i],
+            lr_min=train_params["lr_min"][i])
+
+        trainer = Trainer(
+            model_path=weight_path,
+            model=model,
+            loss_fn=loss_fn,
+            optimizer=optimizer,
+            train_loader=train_loader,
+            validation_loader=val_loader,
+            hooks=train_hooks,
+            world_size=world_size,
+            global_rank=rank,
+            **trainer_kwargs)
+
+        if i != 0:
+            trainer = update_trainer(
+                trainer,
+                optimizer=optimizer,
+                new_lr=train_params["lr"][i],
+                loss_type=train_params["loss_types"][i],
+                loss_coef=train_params["loss_coefs"][i])
+
+        trainer.train(device=device,
+                      n_epochs=train_params["max_epochs"][i])
+    return trainer
 
 
 def train(gpu,
@@ -1023,55 +1146,33 @@ def train(gpu,
                        world_size=world_size,
                        weight_path=weight_path)
 
-    loss_fn, optimizer, train_hooks = optim_loss_hooks(
-        params=params,
-        model=model,
-        metric_names=metric_names,
-        base_keys=base_keys,
-        grad_keys=grad_keys,
-        weight_path=weight_path,
-        base=base,
-        rank=rank,
-        world_size=world_size
-    )
-
     trainer_kwargs = get_trainer_kwargs(params=params,
                                         weight_path=weight_path,
                                         world_size=world_size)
 
-    log_train("Training...")
-
-    T = Trainer(
-        model_path=weight_path,
-        model=model,
-        loss_fn=loss_fn,
-        optimizer=optimizer,
-        train_loader=train_loader,
-        validation_loader=val_loader,
-        hooks=train_hooks,
-        world_size=world_size,
-        global_rank=rank,
-        **trainer_kwargs
-    )
-
-    T.train(device=device, n_epochs=params['max_epochs'])
+    trainer = train_sequential(weight_path=weight_path,
+                               model=model,
+                               train_loader=train_loader,
+                               val_loader=val_loader,
+                               world_size=world_size,
+                               rank=rank,
+                               trainer_kwargs=trainer_kwargs,
+                               params=params,
+                               metric_names=metric_names,
+                               base_keys=base_keys,
+                               grad_keys=grad_keys,
+                               base=base,
+                               device=device)
 
     log_train('model saved in ' + weight_path)
 
     # make test stats
 
-    make_stats(T=T,
+    make_stats(trainer=trainer,
                test_loader=test_loader,
-               loss_fn=loss_fn,
                params=params,
                weight_path=weight_path,
-               global_rank=rank,
-               base=base,
-               world_size=world_size,
                device=device,
-               base_keys=base_keys,
-               grad_keys=grad_keys,
-               trainer_kwargs=trainer_kwargs,
                val_loader=val_loader,
                log_train=log_train)
 
@@ -1082,12 +1183,12 @@ def add_args(all_params):
     Args:
         all_params (dict): config dictionary
     Returns:
-        args (list): extra arguments in `train` 
+        args (list): extra arguments in `train`
     """
 
     params = {**all_params['train_params'],
               **all_params['model_params']}
-    metric_names = params.get("metrics", [DEFAULT_METRIC])
+    metric_names = params.get("metrics", DEFAULT_METRICS)
     base_keys = params.get("base_keys", params.get("output_keys", ["energy"]))
     grad_keys = params.get("grad_keys", ["energy_grad"])
     needs_nbrs = params.get("needs_nbrs", True)
