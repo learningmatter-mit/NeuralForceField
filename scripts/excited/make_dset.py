@@ -1,3 +1,11 @@
+import argparse
+from nff.data import Dataset, concatenate_dict, split_train_validation_test
+from pgmols.models import Calc
+from jobs.models import Job, JobConfig
+from analysis.metalation_energy import custom_stoich
+from tqdm import tqdm
+import torch
+import json
 import sys
 import os
 import django
@@ -15,15 +23,6 @@ sys.path.insert(0, NFFDIR)
 
 os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
 django.setup()
-
-import json
-import torch
-from tqdm import tqdm
-from analysis.metalation_energy import custom_stoich
-from jobs.models import Job, JobConfig
-from pgmols.models import Calc
-from nff.data import Dataset, concatenate_dict, split_train_validation_test
-import argparse
 
 
 CONFIG_DIC = {"bhhlyp_6-31gs_sf_tddft_engrad":
@@ -216,6 +215,32 @@ def remove_outliers(dset,
     return dset
 
 
+def add_deltas(dset,
+               deltas):
+    if deltas is None:
+        return dset
+
+    new_props = {}
+
+    for delta_pair in deltas:
+        top_val = dset.props[delta_pair[0]]
+        if isinstance(top_val, list):
+            delta = [torch.zeros_like(val) for val in top_val]
+        else:
+            delta = torch.zeros_like(top_val)
+
+        for i, batch in enumerate(dset):
+            this_delta = batch[delta_pair[0]] - batch[delta_pair[1]]
+            delta[i] = this_delta
+
+        new_key = f"{delta_pair[0]}_{delta_pair[1]}_delta"
+        new_props[new_key] = delta
+
+    dset.props.update(new_props)
+
+    return dset
+
+
 def save_dset(overall_dict,
               required_keys,
               save_dir,
@@ -227,11 +252,15 @@ def save_dset(overall_dict,
               max_std_force,
               max_val_en,
               max_val_force,
-              make_splits=False):
+              make_splits=False,
+              deltas=None):
 
     overall_dict = trim_overall(overall_dict, required_keys)
+
     props = concatenate_dict(*list(overall_dict.values()))
     dset = Dataset(props=props, units='atomic')
+    dset = add_deltas(dset, deltas)
+
     save_folder = os.path.join(save_dir, str(idx))
     if not os.path.isdir(save_folder):
         os.makedirs(save_folder)
@@ -276,11 +305,11 @@ def get_job_pks(method_name,
     config_names = [key for key, val in CONFIG_DIC.items() if
                     val['name'] == method_name and
                     val['description'] == method_description]
- 
+
     config_str = ", ".join(config_names[:-1])
     if len(config_names) >= 2:
         config_str += f" or {config_names[-1]}"
-    
+
     print(f"Querying all jobs with config {config_str}...")
     job_pks = list(JobConfig.objects.filter(name__in=config_names)
                    .order_by("?").values_list('job__pk', flat=True))
@@ -381,6 +410,7 @@ def main(group_name,
          molsets=None,
          chunk_size=CHUNK_SIZE,
          make_splits=False,
+         deltas=None,
          **kwargs):
 
     max_geoms, max_geoms_per_dset, molsets = parse_optional(
@@ -393,7 +423,7 @@ def main(group_name,
 
     ####
     # job_pks = list(Job.objects.filter(parentgeom__parentjob__config__name__contains='bp86',
-    #  	pk__in=job_pks).values_list('pk', flat=True))
+    #   pk__in=job_pks).values_list('pk', flat=True))
     ####
 
     geom_count = 0
@@ -433,7 +463,8 @@ def main(group_name,
                           max_std_force=max_std_force,
                           max_val_en=max_val_en,
                           max_val_force=max_val_force,
-                          make_splits=make_splits)
+                          make_splits=make_splits,
+                          deltas=deltas)
 
                 i += 1
                 overall_dict = {}
