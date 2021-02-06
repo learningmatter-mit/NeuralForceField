@@ -998,6 +998,12 @@ def update_trainer(trainer,
 
     return trainer
 
+def plural(key):
+    if key.endswith("s"):
+        plural_key = key + "es"
+    else:
+        plural_key = key + "s"
+    return plural_key
 
 def get_train_params(params):
 
@@ -1008,7 +1014,7 @@ def get_train_params(params):
     other_keys = ['lr',
                   'lr_patience',
                   'lr_decay',
-                  'lr_min'
+                  'lr_min',
                   'max_epochs']
 
     train_params = {}
@@ -1020,17 +1026,13 @@ def get_train_params(params):
         if key == 'loss_coef' and isinstance(key, str):
             val = json.loads(val)
 
-        if key.endswith("s"):
-            plural_key = key + "es"
-        else:
-            plural_key = key + "s"
-
+        plural_key = plural(key)
         if isinstance(val, list):
             train_params[plural_key] = val
         else:
             train_params[plural_key] = [val]
 
-    use_key = [key for key in main_keys if key in
+    use_key = [plural(key) for key in main_keys if plural(key) in
                train_params][0]
     num_types = len(train_params[use_key])
 

@@ -120,13 +120,13 @@
         "lr": 0.0003,
         "lr_decay": 0.5,
         "lr_min": 5e-06,
-        "lr_patience": 5,
+        "lr_patience": 15,
         "max_epochs": 1000,
         "metrics": [
             "MeanAbsoluteError"
         ],
         "weightpath": "/nfs/rafagblab001/saxelrod/dsets_switches",
-        "model_name": "schnet_random",
+        "model_name": "schnet_random_patience_15",
         "mol_loss_norm": true,
         "seed": 0,
         "torch_par": false,
