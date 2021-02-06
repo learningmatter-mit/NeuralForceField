@@ -369,7 +369,6 @@ class Trainer:
         loss = torch.tensor(0.0).to(device)
         num_batches = 0
         self.optimizer.zero_grad()
-        self.save_as_best()
 
         for hook in self.hooks:
             hook.on_train_begin(self)
@@ -633,7 +632,6 @@ class Trainer:
 
             if self.loss_is_normalized or self.mol_loss_norm:
                 val_loss += val_batch_loss * vsize
-
             else:
                 val_loss += val_batch_loss
             for hook in self.hooks:
