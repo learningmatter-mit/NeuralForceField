@@ -130,7 +130,7 @@
                                        ]},
         "lr": 1e-5,
         "lr_decay": 0.5,
-        "lr_min": 5e-06,
+        "lr_min": 1e-07,
         "lr_patience": 15,
         "max_epochs": 1000,
         "metrics": [
