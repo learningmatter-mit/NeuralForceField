@@ -223,6 +223,10 @@ def add_deltas(dset,
     new_props = {}
 
     for delta_pair in deltas:
+        new_key = f"{delta_pair[0]}_{delta_pair[1]}_delta"
+        if new_key in dset.props:
+            continue
+
         top_val = dset.props[delta_pair[0]]
         if isinstance(top_val, list):
             delta = [torch.zeros_like(val) for val in top_val]
@@ -233,7 +237,6 @@ def add_deltas(dset,
             this_delta = batch[delta_pair[0]] - batch[delta_pair[1]]
             delta[i] = this_delta
 
-        new_key = f"{delta_pair[0]}_{delta_pair[1]}_delta"
         new_props[new_key] = delta
 
     dset.props.update(new_props)
@@ -422,7 +425,8 @@ def main(group_name,
                           method_description=method_description)
 
     ####
-    # job_pks = list(Job.objects.filter(parentgeom__parentjob__config__name__contains='bp86',
+    # job_pks = list(Job.objects.filter(
+    # parentgeom__parentjob__config__name__contains='bp86',
     #   pk__in=job_pks).values_list('pk', flat=True))
     ####
 

@@ -1098,10 +1098,25 @@ class DiabaticReadout(nn.Module):
 
     def add_gap(self, results):
 
+        # diabatic gap
+
         bottom_key = self.diabat_keys[0][0]
         top_key = self.diabat_keys[1][1]
         gap = results[top_key] - results[bottom_key]
         results.update({"abs_diabat_gap": abs(gap)})
+
+        # adiabatic gap
+        
+        num_states = len(self.energy_keys)
+        for i in range(num_states):
+            for j in range(num_states):
+                if j <= i:
+                    continue
+
+                upper_key = self.energy_keys[j]
+                lower_key = self.energy_keys[i]
+                gap = results[upper_key] - results[lower_key]
+                results.update({f"{upper_key}_{lower_key}_gap": gap})
 
         return results
 
