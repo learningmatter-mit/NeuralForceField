@@ -117,14 +117,14 @@
 
                            "zhu": [{"coef": 10,
                                    "params": {"loss_type": "cross_entropy",
-                                   "expected_gap": 0.00551,
+                                   "expected_gap": 0.00257353,
                                    "lower_energy": "energy_0",
                                    "upper_energy": "energy_1"}
                                    }],
 
                            "zhu_grad": [{"coef": 100,
                                          "params": {"loss_type": "mse",
-                                                    "expected_gap": 0.00551,
+                                                    "expected_gap": 0.00257353,
                                                     "lower_energy": "energy_0",
                                                     "upper_energy": "energy_1"}}
                                        ]},
