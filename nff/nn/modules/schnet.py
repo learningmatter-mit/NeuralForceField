@@ -1116,7 +1116,7 @@ class DiabaticReadout(nn.Module):
                 upper_key = self.energy_keys[j]
                 lower_key = self.energy_keys[i]
                 gap = results[upper_key] - results[lower_key]
-                results.update({f"{upper_key}_{lower_key}_gap": gap})
+                results.update({f"{upper_key}_{lower_key}_delta": gap})
 
         return results
 
