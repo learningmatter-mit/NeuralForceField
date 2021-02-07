@@ -113,7 +113,7 @@
                                     {"coef": 0.1, "params": {"key": "energy_1"}},
                                     {"coef": 1.0, "params": {"key": "energy_0_grad"}},
                                     {"coef": 1.0, "params": {"key": "energy_1_grad"}},
-                                    {"coef": 1.0, "params": {"key": "energy_1_energy_0_gap"}}
+                                    {"coef": 1.0, "params": {"key": "energy_1_energy_0_delta"}}
 ],
 
                            "zhu": [{"coef": 10,

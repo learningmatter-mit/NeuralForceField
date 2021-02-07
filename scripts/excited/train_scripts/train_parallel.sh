@@ -28,7 +28,7 @@ export LD_LIBRARY_PATH=lib/$CONDA_PREFIX/:$LD_LIBRARY_PATH
 export NFFDIR="$HOME/repo/nff/master/NeuralForceField"
 export PYTHONPATH=$NFFDIR:$PYTHON_PATH
 
-cmd="python train_parallel.py $CONFIG  "
+cmd="python ../train_parallel.py  $CONFIG  "
 echo $cmd
 eval $cmd
 
