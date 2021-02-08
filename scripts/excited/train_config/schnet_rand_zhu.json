@@ -137,7 +137,7 @@
         ],
 
         "weightpath": "/nfs/rafagblab001/saxelrod/dsets_switches",
-        "model_name": "schnet_random",
+        "model_name": "schnet_random_patience_15",
         "mol_loss_norm": true,
         "seed": 0,
         "torch_par": false,
