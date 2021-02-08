@@ -232,7 +232,6 @@
         "use_slurm": true,
         "needs_nbrs": true,
         "needs_angles": false,
-        "cutoff": 5.0,
-        "reset_trainer": true
+        "cutoff": 5.0
     }
 }
