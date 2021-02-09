@@ -222,8 +222,6 @@ class Trainer:
 
         for hook, state in zip(self.hooks, state_dict["hooks"]):
             hook.state_dict = state
-            if hasattr(getattr(hook, "scheduler", None), "optimizer"):
-                hook.scheduler.optimizer = self.optimizer
 
     def store_checkpoint(self):
         chkpt = os.path.join(

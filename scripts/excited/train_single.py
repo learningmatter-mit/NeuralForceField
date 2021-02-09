@@ -1049,14 +1049,23 @@ def train_sequential(weight_path,
             loss_coef=loss_coefs[i],
             multi_loss_dict=multi_loss_dicts[i])
 
+        # must copy to avoid the originals getting written over
+        # during load_state_dict in the trainer
+        copied_loss = copy.deepcopy(loss_fn)
+        copied_optim = copy.deeepcopy(optimizer)
+        copied_hooks = copy.deepcopy(train_hooks)
+        for hook in copied_hooks:
+            if hasattr(getattr(hook, "scheduler", None), "optimizer"):
+                hook.scheduler.optimizer = copied_optim
+
         trainer = Trainer(
             model_path=weight_path,
             model=model,
-            loss_fn=copy.deepcopy(loss_fn),
-            optimizer=copy.deepcopy(optimizer),
+            loss_fn=copied_loss,
+            optimizer=copied_optim,
             train_loader=train_loader,
             validation_loader=val_loader,
-            hooks=copy.deepcopy(train_hooks),
+            hooks=copied_hooks,
             world_size=world_size,
             global_rank=rank,
             **trainer_kwargs)
