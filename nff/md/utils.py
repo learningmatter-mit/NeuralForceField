@@ -94,3 +94,44 @@ def write_traj(filename, frames):
                 raise ValueError("wrong format")
     file.close()
 
+
+def csv_read(out_file):
+
+    """
+    Read a csv output file.
+    Args:
+        out_file (str): name of output file
+    Returns:
+        dic_list (list): list of dictionaries
+    """
+
+    with open(out_file, newline='') as csvfile:
+        # get the keys and the corresponding dictionaries
+        # being outputted
+        dic_list = list(csv.DictReader(csvfile))[0::2]
+
+    # the key ordering in the csv file may change; get `dic_keys`, the
+    # dictionary that converts the key order on the first line
+    # to the key order on every other line.
+    # (Also, weird things happen if you define `dic_keys` and
+    # `dic_list` within the same context manager, so must do it separately)
+    with open(out_file, newline='') as csvfile:
+        # this dictionary gives you a key: value pair
+        # of the form supposed key: actual key
+        dic_keys = list(csv.DictReader(csvfile))[1::2]
+
+    # fix the key ordering
+    new_dic_list = []
+    for regular_dic, key_dic in zip(dic_list, dic_keys):
+        new_dic = copy.deepcopy(regular_dic)
+        for key in regular_dic.keys():
+            new_dic[key_dic[key]] = regular_dic[key]
+        new_dic_list.append(new_dic)
+
+    for dic in new_dic_list:
+        for key, value in dic.items():
+            if 'nan' in value:
+                value = value.replace('nan', "float('nan')")
+            dic[key] = eval(value)
+
+    return new_dic_list
