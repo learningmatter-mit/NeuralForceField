@@ -1049,30 +1049,23 @@ def train_sequential(weight_path,
             loss_coef=loss_coefs[i],
             multi_loss_dict=multi_loss_dicts[i])
 
-        # save the hooks and optimizer in copied form
-        # to protect them from being updated
-
-        protect = {"loss_fn": copy.deepcopy(loss_fn),
-                   "optimizer": copy.deepcopy(optimizer),
-                   "train_hooks": copy.deepcopy(train_hooks)}
-
         trainer = Trainer(
             model_path=weight_path,
             model=model,
-            loss_fn=loss_fn,
-            optimizer=optimizer,
+            loss_fn=copy.deepcopy(loss_fn),
+            optimizer=copy.deepcopy(optimizer),
             train_loader=train_loader,
             validation_loader=val_loader,
-            hooks=train_hooks,
+            hooks=copy.deepcopy(train_hooks),
             world_size=world_size,
             global_rank=rank,
             **trainer_kwargs)
 
         if i != 0 or reset_trainer:
-            trainer.optimizer = protect["optimizer"]
-            trainer.loss_fn = protect["loss_fn"]
+            trainer.optimizer = optimizer
+            trainer.loss_fn = loss_fn
             trainer.best_loss = float("inf")
-            trainer.hooks = protect["train_hooks"]
+            trainer.hooks = train_hooks
 
         trainer.train(device=device,
                       n_epochs=train_params["max_epochs"][i])
