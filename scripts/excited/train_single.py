@@ -1052,7 +1052,7 @@ def train_sequential(weight_path,
         # must copy to avoid the originals getting written over
         # during load_state_dict in the trainer
         copied_loss = copy.deepcopy(loss_fn)
-        copied_optim = copy.deeepcopy(optimizer)
+        copied_optim = copy.deepcopy(optimizer)
         copied_hooks = copy.deepcopy(train_hooks)
         for hook in copied_hooks:
             if hasattr(getattr(hook, "scheduler", None), "optimizer"):
