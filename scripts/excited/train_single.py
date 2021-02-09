@@ -1031,50 +1031,54 @@ def train_sequential(weight_path,
                                         [None] * num_types)
 
     for i in range(num_types):
-        loss_fn, optimizer, train_hooks = optim_loss_hooks(
-            model,
-            max_epochs=train_params["max_epochs"][i],
-            metric_names=metric_names,
-            base_keys=base_keys,
-            grad_keys=grad_keys,
-            weight_path=weight_path,
-            base=base,
-            rank=rank,
-            world_size=world_size,
-            lr=train_params["lr"][i],
-            lr_patience=train_params["lr_patience"][i],
-            lr_decay=train_params["lr_decay"][i],
-            lr_min=train_params["lr_min"][i],
-            loss_type=loss_types[i],
-            loss_coef=loss_coefs[i],
-            multi_loss_dict=multi_loss_dicts[i])
+        # once for putting into the trainer and once for
+        # keeping unused so it won't get written over during
+        # load_state_dict in the trainer
+        loss_fns = []
+        optimizers = []
+        hooks_list = []
 
-        # must copy to avoid the originals getting written over
-        # during load_state_dict in the trainer
-        copied_loss = copy.deepcopy(loss_fn)
-        copied_optim = copy.deepcopy(optimizer)
-        copied_hooks = copy.deepcopy(train_hooks)
-        for hook in copied_hooks:
-            if hasattr(getattr(hook, "scheduler", None), "optimizer"):
-                hook.scheduler.optimizer = copied_optim
+        for _ in range(2):
+            loss_fn, optimizer, train_hooks = optim_loss_hooks(
+                model,
+                max_epochs=train_params["max_epochs"][i],
+                metric_names=metric_names,
+                base_keys=base_keys,
+                grad_keys=grad_keys,
+                weight_path=weight_path,
+                base=base,
+                rank=rank,
+                world_size=world_size,
+                lr=train_params["lr"][i],
+                lr_patience=train_params["lr_patience"][i],
+                lr_decay=train_params["lr_decay"][i],
+                lr_min=train_params["lr_min"][i],
+                loss_type=loss_types[i],
+                loss_coef=loss_coefs[i],
+                multi_loss_dict=multi_loss_dicts[i])
+
+            loss_fns.append(loss_fn)
+            optimizers.append(optimizer)
+            hooks_list.append(train_hooks)
+
 
         trainer = Trainer(
             model_path=weight_path,
             model=model,
-            loss_fn=copied_loss,
-            optimizer=copied_optim,
+            loss_fn=loss_fns[0],
+            optimizer=optimizers[0],
             train_loader=train_loader,
             validation_loader=val_loader,
-            hooks=copied_hooks,
+            hooks=hooks_list[0],
             world_size=world_size,
             global_rank=rank,
             **trainer_kwargs)
 
         if i != 0 or reset_trainer:
-            trainer.optimizer = optimizer
-            trainer.loss_fn = loss_fn
+            trainer.optimizer = optimizers[1]
+            trainer.loss_fn = loss_fns[1]
             trainer.best_loss = float("inf")
-            trainer.hooks = train_hooks
+            trainer.hooks = hooks_list[1]
 
         trainer.train(device=device,
                       n_epochs=train_params["max_epochs"][i])
