@@ -124,14 +124,35 @@ def logits_cross_entropy(targ, pred):
     return diff
 
 
-def zhu_p(gap, expec_gap):
-    p = torch.exp(-gap ** 2 / (2 * expec_gap ** 2))
+def zhu_p(gap,
+          expec_gap,
+          func_type):
+    
+    if func_type == "gaussian":
+        p = torch.exp(-gap ** 2 / (2 * expec_gap ** 2))
+    elif func_type == "exponential":
+        p = torch.exp(-gap /  expec_gap)
+    else:
+        raise NotImplementedError
+
     return p
 
 
-def zhu_p_grad(gap, gap_grad, expec_gap):
-    p = torch.exp(-gap ** 2 / (2 * expec_gap ** 2))
-    p_grad = - p * gap * gap_grad / (expec_gap ** 2)
+def zhu_p_grad(gap,
+               gap_grad,
+               expec_gap,
+               func_type):
+    
+    if func_type == "gaussian":
+        p = torch.exp(-gap ** 2 / (2 * expec_gap ** 2))
+        p_grad = - p * gap * gap_grad / (expec_gap ** 2)
+    elif func_type == "exponential":
+        p = torch.exp(-gap / expec_gap)
+        p_grad = - p * gap_grad / expec_gap 
+
+    else:
+        raise NotImplementedError
+
 
     return p_grad
 
@@ -140,6 +161,7 @@ def batch_zhu_p(batch,
                 upper_key,
                 lower_key,
                 expec_gap,
+                func_type,
                 gap_shape=None):
 
     gap = batch[upper_key] - batch[lower_key]
@@ -147,7 +169,8 @@ def batch_zhu_p(batch,
     if gap_shape is not None:
         gap = gap.view(gap_shape)
     p = zhu_p(gap=gap,
-              expec_gap=expec_gap)
+              expec_gap=expec_gap,
+              func_type=func_type)
 
     return p
 
@@ -156,6 +179,7 @@ def batch_zhu_p_grad(batch,
                      upper_key,
                      lower_key,
                      expec_gap,
+                     func_type,
                      gap_shape=None,
                      gap_grad_shape=None):
 
@@ -176,7 +200,8 @@ def batch_zhu_p_grad(batch,
     p_grad = zhu_p_grad(
         gap=gap,
         gap_grad=gap_grad,
-        expec_gap=expec_gap)
+        expec_gap=expec_gap,
+        func_type=func_type)
 
     return p_grad, gap, gap_grad
 
@@ -243,6 +268,7 @@ def build_zhu_loss(loss_dict):
     expec_gap = loss_dict["params"]["expected_gap"] * \
         const.AU_TO_KCAL["energy"]
     loss_key = loss_dict["params"].get("loss_type", "mse")
+    func_type = loss_dict["params"].get("func_type", "gaussian")
 
     if loss_key == "mse":
         loss_type = mse_operation
@@ -255,11 +281,15 @@ def build_zhu_loss(loss_dict):
 
         targ_gap = ground_truth[upper_key] - ground_truth[lower_key]
 
-        targ_p = zhu_p(gap=targ_gap, expec_gap=expec_gap)
+        targ_p = zhu_p(gap=targ_gap,
+                       expec_gap=expec_gap,
+                       func_type=func_type)
 
         pred_gap = (results[upper_key] - results[lower_key]
                     ).view(targ_gap.shape)
-        pred_p = zhu_p(gap=pred_gap, expec_gap=expec_gap)
+        pred_p = zhu_p(gap=pred_gap,
+                       expec_gap=expec_gap,
+                       func_type=func_type)
 
         valid_idx = torch.bitwise_not(torch.isnan(targ_p))
         targ_p = targ_p[valid_idx]
@@ -282,6 +312,7 @@ def build_zhu_grad_loss(loss_dict):
     expec_gap = loss_dict["params"]["expected_gap"] * \
         const.AU_TO_KCAL["energy"]
     loss_key = loss_dict["params"].get("loss_type", "mse")
+    func_type = loss_dict["params"].get("func_type", "gaussian")
 
     if loss_key == "mse":
         loss_type = mse_operation
@@ -297,6 +328,7 @@ def build_zhu_grad_loss(loss_dict):
         targ_p_grad, targ_gap, targ_gap_grad = batch_zhu_p_grad(
             batch=ground_truth,
             expec_gap=expec_gap,
+            func_type=func_type,
             upper_key=upper_key,
             lower_key=lower_key)
 
@@ -309,6 +341,7 @@ def build_zhu_grad_loss(loss_dict):
                                              upper_key=upper_key,
                                              lower_key=lower_key,
                                              expec_gap=expec_gap,
+                                             func_type=func_type,
                                              gap_shape=gap_shape,
                                              gap_grad_shape=gap_grad_shape)
 
