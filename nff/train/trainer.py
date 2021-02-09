@@ -220,7 +220,7 @@ class Trainer:
         self.optimizer.load_state_dict(state_dict["optimizer"])
         self._load_model_state_dict(state_dict["model"])
 
-        for hook, state in zip(self.hooks, self.state_dict["hooks"]):
+        for hook, state in zip(self.hooks, state_dict["hooks"]):
             hook.state_dict = state
 
     def store_checkpoint(self):
