@@ -1081,7 +1081,7 @@ def train_sequential(weight_path,
 
         optim = trainer.optimizer
         do_train = True
-        for i, param_group in enumerate(optim.param_groups):
+        for param_group in optim.param_groups:
             old_lr = float(param_group["lr"])
             if old_lr <= train_params["lr_min"][i]:
                 do_train = False
