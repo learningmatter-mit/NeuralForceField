@@ -960,55 +960,13 @@ def build_loss(loss_coef,
     return loss_fn
 
 
-def update_trainer(trainer,
-                   optimizer,
-                   new_lr,
-                   loss_type,
-                   loss_coef,
-                   multi_loss_dict,
-                   train_hooks):
-    """
-    Change the loss function after a model has been trained for
-    a few epochs. Useful e.g. for conical intersection models where
-    you want to train with an energy/force MSE loss first to learn
-    the general features of the PES, and then add a term later that
-    strongly emphasizes getitng the gap right when it's small.
-    """
-
-    # new optimizer
-    model = trainer._model
-    trainable_params = filter(lambda p: p.requires_grad, model.parameters())
-    optimizer = Adam(trainable_params, lr=new_lr)
-    trainer.optimizer = optimizer
-
-    # build and set the new loss function
-
-    loss_fn = build_loss(loss_coef=loss_coef,
-                         loss_type=loss_type,
-                         multi_loss_dict=multi_loss_dict)
-    trainer.loss_fn = loss_fn
-
-    # You want to set up the parameters of the trainer so that
-    # only models that come after the loss update can be the best
-    # ones (you don't want it giving you a model with the best value
-    # of the previous loss, because if you've changed the loss function
-    # then that means you want the model with the best value of *this*
-    # loss function)
-
-    trainer.best_loss = float("inf")
-
-    # new hooks or else the other ones might cause you to end early or other
-    # weird things from the previous iteration
-    trainer.hooks = train_hooks
-
-    return trainer
-
 def plural(key):
     if key.endswith("s"):
         plural_key = key + "es"
     else:
         plural_key = key + "s"
     return plural_key
+
 
 def get_train_params(params):
 
@@ -1073,7 +1031,6 @@ def train_sequential(weight_path,
                                         [None] * num_types)
 
     for i in range(num_types):
-
         loss_fn, optimizer, train_hooks = optim_loss_hooks(
             model,
             max_epochs=train_params["max_epochs"][i],
@@ -1092,6 +1049,13 @@ def train_sequential(weight_path,
             loss_coef=loss_coefs[i],
             multi_loss_dict=multi_loss_dicts[i])
 
+        # save the hooks and optimizer in copied form
+        # to protect them from being updated
+
+        protect = {"loss_fn": copy.deepcopy(loss_fn),
+                   "optimizer": copy.deepcopy(optimizer),
+                   "train_hooks": copy.deepcopy(train_hooks)}
+
         trainer = Trainer(
             model_path=weight_path,
             model=model,
@@ -1105,14 +1069,10 @@ def train_sequential(weight_path,
             **trainer_kwargs)
 
         if i != 0 or reset_trainer:
-            trainer = update_trainer(
-                trainer,
-                optimizer=optimizer,
-                new_lr=train_params["lr"][i],
-                loss_type=loss_types[i],
-                loss_coef=loss_coefs[i],
-                multi_loss_dict=multi_loss_dicts[i],
-                train_hooks=train_hooks)
+            trainer.optimizer = protect["optimizer"]
+            trainer.loss_fn = protect["loss_fn"]
+            trainer.best_loss = float("inf")
+            trainer.hooks = protect["train_hooks"]
 
         trainer.train(device=device,
                       n_epochs=train_params["max_epochs"][i])
