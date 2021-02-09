@@ -1061,7 +1061,6 @@ def train_sequential(weight_path,
             optimizers.append(optimizer)
             hooks_list.append(train_hooks)
 
-
         trainer = Trainer(
             model_path=weight_path,
             model=model,
@@ -1080,8 +1079,18 @@ def train_sequential(weight_path,
             trainer.best_loss = float("inf")
             trainer.hooks = hooks_list[1]
 
-        trainer.train(device=device,
-                      n_epochs=train_params["max_epochs"][i])
+        optim = trainer.optimizer
+        do_train = True
+        for i, param_group in enumerate(optim.param_groups):
+            old_lr = float(param_group["lr"])
+            if old_lr <= train_params["lr_min"][i]:
+                do_train = False
+                break
+
+        if do_train:
+            trainer.train(device=device,
+                          n_epochs=train_params["max_epochs"][i])
+
     return trainer
 
 
