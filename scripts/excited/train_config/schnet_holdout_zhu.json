@@ -109,42 +109,129 @@
         "del_grad_interval": 100,
         "log_every_n_epochs": 1,
 
-        "multi_loss_dict": {"mse": [{"coef": 0.2, "params": {"key": "energy_0"}},
-                                    {"coef": 0.1, "params": {"key": "energy_1"}},
-                                    {"coef": 1.0, "params": {"key": "energy_0_grad"}},
-                                    {"coef": 1.0, "params": {"key": "energy_1_grad"}}],
+        "multi_loss_dict": [
+            {
+                "mse": [
+                    {
+                        "coef": 0.01,
+                        "params": {
+                            "key": "d0"
+                        }
+                    },
+                    {
+                        "coef": 0.01,
+                        "params": {
+                            "key": "d1"
+                        }
+                    },
+                    {
+                        "coef": 0.1,
+                        "params": {
+                            "key": "energy_0"
+                        }
+                    },
+                    {
+                        "coef": 1,
+                        "params": {
+                            "key": "energy_0_grad"
+                        }
+                    },
+                    {
+                        "coef": 0.1,
+                        "params": {
+                            "key": "energy_1"
+                        }
+                    },
+                    {
+                        "coef": 1,
+                        "params": {
+                            "key": "energy_1_grad"
+                        }
+                    }
+                ]
+            },
+            {
+                "mse": [
+                    {
+                        "coef": 0.2,
+                        "params": {
+                            "key": "energy_0"
+                        }
+                    },
+                    {
+                        "coef": 0.1,
+                        "params": {
+                            "key": "energy_1"
+                        }
+                    },
+                    {
+                        "coef": 1.0,
+                        "params": {
+                            "key": "energy_0_grad"
+                        }
+                    },
+                    {
+                        "coef": 1.0,
+                        "params": {
+                            "key": "energy_1_grad"
+                        }
+                    },
+                    {
+                        "coef": 1.0,
+                        "params": {
+                            "key": "energy_1_energy_0_delta"
+                        }
+                    }
+                ],
+                "zhu": [
+                    {
+                        "coef": 10,
+                        "params": {
+                            "loss_type": "cross_entropy",
+                            "expected_gap": 0.00257353,
+                            "lower_energy": "energy_0",
+                            "upper_energy": "energy_1"
+                        }
+                    }
+                ],
+                "zhu_grad": [
+                    {
+                        "coef": 100,
+                        "params": {
+                            "loss_type": "mse",
+                            "expected_gap": 0.00257353,
+                            "lower_energy": "energy_0",
+                            "upper_energy": "energy_1"
+                        }
+                    }
+                ]
+            }
+        ],
+        "lr": [
+            0.0003,
+            1e-05
+        ],
+        "lr_min": [
+            5e-06,
+            1e-07
+        ],
+        "reset_trainer": false,
 
-                           "zhu": [{"coef": 10,
-                                   "params": {"loss_type": "cross_entropy",
-                                   "expected_gap": 0.00257353,
-                                   "lower_energy": "energy_0",
-                                   "upper_energy": "energy_1"}
-                                   }],
-
-                           "zhu_grad": [{"coef": 100,
-                                         "params": {"loss_type": "mse",
-                                                    "expected_gap": 0.00257353,
-                                                    "lower_energy": "energy_0",
-                                                    "upper_energy": "energy_1"}}
-                                       ]},
-        "lr": 1e-5,
-        "lr_decay": 0.5,
-        "lr_min": 1e-07,
         "lr_patience": 15,
         "max_epochs": 1000,
         "metrics": [
             "MeanAbsoluteError"
         ],
 
+
         "weightpath": "/nfs/rafagblab001/saxelrod/dsets_switches",
-        "model_name": "schnet_holdout",
+        "model_name": "schnet_holdout_patience_15",
         "mol_loss_norm": true,
         "seed": 0,
         "torch_par": false,
         "use_slurm": true,
         "needs_nbrs": true,
         "needs_angles": false,
-        "cutoff": 5.0,
-        "reset_trainer": true
+        "cutoff": 5.0
     }
 }
