@@ -188,9 +188,10 @@
                         "coef": 10,
                         "params": {
                             "loss_type": "cross_entropy",
-                            "expected_gap": 0.00257353,
+                            "expected_gap": 0.00956,
                             "lower_energy": "energy_0",
-                            "upper_energy": "energy_1"
+                            "upper_energy": "energy_1",
+                            "func_type": "exponential"
                         }
                     }
                 ],
@@ -199,9 +200,10 @@
                         "coef": 100,
                         "params": {
                             "loss_type": "mse",
-                            "expected_gap": 0.00257353,
+                            "expected_gap": 0.00956,
                             "lower_energy": "energy_0",
-                            "upper_energy": "energy_1"
+                            "upper_energy": "energy_1",
+                            "func_type": "exponential"
                         }
                     }
                 ]
@@ -215,6 +217,7 @@
             5e-06,
             1e-07
         ],
+        "lr_decay": 0.5,
         "reset_trainer": false,
 
         "lr_patience": 15,
@@ -225,7 +228,7 @@
 
 
         "weightpath": "/nfs/rafagblab001/saxelrod/dsets_switches",
-        "model_name": "schnet_holdout_patience_15",
+        "model_name": "schnet_holdout_patience_15_gap_0_26_ev_exp",
         "mol_loss_norm": true,
         "seed": 0,
         "torch_par": false,
