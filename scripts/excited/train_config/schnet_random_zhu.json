@@ -220,15 +220,15 @@
         "lr_decay": 0.5,
         "reset_trainer": false,
 
-        "lr_patience": 5,
+        "lr_patience": 15,
         "max_epochs": 1000,
         "metrics": [
             "MeanAbsoluteError"
         ],
 
 
-        "weightpath": "/home/gridsan/saxelrod/models/switches",
-        "model_name": "dimenet_holdout",
+        "weightpath": "/nfs/rafagblab001/saxelrod/dsets_switches",
+        "model_name": "schnet_random_patience_15_gap_0_26_ev_exp",
         "mol_loss_norm": true,
         "seed": 0,
         "torch_par": false,
