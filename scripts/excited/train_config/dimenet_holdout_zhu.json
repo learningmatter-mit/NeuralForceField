@@ -1,6 +1,7 @@
 {
     "model_params": {
-        "model_type": "SchNetDiabat",
+        "model_type": "DimeNetDiabat",
+        "activation": "swish",
         "cutoff": 5.0,
         "diabat_keys": [
             [
@@ -12,82 +13,21 @@
                 "d1"
             ]
         ],
-        "dropout_rate": 0.0,
+        "embed_dim": 128,
+        "envelope_p": 5,
         "grad_keys": [
             "energy_0_grad",
             "energy_1_grad"
         ],
-        "n_atom_basis": 256,
+        "l_spher": 7,
+        "n_bilinear": 8,
         "n_convolutions": 4,
-        "n_filters": 256,
-        "n_gaussians": 32,
+        "n_rbf": 6,
+        "n_spher": 6,
         "output_keys": [
             "energy_0",
             "energy_1"
-        ],
-        "readoutdict": {
-            "d0": [
-                {
-                    "name": "linear",
-                    "param": {
-                        "in_features": 256,
-                        "out_features": 128
-                    }
-                },
-                {
-                    "name": "shifted_softplus",
-                    "param": {}
-                },
-                {
-                    "name": "linear",
-                    "param": {
-                        "in_features": 128,
-                        "out_features": 1
-                    }
-                }
-            ],
-            "d1": [
-                {
-                    "name": "linear",
-                    "param": {
-                        "in_features": 256,
-                        "out_features": 128
-                    }
-                },
-                {
-                    "name": "shifted_softplus",
-                    "param": {}
-                },
-                {
-                    "name": "linear",
-                    "param": {
-                        "in_features": 128,
-                        "out_features": 1
-                    }
-                }
-            ],
-            "lam": [
-                {
-                    "name": "linear",
-                    "param": {
-                        "in_features": 256,
-                        "out_features": 128
-                    }
-                },
-                {
-                    "name": "shifted_softplus",
-                    "param": {}
-                },
-                {
-                    "name": "linear",
-                    "param": {
-                        "in_features": 128,
-                        "out_features": 1
-                    }
-                }
-            ]
-        },
-        "trainable_gauss": true
+        ]
     },
     "train_params": {
         "sampler": {
@@ -108,7 +48,6 @@
         "checkpoints_to_keep": 3,
         "del_grad_interval": 100,
         "log_every_n_epochs": 1,
-
         "multi_loss_dict": [
             {
                 "mse": [
@@ -219,14 +158,11 @@
         ],
         "lr_decay": 0.5,
         "reset_trainer": false,
-
         "lr_patience": 5,
         "max_epochs": 1000,
         "metrics": [
             "MeanAbsoluteError"
         ],
-
-
         "weightpath": "/home/gridsan/saxelrod/models/switches",
         "model_name": "dimenet_holdout",
         "mol_loss_norm": true,
