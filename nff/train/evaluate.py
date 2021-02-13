@@ -35,6 +35,7 @@ def evaluate(model,
         else:
             results = model(batch, **kwargs)
 
+        results = batch_to(batch_detach(results), device)
         eval_batch_loss = loss_fn(batch, results).data.cpu().numpy()
 
         if loss_is_normalized:
