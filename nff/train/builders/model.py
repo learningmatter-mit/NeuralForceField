@@ -10,6 +10,7 @@ from nff.nn.models.conformers import WeightedConformers
 from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import ChemProp3D, OnlyBondUpdateCP3D
 from nff.nn.models.dimenet import DimeNet, DimeNetDiabat, DimeNetDiabatDelta, DimeNetDelta
+from nff.nn.models.painn import Painn
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -118,7 +119,7 @@ PARAMS_TYPE = {"SchNet":
 
                },
 
-               "DimeNetDiabat": 
+               "DimeNetDiabat":
                {
                    "n_rbf": int,
                    "cutoff": float,
@@ -182,9 +183,21 @@ PARAMS_TYPE = {"SchNet":
                    'dropout_rate': float
                },
 
+               "Painn":
+               {
+                   "feat_dim": int,
+                   "activation": str,
+                   "n_rbf": int,
+                   "cutoff": float,
+                   "num_conv": int,
+                   "output_keys": list,
+                   "grad_keys": list
+
+               }
 
 
-}
+
+               }
 
 MODEL_DICT = {
     "SchNet": SchNet,
@@ -197,7 +210,8 @@ MODEL_DICT = {
     "DimeNet": DimeNet,
     "DimeNetDiabat": DimeNetDiabat,
     "DimeNetDiabatDelta": DimeNetDiabatDelta,
-    "DimeNetDelta": DimeNetDelta
+    "DimeNetDelta": DimeNetDelta,
+    "Painn": Painn
 
 }
 
@@ -269,7 +283,8 @@ def load_model(path, params=None, model_type=None, **kwargs):
         model = get_model(params, model_type=model_type, **kwargs)
 
         if os.path.isdir(path):
-            state_dict = torch.load(os.path.join(path, "best_model.pth.tar"), map_location="cpu")
+            state_dict = torch.load(os.path.join(
+                path, "best_model.pth.tar"), map_location="cpu")
         elif os.path.exists(path):
             state_dict = torch.load(path, map_location="cpu")
         else:

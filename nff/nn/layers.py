@@ -391,7 +391,7 @@ class CosineEnvelope(nn.Module):
 
         output = 0.5 * (torch.cos((np.pi * d / self.cutoff)) + 1)
         exclude = d >= self.cutoff
-        output[exclude] *= 0
+        output[exclude] = 0
 
         return output
 
@@ -411,7 +411,8 @@ class PainnRadialBasis(nn.Module):
         """
 
         shape_d = dist.reshape(-1, 1)
-        arg = self.n * np.pi * shape_d / self.cutoff
+        n = self.n.to(dist.device)
+        arg = n * np.pi * shape_d / self.cutoff
         output = torch.sin(arg) / shape_d * self.envelope(shape_d)
 
         return output
