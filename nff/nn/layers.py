@@ -378,3 +378,40 @@ class Diagonalize(nn.Module):
                            lam=lam,
                            e0=e0)
         return eigs, U
+
+
+class CosineEnvelope(nn.Module):
+    # Behler, J. Chem. Phys. 134, 074106 (2011)
+    def __init__(self, cutoff):
+        super().__init__()
+
+        self.cutoff = cutoff
+
+    def forward(self, d):
+
+        output = 0.5 * (torch.cos((np.pi * d / self.cutoff)) + 1)
+        exclude = d >= self.cutoff
+        output[exclude] *= 0
+
+        return output
+
+
+class PainnRadialBasis(nn.Module):
+    def __init__(self, n_rbf, cutoff):
+        super().__init__()
+
+        self.n = torch.arange(1, n_rbf + 1).float()
+        self.envelope = CosineEnvelope(cutoff)
+        self.cutoff = cutoff
+
+    def forward(self, dist):
+        """
+        Args:
+            d (torch.Tensor): tensor of distances
+        """
+
+        shape_d = dist.reshape(-1, 1)
+        arg = self.n * np.pi * shape_d / self.cutoff
+        output = torch.sin(arg) / shape_d * self.envelope(shape_d)
+
+        return output
