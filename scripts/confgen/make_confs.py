@@ -1,6 +1,6 @@
 from nff.utils.confgen import confs_and_save
 import argparse
-import pdb
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -11,8 +11,4 @@ def main():
 
 
 if __name__ == "__main__":
-	try:
-	    main()
-	except Exception as err:
-		print(err)
-		pdb.post_mortem()
+    main()
