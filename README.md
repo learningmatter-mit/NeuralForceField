@@ -20,12 +20,13 @@ This software requires the following packages:
 - [e3fp=1.2.1](https://github.com/keiserlab/e3fp)
 - [ipykernel==5.3.0](https://github.com/ipython/ipykernel)
 - [hyperopt=0.2.5](https://github.com/hyperopt/hyperopt)
+- [openbabel=2.4.1](https://github.com/openbabel/openbabel)
 
 We highly recommend to create a `conda` environment to run the code. To do that, use the following commands:
 
 ```bash
 conda upgrade conda
-conda create -n nff python=3.7 scikit-learn pytorch\>=1.2.0 cudatoolkit=10.0 ase pandas pymatgen sympy rdkit hyperopt jq -c pytorch -c conda-forge -c rdkit
+conda create -n nff python=3.7 scikit-learn pytorch\>=1.2.0 cudatoolkit=10.0 ase pandas pymatgen sympy rdkit hyperopt jq openbabel -c pytorch -c conda-forge -c rdkit -c openbabel
 ```
 
 Next install remaining pip requirements:
