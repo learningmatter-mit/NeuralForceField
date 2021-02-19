@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 import numpy as np
 import copy
@@ -13,6 +14,15 @@ from nff.nn.layers import Diagonalize
 class Painn(nn.Module):
     def __init__(self,
                  modelparams):
+
+        """
+        Args:
+            modelparams (dict): dictionary of model parameters
+
+
+
+        """
+
         super().__init__()
 
         feat_dim = modelparams["feat_dim"]
@@ -24,6 +34,8 @@ class Painn(nn.Module):
         learnable_k = modelparams.get("learnable_k", False)
         conv_dropout = modelparams.get("conv_dropout", 0)
         readout_dropout = modelparams.get("readout_dropout", 0)
+        means = modelparams.get("means")
+        stddevs = modelparams.get("stddevs")
 
         self.grad_keys = modelparams["grad_keys"]
 
@@ -50,9 +62,10 @@ class Painn(nn.Module):
         self.readout_blocks = nn.ModuleList(
             [ReadoutBlock(feat_dim=feat_dim,
                           output_keys=output_keys,
-                          grad_keys=self.grad_keys,
                           activation=activation,
-                          dropout=readout_dropout)
+                          dropout=readout_dropout,
+                          means=means,
+                          stddevs=stddevs)
              for _ in range(num_readouts)]
         )
 

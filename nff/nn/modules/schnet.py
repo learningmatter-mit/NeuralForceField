@@ -1106,7 +1106,7 @@ class DiabaticReadout(nn.Module):
         results.update({"abs_diabat_gap": abs(gap)})
 
         # adiabatic gap
-        
+
         num_states = len(self.energy_keys)
         for i in range(num_states):
             for j in range(num_states):
@@ -1144,7 +1144,39 @@ class DiabaticReadout(nn.Module):
 
         return results
 
-# Test
+
+class ScaleShift(nn.Module):
+    r"""Scale and shift layer for standardization.
+    .. math::
+       y = x \times \sigma + \mu
+    Args:
+        means (dict): dictionary of mean values
+        stddev (dict): dictionary of standard deviations
+    """
+
+    def __init__(self,
+                 means=None,
+                 stddevs=None):
+        super(ScaleShift, self).__init__()
+
+        means = means if (means is not None) else {}
+        stddevs = stddevs if (stddevs is not None) else {}
+        self.means = means
+        self.stddevs = stddevs
+
+    def forward(self, inp, key):
+        """Compute layer output.
+        Args:
+            inp (torch.Tensor): input data.
+        Returns:
+            torch.Tensor: layer output.
+        """
+
+        stddev = self.stddevs.get(key, 1.0)
+        mean = self.means.get(key, 0.0)
+        out = inp * stddev + mean
+
+        return out
 
 
 class TestModules(unittest.TestCase):

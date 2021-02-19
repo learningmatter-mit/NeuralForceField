@@ -3,7 +3,8 @@ from torch import nn
 
 from nff.utils.tools import layer_types
 from nff.nn.layers import PainnRadialBasis, CosineEnvelope
-from nff.utils.scatter import scatter_add, compute_grad
+from nff.utils.scatter import scatter_add
+from nff.nn.modules.schnet import ScaleShift
 
 EPS = 1e-15
 
@@ -246,9 +247,10 @@ class ReadoutBlock(nn.Module):
     def __init__(self,
                  feat_dim,
                  output_keys,
-                 grad_keys,
                  activation,
-                 dropout):
+                 dropout,
+                 means=None,
+                 stddevs=None):
         super().__init__()
 
         self.readoutdict = nn.ModuleDict(
@@ -265,13 +267,19 @@ class ReadoutBlock(nn.Module):
              for key in output_keys}
         )
 
-        self.grad_keys = grad_keys
+        self.scale_shift = ScaleShift(means=means,
+                                      stddevs=stddevs)
 
     def forward(self, s_i):
         """
         Note: no atomwise summation. That's done in the model itself
         """
 
-        output = {key: self.readoutdict[key](s_i)
-                  for key in self.readoutdict.keys()}
-        return output
+        results = {}
+
+        for key, readoutdict in self.readoutdict.items():
+            output = readoutdict(s_i)
+            output = self.scale_shift(output, key)
+            results[key] = output
+
+        return results
