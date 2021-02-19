@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from nff.utils.scatter import scatter_add
+from nff.utils.scatter import scatter_add, compute_grad
 from nff.utils.tools import layer_types
 from nff.nn.layers import Dense
 
@@ -570,3 +570,28 @@ class OutputBlock(nn.Module):
         node_feats = self.out_dense(node_feats)
 
         return node_feats
+
+
+def sum_and_grad(batch,
+                 xyz,
+                 atomwise_output,
+                 grad_keys):
+
+    N = batch["num_atoms"].detach().cpu().tolist()
+    results = {}
+
+    for key, val in atomwise_output.items():
+        # split the outputs into those of each molecule
+        split_val = torch.split(val, N)
+        # sum the results for each molecule
+        results[key] = torch.stack([i.sum() for i in split_val])
+
+    # compute gradients
+
+    for key in grad_keys:
+        output = results[key.replace("_grad", "")]
+        grad = compute_grad(output=output,
+                            inputs=xyz)
+        results[key] = grad
+
+    return results
