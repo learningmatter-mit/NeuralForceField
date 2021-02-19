@@ -418,6 +418,8 @@ class PainnRadialBasis(nn.Module):
         shape_d = dist.unsqueeze(-1)
         n = self.n.to(dist.device)
         arg = n * np.pi * shape_d / self.cutoff
-        output = torch.sin(arg) / shape_d
+        denom = torch.where(shape_d == 0, torch.tensor(
+            1.0, device=shape_d.device), shape_d)
+        output = torch.sin(arg) / denom
 
         return output

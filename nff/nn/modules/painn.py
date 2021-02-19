@@ -5,6 +5,7 @@ from nff.utils.tools import layer_types
 from nff.nn.layers import PainnRadialBasis, CosineEnvelope
 from nff.utils.scatter import scatter_add
 from nff.nn.modules.schnet import ScaleShift
+from nff.nn.layers import Dense
 
 EPS = 1e-15
 
@@ -31,15 +32,15 @@ class InvariantDense(nn.Module):
                  dropout,
                  activation='swish'):
         super().__init__()
-        self.layers = nn.Sequential(nn.Linear(in_features=dim,
-                                              out_features=dim,
-                                              bias=True),
-                                    nn.Dropout(p=dropout),
+        self.layers = nn.Sequential(Dense(in_features=dim,
+                                          out_features=dim,
+                                          bias=True,
+                                          dropout_rate=dropout),
                                     layer_types[activation](),
-                                    nn.Linear(in_features=dim,
-                                              out_features=3 * dim,
-                                              bias=True),
-                                    nn.Dropout(p=dropout))
+                                    Dense(in_features=dim,
+                                          out_features=3 * dim,
+                                          bias=True,
+                                          dropout_rate=dropout))
 
     def forward(self, s_j):
         output = self.layers(s_j)
@@ -58,11 +59,11 @@ class DistanceEmbed(nn.Module):
         rbf = PainnRadialBasis(n_rbf=n_rbf,
                                cutoff=cutoff,
                                learnable_k=learnable_k)
-        dense = nn.Linear(in_features=n_rbf,
-                          out_features=3 * feat_dim,
-                          bias=True)
-        dropout = nn.Dropout(p=dropout)
-        self.block = nn.Sequential(rbf, dense, dropout)
+        dense = Dense(in_features=n_rbf,
+                      out_features=3 * feat_dim,
+                      bias=True,
+                      dropout_rate=dropout)
+        self.block = nn.Sequential(rbf, dense)
         self.f_cut = CosineEnvelope(cutoff=cutoff)
 
     def forward(self, dist):
@@ -165,21 +166,21 @@ class UpdateBlock(nn.Module):
                  activation,
                  dropout):
         super().__init__()
-        self.u_mat = nn.Linear(in_features=feat_dim,
-                               out_features=feat_dim,
-                               bias=False)
-        self.v_mat = nn.Linear(in_features=feat_dim,
-                               out_features=feat_dim,
-                               bias=False)
-        self.s_dense = nn.Sequential(nn.Linear(in_features=2*feat_dim,
-                                               out_features=feat_dim,
-                                               bias=True),
-                                     nn.Dropout(p=dropout),
+        self.u_mat = Dense(in_features=feat_dim,
+                           out_features=feat_dim,
+                           bias=False)
+        self.v_mat = Dense(in_features=feat_dim,
+                           out_features=feat_dim,
+                           bias=False)
+        self.s_dense = nn.Sequential(Dense(in_features=2*feat_dim,
+                                           out_features=feat_dim,
+                                           bias=True,
+                                           dropout_rate=dropout),
                                      layer_types[activation](),
-                                     nn.Linear(in_features=feat_dim,
-                                               out_features=3*feat_dim,
-                                               bias=True),
-                                     nn.Dropout(p=dropout))
+                                     Dense(in_features=feat_dim,
+                                           out_features=3*feat_dim,
+                                           bias=True,
+                                           dropout_rate=dropout))
 
     def forward(self,
                 s_i,
@@ -189,7 +190,7 @@ class UpdateBlock(nn.Module):
         # v_i.transpose(1, 2).reshape(-1, v_i.shape[1])
         # = (num_atoms, 3, num_feats).reshape(-1, num_feats)
         # = (num_atoms * 3, num_feats)
-        # -> So the same u gets applied to to each atom
+        # -> So the same u gets applied to each atom
         # and for each of the three dimensions, but differently
         # for the different feature dimensions
 
@@ -255,15 +256,15 @@ class ReadoutBlock(nn.Module):
 
         self.readoutdict = nn.ModuleDict(
             {key: nn.Sequential(
-                nn.Linear(in_features=feat_dim,
-                          out_features=feat_dim//2,
-                          bias=True),
-                nn.Dropout(p=dropout),
+                Dense(in_features=feat_dim,
+                      out_features=feat_dim//2,
+                      bias=True,
+                      dropout_rate=dropout),
                 layer_types[activation](),
-                nn.Linear(in_features=feat_dim//2,
-                          out_features=1,
-                          bias=True),
-                nn.Dropout(p=dropout))
+                Dense(in_features=feat_dim//2,
+                      out_features=1,
+                      bias=True,
+                      dropout_rate=dropout))
              for key in output_keys}
         )
 

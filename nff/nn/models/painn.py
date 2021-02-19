@@ -14,7 +14,6 @@ from nff.nn.layers import Diagonalize
 class Painn(nn.Module):
     def __init__(self,
                  modelparams):
-
         """
         Args:
             modelparams (dict): dictionary of model parameters
@@ -38,7 +37,6 @@ class Painn(nn.Module):
         stddevs = modelparams.get("stddevs")
 
         self.grad_keys = modelparams["grad_keys"]
-
         self.embed_block = EmbeddingBlock(feat_dim=feat_dim)
         self.message_blocks = nn.ModuleList(
             [MessageBlock(feat_dim=feat_dim,
