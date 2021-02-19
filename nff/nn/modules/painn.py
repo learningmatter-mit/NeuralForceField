@@ -27,15 +27,18 @@ def preprocess_r(r_ij):
 class InvariantDense(nn.Module):
     def __init__(self,
                  dim,
+                 dropout,
                  activation='swish'):
         super().__init__()
         self.layers = nn.Sequential(nn.Linear(in_features=dim,
                                               out_features=dim,
                                               bias=True),
+                                    nn.Dropout(p=dropout),
                                     layer_types[activation](),
                                     nn.Linear(in_features=dim,
                                               out_features=3 * dim,
-                                              bias=True))
+                                              bias=True),
+                                    nn.Dropout(p=dropout))
 
     def forward(self, s_j):
         output = self.layers(s_j)
@@ -47,19 +50,22 @@ class DistanceEmbed(nn.Module):
                  n_rbf,
                  cutoff,
                  feat_dim,
-                 learnable_k):
+                 learnable_k,
+                 dropout):
 
         super().__init__()
-        self.rbf = PainnRadialBasis(n_rbf=n_rbf,
-                                    cutoff=cutoff,
-                                    learnable_k=learnable_k)
-        self.dense = nn.Linear(in_features=n_rbf,
-                               out_features=3 * feat_dim,
-                               bias=True)
+        rbf = PainnRadialBasis(n_rbf=n_rbf,
+                               cutoff=cutoff,
+                               learnable_k=learnable_k)
+        dense = nn.Linear(in_features=n_rbf,
+                          out_features=3 * feat_dim,
+                          bias=True)
+        dropout = nn.Dropout(p=dropout)
+        self.block = nn.Sequential(rbf, dense, dropout)
         self.f_cut = CosineEnvelope(cutoff=cutoff)
 
     def forward(self, dist):
-        rbf_feats = self.dense(self.rbf(dist))
+        rbf_feats = self.block(dist)
         envelope = self.f_cut(dist).reshape(-1, 1)
         output = rbf_feats * envelope
 
@@ -72,15 +78,18 @@ class InvariantMessage(nn.Module):
                  activation,
                  n_rbf,
                  cutoff,
-                 learnable_k):
+                 learnable_k,
+                 dropout):
         super().__init__()
 
         self.inv_dense = InvariantDense(dim=feat_dim,
-                                        activation=activation)
+                                        activation=activation,
+                                        dropout=dropout)
         self.dist_embed = DistanceEmbed(n_rbf=n_rbf,
                                         cutoff=cutoff,
                                         feat_dim=feat_dim,
-                                        learnable_k=learnable_k)
+                                        learnable_k=learnable_k,
+                                        dropout=dropout)
 
     def forward(self,
                 s_j,
@@ -104,13 +113,15 @@ class MessageBlock(nn.Module):
                  activation,
                  n_rbf,
                  cutoff,
-                 learnable_k):
+                 learnable_k,
+                 dropout):
         super().__init__()
         self.inv_message = InvariantMessage(feat_dim=feat_dim,
                                             activation=activation,
                                             n_rbf=n_rbf,
                                             cutoff=cutoff,
-                                            learnable_k=learnable_k)
+                                            learnable_k=learnable_k,
+                                            dropout=dropout)
 
     def forward(self,
                 s_j,
@@ -150,7 +161,8 @@ class MessageBlock(nn.Module):
 class UpdateBlock(nn.Module):
     def __init__(self,
                  feat_dim,
-                 activation):
+                 activation,
+                 dropout):
         super().__init__()
         self.u_mat = nn.Linear(in_features=feat_dim,
                                out_features=feat_dim,
@@ -161,10 +173,12 @@ class UpdateBlock(nn.Module):
         self.s_dense = nn.Sequential(nn.Linear(in_features=2*feat_dim,
                                                out_features=feat_dim,
                                                bias=True),
+                                     nn.Dropout(p=dropout),
                                      layer_types[activation](),
                                      nn.Linear(in_features=feat_dim,
                                                out_features=3*feat_dim,
-                                               bias=True))
+                                               bias=True),
+                                     nn.Dropout(p=dropout))
 
     def forward(self,
                 s_i,
@@ -233,7 +247,8 @@ class ReadoutBlock(nn.Module):
                  feat_dim,
                  output_keys,
                  grad_keys,
-                 activation):
+                 activation,
+                 dropout):
         super().__init__()
 
         self.readoutdict = nn.ModuleDict(
@@ -241,10 +256,12 @@ class ReadoutBlock(nn.Module):
                 nn.Linear(in_features=feat_dim,
                           out_features=feat_dim//2,
                           bias=True),
+                nn.Dropout(p=dropout),
                 layer_types[activation](),
                 nn.Linear(in_features=feat_dim//2,
                           out_features=1,
-                          bias=True))
+                          bias=True),
+                nn.Dropout(p=dropout))
              for key in output_keys}
         )
 
@@ -258,20 +275,3 @@ class ReadoutBlock(nn.Module):
         output = {key: self.readoutdict[key](s_i)
                   for key in self.readoutdict.keys()}
         return output
-
-        # results = {}
-
-        # for key, val in output.items():
-        #     # split the outputs into those of each molecule
-        #     split_val = torch.split(val, num_atoms)
-
-        #     # sum the results for each molecule
-        #     results[key] = torch.stack([i.sum() for i in split_val])
-
-        # for key in self.grad_keys:
-        #     output = results[key.replace("_grad", "")]
-        #     grad = compute_grad(output=output,
-        #                         inputs=xyz)
-        #     results[key] = grad
-
-        # return results

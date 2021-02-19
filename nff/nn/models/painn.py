@@ -1,4 +1,3 @@
-import torch
 from torch import nn
 import numpy as np
 import copy
@@ -24,6 +23,8 @@ class Painn(nn.Module):
         output_keys = modelparams["output_keys"]
         grad_keys = modelparams["grad_keys"]
         learnable_k = modelparams.get("learnable_k", False)
+        conv_dropout = modelparams.get("conv_dropout", 0)
+        readout_dropout = modelparams.get("readout_dropout", 0)
 
         self.embed_block = EmbeddingBlock(feat_dim=feat_dim)
         self.message_blocks = nn.ModuleList(
@@ -31,12 +32,14 @@ class Painn(nn.Module):
                           activation=activation,
                           n_rbf=n_rbf,
                           cutoff=cutoff,
-                          learnable_k=learnable_k)
+                          learnable_k=learnable_k,
+                          dropout=conv_dropout)
              for _ in range(num_conv)]
         )
         self.update_blocks = nn.ModuleList(
             [UpdateBlock(feat_dim=feat_dim,
-                         activation=activation)
+                         activation=activation,
+                         dropout=conv_dropout)
              for _ in range(num_conv)]
         )
 
@@ -47,7 +50,8 @@ class Painn(nn.Module):
             [ReadoutBlock(feat_dim=feat_dim,
                           output_keys=output_keys,
                           grad_keys=grad_keys,
-                          activation=activation)
+                          activation=activation,
+                          dropout=readout_dropout)
              for _ in range(num_readouts)]
         )
 

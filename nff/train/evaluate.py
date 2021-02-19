@@ -6,6 +6,19 @@ from nff.utils.cuda import batch_to, batch_detach
 from nff.data.dataset import concatenate_dict
 
 
+def shrink_batch(batch):
+    """
+    Exclude certain keys from the batch that take up a lot of memory
+    """
+
+    bad_keys = ['nbr_list', 'kj_idx', 'ji_idx',
+                'angle_list']
+    new_batch = {key: val for key, val in batch.items()
+                 if key not in bad_keys}
+
+    return new_batch
+
+
 def evaluate(model,
              loader,
              loss_fn,
@@ -13,6 +26,7 @@ def evaluate(model,
              return_results=True,
              loss_is_normalized=True,
              submodel=None,
+             trim_batch=False,
              **kwargs):
     """Evaluate the current state of the model using a given dataloader
     """
@@ -62,6 +76,9 @@ def evaluate(model,
             eval_loss += eval_batch_loss
 
         all_results.append(batch_detach(results))
+
+        if trim_batch:
+            batch = shrink_batch(batch)
         all_batches.append(batch_detach(batch))
 
         del results
