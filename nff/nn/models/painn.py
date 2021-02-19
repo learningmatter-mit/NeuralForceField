@@ -21,10 +21,11 @@ class Painn(nn.Module):
         cutoff = modelparams["cutoff"]
         num_conv = modelparams["num_conv"]
         output_keys = modelparams["output_keys"]
-        grad_keys = modelparams["grad_keys"]
         learnable_k = modelparams.get("learnable_k", False)
         conv_dropout = modelparams.get("conv_dropout", 0)
         readout_dropout = modelparams.get("readout_dropout", 0)
+
+        self.grad_keys = modelparams["grad_keys"]
 
         self.embed_block = EmbeddingBlock(feat_dim=feat_dim)
         self.message_blocks = nn.ModuleList(
@@ -49,7 +50,7 @@ class Painn(nn.Module):
         self.readout_blocks = nn.ModuleList(
             [ReadoutBlock(feat_dim=feat_dim,
                           output_keys=output_keys,
-                          grad_keys=grad_keys,
+                          grad_keys=self.grad_keys,
                           activation=activation,
                           dropout=readout_dropout)
              for _ in range(num_readouts)]
