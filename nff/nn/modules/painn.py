@@ -26,6 +26,10 @@ def preprocess_r(r_ij):
     return dist, unit
 
 
+def to_module(activation):
+    return layer_types[activation]()
+
+
 class InvariantDense(nn.Module):
     def __init__(self,
                  dim,
@@ -35,8 +39,8 @@ class InvariantDense(nn.Module):
         self.layers = nn.Sequential(Dense(in_features=dim,
                                           out_features=dim,
                                           bias=True,
-                                          dropout_rate=dropout),
-                                    layer_types[activation](),
+                                          dropout_rate=dropout,
+                                          activation=to_module(activation)),
                                     Dense(in_features=dim,
                                           out_features=3 * dim,
                                           bias=True,
@@ -175,8 +179,8 @@ class UpdateBlock(nn.Module):
         self.s_dense = nn.Sequential(Dense(in_features=2*feat_dim,
                                            out_features=feat_dim,
                                            bias=True,
-                                           dropout_rate=dropout),
-                                     layer_types[activation](),
+                                           dropout_rate=dropout,
+                                           activation=to_module(activation)),
                                      Dense(in_features=feat_dim,
                                            out_features=3*feat_dim,
                                            bias=True,
@@ -259,8 +263,8 @@ class ReadoutBlock(nn.Module):
                 Dense(in_features=feat_dim,
                       out_features=feat_dim//2,
                       bias=True,
-                      dropout_rate=dropout),
-                layer_types[activation](),
+                      dropout_rate=dropout,
+                      activation=to_module(activation)),
                 Dense(in_features=feat_dim//2,
                       out_features=1,
                       bias=True,
