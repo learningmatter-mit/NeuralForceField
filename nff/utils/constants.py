@@ -1,5 +1,7 @@
 import torch
 from rdkit import Chem
+import copy
+import math
 
 PERIODICTABLE = Chem.GetPeriodicTable()
 
@@ -31,6 +33,9 @@ KCAL_TO_AU = {
     '_grad': BOHR_RADIUS,
 }
 
+KB_EV = 0.0000861731
+EV_TO_AU = 1/27.2114
+
 # Hardness used in xtb, in eV. Source: Ghosh, D.C. and Islam, N., 2010.
 # Semiempirical evaluation of the global hardness of the atoms
 # of 103 elements of the periodic table using the most probable
@@ -60,8 +65,6 @@ HARDNESS_EV = {"H": 6.4299,
                "Br": 5.9111,
                "I": 5.5839}
 
-EV_TO_AU = 1/27.2114
-
 # Hardness in AU
 HARDNESS_AU = {key: val * EV_TO_AU for key, val in
                HARDNESS_EV.items()}
@@ -71,6 +74,36 @@ HARDNESS_AU_MAT = torch.zeros(200)
 for key, val in HARDNESS_AU.items():
     at_num = int(PERIODICTABLE.GetAtomicNumber(key))
     HARDNESS_AU_MAT[at_num] = val
+
+
+# Times
+
+FS_TO_AU = 41.341374575751
+FS_TO_ASE = 0.098
+ASE_TO_FS = 1/FS_TO_ASE
+
+# Masses
+AMU_TO_AU = 1.66e-27/(9.1093837015e-31)
+
+# Weird units used by Gaussian
+CM_TO_J = 1.98630e-23
+DYN_TO_J_PER_M  = 0.00001
+ANGS_TO_M = 1e-10
+MDYN_PER_A_TO_J_PER_M = DYN_TO_J_PER_M / 1000 / ANGS_TO_M
+KG_TO_AMU = 1 / (1.66e-27)
+HBAR_SI = 6.626e-34/ (2 * math.pi)
+
+AU_TO_KCAL = {
+    'energy': HARTREE_TO_KCAL_MOL,
+    '_grad': 1.0 / BOHR_RADIUS,
+}
+
+KCAL_TO_AU = {
+    'energy': 1.0 / HARTREE_TO_KCAL_MOL,
+    '_grad': BOHR_RADIUS,
+}
+
+
 
 
 def convert_units(props, conversion_dict):
@@ -94,3 +127,22 @@ def convert_units(props, conversion_dict):
                 ]
 
     return props
+
+def exc_ev_to_hartree(props, add_ground_energy=False):
+    """ Note: only converts excited state energies from ev to hartree, not gradients.
+
+    """
+
+    assert "energy_0" in props.keys()
+    exc_keys = [key for key in props.keys() if key.startswith('energy'
+        ) and 'grad' not in key and key != 'energy_0']
+    energy_0 = props['energy_0']
+    new_props = copy.deepcopy(props)
+
+    for key in exc_keys:
+        new_props[key] *= EV_TO_AU
+        if add_ground_energy:
+            new_props[key] += energy_0
+
+    return new_props
+
