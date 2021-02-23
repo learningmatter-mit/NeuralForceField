@@ -4,7 +4,7 @@ from torch import nn
 import copy
 
 from nff.nn.modules.dimenet import (EmbeddingBlock, InteractionBlock,
-                                    OutputBlock)
+                                    OutputBlock, sum_and_grad)
 from nff.nn.modules.schnet import DiabaticReadout
 from nff.nn.layers import DimeNetRadialBasis as RadialBasis
 from nff.nn.layers import DimeNetSphericalBasis as SphericalBasis
@@ -249,23 +249,10 @@ class DimeNet(nn.Module):
         """
 
         out, xyz = self.atomwise(batch, xyz)
-        N = batch["num_atoms"].detach().cpu().tolist()
-        results = {}
-
-        for key, val in out.items():
-            # split the outputs into those of each molecule
-            split_val = torch.split(val, N)
-            # sum the results for each molecule
-            results[key] = torch.stack([i.sum() for i in split_val])
-
-        # compute gradients
-
-        for key in self.grad_keys:
-            output = results[key.replace("_grad", "")]
-            grad = compute_grad(output=output,
-                                inputs=xyz)
-            results[key] = grad
-
+        results = sum_and_grad(batch=batch,
+                               xyz=xyz,
+                               atomwise_output=out,
+                               grad_keys=self.grad_keys)
         return results
 
 

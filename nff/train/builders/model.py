@@ -10,7 +10,7 @@ from nff.nn.models.conformers import WeightedConformers
 from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import ChemProp3D, OnlyBondUpdateCP3D
 from nff.nn.models.dimenet import DimeNet, DimeNetDiabat, DimeNetDiabatDelta, DimeNetDelta
-from nff.nn.models.painn import Painn
+from nff.nn.models.painn import Painn, PainnDiabat
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -193,9 +193,20 @@ PARAMS_TYPE = {"SchNet":
                    "output_keys": list,
                    "grad_keys": list
 
+               },
+
+               "PainnDiabat":
+               {
+                   "feat_dim": int,
+                   "activation": str,
+                   "n_rbf": int,
+                   "cutoff": float,
+                   "num_conv": int,
+                   "output_keys": list,
+                   "grad_keys": list,
+                   "diabat_keys": list
+
                }
-
-
 
                }
 
@@ -211,7 +222,8 @@ MODEL_DICT = {
     "DimeNetDiabat": DimeNetDiabat,
     "DimeNetDiabatDelta": DimeNetDiabatDelta,
     "DimeNetDelta": DimeNetDelta,
-    "Painn": Painn
+    "Painn": Painn,
+    "PainnDiabat": PainnDiabat
 
 }
 

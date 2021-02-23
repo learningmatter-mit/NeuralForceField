@@ -7,9 +7,11 @@ import time
 import numpy as np
 import json
 import pickle
+import copy
+import math
 
 from rdkit.Chem import (AddHs, MolFromSmiles, inchi, GetPeriodicTable,
-                        Conformer)
+                        Conformer, MolToSmiles)
 from rdkit.Chem.AllChem import (EmbedMultipleConfs,
                                 UFFGetMoleculeForceField,
                                 MMFFGetMoleculeForceField,
@@ -17,7 +19,8 @@ from rdkit.Chem.AllChem import (EmbedMultipleConfs,
                                 GetConformerRMS)
 from rdkit.Chem.rdmolops import RemoveHs, GetFormalCharge
 
-from nff.utils.misc import read_csv
+from nff.utils.misc import read_csv, tqdm_enum
+from nff.data.parallel import gen_parallel
 
 PERIODICTABLE = GetPeriodicTable()
 
@@ -141,18 +144,16 @@ class ConformerGenerator(object):
         return self.initial_confs
 
     def minimise(self,
-                 output=None,
-                 do_minimize=True):
+                 output=None):
         '''
         Minimises conformers using a force field
         '''
 
         if "\\" in self.smiles or "/" in self.smiles:
-            output.write(("Smiles string contains slashes, "
+            output.write(("WARNING: Smiles string contains slashes, "
                           "which specify cis/trans stereochemistry.\n"))
-            output.write(("Bypassing force-field minimization to avoid "
-                          "generating incorrect isomer.\n"))
-            do_minimize = False
+            output.write(("Force-field minimization may change the "
+                          "stereochemistry.\n"))
 
         if self.forcefield != "mmff" and self.forcefield != "uff":
             raise ValueError("Unrecognised force field")
@@ -165,9 +166,8 @@ class ConformerGenerator(object):
                     output.write("MMFF not available, using UFF\n")
                     potential = UFFGetMoleculeForceField(self.mol, confId=i)
                     assert potential is not None
-                if do_minimize:
-                    output.write(f"Minimising conformer number {i}\n")
-                    potential.Minimize()
+                output.write(f"Minimising conformer number {i}\n")
+                potential.Minimize()
                 mmff_energy = potential.CalcEnergy()
                 self.conf_energies.append((i, mmff_energy))
 
@@ -175,8 +175,7 @@ class ConformerGenerator(object):
             for i in range(0, len(self.initial_confs)):
                 potential = UFFGetMoleculeForceField(self.mol, confId=i)
                 assert potential is not None
-                if do_minimize:
-                    potential.Minimize()
+                potential.Minimize()
                 uff_energy = potential.CalcEnergy()
                 self.conf_energies.append((i, uff_energy))
         self.conf_energies = sorted(self.conf_energies, key=lambda tup: tup[1])
@@ -312,8 +311,11 @@ class ConformerGenerator(object):
                     elements = _extract_atomic_type(conf_b[0])
                     pos = [[-float(coor[k]) for k in range(3)] for coor in pos]
                     coords = list(zip(elements, pos))
-                    write_xyz(coords=coords, filename=key + "_Conf_" +
-                              str(j + 1) + "_inv.xyz", comment=conf_b[1])
+
+                    filename = os.path.join(path, key + "_Conf_" +
+                                            str(j + 1) + "_inv.xyz")
+                    write_xyz(coords=coords, filename=filename,
+                              comment=conf_b[1])
                     try:
                         file1 = key + "_Conf_" + str(i + 1)
                         file2 = key + "_Conf_" + str(j + 1) + "_inv"
@@ -405,7 +407,10 @@ def minimize(output,
              molecule,
              forcefield,
              nconf_gen,
-             prun_tol):
+             prun_tol,
+             e_window,
+             rms_tol,
+             rep_e_window):
 
     output.write(f"Analysing smiles string {molecule}\n")
     MolFromSmiles(molecule)
@@ -436,12 +441,13 @@ def minimize(output,
 def write_clusters(output,
                    idx,
                    conformer,
-                   inchikey):
+                   inchikey,
+                   path):
     output.write(f"Cluster {idx} has energy {conformer[1]}\n")
     pos = _atomic_pos_from_conformer(conformer[0])
     elements = _extract_atomic_type(conformer[0])
     coords = list(zip(elements, pos))
-    xyz_file = f"{inchikey}_Conf_{(idx + 1)}.xyz"
+    xyz_file = os.path.join(path, f"{inchikey}_Conf_{(idx + 1)}.xyz")
     write_xyz(coords=coords, filename=xyz_file,
               comment=conformer[1])
 
@@ -485,14 +491,20 @@ def summarize(output,
     output.write('Terminated successfully\n')
 
 
-def xyz_to_rdmol(nxyz, inchikey):
-    mol = inchi.MolFromInchi(inchikey)
+def get_mol(smiles):
+    mol = MolFromSmiles(MolToSmiles(
+        MolFromSmiles(smiles)))
+    return mol
+
+
+def xyz_to_rdmol(nxyz, smiles):
+    mol = get_mol(smiles)
     mol = AddHs(mol)
 
     num_atoms = len(nxyz)
     conformer = Conformer(num_atoms)
-    for i, nxyz in enumerate(nxyz):
-        conformer.SetAtomPosition(i, nxyz[1:])
+    for i, quad in enumerate(nxyz):
+        conformer.SetAtomPosition(i, quad[1:])
 
     mol.AddConformer(conformer)
     return mol
@@ -516,15 +528,18 @@ def update_with_boltz(geom_list,
 def parse_nxyz(lines):
     nxyz = []
     for line in lines[2:]:
-        atom_char, positions = line.split()
+        split = line.split()
+        atom_char = split[0]
+        positions = np.array(split[1:]).astype(float)
         atom_num = PERIODICTABLE.GetAtomicNumber(atom_char)
-        this_nxyz = [atom_num, *positions]
+        this_nxyz = np.array([atom_num, *positions])
         nxyz.append(this_nxyz)
+    nxyz = np.array(nxyz)
     return nxyz
 
 
 def make_geom_dic(lines,
-                  inchikey,
+                  smiles,
                   geom_list,
                   idx):
 
@@ -542,27 +557,25 @@ def make_geom_dic(lines,
         rel_energy = energy_kcal - ref_energy_kcal
 
     rd_mol = xyz_to_rdmol(nxyz=nxyz,
-                          inchikey=inchikey)
+                          smiles=smiles)
 
     geom = {"confnum": idx + 1,
             "totalenergy": energy_au,
             "relativeenergy": rel_energy,
-            "nxyz": nxyz,
             "degeneracy": 1,
             "rd_mol": rd_mol}
 
     return geom
 
 
-def get_charge(inchikey):
-    mol = inchi.MolFromInchi(inchikey)
+def get_charge(smiles):
+    mol = get_mol(smiles)
     charge = GetFormalCharge(mol)
     return charge
 
 
 def combine_geom_dics(geom_list,
                       temp,
-                      inchikey,
                       other_props,
                       smiles):
 
@@ -572,7 +585,7 @@ def combine_geom_dics(geom_list,
     lowestenergy = geom_list[0]["totalenergy"]
     poplowestpct = (geom_list[0]["boltzmannweight"]
                     * 100)
-    charge = get_charge(inchikey)
+    charge = get_charge(smiles)
 
     combination = {"totalconfs": totalconfs,
                    "uniqueconfs": uniqueconfs,
@@ -594,7 +607,11 @@ def parse_results(job_dir,
                   smiles,
                   max_confs,
                   other_props,
-                  temp):
+                  temp,
+                  clean_up):
+
+    # import pdb
+    # pdb.set_trace()
 
     geom_list = []
     log_path = os.path.join(job_dir, log_file)
@@ -615,35 +632,123 @@ def parse_results(job_dir,
             lines = f_p.readlines()
 
         geom = make_geom_dic(lines=lines,
-                             inchikey=inchikey,
+                             smiles=smiles,
                              geom_list=geom_list,
                              idx=i)
         geom_list.append(geom)
+
     geom_list = update_with_boltz(geom_list=geom_list,
                                   temp=temp)
     summary_dic = combine_geom_dics(geom_list=geom_list,
                                     temp=temp,
-                                    inchikey=inchikey,
                                     other_props=other_props,
                                     smiles=smiles)
 
+    if clean_up:
+        for file in os.listdir(job_dir):
+            if not ("_Conf_" in file and file.endswith("xyz")):
+                continue
+            file_path = os.path.join(job_dir, file)
+            os.remove(file_path)
+
     return summary_dic
+
+
+def one_species_confs(molecule,
+                      log,
+                      other_props,
+                      max_confs,
+                      forcefield,
+                      nconf_gen,
+                      e_window,
+                      rms_tol,
+                      prun_tol,
+                      job_dir,
+                      log_file,
+                      rep_e_window,
+                      fallback_to_align,
+                      temp,
+                      clean_up,
+                      start_time):
+
+    smiles = copy.deepcopy(molecule)
+    with open(log, "w") as output:
+        output.write("The smiles strings that will be run are:\n")
+        output.write("\n".join([molecule])+"\n")
+
+        if any([element in molecule for element in UFF_ELEMENTS]):
+            output.write(("Switching to UFF, since MMFF94 does "
+                          "not have boron and/or aluminum\n"))
+            forcefield = 'uff'
+
+        confgen, gen_time, min_time = minimize(output=output,
+                                               molecule=molecule,
+                                               forcefield=forcefield,
+                                               nconf_gen=nconf_gen,
+                                               prun_tol=prun_tol,
+                                               e_window=e_window,
+                                               rms_tol=rms_tol,
+                                               rep_e_window=rep_e_window)
+        clustered_confs = confgen.cluster(rms_tolerance=float(rms_tol),
+                                          max_ranked_conformers=int(
+                                              max_confs),
+                                          energy_window=float(e_window),
+                                          Report_e_tol=float(rep_e_window),
+                                          output=output)
+
+        cluster_time = time.time()
+        inchikey = inchi.MolToInchiKey(get_mol(molecule))
+
+        for i, conformer in enumerate(clustered_confs):
+            write_clusters(output=output,
+                           idx=i,
+                           conformer=conformer,
+                           inchikey=inchikey,
+                           path=job_dir)
+
+        molecule = run_obabel(inchikey=inchikey,
+                              idx=i)
+        confgen.recluster(path=job_dir,
+                          rms_tolerance=float(rms_tol),
+                          max_ranked_conformers=int(max_confs),
+                          energy_window=float(e_window),
+                          output=output,
+                          clustered_confs=clustered_confs,
+                          molecule=molecule,
+                          key=inchikey,
+                          fallback_to_align=fallback_to_align)
+        rename_xyz_files(path=job_dir)
+        summarize(output=output,
+                  gen_time=gen_time,
+                  start_time=start_time,
+                  min_time=min_time,
+                  cluster_time=cluster_time)
+
+    conf_dic = parse_results(job_dir=job_dir,
+                             log_file=log_file,
+                             inchikey=inchikey,
+                             max_confs=max_confs,
+                             other_props=other_props,
+                             temp=temp,
+                             smiles=smiles,
+                             clean_up=clean_up)
+    return conf_dic
 
 
 def run_generator(smiles_list,
                   other_props=None,
                   max_confs=MAX_CONFS,
                   forcefield="mmff",
-                  nconf=20,
-                  nconf_gen=200,
+                  nconf_gen=(10 * MAX_CONFS),
                   e_window=5.0,
                   rms_tol=0.1,
                   prun_tol=0.01,
-                  job_dir="confgen",
+                  job_dir="confs",
                   log_file="confgen.log",
                   rep_e_window=5.0,
                   fallback_to_align=False,
                   temp=298.15,
+                  clean_up=True,
                   **kwargs):
     """
     Args:
@@ -651,7 +756,7 @@ def run_generator(smiles_list,
         other_props (dict): dictionary of any other properties of
             the molecule.
         forcefield (str): Forcefield used for minimisations
-        nconf (int): Number of low energy conformations to return
+        max_confs (int): Number of low energy conformations to return
         nconf_gen (int): Number of conformations to build in the generation stage
         e_window (float): Energy window to use when clustering, kcal/mol
         rms_tol (float): RMS tolerance to use when clustering
@@ -671,74 +776,61 @@ def run_generator(smiles_list,
     conf_dics = []
 
     for molecule in smiles_list:
-        with open(log, "w") as output:
-            output.write("The smiles strings that will be run are:\n")
-            output.write("\n".join(smiles_list)+"\n")
-
-            if any([element in molecule for element in UFF_ELEMENTS]):
-                output.write(("Switching to UFF, since MMFF94 does "
-                              "not have boron and/or aluminum\n"))
-                forcefield = 'uff'
-
-            confgen, gen_time, min_time = minimize(output=output,
-                                                   molecule=molecule,
-                                                   forcefield=forcefield,
-                                                   nconf_gen=nconf_gen,
-                                                   prun_tol=prun_tol)
-            clustered_confs = confgen.cluster(rms_tolerance=float(rms_tol),
-                                              max_ranked_conformers=int(nconf),
-                                              energy_window=float(e_window),
-                                              Report_e_tol=float(rep_e_window),
-                                              output=output)
-
-            cluster_time = time.time()
-            inchikey = inchi.MolToInchi(molecule)
-
-            for i, conformer in enumerate(clustered_confs):
-                write_clusters(output=output,
-                               idx=i,
-                               conformer=conformer,
-                               inchikey=inchikey)
-
-            molecule = run_obabel(inchikey=inchikey,
-                                  idx=i)
-            confgen.recluster(path=job_dir,
-                              rms_tolerance=float(rms_tol),
-                              max_ranked_conformers=int(nconf),
-                              energy_window=float(e_window),
-                              output=output,
-                              clustered_confs=clustered_confs,
-                              molecule=molecule,
-                              key=inchikey,
-                              fallback_to_align=fallback_to_align)
-            rename_xyz_files(path=job_dir)
-            summarize(output=output,
-                      gen_time=gen_time,
-                      start_time=start_time,
-                      min_time=min_time,
-                      cluster_time=cluster_time)
-
-        conf_dic = parse_results(job_dir=job_dir,
-                                 log_file=log_file,
-                                 inchikey=inchikey,
-                                 max_confs=max_confs,
-                                 other_props=other_props,
-                                 temp=temp,
-                                 smiles=molecule)
+        conf_dic = one_species_confs(molecule=molecule,
+                                     log=log,
+                                     other_props=other_props,
+                                     max_confs=max_confs,
+                                     forcefield=forcefield,
+                                     nconf_gen=nconf_gen,
+                                     e_window=e_window,
+                                     rms_tol=rms_tol,
+                                     prun_tol=prun_tol,
+                                     job_dir=job_dir,
+                                     log_file=log_file,
+                                     rep_e_window=rep_e_window,
+                                     fallback_to_align=fallback_to_align,
+                                     temp=temp,
+                                     clean_up=clean_up,
+                                     start_time=start_time)
         conf_dics.append(conf_dic)
 
     return conf_dics
+
+
+# def get_confs_parallel(num_threads,
+#                        smiles_list,
+#                        **kwargs):
+
+#     num_smiles = len(smiles_list)
+#     num_batches = math.ceil(num_smiles / num_threads)
+#     smiles_splits = np.array_split(smiles_list, num_batches)
+
+#     all_conf_dics = []
+#     for smiles_split in smiles_splits:
+#         kwargs_list = [{"smiles_list": smiles,
+#                         **kwargs}
+#                        for smiles in smiles_split]
+#         conf_dics = gen_parallel(run_generator, kwargs_list)
+#         all_conf_dics += [i[0] for i in conf_dics]
+
+#     return all_conf_dics
+
+
+##########
+# Need to allow for minimization but provide a warning for c/t stereo
+# -> RDKit should be able to detect bond stereochemistry and give a new
+# smiles after optimization, which we provide
+#########
 
 
 def add_to_summary(summary_dic,
                    conf_dic,
                    smiles,
                    save_dir):
-    inchikey = inchi.MolToInchi(MolFromSmiles(smiles))
-    pickle_path = os.path.join(save_dir, f"{inchikey}.pickle")
-
+    inchikey = inchi.MolToInchiKey(get_mol(smiles))
+    pickle_path = os.path.join(os.path.abspath(save_dir), f"{inchikey}.pickle")
     summary_dic[smiles] = {key: val for key, val in
-                           summary_dic.items() if key != "conformers"}
+                           conf_dic.items() if key != "conformers"}
     summary_dic[smiles].update({"pickle_path": pickle_path})
 
     return summary_dic, pickle_path
@@ -748,17 +840,18 @@ def confs_and_save(config_path):
     with open(config_path, "r") as f_open:
         info = json.load(f_open)
 
-    data_path = info["data_path"]
-    save_dir = os.path.join(info["save_dir"], "rdkit_folder")
+    csv_data_path = info["csv_data_path"]
+    save_dir = info["pickle_save_dir"]
+
     if not os.path.isdir(save_dir):
         os.makedirs(save_dir)
 
-    smiles_dic = read_csv(data_path)
+    smiles_dic = read_csv(csv_data_path)
     summary_dic = {}
 
-    print(f"Saving pickle files to {save_dir}")
+    print(f"Saving pickle files to directory {save_dir}")
 
-    for i, smiles in enumerate(smiles_dic["smiles"]):
+    for i, smiles in tqdm_enum(smiles_dic["smiles"]):
         other_props = {key: val[i] for key, val in smiles_dic.items()
                        if key != 'smiles'}
         smiles_list = [smiles]
@@ -770,9 +863,9 @@ def confs_and_save(config_path):
                                                   smiles=smiles,
                                                   save_dir=save_dir)
         with open(pickle_path, "wb") as f_open:
-            pickle.dump(summary_dic, f_open)
+            pickle.dump(conf_dic, f_open)
 
-    summary_path = os.path.join(info["save_dir"], "summary.json")
+    summary_path = os.path.join(info["summary_save_dir"], "summary.json")
     print(f"Saving summary to {summary_path}")
     with open(summary_path, "w") as f_open:
         json.dump(summary_dic, f_open, indent=4)

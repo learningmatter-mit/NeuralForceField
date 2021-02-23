@@ -397,11 +397,16 @@ class CosineEnvelope(nn.Module):
 
 
 class PainnRadialBasis(nn.Module):
-    def __init__(self, n_rbf, cutoff):
+    def __init__(self,
+                 n_rbf,
+                 cutoff,
+                 learnable_k):
         super().__init__()
 
         self.n = torch.arange(1, n_rbf + 1).float()
-        self.envelope = CosineEnvelope(cutoff)
+        if learnable_k:
+            self.n = nn.Parameter(self.n)
+
         self.cutoff = cutoff
 
     def forward(self, dist):
@@ -410,9 +415,11 @@ class PainnRadialBasis(nn.Module):
             d (torch.Tensor): tensor of distances
         """
 
-        shape_d = dist.reshape(-1, 1)
+        shape_d = dist.unsqueeze(-1)
         n = self.n.to(dist.device)
         arg = n * np.pi * shape_d / self.cutoff
-        output = torch.sin(arg) / shape_d * self.envelope(shape_d)
+        denom = torch.where(shape_d == 0, torch.tensor(
+            1.0, device=shape_d.device), shape_d)
+        output = torch.sin(arg) / denom
 
         return output

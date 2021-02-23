@@ -240,12 +240,23 @@ class ReduceLROnPlateauHook(Hook):
         min_lr=1e-6,
         window_length=1,
         stop_after_min=False,
+        cooldown=0,
+        threshold=0.0001
     ):
         self.patience = patience
         self.factor = factor
         self.min_lr = min_lr
+        self.cooldown = cooldown
+        self.threshold = threshold
+
         self.scheduler = ReduceLROnPlateau(
-            optimizer, patience=self.patience, factor=self.factor, min_lr=self.min_lr
+            optimizer,
+            patience=self.patience,
+            factor=self.factor,
+            min_lr=self.min_lr,
+            cooldown=self.cooldown,
+            threshold=self.threshold
+
         )
         self.window_length = window_length
         self.stop_after_min = stop_after_min

@@ -2,8 +2,10 @@ import torch
 from torch import nn
 
 from nff.utils.tools import layer_types
-from nff.nn.layers import PainnRadialBasis as RadialBasis
-from nff.utils.scatter import scatter_add, compute_grad
+from nff.nn.layers import PainnRadialBasis, CosineEnvelope
+from nff.utils.scatter import scatter_add
+from nff.nn.modules.schnet import ScaleShift
+from nff.nn.layers import Dense
 
 EPS = 1e-15
 
@@ -24,16 +26,25 @@ def preprocess_r(r_ij):
     return dist, unit
 
 
+def to_module(activation):
+    return layer_types[activation]()
+
+
 class InvariantDense(nn.Module):
-    def __init__(self, dim, activation='swish'):
+    def __init__(self,
+                 dim,
+                 dropout,
+                 activation='swish'):
         super().__init__()
-        self.layers = nn.Sequential(nn.Linear(in_features=dim,
-                                              out_features=dim,
-                                              bias=True),
-                                    layer_types[activation](),
-                                    nn.Linear(in_features=dim,
-                                              out_features=3 * dim,
-                                              bias=True))
+        self.layers = nn.Sequential(Dense(in_features=dim,
+                                          out_features=dim,
+                                          bias=True,
+                                          dropout_rate=dropout,
+                                          activation=to_module(activation)),
+                                    Dense(in_features=dim,
+                                          out_features=3 * dim,
+                                          bias=True,
+                                          dropout_rate=dropout))
 
     def forward(self, s_j):
         output = self.layers(s_j)
@@ -44,21 +55,26 @@ class DistanceEmbed(nn.Module):
     def __init__(self,
                  n_rbf,
                  cutoff,
-                 feat_dim):
+                 feat_dim,
+                 learnable_k,
+                 dropout):
 
         super().__init__()
-        rbf = RadialBasis(n_rbf=n_rbf, cutoff=cutoff)
-        dense = nn.Linear(in_features=n_rbf,
-                          out_features=3 * feat_dim,
-                          bias=True)
-        # what is this??
-        f_cut = nn.Sequential()
-        ##
-
-        self.block = nn.Sequential(rbf, dense, f_cut)
+        rbf = PainnRadialBasis(n_rbf=n_rbf,
+                               cutoff=cutoff,
+                               learnable_k=learnable_k)
+        dense = Dense(in_features=n_rbf,
+                      out_features=3 * feat_dim,
+                      bias=True,
+                      dropout_rate=dropout)
+        self.block = nn.Sequential(rbf, dense)
+        self.f_cut = CosineEnvelope(cutoff=cutoff)
 
     def forward(self, dist):
-        output = self.block(dist)
+        rbf_feats = self.block(dist)
+        envelope = self.f_cut(dist).reshape(-1, 1)
+        output = rbf_feats * envelope
+
         return output
 
 
@@ -67,28 +83,32 @@ class InvariantMessage(nn.Module):
                  feat_dim,
                  activation,
                  n_rbf,
-                 cutoff):
+                 cutoff,
+                 learnable_k,
+                 dropout):
         super().__init__()
 
         self.inv_dense = InvariantDense(dim=feat_dim,
-                                        activation=activation)
+                                        activation=activation,
+                                        dropout=dropout)
         self.dist_embed = DistanceEmbed(n_rbf=n_rbf,
                                         cutoff=cutoff,
-                                        feat_dim=feat_dim)
+                                        feat_dim=feat_dim,
+                                        learnable_k=learnable_k,
+                                        dropout=dropout)
 
     def forward(self,
                 s_j,
                 dist,
                 nbrs):
 
-        s_j_nbrs = s_j[nbrs[:, 1]]
-        phi = self.inv_dense(s_j_nbrs)
+        phi = self.inv_dense(s_j)[nbrs[:, 1]]
         w_s = self.dist_embed(dist)
         output = phi * w_s
 
         # split into three components, so the tensor now has
-        # shape n_atoms x feat_dim x 3
-        out_reshape = output.reshape(output.shape[0], -1, 3)
+        # shape n_atoms x 3 x feat_dim
+        out_reshape = output.reshape(output.shape[0], 3, -1)
 
         return out_reshape
 
@@ -98,12 +118,16 @@ class MessageBlock(nn.Module):
                  feat_dim,
                  activation,
                  n_rbf,
-                 cutoff):
+                 cutoff,
+                 learnable_k,
+                 dropout):
         super().__init__()
         self.inv_message = InvariantMessage(feat_dim=feat_dim,
                                             activation=activation,
                                             n_rbf=n_rbf,
-                                            cutoff=cutoff)
+                                            cutoff=cutoff,
+                                            learnable_k=learnable_k,
+                                            dropout=dropout)
 
     def forward(self,
                 s_j,
@@ -116,11 +140,11 @@ class MessageBlock(nn.Module):
                                    dist=dist,
                                    nbrs=nbrs)
 
-        split_0 = inv_out[:, :, 0].reshape(-1, s_j.shape[1], 1)
-        split_1 = inv_out[:, :, 1]
-        split_2 = inv_out[:, :, 2].reshape(-1, s_j.shape[1], 1)
+        split_0 = inv_out[:, 0, :].unsqueeze(-1)
+        split_1 = inv_out[:, 1, :]
+        split_2 = inv_out[:, 2, :].unsqueeze(-1)
 
-        unit_add = split_2 * unit.reshape(-1, 1, 3)
+        unit_add = split_2 * unit.unsqueeze(1)
         delta_v_ij = unit_add + split_0 * v_j[nbrs[:, 1]]
         delta_s_ij = split_1
 
@@ -143,46 +167,62 @@ class MessageBlock(nn.Module):
 class UpdateBlock(nn.Module):
     def __init__(self,
                  feat_dim,
-                 activation):
+                 activation,
+                 dropout):
         super().__init__()
-        self.u_mat = nn.Linear(in_features=feat_dim,
-                               out_features=feat_dim,
-                               bias=False)
-        self.v_mat = nn.Linear(in_features=feat_dim,
-                               out_features=feat_dim,
-                               bias=False)
-        self.s_dense = nn.Sequential(nn.Linear(in_features=2*feat_dim,
-                                               out_features=feat_dim,
-                                               bias=True),
-                                     layer_types[activation](),
-                                     nn.Linear(in_features=feat_dim,
-                                               out_features=3*feat_dim,
-                                               bias=True))
+        self.u_mat = Dense(in_features=feat_dim,
+                           out_features=feat_dim,
+                           bias=False)
+        self.v_mat = Dense(in_features=feat_dim,
+                           out_features=feat_dim,
+                           bias=False)
+        self.s_dense = nn.Sequential(Dense(in_features=2*feat_dim,
+                                           out_features=feat_dim,
+                                           bias=True,
+                                           dropout_rate=dropout,
+                                           activation=to_module(activation)),
+                                     Dense(in_features=feat_dim,
+                                           out_features=3*feat_dim,
+                                           bias=True,
+                                           dropout_rate=dropout))
 
     def forward(self,
                 s_i,
                 v_i):
 
-        v_tranpose = v_i.transpose(1, 2).reshape(-1, v_i.shape[1])
-        u_v = (self.u_mat(v_tranpose).reshape(-1, 3, v_i.shape[1])
-               .transpose(1, 2))
+        # v_i = (num_atoms, num_feats, 3)
+        # v_i.transpose(1, 2).reshape(-1, v_i.shape[1])
+        # = (num_atoms, 3, num_feats).reshape(-1, num_feats)
+        # = (num_atoms * 3, num_feats)
+        # -> So the same u gets applied to each atom
+        # and for each of the three dimensions, but differently
+        # for the different feature dimensions
 
-        v_v = (self.v_mat(v_tranpose).reshape(-1, 3, v_i.shape[1])
+        v_tranpose = v_i.transpose(1, 2).reshape(-1, v_i.shape[1])
+
+        # now reshape it to (num_atoms, 3, num_feats) and transpose
+        # to get (num_atoms, num_feats, 3)
+
+        num_feats = v_i.shape[1]
+        u_v = (self.u_mat(v_tranpose).reshape(-1, 3, num_feats)
+               .transpose(1, 2))
+        v_v = (self.v_mat(v_tranpose).reshape(-1, 3, num_feats)
                .transpose(1, 2))
 
         v_v_norm = norm(v_v)
         s_stack = torch.cat([s_i, v_v_norm], dim=-1)
+
         split = (self.s_dense(s_stack)
-                 .reshape(s_i.shape[0], -1, 3))
+                 .reshape(s_i.shape[0], 3, -1))
 
         # delta v update
-        a_vv = split[:, :, 0].reshape(*split.shape[:2], 1)
+        a_vv = split[:, 0, :].unsqueeze(-1)
         delta_v_i = u_v * a_vv
 
         # delta s update
-        a_sv = split[:, :, 1]
-        a_ss = split[:, :, 2]
-        # check this
+        a_sv = split[:, 1, :]
+        a_ss = split[:, 2, :]
+
         inner = (u_v * v_v).sum(-1)
         delta_s_i = inner * a_sv + a_ss
 
@@ -212,44 +252,39 @@ class ReadoutBlock(nn.Module):
     def __init__(self,
                  feat_dim,
                  output_keys,
-                 grad_keys,
-                 activation):
+                 activation,
+                 dropout,
+                 means=None,
+                 stddevs=None):
         super().__init__()
 
         self.readoutdict = nn.ModuleDict(
             {key: nn.Sequential(
-                nn.Linear(in_features=feat_dim,
-                          out_features=feat_dim//2,
-                          bias=True),
-                layer_types[activation](),
-                nn.Linear(in_features=feat_dim//2,
-                          out_features=1,
-                          bias=True)
-            )
-                for key in output_keys}
+                Dense(in_features=feat_dim,
+                      out_features=feat_dim//2,
+                      bias=True,
+                      dropout_rate=dropout,
+                      activation=to_module(activation)),
+                Dense(in_features=feat_dim//2,
+                      out_features=1,
+                      bias=True,
+                      dropout_rate=dropout))
+             for key in output_keys}
         )
 
-        self.grad_keys = grad_keys
+        self.scale_shift = ScaleShift(means=means,
+                                      stddevs=stddevs)
 
-    def forward(self,
-                s_i,
-                xyz,
-                num_atoms):
+    def forward(self, s_i):
+        """
+        Note: no atomwise summation. That's done in the model itself
+        """
 
-        output = {key: self.readoutdict[key](s_i)
-                  for key in self.readoutdict.keys()}
         results = {}
 
-        for key, val in output.items():
-            # split the outputs into those of each molecule
-            split_val = torch.split(val, num_atoms)
-            # sum the results for each molecule
-            results[key] = torch.stack([i.sum() for i in split_val])
-
-        for key in self.grad_keys:
-            output = results[key.replace("_grad", "")]
-            grad = compute_grad(output=output,
-                                inputs=xyz)
-            results[key] = grad
+        for key, readoutdict in self.readoutdict.items():
+            output = readoutdict(s_i)
+            output = self.scale_shift(output, key)
+            results[key] = output
 
         return results
