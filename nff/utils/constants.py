@@ -1,4 +1,5 @@
 import torch
+import math
 from rdkit import Chem
 
 PERIODICTABLE = Chem.GetPeriodicTable()
@@ -30,6 +31,9 @@ KCAL_TO_AU = {
     'energy': 1.0 / HARTREE_TO_KCAL_MOL,
     '_grad': BOHR_RADIUS,
 }
+
+KB_EV = 0.0000861731
+EV_TO_AU = 1/27.2114
 
 # Hardness used in xtb, in eV. Source: Ghosh, D.C. and Islam, N., 2010.
 # Semiempirical evaluation of the global hardness of the atoms
@@ -71,6 +75,23 @@ HARDNESS_AU_MAT = torch.zeros(200)
 for key, val in HARDNESS_AU.items():
     at_num = int(PERIODICTABLE.GetAtomicNumber(key))
     HARDNESS_AU_MAT[at_num] = val
+
+# Times
+
+FS_TO_AU = 41.341374575751
+FS_TO_ASE = 0.098
+ASE_TO_FS = 1/FS_TO_ASE
+
+# Masses
+AMU_TO_AU = 1.66e-27/(9.1093837015e-31)
+
+# Weird units used by Gaussian
+CM_TO_J = 1.98630e-23
+DYN_TO_J_PER_M  = 0.00001
+ANGS_TO_M = 1e-10
+MDYN_PER_A_TO_J_PER_M = DYN_TO_J_PER_M / 1000 / ANGS_TO_M
+KG_TO_AMU = 1 / (1.66e-27)
+HBAR_SI = 6.626e-34/ (2 * math.pi)
 
 
 def convert_units(props, conversion_dict):
