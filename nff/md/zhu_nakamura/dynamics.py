@@ -1,30 +1,20 @@
-import os
+from datetime import datetime
 import numpy as np
 import random
-import json
-import pdb
-import logging
-from datetime import datetime
-from pytz import timezone
 import torch
 import copy
-import csv
 
-from ase.md.md import MolecularDynamics
+from torch.utils.data import DataLoader
 from ase.io.trajectory import Trajectory
-from ase import Atoms
 
 from nff.md.utils_ax import mol_dot, mol_norm, ZhuNakamuraLogger, atoms_to_nxyz
 from nff.md.nvt_ax import NoseHoover, NoseHooverChain
 from nff.md.nms import nms_sample
-
-from nff.utils.constants import BOHR_RADIUS, FS_TO_AU, AMU_TO_AU, FS_TO_ASE, ASE_TO_FS, EV_TO_AU
+from nff.utils.constants import BOHR_RADIUS, FS_TO_AU, AMU_TO_AU, ASE_TO_FS
 from nff.data import Dataset, collate_dicts
 from nff.utils.cuda import batch_to
-from nff.utils.constants import KCAL_TO_AU, KB_EV
+from nff.utils.constants import KCAL_TO_AU
 from nff.train import load_model
-
-from torch.utils.data import DataLoader
 
 
 HBAR = 1
@@ -72,13 +62,13 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         _energies (numpy.ndarray): array of shape (num_states). There is one energy for each state.
         _surf (int): current electronic state that the system is in
         _in_trj (bool): whether or not the current frame is "in the trajectory". The frame may not
-            be in the trajectory in the following example. If an avoided crossing is found, and a hop
-            occurs, then the last two frames are "removed" from the trajectory and replaced with a new
-            frame. The new frame has the position of the second last frame, but a new surface and new
-            re-scaled velocities. In this case the last two frames are not considered  to be in the
-            trajectory.
-        _hopping_probabilities (list): A list of dictionaries with the Zhu a, b and p parameters. Each
-            dictionary has information for hopping between different pairs of states.
+            be in the trajectory in the following example. If an avoided crossing is found, and a 
+            hop occurs, then the last two frames are "removed" from the trajectory and replaced 
+            with a new frame. The new frame has the position of the second last frame, but a new 
+            surface and new re-scaled velocities. In this case the last two frames are not considered
+            to be in the trajectory.
+        _hopping_probabilities (list): A list of dictionaries with the Zhu a, b and p parameters. 
+            Each dictionary has information for hopping between different pairs of states.
 
         position_list (list): list of _positions at all past times in the trajectory
         velocity_list (list): list of _velocities at all past times in the trajectory
@@ -96,28 +86,30 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         zhu_difference (float): Zhu difference parameter, used for calculating hopping probability
         zhu_product (float): Zhu product parameter, used for calculating hopping probability
         zhu_sign (int): Zhu sign parameter (+/- 1), used for calculating hopping probability
-        n_vector (numpy.ndarray): Zhu n-vector, of shape (num_atoms, 3), used for calculating hopping
-            probability
+        n_vector (numpy.ndarray): Zhu n-vector, of shape (num_atoms, 3), used for calculating 
+            hopping probability
         v_parallel (numpy.ndarray): Component of the velocity parallel to the hopping direction. Has
             shape (num_atoms), and is used for calculating hopping probability.
         ke_parallel (float): Kinetic energy associated with v_parallel.
         ke (float): Total kinetic energy
-        hopping_probabilities (list): A list of dictionaries with the Zhu a, b and p parameters. Each
-            dictionary has information for hopping between different pairs of states.
+        hopping_probabilities (list): A list of dictionaries with the Zhu a, b and p parameters. 
+            Each dictionary has information for hopping between different pairs of states.
 
     Properties:
 
-        positions: returns self._positions. Updating positions updates self._positions, self.positions_list, and positions of
-            self.atoms.
-        velocities: returns self._velocities. Updating positions updates self._velocities, self.velocities_list and velocities
-            of self.atoms.
-        forces: returns self._forces. Updating forces updates self._forces, self.forces_list and forces of self.atoms.
-        energies: returns self._energies. Updating energies updates self._energies, self.energy_list and energies of self.atoms.
+        positions: returns self._positions. Updating positions updates self._positions, 
+            self.positions_list, and positions of self.atoms.
+        velocities: returns self._velocities. Updating positions updates self._velocities, 
+            self.velocities_list and velocities of self.atoms.
+        forces: returns self._forces. Updating forces updates self._forces, self.forces_list 
+            and forces of self.atoms.
+        energies: returns self._energies. Updating energies updates self._energies, 
+            self.energy_list and energies of self.atoms.
         surf: returns self._surf. Updating surf updates self._surf and self.surf_list.
         in_trj: returns self._in_trj. Updating in_trj updates self._in_trj and self.
         time: returns self._time. Updating time updates self.time_list.
-        hopping_probabilities: returns self._hopping_probabilities. Updating hopping_probabilities updates
-            self.hopping_probability_list
+        hopping_probabilities: returns self._hopping_probabilities. Updating hopping_probabilities 
+            updates self.hopping_probability_list
     """
 
     def __init__(self,
@@ -152,8 +144,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         """
 
         self.atoms = atoms
-        self.dt = timestep*FS_TO_AU
-        self.max_time = max_time*FS_TO_AU
+        self.dt = timestep * FS_TO_AU
+        self.max_time = max_time * FS_TO_AU
         self.num_states = num_states
         self.Natom = atoms.get_number_of_atoms()
         self.out_file = out_file
@@ -162,52 +154,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         # everything in a.u. other than positions (which are in angstrom)
         self._positions = atoms.get_positions()
-
-        # What's the deal with these units? They NVT units were already super weird
-        # so these might be right, but they're bizarre. Need to check this
-        # very carefully.
-
-        # I think it may be 4.48 * 10^(-3), not 8.71 * 10 ^(-5), because
-        # angs/(angs*Sqrt[amu / eV] /. {angs -> 1/0.529*bohr,
-        # amu -> 1826 eMass, eV -> 1/27.2 Hartree} = 4.48 * 10^(-3),
-        # and the unit of time is Angstrom Sqrt[amu / eV] in ASE.
-
-        # So this conversion
-        # factor was underestimated, leading to velocities that were too slow?
-        # -> I think the best way to check this is go back and run MD to
-        # initialize, and re-run the set_trace below to check the kinetic energy.
-        # -> My feeling is still that NMS was the culprit because of how constrained
-        # the vibrations look compared to what we saw in MD.
-        # ... unless what we saw in MD was also in wrong units
-        # -> According to that log file, the average kinetic energy was about 0.85 eV,
-        # which is exactly 1/2 kT per degree of freedom.
-        # -> The average PE was about -3.2 eV, and the minimum is -4.1, so that's about
-        # 0.9 eV and also 1/2 kT per degree of freedom.
-        # -> So it looks like the dynamics were right (and hence the big torsions),
-        # it's just a question of the conversion
-
-        # self._velocities = atoms.get_velocities() * EV_TO_AU / (ASE_TO_FS * FS_TO_AU)
-        self._velocities = atoms.get_velocities() / BOHR_RADIUS / (ASE_TO_FS * FS_TO_AU)
-
-        # this gives 1/2 kT of energy for all 3N - 6 modes so we're good with the NMS,
-        # just still weirded out by the units above for NVT
-
-        # import pdb
-        # pdb.set_trace()
-
-        # atoms.set_velocities(self._velocities * BOHR_RADIUS * FS_TO_AU * ASE_TO_FS)
-        # print(atoms.get_kinetic_energy())
-
-        # I think if you scale this by 4.48 * 10^(-3) / 8.71 * 10 ^(-5) you get about 1/2 kT
-        # per degree of freedom. So I think the units were wrong here.
-
-        # Next step is to do this again with the corrected velocities and MD, and check the
-        # new lifetimes and yields (cis lifetimes will for sure drop, unlcear what will happen
-        # with the yields)
-
-        # * I think this is right because we're using nvt_ax.py, which automatically converts
-        # the units for us. As long as we have the right ASE conversion we're good, and this
-        # looks right.
+        self._velocities = (atoms.get_velocities()
+                            / BOHR_RADIUS / (ASE_TO_FS * FS_TO_AU))
 
         self._forces = None
         self._energies = None
@@ -237,7 +185,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.ke_parallel = 0.0
         self.ke = 0.0
 
-        save_keys = ["position_list", "velocity_list", "force_list", "energy_list", "surf_list", "in_trj_list",
+        save_keys = ["position_list", "velocity_list", "force_list",
+                     "energy_list", "surf_list", "in_trj_list",
                      "hopping_probability_list", "time_list"]
 
         super().__init__(save_keys=save_keys, **self.__dict__)
@@ -428,18 +377,20 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         # take a step for the positions
         # positions are in Angstrom so they must be properly converted
-        # Note also that we don't use += here, because that causes problems with
-        # setters.
+        # Note also that we don't use += here, because that causes problems
+        # with setters.
 
-        self.positions = self.positions + (self.velocities * self.dt + 1 /
-                                           2 * accel * self.dt ** 2) * BOHR_RADIUS
+        self.positions = (self.positions + (self.velocities * self.dt
+                                            + 1 / 2 * accel * self.dt ** 2
+                                            ) * BOHR_RADIUS)
 
     def velocity_step(self):
 
         new_accel = self.get_accel()
         self.velocities = self.velocities + 1 / 2 * \
             (new_accel + self.old_accel) * self.dt
-        # assume the current frame is in the trajectory until finding out otherwise
+        # assume the current frame is in the trajectory until
+        # finding out otherwise
         self.in_trj = True
         # update surf (which also appends to surf_list)
         self.surf = self.surf
@@ -447,7 +398,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.log("Completed step {}. Currently in state {}.".format(
             int(self.time/self.dt), self.surf))
         self.log("Relative energies are {} eV".format(", ".join(
-            ((self.energies - self.energies[0])*27.2).reshape(-1).astype("str").tolist())))
+            ((self.energies - self.energies[0]) * 27.2
+             ).reshape(-1).astype("str").tolist())))
 
     def md_step(self):
         """
@@ -461,28 +413,34 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.velocity_step()
 
     def check_crossing(self):
-        """Check if we're at an avoided crossing by seeing if the energy gap was at a minimum in the last step.
+        """Check if we're at an avoided crossing by seeing if the energy gap
+         was at a minimum  in the last step.
         Args:
             None
         Returns:
             at_crossing (bool): whether we're at an avoided crossing for any combination of states
-            new_surfs (list): list of surfaces that are at an avoided crossing with the current surface.
+            new_surfs (list): list of surfaces that are at an avoided crossing with the current 
+                surface.
         """
 
         new_surfs = []
         at_crossing = False
 
-        # if we've taken less than three steps, we can't check if we're at an avoided crossing
+        # if we've taken less than three steps, we can't check if we're at
+        # an avoided crossing
         if len(self.energy_list) < 3 or len(self.surf_list) < 3:
             return at_crossing, new_surfs
 
-        # all of the past three steps must be in the trajectory. This stops us from trying to re-hop
-        # after we've already hopped at an avoided crossing. If a hop has already happened, then
-        # you don't try it again at the same position.
+        # all of the past three steps must be in the trajectory. This stops us
+        # from trying to re-hop after we've already hopped at an avoided
+        # crossing. If a hop has already happened, then you don't try it again
+        #  at the same position.
+
         if not all(is_in_trj for is_in_trj in self.in_trj_list[-3:]):
             return at_crossing, new_surfs
 
-        # loop through states other than self.surf and see if they're at an avoided crossing
+        # loop through states other than self.surf and see if they're
+        # at an avoided crossing
         for i in range(self.num_states):
             if i == self.surf:
                 continue
@@ -508,8 +466,9 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         """
 
-        # update diabatic forces. Start with the r_{ij} parameters from the ZN paper
-        # units for r_{ij} don't matter since they only get called in ratios
+        # update diabatic forces. Start with the r_{ij} parameters
+        # from the ZN paper units for r_{ij} don't matter since
+        # they only get called in ratios
 
         r_20 = self.position_list[-1] - self.position_list[-3]
         r_10 = self.position_list[-2] - self.position_list[-3]
@@ -517,18 +476,21 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         # diabatic forecs on the lower state
         lower_diabatic_forces = -(-self.force_list[-1][lower_state] * r_10 +
-                                  self.force_list[-3][upper_state] * r_12) / r_20
+                                  self.force_list[-3][upper_state] * r_12
+                                  ) / r_20
         # diabatic forces on the upper state
         upper_diabatic_forces = -(-self.force_list[-1][upper_state] * r_10 +
-                                  self.force_list[-3][lower_state] * r_12) / r_20
+                                  self.force_list[-3][lower_state] * r_12
+                                  ) / r_20
 
         # array of forces on the lower and upper diabatic states
-        self.diabatic_forces = np.append([lower_diabatic_forces], [
-            upper_diabatic_forces], axis=0)
+        self.diabatic_forces = np.append([lower_diabatic_forces],
+                                         [upper_diabatic_forces], axis=0)
 
         # update diabatic coupling
         self.diabatic_coupling = (
-            self.energy_list[-2][upper_state].item() - self.energy_list[-2][lower_state].item()) / 2
+            self.energy_list[-2][upper_state].item()
+            - self.energy_list[-2][lower_state].item()) / 2
 
         # update Zhu difference parameter
         norm_vec = mol_norm(self.diabatic_forces[1] - self.diabatic_forces[0])
@@ -584,7 +546,6 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
             return "err"
         self.velocities = velocities
 
-
     def update_probabilities(self):
         """
         Update the Zhu a, b and p probabilities.
@@ -592,19 +553,22 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         hopping_probabilities = []
         at_crossing, new_surfs = self.check_crossing()
-        # if we're not at a crossing, then the hopping probabilities shouldn't be considered
+        # if we're not at a crossing, then the hopping probabilities
+        # shouldn't be considered
         if not at_crossing:
             self.hopping_probabilities = hopping_probabilities
             return
 
         # if the molecule's exploded then move on
-        if 'nan' in self.positions.astype("str") or 'nan' in self.forces.astype("str"):
+        if ('nan' in self.positions.astype("str")
+                or 'nan' in self.forces.astype("str")):
             self.hopping_probabilities = hopping_probabilities
             return
 
         for new_surf in new_surfs:
 
-            # get the upper and lower state by sorting the current surface and the new one
+            # get the upper and lower state by sorting the current
+            # surface and the new one
             lower_state, upper_state = sorted((self.surf, new_surf))
             self.update_diabatic_quants(lower_state, upper_state)
 
@@ -612,7 +576,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
             with np.errstate(divide='ignore', invalid='ignore'):
 
                 # calculate the zhu a parameter
-                a_numerator = HBAR ** 2 / 2 * self.zhu_product * self.zhu_difference
+                a_numerator = (HBAR ** 2 / 2 * self.zhu_product
+                               * self.zhu_difference)
                 a_denominator = (2 * self.diabatic_coupling) ** 3
                 zhu_a = np.nan_to_num(
                     np.divide(a_numerator, a_denominator) ** 0.5)
@@ -628,14 +593,17 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
                     np.divide(b_numerator, b_denominator) ** 0.5)
 
                 # calculating the hopping probability
-                zhu_p = np.nan_to_num(np.exp(-np.pi / 4 / zhu_a * (2 / (zhu_b ** 2 +
-                                                                        (abs((zhu_b ** 4) + (
-                                                                            self.zhu_sign) * 1.0)) ** 0.5)) ** 0.5))
+                zhu_p = np.nan_to_num(
+                    np.exp(-np.pi / 4 / zhu_a *
+                           (2 / (zhu_b ** 2 +
+                                 (abs((zhu_b ** 4) + (self.zhu_sign) * 1.0))
+                                 ** 0.5)) ** 0.5))
 
                 # add this info to the list of hopping probabilities
 
                 hopping_probabilities.append(
-                    {"zhu_a": zhu_a, "zhu_b": zhu_b, "zhu_p": zhu_p, "new_surf": new_surf})
+                    {"zhu_a": zhu_a, "zhu_b": zhu_b,
+                     "zhu_p": zhu_p, "new_surf": new_surf})
 
         self.hopping_probabilities = hopping_probabilities
 
@@ -686,8 +654,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.energies = self.energy_list[-2]
         self.forces = self.force_list[-2]
 
-        # set the frame to be in the trajectory, but the previous two frames to be
-        # out of the trajectory
+        # set the frame to be in the trajectory, but the previous
+        # two frames to be out of the trajectory
         self.in_trj = True
         self.in_trj_list[-2] = False
         self.in_trj_list[-3] = False
@@ -710,10 +678,14 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         # update the hopping probabilities
         self.update_probabilities()
 
-        # randomly order the self.hopping_probabilities list. If, for some reason, two sets of states
-        # are both at an avoided crossing, then we'll first try to hop between the first set of states.
-        # If this fails then we'll try to hop between the second set of states. To avoid biasing in
-        # the direction of one hop vs. another, we randomly shuffle the order of self.hopping_probabilities
+        # randomly order the self.hopping_probabilities list.
+        # If, for some reason, two sets of states
+        # are both at an avoided crossing, then we'll first
+        # try to hop between the first set of states.
+        # If this fails then we'll try to hop between the second
+        # set of states. To avoid biasing in
+        # the direction of one hop vs. another, we randomly shuffle
+        # the order of self.hopping_probabilities
         # each time.
 
         random.shuffle(self.hopping_probabilities)
@@ -727,7 +699,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
             zhu_p = probability_dic["zhu_p"]
             new_surf = probability_dic["new_surf"]
 
-            self.log("Attempting hop from state {} to state {}. Probability is {}.".format(
+            self.log(("Attempting hop from state {} to state {}. "
+                      "Probability is {}.").format(
                 self.surf, probability_dic["new_surf"], zhu_p))
 
             # decide whether or not to hop based on Zhu a, b, and p
@@ -755,7 +728,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.log("Beginning surface hopping at {}.".format(
             datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
         self.log("Relative energies are {} eV".format(", ".join(
-            ((self.energies - self.energies[0])*27.2).reshape(-1).astype("str").tolist())))
+            ((self.energies - self.energies[0]) * 27.2
+             ).reshape(-1).astype("str").tolist())))
 
         while self.time < self.max_time:
             self.step()
@@ -769,8 +743,9 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 class BatchedZhuNakamura:
 
     """
-    A class for running several Zhu Nakamura trajectories at once. This is done by taking a half step for each trajectory,
-    combining all the xyz's into a dataset and batching it for the network, and then de-batching to put the forces and energies
+    A class for running several Zhu Nakamura trajectories at once. This is done by taking a half 
+    step for each trajectory, combining all the xyz's into a dataset and batching it for the 
+    network, and then de-batching to put the forces and energies
     back in the trajectories.
 
     Attributes:
@@ -809,10 +784,12 @@ class BatchedZhuNakamura:
         self.props = self.duplicate_props(props)
         self.nbr_update_period = batched_params["nbr_update_period"]
         self.device = batched_params["device"]
-        self.model = load_model(batched_params["weight_path"], params=modelparams,
+        self.model = load_model(batched_params["weight_path"],
+                                params=modelparams,
                                 model_type=model_type)
-
+        self.model.eval()
         self.model.to(self.device)
+
         self.batch_size = batched_params["batch_size"]
         self.cutoff = batched_params["cutoff"]
         self.needs_angles = needs_angles
@@ -864,7 +841,8 @@ class BatchedZhuNakamura:
             else:
                 raise Exception
 
-        new_props.update({key: None for key in [*self.energy_keys, *self.grad_keys]})
+        new_props.update({key: None for key in
+                          [*self.energy_keys, *self.grad_keys]})
         new_props["num_atoms"] = new_props["num_atoms"].long()
 
         return new_props
@@ -905,13 +883,17 @@ class BatchedZhuNakamura:
 
             current_trj = i * self.batch_size
 
-            for j, trj in enumerate(trjs[current_trj:current_trj+self.batch_size]):
+            for j, trj in enumerate(trjs[current_trj:
+                                         current_trj + self.batch_size]):
                 energies = []
                 forces = []
                 for key in self.energy_keys:
                     energy = (results[key][j].item())*KCAL_TO_AU["energy"]
-                    force = ((-results[key + "_grad"][j]).detach().cpu().numpy()
-                             )*KCAL_TO_AU["energy"]*KCAL_TO_AU["_grad"]
+
+                    force = ((-results[key + "_grad"][j]).detach(
+                    ).cpu().numpy()
+                    )*KCAL_TO_AU["energy"]*KCAL_TO_AU["_grad"]
+
                     energies.append(energy)
                     forces.append(force)
 
@@ -1050,11 +1032,12 @@ class CombinedZhuNakamura:
         if self.nms:
             temp = self.ground_params.get(
                 "temperature", self.ground_params.get("T_init"))
-            actual_states = nms_sample(params=self.ground_params,
-                                       classical=self.ground_params["classical"],
-                                       num_samples=self.num_trj,
-                                       kt=25.7 / 1000 / 27.2 * temp / 300,
-                                       hb=1)
+            actual_states = nms_sample(
+                params=self.ground_params,
+                classical=self.ground_params["classical"],
+                num_samples=self.num_trj,
+                kt=25.7 / 1000 / 27.2 * temp / 300,
+                hb=1)
 
             return actual_states
 
