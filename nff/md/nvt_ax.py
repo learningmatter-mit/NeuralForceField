@@ -16,13 +16,12 @@ class NoseHoover(MolecularDynamics):
                  timestep,
                  temperature,
                  ttime,
+                 maxwell_temp=None,
                  trajectory=None,
                  logfile=None,
                  loginterval=1,
                  max_steps=None,
                  **kwargs):
-
-        
 
         MolecularDynamics.__init__(self,
                                    atoms,
@@ -33,7 +32,7 @@ class NoseHoover(MolecularDynamics):
 
         # Initialize simulation parameters
         # convert units
-        
+
         self.dt = timestep * units.fs
         self.T = temperature * units.kB
         self.ttime = ttime  # defined as a fraction of self.dt
@@ -47,7 +46,15 @@ class NoseHoover(MolecularDynamics):
         self.zeta = 0.0
         self.num_steps = max_steps
         self.n_steps = 0
-        MaxwellBoltzmannDistribution(self.atoms, self.T)
+
+        # initial Maxwell-Boltmann temperature for atoms
+        if maxwell_temp is not None:
+            # convert units
+            maxwell_temp = maxwell_temp * units.kB
+        else:
+            maxwell_temp = 2 * self.T
+
+        MaxwellBoltzmannDistribution(self.atoms, maxwell_temp)
         Stationary(self.atoms)
         ZeroRotation(self.atoms)
 
@@ -105,6 +112,7 @@ class NoseHooverChain(MolecularDynamics):
                  temperature,
                  ttime,
                  num_chains,
+                 maxwell_temp,
                  trajectory=None,
                  logfile=None,
                  loginterval=1,
@@ -140,7 +148,13 @@ class NoseHooverChain(MolecularDynamics):
         self.num_steps = max_steps
         self.n_steps = 0
 
-        MaxwellBoltzmannDistribution(self.atoms, self.T)
+        # initial Maxwell-Boltmann temperature for atoms
+        if maxwell_temp is not None:
+            # convert units
+            maxwell_temp = maxwell_temp * units.kB
+        else:
+            maxwell_temp = 2 * self.T
+        MaxwellBoltzmannDistribution(self.atoms, maxwell_temp)
 
 
     def get_zeta_accel(self):
