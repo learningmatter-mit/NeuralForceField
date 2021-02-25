@@ -26,7 +26,7 @@ We highly recommend to create a `conda` environment to run the code. To do that,
 
 ```bash
 conda upgrade conda
-conda create -n nff python=3.7 scikit-learn pytorch\>=1.2.0 cudatoolkit=10.0 ase pandas pymatgen sympy rdkit hyperopt jq openbabel -c pytorch -c conda-forge -c rdkit -c openbabel
+conda create -n nff python=3.7 scikit-learn pytorch=1.7 cudatoolkit=10.2 ase pandas pymatgen sympy rdkit hyperopt jq openbabel -c pytorch -c conda-forge -c rdkit -c openbabel
 ```
 
 Next install remaining pip requirements:
