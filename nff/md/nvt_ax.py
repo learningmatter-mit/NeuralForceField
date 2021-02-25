@@ -47,7 +47,7 @@ class NoseHoover(MolecularDynamics):
         self.zeta = 0.0
         self.num_steps = max_steps
         self.n_steps = 0
-        MaxwellBoltzmannDistribution(self.atoms, 2 * self.T)
+        MaxwellBoltzmannDistribution(self.atoms, self.T)
         Stationary(self.atoms)
         ZeroRotation(self.atoms)
 
@@ -140,9 +140,7 @@ class NoseHooverChain(MolecularDynamics):
         self.num_steps = max_steps
         self.n_steps = 0
 
-        MaxwellBoltzmannDistribution(self.atoms, 2 * self.T)
-        Stationary(self.atoms)
-       	ZeroRotation(self.atoms)
+        MaxwellBoltzmannDistribution(self.atoms, self.T)
 
 
     def get_zeta_accel(self):
@@ -196,9 +194,6 @@ class NoseHooverChain(MolecularDynamics):
 
         self.atoms.set_velocities(v_full_system)
         self.p_zeta = v_full_zeta * self.Q
-
-        Stationary(self.atoms)
-        ZeroRotation(self.atoms)
 
     def run(self, steps=None):
 
