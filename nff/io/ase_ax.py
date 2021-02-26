@@ -232,9 +232,6 @@ class NeuralFF(Calculator):
                                            props=self.dataset_props,
                                            needs_angles=self.needs_angles,
                                            device=self.device)
-        # set the neighbor list so it gets reused every time -
-        # update it in the integrator
-        atomsbatch.nbr_list = self.dataset_props['nbr_list']
         batch = atomsbatch.get_batch()
 
         # add keys so that the readout function can calculate these properties
