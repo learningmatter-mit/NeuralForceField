@@ -980,8 +980,10 @@ class BatchedZhuNakamura:
         # get positions at previous time step for all trajectories at
         # crossings
 
-        nxyz_data = [trj.position_list[-2] for trj in diabat_trjs]
-        for i, nxyz in enumerate(nxyz_data):
+        xyz_data = [trj.position_list[-2] for trj in diabat_trjs]
+        for i, xyz in enumerate(xyz_data):
+            z_arr = diabat_trjs[i].atoms.get_atomic_numbers()
+            nxyz = np.concatenate([z_arr.reshape(-1, 1), xyz], axis=-1)
             dataset.props['nxyz'][i] = torch.Tensor(nxyz)
 
         # technically not generating neighbors here isn't totally consistent,
