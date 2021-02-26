@@ -107,7 +107,7 @@ class NoseHoover(MolecularDynamics):
 
         epochs = int(total_steps // self.nbr_update_period)
         # number of steps in between nbr updates
-        self.max_steps = int(self.max_steps / epochs)
+        self.max_steps = int(total_steps / epochs)
 
         for _ in range(epochs):
             Dynamics.run(self)
