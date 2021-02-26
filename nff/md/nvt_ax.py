@@ -110,12 +110,12 @@ class NoseHoover(MolecularDynamics):
         steps_per_epoch = int(total_steps / epochs)
         # maximum number of steps starts at `steps_per_epoch`
         # and increments after every nbr list update
-        self.max_steps = steps_per_epoch
+        self.max_steps = 0
 
         for _ in range(epochs):
+            self.max_steps += steps_per_epoch
             Dynamics.run(self)
             self.atoms.update_nbr_list()
-            self.max_steps += steps_per_epoch
 
 
 class NoseHooverChain(MolecularDynamics):
