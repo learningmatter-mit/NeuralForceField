@@ -1017,10 +1017,10 @@ class BatchedZhuNakamura:
                 num_states = diabat_keys.shape[0]
 
                 # store the diabatic energies as a matrix
-                diabat_ens = np.zeros(num_states, num_states)
+                diabat_ens = np.zeros((num_states, num_states))
 
                 # only store the diagonal diabatic forces
-                diabat_forces = np.zeros(num_states, N[j])
+                diabat_forces = np.zeros((num_states, N[j]))
 
                 for l in range(num_states):
                     for m in range(num_states):
