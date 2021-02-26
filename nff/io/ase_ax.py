@@ -211,7 +211,7 @@ class NeuralFF(Calculator):
 
     def calculate(
         self,
-        atoms=None,
+        atomsbatch=None,
         properties=['energy', 'forces'],
         system_changes=all_changes
     ):
@@ -225,13 +225,13 @@ class NeuralFF(Calculator):
             system_changes (default from ase)
         """
 
-        Calculator.calculate(self, atoms, properties, system_changes)
+        Calculator.calculate(self, atomsbatch, properties, system_changes)
 
         # run model
-        atomsbatch = AtomsBatch.from_atoms(atoms=atoms,
-                                           props=self.dataset_props,
-                                           needs_angles=self.needs_angles,
-                                           device=self.device)
+        # atomsbatch = AtomsBatch.from_atoms(atoms=atoms,
+        #                                    props=self.dataset_props,
+        #                                    needs_angles=self.needs_angles,
+        #                                    device=self.device)
         batch = atomsbatch.get_batch()
 
         # add keys so that the readout function can calculate these properties
