@@ -982,7 +982,7 @@ class BatchedZhuNakamura:
 
         nxyz_data = [trj.position_list[-2] for trj in diabat_trjs]
         for i, nxyz in enumerate(nxyz_data):
-            dataset.props['nxyz'][i] = nxyz
+            dataset.props['nxyz'][i] = torch.Tensor(nxyz)
 
         # technically not generating neighbors here isn't totally consistent,
         # because it's possible that neighbors were generated at the subsequent
