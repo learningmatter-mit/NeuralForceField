@@ -366,7 +366,8 @@ class Diagonalize(nn.Module):
 
         return U
 
-    def forward(self, inputs, return_U=False):
+    def forward(self,
+                inputs):
 
         d0, d1, lam = self._generate_inputs(inputs)
         e0 = 1 / 2 * (d0 + d1 - ((d0 - d1) ** 2 + 4 * lam ** 2 + EPS) ** 0.5)

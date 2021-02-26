@@ -1045,9 +1045,50 @@ class DiabaticReadout(nn.Module):
         self.grad_keys = grad_keys
         self.energy_keys = energy_keys
 
+    def get_nacv(self, U, xyz, N):
+
+        num_states = U.shape[2]
+        split_xyz = torch.split(xyz, N)
+
+        u_grads = [torch.zeros(num_states, num_states,
+                               this_xyz.shape[0], 3).to(xyz.device)
+                   for this_xyz in split_xyz]
+
+        for i in range(U.shape[1]):
+            for j in range(U.shape[2]):
+                if i == j:
+                    continue
+                this_grad = compute_grad(inputs=xyz,
+                                         output=U[:, i, j]).detach()
+                grad_split = torch.split(this_grad, N)
+                for k, grad in enumerate(grad_split):
+                    u_grads[k][i, j, :, :] = grad
+
+        U = U.detach()
+
+        # m, l, and s are state indices that get summed out
+        # i and j are state indices that don't get summed out
+        # a = N_at is the number of atoms
+        # t = 3 is the number of directions for each atom
+
+        nacvs = []
+        for k, u_grad in enumerate(u_grads):
+            this_u = U[k]
+            nacv = torch.einsum('im, sjat, lm, sl -> ijat',
+                                this_u, u_grad, this_u, this_u)
+            nacvs.append(nacv)
+
+        # concatenate along all the atoms just like we do
+        # for forces, giving a tensor of shape
+        # (num_states, num_states, total_num_atoms, 3)
+
+        nacv_cat = torch.cat(nacvs, axis=-2)
+
+        return nacv_cat
+
     def add_nacv(self, results, u, xyz, N):
 
-        nacv = self.get_nacv(u=u, xyz=xyz, N=N)
+        nacv = self.get_nacv(U=u, xyz=xyz, N=N)
         num_states = nacv.shape[0]
         for i in range(num_states):
             for j in range(num_states):
@@ -1066,8 +1107,8 @@ class DiabaticReadout(nn.Module):
         diabat_keys = np.array(self.diabat_keys)
         dim = diabat_keys.shape[0]
         num_geoms = len(N)
-        diabat_ham = torch.zeros(num_geoms, dim, dim
-                                 ).to(xyz.device)
+        diabat_ham = (torch.zeros(num_geoms, dim, dim)
+                      .to(xyz.device))
         for i in range(dim):
             for j in range(dim):
                 key = diabat_keys[i, j]
@@ -1085,9 +1126,182 @@ class DiabaticReadout(nn.Module):
 
         return results
 
-    def add_grad(self, results, xyz):
+    def choose_grad_route(self, extra_grads):
+        """
+        If gradients of certain diabatic states are asked for, then
+        decide the most efficient way to calculate both those and
+        the adiabatic gradients.
+        """
 
-        for grad_key in self.grad_keys:
+        # unique diabatic quantities
+        unique_diabats = list(set(np.array(self.diabat_keys)
+                                  .reshape(-1).tolist()))
+
+        # extra quantities whose gradients were requested
+        extra_quants = [i.replace("_grad", "") for i in
+                        np.array(extra_grads).reshape(-1).tolist()]
+
+        # diabatic keys for which gradients were requested
+        diabats_need_grad = list(set([i for i in extra_quants
+                                      if i in unique_diabats]))
+
+        # adiabatic energies for which gradients were requested
+        energies_need_grad = [i.replace("_grad", "") for i in self.grad_keys
+                              if i.replace("_grad", "") in self.energy_keys]
+
+        # number of diabatic gradients needed to make sure we get all the
+        # adiabatic gradients right
+
+        num_diabat_to_en = len(unique_diabats)
+
+        # number of gradients needed if we compute all gradients separately
+
+        num_separate = len(diabats_need_grad) + len(energies_need_grad)
+
+        # choose the route that takes fewer calculations
+
+        if num_diabat_to_en < num_separate:
+            route = "diabat_to_en"
+        else:
+            route = "separate"
+
+        return route
+
+    def compute_diabat_grad(self,
+                            results,
+                            xyz,
+                            N):
+        unique_diabats = list(set(np.array(self.diabat_keys)
+                                  .reshape(-1).tolist()))
+
+        grad_dic = {}
+        for d_key in unique_diabats:
+            grad = compute_grad(inputs=xyz, output=results[d_key])
+            grad_dic[f"{d_key}_grad"] = grad
+
+        # num_diabat x num_atoms x 3
+        d_grads = torch.stack([grad_dic[d_key + "_grad"]
+                               for d_key in unique_diabats])
+
+        return grad_dic, d_grads, unique_diabats
+
+    def compute_dE_dD(self,
+                      results,
+                      en_keys,
+                      unique_diabats,
+                      num_mols,
+                      num_states):
+
+        num_diabat = len(unique_diabats)
+        device = results[en_keys[0]].device
+
+        # num_mols x num_states x num_diabat
+        dE_dD = torch.zeros(num_mols, num_states, num_diabat)
+
+        for i, en_key in enumerate(en_keys):
+            for j, d_key in enumerate(unique_diabats):
+                grad = compute_grad(inputs=results[d_key],
+                                    output=results[en_key])
+                dE_dD[:, i, j] = grad
+
+        return dE_dD
+
+    def compute_all_grads(self,
+                          results,
+                          xyz,
+                          N):
+        """
+        Compute gradients of all diabatic energies and then
+        of the adiabatic energies requested.
+        """
+
+        en_keys = [i.replace("_grad", "") for i in self.grad_keys
+                   if i.replace("_grad", "") in self.energy_keys]
+        num_states = len(en_keys)
+        num_mols = results[en_keys[0]].shape[0]
+
+        # d_grads: num_diabat x num_atoms x 3
+        grad_dic, d_grads, unique_diabats = self.compute_diabat_grad(
+            results=results,
+            xyz=xyz,
+            N=N)
+
+        # dE_dD: num_mols x num_states x num_diabat
+        dE_dD = self.compute_dE_dD(results=results,
+                                   en_keys=en_keys,
+                                   unique_diabats=unique_diabats,
+                                   num_mols=num_mols,
+                                   num_states=num_states)
+
+        # do molecule by molecule
+        num_atoms = d_grads.shape[1]
+        mol_d_grads = torch.split(d_grads, N, dim=1)
+        all_engrads = torch.zeros(num_states, num_atoms, 3)
+
+        counter = 0
+
+        for i in range(num_mols):
+            # num_diabat x (num_atoms of this mol) x 3
+            mol_d_grad = mol_d_grads[i]
+
+            # num_states x num_diabat
+            mol_dE_dD = dE_dD[i].to(mol_d_grad.device)
+
+            # output = num_states x (num_atoms of this_mol) x 3
+            engrads = torch.einsum("ij,jkl->ikl", mol_dE_dD, mol_d_grad)
+
+            # put into concatenated gradients
+            this_num_atoms = mol_d_grad.shape[1]
+            all_engrads[:, counter: counter + this_num_atoms, :] = engrads
+
+            counter += this_num_atoms
+
+        for j, en_key in enumerate(en_keys):
+            grad_dic[en_key + "_grad"] = all_engrads[j]
+
+        return grad_dic
+
+    def add_grad(self,
+                 results,
+                 xyz,
+                 N,
+                 extra_grads=None,
+                 try_speedup=False):
+
+        # for example, if you want the gradients of the diabatic
+        # energies
+
+        if extra_grads is not None:
+
+            # For two states you can get a speed-up by first
+            # computing the gradients of all diabatic quantities
+            # and then using the chain rule to get the adiabatic
+            # gradients. This slows things down for >= 4 states
+            # if you only want diagonal diabatic gradients.
+            # The function `choose_grad_route` identifies which
+            # method should be faster.
+
+            # This provides a speedup on cpu but actually slows
+            # things down on GPU, possibly because of having
+            # to move dE_dD to the GPU. The increase in time
+            # is actually only about 25% when doing in the
+            # naive way for a batch size of 20 and 2 states.
+
+            grad_route = self.choose_grad_route(extra_grads)
+
+            if try_speedup and grad_route == "diabat_to_en":
+                grads = self.compute_all_grads(results, xyz, N)
+                results.update(grads)
+                return results
+
+            all_grad_keys = [*self.grad_keys, *extra_grads]
+        else:
+            all_grad_keys = self.grad_keys
+
+        for grad_key in all_grad_keys:
+            if "_grad" not in grad_key:
+                grad_key += "_grad"
+
             base_key = grad_key.replace("_grad", "")
             output = results[base_key]
             grad = compute_grad(inputs=xyz, output=output)
@@ -1124,7 +1338,11 @@ class DiabaticReadout(nn.Module):
                 batch,
                 output,
                 xyz,
-                add_nacv=False):
+                add_nacv=False,
+                add_grad=True,
+                add_gap=True,
+                extra_grads=None,
+                try_speedup=False):
 
         N = batch["num_atoms"].detach().cpu().tolist()
         results = {}
@@ -1139,8 +1357,14 @@ class DiabaticReadout(nn.Module):
                                 N=N,
                                 xyz=xyz,
                                 add_nacv=add_nacv)
-        results = self.add_grad(results, xyz)
-        results = self.add_gap(results)
+        if add_grad:
+            results = self.add_grad(results=results,
+                                    xyz=xyz,
+                                    N=N,
+                                    extra_grads=extra_grads,
+                                    try_speedup=try_speedup)
+        if add_gap:
+            results = self.add_gap(results)
 
         return results
 

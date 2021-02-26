@@ -176,15 +176,19 @@ class SchNetDiabat(SchNet):
 
         super().__init__(modelparams)
 
-        self.diag = Diagonalize()
         self.diabatic_readout = DiabaticReadout(
             diabat_keys=modelparams["diabat_keys"],
             grad_keys=modelparams["grad_keys"],
             energy_keys=modelparams["output_keys"])
 
-    def forward(self, batch,
+    def forward(self,
+                batch,
                 xyz=None,
                 add_nacv=False,
+                add_grad=True,
+                add_gap=True,
+                extra_grads=None,
+                try_speedup=False,
                 **kwargs):
 
         r, N, xyz = self.convolve(batch, xyz)
@@ -192,6 +196,10 @@ class SchNetDiabat(SchNet):
         results = self.diabatic_readout(batch=batch,
                                         output=output,
                                         xyz=xyz,
-                                        add_nacv=add_nacv)
+                                        add_nacv=add_nacv,
+                                        add_grad=add_grad,
+                                        add_gap=add_gap,
+                                        extra_grads=extra_grads,
+                                        try_speedup=try_speedup)
 
         return results

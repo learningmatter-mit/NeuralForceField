@@ -154,12 +154,18 @@ class PainnDiabat(Painn):
     def forward(self,
                 batch,
                 xyz=None,
-                add_nacv=False):
+                add_nacv=False,
+                add_grad=True,
+                add_gap=True,
+                extra_grads=None):
 
         output, xyz = self.atomwise(batch, xyz)
         results = self.diabatic_readout(batch=batch,
                                         output=output,
                                         xyz=xyz,
-                                        add_nacv=add_nacv)
+                                        add_nacv=add_nacv,
+                                        add_grad=add_grad,
+                                        add_gap=add_gap,
+                                        extra_grads=extra_grads)
 
         return results
