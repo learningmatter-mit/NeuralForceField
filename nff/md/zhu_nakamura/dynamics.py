@@ -1020,7 +1020,7 @@ class BatchedZhuNakamura:
                 diabat_ens = np.zeros((num_states, num_states))
 
                 # only store the diagonal diabatic forces
-                diabat_forces = np.zeros((num_states, N[j]))
+                diabat_forces = np.zeros((num_states, N[j], 3))
 
                 for l in range(num_states):
                     for m in range(num_states):
