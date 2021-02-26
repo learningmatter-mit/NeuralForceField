@@ -20,17 +20,14 @@ from nff.train import load_model
 HBAR = 1
 OUT_FILE = "trj.csv"
 LOG_FILE = "trj.log"
-
+DEF_EXPLICIT_DIABAT = False
+DEF_MAX_GAP_HOP = float("inf")
 
 METHOD_DIC = {
     "nosehoover": NoseHoover,
     "nosehooverchain": NoseHooverChain
 }
 
-
-# /home/saxelrod/repo/htvs/ax/htvs/djangochem/neuralnet/
-# from neuralnet.neuraloptimizer import main as optimize
-# optimize(ground_params)
 
 class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
@@ -116,6 +113,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
                  atoms,
                  timestep,
                  max_time,
+                 explicit_diabat=DEF_EXPLICIT_DIABAT,
+                 max_gap_hop=DEF_MAX_GAP_HOP,
                  initial_time=0.0,
                  initial_surf=1,
                  num_states=2,
@@ -148,6 +147,11 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.max_time = max_time * FS_TO_AU
         self.num_states = num_states
         self.Natom = atoms.get_number_of_atoms()
+        self.max_gap_hop = max_gap_hop
+        self.explicit_diabat = explicit_diabat
+        self.diabat_ens = None
+        self.diabat_forces = None
+
         self.out_file = out_file
         self.log_file = log_file
         self.setup_logging()
@@ -455,16 +459,9 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         return at_crossing, new_surfs
 
-    def update_diabatic_quants(self, lower_state, upper_state):
-        """
-        Update diabatic quantities at an avoided crossing.
-        Args:
-            lower_state (int): index of lower electronic state at crossing
-            upper_state (int): index of upper electronic stte at crossing
-        Returns:
-            None
-
-        """
+    def get_diabat_engrads(self,
+                           lower_state,
+                           upper_state):
 
         # update diabatic forces. Start with the r_{ij} parameters
         # from the ZN paper units for r_{ij} don't matter since
@@ -484,13 +481,41 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
                                   ) / r_20
 
         # array of forces on the lower and upper diabatic states
-        self.diabatic_forces = np.append([lower_diabatic_forces],
-                                         [upper_diabatic_forces], axis=0)
+        diabatic_forces = np.append([lower_diabatic_forces],
+                                    [upper_diabatic_forces], axis=0)
 
         # update diabatic coupling
-        self.diabatic_coupling = (
+        diabatic_coupling = (
             self.energy_list[-2][upper_state].item()
             - self.energy_list[-2][lower_state].item()) / 2
+
+        return diabatic_forces, diabatic_coupling
+
+    def update_diabatic_quants(self, lower_state, upper_state):
+        """
+        Update diabatic quantities at an avoided crossing.
+        Args:
+            lower_state (int): index of lower electronic state at crossing
+            upper_state (int): index of upper electronic stte at crossing
+        Returns:
+            None
+
+        """
+
+        if self.explicit_diabat:
+            if self.diabat_ens is None:
+                raise Exception("Diabatic quantities haven't been updated")
+            self.diabatic_coupling = self.diabat_ens[lower_state, upper_state]
+            state_array = np.array([lower_state, upper_state])
+            self.diabatic_forces = self.diabat_forces[state_array, :]
+
+        else:
+            d_forces, d_coupling = self.get_diabat_engrads(
+                lower_state=lower_state,
+                upper_state=upper_state)
+
+            self.diabatic_forces = d_forces
+            self.diabatic_coupling = d_coupling
 
         # update Zhu difference parameter
         norm_vec = mol_norm(self.diabatic_forces[1] - self.diabatic_forces[0])
@@ -570,6 +595,22 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
             # get the upper and lower state by sorting the current
             # surface and the new one
             lower_state, upper_state = sorted((self.surf, new_surf))
+
+            # If requested, only consider a hop if the gap is below
+            # a certain value. Don't just get the gap as 2 * the
+            # diabatic coupling, because that's not the case if
+            # we use explicit diabatic states
+
+            gap = abs(self.energy_list[-2][upper_state].item()
+                      - self.energy_list[-2][lower_state].item())
+
+            if gap > self.max_gap_hop:
+                hopping_probabilities.append({"zhu_a": 0,
+                                              "zhu_b": 0,
+                                              "zhu_p": 0,
+                                              "new_surf": new_surf})
+                continue
+
             self.update_diabatic_quants(lower_state, upper_state)
 
             # use context manager to ignore any divide by 0's
@@ -601,13 +642,14 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
                 # add this info to the list of hopping probabilities
 
-                hopping_probabilities.append(
-                    {"zhu_a": zhu_a, "zhu_b": zhu_b,
-                     "zhu_p": zhu_p, "new_surf": new_surf})
+                hopping_probabilities.append({"zhu_a": zhu_a,
+                                              "zhu_b": zhu_b,
+                                              "zhu_p": zhu_p,
+                                              "new_surf": new_surf})
 
         self.hopping_probabilities = hopping_probabilities
 
-    def should_hop(self, zhu_a, zhu_b, zhu_p):
+    def should_hop(self, zhu_p):
         """ 
         Decide whether or not to hop based on the zhu a, b and p parameters.
         Args:
@@ -619,16 +661,19 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         """
 
-        will_hop = False
-        # hop for very large a
-        if zhu_a > 1000:
-            will_hop = True
+        # from the ZN paper - seems useless to not just do monte
+        # carlo for all p
 
-        # calculate p for intermediate a and do Monte Carlo
-        if 0.001 < zhu_a < 1000:
-            rnd = np.random.rand()
-            if zhu_p > rnd:
-                will_hop = True
+        # will_hop = False
+        # # hop for very large a
+        # if zhu_a > 1000:
+        #     will_hop = True
+
+        # # calculate p for intermediate a and do Monte Carlo
+        # if 0.001 < zhu_a < 1000:
+
+        rnd = np.random.rand()
+        will_hop = (zhu_p > rnd)
 
         return will_hop
 
@@ -693,29 +738,27 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         # loop through sets of states to hop between
 
         for probability_dic in self.hopping_probabilities:
-
-            zhu_a = probability_dic["zhu_a"]
-            zhu_b = probability_dic["zhu_b"]
             zhu_p = probability_dic["zhu_p"]
             new_surf = probability_dic["new_surf"]
+            old_surf = copy.deepcopy(self.surf)
 
             self.log(("Attempting hop from state {} to state {}. "
                       "Probability is {}.").format(
-                self.surf, probability_dic["new_surf"], zhu_p))
+                old_surf, probability_dic["new_surf"], zhu_p))
 
             # decide whether or not to hop based on Zhu a, b, and p
-            will_hop = self.should_hop(zhu_a, zhu_b, zhu_p)
+            will_hop = self.should_hop(zhu_p)
 
             # hop and end loop if will_hop == True
             if will_hop:
                 out = self.hop(new_surf)
                 if out != "err":
                     self.log("Hopped from from state {} to state {}.".format(
-                        self.surf, probability_dic["new_surf"]))
+                        old_surf, probability_dic["new_surf"]))
                     return
             else:
                 self.log("Did not hop from from state {} to state {}.".format(
-                    self.surf, probability_dic["new_surf"]))
+                    old_surf, probability_dic["new_surf"]))
 
     def run(self):
 
@@ -763,8 +806,14 @@ class BatchedZhuNakamura:
 
     """
 
-    def __init__(self, atoms_list, props, batched_params, zhu_params,
-                 modelparams=None, model_type=None, needs_angles=False):
+    def __init__(self,
+                 atoms_list,
+                 props,
+                 batched_params,
+                 zhu_params,
+                 modelparams=None,
+                 model_type=None,
+                 needs_angles=False):
         """
         Initialize.
         Args:
@@ -775,11 +824,13 @@ class BatchedZhuNakamura:
         """
 
         self.num_trj = batched_params["num_trj"]
-        self.zhu_trjs = self.make_zhu_trjs(props, atoms_list, zhu_params)
+        self.zhu_trjs = self.make_zhu_trjs(atoms_list, zhu_params)
+        self.explicit_diabat = zhu_params.get("explicit_diabat",
+                                              DEF_EXPLICIT_DIABAT)
         self.max_time = self.zhu_trjs[0].max_time
-        self.energy_keys = ["energy_{}".format(
-            i) for i in range(self.zhu_trjs[0].num_states)]
-        self.grad_keys = ["{}_grad".format(key) for key in self.energy_keys]
+        self.energy_keys = [f"energy_{i}" for i in
+                            range(self.zhu_trjs[0].num_states)]
+        self.grad_keys = [f"{key}_grad" for key in self.energy_keys]
 
         self.props = self.duplicate_props(props)
         self.nbr_update_period = batched_params["nbr_update_period"]
@@ -794,11 +845,10 @@ class BatchedZhuNakamura:
         self.cutoff = batched_params["cutoff"]
         self.needs_angles = needs_angles
 
-    def make_zhu_trjs(self, props, atoms_list, zhu_params):
+    def make_zhu_trjs(self, atoms_list, zhu_params):
         """
         Instantiate the Zhu Nakamura objects.
         Args:
-            props (dict): dictionary of dataset props
             atoms_list (list): list of ASE atom objects
             zhu_params (dict): parameters related to Zhu Nakamura
         Returns:
@@ -833,11 +883,11 @@ class BatchedZhuNakamura:
 
         new_props = dict()
         for key, val in props.items():
-            if type(val) is list:
-                new_props[key] = val*self.num_trj
+            if isinstance(val, list):
+                new_props[key] = val * self.num_trj
             elif hasattr(val, "tolist"):
                 typ = type(val)
-                new_props[key] = typ((val.tolist())*self.num_trj)
+                new_props[key] = typ((val.tolist()) * self.num_trj)
             else:
                 raise Exception
 
@@ -869,8 +919,9 @@ class BatchedZhuNakamura:
             dataset.props["num_atoms"] = dataset.props["num_atoms"].long()
 
         self.props = dataset.props
-        loader = DataLoader(
-            dataset, batch_size=self.batch_size, collate_fn=collate_dicts)
+        loader = DataLoader(dataset,
+                            batch_size=self.batch_size,
+                            collate_fn=collate_dicts)
 
         for i, batch in enumerate(loader):
 
@@ -890,15 +941,99 @@ class BatchedZhuNakamura:
                 for key in self.energy_keys:
                     energy = (results[key][j].item())*KCAL_TO_AU["energy"]
 
-                    force = ((-results[key + "_grad"][j]).detach(
-                    ).cpu().numpy()
-                    )*KCAL_TO_AU["energy"]*KCAL_TO_AU["_grad"]
+                    force = (
+                        (-results[key + "_grad"][j]).detach(
+                        ).cpu().numpy()
+                    ) * KCAL_TO_AU["energy"]*KCAL_TO_AU["_grad"]
 
                     energies.append(energy)
                     forces.append(force)
 
                 trj.energies = np.array(energies)
                 trj.forces = np.array(forces)
+
+        if self.explicit_diabat:
+            self.add_diabat_forces()
+
+    def add_diabat_forces(self):
+        diabat_trjs = []
+        diabat_idx = []
+
+        for i, trj in enumerate(self.zhu_trjs):
+            at_crossing, _ = trj.check_crossing()
+            if at_crossing:
+                diabat_trjs.append(trj)
+                diabat_idx.append(i)
+
+        # create a dataset and limit to only the trajectories you
+        # care about
+
+        dataset = Dataset(props=self.props.copy(), units='kcal/mol')
+        diabat_idx = torch.LongTensor(diabat_idx)
+        dataset.change_idx(diabat_idx)
+
+        # get positions at previous time step for all trajectories at
+        # crossings
+
+        nxyz_data = [trj.position_list[-2] for trj in diabat_trjs]
+        for i, nxyz in enumerate(nxyz_data):
+            dataset.props['nxyz'][i] = nxyz
+
+        # technically not generating neighbors here isn't totally consistent,
+        # because it's possible that neighbors were generated at the subsequent
+        # step in `update_energies_forces`, and you're using those neighbors
+        # now, whereas they really weren't used in the original calculation of
+        # the forces at this step. But assuming the neighbor list is getting
+        # updated frequently enough that this doesn't affect the engrads too
+        # much, we shouldn't have to worry about it
+
+        loader = DataLoader(dataset,
+                            batch_size=self.batch_size,
+                            collate_fn=collate_dicts)
+
+        for i, batch in enumerate(loader):
+            batch = batch_to(batch, self.device)
+            diabat_keys = np.array(self.model.diabatic_readout.diabat_keys)
+            diag_diabats = diabat_keys.diagonal()
+            extra_grads = [f"{key}_grad" for key in diag_diabats]
+            results = self.model(batch, extra_grads=extra_grads)
+
+            for key in self.grad_keys:
+                N = batch["num_atoms"].cpu().detach().numpy().tolist()
+                results[key] = torch.split(results[key], N)
+
+            current_trj = i * self.batch_size
+            end_trj = current_trj + self.batch_size
+
+            for j, trj in enumerate(diabat_trjs[current_trj: end_trj]):
+
+                num_states = diabat_keys.shape[0]
+
+                # store the diabatic energies as a matrix
+                diabat_ens = np.zeros(num_states, num_states)
+
+                # only store the diagonal diabatic forces
+                diabat_forces = np.zeros(num_states, N[j])
+
+                for l in range(num_states):
+                    for m in range(num_states):
+
+                        d_key = diabat_keys[l, m]
+                        diabat_en_kcal = results[d_key][j].item()
+                        diabat_en_au = diabat_en_kcal * KCAL_TO_AU["energy"]
+
+                        diabat_ens[l, m] = diabat_en_au
+
+                        if l == m:
+                            diabat_force_kcal = -(results[f"{d_key}_grad"][j]
+                                                  .detach().cpu().numpy())
+                            diabat_force_au = (diabat_force_kcal
+                                               * KCAL_TO_AU["energy"]
+                                               * KCAL_TO_AU["_grad"])
+                            diabat_forces[l, :] = diabat_force_au
+
+                trj.diabat_ens = diabat_ens
+                trj.diabat_forces = diabat_forces
 
     def step(self, get_new_neighbors):
         """
