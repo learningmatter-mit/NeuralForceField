@@ -1005,7 +1005,7 @@ class BatchedZhuNakamura:
             extra_grads = [f"{key}_grad" for key in diag_diabats]
             results = self.model(batch, extra_grads=extra_grads)
 
-            for key in self.grad_keys:
+            for key in [*self.grad_keys, *extra_grads]:
                 N = batch["num_atoms"].cpu().detach().numpy().tolist()
                 results[key] = torch.split(results[key], N)
 
