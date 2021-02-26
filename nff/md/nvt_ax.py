@@ -10,6 +10,7 @@ from ase import units
 from ase.md.velocitydistribution import (MaxwellBoltzmannDistribution,
                                          Stationary, ZeroRotation)
 
+
 class NoseHoover(MolecularDynamics):
     def __init__(self,
                  atoms,
@@ -21,6 +22,7 @@ class NoseHoover(MolecularDynamics):
                  logfile=None,
                  loginterval=1,
                  max_steps=None,
+                 nbr_update_period=20,
                  **kwargs):
 
         MolecularDynamics.__init__(self,
@@ -39,13 +41,14 @@ class NoseHoover(MolecularDynamics):
         # Q is chosen to be 6 N kT
         self.Natom = atoms.get_number_of_atoms()
 
-        # no rotation or translation, so target kinetic energy is 1/2 (3N - 6) kT 
-        self.targeEkin = 0.5 * (3.0 * self.Natom - 6) * self.T 
+        # no rotation or translation, so target kinetic energy is 1/2 (3N - 6) kT
+        self.targeEkin = 0.5 * (3.0 * self.Natom - 6) * self.T
 
-        self.Q = (3.0 * self.Natom  -6)* self.T * (self.ttime * self.dt)**2
+        self.Q = (3.0 * self.Natom - 6) * self.T * (self.ttime * self.dt)**2
         self.zeta = 0.0
         self.num_steps = max_steps
         self.n_steps = 0
+        self.nbr_update_period = nbr_update_period
 
         # initial Maxwell-Boltmann temperature for atoms
         if maxwell_temp is not None:
@@ -93,16 +96,22 @@ class NoseHoover(MolecularDynamics):
             (1 + 0.5 * self.dt * self.zeta)
         self.atoms.set_velocities(vel)
 
-
         return f
 
     def run(self, steps=None):
 
         if steps is None:
             steps = self.num_steps
-        self.max_steps = steps + self.nsteps
-        return Dynamics.run(self)
+        total_steps = steps + self.nsteps
+        # return Dynamics.run(self)
 
+        epochs = int(total_steps // self.nbr_update_period)
+        # number of steps in between nbr updates
+        self.max_steps = int(self.max_steps / epochs)
+
+        for _ in range(epochs):
+            Dynamics.run(self)
+            self.atoms.update_nbr_list()
 
 
 class NoseHooverChain(MolecularDynamics):
@@ -134,14 +143,13 @@ class NoseHooverChain(MolecularDynamics):
 
         self.N_dof = 3*atoms.get_number_of_atoms() - 6
 
-
         # in units of fs:
         self.ttime = ttime
         self.Q = 2 * np.array([self.N_dof * self.T * (self.ttime * self.dt)**2,
-                           *[self.T * (self.ttime * self.dt)**2]*(num_chains-1)])
+                               *[self.T * (self.ttime * self.dt)**2]*(num_chains-1)])
 
         # no rotation or translation, so target kinetic energy is 3/2 N kT - 6
-        self.targeEkin = 1/2 * self.N_dof * self.T 
+        self.targeEkin = 1/2 * self.N_dof * self.T
 
         # self.zeta = np.array([0.0]*num_chains)
         self.p_zeta = np.array([0.0]*num_chains)
@@ -156,10 +164,9 @@ class NoseHooverChain(MolecularDynamics):
             maxwell_temp = 2 * self.T
         MaxwellBoltzmannDistribution(self.atoms, maxwell_temp)
 
-
     def get_zeta_accel(self):
 
-        p0_dot = 2 * (self.atoms.get_kinetic_energy() - self.targeEkin)- \
+        p0_dot = 2 * (self.atoms.get_kinetic_energy() - self.targeEkin) - \
             self.p_zeta[0]*self.p_zeta[1] / self.Q[1]
         p_middle_dot = self.p_zeta[:-2]**2 / self.Q[:-2] - \
             self.T - self.p_zeta[1:-1] * self.p_zeta[2:]/self.Q[2:]
@@ -178,7 +185,7 @@ class NoseHooverChain(MolecularDynamics):
     def half_step_v_system(self):
 
         v = self.atoms.get_velocities()
-        accel = self.atoms.get_forces() / self.atoms.get_masses().reshape(-1, 1) 
+        accel = self.atoms.get_forces() / self.atoms.get_masses().reshape(-1, 1)
         accel -= v * self.p_zeta[0] / self.Q[0]
         v_half = v + 1/2 * accel * self.dt
         return v_half
@@ -215,4 +222,3 @@ class NoseHooverChain(MolecularDynamics):
             steps = self.num_steps
         self.max_steps = steps + self.nsteps
         return Dynamics.run(self)
-

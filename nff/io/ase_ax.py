@@ -133,7 +133,8 @@ class AtomsBatch(Atoms):
                 offsets = np.zeros((self.nbr_list.shape[0], 3))
 
         else:
-            edge_from, edge_to, offsets = torch_nbr_list(self, self.cutoff, self.device)
+            edge_from, edge_to, offsets = torch_nbr_list(
+                self, self.cutoff, self.device)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
             self.nbr_list = nbr_list
 
@@ -152,7 +153,10 @@ class AtomsBatch(Atoms):
         pass
 
     @classmethod
-    def from_atoms(cls, atoms, props=None, needs_angles=False,
+    def from_atoms(cls,
+                   atoms,
+                   props=None,
+                   needs_angles=False,
                    device=0):
         instance = cls(
             atoms,
@@ -228,7 +232,9 @@ class NeuralFF(Calculator):
                                            props=self.dataset_props,
                                            needs_angles=self.needs_angles,
                                            device=self.device)
-
+        # set the neighbor list so it gets reused every time -
+        # update it in the integrator
+        atomsbatch.nbr_list = self.dataset_props['nbr_list']
         batch = atomsbatch.get_batch()
 
         # add keys so that the readout function can calculate these properties
