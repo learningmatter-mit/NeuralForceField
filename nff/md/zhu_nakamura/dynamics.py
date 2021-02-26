@@ -964,6 +964,11 @@ class BatchedZhuNakamura:
             if at_crossing:
                 diabat_trjs.append(trj)
                 diabat_idx.append(i)
+            else:
+                # reset to None to catch any silent errors of
+                # reusing the old diabatic forces
+                trj.diabat_ens = None
+                trj.diabat_forces = None
 
         # create a dataset and limit to only the trajectories you
         # care about
@@ -1049,8 +1054,8 @@ class BatchedZhuNakamura:
             trj.position_step()
 
         # update the energies and forces
-        self.update_energies_forces(
-            trjs=self.zhu_trjs, get_new_neighbors=get_new_neighbors)
+        self.update_energies_forces(trjs=self.zhu_trjs,
+                                    get_new_neighbors=get_new_neighbors)
 
         for trj in self.zhu_trjs:
             # take a velocity step
@@ -1070,7 +1075,8 @@ class BatchedZhuNakamura:
         """
 
         # initial energy and force calculation to get things started
-        self.update_energies_forces(trjs=self.zhu_trjs, get_new_neighbors=True)
+        self.update_energies_forces(trjs=self.zhu_trjs,
+                                    get_new_neighbors=True)
         complete = False
         num_steps = 0
 
