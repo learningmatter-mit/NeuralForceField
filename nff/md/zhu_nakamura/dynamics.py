@@ -14,7 +14,7 @@ from nff.utils.constants import BOHR_RADIUS, FS_TO_AU, AMU_TO_AU, ASE_TO_FS
 from nff.data import Dataset, collate_dicts
 from nff.utils.cuda import batch_to
 from nff.utils.constants import KCAL_TO_AU
-from nff.train import load_model
+from nff.train import load_model, batch_detach
 
 
 HBAR = 1
@@ -926,7 +926,7 @@ class BatchedZhuNakamura:
         for i, batch in enumerate(loader):
 
             batch = batch_to(batch, self.device)
-            results = self.model(batch)
+            results = batch_detach(self.model(batch))
 
             for key in self.grad_keys:
                 N = batch["num_atoms"].cpu().detach().numpy().tolist()
@@ -1003,7 +1003,7 @@ class BatchedZhuNakamura:
             diabat_keys = np.array(self.model.diabatic_readout.diabat_keys)
             diag_diabats = diabat_keys.diagonal()
             extra_grads = [f"{key}_grad" for key in diag_diabats]
-            results = self.model(batch, extra_grads=extra_grads)
+            results = batch_detach(self.model(batch, extra_grads=extra_grads))
 
             for key in [*self.grad_keys, *extra_grads]:
                 N = batch["num_atoms"].cpu().detach().numpy().tolist()
