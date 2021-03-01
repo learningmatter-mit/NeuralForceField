@@ -6,9 +6,13 @@ import copy
 from nff.utils.tools import make_directed
 from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
                                   EmbeddingBlock, ReadoutBlock)
-from nff.nn.modules.schnet import DiabaticReadout
-from nff.nn.modules.dimenet import sum_and_grad
+from nff.nn.modules.schnet import (DiabaticReadout, AttentionPool,
+                                   SumPool)
 from nff.nn.layers import Diagonalize
+
+
+POOL_DIC = {"sum": SumPool,
+            "attention": AttentionPool}
 
 
 class Painn(nn.Module):
@@ -35,6 +39,7 @@ class Painn(nn.Module):
         readout_dropout = modelparams.get("readout_dropout", 0)
         means = modelparams.get("means")
         stddevs = modelparams.get("stddevs")
+        pool_dic = modelparams.get("pool_dic")
 
         self.grad_keys = modelparams["grad_keys"]
         self.embed_block = EmbeddingBlock(feat_dim=feat_dim)
@@ -66,6 +71,18 @@ class Painn(nn.Module):
                           stddevs=stddevs)
              for _ in range(num_readouts)]
         )
+        self.output_keys = output_keys
+
+        if pool_dic is None:
+            self.pool_dic = {key: SumPool() for key
+                             in self.output_keys}
+        else:
+            self.pool_dic = nn.ModuleDict({})
+            for out_key, sub_dic in pool_dic.items():
+                pool_name = sub_dic["name"].lower()
+                kwargs = sub_dic["param"]
+                pool_class = POOL_DIC[pool_name]
+                self.pool_dic[out_key] = pool_class(**kwargs)
 
     def atomwise(self, batch, xyz=None):
 
@@ -109,7 +126,48 @@ class Painn(nn.Module):
             readout_block = self.readout_blocks[0]
             results = readout_block(s_i=s_i)
 
+        results['features'] = s_i
+
         return results, xyz
+
+    def pool(self,
+             batch,
+             atomwise_out,
+             xyz):
+
+        if not hasattr(self, "output_keys"):
+            self.output_keys = list(self.readout_blocks[0]
+                                    .readoutdict.keys())
+
+        if not hasattr(self, "pool_dic"):
+            self.pool_dic = {key: SumPool() for key
+                             in self.output_keys}
+
+        all_results = {}
+
+        for key, pool_obj in self.pool_dic.items():
+
+            grad_key = f"{key}_grad"
+            grad_keys = [grad_key] if (grad_key in self.grad_keys) else []
+            results = pool_obj(batch=batch,
+                               xyz=xyz,
+                               atomwise_output=atomwise_out,
+                               grad_keys=grad_keys,
+                               out_keys=[key])
+            all_results.update(results)
+
+        return all_results, xyz
+
+    def run(self,
+            batch,
+            xyz=None):
+
+        atomwise_out, xyz = self.atomwise(batch, xyz)
+        all_results, xyz = self.pool(batch=batch,
+                                     atomwise_out=atomwise_out,
+                                     xyz=xyz)
+
+        return all_results, xyz
 
     def forward(self, batch, xyz=None):
         """
@@ -120,12 +178,8 @@ class Painn(nn.Module):
             results (dict): dictionary of predictions
         """
 
-        out, xyz = self.atomwise(batch, xyz)
-        results = sum_and_grad(batch=batch,
-                               xyz=xyz,
-                               atomwise_output=out,
-                               grad_keys=self.grad_keys)
-
+        results, _ = self.run(batch=batch,
+                              xyz=xyz)
         return results
 
 
@@ -142,14 +196,16 @@ class PainnDiabat(Painn):
                                 .tolist()))
 
         new_modelparams = copy.deepcopy(modelparams)
-        new_modelparams.update({"output_keys": new_out_keys})
+        new_modelparams.update({"output_keys": new_out_keys,
+                                "grad_keys": []})
         super().__init__(new_modelparams)
 
         self.diag = Diagonalize()
         self.diabatic_readout = DiabaticReadout(
             diabat_keys=diabat_keys,
             grad_keys=modelparams["grad_keys"],
-            energy_keys=energy_keys)
+            energy_keys=energy_keys,
+            delta=modelparams.get("delta", False))
 
     def forward(self,
                 batch,
@@ -159,10 +215,12 @@ class PainnDiabat(Painn):
                 add_gap=True,
                 extra_grads=None):
 
-        output, xyz = self.atomwise(batch, xyz)
+        # for backwards compatability - check that this works
+        self.grad_keys = []
+        diabat_results, xyz = self.run(batch, xyz)
         results = self.diabatic_readout(batch=batch,
-                                        output=output,
                                         xyz=xyz,
+                                        results=diabat_results,
                                         add_nacv=add_nacv,
                                         add_grad=add_grad,
                                         add_gap=add_gap,

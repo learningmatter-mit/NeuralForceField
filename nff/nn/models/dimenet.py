@@ -4,8 +4,8 @@ from torch import nn
 import copy
 
 from nff.nn.modules.dimenet import (EmbeddingBlock, InteractionBlock,
-                                    OutputBlock, sum_and_grad)
-from nff.nn.modules.schnet import DiabaticReadout
+                                    OutputBlock)
+from nff.nn.modules.schnet import DiabaticReadout, sum_and_grad
 from nff.nn.layers import DimeNetRadialBasis as RadialBasis
 from nff.nn.layers import DimeNetSphericalBasis as SphericalBasis
 from nff.nn.layers import Diagonalize

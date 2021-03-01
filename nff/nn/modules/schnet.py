@@ -1037,13 +1037,15 @@ class DiabaticReadout(nn.Module):
     def __init__(self,
                  diabat_keys,
                  grad_keys,
-                 energy_keys):
+                 energy_keys,
+                 delta=False):
         nn.Module.__init__(self)
 
         self.diag = Diagonalize()
         self.diabat_keys = diabat_keys
         self.grad_keys = grad_keys
         self.energy_keys = energy_keys
+        self.delta = delta
 
     def get_nacv(self, U, xyz, N):
 
@@ -1336,27 +1338,36 @@ class DiabaticReadout(nn.Module):
 
     def forward(self,
                 batch,
-                output,
                 xyz,
+                results,
                 add_nacv=False,
                 add_grad=True,
                 add_gap=True,
                 extra_grads=None,
                 try_speedup=False):
 
-        N = batch["num_atoms"].detach().cpu().tolist()
-        results = {}
+        if not hasattr(self, "delta"):
+            self.delta = False
 
-        for key, val in output.items():
-            # split the outputs into those of each molecule
-            split_val = torch.split(val, N)
-            # sum the results for each molecule
-            results[key] = torch.stack([i.sum() for i in split_val])
+        N = batch["num_atoms"].detach().cpu().tolist()
+        # results = {}
+
+        # for key, val in output.items():
+        #     # split the outputs into those of each molecule
+        #     split_val = torch.split(val, N)
+        #     # sum the results for each molecule
+        #     results[key] = torch.stack([i.sum() for i in split_val])
 
         results = self.add_diag(results=results,
                                 N=N,
                                 xyz=xyz,
                                 add_nacv=add_nacv)
+
+        if self.delta:
+            diag_diabat = np.array(self.diabat_keys).diagonal()
+            for key in diag_diabat[1:]:
+                results[key] += results[diag_diabat[0]]
+
         if add_grad:
             results = self.add_grad(results=results,
                                     xyz=xyz,
@@ -1369,7 +1380,177 @@ class DiabaticReadout(nn.Module):
         return results
 
 
+def sum_and_grad(batch,
+                 xyz,
+                 atomwise_output,
+                 grad_keys,
+                 out_keys=None):
+
+    N = batch["num_atoms"].detach().cpu().tolist()
+    results = {}
+    if out_keys is None:
+        out_keys = list(atomwise_output.keys())
+
+    for key, val in atomwise_output.items():
+        if key not in out_keys:
+            continue
+        # split the outputs into those of each molecule
+        split_val = torch.split(val, N)
+        # sum the results for each molecule
+        results[key] = torch.stack([i.sum() for i in split_val])
+
+    # compute gradients
+
+    for key in grad_keys:
+        output = results[key.replace("_grad", "")]
+        grad = compute_grad(output=output,
+                            inputs=xyz)
+        results[key] = grad
+
+    return results
+
+
+class SumPool(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self,
+                batch,
+                xyz,
+                atomwise_output,
+                grad_keys,
+                out_keys=None):
+        results = sum_and_grad(batch=batch,
+                               xyz=xyz,
+                               atomwise_output=atomwise_output,
+                               grad_keys=grad_keys,
+                               out_keys=out_keys)
+        return results
+
+
+def att_readout_probs(name):
+    if name.lower() == "softmax":
+        def func(output):
+            weights = softmax(output, dim=0)
+            return weights
+
+    elif name.lower() == "square":
+        def func(output):
+            weights = ((output ** 2 / (output ** 2).sum()))
+            return weights
+    else:
+        raise NotImplementedError
+
+    return func
+
+
+class AttentionPool(nn.Module):
+    """
+    Compute output quantities using attention, rather than a sum over
+    atomic quantities. There are two methods to do this:
+    (1): "atomwise": Learn the attention weights from atomic fingerprints,
+    get atomwise quantities from a network applied to the fingeprints,
+    and sum them with attention weights.
+    (2) "mol_fp": Learn the attention weights from atomic fingerprints,
+    multiply the fingerprints by these weights, add the fingerprints
+    together to get a molecular fingerprint, and put the molecular
+    fingerprint through a network that predicts the output.
+
+    This one uses `mol_fp`, since it seems more expressive (?)
+    """
+
+    def __init__(self,
+                 prob_func,
+                 feat_dim,
+                 att_act,
+                 mol_fp_act,
+                 num_out_layers,
+                 out_dim):
+        """
+
+        """
+        super().__init__()
+
+        self.w_mat = nn.Linear(in_features=feat_dim,
+                               out_features=feat_dim,
+                               bias=False)
+
+        self.att_weight = torch.nn.Parameter(torch.rand(1, feat_dim))
+        nn.init.xavier_uniform_(self.att_weight, gain=1.414)
+        self.prob_func = att_readout_probs(prob_func)
+        self.att_act = layer_types[att_act]()
+
+        # reduce the number of features by the same factor in each layer
+        feat_num = [int(feat_dim / num_out_layers ** m)
+                    for m in range(num_out_layers)]
+
+        # make layers followed by an activation for all but the last
+        # layer
+        mol_fp_layers = [Dense(in_features=feat_num[i],
+                               out_features=feat_num[i+1],
+                               activation=layer_types[mol_fp_act]())
+                         for i in range(num_out_layers - 1)]
+
+        # use no activation for the last layer
+        mol_fp_layers.append(Dense(in_features=feat_num[-1],
+                                   out_features=out_dim,
+                                   activation=None))
+
+        # put together in readout network
+        self.mol_fp_nn = Sequential(*mol_fp_layers)
+
+    def forward(self,
+                batch,
+                xyz,
+                atomwise_output,
+                grad_keys,
+                out_keys):
+        """
+        Args:
+            feats (torch.Tensor): n_atom x feat_dim atomic features,
+                after convolutions are finished.
+        """
+
+        N = batch["num_atoms"].detach().cpu().tolist()
+        results = {}
+
+        for key in out_keys:
+
+            # batched_feats = atomwise_output[key]
+            batched_feats = atomwise_output['features']
+
+            # split the outputs into those of each molecule
+            split_feats = torch.split(batched_feats, N)
+            # sum the results for each molecule
+
+            all_outputs = []
+
+            for feats in split_feats:
+                weights = self.prob_func(
+                    self.att_act(
+                        (self.att_weight * self.w_mat(feats)).sum(-1)
+                    )
+                )
+
+                mol_fp = (weights.reshape(-1, 1) * self.w_mat(feats)).sum(0)
+                output = self.mol_fp_nn(mol_fp)
+                all_outputs.append(output)
+
+            results[key] = torch.stack(all_outputs).reshape(-1)
+
+        for key in grad_keys:
+            output = results[key.replace("_grad", "")]
+            grad = compute_grad(output=output,
+                                inputs=xyz)
+            results[key] = grad
+
+        return results
+
+
+
+
 class ScaleShift(nn.Module):
+
     r"""Scale and shift layer for standardization.
     .. math::
        y = x \times \sigma + \mu
@@ -1401,6 +1582,7 @@ class ScaleShift(nn.Module):
         out = inp * stddev + mean
 
         return out
+
 
 
 class TestModules(unittest.TestCase):

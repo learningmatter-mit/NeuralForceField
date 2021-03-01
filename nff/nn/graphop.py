@@ -161,6 +161,36 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
     return results
 
 
+def sum_and_grad(batch,
+                 xyz,
+                 atomwise_output,
+                 grad_keys,
+                 keys=None):
+
+    N = batch["num_atoms"].detach().cpu().tolist()
+    results = {}
+    if keys is None:
+        keys = list(atomwise_output.keys())
+
+    for key, val in atomwise_output.items():
+        if key not in keys:
+            continue
+        # split the outputs into those of each molecule
+        split_val = torch.split(val, N)
+        # sum the results for each molecule
+        results[key] = torch.stack([i.sum() for i in split_val])
+
+    # compute gradients
+
+    for key in grad_keys:
+        output = results[key.replace("_grad", "")]
+        grad = compute_grad(output=output,
+                            inputs=xyz)
+        results[key] = grad
+
+    return results
+
+
 def get_atoms_inside_cell(r, N, pbc):
     """Removes atoms outside of the unit cell which are carried in `r`
         to ensure correct periodic boundary conditions. Does that by discarding
