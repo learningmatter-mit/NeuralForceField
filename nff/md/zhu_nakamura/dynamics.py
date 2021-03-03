@@ -399,11 +399,13 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         # update surf (which also appends to surf_list)
         self.surf = self.surf
         self.time = self.time + self.dt
-        self.log("Completed step {}. Currently in state {}.".format(
-            int(self.time/self.dt), self.surf))
-        self.log("Relative energies are {} eV".format(", ".join(
-            ((self.energies - self.energies[0]) * 27.2
-             ).reshape(-1).astype("str").tolist())))
+
+        step = int(self.time/self.dt)
+        rel_ens = ", ".join(((self.energies - self.energies[0]) * 27.2
+                             ).reshape(-1).astype("str").tolist())
+
+        self.log(f"Completed step {step}. Currently in state {self.surf}.")
+        self.log(f"Relative energies are {rel_ens} eV")
 
     def md_step(self):
         """
@@ -505,7 +507,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         if self.explicit_diabat:
             if self.diabat_ens is None:
                 raise Exception("Diabatic quantities haven't been updated")
-            self.diabatic_coupling = abs(self.diabat_ens[lower_state, upper_state])
+            self.diabatic_coupling = abs(
+                self.diabat_ens[lower_state, upper_state])
             state_array = np.array([lower_state, upper_state])
             self.diabatic_forces = self.diabat_forces[state_array, :]
 
@@ -742,9 +745,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
             new_surf = probability_dic["new_surf"]
             old_surf = copy.deepcopy(self.surf)
 
-            self.log(("Attempting hop from state {} to state {}. "
-                      "Probability is {}.").format(
-                old_surf, probability_dic["new_surf"], zhu_p))
+            self.log(f"Attempting hop from state {old_surf} to state "
+                     f"{new_surf}. Probability is {zhu_p}.")
 
             # decide whether or not to hop based on Zhu a, b, and p
             will_hop = self.should_hop(zhu_p)
@@ -753,12 +755,12 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
             if will_hop:
                 out = self.hop(new_surf)
                 if out != "err":
-                    self.log("Hopped from from state {} to state {}.".format(
-                        old_surf, probability_dic["new_surf"]))
+                    self.log(f"Hopped from from state {old_surf} "
+                             f"to state {new_surf}.")
                     return
             else:
-                self.log("Did not hop from from state {} to state {}.".format(
-                    old_surf, probability_dic["new_surf"]))
+                self.log(f"Did not hop from from state {old_surf} "
+                         f"to state {new_surf}.")
 
     def run(self):
 
@@ -768,19 +770,20 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.update_forces()
 
         self.save()
-        self.log("Beginning surface hopping at {}.".format(
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-        self.log("Relative energies are {} eV".format(", ".join(
-            ((self.energies - self.energies[0]) * 27.2
-             ).reshape(-1).astype("str").tolist())))
+        time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        rel_ens = ", ".join(((self.energies - self.energies[0]) * 27.2
+                             ).reshape(-1).astype("str").tolist())
+
+        self.log(f"Beginning surface hopping at {time_str}.")
+        self.log(f"Relative energies are {rel_ens} eV")
 
         while self.time < self.max_time:
             self.step()
             self.save()
 
         # self.output_to_json()
-        self.log("Surface hopping completed normally at {}.".format(
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.log(f"Surface hopping completed normally at {time_str}.")
 
 
 class BatchedZhuNakamura:
@@ -865,8 +868,8 @@ class BatchedZhuNakamura:
         for i, atoms in enumerate(atoms_list):
 
             these_params = copy.deepcopy(zhu_params)
-            these_params["out_file"] = "{}_{}.csv".format(base_out_name, i)
-            these_params["log_file"] = "{}_{}.log".format(base_log_name, i)
+            these_params["out_file"] = f"{base_out_name}_{i}.csv"
+            these_params["log_file"] = f"{base_log_name}_{i}.log"
 
             zhu_trjs.append(ZhuNakamuraDynamics(atoms=atoms, **these_params))
 
@@ -1085,16 +1088,13 @@ class BatchedZhuNakamura:
         while not complete:
 
             num_steps += 1
-            if np.mod(num_steps, self.nbr_update_period) == 0:
-                get_new_neighbors = True
-            else:
-                get_new_neighbors = False
-
+            get_new_neighbors = np.mod(num_steps,
+                                       self.nbr_update_period) == 0
             self.step(get_new_neighbors=get_new_neighbors)
-            print("Completed step {}".format(num_steps))
+            print(f"Completed step {num_steps}")
 
-            complete = all(
-                [trj.time >= self.max_time for trj in self.zhu_trjs])
+            complete = all([trj.time >= self.max_time
+                            for trj in self.zhu_trjs])
 
         print("Neural ZN terminated normally.")
 
@@ -1148,9 +1148,6 @@ class CombinedZhuNakamura:
             method = METHOD_DIC[ase_ground_params["thermostat"]]
             self.ground_dynamics = method(atoms, **ase_ground_params)
 
-        # import pdb
-        # pdb.set_trace()
-
         self.ground_savefile = ground_params.get("savefile")
         self.equil_time = ground_params.get("equil_time")
         self.num_trj = batched_params["num_trj"]
@@ -1188,17 +1185,17 @@ class CombinedZhuNakamura:
 
         steps = int(self.ground_params["max_time"] /
                     self.ground_params["timestep"])
-        equil_steps = int(
-            self.ground_params["equil_time"]/self.ground_params["timestep"])
+        equil_steps = int(self.ground_params["equil_time"] /
+                          self.ground_params["timestep"])
 
         self.ground_dynamics.run(steps=steps)
 
         trj = Trajectory(self.ground_savefile)
 
-        possible_states = [trj[index]
-                           for index in range(equil_steps, len(trj))]
-        random_indices = random.sample(
-            range(len(possible_states)), self.num_trj)
+        possible_states = [trj[index] for index in
+                           range(equil_steps, len(trj))]
+        random_indices = random.sample(range(len(possible_states)),
+                                       self.num_trj)
         actual_states = [possible_states[index] for index in random_indices]
 
         return actual_states
