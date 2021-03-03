@@ -505,7 +505,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         if self.explicit_diabat:
             if self.diabat_ens is None:
                 raise Exception("Diabatic quantities haven't been updated")
-            self.diabatic_coupling = self.diabat_ens[lower_state, upper_state]
+            self.diabatic_coupling = abs(self.diabat_ens[lower_state, upper_state])
             state_array = np.array([lower_state, upper_state])
             self.diabatic_forces = self.diabat_forces[state_array, :]
 
