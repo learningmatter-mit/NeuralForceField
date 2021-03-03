@@ -1096,6 +1096,8 @@ class BatchedZhuNakamura:
             complete = all(
                 [trj.time >= self.max_time for trj in self.zhu_trjs])
 
+        print("Neural ZN terminated normally.")
+
         # for trj in self.zhu_trjs:
         #     trj.output_to_json()
 
