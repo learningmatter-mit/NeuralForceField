@@ -28,6 +28,9 @@ class NoseHoover(MolecularDynamics):
                  append_trajectory=True,
                  **kwargs):
 
+        if os.path.isfile(trajectory):
+            os.remove(trajectory)
+
         MolecularDynamics.__init__(self,
                                    atoms=atoms,
                                    timestep=timestep * units.fs,
@@ -36,9 +39,6 @@ class NoseHoover(MolecularDynamics):
                                    loginterval=loginterval,
                                    append_trajectory=append_trajectory)
 
-        if os.path.isfile(trajectory):
-            os.remove(trajectory)
-
         # Initialize simulation parameters
         # convert units
 
@@ -46,7 +46,7 @@ class NoseHoover(MolecularDynamics):
         self.T = temperature * units.kB
         self.ttime = ttime  # defined as a fraction of self.dt
         # Q is chosen to be 6 N kT
-        self.Natom = atoms.get_number_of_atoms()
+        self.Natom = len(atoms)
 
         # no rotation or translation, so target kinetic energy is 1/2 (3N - 6) kT
         self.targeEkin = 0.5 * (3.0 * self.Natom - 6) * self.T
@@ -152,7 +152,7 @@ class NoseHooverChain(MolecularDynamics):
         self.dt = timestep * units.fs
         self.T = temperature * units.kB
 
-        self.N_dof = 3*atoms.get_number_of_atoms() - 6
+        self.N_dof = 3 * len(atoms) - 6
 
         # in units of fs:
         self.ttime = ttime
