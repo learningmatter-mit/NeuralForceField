@@ -363,7 +363,10 @@ def remove_bias(layers):
     return new_layers
 
 
-def single_spec_nbrs(dset, cutoff, device):
+def single_spec_nbrs(dset,
+                     cutoff,
+                     device,
+                     directed=True):
 
     xyz = torch.stack(dset.props['nxyz'])[:, :, 1:]
 
@@ -371,6 +374,9 @@ def single_spec_nbrs(dset, cutoff, device):
                 .to(device).norm(dim=-1))
     nbr_mask = (dist_mat <= cutoff) * (dist_mat > 0)
     nbrs = nbr_mask.nonzero()
+
+    if not directed:
+        nbrs = nbrs[nbrs[:, 2] > nbrs[:, 1]]
 
     split_idx = (nbrs[:, 0][1:] != nbrs[:, 0][:-1]
                  ).nonzero().reshape(-1)  # .tolist()
