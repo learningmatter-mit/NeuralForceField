@@ -365,27 +365,18 @@ def remove_bias(layers):
 
 def single_spec_nbrs(dset, cutoff, device):
 
-    num_atoms = dset.props['num_atoms'][0]
     xyz = torch.stack(dset.props['nxyz'])[:, :, 1:]
 
     dist_mat = ((xyz[:, :, None, :] - xyz[:, None, :, :])
                 .to(device).norm(dim=-1))
     nbr_mask = (dist_mat <= cutoff) * (dist_mat > 0)
     nbrs = nbr_mask.nonzero()
-    # nbrs[:, 1:] += (nbrs[:, 0] * num_atoms).reshape(-1, 1)
-    # nbrs = nbrs[:, 1:].cpu()
 
-    # split into list for dataset
-
-    split_idx = (nbrs[:, 0][1:].reshape(-1) != nbrs[:, 0][:-1]
-                 .reshape(-1)).nonzero().reshape(-1) + 1
-    splits = (split_idx[1:] - split_idx[:-1]).cpu()
-    splits = torch.cat([split_idx[0].reshape(-1).cpu(),
-                        splits.cpu(),
-                        nbrs.shape[0] - split_idx[-1].reshape(-1).cpu()
-                        ]).tolist()
-
-
-    split_nbrs = torch.split(nbrs[:, 1:], splits, dim=0)
+    split_idx = (nbrs[:, 0][1:] != nbrs[:, 0][:-1]
+                 ).nonzero().reshape(-1)  # .tolist()
+    split_sizes = torch.cat([split_idx[0].reshape(-1),
+                             split_idx[1:] - split_idx[:-1],
+                             nbrs.shape[0] - split_idx[-1].reshape(-1)]).tolist()
+    split_nbrs = list(torch.split(nbrs[:, 1:].cpu(), split_sizes))
 
     return split_nbrs

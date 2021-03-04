@@ -915,21 +915,14 @@ class BatchedZhuNakamura:
                           check_props=False)
 
         if get_new_neighbors:
-            # # can stack the nxyz's and generate the neighbor list accordingly
-            # # because all geoms correspond to the same molecule
-            # nbrs = single_spec_nbrs(dset=dataset,
-            #                         cutoff=self.cutoff,
-            #                         device=self.device)
-            # dataset.props['nbr_list'] = nbrs
-            # for batch in dataset:
-            #     for nbr in batch['nbr_list']:
-            #         dist = (batch['nxyz'][nbr[1]] - batch['nxyz'][nbr[0]]).norm()
-            #         assert dist <= 5
+            # can stack the nxyz's and generate the neighbor list accordingly
+            # because all geoms correspond to the same molecule
+            nbrs = single_spec_nbrs(dset=dataset,
+                                    cutoff=self.cutoff,
+                                    device=self.device)
+            dataset.props['nbr_list'] = nbrs
 
-            # import pdb
-            # pdb.set_trace()
-
-            dataset.generate_neighbor_list(self.cutoff)
+            # dataset.generate_neighbor_list(self.cutoff)
 
             if self.needs_angles:
                 dataset.generate_angle_list()
@@ -942,7 +935,6 @@ class BatchedZhuNakamura:
                             collate_fn=collate_dicts)
 
         for i, batch in enumerate(loader):
-
 
             batch = batch_to(batch, self.device)
             results = self.model(batch)
@@ -1139,8 +1131,6 @@ class BatchedZhuNakamura:
         complete = False
         num_steps = 0
 
-
-
         while not complete:
             num_steps += 1
             get_new_neighbors = np.mod(num_steps,
@@ -1150,7 +1140,6 @@ class BatchedZhuNakamura:
 
             complete = all([trj.time >= self.max_time
                             for trj in self.zhu_trjs])
-
 
         print("Neural ZN terminated normally.")
 
