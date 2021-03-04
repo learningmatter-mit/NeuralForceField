@@ -205,6 +205,17 @@ class NeuralFF(Calculator):
         self.dataset_props = dataset_props
         self.needs_angles = needs_angles
 
+        # don't compute any gradients that aren't needed in the
+        # output keys
+
+        if hasattr(model, "grad_keys"):
+            keep_keys = [key for key in model.grad_keys
+                         if key.replace("_grad", "") in self.output_keys]
+            if hasattr(model, "_grad_keys"):
+                model._grad_keys = keep_keys
+            else:
+                model.grad_keys = keep_keys
+
     def to(self, device):
         self.device = device
         self.model.to(device)
@@ -289,6 +300,12 @@ class NeuralFF(Calculator):
         needs_angles=False,
         **kwargs
     ):
-        model = load_model(model_path, params=params, model_type=model_type)
-        return cls(model, device, output_keys, conversion, needs_angles=needs_angles,
+        model = load_model(model_path,
+                           params=params,
+                           model_type=model_type)
+        return cls(model,
+                   device,
+                   output_keys,
+                   conversion,
+                   needs_angles=needs_angles,
                    **kwargs)
