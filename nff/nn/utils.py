@@ -379,7 +379,7 @@ def single_spec_nbrs(dset,
         nbrs = nbrs[nbrs[:, 2] > nbrs[:, 1]]
 
     split_idx = (nbrs[:, 0][1:] != nbrs[:, 0][:-1]
-                 ).nonzero().reshape(-1) + 1  # .tolist()
+                 ).nonzero().reshape(-1) + 1
     split_sizes = torch.cat([split_idx[0].reshape(-1),
                              split_idx[1:] - split_idx[:-1],
                              nbrs.shape[0] - split_idx[-1].reshape(-1)]).tolist()
