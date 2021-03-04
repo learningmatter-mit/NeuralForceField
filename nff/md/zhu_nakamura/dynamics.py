@@ -3,6 +3,7 @@ import numpy as np
 import random
 import torch
 import copy
+from multiprocessing import Pool
 
 from torch.utils.data import DataLoader
 from ase.io.trajectory import Trajectory
@@ -14,6 +15,7 @@ from nff.utils.constants import BOHR_RADIUS, FS_TO_AU, AMU_TO_AU, ASE_TO_FS
 from nff.data import Dataset, collate_dicts
 from nff.utils.cuda import batch_to
 from nff.utils.constants import KCAL_TO_AU
+from nff.nn.utils import single_spec_nbrs
 from nff.train import load_model, batch_detach
 
 
@@ -146,7 +148,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.dt = timestep * FS_TO_AU
         self.max_time = max_time * FS_TO_AU
         self.num_states = num_states
-        self.Natom = atoms.get_number_of_atoms()
+        self.Natom = len(atoms)
         self.max_gap_hop = max_gap_hop
         self.explicit_diabat = explicit_diabat
         self.diabat_ens = None
@@ -507,8 +509,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         if self.explicit_diabat:
             if self.diabat_ens is None:
                 raise Exception("Diabatic quantities haven't been updated")
-            self.diabatic_coupling = abs(
-                self.diabat_ens[lower_state, upper_state])
+            self.diabatic_coupling = abs(self.diabat_ens[lower_state,
+                                                         upper_state])
             state_array = np.array([lower_state, upper_state])
             self.diabatic_forces = self.diabat_forces[state_array, :]
 
@@ -664,17 +666,6 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         """
 
-        # from the ZN paper - seems useless to not just do monte
-        # carlo for all p
-
-        # will_hop = False
-        # # hop for very large a
-        # if zhu_a > 1000:
-        #     will_hop = True
-
-        # # calculate p for intermediate a and do Monte Carlo
-        # if 0.001 < zhu_a < 1000:
-
         rnd = np.random.rand()
         will_hop = (zhu_p > rnd)
 
@@ -712,7 +703,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.hopping_probabilities = []
         self.time = self.time - self.dt
 
-        self.modify_save()
+        # self.modify_save()
 
     def full_step(self, compute_internal_forces=True):
         """
@@ -910,12 +901,31 @@ class BatchedZhuNakamura:
             None
         """
 
-        nxyz_data = [atoms_to_nxyz(trj.atoms) for trj in trjs]
-        self.props.update({"nxyz": nxyz_data})
-        dataset = Dataset(props=self.props.copy(), units='kcal/mol')
+        nxyz_data = [torch.Tensor(atoms_to_nxyz(trj.atoms)) for trj in trjs]
+        props = {"nxyz": nxyz_data,
+                 "nbr_list": self.props["nbr_list"],
+                 "num_atoms": self.props['num_atoms']}
+        dataset = Dataset(props=props,
+                          units='kcal/mol',
+                          check_props=False)
 
         if get_new_neighbors:
-            dataset.generate_neighbor_list(cutoff=self.cutoff)
+            # # can stack the nxyz's and generate the neighbor list accordingly
+            # # because all geoms correspond to the same molecule
+            # nbrs = single_spec_nbrs(dset=dataset,
+            #                         cutoff=self.cutoff,
+            #                         device=self.device)
+            # dataset.props['nbr_list'] = nbrs
+            # for batch in dataset:
+            #     for nbr in batch['nbr_list']:
+            #         dist = (batch['nxyz'][nbr[1]] - batch['nxyz'][nbr[0]]).norm()
+            #         assert dist <= 5
+
+            # import pdb
+            # pdb.set_trace()
+
+            dataset.generate_neighbor_list(self.cutoff)
+
             if self.needs_angles:
                 dataset.generate_angle_list()
 
@@ -928,8 +938,11 @@ class BatchedZhuNakamura:
 
         for i, batch in enumerate(loader):
 
+            # start = datetime.now()
+
             batch = batch_to(batch, self.device)
-            results = batch_detach(self.model(batch))
+            results = self.model(batch)
+            results = batch_detach(results)
 
             for key in self.grad_keys:
                 N = batch["num_atoms"].cpu().detach().numpy().tolist()
@@ -955,9 +968,6 @@ class BatchedZhuNakamura:
                 trj.energies = np.array(energies)
                 trj.forces = np.array(forces)
 
-        if self.explicit_diabat:
-            self.add_diabat_forces()
-
     def add_diabat_forces(self):
         diabat_trjs = []
         diabat_idx = []
@@ -976,7 +986,9 @@ class BatchedZhuNakamura:
         # create a dataset and limit to only the trajectories you
         # care about
 
-        dataset = Dataset(props=self.props.copy(), units='kcal/mol')
+        dataset = Dataset(props=self.props.copy(),
+                          units='kcal/mol',
+                          check_props=False)
         diabat_idx = torch.LongTensor(diabat_idx)
         dataset.change_idx(diabat_idx)
 
@@ -1045,6 +1057,17 @@ class BatchedZhuNakamura:
                 trj.diabat_ens = diabat_ens
                 trj.diabat_forces = diabat_forces
 
+    def single_pos_step(self, i):
+        self.zhu_trjs[i].position_step()
+
+    def step_and_save(self, i):
+        trj = self.zhu_trjs[i]
+        trj.velocity_step()
+        trj.full_step(compute_internal_forces=False)
+        # print(trj.time)
+        if trj.time < self.max_time:
+            trj.save()
+
     def step(self, get_new_neighbors):
         """
         Take a step for each trajectory
@@ -1058,6 +1081,14 @@ class BatchedZhuNakamura:
             # take a position step based on previous energies and forces
             trj.position_step()
 
+        # run position steps in parallel - for some reason a single process
+        # is the most efficient and is still much faster than a for-loop
+        # when it comes to saving csvs
+
+        # pool = Pool(processes=1)
+        # num_trjs = len(self.zhu_trjs)
+        # pool.imap_unordered(self.single_pos_step, range(num_trjs))
+
         # update the energies and forces
         self.update_energies_forces(trjs=self.zhu_trjs,
                                     get_new_neighbors=get_new_neighbors)
@@ -1065,14 +1096,22 @@ class BatchedZhuNakamura:
         for trj in self.zhu_trjs:
             # take a velocity step
             trj.velocity_step()
+
+        if self.explicit_diabat:
+            self.add_diabat_forces()
+
+        for trj in self.zhu_trjs:
             # take a "full_step" with compute_internal_forces=False,
             # which just amounts to checking if you're at a crossing and
             # potentially hopping
             trj.full_step(compute_internal_forces=False)
 
-        for trj in self.zhu_trjs:
-            if trj.time < self.max_time:
-                trj.save()
+        # for trj in self.zhu_trjs:
+            # if trj.time < self.max_time:
+            #     trj.save()
+
+        # pool.imap_unordered(self.step_and_save, range(num_trjs))
+        # pool.close()
 
     def run(self):
         """
@@ -1085,8 +1124,11 @@ class BatchedZhuNakamura:
         complete = False
         num_steps = 0
 
-        while not complete:
+        ###
+        # from datetime import datetime
+        # start = datetime.now()
 
+        while not complete:
             num_steps += 1
             get_new_neighbors = np.mod(num_steps,
                                        self.nbr_update_period) == 0
@@ -1095,6 +1137,12 @@ class BatchedZhuNakamura:
 
             complete = all([trj.time >= self.max_time
                             for trj in self.zhu_trjs])
+
+        ###
+        # end = datetime.now()
+        # change = (end - start).total_seconds()
+        # print("Finished in %.2f seconds" % change)
+        ###
 
         print("Neural ZN terminated normally.")
 
