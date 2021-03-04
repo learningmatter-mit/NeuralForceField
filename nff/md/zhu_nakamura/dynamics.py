@@ -3,7 +3,10 @@ import numpy as np
 import random
 import torch
 import copy
-from multiprocessing import Pool
+# from multiprocessing import Pool
+
+from torch.multiprocessing import Pool, set_start_method
+
 
 from torch.utils.data import DataLoader
 from ase.io.trajectory import Trajectory
@@ -17,6 +20,8 @@ from nff.utils.cuda import batch_to
 from nff.utils.constants import KCAL_TO_AU
 from nff.nn.utils import single_spec_nbrs
 from nff.train import load_model, batch_detach
+
+import multiprocessing as mp
 
 
 HBAR = 1
@@ -703,7 +708,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.hopping_probabilities = []
         self.time = self.time - self.dt
 
-        # self.modify_save()
+        self.modify_save()
 
     def full_step(self, compute_internal_forces=True):
         """
@@ -938,7 +943,6 @@ class BatchedZhuNakamura:
 
         for i, batch in enumerate(loader):
 
-            # start = datetime.now()
 
             batch = batch_to(batch, self.device)
             results = self.model(batch)
@@ -1060,10 +1064,10 @@ class BatchedZhuNakamura:
     def single_pos_step(self, i):
         self.zhu_trjs[i].position_step()
 
-    def step_and_save(self, i):
+    def save_par(self, i):
         trj = self.zhu_trjs[i]
-        trj.velocity_step()
-        trj.full_step(compute_internal_forces=False)
+        # trj.velocity_step()
+        # trj.full_step(compute_internal_forces=False)
         # print(trj.time)
         if trj.time < self.max_time:
             trj.save()
@@ -1085,8 +1089,6 @@ class BatchedZhuNakamura:
         # is the most efficient and is still much faster than a for-loop
         # when it comes to saving csvs
 
-        # pool = Pool(processes=1)
-        # num_trjs = len(self.zhu_trjs)
         # pool.imap_unordered(self.single_pos_step, range(num_trjs))
 
         # update the energies and forces
@@ -1106,12 +1108,25 @@ class BatchedZhuNakamura:
             # potentially hopping
             trj.full_step(compute_internal_forces=False)
 
-        # for trj in self.zhu_trjs:
-            # if trj.time < self.max_time:
-            #     trj.save()
+        for trj in self.zhu_trjs:
+            if trj.time < self.max_time:
+                trj.save()
 
-        # pool.imap_unordered(self.step_and_save, range(num_trjs))
+        # pool = Pool(processes=1)
+        # num_trjs = len(self.zhu_trjs)
+        # pool.imap_unordered(self.save_par, range(1))
         # pool.close()
+
+        # multi_pool = Pool(processes=5)
+        # multi_pool.map(self.save_par, range(1))
+        # multi_pool.close()
+        # multi_pool.join()
+
+        # q = mp.Queue()
+        # p = mp.Process(target=self.save_par, args=range(1))
+        # p.start()
+        # print(q.get())
+        # p.join()
 
     def run(self):
         """
@@ -1124,9 +1139,7 @@ class BatchedZhuNakamura:
         complete = False
         num_steps = 0
 
-        ###
-        # from datetime import datetime
-        # start = datetime.now()
+
 
         while not complete:
             num_steps += 1
@@ -1138,11 +1151,6 @@ class BatchedZhuNakamura:
             complete = all([trj.time >= self.max_time
                             for trj in self.zhu_trjs])
 
-        ###
-        # end = datetime.now()
-        # change = (end - start).total_seconds()
-        # print("Finished in %.2f seconds" % change)
-        ###
 
         print("Neural ZN terminated normally.")
 
@@ -1253,11 +1261,15 @@ class CombinedZhuNakamura:
         Run a ground state trajectory followed by a set of parallel Zhu Nakamura trajectories.
         """
 
+        set_start_method('spawn')
+
         atoms_list = self.sample_ground_geoms()
 
         # print(atoms_list[0].get_kinetic_energy())
         # print(atoms_list[0].get_positions())
         # print(atoms_list[0].get_velocities())
+
+        # mp.set_start_method('spawn')
 
         batched_zn = BatchedZhuNakamura(atoms_list=atoms_list,
                                         props=self.props,

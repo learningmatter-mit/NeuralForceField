@@ -1,4 +1,4 @@
-import os 
+import os
 import numpy as np
 import csv
 import json
@@ -17,12 +17,12 @@ import nff.utils.constants as const
 
 
 def get_energy(atoms):
-    """Function to print the potential, kinetic and total energy""" 
-    epot = atoms.get_potential_energy() * const.EV_TO_KCAL_MOL#/ len(atoms)
-    ekin = atoms.get_kinetic_energy() * const.EV_TO_KCAL_MOL #/ len(atoms)
+    """Function to print the potential, kinetic and total energy"""
+    epot = atoms.get_potential_energy() * const.EV_TO_KCAL_MOL  # / len(atoms)
+    ekin = atoms.get_kinetic_energy() * const.EV_TO_KCAL_MOL  # / len(atoms)
     Temperature = ekin / (1.5 * units.kB * len(atoms))
 
-    # compute kinetic energy by hand 
+    # compute kinetic energy by hand
     # vel = torch.Tensor(atoms.get_velocities())
     # mass = atoms.get_masses()
     # mass = torch.Tensor(mass)
@@ -32,7 +32,7 @@ def get_energy(atoms):
     #ekin = ekin.detach().numpy()
 
     print('Energy per atom: Epot = %.2fkcal/mol  Ekin = %.2fkcal/mol (T=%3.0fK)  '
-         'Etot = %.2fkcal/mol' % (epot, ekin, Temperature, epot + ekin))
+          'Etot = %.2fkcal/mol' % (epot, ekin, Temperature, epot + ekin))
     # print('Energy per atom: Epot = %.5feV  Ekin = %.5feV (T=%3.0fK)  '
     #      'Etot = %.5feV' % (epot, ekin, Temperature, (epot + ekin)))
     return epot, ekin, Temperature
@@ -42,25 +42,28 @@ def write_traj(filename, frames):
     '''
         Write trajectory dataframes into .xyz format for VMD visualization
         to do: include multiple atom types 
-        
+
         example:
             path = "../../sim/topotools_ethane/ethane-nvt_unwrap.xyz"
             traj2write = trajconv(n_mol, n_atom, box_len, path)
             write_traj(path, traj2write)
-    '''    
-    file = open(filename,'w')
+    '''
+    file = open(filename, 'w')
     atom_no = frames.shape[1]
-    for i, frame in enumerate(frames): 
-        file.write( str(atom_no) + '\n')
-        file.write('Atoms. Timestep: '+ str(i)+'\n')
+    for i, frame in enumerate(frames):
+        file.write(str(atom_no) + '\n')
+        file.write('Atoms. Timestep: ' + str(i)+'\n')
         for atom in frame:
             if atom.shape[0] == 4:
                 try:
-                    file.write(str(int(atom[0])) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
+                    file.write(str(int(atom[0])) + " " + str(atom[1]) +
+                               " " + str(atom[2]) + " " + str(atom[3]) + "\n")
                 except:
-                    file.write(str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
+                    file.write(str(atom[0]) + " " + str(atom[1]) +
+                               " " + str(atom[2]) + " " + str(atom[3]) + "\n")
             elif atom.shape[0] == 3:
-                file.write("1" + " " + str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + "\n")
+                file.write(
+                    "1" + " " + str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + "\n")
             else:
                 raise ValueError("wrong format")
     file.close()
@@ -89,13 +92,12 @@ def atoms_to_nxyz(atoms, positions=None):
     # don't make this a numpy array or it'll become type float64, which will mess up
     # the tensor computation. Need it to be type float32.
     nxyz = [[symbol, *position] for
-        symbol, position in zip(atomic_numbers, positions)]
-
+            symbol, position in zip(atomic_numbers, positions)]
 
     return nxyz
 
-def zhu_dic_to_list(dic):
 
+def zhu_dic_to_list(dic):
     """
     Convert dictionary of items, each value of which contains the items at all time steps, to a list
     of dictionaries at each time step.
@@ -111,12 +113,11 @@ def zhu_dic_to_list(dic):
         sub_dic = dict()
         for key in dic.keys():
             sub_dic[key.split("_list")[0]] = dic[key][i]
-            if (key=="time_list"):
+            if (key == "time_list"):
                 sub_dic[key.split("_list")[0]] /= const.FS_TO_AU
         lst.append(sub_dic)
 
     return lst
-
 
 
 def append_to_csv(lst, out_file):
@@ -134,6 +135,7 @@ def append_to_csv(lst, out_file):
             writer.writeheader()
             writer.writerow({key: item[key] for key in fieldnames})
 
+
 def write_to_new_csv(lst, out_file):
     """
     Same as `append_to_csv`, but writes a new file.
@@ -144,6 +146,7 @@ def write_to_new_csv(lst, out_file):
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerow({key: item[key] for key in fieldnames})
+
 
 def csv_write(lst, out_file, method):
     """
@@ -156,8 +159,8 @@ def csv_write(lst, out_file, method):
         write_to_new_csv(lst, "temp")
         os.rename("temp", out_file)
 
-def csv_read(out_file):
 
+def csv_read(out_file):
     """
     Read a csv output file.
     Args:
@@ -198,11 +201,9 @@ def csv_read(out_file):
     return new_dic_list
 
 
-
-
 class NeuralMDLogger(MDLogger):
     def __init__(self,
-                *args,
+                 *args,
                  verbose=True,
                  **kwargs):
 
@@ -251,7 +252,6 @@ class ZhuNakamuraLogger:
         self.log_file = log_file
         self.save_keys = save_keys
 
-
     def setup_logging(self):
         """
         Set up logging and saving for trajectory.
@@ -261,8 +261,6 @@ class ZhuNakamuraLogger:
             os.remove(self.out_file)
         if os.path.exists(self.log_file):
             os.remove(self.log_file)
-
-
 
     # def save_as_pymol(self):
 
@@ -285,7 +283,6 @@ class ZhuNakamuraLogger:
     #     with open(PYMOL_NAME, "w") as f:
     #         f.write(pymol_str)
 
-
     def create_save_list(self):
         """
         Get a list of the values to be saved.
@@ -298,15 +295,16 @@ class ZhuNakamuraLogger:
         self_dic = {key: getattr(self, key) for key in self.save_keys}
         save_dic = dict()
         for key, val in self_dic.items():
-            save_dic[key] = [sub_val.tolist() for sub_val in val] if hasattr(val[0], "tolist") else val
+            save_dic[key] = [sub_val.tolist()
+                             for sub_val in val] if hasattr(val[0], "tolist") else val
 
-        save_dic["nxyz_list"] = [atoms_to_nxyz(self.atoms, positions) for positions in save_dic["position_list"] ]
+        save_dic["nxyz_list"] = [atoms_to_nxyz(
+            self.atoms, positions) for positions in save_dic["position_list"]]
         save_list = zhu_dic_to_list(save_dic)
 
         return save_list
 
     def save(self):
-
         """
         Save values
         """
@@ -315,13 +313,15 @@ class ZhuNakamuraLogger:
         csv_write(out_file=self.out_file, lst=save_list[-1:], method="append")
 
         for key in self.save_keys:
-            setattr(self, key, getattr(self, key)[-5:] )
-
+            setattr(self, key, getattr(self, key)[-5:])
 
     def modify_save(self):
-
         """
         Modify a saved csv file (e.g., with Zhu hopping parameters calculated in the next step)
+
+        * this probably takes forever, and is more likely to happen as you increase the number of
+        parallel trajectories
+
         """
 
         old_list = csv_read(out_file=self.out_file)
@@ -334,20 +334,16 @@ class ZhuNakamuraLogger:
 
         csv_write(out_file=self.out_file, lst=save_list, method="new")
 
-
     def output_to_json(self):
-
         """
         Convert csv file to a json file.
         """
 
-
         props_list = csv_read(out_file=self.out_file)
         base_name = self.out_file.split(".csv")[0]
-        json_name = "{}.json".format(base_name)
+        json_name = f"{base_name}.json"
         with open(json_name, "w") as f:
             json.dump(props_list, f, indent=5, sort_keys=True)
-
 
     def log(self, msg):
         """
@@ -360,6 +356,3 @@ class ZhuNakamuraLogger:
         with open(self.log_file, "a+") as f:
             f.write(output)
             f.write("\n")
-
-
-
