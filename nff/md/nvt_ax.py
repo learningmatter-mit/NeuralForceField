@@ -3,12 +3,14 @@ import os
 import numpy as np
 import copy
 import pdb
+import math
 
 from ase.md.md import MolecularDynamics
 from ase.optimize.optimize import Dynamics
 from ase import units
 from ase.md.velocitydistribution import (MaxwellBoltzmannDistribution,
                                          Stationary, ZeroRotation)
+from ase.io.trajectory import Trajectory
 
 
 class NoseHoover(MolecularDynamics):
@@ -23,14 +25,19 @@ class NoseHoover(MolecularDynamics):
                  loginterval=1,
                  max_steps=None,
                  nbr_update_period=20,
+                 append_trajectory=True,
                  **kwargs):
 
         MolecularDynamics.__init__(self,
-                                   atoms,
-                                   timestep * units.fs,
-                                   trajectory,
-                                   logfile,
-                                   loginterval)
+                                   atoms=atoms,
+                                   timestep=timestep * units.fs,
+                                   trajectory=trajectory,
+                                   logfile=logfile,
+                                   loginterval=loginterval,
+                                   append_trajectory=append_trajectory)
+
+        if os.path.isfile(trajectory):
+            os.remove(trajectory)
 
         # Initialize simulation parameters
         # convert units
@@ -105,7 +112,7 @@ class NoseHoover(MolecularDynamics):
         total_steps = steps + self.nsteps
         # return Dynamics.run(self)
 
-        epochs = int(total_steps // self.nbr_update_period)
+        epochs = math.ceil(total_steps / self.nbr_update_period)
         # number of steps in between nbr updates
         steps_per_epoch = int(total_steps / epochs)
         # maximum number of steps starts at `steps_per_epoch`
