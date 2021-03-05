@@ -1187,9 +1187,4 @@ if __name__ == "__main__":
     if type(args.extra_features) == str:
         args.extra_features = json.loads(args.extra_features)
 
-    try:
-        main(**args.__dict__)
-    except Exception as e:
-        print(e)
-        import pdb
-        pdb.post_mortem()
+    main(**args.__dict__)
