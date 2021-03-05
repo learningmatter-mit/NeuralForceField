@@ -6,6 +6,7 @@ This folder contains scripts for doing 3D-based prediction tasks. These include 
 
 - [Getting started](#getting-started)
 - [Making a dataset](#making-a-dataset)
+    * [Generating 3D structures](#generating-3d-structures)
     * [Splitting the data](#splitting-the-data)
     * [Generating the dataset from splits and pickles](#generating-the-dataset-from-splits-and-pickles)
     * [Adding custom features](#adding-custom-features)
@@ -40,11 +41,42 @@ This folder contains scripts for doing 3D-based prediction tasks. These include 
 
 ## Making a dataset
 
-The scripts for making a dataset assume that you have a set of pickle files in a folder, one for each species, each of which contains all the 3D information about the conformers. It also assumes that you have one summary `JSON` file, which tells you all the properties of each species (except for its 3D information), and also has the path to the pickle file. This follows the organization of the GEOM dataset. More information about this organization can be found [here](https://github.com/learningmatter-mit/geom/blob/master/tutorials/02_loading_rdkit_mols.ipynb). 
+If you don't have 3D conformers but you do have SMILES strings and properties, then you can use [Generating 3D structures](#generating-3d-structures) to make conformers with RDKit and its built-in classical force fields. If you do have 3D conformers, you can skip to section [Splitting the data](#splitting-the-data) below, which gets you started on converting the 3D data to a PyTorch dataset.
+
+
+### Generating 3D structures
+
+The scripts for making a dataset assume that you have a set of pickle files in a folder, one for each species, each of which contains all the 3D information about the conformers. It also assumes that you have one summary `JSON` file, which tells you all the properties of each species (except for its 3D information), and also has the path to the pickle file. This follows the organization of the GEOM dataset. More information about this organization can be found [here](https://github.com/learningmatter-mit/geom/blob/master/tutorials/02_loading_rdkit_mols.ipynb). If you don't have 3D structures, the script `scripts/confgen/make_confs.sh` can generate conformers from RDKit and store them in the style of GEOM. 
+
+The script runs `make_confs.py` and specifies the config file with the details of the job through the `--config` argument. By default the config file is set to `config/test_config.json` in the `confgen` directory. Running the script as is (`bash make_confs.sh`) should produce a set of pickle files and a summary file for an example csv with 8 species. You can modify any of the arguments in that config file, or make a new config file with different arguments and change the `--config` argument in the script. The keys in the config file are:
+
+- `max_confs` (int): The maximum number of conformers to be saved for each species
+- `forcefield` (str): Name of the classical force field to use. Can be either "mmff" (Merck molecular force field) or "uff" (universal force field).
+- `nconf_gen` (int): The maximum number of conformers to be generated before they are optimized and pruned to remove identical or high-energy conformers.
+- `e_window` (float): If two conformers have an energy difference greater than `e_window` (in kcal/mol), they cannot be considered identical and grouped together, even with a low RMSD.
+- `rms_tol` (float): Minimum RMSD (in Angstroms) that two optimized conformers can have before they are considered identical.
+- `prun_tol` (float): Same as `rms_tol`, but used in initial RDKit conformer generation before optimization.
+- `job_dir` (str): Working directory in which to generate the conformer log file and produce the outputs as text files before eventually combining everything into pickles.
+- `log_file` (str): Name of the log file that monitors the progress of conformer generation.
+- `rep_e_window` (float):  Maximum energy (in kcal/mol) that a conformer can have before being removed.
+- `fallback_to_align` (bool): Use `align` argument in OpenBabel to alig molecules if OpenBabel's `Obfit` fails.
+- `temp` (float): Temperature used for reporting Boltzmann populations.
+- `csv_data_path` (str): Path to csv file that has the list of molecules with their SMILES strings and properties
+- `pickle_save_dir` (str): Path to the folder in which the RDKit pickle files will be saved.
+- `summary_save_dir` (str): Path to the folder in which to save `summary.json`, the summary file of the species and where to find their pickles.
+- `clean_up` (bool): Remove intermediate text and log files generated during conformer generation.
+
+
+
+The conformers are generated with the stochastic methods in RDKit, and are optimized using classical force fields. They will be necessarily be less reliable than the GEOM conformers, which were generated with metadynamics and semiempirical DFT through CREST. However, they can be generated far more quickly, and may provide reliable enough conformers to be useful for a 3D model. Note also that RDKit usually takes about one minute per species. While this is much faster than CREST, it would still amount to almost four days for a dataset with 5,000 species. For this reason we recommend separating the SMILES/property CSV files into chunks and creating smaller datasets in parallel. This will significantly speed up the process. Once all conformers have been generated, you can simply move all the pickle files into one folder and combine the summary files into one.
+
+
+### Splitting the data
+
 
 The script `scripts/cp3d/make_dset/make_dset.sh` first generates training, validation and test splits from your summary file. It interfaces with ChemProp to do so, so that you can use functionality like ChemProp's scaffold split. It then uses the splits you've generated, together with the pickle files, to create train, validation, and test datasets complete with all the 3D information. The following two sections discuss the two functions that `make_dset.sh` calls. You can run `make_dset.sh` or you can run the individual scripts themselves. 
 
-### Splitting the data
+
 The script `scripts/cp3d/make_dset/splits/split.sh` uses your summary file to get information about the data, generates a CSV of the data for ChemProp to read, and uses ChemProp to split the data. 
 
 Details for the script are can be found in any of the `JSON` files in `scripts/cp3d/make_dset/splits/config`. If you want to use a config file with a different name than what is specified in `split.sh`, then you should modify the `split.sh` script accordingly. The keys are:

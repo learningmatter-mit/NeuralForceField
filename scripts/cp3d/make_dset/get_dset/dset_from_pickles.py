@@ -26,7 +26,7 @@ KEY_MAP = {"rd_mol": "nxyz",
 
 # These are keys that confuse the dataset.
 EXCLUDE_KEYS = ["totalconfs", "datasets", "conformerweights",
-                "uncleaned_smiles"]
+                "uncleaned_smiles", "poplowestpct"]
 
 # these keys are for per-conformer quantities
 CONF_KEYS = ["rd_mols", "bonded_nbr_list", "bond_features",
