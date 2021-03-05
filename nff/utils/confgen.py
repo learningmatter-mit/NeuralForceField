@@ -797,32 +797,6 @@ def run_generator(smiles_list,
     return conf_dics
 
 
-# def get_confs_parallel(num_threads,
-#                        smiles_list,
-#                        **kwargs):
-
-#     num_smiles = len(smiles_list)
-#     num_batches = math.ceil(num_smiles / num_threads)
-#     smiles_splits = np.array_split(smiles_list, num_batches)
-
-#     all_conf_dics = []
-#     for smiles_split in smiles_splits:
-#         kwargs_list = [{"smiles_list": smiles,
-#                         **kwargs}
-#                        for smiles in smiles_split]
-#         conf_dics = gen_parallel(run_generator, kwargs_list)
-#         all_conf_dics += [i[0] for i in conf_dics]
-
-#     return all_conf_dics
-
-
-##########
-# Need to allow for minimization but provide a warning for c/t stereo
-# -> RDKit should be able to detect bond stereochemistry and give a new
-# smiles after optimization, which we provide
-#########
-
-
 def add_to_summary(summary_dic,
                    conf_dic,
                    smiles,
