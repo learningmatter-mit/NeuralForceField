@@ -26,7 +26,7 @@ KEY_MAP = {"rd_mol": "nxyz",
 
 # These are keys that confuse the dataset.
 EXCLUDE_KEYS = ["totalconfs", "datasets", "conformerweights",
-                "uncleaned_smiles"]
+                "uncleaned_smiles", "poplowestpct"]
 
 # these keys are for per-conformer quantities
 CONF_KEYS = ["rd_mols", "bonded_nbr_list", "bond_features",
@@ -1187,4 +1187,9 @@ if __name__ == "__main__":
     if type(args.extra_features) == str:
         args.extra_features = json.loads(args.extra_features)
 
-    main(**args.__dict__)
+    try:
+        main(**args.__dict__)
+    except Exception as e:
+        print(e)
+        import pdb
+        pdb.post_mortem()

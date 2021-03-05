@@ -1,0 +1,17 @@
+{
+  "max_confs": 200,
+  "forcefield": "mmff",
+  "nconf_gen": 2000,
+  "e_window": 5.0,
+  "rms_tol": 0.1,
+  "prun_tol": 0.01,
+  "job_dir": "confs",
+  "log_file": "confgen.log",
+  "rep_e_window": 5.0,
+  "fallback_to_align": false,
+  "temp": 298.15,
+  "csv_data_path": "/home/saxelrod/Repo/projects/public_nff/NeuralForceField/scripts/confgen/test.csv",
+  "pickle_save_dir": "rd_pickles",
+  "summary_save_dir": ".",
+  "clean_up": true
+}

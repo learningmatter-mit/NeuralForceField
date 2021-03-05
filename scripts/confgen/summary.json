@@ -1,0 +1,68 @@
+{
+    "Brc1ccnc2ncccc12": {
+        "totalconfs": 2,
+        "uniqueconfs": 2,
+        "temperature": 298.15,
+        "lowestenergy": 0.03580020523451584,
+        "poplowestpct": 50.00000000002506,
+        "charge": 0,
+        "smiles": "Brc1ccnc2ncccc12",
+        "sars_cov_two_cl_protease_active": 0,
+        "pickle_path": "/home/saxelrod/Repo/projects/public_nff/NeuralForceField/scripts/confgen/rd_pickles/QYXNSNJTMIEAPG-UHFFFAOYSA-N.pickle"
+    },
+    "Brc1cn[nH]c1": {
+        "totalconfs": 2,
+        "uniqueconfs": 2,
+        "temperature": 298.15,
+        "lowestenergy": 0.05873127073391453,
+        "poplowestpct": 50.0000000000003,
+        "charge": 0,
+        "smiles": "Brc1cn[nH]c1",
+        "sars_cov_two_cl_protease_active": 0,
+        "pickle_path": "/home/saxelrod/Repo/projects/public_nff/NeuralForceField/scripts/confgen/rd_pickles/WVGCPEDBFHEHEZ-UHFFFAOYSA-N.pickle"
+    },
+    "Brc1cncnc1": {
+        "totalconfs": 2,
+        "uniqueconfs": 2,
+        "temperature": 298.15,
+        "lowestenergy": 0.015725088334832518,
+        "poplowestpct": 50.000000000000156,
+        "charge": 0,
+        "smiles": "Brc1cncnc1",
+        "sars_cov_two_cl_protease_active": 0,
+        "pickle_path": "/home/saxelrod/Repo/projects/public_nff/NeuralForceField/scripts/confgen/rd_pickles/GYCPLYCTMDTEPU-UHFFFAOYSA-N.pickle"
+    },
+    "Brc1cnoc1": {
+        "totalconfs": 2,
+        "uniqueconfs": 2,
+        "temperature": 298.15,
+        "lowestenergy": 0.058354938368596905,
+        "poplowestpct": 50.00000000013291,
+        "charge": 0,
+        "smiles": "Brc1cnoc1",
+        "sars_cov_two_cl_protease_active": 0,
+        "pickle_path": "/home/saxelrod/Repo/projects/public_nff/NeuralForceField/scripts/confgen/rd_pickles/IRDVIGFQMLUJAM-UHFFFAOYSA-N.pickle"
+    },
+    "C(#Cc1ccccc1)C[NH+]1CCCCC1": {
+        "totalconfs": 24,
+        "uniqueconfs": 24,
+        "temperature": 298.15,
+        "lowestenergy": -0.003593835406622898,
+        "poplowestpct": 7.341035053676606,
+        "charge": 1,
+        "smiles": "C(#Cc1ccccc1)C[NH+]1CCCCC1",
+        "sars_cov_two_cl_protease_active": 0,
+        "pickle_path": "/home/saxelrod/Repo/projects/public_nff/NeuralForceField/scripts/confgen/rd_pickles/PJMAQEATSLLDCR-UHFFFAOYSA-O.pickle"
+    },
+    "C1CC(CNC2CC2)CO1": {
+        "totalconfs": 54,
+        "uniqueconfs": 54,
+        "temperature": 298.15,
+        "lowestenergy": 0.005743782705774293,
+        "poplowestpct": 15.968885934794155,
+        "charge": 0,
+        "smiles": "C1CC(CNC2CC2)CO1",
+        "sars_cov_two_cl_protease_active": 0,
+        "pickle_path": "/home/saxelrod/Repo/projects/public_nff/NeuralForceField/scripts/confgen/rd_pickles/XTBAPHZUOIOBDQ-UHFFFAOYSA-N.pickle"
+    }
+}
