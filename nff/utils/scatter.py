@@ -16,8 +16,11 @@ def compute_grad(inputs, output):
 
     assert inputs.requires_grad
 
-    gradspred, = grad(output, inputs, grad_outputs=output.data.new(output.shape).fill_(1),
-                      create_graph=True, retain_graph=True)
+    gradspred, = grad(output,
+                      inputs,
+                      grad_outputs=output.data.new(output.shape).fill_(1),
+                      create_graph=True,
+                      retain_graph=True)
 
     return gradspred
 

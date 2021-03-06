@@ -1347,9 +1347,6 @@ class DiabaticReadout(nn.Module):
         else:
             all_grad_keys = self.grad_keys
 
-        # import pdb
-        # pdb.set_trace()
-
         for grad_key in all_grad_keys:
             if "_grad" not in grad_key:
                 grad_key += "_grad"

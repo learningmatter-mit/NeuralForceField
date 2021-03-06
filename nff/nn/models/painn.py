@@ -182,8 +182,8 @@ class Painn(nn.Module):
             results (dict): dictionary of predictions
         """
 
-        results, _, _ = self.run(batch=batch,
-                                 xyz=xyz)
+        results, _ = self.run(batch=batch,
+                              xyz=xyz)
         return results
 
 
