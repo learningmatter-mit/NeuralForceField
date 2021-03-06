@@ -84,7 +84,9 @@ class Painn(nn.Module):
                 pool_class = POOL_DIC[pool_name]
                 self.pool_dic[out_key] = pool_class(**kwargs)
 
-    def atomwise(self, batch, xyz=None):
+    def atomwise(self,
+                 batch,
+                 xyz=None):
 
         nbrs, _ = make_directed(batch['nbr_list'])
         nxyz = batch['nxyz']
@@ -92,6 +94,7 @@ class Painn(nn.Module):
         if xyz is None:
             xyz = nxyz[:, 1:]
             xyz.requires_grad = True
+
         z_numbers = nxyz[:, 0].long()
         r_ij = xyz[nbrs[:, 1]] - xyz[nbrs[:, 0]]
 
@@ -162,7 +165,8 @@ class Painn(nn.Module):
             batch,
             xyz=None):
 
-        atomwise_out, xyz = self.atomwise(batch, xyz)
+        atomwise_out, xyz = self.atomwise(batch=batch,
+                                          xyz=xyz)
         all_results, xyz = self.pool(batch=batch,
                                      atomwise_out=atomwise_out,
                                      xyz=xyz)
@@ -178,8 +182,8 @@ class Painn(nn.Module):
             results (dict): dictionary of predictions
         """
 
-        results, _ = self.run(batch=batch,
-                              xyz=xyz)
+        results, _, _ = self.run(batch=batch,
+                                 xyz=xyz)
         return results
 
 
@@ -192,6 +196,15 @@ class PainnDiabat(Painn):
 
         energy_keys = modelparams["output_keys"]
         diabat_keys = modelparams["diabat_keys"]
+        delta = modelparams.get("delta", False)
+        # sigma_delta_keys = modelparams.get("sigma_delta_keys")
+        # if delta:
+        #     assert len(diabat_keys) == 2
+        #     new_out_keys = [diabat_keys[0][1], *sigma_delta_keys]
+        # else:
+        #     new_out_keys = list(set(np.array(diabat_keys).reshape(-1)
+        #                             .tolist()))
+
         new_out_keys = list(set(np.array(diabat_keys).reshape(-1)
                                 .tolist()))
 
@@ -205,7 +218,18 @@ class PainnDiabat(Painn):
             diabat_keys=diabat_keys,
             grad_keys=modelparams["grad_keys"],
             energy_keys=energy_keys,
-            delta=modelparams.get("delta", False))
+            delta=delta,
+            stochastic_dic=modelparams.get("stochastic_dic"))  # ,
+        # sigma_delta_keys=sigma_delta_keys)
+
+    @property
+    def _grad_keys(self):
+        return self.grad_keys
+
+    @_grad_keys.setter
+    def _grad_keys(self, value):
+        self.grad_keys = value
+        self.diabatic_readout.grad_keys = value
 
     def forward(self,
                 batch,
@@ -215,9 +239,11 @@ class PainnDiabat(Painn):
                 add_gap=True,
                 extra_grads=None):
 
-        # for backwards compatability - check that this works
+        # self.grad_keys set for backwards compatability
         self.grad_keys = []
-        diabat_results, xyz = self.run(batch, xyz)
+        diabat_results, xyz = self.run(batch=batch,
+                                       xyz=xyz)
+
         results = self.diabatic_readout(batch=batch,
                                         xyz=xyz,
                                         results=diabat_results,

@@ -8,7 +8,7 @@ from torch.nn.functional import softmax
 import numpy as np
 import unittest
 
-from nff.nn.layers import Dense, GaussianSmearing
+from nff.nn.layers import Dense, GaussianSmearing, StochasticIncrease
 from nff.utils.scatter import scatter_add, compute_grad
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphconv import (
@@ -1038,7 +1038,9 @@ class DiabaticReadout(nn.Module):
                  diabat_keys,
                  grad_keys,
                  energy_keys,
-                 delta=False):
+                 delta=False,
+                 stochastic_dic=None):
+
         nn.Module.__init__(self)
 
         self.diag = Diagonalize()
@@ -1046,6 +1048,51 @@ class DiabaticReadout(nn.Module):
         self.grad_keys = grad_keys
         self.energy_keys = energy_keys
         self.delta = delta
+        self.stochastic_modules = self.make_stochastic(stochastic_dic)
+        # self.sigma_delta_keys = sigma_delta_keys
+
+    def make_stochastic(self, stochastic_dic):
+        """
+        E.g. stochastic_layers = {"energy_1": 
+                                    {"name": "stochasticincrease",
+                                    "param": {"exp_coef": 3,
+                                             "order": 4,
+                                             "rate": 0.5},
+                                "lam": 
+                                    {"name": "stochasticincrease",
+                                    "param": {"exp_coef": 3,
+                                             "order": 4,
+                                             "rate": 0.25}
+                                    },
+                                 "d1": 
+                                    {"name": "stochasticincrease",
+                                    "param": {"exp_coef": 3,
+                                             "order": 4,
+                                             "rate": 0.5}}
+
+        For energy_1 it's understood that the adiabatic gap between state 1
+        and state 0 will be increased. Similarly for d1 is's understood that
+        the diabatic gap between state 1 and state 0 will be increased. If we
+        had also specified, for example, energy_2 and d2, then those gaps
+        will be increased relative to the new values of energy_1 and d_1.
+
+        For "lam", an off-diagonal diabatic element, it's understood only that
+        its magnitude will decrease.
+        """
+
+        stochastic_modules = nn.ModuleDict({})
+        if stochastic_dic is None:
+            return stochastic_modules
+
+        for key, layer_dic in stochastic_dic.items():
+            if layer_dic["name"].lower() == "stochasticincrease":
+                params = layer_dic["param"]
+                layer = StochasticIncrease(**params)
+                stochastic_modules[key] = layer
+            else:
+                raise NotImplementedError
+
+        return stochastic_modules
 
     def get_nacv(self, U, xyz, N):
 
@@ -1300,12 +1347,16 @@ class DiabaticReadout(nn.Module):
         else:
             all_grad_keys = self.grad_keys
 
+        # import pdb
+        # pdb.set_trace()
+
         for grad_key in all_grad_keys:
             if "_grad" not in grad_key:
                 grad_key += "_grad"
 
             base_key = grad_key.replace("_grad", "")
             output = results[base_key]
+
             grad = compute_grad(inputs=xyz, output=output)
 
             results[grad_key] = grad
@@ -1336,6 +1387,63 @@ class DiabaticReadout(nn.Module):
 
         return results
 
+    def add_stochastic(self, results):
+
+        # any deltas that you want to decrease, whether adiabatic
+        # or diabatic
+
+        module_keys = self.stochastic_modules.keys()
+        diabat_keys = np.array(self.diabat_keys)
+        diag_diabat_keys = np.array(self.diabat_keys).diagonal()
+        num_states = diabat_keys.shape[0]
+
+        diag_adiabat_incr = [i for i in module_keys if i
+                             not in diabat_keys.reshape(-1)]
+        odiag_diabat_incr = []
+        diag_diabat_incr = []
+
+        for i in range(num_states):
+            for j in range(num_states):
+                key = diabat_keys[i, j]
+                if key not in module_keys:
+                    continue
+                if i == j:
+                    diag_diabat_incr.append(key)
+                else:
+                    odiag_diabat_incr.append(key)
+
+        odiag_diabat_incr = list(set(odiag_diabat_incr))
+        # all diagonals, both adiabatic and diabatic
+        all_diag_incr = list(set(diag_adiabat_incr + diag_diabat_incr))
+
+        # directly scale off-diagonal diabatic elements
+        for key in odiag_diabat_incr:
+            output = results[key]
+            results[key] = self.stochastic_modules[key](output)
+
+        # sequentially increase gap between adiabatic and diagonal
+        # diabatic elements
+
+        for diag_keys in [diag_diabat_keys, self.energy_keys]:
+            for i, key in enumerate(diag_keys):
+                # start with first excited state, meaning you ignore
+                # the lowest key
+                if i == 0:
+                    continue
+                # don't do anything if we didn't ask it to be scaled
+                if key not in all_diag_incr:
+                    continue
+
+                lower_key = diag_diabat_keys[i - 1]
+                delta = results[key] - results[lower_key]
+
+                # stochastically increase the difference between the
+                # two states
+                change = -delta + self.stochastic_modules[key](delta)
+                results[key] = results[key] + change
+
+        return results
+
     def forward(self,
                 batch,
                 xyz,
@@ -1349,24 +1457,39 @@ class DiabaticReadout(nn.Module):
         if not hasattr(self, "delta"):
             self.delta = False
 
+        if not hasattr(self, "stochastic_modules"):
+            self.stochastic_modules = nn.ModuleDict({})
+
+        # if not hasattr(self, "sigma_delta_keys"):
+        #     self.sigma_delta_keys = None
+
         N = batch["num_atoms"].detach().cpu().tolist()
-        # results = {}
 
-        # for key, val in output.items():
-        #     # split the outputs into those of each molecule
-        #     split_val = torch.split(val, N)
-        #     # sum the results for each molecule
-        #     results[key] = torch.stack([i.sum() for i in split_val])
-
-        results = self.add_diag(results=results,
-                                N=N,
-                                xyz=xyz,
-                                add_nacv=add_nacv)
+        # must go before computing the diagonals!
 
         if self.delta:
             diag_diabat = np.array(self.diabat_keys).diagonal()
             for key in diag_diabat[1:]:
                 results[key] += results[diag_diabat[0]]
+
+            # diag_diabat = np.array(self.diabat_keys).diagonal()
+            # assert diag_diabat.shape[0] == 2
+
+            # # d0 = sigma - delta, d1 = sigma + delta
+
+            # key_0 = diag_diabat[0]
+            # key_1 = diag_diabat[1]
+
+            # sigma_key = self.sigma_delta_keys[0]
+            # delta_key = self.sigma_delta_keys[1]
+
+            # results[key_0] = results[sigma_key] - results[delta_key]
+            # results[key_1] = results[sigma_key] + results[delta_key]
+
+        results = self.add_diag(results=results,
+                                N=N,
+                                xyz=xyz,
+                                add_nacv=add_nacv)
 
         if add_grad:
             results = self.add_grad(results=results,
@@ -1374,8 +1497,12 @@ class DiabaticReadout(nn.Module):
                                     N=N,
                                     extra_grads=extra_grads,
                                     try_speedup=try_speedup)
+
         if add_gap:
             results = self.add_gap(results)
+
+        if self.training:
+            results = self.add_stochastic(results)
 
         return results
 
@@ -1547,8 +1674,6 @@ class AttentionPool(nn.Module):
         return results
 
 
-
-
 class ScaleShift(nn.Module):
 
     r"""Scale and shift layer for standardization.
@@ -1582,7 +1707,6 @@ class ScaleShift(nn.Module):
         out = inp * stddev + mean
 
         return out
-
 
 
 class TestModules(unittest.TestCase):
