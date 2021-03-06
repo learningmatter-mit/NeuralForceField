@@ -424,3 +424,34 @@ class PainnRadialBasis(nn.Module):
         output = torch.sin(arg) / denom
 
         return output
+
+
+class StochasticIncrease(nn.Module):
+    """
+    Module that stochastically enhances the magnitude of a network
+    output. Designed with energy gaps in mind so that small gaps
+    are stochastically increased while large ones are basically
+    unchanged. This biases the model toward producing small gaps
+    so that it can account for the stochastic increases.
+    """
+
+    def __init__(self,
+                 exp_coef,
+                 order,
+                 rate):
+
+        super().__init__()
+        self.exp_coef = exp_coef
+        self.order = order
+        self.rate = rate
+
+    def forward(self, output):
+
+        rnd = np.random.rand()
+        do_increase = rnd < self.rate
+        if do_increase:
+            arg = -self.exp_coef * (output.abs() ** self.order)
+            new_output = output * (1 + torch.exp(arg))
+        else:
+            new_output = output
+        return new_output
