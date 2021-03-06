@@ -127,11 +127,11 @@ def logits_cross_entropy(targ, pred):
 def zhu_p(gap,
           expec_gap,
           func_type):
-    
+
     if func_type == "gaussian":
         p = torch.exp(-gap ** 2 / (2 * expec_gap ** 2))
     elif func_type == "exponential":
-        p = torch.exp(-gap /  expec_gap)
+        p = torch.exp(-gap / expec_gap)
     else:
         raise NotImplementedError
 
@@ -142,17 +142,16 @@ def zhu_p_grad(gap,
                gap_grad,
                expec_gap,
                func_type):
-    
+
     if func_type == "gaussian":
         p = torch.exp(-gap ** 2 / (2 * expec_gap ** 2))
         p_grad = - p * gap * gap_grad / (expec_gap ** 2)
     elif func_type == "exponential":
         p = torch.exp(-gap / expec_gap)
-        p_grad = - p * gap_grad / expec_gap 
+        p_grad = - p * gap_grad / expec_gap
 
     else:
         raise NotImplementedError
-
 
     return p_grad
 
@@ -359,13 +358,44 @@ def build_zhu_grad_loss(loss_dict):
     return loss_fn
 
 
+def build_diabat_sign_loss(loss_dict):
+    """
+    Loss that makes the diabatic coupling switch
+    signs as the molecule passes through a conical 
+    intersection, so that it has to be zero at some
+    point. Therefore an intersection must occur. 
+    """
+
+    params = loss_dict["params"]
+    # the off-diagonal diabatic coupling
+    off_diag_key = params["off_diag_key"]
+    # the diagonal keys whose sign you want to be the same
+    # as the diabatic sign
+    diag_keys = params["diag_keys"]
+    coef = loss_dict["coef"]
+
+    def loss_fn(ground_truth, results, **kwargs):
+
+        pred = results[off_diag_key]
+        signs = torch.sign(results[diag_keys[1]]
+                           - results[diag_keys[0]])
+        targ = signs * torch.abs(pred)
+        diff = mse_operation(targ, pred)
+        loss = coef * torch.mean(diff)
+
+        return loss
+
+    return loss_fn
+
+
 def name_to_func(name):
     dic = {
         "mse": build_mse_loss,
         "cross_entropy": build_cross_entropy_loss,
         "logits_cross_entropy": build_logits_cross_entropy_loss,
         "zhu": build_zhu_loss,
-        "zhu_grad": build_zhu_grad_loss
+        "zhu_grad": build_zhu_grad_loss,
+        "diabat_sign": build_diabat_sign_loss
     }
     func = dic[name]
     return func
