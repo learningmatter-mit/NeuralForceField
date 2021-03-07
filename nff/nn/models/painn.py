@@ -7,7 +7,7 @@ from nff.utils.tools import make_directed
 from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
                                   EmbeddingBlock, ReadoutBlock)
 from nff.nn.modules.schnet import (DiabaticReadout, AttentionPool,
-                                   SumPool)
+                                   SumPool, DiabaticCrossTalk)
 from nff.nn.layers import Diagonalize
 
 
@@ -197,6 +197,8 @@ class PainnDiabat(Painn):
         energy_keys = modelparams["output_keys"]
         diabat_keys = modelparams["diabat_keys"]
         delta = modelparams.get("delta", False)
+        cross_talk_dic = modelparams.get("cross_talk", {})
+
         # sigma_delta_keys = modelparams.get("sigma_delta_keys")
         # if delta:
         #     assert len(diabat_keys) == 2
@@ -222,6 +224,21 @@ class PainnDiabat(Painn):
             stochastic_dic=modelparams.get("stochastic_dic"))  # ,
         # sigma_delta_keys=sigma_delta_keys)
 
+        self.cross_talk = self.make_cross_talk(cross_talk_dic)
+
+    def make_cross_talk(self, cross_talk_dic):
+        if not cross_talk_dic:
+            return
+
+        diabat_keys = self.diabatic_readout.diabat_keys
+        energy_keys = self.diabatic_readout.energy_keys
+
+        cross_talk_dic.update({"diabat_keys": diabat_keys,
+                               "energy_keys": energy_keys})
+
+        cross_talk = DiabaticCrossTalk(cross_talk_dic)
+        return cross_talk
+
     @property
     def _grad_keys(self):
         return self.grad_keys
@@ -239,8 +256,11 @@ class PainnDiabat(Painn):
                 add_gap=True,
                 extra_grads=None):
 
-        # self.grad_keys set for backwards compatability
+        # for backwards compatability
         self.grad_keys = []
+        if not hasattr(self, "cross_talk"):
+            self.cross_talk = None
+
         diabat_results, xyz = self.run(batch=batch,
                                        xyz=xyz)
 

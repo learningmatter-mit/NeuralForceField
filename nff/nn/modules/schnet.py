@@ -1568,6 +1568,77 @@ def att_readout_probs(name):
     return func
 
 
+class DiabaticCrossTalk(nn.Module):
+    """
+    Module for making diabatic matrix elements talk to 
+    each other
+    """
+
+    def __init__(self,
+                 diabat_keys,
+                 energy_keys,
+                 modes):
+        """
+        Example:
+            modes = {"multiply_diabatic_gap": {
+                        "states": [0, 1],
+                        "activation": {
+                            "name": "sigmoid",
+                            "params": {"slope": 0.33,
+                                       "x_shift": 0.0,
+                                       "y_shift": 0.4}
+                        }
+
+            Note that everything is done in kcal/mol, 
+            so the slope, for example, would need to be
+            changed in different units.
+
+                        }}
+        """
+
+        super().__init__()
+
+        self.diabat_keys = diabat_keys
+        self.energy_keys = energy_keys
+        self.modes = modes
+
+    def make_mult(self, dic):
+        # don't let arbitrary activations be used
+        # because we'll want to modify their parameters.
+        # If we haven't implemented the modification
+        # options then those modifications will be silently
+        # ignored
+
+        act_dic = dic["activation"]
+        name = act_dic["name"]
+        params = act_dic["params"]
+
+        if name.lower() == 'sigmoid':
+            y_shift = params.get("y_shift", 0)
+            x_shift = params.get("x_shift", 0)
+            slope = params.get("slope", 1)
+
+            def activation(inp):
+                norm_factor = 1 / (1 - y_shift)
+                sig = 1 / (1 + torch.exp(-(inp - x_shift) * slope))
+                out = norm_factor * (sig - y_shift)
+                return out
+        else:
+            raise NotImplementedError
+
+
+        def mult(d_ij, d_ii, d_jj):
+            gap = (d_ii - d_jj).abs()
+            scaling = activation(gap)
+            output = d_ij * scaling
+
+            return output
+
+
+
+
+
+
 class AttentionPool(nn.Module):
     """
     Compute output quantities using attention, rather than a sum over

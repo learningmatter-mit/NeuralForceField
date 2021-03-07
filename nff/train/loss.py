@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from nff.utils import constants as const
 
 __all__ = ["build_mse_loss"]
@@ -361,27 +362,36 @@ def build_zhu_grad_loss(loss_dict):
 def build_diabat_sign_loss(loss_dict):
     """
     Loss that makes the diabatic coupling switch
-    signs as the molecule passes through a conical 
+    signs as the molecule passes through a conical
     intersection, so that it has to be zero at some
-    point. Therefore an intersection must occur. 
+    point. Therefore an intersection must occur.
     """
 
     params = loss_dict["params"]
     # the off-diagonal diabatic coupling
-    off_diag_key = params["off_diag_key"]
+    off_diag_key = params["coupling"]
     # the diagonal keys whose sign you want to be the same
     # as the diabatic sign
-    diag_keys = params["diag_keys"]
+    diag_keys = params["diagonal"]
     coef = loss_dict["coef"]
 
     def loss_fn(ground_truth, results, **kwargs):
 
-        pred = results[off_diag_key]
-        signs = torch.sign(results[diag_keys[1]]
-                           - results[diag_keys[0]])
-        targ = signs * torch.abs(pred)
-        diff = mse_operation(targ, pred)
-        loss = coef * torch.mean(diff)
+        delta = (ground_truth[diag_keys[1]]
+                 - ground_truth[diag_keys[0]])
+        valid_idx = torch.bitwise_not(torch.isnan(delta))
+
+        delta = delta[valid_idx]
+        pred = results[off_diag_key][valid_idx]
+
+        sign = torch.sign(delta)
+        targ = torch.abs(pred) * sign
+
+        if len(targ) == 0:
+            loss = 0.0
+        else:
+            diff = mse_operation(targ, pred)
+            loss = coef * torch.mean(diff)
 
         return loss
 
@@ -427,6 +437,7 @@ def build_multi_loss(multi_loss_dict):
     def calc_loss(*args, **kwargs):
         loss = 0.0
         for loss_fn in loss_fns:
-            loss += loss_fn(*args, **kwargs)
+            this_loss = loss_fn(*args, **kwargs)
+            loss += this_loss
         return loss
     return calc_loss
