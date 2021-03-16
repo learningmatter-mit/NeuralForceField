@@ -1,4 +1,5 @@
 import torch
+from torch.nn import CrossEntropyLoss
 import numpy as np
 from nff.utils import constants as const
 
@@ -7,7 +8,10 @@ __all__ = ["build_mse_loss"]
 EPS = 1e-15
 
 
-def build_general_loss(loss_coef, operation, correspondence_keys=None):
+def build_general_loss(loss_coef,
+                       operation,
+                       correspondence_keys=None,
+                       cutoff=None):
     """
     Build a general  loss function.
 
@@ -35,8 +39,10 @@ def build_general_loss(loss_coef, operation, correspondence_keys=None):
 
     correspondence_keys = {} if (
         correspondence_keys is None) else correspondence_keys
+    cutoff = {} if (cutoff is None) else cutoff
 
-    def loss_fn(ground_truth, results):
+    def loss_fn(ground_truth,
+                results):
         """Calculates the MSE between ground_truth and results.
 
         Args:
@@ -64,6 +70,9 @@ def build_general_loss(loss_coef, operation, correspondence_keys=None):
 
             # select only properties which are given
             valid_idx = torch.bitwise_not(torch.isnan(targ))
+            if key in cutoff:
+                valid_idx *= targ <= cutoff[key]
+
             targ = targ[valid_idx]
             pred = pred[valid_idx]
 
@@ -108,12 +117,32 @@ def cross_entropy(targ, pred):
     return diff
 
 
-def cross_entropy_sum(targ, pred):
+def cross_entropy_sum(targ,
+                      pred,
+                      pos_weight=None):
 
-    loss_fn = torch.nn.BCELoss(reduction='sum')
-    loss = loss_fn(pred, targ)
+    if pos_weight is None:
+        loss_fn = torch.nn.BCELoss(reduction='sum')
+        loss = loss_fn(pred, targ)
+    else:
+        loss = (-pos_weight * targ * torch.log(pred) -
+                (1 - targ) * torch.log(1 - pred))
 
     return loss
+
+
+def get_cross_entropy_loss(pos_weight):
+    if pos_weight is None:
+        def fn(targ, pred):
+            loss_fn = torch.nn.BCELoss(reduction='sum')
+            loss = loss_fn(pred, targ)
+            return loss
+    else:
+        def fn(targ, pred):
+            loss = (-pos_weight * targ * torch.log(pred) -
+                    (1 - targ) * torch.log(1 - pred))
+            return loss
+    return fn
 
 
 def logits_cross_entropy(targ, pred):
@@ -216,7 +245,9 @@ def results_to_batch(results, ground_truth):
     return results_batch
 
 
-def build_mse_loss(loss_coef, correspondence_keys=None):
+def build_mse_loss(loss_coef,
+                   correspondence_keys=None,
+                   cutoff=None):
     """
     Build MSE loss from loss_coef.
     Args:
@@ -227,7 +258,8 @@ def build_mse_loss(loss_coef, correspondence_keys=None):
 
     loss_fn = build_general_loss(loss_coef=loss_coef,
                                  operation=mse_operation,
-                                 correspondence_keys=correspondence_keys)
+                                 correspondence_keys=correspondence_keys,
+                                 cutoff=cutoff)
     return loss_fn
 
 
@@ -261,6 +293,86 @@ def build_logits_cross_entropy_loss(loss_coef, correspondence_keys=None):
     return loss_fn
 
 
+def get_p(ground_truth,
+          results,
+          upper_key,
+          lower_key,
+          expec_gap,
+          func_type):
+
+    targ_gap = ground_truth[upper_key] - ground_truth[lower_key]
+
+    targ_p = zhu_p(gap=targ_gap,
+                   expec_gap=expec_gap,
+                   func_type=func_type)
+
+    pred_gap = (results[upper_key] - results[lower_key]
+                ).view(targ_gap.shape)
+    pred_p = zhu_p(gap=pred_gap,
+                   expec_gap=expec_gap,
+                   func_type=func_type)
+
+    valid_idx = torch.bitwise_not(torch.isnan(targ_p))
+    targ_p = targ_p[valid_idx]
+    pred_p = pred_p[valid_idx]
+
+    return targ_p, pred_p
+
+
+def build_skewed_p_loss(loss_dict):
+    """
+    Args:
+        l_max (float): maximum possible value of the loss
+        l_0 (float): maximum loss when the gap is large (i.e. p = 0)
+        a (float): slope of the loss with respect to gap overestimate
+                   (i.e. p underestimate)
+        b (float): slope of the loss with respect to gap underestimate
+                    (i.e. p overestimate)
+    """
+
+    params = loss_dict["params"]
+
+    l_max = loss_dict["coef"]
+    l_0 = params["l_0"]
+    a = params["a"]
+    b = params["b"]
+    lower_key = loss_dict["params"]["lower_energy"]
+    upper_key = loss_dict["params"]["upper_energy"]
+    expec_gap = loss_dict["params"]["expected_gap"] * \
+        const.AU_TO_KCAL["energy"]
+    func_type = loss_dict["params"].get("func_type", "gaussian")
+
+    factor_num = np.exp(b) * (b * (-1 + np.exp(-a))
+                              + a * (-1 + np.exp(b)))
+    factor_denom = a - a * np.exp(b) + b * np.exp(b) * (-1 + np.exp(a))
+    factor = factor_num / factor_denom
+    true_l0 = l_0 / factor
+
+    def loss_fn(ground_truth, results, **kwargs):
+
+        p_targ, p_pred = get_p(ground_truth=ground_truth,
+                               results=results,
+                               upper_key=upper_key,
+                               lower_key=lower_key,
+                               expec_gap=expec_gap,
+                               func_type=func_type)
+
+        loss_1 = true_l0 * torch.exp(np.log(l_max / true_l0) * p_targ)
+
+        delta = p_pred - p_targ
+        loss_2_num = np.exp(b) * (b * (-1 + torch.exp(-a * delta))
+                                  + a * (-1 + torch.exp(b * delta)))
+        loss_2_denom = (a - a * np.exp(b)
+                        + b * np.exp(b) * (-1 + np.exp(a)))
+        loss_2 = loss_2_num / loss_2_denom
+
+        loss = (loss_1 * loss_2).mean()
+
+        return loss
+
+    return loss_fn
+
+
 def build_zhu_loss(loss_dict):
 
     lower_key = loss_dict["params"]["lower_energy"]
@@ -269,33 +381,26 @@ def build_zhu_loss(loss_dict):
         const.AU_TO_KCAL["energy"]
     loss_key = loss_dict["params"].get("loss_type", "mse")
     func_type = loss_dict["params"].get("func_type", "gaussian")
+    pos_weight = loss_dict["params"].get("pos_weight")
 
     if loss_key == "mse":
         loss_type = mse_operation
     elif loss_key == "cross_entropy":
-        loss_type = cross_entropy_sum
+        loss_type = get_cross_entropy_loss(pos_weight)
 
     coef = loss_dict["coef"]
 
     def loss_fn(ground_truth, results, **kwargs):
 
-        targ_gap = ground_truth[upper_key] - ground_truth[lower_key]
+        targ_p, pred_p = get_p(ground_truth=ground_truth,
+                               results=results,
+                               upper_key=upper_key,
+                               lower_key=lower_key,
+                               expec_gap=expec_gap,
+                               func_type=func_type)
 
-        targ_p = zhu_p(gap=targ_gap,
-                       expec_gap=expec_gap,
-                       func_type=func_type)
-
-        pred_gap = (results[upper_key] - results[lower_key]
-                    ).view(targ_gap.shape)
-        pred_p = zhu_p(gap=pred_gap,
-                       expec_gap=expec_gap,
-                       func_type=func_type)
-
-        valid_idx = torch.bitwise_not(torch.isnan(targ_p))
-        targ_p = targ_p[valid_idx]
-        pred_p = pred_p[valid_idx]
-
-        diff = loss_type(targ_p, pred_p)
+        diff = loss_type(targ_p,
+                         pred_p)
         err_sq = coef * torch.mean(diff)
 
         loss = err_sq
@@ -405,7 +510,8 @@ def name_to_func(name):
         "logits_cross_entropy": build_logits_cross_entropy_loss,
         "zhu": build_zhu_loss,
         "zhu_grad": build_zhu_grad_loss,
-        "diabat_sign": build_diabat_sign_loss
+        "diabat_sign": build_diabat_sign_loss,
+        "skewed_p": build_skewed_p_loss
     }
     func = dic[name]
     return func
@@ -420,7 +526,16 @@ def get_all_losses(multi_loss_dict):
         if key == "mse":
             loss_coef = {sub_dic["params"]["key"]:
                          sub_dic["coef"] for sub_dic in loss_list}
-            loss_fn = build_fn(loss_coef)
+            cutoff = {}
+            for sub_dic in loss_list:
+                if 'cutoff' not in sub_dic["params"]:
+                    continue
+                key = sub_dic["params"]["key"]
+                val = sub_dic["params"]["cutoff"]
+                cutoff[key] = val
+
+            loss_fn = build_fn(loss_coef,
+                               cutoff=cutoff)
             loss_fns.append(loss_fn)
             continue
 
@@ -436,8 +551,10 @@ def build_multi_loss(multi_loss_dict):
 
     def calc_loss(*args, **kwargs):
         loss = 0.0
+
         for loss_fn in loss_fns:
             this_loss = loss_fn(*args, **kwargs)
+            # print(loss_fn, this_loss)
             loss += this_loss
         return loss
     return calc_loss

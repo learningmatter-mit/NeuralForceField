@@ -6,13 +6,15 @@ from nff.nn.layers import DEFAULT_DROPOUT_RATE, Diagonalize
 from nff.nn.modules import (
     SchNetConv,
     SchNetEdgeUpdate,
-    NodeMultiTaskReadOut,
-    DiabaticReadout
+    NodeMultiTaskReadOut
 )
 
 
+from nff.nn.modules.diabat import DiabaticReadout
+
+
 from nff.nn.graphop import batch_and_sum, get_atoms_inside_cell
-from nff.nn.utils import get_default_readout
+from nff.nn.utils import get_default_readout, make_pp_funcs
 from nff.nn.activations import shifted_softplus
 from nff.utils.scatter import compute_grad
 import numpy as np
@@ -201,5 +203,72 @@ class SchNetDiabat(SchNet):
                                         add_gap=add_gap,
                                         extra_grads=extra_grads,
                                         try_speedup=try_speedup)
+
+        return results
+
+
+class PostProcessModel(nn.Module):
+
+    def __init__(self, model, process_list, base_keys):
+        """ 
+        post_processes (list): [{"func_name": "gap",
+                                 "output_name": "energy_01_diff",
+                                 "params": {"lower_key": "energy_0",
+                                            "upper_key": "energy_"1}}] 
+        keys (list): ["energy_0", "energy_1", "energy_0_grad", "energy_1_grad"]
+        """
+
+        nn.Module.__init__(self)
+        self.model = model
+        self.pp_funcs = make_pp_funcs(process_list)
+        self.pp_outputs = [item["output_name"] for item in process_list]
+        self.base_keys = base_keys
+
+    def forward(self, batch, nxyz=None):
+
+        # first_batch = {key: val for key, val in batch.items(
+        #     ) if key not in self.pp_outputs}
+        batch.update({key: [] for key in self.base_keys})
+        for key in self.pp_outputs:
+            if key in batch:
+                batch.pop(key)
+
+        # pp_batch = {key: val for key, val in batch.items(
+        #     ) if key in self.pp_outputs}
+
+        results = self.model(batch, nxyz)
+
+        # import pdb
+        # pdb.set_trace()
+
+        # for pp_func, pp_output in zip(self.pp_funcs, self.pp_outputs):
+        #     new_results = pp_func(results)
+        #     add_dic = {pp_output: new_results}
+
+        #     results.update(add_dic)
+
+        penalty, ref = self.pp_funcs[0]
+
+        gap = results['energy_1'] - results['energy_0']
+        gap2 = gap ** 2
+        gap_grad = results['energy_1_grad'] - results['energy_0_grad']
+        gap2_grad = 2 * gap * gap_grad
+
+        # energy = 1 / 2 * (results['energy_0'] + results['energy_1'])
+        energy = results['energy_1'] - float(ref)
+        energy_grad = results['energy_1_grad']  # + results['energy_0_grad']
+
+        num_atoms = gap_grad.shape[0]
+        energy2 = (energy / num_atoms) ** 2
+        energy2_grad = 2 * energy * energy_grad / (num_atoms) ** 2
+
+        results.update({"energy": gap2 + penalty * energy2,
+                        "energy_grad": gap2_grad + penalty * energy2_grad})
+
+        # # results.update({"energy": results["energy_0"], "energy_grad": results["energy_0_grad"]})
+
+        # print((results['energy_1'].item() - results['energy_0'].item()) * 27.2 / 627.5)
+
+        # print((gap2.item() ** 0.5 ) * 27.2 / 627.5)
 
         return results

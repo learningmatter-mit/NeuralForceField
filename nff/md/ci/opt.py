@@ -8,20 +8,17 @@ os.environ["DJANGO_SETTINGS_MODULE"]="djangochem.settings.orgel"
 django.setup()
 
 # Shell Plus Model Imports
-from features.models import AtomDescriptor, BondDescriptor, ConnectivityMatrix, DistanceMatrix, Fingerprint, ProximityMatrix, SpeciesDescriptor, TrainingSet, Transformation
-from guardian.models import GroupObjectPermission, UserObjectPermission
+
+
 from django.contrib.contenttypes.models import ContentType
-from neuralnet.models import ActiveLearningLoop, NetArchitecture, NetCommunity, NetFamily, NeuralNetwork, NnPotential, NnPotentialStats
-from jobs.models import Job, JobConfig, WorkBatch
-from django.contrib.admin.models import LogEntry
-from django.contrib.auth.models import Group, Permission, User
-from django.contrib.sessions.models import Session
-from pgmols.models import (AtomBasis, BasisSet, Batch, Calc, Cluster,
+
+from jobs.models import Job, JobConfig
+
+from django.contrib.auth.models import Group
+from pgmols.models import (AtomBasis, 
                            Geom, Hessian, Jacobian, MDFrame, Mechanism, Method, Mol, MolGroupObjectPermission,
                            MolSet, MolUserObjectPermission, PathImage, ProductLink, ReactantLink, Reaction,
                            ReactionPath, ReactionType, SinglePoint, Species, Stoichiometry, Trajectory)
-
-
 
 
 
@@ -44,7 +41,7 @@ from ase.io.trajectory import Trajectory as AseTrajectory
 
 
 from nff.nn.models import PostProcessModel
-from nff.io.ase import NeuralFF, AtomsBatch
+from nff.io.ase_ax import NeuralFF, AtomsBatch
 from nff.train import load_model
 from nff.utils import constants as const
 from nff.nn.tensorgrad import get_schnet_hessians
@@ -173,6 +170,9 @@ def get_new_model(model, lower_key, upper_key, ref_energy, penalty):
 	# 				 "params": {"lower_key": lower_key,
 	# 							"upper_key": upper_key}}] 
 
+	if ref_energy is None:
+		ref_energy = 0
+
 	process_list = [{"func_name": "gap_penalty",
 					 # hack to get ase to think this is the energy
 					 # for minimization
@@ -189,7 +189,9 @@ def get_new_model(model, lower_key, upper_key, ref_energy, penalty):
 								"upper_key": upper_key,
 								"penalty": penalty
 
-						}}] 
+						}}
+
+						] 
 
 	base_keys = [lower_key, upper_key, lower_key + "_grad",
 				 upper_key + "_grad"]

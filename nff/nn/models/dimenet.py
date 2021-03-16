@@ -5,10 +5,10 @@ import copy
 
 from nff.nn.modules.dimenet import (EmbeddingBlock, InteractionBlock,
                                     OutputBlock)
-from nff.nn.modules.schnet import DiabaticReadout, sum_and_grad
+from nff.nn.modules.schnet import sum_and_grad
+from nff.nn.modules.diabat import DiabaticReadout
 from nff.nn.layers import DimeNetRadialBasis as RadialBasis
 from nff.nn.layers import DimeNetSphericalBasis as SphericalBasis
-from nff.nn.layers import Diagonalize
 from nff.utils.scatter import compute_grad
 
 

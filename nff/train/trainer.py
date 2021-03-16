@@ -255,7 +255,8 @@ class Trainer:
         self.state_dict = torch.load(chkpt, map_location='cpu')
 
     def loss_backward(self, loss):
-        loss.backward()
+        if hasattr(loss, "backward"):
+            loss.backward()
         self.back_count += 1
         self.batch_stop = self.back_count == self.max_batch_iters
 

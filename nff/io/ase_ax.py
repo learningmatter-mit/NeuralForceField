@@ -81,6 +81,8 @@ class AtomsBatch(Atoms):
             batch (dict): batch with the keys 'nxyz',
                 'num_atoms', 'nbr_list' and 'offsets'
         """
+
+
         if self.nbr_list is None:  # or self.offsets is None:
             self.update_nbr_list()
             self.props['nbr_list'] = self.nbr_list
@@ -208,7 +210,8 @@ class NeuralFF(Calculator):
         # don't compute any gradients that aren't needed in the
         # output keys
 
-        if hasattr(model, "grad_keys"):
+
+        if getattr(model, "grad_keys", []):
             keep_keys = [key for key in model.grad_keys
                          if key.replace("_grad", "") in self.output_keys]
             if hasattr(model, "_grad_keys"):
@@ -250,6 +253,7 @@ class NeuralFF(Calculator):
             batch[key] = []
             if 'forces' in properties:
                 batch[key + "_grad"] = []
+
 
         prediction = self.model(batch)
 

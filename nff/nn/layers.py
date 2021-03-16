@@ -418,10 +418,21 @@ class PainnRadialBasis(nn.Module):
 
         shape_d = dist.unsqueeze(-1)
         n = self.n.to(dist.device)
-        arg = n * np.pi * shape_d / self.cutoff
-        denom = torch.where(shape_d == 0, torch.tensor(
-            1.0, device=shape_d.device), shape_d)
-        output = torch.sin(arg) / denom
+        coef = n * np.pi / self.cutoff
+        device = shape_d.device
+
+        # replace divide by 0 with limit of sinc function
+
+        denom = torch.where(shape_d == 0,
+                            torch.tensor(1.0, device=device),
+                            shape_d)
+        num = torch.where(shape_d == 0,
+                          coef,
+                          torch.sin(coef * shape_d))
+
+        output = torch.where(shape_d >= self.cutoff,
+                             torch.tensor(0.0, device=device),
+                             num / denom)
 
         return output
 
@@ -455,3 +466,30 @@ class StochasticIncrease(nn.Module):
         else:
             new_output = output
         return new_output
+
+
+class Gaussian(nn.Module):
+    def __init__(self,
+                 mean,
+                 sigma,
+                 learnable_mean,
+                 learnable_sigma,
+                 normalize):
+
+        super().__init__()
+
+        self.mean = mean
+        self.sigma = sigma
+        self.normalize = normalize
+
+        if learnable_mean:
+            self.mean = torch.nn.Parameter(torch.Tensor([self.mean]))
+        if learnable_sigma:
+            self.sigma = torch.nn.Parameter(torch.Tensor([self.sigma]))
+
+    def forward(self, inp):
+        out = torch.exp(-(inp - self.mean) ** 2 / (2 * self.sigma ** 2))
+        if self.normalize:
+            denom = self.sigma * (2 * np.pi) ** 0.5
+            out = out / denom
+        return out

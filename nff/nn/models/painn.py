@@ -6,8 +6,8 @@ import copy
 from nff.utils.tools import make_directed
 from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
                                   EmbeddingBlock, ReadoutBlock)
-from nff.nn.modules.schnet import (DiabaticReadout, AttentionPool,
-                                   SumPool, DiabaticCrossTalk)
+from nff.nn.modules.schnet import (AttentionPool, SumPool)
+from nff.nn.modules.diabat import DiabaticReadout
 from nff.nn.layers import Diagonalize
 
 
@@ -59,8 +59,12 @@ class Painn(nn.Module):
              for _ in range(num_conv)]
         )
 
+        self.output_keys = output_keys
         # no skip connection in original paper
-        self.skip = modelparams.get("skip_connection", False)
+        self.skip = modelparams.get("skip_connection",
+                                    {key: False for key
+                                     in self.output_keys})
+
         num_readouts = num_conv if (self.skip) else 1
         self.readout_blocks = nn.ModuleList(
             [ReadoutBlock(feat_dim=feat_dim,
@@ -71,7 +75,6 @@ class Painn(nn.Module):
                           stddevs=stddevs)
              for _ in range(num_readouts)]
         )
-        self.output_keys = output_keys
 
         if pool_dic is None:
             self.pool_dic = {key: SumPool() for key
@@ -88,6 +91,11 @@ class Painn(nn.Module):
                  batch,
                  xyz=None):
 
+        # for backwards compatability
+        if isinstance(self.skip, bool):
+            self.skip = {key: self.skip
+                         for key in self.output_keys}
+
         nbrs, _ = make_directed(batch['nbr_list'])
         nxyz = batch['nxyz']
 
@@ -99,6 +107,7 @@ class Painn(nn.Module):
         r_ij = xyz[nbrs[:, 1]] - xyz[nbrs[:, 0]]
 
         s_i, v_i = self.embed_block(z_numbers)
+        results = {}
 
         for i, message_block in enumerate(self.message_blocks):
             update_block = self.update_blocks[i]
@@ -116,18 +125,25 @@ class Painn(nn.Module):
             s_i = s_i + ds_update
             v_i = v_i + dv_update
 
-            if self.skip:
-                readout_block = self.readout_blocks[i]
-                new_results = readout_block(s_i=s_i)
-                if i == 0:
-                    results = new_results
-                else:
-                    for key in results.keys():
-                        results[key] += new_results[key]
+            if not any(self.skip.values()):
+                continue
 
-        if not self.skip:
-            readout_block = self.readout_blocks[0]
-            results = readout_block(s_i=s_i)
+            readout_block = self.readout_blocks[i]
+            new_results = readout_block(s_i=s_i)
+            for key, skip in self.skip.items():
+                if not skip:
+                    continue
+                if key in results:
+                    results[key] += new_results[key]
+                else:
+                    results[key] = new_results[key]
+
+        if not all(self.skip.values()):
+            first_readout = self.readout_blocks[0]
+            new_results = first_readout(s_i=s_i)
+            for key, skip in self.skip.items():
+                if not skip:
+                    results[key] = new_results[key]
 
         results['features'] = s_i
 
@@ -197,7 +213,6 @@ class PainnDiabat(Painn):
         energy_keys = modelparams["output_keys"]
         diabat_keys = modelparams["diabat_keys"]
         delta = modelparams.get("delta", False)
-        cross_talk_dic = modelparams.get("cross_talk", {})
 
         # sigma_delta_keys = modelparams.get("sigma_delta_keys")
         # if delta:
@@ -221,23 +236,8 @@ class PainnDiabat(Painn):
             grad_keys=modelparams["grad_keys"],
             energy_keys=energy_keys,
             delta=delta,
-            stochastic_dic=modelparams.get("stochastic_dic"))  # ,
-        # sigma_delta_keys=sigma_delta_keys)
-
-        self.cross_talk = self.make_cross_talk(cross_talk_dic)
-
-    def make_cross_talk(self, cross_talk_dic):
-        if not cross_talk_dic:
-            return
-
-        diabat_keys = self.diabatic_readout.diabat_keys
-        energy_keys = self.diabatic_readout.energy_keys
-
-        cross_talk_dic.update({"diabat_keys": diabat_keys,
-                               "energy_keys": energy_keys})
-
-        cross_talk = DiabaticCrossTalk(cross_talk_dic)
-        return cross_talk
+            stochastic_dic=modelparams.get("stochastic_dic"),
+            cross_talk_dic=modelparams.get("cross_talk_dic"))
 
     @property
     def _grad_keys(self):
@@ -258,8 +258,6 @@ class PainnDiabat(Painn):
 
         # for backwards compatability
         self.grad_keys = []
-        if not hasattr(self, "cross_talk"):
-            self.cross_talk = None
 
         diabat_results, xyz = self.run(batch=batch,
                                        xyz=xyz)
