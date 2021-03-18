@@ -4,12 +4,13 @@
 import os
 import numpy as np
 import torch
-from nff.nn.models.schnet import SchNet
+from nff.nn.models.schnet import SchNet, SchNetDiabat
 from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import ChemProp3D, OnlyBondUpdateCP3D
-from nff.nn.models.dimenet import DimeNet
+from nff.nn.models.dimenet import DimeNet #, DimeNetDiabat, DimeNetDiabatDelta, DimeNetDelta
+from nff.nn.models.painn import Painn #, PainnDiabat
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -116,18 +117,116 @@ PARAMS_TYPE = {"SchNet":
                    "output_keys": list,
                    "grad_keys": list
 
+               },
+
+               # "DimeNetDiabat":
+               # {
+               #     "n_rbf": int,
+               #     "cutoff": float,
+               #     "envelope_p": int,
+               #     "n_spher": int,
+               #     "l_spher": int,
+               #     "atom_embed_dim": int,
+               #     "n_bilinear": int,
+               #     "activation": str,
+               #     "n_convolutions": int,
+               #     "output_keys": list,
+               #     "grad_keys": list,
+               #     "diabat_keys": list
+
+               #},
+
+               # "DimeNetDiabatDelta":
+               # {
+               #     "n_rbf": int,
+               #     "cutoff": float,
+               #     "envelope_p": int,
+               #     "n_spher": int,
+               #     "l_spher": int,
+               #     "atom_embed_dim": int,
+               #     "n_bilinear": int,
+               #     "activation": str,
+               #     "n_convolutions": int,
+               #     "output_keys": list,
+               #     "grad_keys": list,
+               #     "diabat_keys": list
+
+               # },
+
+               # "DimeNetDelta":
+               # {
+               #     "n_rbf": int,
+               #     "cutoff": float,
+               #     "envelope_p": int,
+               #     "n_spher": int,
+               #     "l_spher": int,
+               #     "atom_embed_dim": int,
+               #     "n_bilinear": int,
+               #     "activation": str,
+               #     "n_convolutions": int,
+               #     "output_keys": list,
+               #     "grad_keys": list,
+               #     "diabat_keys": list
+
+               # },
+
+               # "SchNetDiabat":
+               # {
+               #     'n_atom_basis': int,
+               #     'n_filters': int,
+               #     'n_gaussians': int,
+               #     'n_convolutions': int,
+               #     'cutoff': float,
+               #     'bond_par': float,
+               #     'trainable_gauss': bool,
+               #     'box_size': np.array,
+               #     'dropout_rate': float
+               # },
+
+               "Painn":
+               {
+                   "feat_dim": int,
+                   "activation": str,
+                   "n_rbf": int,
+                   "cutoff": float,
+                   "num_conv": int,
+                   "output_keys": list,
+                   "grad_keys": list
+
+               },
+
+               # "PainnDiabat":
+               # {
+               #     "feat_dim": int,
+               #     "activation": str,
+               #     "n_rbf": int,
+               #     "cutoff": float,
+               #     "num_conv": int,
+               #     "output_keys": list,
+               #     "grad_keys": list,
+               #     "diabat_keys": list
+
+               # }
+
                }
-}
 
 MODEL_DICT = {
     "SchNet": SchNet,
+   # "SchNetDiabat": SchNetDiabat,
     "HybridGraphConv": HybridGraphConv,
     "WeightedConformers": WeightedConformers,
     "SchNetFeatures": SchNetFeatures,
     "ChemProp3D": ChemProp3D,
     "OnlyBondUpdateCP3D": OnlyBondUpdateCP3D,
-    "DimeNet": DimeNet
+    "DimeNet": DimeNet,
+   # "DimeNetDiabat": DimeNetDiabat,
+   # "DimeNetDiabatDelta": DimeNetDiabatDelta,
+   # "DimeNetDelta": DimeNetDelta,
+    "Painn": Painn,
+   # "PainnDiabat": PainnDiabat
+
 }
+
 
 
 class ParameterError(Exception):

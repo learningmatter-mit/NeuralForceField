@@ -253,8 +253,9 @@ class DimeNetSphericalBasis(nn.Module):
         # so they align with the kj indices of `angles`
 
         rbf_env = rbf_env[kj_idx.long()]
+
         rbf_env = rbf_env.reshape(*torch.tensor(
-            rbf_env.shape[:2]).tolist())
+            rbf_env.shape[:2]).tolist()) # What is the purpose of this line? 
 
         # get the angular functions
         cbf = [f(angles) for f in self.sph_funcs]
@@ -302,3 +303,115 @@ class DimeNetRadialBasis(nn.Module):
         u = self.envelope(d / self.cutoff)
 
         return pref * arg * u
+
+
+class PainnRadialBasis(nn.Module):
+    def __init__(self,
+                 n_rbf,
+                 cutoff,
+                 learnable_k):
+        super().__init__()
+
+        self.n = torch.arange(1, n_rbf + 1).float()
+        if learnable_k:
+            self.n = nn.Parameter(self.n)
+
+        self.cutoff = cutoff
+
+    def forward(self, dist):
+        """
+        Args:
+            d (torch.Tensor): tensor of distances
+        """
+
+        shape_d = dist.unsqueeze(-1)
+        n = self.n.to(dist.device)
+        coef = n * np.pi / self.cutoff
+        device = shape_d.device
+
+        # replace divide by 0 with limit of sinc function
+
+        denom = torch.where(shape_d == 0,
+                            torch.tensor(1.0, device=device),
+                            shape_d)
+        num = torch.where(shape_d == 0,
+                          coef,
+                          torch.sin(coef * shape_d))
+
+        output = torch.where(shape_d >= self.cutoff,
+                             torch.tensor(0.0, device=device),
+                             num / denom)
+
+        return output
+
+
+class StochasticIncrease(nn.Module):
+    """
+    Module that stochastically enhances the magnitude of a network
+    output. Designed with energy gaps in mind so that small gaps
+    are stochastically increased while large ones are basically
+    unchanged. This biases the model toward producing small gaps
+    so that it can account for the stochastic increases.
+    """
+
+    def __init__(self,
+                 exp_coef,
+                 order,
+                 rate):
+
+        super().__init__()
+        self.exp_coef = exp_coef
+        self.order = order
+        self.rate = rate
+
+    def forward(self, output):
+
+        rnd = np.random.rand()
+        do_increase = rnd < self.rate
+        if do_increase:
+            arg = -self.exp_coef * (output.abs() ** self.order)
+            new_output = output * (1 + torch.exp(arg))
+        else:
+            new_output = output
+        return new_output
+
+class CosineEnvelope(nn.Module):
+    # Behler, J. Chem. Phys. 134, 074106 (2011)
+    def __init__(self, cutoff):
+        super().__init__()
+
+        self.cutoff = cutoff
+
+    def forward(self, d):
+
+        output = 0.5 * (torch.cos((np.pi * d / self.cutoff)) + 1)
+        exclude = d >= self.cutoff
+        output[exclude] = 0
+
+        return output
+
+class Gaussian(nn.Module):
+    def __init__(self,
+                 mean,
+                 sigma,
+                 learnable_mean,
+                 learnable_sigma,
+                 normalize):
+
+        super().__init__()
+
+        self.mean = mean
+        self.sigma = sigma
+        self.normalize = normalize
+
+        if learnable_mean:
+            self.mean = torch.nn.Parameter(torch.Tensor([self.mean]))
+        if learnable_sigma:
+            self.sigma = torch.nn.Parameter(torch.Tensor([self.sigma]))
+
+    def forward(self, inp):
+        out = torch.exp(-(inp - self.mean) ** 2 / (2 * self.sigma ** 2))
+        if self.normalize:
+            denom = self.sigma * (2 * np.pi) ** 0.5
+            out = out / denom
+        return out
