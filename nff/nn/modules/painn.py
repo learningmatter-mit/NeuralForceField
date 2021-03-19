@@ -209,14 +209,12 @@ class InvariantTransformerMessage(nn.Module):
                  rbf,
                  num_heads,
                  feat_dim,
-                 dropout,
                  activation,
                  layer_norm):
 
         super().__init__()
         self.msg_layer = MDMessage(feat_dim=feat_dim,
                                    num_heads=num_heads,
-                                   dropout=dropout,
                                    activation=activation,
                                    rbf=rbf)
 
@@ -247,10 +245,6 @@ class TransformerMessageBlock(MessageBase):
                  activation,
                  layer_norm):
         super().__init__()
-
-        # Need to make three of these, ideally in parallel
-        # What that means is we should really make the heads go in parallel
-        # and let the number of outputs be specifiable (i.e. not 1)
 
         self.inv_message = InvariantTransformerMessage(
             rbf=rbf,
