@@ -5,7 +5,8 @@ Retrieved from https://github.com/atomistic-machine-learning/schnetpack/tree/dev
 
 import torch
 import numpy as np
-from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
+from torch.optim.lr_scheduler import (ReduceLROnPlateau, StepLR,
+                                      _LRScheduler)
 from nff.train.hooks import Hook
 
 
@@ -305,6 +306,54 @@ class ExponentialDecayHook(Hook):
 
     def on_batch_end(self, trainer, train_batch, result, loss):
         self.scheduler.step()
+
+
+class WarmUpLR(_LRScheduler):
+
+    def __init__(self,
+                 optimizer,
+                 n_steps,
+                 max_lr,
+                 last_epoch=-1,
+                 verbose=False):
+
+        self.n_steps = n_steps
+        self.max_lr = max_lr
+        super(WarmUpLR, self).__init__(optimizer, last_epoch, verbose)
+
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = 0
+
+    def set_lr(self):
+        scale = self._step_count / self.n_steps
+        new_lr = self.max_lr * scale
+
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = new_lr
+
+    def step(self):
+        self._step_count += 1
+        self.set_lr()
+
+
+class WarmUpLRHook(Hook):
+    def __init__(self,
+                 optimizer,
+                 n_steps,
+                 max_lr):
+        self.scheduler = WarmUpLR(optimizer=optimizer,
+                                  n_steps=n_steps,
+                                  max_lr=max_lr)
+
+    def on_batch_end(self,
+                     trainer,
+                     train_batch,
+                     result,
+                     loss):
+
+        self.scheduler.step()
+        if self.scheduler._step_count >= self.scheduler.n_steps:
+            trainer._stop = True
 
 
 class UpdatePrioritiesHook(Hook):

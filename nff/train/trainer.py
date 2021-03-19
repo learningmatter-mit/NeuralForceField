@@ -329,6 +329,7 @@ class Trainer:
                       calc_loss):
 
         use_device = device
+        mini_loss = None
 
         while True:
             try:
@@ -336,8 +337,8 @@ class Trainer:
                 if use_device != device:
                     self.to(use_device)
                 results = self.call_model(batch, train=True)
-                mini_loss = self.get_loss(batch, results)
                 if calc_loss:
+                    mini_loss = self.get_loss(batch, results)
                     self.loss_backward(mini_loss)
 
                 if use_device != device:
