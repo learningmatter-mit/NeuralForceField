@@ -2,10 +2,12 @@ import torch
 from torch import nn
 
 from nff.utils.tools import layer_types
-from nff.nn.layers import PainnRadialBasis, CosineEnvelope
+from nff.nn.layers import (PainnRadialBasis, CosineEnvelope,
+                           ExpNormalBasis, Dense)
 from nff.utils.scatter import scatter_add
 from nff.nn.modules.schnet import ScaleShift
-from nff.nn.layers import Dense
+from nff.nn.modules.torchmd_net import MessageBlock as MDMessage
+from nff.nn.modules.torchmd_net import EmbeddingBlock as MDEmbedding
 
 EPS = 1e-15
 
@@ -63,6 +65,7 @@ class DistanceEmbed(nn.Module):
         rbf = PainnRadialBasis(n_rbf=n_rbf,
                                cutoff=cutoff,
                                learnable_k=learnable_k)
+
         dense = Dense(in_features=n_rbf,
                       out_features=3 * feat_dim,
                       bias=True,
@@ -113,7 +116,44 @@ class InvariantMessage(nn.Module):
         return out_reshape
 
 
-class MessageBlock(nn.Module):
+class MessageBase(nn.Module):
+
+    def forward(self,
+                s_j,
+                v_j,
+                r_ij,
+                nbrs):
+
+        dist, unit = preprocess_r(r_ij)
+        inv_out = self.inv_message(s_j=s_j,
+                                   dist=dist,
+                                   nbrs=nbrs)
+
+        split_0 = inv_out[:, 0, :].unsqueeze(-1)
+        split_1 = inv_out[:, 1, :]
+        split_2 = inv_out[:, 2, :].unsqueeze(-1)
+
+        unit_add = split_2 * unit.unsqueeze(1)
+        delta_v_ij = unit_add + split_0 * v_j[nbrs[:, 1]]
+        delta_s_ij = split_1
+
+        # add results from neighbors of each node
+
+        graph_size = s_j.shape[0]
+        delta_v_i = scatter_add(src=delta_v_ij,
+                                index=nbrs[:, 0],
+                                dim=0,
+                                dim_size=graph_size)
+
+        delta_s_i = scatter_add(src=delta_s_ij,
+                                index=nbrs[:, 0],
+                                dim=0,
+                                dim_size=graph_size)
+
+        return delta_s_i, delta_v_i
+
+
+class MessageBlock(MessageBase):
     def __init__(self,
                  feat_dim,
                  activation,
@@ -162,6 +202,62 @@ class MessageBlock(nn.Module):
                                 dim_size=graph_size)
 
         return delta_s_i, delta_v_i
+
+
+class InvariantTransformerMessage(nn.Module):
+    def __init__(self,
+                 rbf,
+                 num_heads,
+                 feat_dim,
+                 dropout,
+                 activation,
+                 layer_norm):
+
+        super().__init__()
+        self.msg_layer = MDMessage(feat_dim=feat_dim,
+                                   num_heads=num_heads,
+                                   dropout=dropout,
+                                   activation=activation,
+                                   rbf=rbf)
+
+        self.dense = Dense(in_features=(num_heads * feat_dim),
+                           out_features=(3 * feat_dim),
+                           bias=True,
+                           activation=None)
+        self.layer_norm = nn.LayerNorm(feat_dim) if (layer_norm) else None
+
+    def forward(self,
+                s_j,
+                dist,
+                nbrs):
+
+        inp = self.layer_norm(s_j) if self.layer_norm else s_j
+        output = self.dense(self.msg_layer(dist=dist,
+                                           nbrs=nbrs,
+                                           x_i=inp))
+        out_reshape = output.reshape(output.shape[0], 3, -1)
+        return out_reshape
+
+
+class TransformerMessageBlock(MessageBase):
+    def __init__(self,
+                 rbf,
+                 num_heads,
+                 feat_dim,
+                 activation,
+                 layer_norm):
+        super().__init__()
+
+        # Need to make three of these, ideally in parallel
+        # What that means is we should really make the heads go in parallel
+        # and let the number of outputs be specifiable (i.e. not 1)
+
+        self.inv_message = InvariantTransformerMessage(
+            rbf=rbf,
+            num_heads=num_heads,
+            feat_dim=feat_dim,
+            activation=activation,
+            layer_norm=layer_norm)
 
 
 class UpdateBlock(nn.Module):
@@ -238,10 +334,41 @@ class EmbeddingBlock(nn.Module):
         self.feat_dim = feat_dim
 
     def forward(self,
-                z_number):
+                z_number,
+                **kwargs):
 
         num_atoms = z_number.shape[0]
         s_i = self.atom_embed(z_number)
+        v_i = (torch.zeros(num_atoms, self.feat_dim, 3)
+               .to(s_i.device))
+
+        return s_i, v_i
+
+
+class NbrEmbeddingBlock(nn.Module):
+    def __init__(self,
+                 feat_dim,
+                 dropout,
+                 rbf):
+
+        super().__init__()
+        self.embedding = MDEmbedding(feat_dim=feat_dim,
+                                     dropout=dropout,
+                                     rbf=rbf)
+        self.feat_dim = feat_dim
+
+    def forward(self,
+                z_number,
+                nbrs,
+                r_ij):
+
+        num_atoms = z_number.shape[0]
+
+        dist, _ = preprocess_r(r_ij)
+        s_i = self.embedding(z_number=z_number,
+                             nbrs=nbrs,
+                             dist=dist)
+
         v_i = (torch.zeros(num_atoms, self.feat_dim, 3)
                .to(s_i.device))
 
