@@ -9,6 +9,7 @@ import sys
 import copy
 import pickle
 import numpy as np
+import shutil
 
 import torch
 from torch.utils.data import DataLoader
@@ -812,7 +813,7 @@ def optim_loss_hooks(model,
     train_metrics = []
     for metric_name in metric_names:
         metric = getattr(metrics, metric_name)
-        for key in [*base_keys, *grad_keys]:
+        for key in ['energy_1_energy_0_delta', *base_keys, *grad_keys]:
             train_metrics.append(metric(key))
 
     # make the train hooks
@@ -1090,6 +1091,29 @@ def train_sequential(weight_path,
         if do_train:
             trainer.train(device=device,
                           n_epochs=train_params["max_epochs"][i])
+
+        backup_dir = os.path.join(weight_path, f"sequence_{i}")
+        if not os.path.isdir(backup_dir):
+            os.makedirs(backup_dir)
+        files = ['log_human.read.csv', 'best_model', 'best_model.pth.tar']
+        for file in files:
+            file_path = os.path.join(weight_path, file)
+            if not os.path.isfile(file_path):
+                continue
+            new_path = os.path.join(backup_dir, file)
+            if os.path.isfile(new_path):
+                os.remove(new_path)
+            shutil.copy(file_path, new_path)
+
+        folders = ['checkpoints']
+        for folder in folders:
+            folder_path = os.path.join(weight_path, folder)
+            if not os.path.isdir(folder_path):
+                continue
+            new_path = os.path.join(backup_dir, folder)
+            if os.path.isdir(new_path):
+                shutil.rmtree(new_path)
+            shutil.copytree(folder_path, new_path)
 
     return trainer
 

@@ -71,7 +71,7 @@ def build_general_loss(loss_coef,
             # select only properties which are given
             valid_idx = torch.bitwise_not(torch.isnan(targ))
             if key in cutoff:
-                valid_idx *= targ <= cutoff[key]
+                valid_idx *= (targ <= cutoff[key])
 
             targ = targ[valid_idx]
             pred = pred[valid_idx]
