@@ -192,7 +192,7 @@ class Painn(nn.Module):
                                      xyz=xyz)
 
         en_keys = ['energy_0', 'energy_1']
-        if all([key in all_results for key in en_keys]);
+        if all([key in all_results for key in en_keys]):
             delta = (all_results[en_keys[1]] -
                     all_results[en_keys[0]])
             all_results['energy_1_energy_0_delta'] = delta
