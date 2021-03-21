@@ -5,10 +5,12 @@ import copy
 
 from nff.utils.tools import make_directed
 from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
-                                  EmbeddingBlock, ReadoutBlock)
+                                  EmbeddingBlock, ReadoutBlock,
+                                  TransformerMessageBlock,
+                                  NbrEmbeddingBlock)
 from nff.nn.modules.schnet import (AttentionPool, SumPool)
 from nff.nn.modules.diabat import DiabaticReadout
-from nff.nn.layers import Diagonalize
+from nff.nn.layers import (Diagonalize, ExpNormalBasis)
 
 
 POOL_DIC = {"sum": SumPool,
@@ -65,7 +67,7 @@ class Painn(nn.Module):
                                     {key: False for key
                                      in self.output_keys})
 
-        num_readouts = num_conv if (self.skip) else 1
+        num_readouts = num_conv if any(self.skip.values()) else 1
         self.readout_blocks = nn.ModuleList(
             [ReadoutBlock(feat_dim=feat_dim,
                           output_keys=output_keys,
@@ -106,7 +108,9 @@ class Painn(nn.Module):
         z_numbers = nxyz[:, 0].long()
         r_ij = xyz[nbrs[:, 1]] - xyz[nbrs[:, 0]]
 
-        s_i, v_i = self.embed_block(z_numbers)
+        s_i, v_i = self.embed_block(z_numbers,
+                                    nbrs=nbrs,
+                                    r_ij=r_ij)
         results = {}
 
         for i, message_block in enumerate(self.message_blocks):
@@ -200,7 +204,47 @@ class Painn(nn.Module):
 
         results, _ = self.run(batch=batch,
                               xyz=xyz)
+
         return results
+
+
+class PainnTransformer(Painn):
+    def __init__(self,
+                 modelparams):
+        super().__init__(modelparams)
+
+        conv_dropout = modelparams.get("conv_dropout", 0)
+        learnable_mu = modelparams.get("learnable_mu", False)
+        learnable_beta = modelparams.get("learnable_beta", False)
+        same_message_blocks = modelparams["same_message_blocks"]
+        feat_dim = modelparams["feat_dim"]
+
+        rbf = ExpNormalBasis(n_rbf=modelparams["n_rbf"],
+                             cutoff=modelparams["cutoff"],
+                             learnable_mu=learnable_mu,
+                             learnable_beta=learnable_beta)
+
+        self.message_blocks = nn.ModuleList(
+            [
+                TransformerMessageBlock(
+                    num_heads=modelparams["num_heads"],
+                    feat_dim=feat_dim,
+                    activation=modelparams["activation"],
+                    layer_norm=modelparams.get("layer_norm", True),
+                    rbf=rbf)
+
+                for _ in range(modelparams["num_conv"])
+            ]
+        )
+
+        if same_message_blocks:
+            self.message_blocks = nn.ModuleList(
+                [self.message_blocks[0]]
+                * len(self.message_blocks))
+
+        self.embed_block = NbrEmbeddingBlock(feat_dim=feat_dim,
+                                             dropout=conv_dropout,
+                                             rbf=rbf)
 
 
 class PainnDiabat(Painn):

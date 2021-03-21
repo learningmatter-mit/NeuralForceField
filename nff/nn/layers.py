@@ -437,6 +437,42 @@ class PainnRadialBasis(nn.Module):
         return output
 
 
+class ExpNormalBasis(nn.Module):
+    def __init__(self,
+                 n_rbf,
+                 cutoff,
+                 learnable_mu,
+                 learnable_beta):
+        super().__init__()
+
+        self.mu = torch.linspace(np.exp(-cutoff), 1, n_rbf)
+
+        init_beta = (2 / n_rbf * (1 - np.exp(-cutoff))) ** (-2)
+        self.beta = (torch.ones_like(self.mu) * init_beta)
+
+        if learnable_mu:
+            self.mu = nn.Parameter(self.mu)
+        if learnable_beta:
+            self.beta = nn.Parameter(self.beta)
+
+        self.cutoff = cutoff
+
+    def forward(self, dist):
+        """
+        Args:
+            d (torch.Tensor): tensor of distances
+        """
+
+        shape_d = dist.unsqueeze(-1)
+        mu = self.mu.to(dist.device)
+        beta = self.beta.to(dist.device)
+
+        arg = beta * (torch.exp(-shape_d) - mu) ** 2
+        output = torch.exp(-arg)
+
+        return output
+
+
 class StochasticIncrease(nn.Module):
     """
     Module that stochastically enhances the magnitude of a network

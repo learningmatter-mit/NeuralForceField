@@ -56,7 +56,7 @@ slurm*.out
 # directory 
 log/
 debug/
-sandbox/
+sandbox*/
 backup
 dist/
 sandbox_excited/
