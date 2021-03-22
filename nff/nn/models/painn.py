@@ -191,6 +191,12 @@ class Painn(nn.Module):
                                      atomwise_out=atomwise_out,
                                      xyz=xyz)
 
+        en_keys = ['energy_0', 'energy_1']
+        if all([key in all_results for key in en_keys]):
+            delta = (all_results[en_keys[1]] -
+                    all_results[en_keys[0]])
+            all_results['energy_1_energy_0_delta'] = delta
+
         return all_results, xyz
 
     def forward(self, batch, xyz=None):
