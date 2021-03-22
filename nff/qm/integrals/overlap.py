@@ -92,6 +92,12 @@ def pos_to_overlaps(r_a,
                     b,
                     l_0,
                     l_1):
+	"""
+	Overlaps between the Cartesian Gaussian orbitals
+	of two atoms at r_a and r_b, respectively,
+	with repsective position exponents a and b,
+	and maximum angular momenta l_0 and l_1.
+	"""
 
     r_pa, r_pb, s_0, p = get_prelims(r_a=r_a,
                                      r_b=r_b,
