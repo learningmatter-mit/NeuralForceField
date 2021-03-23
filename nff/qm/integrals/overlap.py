@@ -1,7 +1,13 @@
+"""
+Functions for computing overlaps of Gaussian orbitals.
+Formulas from Chapter 9 in Molecular Electronic Structure 
+Theory, by Helgaker, Jorgensen and Olsen.
+"""
+
 # import numba as nb
 import numpy as np
-
 import torch
+from nff.utils.scatter import compute_grad
 
 # @nb.jit(nopython=True)
 
@@ -133,6 +139,9 @@ def test():
                         l_0,
                         l_1)
 
+    grad = compute_grad(r_a, s)
+    print(grad)
+
     loss = s.sum()
     loss.backward()
 
@@ -142,9 +151,9 @@ def test():
     targs = [0.167162, 7.52983e-5, -0.0320324]
     for i, idx in enumerate(idx_pairs):
         print(idx)
-        print("Predicted value: %.5f" %
+        print("Predicted value: %.5e" %
               (s[idx[0], idx[1], idx[2]]))
-        print("Target value: %.5f" % targs[i])
+        print("Target value: %.5e" % targs[i])
 
 
 if __name__ == "__main__":
