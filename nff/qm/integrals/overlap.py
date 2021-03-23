@@ -1,18 +1,24 @@
 """
 Functions for computing overlaps of Gaussian orbitals.
-Formulas from Chapter 9 in Molecular Electronic Structure 
+Formulas from Chapter 9 in Molecular Electronic Structure
 Theory, by Helgaker, Jorgensen and Olsen.
 """
 
 # import numba as nb
 import numpy as np
 import torch
+import time
+
+# from typing import Union
 from nff.utils.scatter import compute_grad
 
-# @nb.jit(nopython=True)
+
+# @torch.jit.script
 
 
-def horizontal(s, p, r_pa):
+def horizontal(s: torch.Tensor,
+               p: float,
+               r_pa: torch.Tensor):
 
     num = s.shape[0]
 
@@ -26,15 +32,18 @@ def horizontal(s, p, r_pa):
     return s
 
 
-# @nb.jit(nopython=True)
-def vertical(s, r_pb, p):
+# @torch.jit.script
+def vertical(s: torch.Tensor,
+             r_pb: torch.Tensor,
+             p: float,
+             device: int):
 
     l_1 = s.shape[2]
 
-    i_range = torch.arange(s.shape[1])
+    i_range = torch.arange(s.shape[1]).to(device)
     r_pb_shape = r_pb.reshape(-1, 1)
 
-    zeros = torch.zeros(3, 1)
+    zeros = torch.zeros(3, 1).to(device)
 
     for j in range(1, l_1):
 
@@ -51,11 +60,11 @@ def vertical(s, r_pb, p):
     return s
 
 
-# @nb.jit(nopython=True)
-def get_prelims(r_a,
-                r_b,
-                a,
-                b,):
+# @torch.jit.script
+def get_prelims(r_a: torch.Tensor,
+                r_b: torch.Tensor,
+                a: float,
+                b: float):
 
     p = a + b
     mu = a * b / (a + b)
@@ -66,7 +75,8 @@ def get_prelims(r_a,
     r_pa = big_p - r_a
     r_pb = big_p - r_b
 
-    s_0 = np.sqrt(np.pi / p) * torch.exp(-mu * r_ab ** 2)
+    s_0 = (torch.sqrt(torch.tensor(np.pi / p))
+           * torch.exp(-mu * r_ab ** 2))
 
     return r_pa, r_pb, s_0, p
 
@@ -76,18 +86,23 @@ def compute_overlaps(l_0,
                      p,
                      r_pa,
                      r_pb,
-                     s_0):
+                     s_0,
+                     device):
 
-    s = torch.zeros(l_0, 3)
-    s[0, :] = s_0
+    r_pa = r_pa.to(device)
+    r_pb = r_pb.to(device)
+
+    s = torch.zeros(l_0, 3).to(device)
+    s[0, :] = s_0.to(device)
 
     s = horizontal(s, p, r_pa)
     s_t = (s.transpose(0, 1).reshape(3, 1, -1)
            .transpose(1, 2))
 
-    zeros = torch.zeros((3, l_0, l_1 - 1))
+    zeros = (torch.zeros((3, l_0, l_1 - 1))
+             .to(device))
     s = torch.cat([s_t, zeros], dim=2)
-    s = vertical(s, r_pb, p)
+    s = vertical(s, r_pb, p, device)
 
     return s
 
@@ -97,7 +112,8 @@ def pos_to_overlaps(r_a,
                     a,
                     b,
                     l_0,
-                    l_1):
+                    l_1,
+                    device):
     """
     Overlaps between the Cartesian Gaussian orbitals
     of two atoms at r_a and r_b, respectively,
@@ -115,7 +131,8 @@ def pos_to_overlaps(r_a,
                          p=p,
                          r_pa=r_pa,
                          r_pb=r_pb,
-                         s_0=s_0)
+                         s_0=s_0,
+                         device=device)
 
     return s
 
@@ -132,12 +149,17 @@ def test():
     l_0 = 4
     l_1 = 5
 
+    start = time.time()
     s = pos_to_overlaps(r_a,
                         r_b,
                         a,
                         b,
                         l_0,
-                        l_1)
+                        l_1,
+                        device='cpu')
+    end = time.time()
+    delta = end - start
+    print("%.5e seconds" % delta)
 
     grad = compute_grad(r_a, s)
     print(grad)
