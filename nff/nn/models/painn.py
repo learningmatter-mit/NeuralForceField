@@ -194,7 +194,7 @@ class Painn(nn.Module):
         en_keys = ['energy_0', 'energy_1']
         if all([key in all_results for key in en_keys]):
             delta = (all_results[en_keys[1]] -
-                    all_results[en_keys[0]])
+                     all_results[en_keys[0]])
             all_results['energy_1_energy_0_delta'] = delta
 
         return all_results, xyz
@@ -308,6 +308,12 @@ class PainnDiabat(Painn):
 
         # for backwards compatability
         self.grad_keys = []
+
+        if not hasattr(self, "output_keys"):
+            diabat_keys = self.diabatic_readout.diabat_keys
+            self.output_keys = list(set(np.array(diabat_keys)
+                                        .reshape(-1)
+                                        .tolist()))
 
         diabat_results, xyz = self.run(batch=batch,
                                        xyz=xyz)
