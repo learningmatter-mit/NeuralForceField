@@ -444,7 +444,8 @@ def update_overall(overall_dict,
             deriv_nacv_etf = props['deriv_nacv_etf'][str(exc_state_num)]
             gap = excited_props["energy"] - props["totalenergy"]
 
-            # Hartree / bohr -> kcal/mol/A
+            # Hartree / bohr -> kcal/mol/A. Need to convert because
+            # the conversion in the NFF dataset is unknown for this key
             exact_nacv = (torch.Tensor(exact_nacv) * conv) .tolist()
             approx_nacv = (torch.Tensor(deriv_nacv_etf) * gap * conv).tolist()
 

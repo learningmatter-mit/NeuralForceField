@@ -16,21 +16,19 @@ sys.path.insert(0, NFFDIR)
 os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
 django.setup()
 
-from nff.utils.misc import tqdm_enum
-from nff.data import Dataset, split_train_validation_test
-from nff.data.loader import BalancedFFSampler
-from tqdm import tqdm
-from sklearn.model_selection import train_test_split
-from rdkit import Chem
-import numpy as np
-import torch
-import argparse
-import json
-import os
-import random
-import copy
 from neuralnet.utils.data import convg_and_ci_geoms, equil_geoms
-
+import copy
+import random
+import json
+import argparse
+import torch
+import numpy as np
+from rdkit import Chem
+from sklearn.model_selection import train_test_split
+from tqdm import tqdm
+from nff.data.loader import BalancedFFSampler
+from nff.data import Dataset, split_train_validation_test
+from nff.utils.misc import tqdm_enum
 
 # if you sub-divide your job_info with these names, then their contents
 # will be read in. Any other division will be left as is
@@ -244,8 +242,8 @@ def make_parallel_chunks(dset, num_chunks, sampler):
         this_balance = {key: val[:geoms_per_split] for key, val
                         in balance_dict.items()}
         balance_dict = {key: val[geoms_per_split:] for key, val
-       	       	       	in balance_dict.items()}
- 
+                        in balance_dict.items()}
+
         analyze_split(these_weights=this_balance['weights'],
                       num_chunks=num_chunks)
 
@@ -277,6 +275,7 @@ def to_json(dic):
             else:
                 dic[key] = val
     return dic
+
 
 def make_random_split(dset, split_sizes, seed):
 
@@ -313,18 +312,18 @@ def idx_in_smiles_list(dset, specs, present):
     return idx
 
 
-def norm_test_size(train_name, 
-                   test_name, 
+def norm_test_size(train_name,
+                   test_name,
                    split_sizes,
                    length):
 
     base_message = ("You specified a dataset proportion "
                     "for the {present} set but not the {missing} set. "
                     "It's ambiguous whether this means that "
-       	       	    "{missing}_proportion = 1 - {present}_proportion or "
-       	       	    "{missing}_proportion = 1 - {present}_proportion - "
-                    "third_split_proportion.	Please specify a proportion "
-       	       	    "for the {missing} set. ")
+                    "{missing}_proportion = 1 - {present}_proportion or "
+                    "{missing}_proportion = 1 - {present}_proportion - "
+                    "third_split_proportion.    Please specify a proportion "
+                    "for the {missing} set. ")
 
     if train_name in split_sizes:
         train_size = split_sizes[train_name]
@@ -335,9 +334,9 @@ def norm_test_size(train_name,
             if test_name in split_sizes:
                 test_size = split_sizes[test_name]
             else:
-       	       	err_msg	= base_message.format(present=train_name,
-       	       	       	       	       	      absent=test_name)
-       	       	raise Exception(err_msg)
+                err_msg = base_message.format(present=train_name,
+                                              absent=test_name)
+                raise Exception(err_msg)
 
     elif test_name in split_sizes:
         test_size = split_sizes[test_name]
@@ -355,7 +354,7 @@ def norm_test_size(train_name,
         err_msg = ("Neither {train_name} nor {test_name} "
                    "proportions were specified.")
         raise Exception(err_msg)
-        
+
     norm_test = test_size / (test_size + train_size)
 
     return norm_test
@@ -525,9 +524,9 @@ def make_split(dset, job_info):
 
     if species_splits:
         splits_idx = split_by_species(dset=dset,
-                                  species_splits=species_splits,
-                                  split_sizes=split_sizes,
-                                  seed=seed)
+                                      species_splits=species_splits,
+                                      split_sizes=split_sizes,
+                                      seed=seed)
         split_dic = {}
         for name, split_idx in zip(names, splits_idx):
             this_dset = copy.deepcopy(dset)
@@ -536,8 +535,8 @@ def make_split(dset, job_info):
 
     else:
         train, val, test = make_random_split(dset=dset,
-                                            split_sizes=split_sizes,
-                                            seed=seed)
+                                             split_sizes=split_sizes,
+                                             seed=seed)
         split_dic = {"train": {"dset": train},
                      "val": {"dset": val},
                      "test": {"dset": test}}
@@ -585,7 +584,7 @@ def split_and_sample(dset, job_info):
         this_dset = sub_dic["dset"]
         if "sampler_kwargs" in job_info:
             sampler_kwargs = get_sampler_kwargs(this_dset=this_dset,
-                                            job_info=job_info)
+                                                job_info=job_info)
         else:
             sampler_kwargs = {}
 
@@ -645,9 +644,18 @@ def save_as_chunks(split_dic, job_info):
 
             balance_dict = to_json(chunk_dic["balance_dict"])
             balance_path = os.path.join(direc, f"{split}_sample_dict.json")
-            
+
             with open(balance_path, "w") as f_open:
                 json.dump(balance_dict, f_open, indent=4)
+
+
+def standardize(dset):
+    mean_en = torch.stack(dset.props['energy_0']).mean()
+    keys = ['energy_0', 'energy_1']
+    for key in keys:
+        dset.props[key] = [val - mean_en for val in
+                           dset.props[key]]
+    return dset
 
 
 def diabat_and_weights(dset, job_info):
@@ -744,6 +752,9 @@ def main():
     job_info = parse_job_info()
     set_seed(job_info["seed"])
     dset = load_dset(job_info)
+
+    if job_info.get("standardize", False):
+        dset = standardize(dset)
     diabat_and_weights(dset=dset, job_info=job_info)
 
     print("Complete!")
