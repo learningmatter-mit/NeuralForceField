@@ -8,13 +8,14 @@ from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
                                   EmbeddingBlock, ReadoutBlock,
                                   TransformerMessageBlock,
                                   NbrEmbeddingBlock)
-from nff.nn.modules.schnet import (AttentionPool, SumPool)
+from nff.nn.modules.schnet import (AttentionPool, SumPool, MolFpPool)
 from nff.nn.modules.diabat import DiabaticReadout
 from nff.nn.layers import (Diagonalize, ExpNormalBasis)
 
 
 POOL_DIC = {"sum": SumPool,
-            "attention": AttentionPool}
+            "attention": AttentionPool,
+            "mol_fp": MolFpPool}
 
 
 class Painn(nn.Module):
@@ -288,6 +289,7 @@ class PainnDiabat(Painn):
             delta=delta,
             stochastic_dic=modelparams.get("stochastic_dic"),
             cross_talk_dic=modelparams.get("cross_talk_dic"))
+        self.add_nacv = modelparams.get("add_nacv", False)
 
     @property
     def _grad_keys(self):
@@ -314,6 +316,8 @@ class PainnDiabat(Painn):
             self.output_keys = list(set(np.array(diabat_keys)
                                         .reshape(-1)
                                         .tolist()))
+        if hasattr(self, "add_nacv"):
+            add_nacv = self.add_nacv
 
         diabat_results, xyz = self.run(batch=batch,
                                        xyz=xyz)

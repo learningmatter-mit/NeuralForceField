@@ -82,7 +82,11 @@ class DiabaticReadout(nn.Module):
 
         return stochastic_modules
 
-    def get_nacv(self, U, xyz, N):
+    def get_nacv(self,
+                 U,
+                 xyz,
+                 N,
+                 results):
 
         num_states = U.shape[2]
         split_xyz = torch.split(xyz, N)
@@ -93,8 +97,6 @@ class DiabaticReadout(nn.Module):
 
         for i in range(U.shape[1]):
             for j in range(U.shape[2]):
-                if i == j:
-                    continue
                 this_grad = compute_grad(inputs=xyz,
                                          output=U[:, i, j]).detach()
                 grad_split = torch.split(this_grad, N)
@@ -109,30 +111,52 @@ class DiabaticReadout(nn.Module):
         # t = 3 is the number of directions for each atom
 
         nacvs = []
+        force_nacvs = []
+
         for k, u_grad in enumerate(u_grads):
             this_u = U[k]
-            nacv = torch.einsum('im, sjat, lm, sl -> ijat',
-                                this_u, u_grad, this_u, this_u)
+            nacv = torch.einsum('jk, iknm -> jinm',
+                                this_u, u_grad)
+
+            gaps = torch.zeros(num_states, num_states).to(nacv.device)
+            for i in range(num_states):
+                for j in range(num_states):
+                    en_i = results[f'energy_{i}'][k]
+                    en_j = results[f'energy_{j}'][k]
+                    gaps[i, j] = en_i - en_j
+
+            gaps = gaps.reshape(num_states, num_states, 1, 1)
+            force_nacv = nacv * gaps
+
             nacvs.append(nacv)
+            force_nacvs.append(force_nacv)
 
         # concatenate along all the atoms just like we do
         # for forces, giving a tensor of shape
         # (num_states, num_states, total_num_atoms, 3)
 
         nacv_cat = torch.cat(nacvs, axis=-2)
+        force_nacv_cat = torch.cat(force_nacvs, axis=-2)
 
-        return nacv_cat
+        return nacv_cat, force_nacv_cat
 
     def add_nacv(self, results, u, xyz, N):
 
-        nacv = self.get_nacv(U=u, xyz=xyz, N=N)
+        nacv, force_nacv = self.get_nacv(U=u,
+                                         xyz=xyz,
+                                         N=N,
+                                         results=results)
         num_states = nacv.shape[0]
         for i in range(num_states):
             for j in range(num_states):
                 if i == j:
                     continue
                 this_nacv = nacv[i, j, :, :]
+                this_force_nacv = force_nacv[i, j, :, :]
+
                 results[f"nacv_{i}{j}"] = this_nacv
+                results[f"force_nacv_{i}{j}"] = this_force_nacv
+
         return results
 
     def add_diag(self,

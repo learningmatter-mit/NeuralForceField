@@ -16,7 +16,6 @@ sys.path.insert(0, NFFDIR)
 os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
 django.setup()
 
-
 import json
 import torch
 from tqdm import tqdm
@@ -270,6 +269,7 @@ def save_dset(overall_dict,
 
     props = concatenate_dict(*list(overall_dict.values()))
     dset = Dataset(props=props, units='atomic')
+
     dset = add_deltas(dset, deltas)
 
     save_folder = os.path.join(save_dir, str(idx))
@@ -322,14 +322,16 @@ def get_job_pks(method_name,
     if len(config_names) > 1:
         config_str = ", ".join(config_names[:-1])
     if len(config_names) >= 2:
-        config_str += f" or {config_names[-1]}"
+        joiner = 'and' if all_calcs_for_geom else 'or'
+        config_str += f" {joiner} {config_names[-1]}"
 
     print(f"Querying all jobs with config {config_str}...")
 
     if all_calcs_for_geom:
         job_dic = {}
         for name in config_names:
-            jobs = JobConfig.objects.get(name=name).job_set.all()
+            jobs = (JobConfig.objects.get(name=name).job_set
+                    .filter(status='done'))
             job_dic[name] = jobs
 
         sort_configs = sorted(config_names, key=lambda x: job_dic[x].count())
@@ -345,7 +347,8 @@ def get_job_pks(method_name,
         job_pks = list(jobs.values_list('pk', flat=True))
 
     else:
-        job_pks = list(JobConfig.objects.filter(name__in=config_names)
+        job_pks = list(JobConfig.objects.filter(name__in=config_names,
+                                                status='done')
                        .order_by("?").values_list('job__pk', flat=True))
 
     print("Completed query!")
@@ -569,7 +572,9 @@ def main(group_name,
               max_std_en=max_std_en,
               max_std_force=max_std_force,
               max_val_en=max_val_en,
-              max_val_force=max_val_force)
+              max_val_force=max_val_force,
+              make_splits=make_splits,
+              deltas=deltas)
 
 
 if __name__ == "__main__":
