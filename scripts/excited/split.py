@@ -1,4 +1,19 @@
+import sys
+import os
 import django
+
+HOME = os.environ["HOME"]
+HTVS_DIR = os.environ.get("HTVSDIR", f"{HOME}/htvs")
+DJANGOCHEMDIR = os.environ.get("DJANGOCHEMDIR", f"{HOME}/htvs/djangochem")
+NFFDIR = os.environ.get("NFFDIR",
+                        f"{HOME}/Repo/projects/master/NeuralForceField")
+
+sys.path.insert(0, HTVS_DIR)
+sys.path.insert(0, DJANGOCHEMDIR)
+sys.path.insert(0, NFFDIR)
+
+
+os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
 django.setup()
 
 from nff.utils.misc import tqdm_enum
@@ -568,12 +583,19 @@ def split_and_sample(dset, job_info):
 
         sub_dic = split_dic[key]
         this_dset = sub_dic["dset"]
-        sampler_kwargs = get_sampler_kwargs(this_dset=this_dset,
+        if "sampler_kwargs" in job_info:
+            sampler_kwargs = get_sampler_kwargs(this_dset=this_dset,
                                             job_info=job_info)
+        else:
+            sampler_kwargs = {}
 
-        sampler, cluster_rmsds = sampler_and_rmsds(
-            balance_type=job_info["balance_type"],
-            sampler_kwargs=sampler_kwargs)
+        if sampler_kwargs:
+            sampler, cluster_rmsds = sampler_and_rmsds(
+                balance_type=job_info["balance_type"],
+                sampler_kwargs=sampler_kwargs)
+        else:
+            sampler = None
+            cluster_rmsds = {}
 
         this_dset = add_diabat(cluster_rmsds=cluster_rmsds,
                                max_rmsd=job_info["max_diabat_rmsd"],

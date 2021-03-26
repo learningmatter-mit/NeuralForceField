@@ -1,14 +1,6 @@
-import argparse
-from nff.data import Dataset, concatenate_dict, split_train_validation_test
-from pgmols.models import Calc
-from jobs.models import Job, JobConfig
-from analysis.metalation_energy import custom_stoich
-from tqdm import tqdm
-import torch
-import json
-import sys
 import os
 import django
+import sys
 
 HOME = os.environ["HOME"]
 HTVS_DIR = os.environ.get("HTVSDIR", f"{HOME}/htvs")
@@ -25,12 +17,28 @@ os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
 django.setup()
 
 
+import json
+import torch
+from tqdm import tqdm
+from analysis.metalation_energy import custom_stoich, stoich_energy
+from jobs.models import Job, JobConfig
+from pgmols.models import Calc, Geom
+from nff.data import Dataset, concatenate_dict, split_train_validation_test
+import argparse
+
+
 CONFIG_DIC = {"bhhlyp_6-31gs_sf_tddft_engrad":
               {"name": "sf_tddft_bhhlyp",
                "description": "GAMESS bhhlyp/6-31G* spin flip tddft"},
               "bhhlyp_6-31gs_sf_hop":
               {"name": "sf_tddft_bhhlyp",
-               "description": "GAMESS bhhlyp/6-31G* spin flip tddft"}}
+               "description": "GAMESS bhhlyp/6-31G* spin flip tddft"},
+              "bhhlyp_6-31gs_sf_tddft_nacv_qchem":
+              {"name": "sf_tddft_bhhlyp",
+               "description": "QChem bhhlyp/6-31gs SF-TDDFT"},
+              "bhhlyp_6-31gs_sf_tddft_engrad_qchem":
+              {"name": "sf_tddft_bhhlyp",
+               "description": "QChem bhhlyp/6-31gs SF-TDDFT"}}
 
 CHUNK_SIZE = 1000
 
@@ -303,19 +311,43 @@ def parse_optional(max_geoms,
 
 
 def get_job_pks(method_name,
-                method_description):
+                method_description,
+                all_calcs_for_geom=False):
 
     config_names = [key for key, val in CONFIG_DIC.items() if
                     val['name'] == method_name and
                     val['description'] == method_description]
 
-    config_str = ", ".join(config_names[:-1])
+    config_str = ", ".join(config_names)
+    if len(config_names) > 1:
+        config_str = ", ".join(config_names[:-1])
     if len(config_names) >= 2:
         config_str += f" or {config_names[-1]}"
 
     print(f"Querying all jobs with config {config_str}...")
-    job_pks = list(JobConfig.objects.filter(name__in=config_names)
-                   .order_by("?").values_list('job__pk', flat=True))
+
+    if all_calcs_for_geom:
+        job_dic = {}
+        for name in config_names:
+            jobs = JobConfig.objects.get(name=name).job_set.all()
+            job_dic[name] = jobs
+
+        sort_configs = sorted(config_names, key=lambda x: job_dic[x].count())
+
+        min_job_config = sort_configs[0]
+        min_jobs = job_dic[min_job_config]
+        geom_pks = min_jobs.values_list('childcalcs__geoms', flat=True)
+        geoms = Geom.objects.filter(pk__in=geom_pks)
+
+        job_pks = geoms.values_list('calcs__parentjob', flat=True)
+        jobs = Job.objects.filter(pk__in=job_pks,
+                                  config__name__in=config_names)
+        job_pks = list(jobs.values_list('pk', flat=True))
+
+    else:
+        job_pks = list(JobConfig.objects.filter(name__in=config_names)
+                       .order_by("?").values_list('job__pk', flat=True))
+
     print("Completed query!")
 
     return job_pks
@@ -337,12 +369,22 @@ def get_job_query(job_pks, chunk_size, group_name, molsets):
     return job_query
 
 
-def update_stoich(stoich_dict, geom, custom_name):
+def update_stoich(stoich_dict,
+                  geom,
+                  custom_name,
+                  method_name,
+                  method_descrip):
     formula = geom.stoichiometry.formula
     if formula in stoich_dict:
         return stoich_dict, formula
 
-    stoich_en = custom_stoich(formula, custom_name)
+    if custom_name is not None:
+        stoich_en = custom_stoich(formula, custom_name)
+    else:
+        stoich_en = stoich_energy(formula=formula,
+                                  methodname=method_name,
+                                  method_description=method_descrip)
+
     stoich_dict[formula] = stoich_en
 
     return stoich_dict, formula
@@ -351,7 +393,9 @@ def update_stoich(stoich_dict, geom, custom_name):
 def update_overall(overall_dict,
                    stoich_dict,
                    calc_pk,
-                   custom_name):
+                   custom_name,
+                   method_name,
+                   method_descrip):
 
     calc = Calc.objects.filter(pk=calc_pk).first()
     if not calc:
@@ -368,25 +412,53 @@ def update_overall(overall_dict,
 
     stoich_dict, formula = update_stoich(stoich_dict=stoich_dict,
                                          geom=geom,
-                                         custom_name=custom_name)
+                                         custom_name=custom_name,
+                                         method_name=method_name,
+                                         method_descrip=method_descrip)
     stoich_en = stoich_dict[formula]
 
     if props is None:
         jacobian = calc.jacobian
         if not jacobian:
-            return overall_dict
+            return overall_dict, stoich_dict
         forces = jacobian.forces
         overall_dict[geom_id].update({"energy_0_grad":
                                       (-torch.Tensor(forces)).tolist(),
                                       "geom_id": geom_id})
     else:
-        force_1 = props['excitedstates'][0]['forces']
+        if len(props['excitedstates']) == 0:
+            return overall_dict, stoich_dict
+        excited_props = props['excitedstates'][0]
         overall_dict[geom_id].update(
             {"energy_0": props['totalenergy'] - stoich_en,
-             "energy_1": props['excitedstates'][0]['energy'] - stoich_en,
-             "energy_1_grad": (-torch.Tensor(force_1)).tolist()
+             "energy_1": excited_props['energy'] - stoich_en
              }
         )
+
+        if 'force_nacv' in excited_props:
+            exc_state_num = excited_props['absolutestate']
+            conv = 627.5 / 0.529177
+
+            exact_nacv = props['force_nacv'][str(exc_state_num)]
+
+            deriv_nacv_etf = props['deriv_nacv_etf'][str(exc_state_num)]
+            gap = excited_props["energy"] - props["totalenergy"]
+
+            # Hartree / bohr -> kcal/mol/A
+            exact_nacv = (torch.Tensor(exact_nacv) * conv) .tolist()
+            approx_nacv = (torch.Tensor(deriv_nacv_etf) * gap * conv).tolist()
+
+            # use the approximate one so that there are no Hellman-Feynman
+            # assumptions being made, and instead it's just a scaling used
+            # for better training
+            overall_dict[geom_id].update({"exact_force_nacv_10": exact_nacv,
+                                          "force_nacv_10": approx_nacv})
+
+        if 'forces' in excited_props:
+            force_1 = excited_props['forces']
+            overall_dict[geom_id].update(
+                {"energy_1_grad": (-torch.Tensor(force_1)).tolist()})
+
     return overall_dict, stoich_dict
 
 
@@ -414,6 +486,7 @@ def main(group_name,
          chunk_size=CHUNK_SIZE,
          make_splits=False,
          deltas=None,
+         all_calcs_for_geom=False,
          **kwargs):
 
     max_geoms, max_geoms_per_dset, molsets = parse_optional(
@@ -422,7 +495,8 @@ def main(group_name,
         molsets=molsets)
 
     job_pks = get_job_pks(method_name=method_name,
-                          method_description=method_description)
+                          method_description=method_description,
+                          all_calcs_for_geom=all_calcs_for_geom)
 
     ####
     # job_pks = list(Job.objects.filter(
@@ -452,9 +526,12 @@ def main(group_name,
                 overall_dict=overall_dict,
                 stoich_dict=stoich_dict,
                 calc_pk=calc_pk,
-                custom_name=custom_name)
+                custom_name=custom_name,
+                method_name=method_name,
+                method_descrip=method_description)
 
             if len(overall_dict) >= max_geoms_per_dset:
+
                 geom_count += len(overall_dict)
                 save_dset(overall_dict=overall_dict,
                           required_keys=required_keys,
@@ -504,4 +581,9 @@ if __name__ == "__main__":
     with open(config_path, 'r') as f:
         kwargs = json.load(f)
 
-    main(**kwargs)
+    try:
+        main(**kwargs)
+    except Exception as e:
+        print(e)
+        import pdb
+        pdb.post_mortem()

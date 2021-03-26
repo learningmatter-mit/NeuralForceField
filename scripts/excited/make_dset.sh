@@ -12,11 +12,18 @@
 
 source deactivate
 source ~/.bashrc
-source activate nff
+# source activate nff
+source activate htvs
 
 # change as necessary
 export HTVSDIR="/home/saxelrod/repo/htvs/master/htvs"
 export DJANGOCHEMDIR="/home/saxelrod/repo/htvs/master/htvs/djangochem"
 export NFFDIR="/home/saxelrod/repo/nff/master/NeuralForceField"
 
-python make_dset.py --config_file dset_config/job_info.json
+# config=dset_config/job_info.json
+config=dset_config/qchem.json
+
+python make_dset.py --config_file $config
+
+split_config=split_config/qchem.json
+python split.py --config_file $split_config

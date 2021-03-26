@@ -1,0 +1,85 @@
+{
+    "dset_path": "/home/saxelrod/rgb_nfs/dsets_switches/azo_qchem_5k/0",
+    "model_path": "/home/saxelrod/rgb_nfs/dsets_switches/azo_qchem_5k",
+    "pruning": {},
+    "balanced_sampling": {
+        "balance_type": "spec_config_zhu_balance",
+        "ref_config": {
+            "type": "equil",
+            "kwargs": {
+                "substruc_smiles": "N(=N/c1ccccc1)\\c2ccccc2",
+                "substruc_idx": [
+                    3,
+                    4,
+                    5,
+                    6
+                ],
+                "group_name": "switches",
+                "method_names": [
+                    "dft_d3_gga_bp86",
+                    "dft_hyb_bhhlyp",
+                    "sf_tddft_bhhlyp"
+                ],
+                "method_descrips": [
+                    "Orca bp86/def2-SVP D3 DFT RI",
+                    "Orca BHHLYP/6-31G* DFT",
+                    "QChem bhhlyp/6-31gs SF-TDDFT"
+                ],
+                "pref_method_idx": 0,
+                "device": "cpu",
+                "ref_smiles_list": [
+                    "N(=N/c1ccccc1)\\c2ccccc2",
+                    "N(=N/c1ccccc1)/c2ccccc2"
+                ]
+            }
+        },
+        "sampler_kwargs": {
+            "zhu_kwargs": {
+                "upper_key": "energy_1",
+                "lower_key": "energy_0",
+                "expec_gap": 0.00551,
+                "func_type": "gaussian"
+            },
+            "spec_weight": 0.6,
+            "config_weight": 0.5,
+            "zhu_weight": 0.5,
+            "device": "cpu",
+            "extra_category": true,
+            "extra_rmsd": 0.25
+        }
+    },
+        "diabatization": {
+        "max_diabat_rmsd": 0.15,
+        "num_diabat_states": 2,
+        "diabat_assignments": {
+            "0": [
+                "energy_0",
+                "energy_1"
+            ],
+            "1": [
+                "energy_1",
+                "energy_0"
+            ]
+        },
+        "diabatic_keys": [
+            [
+                "d0",
+                "lam"
+            ],
+            [
+                "lam",
+                "d1"
+            ]
+        ]
+    },
+    "splitting": {
+        "num_parallel": 1,
+        "seed": 0,
+        "split_sizes": {
+            "val": 0.1,
+            "test": 0.1
+        }
+    },
+    "needs_nbrs": false,
+    "needs_angles": false
+}
