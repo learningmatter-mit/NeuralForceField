@@ -378,6 +378,7 @@ class Diagonalize(nn.Module):
                            d1=d1,
                            lam=lam,
                            e0=e0)
+
         return eigs, U
 
 
