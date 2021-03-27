@@ -17,7 +17,8 @@ class DiabaticReadout(nn.Module):
                  energy_keys,
                  delta=False,
                  stochastic_dic=None,
-                 cross_talk_dic=None):
+                 cross_talk_dic=None,
+                 hellman_feynman=True):
 
         nn.Module.__init__(self)
 
@@ -28,6 +29,7 @@ class DiabaticReadout(nn.Module):
         self.delta = delta
         self.stochastic_modules = self.make_stochastic(stochastic_dic)
         self.cross_talk = self.make_cross_talk(cross_talk_dic)
+        self.hf = hellman_feynman
 
     def make_cross_talk(self, cross_talk_dic):
         if cross_talk_dic is None:
@@ -82,11 +84,62 @@ class DiabaticReadout(nn.Module):
 
         return stochastic_modules
 
-    def get_nacv(self,
-                 U,
-                 xyz,
-                 N,
-                 results):
+    def get_hf_nacv(self,
+                    U,
+                    xyz,
+                    N,
+                    results):
+
+        num_states = U.shape[2]
+        split_xyz = torch.split(xyz, N)
+
+        h_grads = [torch.zeros(num_states, num_states,
+                               this_xyz.shape[0], 3).to(xyz.device)
+                   for this_xyz in split_xyz]
+
+        for i in range(num_states):
+            for j in range(num_states):
+                h_ij = results[self.diabat_keys[i][j]]
+                this_grad = compute_grad(inputs=xyz,
+                                         output=h_ij)
+
+                grad_split = torch.split(this_grad, N)
+                for k, grad in enumerate(grad_split):
+                    h_grads[k][i, j, :, :] = grad
+
+        U = U.detach()
+        nacvs = []
+        force_nacvs = []
+
+        for k, h_grad in enumerate(h_grads):
+            this_u = U[k]
+            this_u_dag = this_u.transpose(0, 1)
+            force_nacv = torch.einsum('ik, klnm, lj -> ijnm',
+                                      this_u_dag, h_grad, this_u)
+
+            gaps = torch.zeros(num_states, num_states).to(force_nacv.device)
+            for i in range(num_states):
+                for j in range(num_states):
+                    en_i = results[f'energy_{i}'][k]
+                    en_j = results[f'energy_{j}'][k]
+                    gaps[i, j] = en_i - en_j
+
+            gaps = gaps.reshape(num_states, num_states, 1, 1)
+            nacv = force_nacv / gaps
+
+            nacvs.append(nacv)
+            force_nacvs.append(force_nacv)
+
+        nacv_cat = torch.cat(nacvs, axis=-2)
+        force_nacv_cat = torch.cat(force_nacvs, axis=-2)
+
+        return nacv_cat, force_nacv_cat
+
+    def get_non_hf_nacv(self,
+                        U,
+                        xyz,
+                        N,
+                        results):
 
         num_states = U.shape[2]
         split_xyz = torch.split(xyz, N)
@@ -95,10 +148,11 @@ class DiabaticReadout(nn.Module):
                                this_xyz.shape[0], 3).to(xyz.device)
                    for this_xyz in split_xyz]
 
-        for i in range(U.shape[1]):
-            for j in range(U.shape[2]):
+        for i in range(num_states):
+            for j in range(num_states):
                 this_grad = compute_grad(inputs=xyz,
-                                         output=U[:, i, j]).detach()
+                                         output=U[:, i, j])
+
                 grad_split = torch.split(this_grad, N)
                 for k, grad in enumerate(grad_split):
                     u_grads[k][i, j, :, :] = grad
@@ -131,12 +185,31 @@ class DiabaticReadout(nn.Module):
             nacvs.append(nacv)
             force_nacvs.append(force_nacv)
 
-        # concatenate along all the atoms just like we do
-        # for forces, giving a tensor of shape
-        # (num_states, num_states, total_num_atoms, 3)
-
         nacv_cat = torch.cat(nacvs, axis=-2)
         force_nacv_cat = torch.cat(force_nacvs, axis=-2)
+
+        return nacv_cat, force_nacv_cat
+
+    def get_nacv(self,
+                 U,
+                 xyz,
+                 N,
+                 results):
+        """
+        hf (bool): whether to use Hellman-Feynman
+        """
+
+        if not hasattr(self, "hf"):
+            self.hf = True
+
+        if self.hf:
+            func = self.get_hf_nacv
+        else:
+            func = self.get_non_hf_nacv
+        nacv_cat, force_nacv_cat = func(U=U,
+                                        xyz=xyz,
+                                        N=N,
+                                        results=results)
 
         return nacv_cat, force_nacv_cat
 
