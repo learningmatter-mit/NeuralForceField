@@ -156,11 +156,6 @@ class DiabaticReadout(nn.Module):
                 for k, grad in enumerate(grad_split):
                     u_grads[k][i, j, :, :] = grad
 
-        # m, l, and s are state indices that get summed out
-        # i and j are state indices that don't get summed out
-        # a = N_at is the number of atoms
-        # t = 3 is the number of directions for each atom
-
         nacvs = []
         force_nacvs = []
 
