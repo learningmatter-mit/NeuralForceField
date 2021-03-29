@@ -56,9 +56,6 @@ class EmbeddingBlock(nn.Module):
                 nbrs,
                 dist):
 
-        # import pdb
-        # pdb.set_trace()
-
         num_atoms = z_number.shape[0]
         node_embeddings = self.atom_embed(z_number)
 

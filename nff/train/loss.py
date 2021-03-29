@@ -60,11 +60,12 @@ def build_general_loss(loss_coef,
         loss = 0.0
         for key, coef in loss_coef.items():
 
-            if key not in ground_truth.keys() and key in correspondence_keys:
+            if key not in ground_truth.keys():
                 ground_key = correspondence_keys[key]
             else:
                 ground_key = key
 
+            targ = ground_truth[ground_key]
             pred = results[key].view(targ.shape)
 
             # select only properties which are given
@@ -480,9 +481,6 @@ def build_diabat_sign_loss(loss_dict):
     coef = loss_dict["coef"]
 
     def loss_fn(ground_truth, results, **kwargs):
-
-        # delta = (ground_truth[diag_keys[1]]
-        #          - ground_truth[diag_keys[0]])
 
         delta = (results[diag_keys[1]]
                  - results[diag_keys[0]])
