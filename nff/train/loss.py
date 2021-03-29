@@ -53,19 +53,18 @@ def build_general_loss(loss_coef,
             loss (torch.Tensor)
         """
 
-        assert all([k in results.keys() for k in loss_coef.keys()])
-        assert all([k in [*ground_truth.keys(), *correspondence_keys.keys()]
-                    for k in loss_coef.keys()])
+        # assert all([k in results.keys() for k in loss_coef.keys()])
+        # assert all([k in [*ground_truth.keys(), *correspondence_keys.keys()]
+        #             for k in loss_coef.keys()])
 
         loss = 0.0
         for key, coef in loss_coef.items():
 
-            if key not in ground_truth.keys():
+            if key not in ground_truth.keys() and key in correspondence_keys:
                 ground_key = correspondence_keys[key]
             else:
                 ground_key = key
 
-            targ = ground_truth[ground_key]
             pred = results[key].view(targ.shape)
 
             # select only properties which are given
@@ -482,8 +481,12 @@ def build_diabat_sign_loss(loss_dict):
 
     def loss_fn(ground_truth, results, **kwargs):
 
-        delta = (ground_truth[diag_keys[1]]
-                 - ground_truth[diag_keys[0]])
+        # delta = (ground_truth[diag_keys[1]]
+        #          - ground_truth[diag_keys[0]])
+
+        delta = (results[diag_keys[1]]
+                 - results[diag_keys[0]])
+
         valid_idx = torch.bitwise_not(torch.isnan(delta))
 
         delta = delta[valid_idx]
@@ -503,6 +506,63 @@ def build_diabat_sign_loss(loss_dict):
     return loss_fn
 
 
+def build_nacv_loss(loss_dict):
+
+    params = loss_dict["params"]
+    key = params["key"]
+    coef = loss_dict["coef"]
+    take_abs = params["abs"]
+    take_max = params["max"]
+
+    def loss_fn(ground_truth,
+                results,
+                **kwargs):
+
+        targ = ground_truth[key]
+        pred = results[key]
+
+        if take_abs:
+            targ = abs(targ)
+            pred = abs(pred)
+
+        else:
+            num_atoms = ground_truth["num_atoms"].tolist()
+            targ_list = torch.split(targ, num_atoms)
+            pred_list = torch.split(pred, num_atoms)
+            signs = []
+
+            for targ_batch, pred_batch in zip(targ_list,
+                                              pred_list):
+                pos_delta = ((targ_batch - pred_batch).abs()
+                             .mean().item())
+                neg_delta = ((targ_batch + pred_batch).abs()
+                             .mean().item())
+                sign = 1 if (pos_delta < neg_delta) else -1
+                signs.append(sign)
+
+            sign_tensor = (torch.cat([sign * torch.ones(n, 3)
+                                      for sign, n in zip(signs, num_atoms)])
+                           .to(targ.device))
+
+            targ = targ * sign_tensor
+
+        valid_idx = torch.bitwise_not(torch.isnan(targ))
+        targ = targ[valid_idx]
+        pred = pred[valid_idx]
+
+        if take_max:
+            idx = abs(targ).argmax()
+            targ = targ[idx]
+            pred = pred[idx]
+
+        diff = mse_operation(targ, pred)
+        loss = coef * torch.mean(diff)
+
+        return loss
+
+    return loss_fn
+
+
 def name_to_func(name):
     dic = {
         "mse": build_mse_loss,
@@ -511,7 +571,8 @@ def name_to_func(name):
         "zhu": build_zhu_loss,
         "zhu_grad": build_zhu_grad_loss,
         "diabat_sign": build_diabat_sign_loss,
-        "skewed_p": build_skewed_p_loss
+        "skewed_p": build_skewed_p_loss,
+        "nacv": build_nacv_loss
     }
     func = dic[name]
     return func

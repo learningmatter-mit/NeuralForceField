@@ -288,7 +288,8 @@ class PainnDiabat(Painn):
             energy_keys=energy_keys,
             delta=delta,
             stochastic_dic=modelparams.get("stochastic_dic"),
-            cross_talk_dic=modelparams.get("cross_talk_dic"))
+            cross_talk_dic=modelparams.get("cross_talk_dic"),
+            hellmann_feynman=modelparams.get("hellmann_feynman", True))
         self.add_nacv = modelparams.get("add_nacv", False)
 
     @property

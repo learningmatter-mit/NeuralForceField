@@ -19,6 +19,8 @@ from nff.nn.utils import (construct_sequential, construct_module_dict,
                           remove_bias)
 from nff.utils.tools import layer_types
 
+# for backwards compatability
+from nff.nn.modules.diabat import DiabaticReadout
 
 EPSILON = 1e-15
 DEFAULT_BONDPRIOR_PARAM = {"k": 20.0}
@@ -1116,7 +1118,8 @@ class AttentionPool(nn.Module):
                  att_act,
                  mol_fp_act,
                  num_out_layers,
-                 out_dim):
+                 out_dim,
+                 **kwargs):
         """
 
         """
@@ -1185,6 +1188,79 @@ class AttentionPool(nn.Module):
 
                 mol_fp = (weights.reshape(-1, 1) * self.w_mat(feats)).sum(0)
 
+                output = self.mol_fp_nn(mol_fp)
+                all_outputs.append(output)
+                learned_feats.append(mol_fp)
+
+            results[key] = torch.stack(all_outputs).reshape(-1)
+            results[f"{key}_features"] = torch.stack(learned_feats)
+
+        for key in grad_keys:
+            output = results[key.replace("_grad", "")]
+            grad = compute_grad(output=output,
+                                inputs=xyz)
+            results[key] = grad
+
+        return results
+
+
+class MolFpPool(nn.Module):
+    def __init__(self,
+                 feat_dim,
+                 mol_fp_act,
+                 num_out_layers,
+                 out_dim,
+                 **kwargs):
+
+        super().__init__()
+
+        # reduce the number of features by the same factor in each layer
+        feat_num = [int(feat_dim / num_out_layers ** m)
+                    for m in range(num_out_layers)]
+
+        # make layers followed by an activation for all but the last
+        # layer
+        mol_fp_layers = [Dense(in_features=feat_num[i],
+                               out_features=feat_num[i+1],
+                               activation=layer_types[mol_fp_act]())
+                         for i in range(num_out_layers - 1)]
+
+        # use no activation for the last layer
+        mol_fp_layers.append(Dense(in_features=feat_num[-1],
+                                   out_features=out_dim,
+                                   activation=None))
+
+        # put together in readout network
+        self.mol_fp_nn = Sequential(*mol_fp_layers)
+
+    def forward(self,
+                batch,
+                xyz,
+                atomwise_output,
+                grad_keys,
+                out_keys):
+        """
+        Args:
+            feats (torch.Tensor): n_atom x feat_dim atomic features,
+                after convolutions are finished.
+        """
+
+        N = batch["num_atoms"].detach().cpu().tolist()
+        results = {}
+
+        for key in out_keys:
+
+            batched_feats = atomwise_output['features']
+
+            # split the outputs into those of each molecule
+            split_feats = torch.split(batched_feats, N)
+            # sum the results for each molecule
+
+            all_outputs = []
+            learned_feats = []
+
+            for feats in split_feats:
+                mol_fp = feats.sum(0)
                 output = self.mol_fp_nn(mol_fp)
                 all_outputs.append(output)
                 learned_feats.append(mol_fp)

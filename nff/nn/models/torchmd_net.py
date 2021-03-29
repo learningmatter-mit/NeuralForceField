@@ -1,4 +1,3 @@
-import torch
 from torch import nn
 from nff.nn.modules.torchmd_net import (UpdateBlock,
                                         MessageBlock,
@@ -6,7 +5,7 @@ from nff.nn.modules.torchmd_net import (UpdateBlock,
 from nff.nn.modules.painn import ReadoutBlock
 from nff.nn.layers import ExpNormalBasis
 from nff.nn.modules.schnet import (AttentionPool, SumPool)
-
+from nff.utils.tools import make_directed
 
 POOL_DIC = {"sum": SumPool,
             "attention": AttentionPool}
@@ -115,10 +114,7 @@ class TorchMDNet(nn.Module):
                  batch,
                  xyz=None):
 
-        # nbrs, _ = make_directed(batch['nbr_list'])
-
-        # no need for directed neighbors
-        nbrs = batch['nbr_list']
+        nbrs, _ = make_directed(batch['nbr_list'])
         nxyz = batch['nxyz']
 
         if xyz is None:

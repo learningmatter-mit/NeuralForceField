@@ -18,7 +18,7 @@ class DiabaticReadout(nn.Module):
                  delta=False,
                  stochastic_dic=None,
                  cross_talk_dic=None,
-                 hellmann_feynman=True):
+                 hellmann_feynman=False):
 
         nn.Module.__init__(self)
 

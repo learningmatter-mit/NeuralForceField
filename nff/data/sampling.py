@@ -56,11 +56,13 @@ def compute_zhu(props,
     upper_key = zhu_kwargs["upper_key"]
     lower_key = zhu_kwargs["lower_key"]
     expec_gap_kcal = zhu_kwargs["expec_gap"] * const.AU_TO_KCAL["energy"]
+    func_type = zhu_kwargs["func_type"]
 
     zhu_p = batch_zhu_p(batch=cat_props(props),
                         upper_key=upper_key,
                         lower_key=lower_key,
                         expec_gap=expec_gap_kcal,
+                        func_type=func_type,
                         gap_shape=None)
 
     return zhu_p

@@ -343,8 +343,9 @@ class Diagonalize(nn.Module):
             v_element_0 = -(term_1 - term_2) / denom
 
         v_element_0 = v_element_0.reshape(*e0.shape)
-        v_crude = torch.stack(
-            [v_element_0, torch.ones_like(v_element_0)], dim=-1)
+        v_crude = torch.stack([v_element_0,
+                               torch.ones_like(v_element_0)],
+                              dim=-1)
         v_norm = torch.norm(v_crude, dim=-1).reshape(-1, 1)
         v = v_crude / v_norm
 
@@ -378,6 +379,17 @@ class Diagonalize(nn.Module):
                            d1=d1,
                            lam=lam,
                            e0=e0)
+
+        # import pdb
+        # pdb.set_trace()
+
+        # h = torch.cat([d0.reshape(-1, 1),
+        #                lam.reshape(-1, 1),
+        #                lam.reshape(-1, 1),
+        #                d1.reshape(-1, 1)],
+        #               dim=-1).reshape(-1, 2, 2)
+
+        # eigs, U  = torch.symeig(h, True)
 
         return eigs, U
 
