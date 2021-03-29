@@ -18,7 +18,7 @@ class DiabaticReadout(nn.Module):
                  delta=False,
                  stochastic_dic=None,
                  cross_talk_dic=None,
-                 hellman_feynman=True):
+                 hellmann_feynman=True):
 
         nn.Module.__init__(self)
 
@@ -29,7 +29,7 @@ class DiabaticReadout(nn.Module):
         self.delta = delta
         self.stochastic_modules = self.make_stochastic(stochastic_dic)
         self.cross_talk = self.make_cross_talk(cross_talk_dic)
-        self.hf = hellman_feynman
+        self.hf = hellmann_feynman
 
     def make_cross_talk(self, cross_talk_dic):
         if cross_talk_dic is None:
@@ -107,7 +107,6 @@ class DiabaticReadout(nn.Module):
                 for k, grad in enumerate(grad_split):
                     h_grads[k][i, j, :, :] = grad
 
-        U = U.detach()
         nacvs = []
         force_nacvs = []
 
@@ -122,7 +121,7 @@ class DiabaticReadout(nn.Module):
                 for j in range(num_states):
                     en_i = results[f'energy_{i}'][k]
                     en_j = results[f'energy_{j}'][k]
-                    gaps[i, j] = en_i - en_j
+                    gaps[i, j] = en_j - en_i
 
             gaps = gaps.reshape(num_states, num_states, 1, 1)
             nacv = force_nacv / gaps
@@ -157,8 +156,6 @@ class DiabaticReadout(nn.Module):
                 for k, grad in enumerate(grad_split):
                     u_grads[k][i, j, :, :] = grad
 
-        U = U.detach()
-
         # m, l, and s are state indices that get summed out
         # i and j are state indices that don't get summed out
         # a = N_at is the number of atoms
@@ -169,7 +166,7 @@ class DiabaticReadout(nn.Module):
 
         for k, u_grad in enumerate(u_grads):
             this_u = U[k]
-            nacv = torch.einsum('jk, iknm -> jinm',
+            nacv = torch.einsum('ki, kjnm -> ijnm',
                                 this_u, u_grad)
 
             gaps = torch.zeros(num_states, num_states).to(nacv.device)
@@ -177,7 +174,7 @@ class DiabaticReadout(nn.Module):
                 for j in range(num_states):
                     en_i = results[f'energy_{i}'][k]
                     en_j = results[f'energy_{j}'][k]
-                    gaps[i, j] = en_i - en_j
+                    gaps[i, j] = en_j - en_i
 
             gaps = gaps.reshape(num_states, num_states, 1, 1)
             force_nacv = nacv * gaps
@@ -736,9 +733,6 @@ class GapCouplingConcat(nn.Module):
         self.featurizer = Sequential(*feat_layers)
 
         new_dim = (feat_dim + num_hidden)
-
-        # import pdb
-        # pdb.set_trace()
         final_act = nn.Softplus(beta=beta) if softplus else None
 
         self.readout = Sequential(
