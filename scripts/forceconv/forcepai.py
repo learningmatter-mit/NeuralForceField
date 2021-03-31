@@ -57,19 +57,19 @@ class ForcePai(nn.Module):
         super().__init__()
 
         feat_dim = modelparams["feat_dim"]
-        activation = modelparams["activation"]
+        activation = modelparams.get("activation", "swish")
         n_rbf = modelparams["n_rbf"]
         cutoff = modelparams["cutoff"]
         num_conv = modelparams["num_conv"]
-        output_keys = modelparams["output_keys"]
+        output_keys = modelparams.get("output_keys", ["energy"])
         learnable_k = modelparams.get("learnable_k", False)
         conv_dropout = modelparams.get("conv_dropout", 0)
         readout_dropout = modelparams.get("readout_dropout", 0)
-        means = modelparams.get("means")
-        stddevs = modelparams.get("stddevs")
+        # means = modelparams.get("means")
+        # stddevs = modelparams.get("stddevs")
         pool_dic = modelparams.get("pool_dic")
 
-        self.grad_keys = modelparams["grad_keys"]
+        self.grad_keys = modelparams.get("grad_keys", ["energy_grad"])
 
         # embedding layers
         self.embed_block = EmbeddingBlock(feat_dim=feat_dim)

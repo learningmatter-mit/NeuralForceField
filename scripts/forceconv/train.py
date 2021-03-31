@@ -27,7 +27,11 @@ def train(params, suggestion, model, n_epochs, angle=False):
     val_loader = DataLoader(val, batch_size=trainparam['batch_size'], collate_fn=collate_dicts)
     test_loader = DataLoader(test, batch_size=trainparam['batch_size'], collate_fn=collate_dicts)
 
-    model = model(**trainparam)
+    try:
+        model = model(**trainparam)
+    except:
+        model = model(trainparam)
+    
     loss_fn = loss.build_mse_loss(loss_coef={'energy_grad': 1})
     
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
