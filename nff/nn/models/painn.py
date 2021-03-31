@@ -306,8 +306,7 @@ class PainnDiabat(Painn):
                 xyz=None,
                 add_nacv=False,
                 add_grad=True,
-                add_gap=True,
-                extra_grads=None):
+                add_gap=True):
 
         # for backwards compatability
         self.grad_keys = []
@@ -328,7 +327,6 @@ class PainnDiabat(Painn):
                                         results=diabat_results,
                                         add_nacv=add_nacv,
                                         add_grad=add_grad,
-                                        add_gap=add_gap,
-                                        extra_grads=extra_grads)
+                                        add_gap=add_gap)
 
         return results
