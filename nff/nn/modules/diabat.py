@@ -87,8 +87,10 @@ class DiabaticReadout(nn.Module):
     def results_to_dmat(self, results, num_atoms):
         num_states = len(self.diabat_keys)
         num_mols = len(num_atoms)
-        d_mat = torch.zeros(num_mols, num_states,
-                            num_states)
+        device = results[self.diabat_keys[0][0]].device
+        d_mat = torch.zeros(num_mols,
+                            num_states,
+                            num_states).to(device)
         for i in range(num_states):
             for j in range(num_states):
                 diabat_key = self.diabat_keys[i][j]
@@ -119,7 +121,7 @@ class DiabaticReadout(nn.Module):
             num_states,
             total_atoms,
             3
-        )
+        ).to(xyz.device)
 
         for i in range(num_states):
             for j in range(num_states):
