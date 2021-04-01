@@ -11,6 +11,7 @@ from nff.nn.modules.schnet import (AttentionPool, SumPool)
 # from nff.nn.modules.diabat import DiabaticReadout
 # from nff.nn.layers import Diagonalize
 from nff.nn.layers import GaussianSmearing, Dense
+from nff.nn.activations import shifted_softplus
 from nff.utils.scatter import scatter_add
 from nff.utils.tools import layer_types
 
@@ -74,14 +75,11 @@ class ForcePai(nn.Module):
         # embedding layers
         self.embed_block = EmbeddingBlock(feat_dim=feat_dim)
         # distance transform
-        # cut_off = modelparams.get("cut_off")
-        # n_gaussians = modelparams.get("n_gaussians")
-        # n_edge_basis = modelparams.get("n_edge_basis")
-        # self.smear = GaussianSmearing(start=0.0, stop=cutoff, n_gaussians=n_gaussians)
-        # self.edgefilter = Sequential(
-        #     Dense(in_features=n_gaussians, out_features=n_edge_basis),
-        #     shifted_softplus(),
-        #     Dense(in_features=n_edge_basis, out_features=n_edge_basis))
+        self.smear = GaussianSmearing(start=0.0, stop=cutoff, n_gaussians=n_rbf)
+        self.edgefilter = Sequential(
+            Dense(in_features=n_rbf, out_features=2*feat_dim, bias=True),
+            shifted_softplus(),
+            Dense(in_features=2*feat_dim, out_features=feat_dim))
         
         self.message_blocks = nn.ModuleList(
             [MessageBlock(feat_dim=feat_dim,
@@ -99,6 +97,21 @@ class ForcePai(nn.Module):
              for _ in range(num_conv)]
         )
 
+        # construct edge update networks
+        # edge_update = [Dense(in_features=feat_dim, out_features=2*feat_dim), shifted_softplus()]
+        # for i in range(edge_update_depth):
+        #     edge_update.append(Dense(in_features=feat_dim, out_features=feat_dim))
+        #     edge_update.append(shifted_softplus())
+        # edge_update.append(Dense(in_features=2*feat_dim, out_features=feat_dim))
+        self.edge_update = nn.ModuleList(
+            [nn.Sequential(Dense(in_features=feat_dim, 
+                                out_features=2*feat_dim), 
+                          shifted_softplus(),
+                          Dense(in_features=2*feat_dim, 
+                                out_features=feat_dim))
+            for _ in range(num_conv)]
+        )
+
         self.output_keys = output_keys
         # no skip connection in original paper
         self.skip = modelparams.get("skip_connection",
@@ -107,9 +120,20 @@ class ForcePai(nn.Module):
 
         num_readouts = num_conv if (self.skip) else 1
 
-        self.edgereadout = EdgeReadoutBlock(feat_dim=feat_dim,
-                                            activation=activation,
-                                            dropout=readout_dropout)
+        # edge readout 
+        self.edgereadout = Sequential(
+            Dense(in_features=feat_dim, 
+                    out_features=feat_dim, 
+                    bias=True, 
+                    dropout_rate=readout_dropout),
+            shifted_softplus(),
+            Dense(in_features=feat_dim, 
+                    out_features=1, 
+                    dropout_rate=readout_dropout)
+        )
+        # self.edgereadout = EdgeReadoutBlock(feat_dim=feat_dim,
+        #                                     activation=activation,
+        #                                     dropout=readout_dropout)
         # self.readout_blocks = nn.ModuleList(
         #     [ReadoutBlock(feat_dim=feat_dim,
         #                   output_keys=output_keys,
@@ -159,32 +183,35 @@ class ForcePai(nn.Module):
         # edge features
         dis_vec = xyz[nbrs[:, 0]] - xyz[nbrs[:, 1]]
         dis = dis_vec.pow(2).sum(1).sqrt()[:, None]
-
         xyz_adjoint = dis_vec / dis
-
-        # e = self.smear(dis)
-        # e = self.edgefilter(e)
+        e_ij = self.smear(dis)
+        e_ij = self.edgefilter(e_ij)
 
         results = {}
 
         for i, message_block in enumerate(self.message_blocks):
-            update_block = self.update_blocks[i]
+
+            # message block
             ds_message, dv_message = message_block(s_j=s_i,
                                                    v_j=v_i,
                                                    r_ij=r_ij,
                                                    nbrs=nbrs)
-
             s_i = s_i + ds_message
             v_i = v_i + dv_message
 
+            # update block
+            update_block = self.update_blocks[i]
             ds_update, dv_update = update_block(s_i=s_i,
                                                 v_i=v_i)
-
             s_i = s_i + ds_update
             v_i = v_i + dv_update
 
-        e = s_i[nbrs[:, 0]] + s_i[nbrs[:, 1]]
-        f_edge = self.edgereadout(e) * xyz_adjoint
+            # edge block
+            edge_update_block = self.edge_update[i]
+            de_update = edge_update_block(s_i[nbrs[:, 0]] + s_i[nbrs[:, 1]])
+            e_ij = e_ij + de_update
+
+        f_edge = self.edgereadout(e_ij) * xyz_adjoint
         f_atom = scatter_add(f_edge, nbrs[:,0], dim=0, dim_size=graph_size) - \
             scatter_add(f_edge, nbrs[:,1], dim=0, dim_size=graph_size)
 

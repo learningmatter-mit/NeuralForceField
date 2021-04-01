@@ -13,7 +13,7 @@ from train import train
 from forcepai import ForcePai
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-logdir", type=str, default='minkaixu/fpai')
+parser.add_argument("-logdir", type=str, default='minkaixu/fpai_ethanol')
 parser.add_argument("-device", type=int, default=0)
 parser.add_argument("-data", type=str, default='ethanol_dft')
 parser.add_argument("-id", type=int, default=None)
@@ -42,10 +42,10 @@ if params['id'] == None:
         metrics=[dict(name='loss', objective='minimize')],
         parameters=[
             dict(name='feat_dim', type='int', bounds=dict(min=64, max=256)),
-            dict(name='num_conv', type='int', bounds=dict(min=2, max=4)),
-            dict(name='n_rbf', type='int', bounds=dict(min=10, max=30)),
-            dict(name='batch_size', type='int', bounds=dict(min=16, max=64)),
-            dict(name='cutoff', type='double', bounds=dict(min=4.0, max=6.0)),
+            dict(name='num_conv', type='int', bounds=dict(min=2, max=5)),
+            dict(name='n_rbf', type='int', bounds=dict(min=8, max=64)),
+            dict(name='batch_size', type='int', bounds=dict(min=8, max=64)),
+            dict(name='cutoff', type='double', bounds=dict(min=4.0, max=8.0)),
             dict(name='lr', type='double', bounds=dict(min=1e-6, max=1e-3)),
         ],
         observation_budget=n_obs, # how many iterations to run for the optimization
