@@ -21,7 +21,7 @@ setup(
     ],
     python_requires=">=3.5",
     install_requires=[
-        "pytorch>=1.4.0",
+        "torch>=1.4.0",
         "numpy",
         "ase>=3.19.1",
         "scikit-learn>=0.23.1",
