@@ -152,8 +152,9 @@ class DiabaticReadout(nn.Module):
 
         for k, this_grad in enumerate(split_grads):
             this_u = u[k]
-            ad_grad = torch.einsum('ki, klnm, lj -> jinm',
+            ad_grad = torch.einsum('ki, klnm, lj -> ijnm',
                                    this_u, this_grad, this_u)
+
             num_states = ad_grad.shape[0]
             for i in range(num_states):
                 for j in range(num_states):
