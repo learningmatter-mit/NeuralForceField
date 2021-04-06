@@ -13,10 +13,11 @@ from train import train
 from forcepai import ForcePai
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-logdir", type=str, default='minkaixu/fpai_ethanol')
-parser.add_argument("-device", type=int, default=0)
-parser.add_argument("-data", type=str, default='ethanol_dft')
-parser.add_argument("-id", type=int, default=None)
+parser.add_argument("--logdir", type=str, default='minkaixu/fpai_ethanol')
+parser.add_argument("--device", type=int, default=0)
+parser.add_argument("--data", type=str, default='ethanol_dft')
+parser.add_argument("--epoch", type=int, default=3000)
+parser.add_argument("--id", type=int, default=None)
 parser.add_argument("--dry_run", action='store_true', default=False)
 params = vars(parser.parse_args())
 
@@ -26,7 +27,7 @@ if params['dry_run']:
     n_obs = 2
 else:
     token = 'JGTKFUYDJMOKBMDFXICMGNEFBXOOSIPAVSGUWPSMJCVDWYMA'
-    n_epochs = 2000 
+    n_epochs = params['epoch']
     n_obs = 1000
 
 
