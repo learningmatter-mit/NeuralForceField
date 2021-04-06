@@ -8,12 +8,14 @@ from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
                                   EmbeddingBlock, ReadoutBlock,
                                   TransformerMessageBlock,
                                   NbrEmbeddingBlock)
-from nff.nn.modules.schnet import (AttentionPool, SumPool, MolFpPool)
+from nff.nn.modules.schnet import (AttentionPool, SumPool, MolFpPool,
+                                   MeanPool)
 from nff.nn.modules.diabat import DiabaticReadout
 from nff.nn.layers import (Diagonalize, ExpNormalBasis)
 
 
 POOL_DIC = {"sum": SumPool,
+            "mean": MeanPool,
             "attention": AttentionPool,
             "mol_fp": MolFpPool}
 

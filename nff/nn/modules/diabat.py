@@ -98,12 +98,26 @@ class DiabaticReadout(nn.Module):
 
         return d_mat
 
+    def compute_eig(self, d_mat):
+        dim = d_mat.shape[-1]
+        # do analytically if possible to avoid sign ambiguity
+        # in the eigenvectors, which leads to worse training
+        # results for the nacv
+        if dim == 2:
+            ad_energies, u = self.diag(d_mat)
+        # otherwise do numerically
+        else:
+            ad_energies, u = torch.symeig(d_mat, True)
+
+        return ad_energies, u
+
     def add_diag(self,
                  results,
                  num_atoms):
 
         d_mat = self.results_to_dmat(results, num_atoms)
-        ad_energies, u = torch.symeig(d_mat, True)
+        # ad_energies, u = torch.symeig(d_mat, True)
+        ad_energies, u = self.compute_eig(d_mat)
         results.update({key: ad_energies[:, i].reshape(-1, 1)
                         for i, key in enumerate(self.energy_keys)})
 

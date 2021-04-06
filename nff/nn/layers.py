@@ -310,24 +310,10 @@ class Diagonalize(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def _generate_inputs(self, inputs):
-        if inputs.shape[-2:] == torch.Size([2, 2]):
-            if not all(inputs[:, 1][:, 0] == inputs[:, 0][:, 1]):
-                raise Exception("Matrix must be Hermitian")
-            d0 = inputs[:, 0, 0]
-            d1 = inputs[:, 1, 1]
-            lam = inputs[:, 0, 1]
-        elif inputs.shape[-1] == 3:
-            d0 = inputs[:, 0]
-            d1 = inputs[:, 1]
-            lam = inputs[:, 2]
-        elif inputs.shape[0] == 3:
-            d0 = inputs[0, :]
-            d1 = inputs[1, :]
-            lam = inputs[2, :]
-        else:
-            raise NotImplementedError(
-                "Only implemented for 2x2 matrix diagonalization")
+    def _generate_inputs(self, d_mat):
+        d0 = d_mat[:, 0, 0]
+        d1 = d_mat[:, 1, 1]
+        lam = d_mat[:, 0, 1]
 
         return d0, d1, lam
 
@@ -368,9 +354,9 @@ class Diagonalize(nn.Module):
         return U
 
     def forward(self,
-                inputs):
+                d_mat):
 
-        d0, d1, lam = self._generate_inputs(inputs)
+        d0, d1, lam = self._generate_inputs(d_mat)
         e0 = 1 / 2 * (d0 + d1 - ((d0 - d1) ** 2 + 4 * lam ** 2 + EPS) ** 0.5)
         e1 = 1 / 2 * (d0 + d1 + ((d0 - d1) ** 2 + 4 * lam ** 2 + EPS) ** 0.5)
 
@@ -379,17 +365,6 @@ class Diagonalize(nn.Module):
                            d1=d1,
                            lam=lam,
                            e0=e0)
-
-        # import pdb
-        # pdb.set_trace()
-
-        # h = torch.cat([d0.reshape(-1, 1),
-        #                lam.reshape(-1, 1),
-        #                lam.reshape(-1, 1),
-        #                d1.reshape(-1, 1)],
-        #               dim=-1).reshape(-1, 2, 2)
-
-        # eigs, U  = torch.symeig(h, True)
 
         return eigs, U
 

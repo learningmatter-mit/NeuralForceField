@@ -1037,7 +1037,8 @@ def sum_and_grad(batch,
                  xyz,
                  atomwise_output,
                  grad_keys,
-                 out_keys=None):
+                 out_keys=None,
+                 mean=False):
 
     N = batch["num_atoms"].detach().cpu().tolist()
     results = {}
@@ -1049,8 +1050,9 @@ def sum_and_grad(batch,
             continue
         # split the outputs into those of each molecule
         split_val = torch.split(val, N)
-        # sum the results for each molecule
-        results[key] = torch.stack([i.sum() for i in split_val])
+        # sum or avg the results for each molecule
+        attr = "mean" if mean else "sum"
+        results[key] = torch.stack([getattr(i, attr)() for i in split_val])
 
     # compute gradients
 
@@ -1078,6 +1080,25 @@ class SumPool(nn.Module):
                                atomwise_output=atomwise_output,
                                grad_keys=grad_keys,
                                out_keys=out_keys)
+        return results
+
+
+class MeanPool(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self,
+                batch,
+                xyz,
+                atomwise_output,
+                grad_keys,
+                out_keys=None):
+        results = sum_and_grad(batch=batch,
+                               xyz=xyz,
+                               atomwise_output=atomwise_output,
+                               grad_keys=grad_keys,
+                               out_keys=out_keys,
+                               mean=True)
         return results
 
 
