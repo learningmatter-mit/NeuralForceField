@@ -50,7 +50,7 @@ if params['id'] == None:
             dict(name='cutoff', type='double', bounds=dict(min=3.5, max=6.0)),
             dict(name='n_bilinear', type='int', bounds=dict(min=4, max=12)),
             dict(name='activation', type='categorical', categorical_values= ["Tanh" ,"ReLU" ,"shifted_softplus" ,
-                                                                            "sigmoid"  ,"Dropout"  ,"LeakyReLU",
+                                                                            "sigmoid"  ,"LeakyReLU",
                                                                             "ELU" ,"swish"]),
             dict(name='n_convolutions', type='int', bounds=dict(min=2, max=7)),
         ],

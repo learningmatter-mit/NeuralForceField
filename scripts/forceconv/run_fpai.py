@@ -22,7 +22,7 @@ parser.add_argument("--dry_run", action='store_true', default=False)
 params = vars(parser.parse_args())
 
 if params['dry_run']:
-    token = 'FSDXBSGDUZUQEDGDCYPCXFTRXFNYBVXVACKZQUWNSOKGKGFN'
+    token = 'GMBSZWXFWPHHUCXSDYLLCBBCBTKZUBVCBQRMCMXEFNEYGCFY'
     params['epoch'] = 2
     n_obs = 2
 else:

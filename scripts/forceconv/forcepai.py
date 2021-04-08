@@ -7,6 +7,7 @@ import copy
 from nff.utils.tools import make_directed
 from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
                                   EmbeddingBlock, ReadoutBlock)
+from nff.nn.layers import PainnRadialBasis, CosineEnvelope
 from nff.nn.modules.schnet import (AttentionPool, SumPool)
 # from nff.nn.modules.diabat import DiabaticReadout
 # from nff.nn.layers import Diagonalize
@@ -19,8 +20,25 @@ from nff.utils.tools import layer_types
 # POOL_DIC = {"sum": SumPool,
 #             "attention": AttentionPool}
 
+EPS = 1e-15
+
+
 def to_module(activation):
     return layer_types[activation]()
+
+def norm(vec):
+    result = ((vec ** 2 + EPS).sum(-1)) ** 0.5
+    return result
+
+def preprocess_r(r_ij):
+    """
+    r_ij (n_nbrs x 3): tensor of interatomic vectors (r_j - r_i)
+    """
+
+    dist = norm(r_ij)
+    unit = r_ij / dist.reshape(-1, 1)
+
+    return dist, unit
 
 class EdgeReadoutBlock(nn.Module):
     def __init__(self,
@@ -44,7 +62,138 @@ class EdgeReadoutBlock(nn.Module):
     def forward(self, e):
         
         return self.edgereadout(e)
+class InvariantDense(nn.Module):
+    def __init__(self,
+                 dim,
+                 dropout,
+                 activation='swish'):
+        super().__init__()
+        self.layers = nn.Sequential(Dense(in_features=dim,
+                                          out_features=dim,
+                                          bias=True,
+                                          dropout_rate=dropout,
+                                          activation=to_module(activation)),
+                                    Dense(in_features=dim,
+                                          out_features=3 * dim,
+                                          bias=True,
+                                          dropout_rate=dropout))
 
+    def forward(self, s_j):
+        output = self.layers(s_j)
+        return output
+
+
+class DistanceEmbed(nn.Module):
+    def __init__(self,
+                 n_rbf,
+                 cutoff,
+                 feat_dim,
+                 learnable_k,
+                 dropout):
+
+        super().__init__()
+        rbf = PainnRadialBasis(n_rbf=n_rbf,
+                               cutoff=cutoff,
+                               learnable_k=learnable_k)
+        dense = Dense(in_features=n_rbf,
+                      out_features=3 * feat_dim,
+                      bias=True,
+                      dropout_rate=dropout)
+        self.block = nn.Sequential(rbf, dense)
+        self.f_cut = CosineEnvelope(cutoff=cutoff)
+
+    def forward(self, dist):
+        rbf_feats = self.block(dist)
+        envelope = self.f_cut(dist).reshape(-1, 1)
+        output = rbf_feats * envelope
+
+        return output
+
+
+class InvariantMessage(nn.Module):
+    def __init__(self,
+                 feat_dim,
+                 activation,
+                 n_rbf,
+                 cutoff,
+                 learnable_k,
+                 dropout):
+        super().__init__()
+
+        self.inv_dense = InvariantDense(dim=feat_dim,
+                                        activation=activation,
+                                        dropout=dropout)
+        self.dist_embed = DistanceEmbed(n_rbf=n_rbf,
+                                        cutoff=cutoff,
+                                        feat_dim=feat_dim,
+                                        learnable_k=learnable_k,
+                                        dropout=dropout)
+
+    def forward(self,
+                s_j,
+                dist,
+                nbrs):
+
+        phi = self.inv_dense(s_j)[nbrs[:, 1]]
+        w_s = self.dist_embed(dist)
+        output = phi * w_s
+
+        # split into three components, so the tensor now has
+        # shape n_atoms x 3 x feat_dim
+        out_reshape = output.reshape(output.shape[0], 3, -1)
+
+        return out_reshape
+
+
+class MessageBlock(nn.Module):
+    def __init__(self,
+                 feat_dim,
+                 activation,
+                 n_rbf,
+                 cutoff,
+                 learnable_k,
+                 dropout):
+        super().__init__()
+        self.inv_message = InvariantMessage(feat_dim=feat_dim,
+                                            activation=activation,
+                                            n_rbf=n_rbf,
+                                            cutoff=cutoff,
+                                            learnable_k=learnable_k,
+                                            dropout=dropout)
+
+    def forward(self,
+                s_j,
+                v_j,
+                r_ij,
+                nbrs):
+
+        dist, unit = preprocess_r(r_ij)
+        inv_out = self.inv_message(s_j=s_j,
+                                   dist=dist,
+                                   nbrs=nbrs)
+
+        split_0 = inv_out[:, 0, :].unsqueeze(-1)
+        split_1 = inv_out[:, 1, :]
+        split_2 = inv_out[:, 2, :].unsqueeze(-1)
+
+        unit_add = split_2 * unit.unsqueeze(1)
+        delta_v_ij = unit_add + split_0 * v_j[nbrs[:, 1]]
+        delta_s_ij = split_1
+
+        # add results from neighbors of each node
+
+        # graph_size = s_j.shape[0]
+        # delta_v_i = scatter_add(src=delta_v_ij,
+        #                         index=nbrs[:, 0],
+        #                         dim=0,
+        #                         dim_size=graph_size)
+
+        # delta_s_i = scatter_add(src=delta_s_ij,
+        #                         index=nbrs[:, 0],
+        #                         dim=0,
+        #                         dim_size=graph_size)
+
+        return delta_s_ij, delta_v_ij
 
 
 class ForcePai(nn.Module):
@@ -131,29 +280,6 @@ class ForcePai(nn.Module):
                     out_features=1, 
                     dropout_rate=readout_dropout)
         )
-        # self.edgereadout = EdgeReadoutBlock(feat_dim=feat_dim,
-        #                                     activation=activation,
-        #                                     dropout=readout_dropout)
-        # self.readout_blocks = nn.ModuleList(
-        #     [ReadoutBlock(feat_dim=feat_dim,
-        #                   output_keys=output_keys,
-        #                   activation=activation,
-        #                   dropout=readout_dropout,
-        #                   means=means,
-        #                   stddevs=stddevs)
-        #      for _ in range(num_readouts)]
-        # )
-
-        # if pool_dic is None:
-        #     self.pool_dic = {key: SumPool() for key
-        #                      in self.output_keys}
-        # else:
-        #     self.pool_dic = nn.ModuleDict({})
-        #     for out_key, sub_dic in pool_dic.items():
-        #         pool_name = sub_dic["name"].lower()
-        #         kwargs = sub_dic["param"]
-        #         pool_class = POOL_DIC[pool_name]
-        #         self.pool_dic[out_key] = pool_class(**kwargs)
 
     def atomwise(self,
                  batch,
@@ -192,10 +318,23 @@ class ForcePai(nn.Module):
         for i, message_block in enumerate(self.message_blocks):
 
             # message block
-            ds_message, dv_message = message_block(s_j=s_i,
+
+            ds_message_ij, dv_message_ij = message_block(s_j=s_i,
                                                    v_j=v_i,
                                                    r_ij=r_ij,
                                                    nbrs=nbrs)
+
+
+            dv_message = scatter_add(src=dv_message_ij,
+                                index=nbrs[:, 0],
+                                dim=0,
+                                dim_size=graph_size)
+
+            ds_message = scatter_add(src=ds_message_ij,
+                                index=nbrs[:, 0],
+                                dim=0,
+                                dim_size=graph_size)
+
             s_i = s_i + ds_message
             v_i = v_i + dv_message
 
@@ -207,13 +346,15 @@ class ForcePai(nn.Module):
             v_i = v_i + dv_update
 
             # edge block
+
+            #import ipdb; ipdb.set_trace()
+
             edge_update_block = self.edge_update[i]
-            de_update = edge_update_block(s_i[nbrs[:, 0]] + s_i[nbrs[:, 1]])
+            de_update = edge_update_block(ds_message_ij)
             e_ij = e_ij + de_update
 
         f_edge = self.edgereadout(e_ij) * xyz_adjoint
-        f_atom = scatter_add(f_edge, nbrs[:,0], dim=0, dim_size=graph_size) - \
-            scatter_add(f_edge, nbrs[:,1], dim=0, dim_size=graph_size)
+        f_atom = scatter_add(f_edge, nbrs[:,0], dim=0, dim_size=graph_size)
 
         results['energy_grad'] = f_atom
 
