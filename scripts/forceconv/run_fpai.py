@@ -46,7 +46,7 @@ if params['id'] == None:
             dict(name='n_rbf', type='int', bounds=dict(min=8, max=64)),
             dict(name='batch_size', type='int', bounds=dict(min=8, max=64)),
             dict(name='cutoff', type='double', bounds=dict(min=4.0, max=8.0)),
-            dict(name='lr', type='double', bounds=dict(min=1e-6, max=1e-3),transformation="log"),
+            dict(name='lr', type='double', bounds=dict(min=1e-6, max=1e-2),transformation="log"),
         ],
         observation_budget=n_obs, # how many iterations to run for the optimization
         parallel_bandwidth=10,
