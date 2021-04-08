@@ -346,9 +346,6 @@ class ForcePai(nn.Module):
             v_i = v_i + dv_update
 
             # edge block
-
-            #import ipdb; ipdb.set_trace()
-
             edge_update_block = self.edge_update[i]
             de_update = edge_update_block(ds_message_ij)
             e_ij = e_ij + de_update
