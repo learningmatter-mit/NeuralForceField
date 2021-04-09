@@ -5,8 +5,9 @@ import numpy as np
 import copy
 
 from nff.utils.tools import make_directed
-from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
-                                  EmbeddingBlock, ReadoutBlock)
+from nff.nn.modules.painn import (DistanceEmbed, MessageBlock, UpdateBlock,
+                                  EmbeddingBlock, ReadoutBlock, 
+                                  to_module, norm)
 from nff.nn.modules.schnet import (AttentionPool, SumPool)
 # from nff.nn.modules.diabat import DiabaticReadout
 # from nff.nn.layers import Diagonalize
@@ -18,33 +19,6 @@ from nff.utils.tools import layer_types
 
 # POOL_DIC = {"sum": SumPool,
 #             "attention": AttentionPool}
-
-def to_module(activation):
-    return layer_types[activation]()
-
-class EdgeReadoutBlock(nn.Module):
-    def __init__(self,
-                 feat_dim,
-                 activation,
-                 dropout):
-        super().__init__()
-
-        self.edgereadout = Sequential(
-            Dense(in_features=feat_dim, 
-                  out_features=feat_dim//2,
-                  bias=True,
-                  dropout_rate=dropout,
-                  activation=to_module(activation)),
-            Dense(in_features=feat_dim//2, 
-                  out_features=1,
-                  bias=True,
-                  dropout_rate=dropout)
-            )
-
-    def forward(self, e):
-        
-        return self.edgereadout(e)
-
 
 
 class ForcePai(nn.Module):
@@ -75,11 +49,11 @@ class ForcePai(nn.Module):
         # embedding layers
         self.embed_block = EmbeddingBlock(feat_dim=feat_dim)
         # distance transform
-        self.smear = GaussianSmearing(start=0.0, stop=cutoff, n_gaussians=n_rbf)
-        self.edgefilter = Sequential(
-            Dense(in_features=n_rbf, out_features=2*feat_dim, bias=True),
-            shifted_softplus(),
-            Dense(in_features=2*feat_dim, out_features=feat_dim))
+        self.dist_embed = DistanceEmbed(n_rbf=n_rbf,
+                                        cutoff=cutoff,
+                                        feat_dim=feat_dim,
+                                        learnable_k=learnable_k,
+                                        dropout=conv_dropout)
         
         self.message_blocks = nn.ModuleList(
             [MessageBlock(feat_dim=feat_dim,
@@ -105,10 +79,14 @@ class ForcePai(nn.Module):
         # edge_update.append(Dense(in_features=2*feat_dim, out_features=feat_dim))
         self.edge_update = nn.ModuleList(
             [nn.Sequential(Dense(in_features=feat_dim, 
-                                out_features=2*feat_dim), 
-                          shifted_softplus(),
+                                 out_features=2*feat_dim,
+                                 bias=True,
+                                 dropout_rate=conv_dropout,
+                                 activation=to_module(activation)), 
                           Dense(in_features=2*feat_dim, 
-                                out_features=feat_dim))
+                                out_features=3*feat_dim,
+                                bias=True,
+                                dropout_rate=conv_dropout))
             for _ in range(num_conv)]
         )
 
@@ -122,14 +100,14 @@ class ForcePai(nn.Module):
 
         # edge readout 
         self.edgereadout = Sequential(
-            Dense(in_features=feat_dim, 
-                    out_features=feat_dim, 
-                    bias=True, 
-                    dropout_rate=readout_dropout),
-            shifted_softplus(),
-            Dense(in_features=feat_dim, 
-                    out_features=1, 
-                    dropout_rate=readout_dropout)
+            Dense(in_features=3*feat_dim, 
+                  out_features=feat_dim*2, 
+                  bias=True, 
+                  dropout_rate=readout_dropout,
+                  activation=to_module(activation)),
+            Dense(in_features=feat_dim*2, 
+                  out_features=1, 
+                  dropout_rate=readout_dropout)
         )
         # self.edgereadout = EdgeReadoutBlock(feat_dim=feat_dim,
         #                                     activation=activation,
@@ -181,11 +159,10 @@ class ForcePai(nn.Module):
         graph_size = z_numbers.shape[0]
 
         # edge features
-        dis_vec = xyz[nbrs[:, 0]] - xyz[nbrs[:, 1]]
-        dis = dis_vec.pow(2).sum(1).sqrt()[:, None]
-        xyz_adjoint = dis_vec / dis
-        e_ij = self.smear(dis)
-        e_ij = self.edgefilter(e_ij)
+        dis_vec = r_ij
+        dis = norm(r_ij)
+        xyz_adjoint = dis_vec / dis.unsqueeze(-1)
+        e_ij = self.dist_embed(dis)
 
         results = {}
 
