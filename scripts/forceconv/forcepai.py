@@ -200,7 +200,7 @@ class ForcePai(nn.Module):
                                                    v_j=v_i,
                                                    r_ij=r_ij,
                                                    nbrs=nbrs,
-                                                   e_ij=e_ij)
+                                                   e_ij=None)
             s_i = s_i + ds_message
             v_i = v_i + dv_message
 
