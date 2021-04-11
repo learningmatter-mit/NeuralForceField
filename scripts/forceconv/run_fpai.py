@@ -22,7 +22,7 @@ parser.add_argument("--dry_run", action='store_true', default=False)
 params = vars(parser.parse_args())
 
 if params['dry_run']:
-    token = 'FSDXBSGDUZUQEDGDCYPCXFTRXFNYBVXVACKZQUWNSOKGKGFN'
+    token = 'GMBSZWXFWPHHUCXSDYLLCBBCBTKZUBVCBQRMCMXEFNEYGCFY'
     params['epoch'] = 2
     n_obs = 2
 else:
@@ -60,7 +60,15 @@ while experiment.progress.observation_count < experiment.observation_budget:
 
     suggestion = conn.experiments(experiment.id).suggestions().create()
 
-    test_mae = train(params, suggestion, ForcePai, params['epoch'])
+    # tranform parameter s
+    trainparam = suggestion.assignments
+    trainparam['feat_dim'] = 2**trainparam['feat_dim']
+    trainparam['n_rbf'] = 2**trainparam['n_rbf']
+    trainparam['batch_size'] = 2**trainparam['batch_size']
+    trainparam['num_conv'] = 3
+    print(trainparam)
+
+    test_mae = train(params, trainparam, id,  ForcePai, params['epoch'])
     # updat result to server
     conn.experiments(experiment.id).observations().create(
       suggestion=suggestion.id,

@@ -10,14 +10,7 @@ from nff.data import Dataset, split_train_validation_test, collate_dicts, to_ten
 from nff.train import Trainer, get_trainer, get_model, load_model, loss, hooks, metrics, evaluate
 from MD17data import *
 
-def train(params, suggestion, model, n_epochs, angle=False):
-    
-    trainparam = suggestion.assignments
-    trainparam['feat_dim'] = 2**trainparam['feat_dim']
-    trainparam['n_rbf'] = 2**trainparam['n_rbf']
-    trainparam['batch_size'] = 2**trainparam['batch_size']
-    trainparam['num_conv'] = 3
-    print(trainparam)
+def train(params, trainparam, id, model, n_epochs, angle=False, train_energy=False):
     
     # get data 
     data = get_MD17data(params['data'])
@@ -37,8 +30,14 @@ def train(params, suggestion, model, n_epochs, angle=False):
         model = model(**trainparam)
     except:
         model = model(trainparam)
+
+    loss_dict = {'energy_grad': 1}
+
+    if train_energy:
+        loss_dict['energy'] = 0.01
+
     
-    loss_fn = loss.build_mse_loss(loss_coef={'energy_grad': 1})
+    loss_fn = loss.build_mse_loss(loss_coef=loss_dict)
     
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
     optimizer = Adam(trainable_params, lr=trainparam['lr'])
@@ -47,7 +46,7 @@ def train(params, suggestion, model, n_epochs, angle=False):
     ]
 
     DEVICE = params['device']
-    OUTDIR = '{}/{}/sandbox'.format(params['logdir'], suggestion.id)
+    OUTDIR = '{}/{}/sandbox'.format(params['logdir'], id)
 
     print(OUTDIR)
 
