@@ -60,14 +60,6 @@ while experiment.progress.observation_count < experiment.observation_budget:
 
     suggestion = conn.experiments(experiment.id).suggestions().create()
 
-    trainparam = suggestion.assignments
-
-    trainparam['feat_dim'] = 2**trainparam['feat_dim']
-    trainparam['n_rbf'] = 2**trainparam['n_rbf']
-    trainparam['batch_size'] = 2**trainparam['batch_size']
-    trainparam['num_conv'] = 3
-    print(trainparam)
-
     test_mae = train(params, suggestion, ForcePai, params['epoch'])
     # updat result to server
     conn.experiments(experiment.id).observations().create(

@@ -11,7 +11,13 @@ from nff.train import Trainer, get_trainer, get_model, load_model, loss, hooks, 
 from MD17data import *
 
 def train(params, suggestion, model, n_epochs, angle=False):
+    
     trainparam = suggestion.assignments
+    trainparam['feat_dim'] = 2**trainparam['feat_dim']
+    trainparam['n_rbf'] = 2**trainparam['n_rbf']
+    trainparam['batch_size'] = 2**trainparam['batch_size']
+    trainparam['num_conv'] = 3
+    print(trainparam)
     
     # get data 
     data = get_MD17data(params['data'])
