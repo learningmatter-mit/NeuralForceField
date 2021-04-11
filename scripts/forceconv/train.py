@@ -35,7 +35,6 @@ def train(params, trainparam, id, model, n_epochs, angle=False, train_energy=Fal
 
     if train_energy:
         loss_dict['energy'] = 0.01
-
     
     loss_fn = loss.build_mse_loss(loss_coef=loss_dict)
     
