@@ -41,12 +41,12 @@ if params['id'] == None:
         name=logdir,
         metrics=[dict(name='loss', objective='minimize')],
         parameters=[
-            dict(name='feat_dim', type='int', bounds=dict(min=64, max=256)),
-            dict(name='num_conv', type='int', bounds=dict(min=2, max=5)),
-            dict(name='n_rbf', type='int', bounds=dict(min=8, max=64)),
-            dict(name='batch_size', type='int', bounds=dict(min=8, max=64)),
-            dict(name='cutoff', type='double', bounds=dict(min=4.0, max=8.0)),
-            dict(name='lr', type='double', bounds=dict(min=1e-6, max=1e-2), transformation="log"),
+            dict(name='feat_dim', type="int", bounds=dict(min=6, max=9), default_value=7),  # 64->512
+            dict(name='num_conv', type='int', bounds=dict(min=2, max=5), default_value=3),
+            dict(name='n_rbf', type='int', bounds=dict(min=2, max=5), default_value=3),  # 4->32
+            dict(name='batch_size', type='int', bounds=dict(min=2, max=5), default_value=3),  # 4->32
+            dict(name='cutoff', type='double', bounds=dict(min=6.0, max=8.0), default_value=7),
+            dict(name='lr', type='double', bounds=dict(min=1e-5, max=1e-3), default_value=5e-4, transformation="log"),
         ],
         observation_budget=n_obs, # how many iterations to run for the optimization
         parallel_bandwidth=10,
@@ -62,6 +62,9 @@ while experiment.progress.observation_count < experiment.observation_budget:
 
     trainparam = suggestion.assignments
 
+    trainparam['feat_dim'] = 2**trainparam['feat_dim']
+    trainparam['n_rbf'] = 2**trainparam['n_rbf']
+    trainparam['batch_size'] = 2**trainparam['batch_size']
     print(trainparam)
 
     test_mae = train(params, suggestion, ForcePai, params['epoch'])

@@ -11,7 +11,7 @@ from nff.nn.modules.painn import (DistanceEmbed, MessageBlock, UpdateBlock,
 from nff.nn.modules.schnet import (AttentionPool, SumPool)
 # from nff.nn.modules.diabat import DiabaticReadout
 # from nff.nn.layers import Diagonalize
-from nff.nn.layers import GaussianSmearing, Dense
+from nff.nn.layers import GaussianSmearing, Dense, PainnRadialBasis, CosineEnvelope
 from nff.nn.activations import shifted_softplus
 from nff.utils.scatter import scatter_add
 from nff.utils.tools import layer_types
@@ -19,6 +19,32 @@ from nff.utils.tools import layer_types
 
 # POOL_DIC = {"sum": SumPool,
 #             "attention": AttentionPool}
+
+class DistEmb(nn.Module):
+    def __init__(self,
+                 n_rbf,
+                 cutoff,
+                 feat_dim,
+                 learnable_k,
+                 dropout):
+
+        super().__init__()
+        rbf = PainnRadialBasis(n_rbf=n_rbf,
+                               cutoff=cutoff,
+                               learnable_k=learnable_k)
+        dense = Dense(in_features=n_rbf,
+                      out_features=feat_dim,
+                      bias=True,
+                      dropout_rate=dropout)
+        self.block = nn.Sequential(rbf, dense)
+        self.f_cut = CosineEnvelope(cutoff=cutoff)
+
+    def forward(self, dist):
+        rbf_feats = self.block(dist)
+        envelope = self.f_cut(dist).reshape(-1, 1)
+        output = rbf_feats * envelope
+
+        return output
 
 
 class ForcePai(nn.Module):
@@ -49,11 +75,11 @@ class ForcePai(nn.Module):
         # embedding layers
         self.embed_block = EmbeddingBlock(feat_dim=feat_dim)
         # distance transform
-        self.dist_embed = DistanceEmbed(n_rbf=n_rbf,
-                                        cutoff=cutoff,
-                                        feat_dim=feat_dim,
-                                        learnable_k=learnable_k,
-                                        dropout=conv_dropout)
+        self.dist_embed = DistEmb(n_rbf=n_rbf,
+                                  cutoff=cutoff,
+                                  feat_dim=feat_dim,
+                                  learnable_k=learnable_k,
+                                  dropout=conv_dropout)
         
         self.message_blocks = nn.ModuleList(
             [MessageBlock(feat_dim=feat_dim,
@@ -83,10 +109,10 @@ class ForcePai(nn.Module):
                                  bias=True,
                                  dropout_rate=conv_dropout,
                                  activation=to_module(activation)), 
-                          Dense(in_features=2*feat_dim, 
-                                out_features=3*feat_dim,
-                                bias=True,
-                                dropout_rate=conv_dropout))
+                           Dense(in_features=2*feat_dim, 
+                                 out_features=feat_dim,
+                                 bias=True,
+                                 dropout_rate=conv_dropout))
             for _ in range(num_conv)]
         )
 
@@ -100,13 +126,14 @@ class ForcePai(nn.Module):
 
         # edge readout 
         self.edgereadout = Sequential(
-            Dense(in_features=3*feat_dim, 
+            Dense(in_features=feat_dim, 
                   out_features=feat_dim*2, 
                   bias=True, 
                   dropout_rate=readout_dropout,
                   activation=to_module(activation)),
             Dense(in_features=feat_dim*2, 
                   out_features=1, 
+                  bias=True,
                   dropout_rate=readout_dropout)
         )
         # self.edgereadout = EdgeReadoutBlock(feat_dim=feat_dim,
@@ -172,7 +199,8 @@ class ForcePai(nn.Module):
             ds_message, dv_message = message_block(s_j=s_i,
                                                    v_j=v_i,
                                                    r_ij=r_ij,
-                                                   nbrs=nbrs)
+                                                   nbrs=nbrs,
+                                                   e_ij=e_ij)
             s_i = s_i + ds_message
             v_i = v_i + dv_message
 

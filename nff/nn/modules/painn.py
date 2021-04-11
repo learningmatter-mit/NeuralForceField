@@ -96,14 +96,22 @@ class InvariantMessage(nn.Module):
                                         feat_dim=feat_dim,
                                         learnable_k=learnable_k,
                                         dropout=dropout)
+        self.edge_embed = Dense(in_features=feat_dim,
+                                out_features=3 * feat_dim,
+                                bias=True,
+                                dropout_rate=dropout)
 
     def forward(self,
                 s_j,
                 dist,
-                nbrs):
+                nbrs,
+                e_ij=None):
 
         phi = self.inv_dense(s_j)[nbrs[:, 1]]
-        w_s = self.dist_embed(dist)
+        if e_ij is None:
+            w_s = self.dist_embed(dist)
+        else:
+            w_s = self.edge_embed(e_ij)
         output = phi * w_s
 
         # split into three components, so the tensor now has
@@ -133,12 +141,14 @@ class MessageBlock(nn.Module):
                 s_j,
                 v_j,
                 r_ij,
-                nbrs):
+                nbrs,
+                e_ij=None):
 
         dist, unit = preprocess_r(r_ij)
         inv_out = self.inv_message(s_j=s_j,
                                    dist=dist,
-                                   nbrs=nbrs)
+                                   nbrs=nbrs,
+                                   e_ij=e_ij)
 
         split_0 = inv_out[:, 0, :].unsqueeze(-1)
         split_1 = inv_out[:, 1, :]
