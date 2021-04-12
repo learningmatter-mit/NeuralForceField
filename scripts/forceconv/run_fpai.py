@@ -1,5 +1,6 @@
 
 import argparse
+from decimal import Decimal
 from sigopt import Connection
 import sys
 sys.path.insert(0, "..")
@@ -45,10 +46,10 @@ if params['id'] == None:
             # dict(name='num_conv', type='int', bounds=dict(min=2, max=4), default_value=3),
             dict(name='n_rbf', type='int', bounds=dict(min=2, max=6), default_value=3),  # 4->32
             dict(name='batch_size', type='int', bounds=dict(min=2, max=6), default_value=3),  # 4->32
-            dict(name='cutoff', type='double', bounds=dict(min=4.0, max=8.0), default_value=7, precision=1),
-            dict(name='lr', type='double', bounds=dict(min=1e-4, max=2e-3), default_value=5e-4, transformation="log"),
-            dict(name='conv_dropout', type='double', bounds=dict(min=0.0, max=0.2), default_value=0.0, precision=1),
-            dict(name='readout_dropout', type='double', bounds=dict(min=0.0, max=0.5), default_value=0.0, precision=1),
+            dict(name='cutoff', type='double', bounds=dict(min=4.0, max=8.0), default_value=7),
+            dict(name='lr', type='double', bounds=dict(min=1e-4, max=1e-3), default_value=5e-4, transformation="log"),
+            # dict(name='conv_dropout', type='double', bounds=dict(min=0.0, max=0.1), default_value=0.0, precision=1),
+            dict(name='readout_dropout', type='double', bounds=dict(min=0.0, max=0.5), default_value=0.0),
         ],
         observation_budget=n_obs, # how many iterations to run for the optimization
         parallel_bandwidth=10,
@@ -64,10 +65,12 @@ while experiment.progress.observation_count < experiment.observation_budget:
 
     # tranform parameter s
     trainparam = suggestion.assignments
+    ## exp process
     # trainparam['feat_dim'] = 2**trainparam['feat_dim']
     trainparam['n_rbf'] = 2**trainparam['n_rbf']
     trainparam['batch_size'] = 2**trainparam['batch_size']
-    # constant
+    ## constant
+    trainparam['conv_dropout'] = 0.0
     trainparam['num_conv'] = 3
     trainparam['feat_dim'] = 256
     print(trainparam)
