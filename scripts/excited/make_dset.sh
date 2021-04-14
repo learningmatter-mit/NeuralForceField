@@ -20,10 +20,15 @@ export HTVSDIR="/home/saxelrod/repo/htvs/master/htvs"
 export DJANGOCHEMDIR="/home/saxelrod/repo/htvs/master/htvs/djangochem"
 export NFFDIR="/home/saxelrod/repo/nff/master/NeuralForceField"
 
-# config=dset_config/job_info.json
-config=dset_config/qchem.json
+# config=dset_config/qchem.json
+# config=dset_config/gamess.json
+# config=dset_config/deg.json
+config=dset_config/qchem_tl.json
 
+# rm lin_stoich_190_70.json
 python make_dset.py --config_file $config
 
-split_config=split_config/qchem.json
-python split.py --config_file $split_config
+# split_config=split_config/qchem.json
+# split_config=split_config/gamess.json
+
+# python split.py --config_file $split_config
