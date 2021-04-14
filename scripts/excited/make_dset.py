@@ -16,9 +16,6 @@ sys.path.insert(0, NFFDIR)
 os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
 django.setup()
 
-# import errno
-# from functools import wraps
-# import signal
 import argparse
 import re
 from rdkit import Chem
@@ -89,37 +86,13 @@ def trim_overall(overall_dict, required_keys):
     return overall_dict
 
 
-# class TimeoutError(Exception):
-#     pass
-
-
-# def timeout(seconds,
-#             error_message=os.strerror(errno.ETIME)):
-#     def decorator(func):
-#         def _handle_timeout(signum, frame):
-#             raise TimeoutError(error_message)
-
-#         def wrapper(*args, **kwargs):
-#             signal.signal(signal.SIGALRM, _handle_timeout)
-#             signal.alarm(seconds)
-#             try:
-#                 result = func(*args, **kwargs)
-#             finally:
-#                 signal.alarm(0)
-#             return result
-
-#         return wraps(func)(wrapper)
-
-#     return decorator
-
-
-# @timeout(seconds=5)
 def query_spec(spec,
                only_neutral,
                method_name,
                method_descrip,
                other_method_name,
                other_method_descrip):
+
     mol = Chem.MolFromSmiles(spec.smiles)
     mol = Chem.AddHs(mol)
     charge = Chem.rdmolops.GetFormalCharge(mol)
@@ -150,8 +123,10 @@ def query_spec(spec,
                                           description=other_method_descrip)
         calcs = calcs.filter(geoms__calcs__method=other_method)
 
-    calc = (calcs.filter(geoms__isnull=False)
-            .order_by("props__totalenergy").first())
+    # calc = (calcs.filter(geoms__isnull=False)
+    #         .order_by("props__totalenergy").first())
+
+    calc = (calcs.order_by("props__totalenergy").first())
 
     if not calc:
         return
@@ -185,15 +160,12 @@ def query_converged(group_name,
     i = 0
 
     for spec in tqdm(specs):
-        try:
-            out = query_spec(spec,
-                             only_neutral,
-                             method_name,
-                             method_descrip,
-                             other_method_name,
-                             other_method_descrip)
-        except TimeoutError:
-            continue
+        out = query_spec(spec,
+                         only_neutral,
+                         method_name,
+                         method_descrip,
+                         other_method_name,
+                         other_method_descrip)
         if out is None:
             continue
 
