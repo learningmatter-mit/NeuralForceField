@@ -5,8 +5,12 @@
     "required_keys": [
         "energy_0_grad",
         "energy_1_grad",
+        "energy_2_grad",
+        "energy_3_grad",
         "energy_0",
         "energy_1",
+        "energy_2",
+        "energy_3",
         "nxyz",
         "smiles"
     ],
@@ -24,7 +28,9 @@
     "max_val_en": 300,
     "max_val_force": 300,
     "make_splits": true,
-    "deltas": [["energy_1", "energy_0"]],
+    "deltas": [["energy_1", "energy_0"],
+               ["energy_2", "energy_1"],
+               ["energy_3", "energy_2"]],
     "all_calcs_for_geom": false,
     "geomsets": null,
     "add_ground_en": true}

@@ -16,9 +16,9 @@ sys.path.insert(0, NFFDIR)
 os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
 django.setup()
 
-import errno
-from functools import wraps
-import signal
+# import errno
+# from functools import wraps
+# import signal
 import argparse
 import re
 from rdkit import Chem
@@ -80,34 +80,40 @@ def trim_overall(overall_dict, required_keys):
                 break
         if not keep:
             overall_dict.pop(key)
+            continue
+        extra_props = [i for i in sub_dic.keys()
+                       if i not in required_keys]
+        for extra in extra_props:
+            overall_dict[key].pop(extra)
+
     return overall_dict
 
 
-class TimeoutError(Exception):
-    pass
+# class TimeoutError(Exception):
+#     pass
 
 
-def timeout(seconds,
-            error_message=os.strerror(errno.ETIME)):
-    def decorator(func):
-        def _handle_timeout(signum, frame):
-            raise TimeoutError(error_message)
+# def timeout(seconds,
+#             error_message=os.strerror(errno.ETIME)):
+#     def decorator(func):
+#         def _handle_timeout(signum, frame):
+#             raise TimeoutError(error_message)
 
-        def wrapper(*args, **kwargs):
-            signal.signal(signal.SIGALRM, _handle_timeout)
-            signal.alarm(seconds)
-            try:
-                result = func(*args, **kwargs)
-            finally:
-                signal.alarm(0)
-            return result
+#         def wrapper(*args, **kwargs):
+#             signal.signal(signal.SIGALRM, _handle_timeout)
+#             signal.alarm(seconds)
+#             try:
+#                 result = func(*args, **kwargs)
+#             finally:
+#                 signal.alarm(0)
+#             return result
 
-        return wraps(func)(wrapper)
+#         return wraps(func)(wrapper)
 
-    return decorator
+#     return decorator
 
 
-@timeout(seconds=5)
+# @timeout(seconds=5)
 def query_spec(spec,
                only_neutral,
                method_name,
@@ -131,11 +137,7 @@ def query_spec(spec,
         return
 
     geoms = Geom.objects.filter(species=spec)
-
-    # print("Making calc pks...")
     calc_pks = geoms.values_list('calcs__pk')
-    # print("Finished calc pks...")
-
     calcs = Calc.objects.filter(pk__in=calc_pks,
                                 method__name=method_name,
                                 method__description=method_descrip,
@@ -146,24 +148,15 @@ def query_spec(spec,
 
         other_method = Method.objects.get(name=other_method_name,
                                           description=other_method_descrip)
-        geoms = Geom.objects.filter(species=spec,
-                                    calcs__method=other_method)
-        # print("Filtering calcs by GAMESS method...")
-        calcs = calcs.filter(geoms__in=geoms)
-        # print("Finished filtering calcs by GAMESS method")
+        calcs = calcs.filter(geoms__calcs__method=other_method)
 
-    if not calcs:
+    calc = (calcs.filter(geoms__isnull=False)
+            .order_by("props__totalenergy").first())
+
+    if not calc:
         return
-
-    # print("Ordering calcs...")
-    calc = calcs.order_by("props__totalenergy").first()
-    # print("Ordered cals")
 
     geom = calc.geoms.first()
-
-    if not geom:
-        return
-
     energy = calc.props['totalenergy']
     formula = spec.stoichiometry.formula
 
@@ -182,6 +175,11 @@ def query_converged(group_name,
     """
 
     specs = Species.objects.filter(group__name=group_name)
+
+    ####
+    # specs = specs.filter(smiles='c1ccc(/N=N/c2ccccc2)cc1')
+    ####
+
     energy_dic = {}
     geom_dic = {}
     i = 0
@@ -979,37 +977,39 @@ def update_overall(overall_dict,
     else:
         if len(props.get('excitedstates', [])) == 0:
             return overall_dict, stoich_dict
-        excited_props = props['excitedstates'][0]
-        overall_dict[geom_id].update(
-            {"energy_0": props['totalenergy'] - stoich_en,
-             "energy_1": excited_props['energy'] - stoich_en
-             }
-        )
 
-        if 'force_nacv' in excited_props:
-            exc_state_num = excited_props['absolutestate']
-            conv = 627.5 / 0.529177
+        overall_dict[geom_id].update({"energy_0": props['totalenergy']
+                                      - stoich_en})
 
-            exact_nacv = props['force_nacv'][str(exc_state_num)]
+        for i, exc_props in enumerate(props['excitedstates']):
+            overall_dict[geom_id].update({f"energy_{i+1}":
+                                          exc_props['energy']})
 
-            deriv_nacv_etf = props['deriv_nacv_etf'][str(exc_state_num)]
-            gap = excited_props["energy"] - props["totalenergy"]
+            if 'force_nacv' in exc_props:
+                exc_state_num = exc_props['absolutestate']
+                conv = 627.5 / 0.529177
 
-            # Hartree / bohr -> kcal/mol/A. Need to convert because
-            # the conversion in the NFF dataset is unknown for this key
-            exact_nacv = (torch.Tensor(exact_nacv) * conv) .tolist()
-            approx_nacv = (torch.Tensor(deriv_nacv_etf) * gap * conv).tolist()
+                exact_nacv = props['force_nacv'][str(exc_state_num)]
 
-            # use the approximate one so that there are no Hellman-Feynman
-            # assumptions being made, and instead it's just a scaling used
-            # for better training
-            overall_dict[geom_id].update({"exact_force_nacv_10": exact_nacv,
-                                          "force_nacv_10": approx_nacv})
+                deriv_nacv_etf = props['deriv_nacv_etf'][str(exc_state_num)]
+                gap = exc_props["energy"] - props["totalenergy"]
 
-        if 'forces' in excited_props:
-            force_1 = excited_props['forces']
-            overall_dict[geom_id].update(
-                {"energy_1_grad": (-torch.Tensor(force_1)).tolist()})
+                # Hartree / bohr -> kcal/mol/A. Need to convert because
+                # the conversion in the NFF dataset is unknown for this key
+                exact_nacv = (torch.Tensor(exact_nacv) * conv) .tolist()
+                approx_nacv = (torch.Tensor(deriv_nacv_etf)
+                               * gap * conv).tolist()
+
+                # use the approximate one so that there are no Hellman-Feynman
+                # assumptions being made, and instead it's just a scaling used
+                # for better training
+                overall_dict[geom_id].update({"exact_force_nacv_10": exact_nacv,
+                                              "force_nacv_10": approx_nacv})
+
+            if 'forces' in exc_props:
+                exc_force = exc_props['forces']
+                overall_dict[geom_id].update({f"energy_{i+1}_grad":
+                                              (-torch.Tensor(exc_force)).tolist()})
 
     return overall_dict, stoich_dict
 
