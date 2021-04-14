@@ -1,4 +1,4 @@
-
+import shutil
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -10,7 +10,7 @@ from nff.data import Dataset, split_train_validation_test, collate_dicts, to_ten
 from nff.train import Trainer, get_trainer, get_model, load_model, loss, hooks, metrics, evaluate
 from MD17data import *
 
-def train(params, trainparam, id, model, n_epochs, angle=False, train_energy=False):
+def train(params, trainparam, suggestionid, model, n_epochs, angle=False, train_energy=False):
     
     # get data 
     data = get_MD17data(params['data'])
@@ -23,8 +23,8 @@ def train(params, trainparam, id, model, n_epochs, angle=False, train_energy=Fal
 
     train, val, test = split_train_validation_test(dataset, val_size=0.05, test_size=0.85)
     train_loader = DataLoader(train, batch_size=trainparam['batch_size'], collate_fn=collate_dicts)
-    val_loader = DataLoader(val, batch_size=trainparam['batch_size'], collate_fn=collate_dicts)
-    test_loader = DataLoader(test, batch_size=trainparam['batch_size'], collate_fn=collate_dicts)
+    val_loader = DataLoader(val, batch_size=128, collate_fn=collate_dicts)
+    test_loader = DataLoader(test, batch_size=128, collate_fn=collate_dicts)
 
     try:
         model = model(**trainparam)
@@ -45,7 +45,7 @@ def train(params, trainparam, id, model, n_epochs, angle=False, train_energy=Fal
     ]
 
     DEVICE = params['device']
-    OUTDIR = '{}/{}/sandbox'.format(params['logdir'], id)
+    OUTDIR = '{}/{}/sandbox'.format(params['logdir'], suggestionid)
 
     print(OUTDIR)
 
@@ -70,7 +70,7 @@ def train(params, trainparam, id, model, n_epochs, angle=False, train_energy=Fal
         hooks.ReduceLROnPlateauHook(
             optimizer=optimizer,
             patience=20,
-            factor=0.5,
+            factor=0.75,
             min_lr=1e-7,
             window_length=1,
             stop_after_min=True
