@@ -1,30 +1,28 @@
 {
     "group_name": "switches",
     "method_name": "sf_tddft_bhhlyp",
-    "method_description": "QChem bhhlyp/6-31gs SF-TDDFT",
+    "method_description": "GAMESS bhhlyp/6-31G* spin flip tddft",
     "required_keys": [
         "energy_0_grad",
         "energy_1_grad",
         "energy_0",
         "energy_1",
         "nxyz",
-        "smiles",
-        "force_nacv_10"
+        "smiles"
     ],
     "max_geoms": 5000,
     "max_geoms_per_dset": 5000,
-    "save_dir": "/home/saxelrod/rgb_nfs/dsets_switches/azo_qchem_5k",
+    "save_dir": "/home/saxelrod/rgb_nfs/dsets_switches/azo_gamess_5k",
     "val_size": 0.1,
     "test_size": 0.1,
     "split_seed": 0,
     "molsets": ["azobenzene"],
     "chunk_size": 1000,
-    "custom_name": null,
+    "custom_name": "azo_switches",
     "max_std_en": 1e6,
     "max_std_force": 1e6,
     "max_val_en": 1e6,
     "max_val_force": 1e6,
     "make_splits": false,
     "deltas": [["energy_1", "energy_0"]],
-    "all_calcs_for_geom": true,
-    "geomsets": ["azo_5k_2"]}
+    "geomsets": ["azo_5k"]}
