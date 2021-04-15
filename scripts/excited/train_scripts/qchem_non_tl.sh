@@ -16,9 +16,7 @@ source deactivate
 source ~/.bashrc
 source activate nff
 
-# CONFIG="../train_config/painn_attention.json"
-# CONFIG="../train_config/painn_attention_2.json"
-CONFIG="../train_config/painn_attention_3.json"
+CONFIG="../train_config/qchem_non_tl.json"
 
 # change to the number of GPUs you're using per node
 export SLURM_GPUS_PER_NODE=1
