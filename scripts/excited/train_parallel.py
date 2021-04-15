@@ -85,7 +85,7 @@ def submit_slurm_job(node,
            f"python $NFFDIR/scripts/excited/train_single.py "
            f"{params_file} -nr {node_index} "
            f"--gpus {num_gpus} --nodes {num_nodes}")
-
+    print(cmd)
     p = subprocess.Popen([cmd],
                          shell=True,
                          stdin=None,
@@ -155,8 +155,9 @@ def submit_to_nodes(params_file):
     # execute each of the commands
 
     for cmd, env_var in zip(cmds, env_vars):
-        var = subprocess.check_output(
+        var = (subprocess.check_output(
             cmd, env=os.environ.copy(), shell=True).decode()
+            .strip())
         os.environ[env_var] = var
 
     if use_slurm:
