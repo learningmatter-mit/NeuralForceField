@@ -752,16 +752,23 @@ def make_stats(trainer,
 
     with open(stat_path, 'w') as f_open:
         json.dump(final_stats, f_open, sort_keys=True, indent=4)
-
-    with open(param_path, 'w') as f_open:
-        json.dump(params, f_open, sort_keys=True, indent=4)
-
     log_train(f"Test stats saved in {stat_path}")
-    log_train(f"Model and training details saved in {param_path}")
 
     # put the validation loader and the old model back
     trainer.validation_loader = val_loader
     trainer._model = old_model.to(device)
+
+
+def get_deltas(base_keys):
+    deltas = []
+    for i, e_i in enumerate(base_keys):
+        if i == 0:
+            continue
+        e_j = base_keys[i-1]
+        delta = f"{e_i}_{e_j}_delta"
+        deltas.append(delta)
+
+    return deltas
 
 
 def optim_loss_hooks(model,
@@ -813,7 +820,8 @@ def optim_loss_hooks(model,
     train_metrics = []
     for metric_name in metric_names:
         metric = getattr(metrics, metric_name)
-        for key in ['energy_1_energy_0_delta', *base_keys, *grad_keys]:
+        deltas = get_deltas(base_keys)
+        for key in [*deltas, *base_keys, *grad_keys]:
             train_metrics.append(metric(key))
 
     # make the train hooks
@@ -1030,6 +1038,14 @@ def train_sequential(weight_path,
     loss_types = train_params.get("losses", [None] * num_types)
     multi_loss_dicts = train_params.get("multi_loss_dicts",
                                         [None] * num_types)
+
+
+
+    param_path = os.path.join(weight_path, "params.json")
+    with open(param_path, 'w') as f_open:
+        json.dump(params, f_open, sort_keys=True, indent=4)
+    log_train(f"Model and training details saved in {param_path}")
+
 
     for i in range(num_types):
         # once for putting into the trainer and once for

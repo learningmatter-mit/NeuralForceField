@@ -92,6 +92,8 @@ class Painn(nn.Module):
                 pool_class = POOL_DIC[pool_name]
                 self.pool_dic[out_key] = pool_class(**kwargs)
 
+        self.compute_delta = modelparams.get("compute_delta", False)
+
     def atomwise(self,
                  batch,
                  xyz=None):
@@ -184,6 +186,16 @@ class Painn(nn.Module):
 
         return all_results, xyz
 
+    def add_delta(self, all_results):
+        for i, e_i in enumerate(self.output_keys):
+            if i == 0:
+                continue
+            e_j = self.output_keys[i-1]
+            key = f"{e_i}_{e_j}_delta"
+            all_results[key] = (all_results[e_i] -
+                                all_results[e_j])
+        return all_results
+
     def run(self,
             batch,
             xyz=None):
@@ -194,15 +206,14 @@ class Painn(nn.Module):
                                      atomwise_out=atomwise_out,
                                      xyz=xyz)
 
-        en_keys = ['energy_0', 'energy_1']
-        if all([key in all_results for key in en_keys]):
-            delta = (all_results[en_keys[1]] -
-                     all_results[en_keys[0]])
-            all_results['energy_1_energy_0_delta'] = delta
+        if getattr(self, compute_delta, False):
+            all_results = self.add_delta(all_results)
 
         return all_results, xyz
 
-    def forward(self, batch, xyz=None):
+    def forward(self,
+                batch,
+                xyz=None):
         """
         Call the model
         Args:

@@ -8,16 +8,23 @@
         "num_conv": 5,
         "output_keys": [
             "energy_0",
-            "energy_1"
+            "energy_1",
+            "energy_2",
+            "energy_3"
         ],
         "grad_keys": [
             "energy_0_grad",
-            "energy_1_grad"
+            "energy_1_grad",
+            "energy_2_grad",
+            "energy_3_grad"
         ],
         "skip_connection": {
             "energy_0": true,
-            "energy_1": true
+            "energy_1": true,
+            "energy_2": true,
+            "energy_3": true
         },
+        "compute_delta": true,
         "learnable_k": true,
         "conv_dropout": 0.0,
         "readout_dropout": 0.0,
@@ -27,6 +34,14 @@
                 "param": {}
             },
             "energy_1": {
+                "name": "sum",
+                "param": {}
+            },
+            "energy_2": {
+                "name": "sum",
+                "param": {}
+            },
+            "energy_3": {
                 "name": "sum",
                 "param": {}
             }
@@ -42,21 +57,46 @@
             {
                 "mse": [
                     {
-                        "coef": 0.2,
+                        "coef": 0.1,
                         "params": {
-                            "key": "energy_0"
+                            "key": "energy_2_energy_1_delta"
                         }
                     },
                     {
-                        "coef": 1,
+                        "coef": 0.1,
                         "params": {
-                            "key": "energy_0_grad"
+                            "key": "energy_3_energy_2_delta"
+                        }
+                    },
+                    {
+                        "coef": 0.1,
+                        "params": {
+                            "key": "energy_0"
                         }
                     },
                     {
                         "coef": 0.1,
                         "params": {
                             "key": "energy_1"
+                        }
+                    },
+                    {
+                        "coef": 0.1,
+                        "params": {
+                            "key": "energy_2"
+                        }
+                    },
+                    {
+                        "coef": 0.1,
+                        "params": {
+                            "key": "energy_3"
+                        }
+                    },
+
+                    {
+                        "coef": 1,
+                        "params": {
+                            "key": "energy_0_grad"
                         }
                     },
                     {
@@ -68,7 +108,13 @@
                     {
                         "coef": 1,
                         "params": {
-                            "key": "energy_1_energy_0_delta"
+                            "key": "energy_2_grad"
+                        }
+                    },
+                    {
+                        "coef": 1,
+                        "params": {
+                            "key": "energy_3_grad"
                         }
                     }
                 ]

@@ -512,7 +512,23 @@ def split_by_species(dset,
     return (train_idx, val_idx, test_idx)
 
 
+def splits_from_path(dset_path):
+    splits = ['train', 'val', 'test']
+    split_dic = {}
+    for split in splits:
+        this_path = os.path.join(dset_path, f"{split}.pth.tar")
+        this_dset = Dataset.from_file(this_path)
+        split_dic[split] = {"dset": this_dset}
+    return split_dic
+
+
 def make_split(dset, job_info):
+    load_splits = job_info.get("load_splits", False)
+    if load_splits:
+        dset_path = job_info["dset_path"]
+        print("Loading pre-saved splits")
+        split_dic = splits_from_path(dset_path)
+        return split_dic
 
     names = ["train", "val", "test"]
     species_splits = job_info.get("species_splits", {})
@@ -574,7 +590,8 @@ def get_sampler_kwargs(this_dset, job_info):
 def split_and_sample(dset, job_info):
 
     print("Splitting dataset...")
-    split_dic = make_split(dset=dset, job_info=job_info)
+    split_dic = make_split(dset=dset,
+                           job_info=job_info)
 
     print("Creating samplers and diabatic values for each split...")
 
