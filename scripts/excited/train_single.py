@@ -19,7 +19,7 @@ from nff.data.loader import ImbalancedDatasetSampler, BalancedFFSampler
 from nff.train import metrics, Trainer, load_model, get_model, loss, hooks
 from nff.utils.confs import trim_confs
 from nff.utils import fprint, tqdm_enum
-from nff.nn.models import Painn, PainnDiabat
+# from nff.nn.models import Painn, PainnDiabat
 
 import torch.multiprocessing as mp
 import torch.nn as nn
