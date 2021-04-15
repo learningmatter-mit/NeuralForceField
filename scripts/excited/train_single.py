@@ -19,6 +19,7 @@ from nff.data.loader import ImbalancedDatasetSampler, BalancedFFSampler
 from nff.train import metrics, Trainer, load_model, get_model, loss, hooks
 from nff.utils.confs import trim_confs
 from nff.utils import fprint, tqdm_enum
+from nff.nn.models import Painn, PainnDiabat
 
 import torch.multiprocessing as mp
 import torch.nn as nn
@@ -1017,6 +1018,12 @@ def get_train_params(params):
 
     return train_params, num_types
 
+# def do_tl(model):
+#     if (isinstance(model, Painn) or 
+#         isinstance(model, PainnDiabat)):
+#         pass
+#     else:
+#         raise NotImplementedError
 
 def train_sequential(weight_path,
                      model,
@@ -1031,21 +1038,21 @@ def train_sequential(weight_path,
                      grad_keys,
                      base,
                      device,
-                     reset_trainer):
+                     reset_trainer,
+                     log_train):
 
     train_params, num_types = get_train_params(params)
     loss_coefs = train_params.get("loss_coefs", [None] * num_types)
     loss_types = train_params.get("losses", [None] * num_types)
     multi_loss_dicts = train_params.get("multi_loss_dicts",
                                         [None] * num_types)
-
-
+    freeze_sequence = train_params.get("freeze_sequence",
+                                       float("inf"))
 
     param_path = os.path.join(weight_path, "params.json")
     with open(param_path, 'w') as f_open:
         json.dump(params, f_open, sort_keys=True, indent=4)
     log_train(f"Model and training details saved in {param_path}")
-
 
     for i in range(num_types):
         # once for putting into the trainer and once for
@@ -1095,6 +1102,9 @@ def train_sequential(weight_path,
             trainer.loss_fn = loss_fns[1]
             trainer.best_loss = float("inf")
             trainer.hooks = hooks_list[1]
+
+        # if i >= freeze_sequence:
+        #     do_tl(trainer._model)
 
         optim = trainer.optimizer
         do_train = True
@@ -1225,7 +1235,8 @@ def train(gpu,
                                grad_keys=grad_keys,
                                base=base,
                                device=device,
-                               reset_trainer=reset_trainer)
+                               reset_trainer=reset_trainer,
+                               log_train=log_train)
 
     log_train('model saved in ' + weight_path)
 
