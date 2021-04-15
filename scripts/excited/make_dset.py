@@ -305,11 +305,7 @@ def lin_reg_stoich(formula, atom_dict):
     dictio = dict(re.findall('([A-Z][a-z]?)([0-9]*)', formula))
     energy = atom_dict['offset']
     for key, val in dictio.items():
-        if val.isdigit():
-            count = int(val)
-        else:
-            count = 1
-
+        count = int(val) if val.isdigit() else 1
         energy += count * atom_dict[key]
 
     return energy
@@ -924,8 +920,8 @@ def update_overall(overall_dict,
                                       - stoich_en})
 
         for i, exc_props in enumerate(props['excitedstates']):
-            overall_dict[geom_id].update({f"energy_{i+1}":
-                                          exc_props['energy']})
+            overall_dict[geom_id].update({f"energy_{i+1}": exc_props['energy']
+                                          - stoich_en})
 
             if 'force_nacv' in exc_props:
                 exc_state_num = exc_props['absolutestate']
