@@ -30,5 +30,6 @@ python make_dset.py --config_file $config
 
 # split_config=split_config/qchem.json
 # split_config=split_config/gamess.json
+split_config=split_config/qchem_holdout_split.json
 
-# python split.py --config_file $split_config
+python split.py --config_file $split_config

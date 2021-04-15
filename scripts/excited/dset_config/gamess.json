@@ -8,7 +8,8 @@
         "energy_0",
         "energy_1",
         "nxyz",
-        "smiles"
+        "smiles",
+        "geom_id"
     ],
     "max_geoms": 5000,
     "max_geoms_per_dset": 5000,
