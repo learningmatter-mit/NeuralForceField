@@ -1106,6 +1106,9 @@ def train_sequential(weight_path,
         # if i >= freeze_sequence:
         #     do_tl(trainer._model)
 
+        # to allow for Q-Chem TL
+        trainer._model.add_nacv = params.get("add_nacv", False)
+
         optim = trainer.optimizer
         do_train = True
         for param_group in optim.param_groups:
