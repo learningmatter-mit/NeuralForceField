@@ -206,7 +206,7 @@ class Painn(nn.Module):
                                      atomwise_out=atomwise_out,
                                      xyz=xyz)
 
-        if getattr(self, compute_delta, False):
+        if getattr(self, "compute_delta", False):
             all_results = self.add_delta(all_results)
 
         return all_results, xyz
