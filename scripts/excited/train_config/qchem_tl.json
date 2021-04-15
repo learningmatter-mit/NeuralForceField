@@ -1,6 +1,7 @@
 {
     "model_params": {
         "model_type": "PainnDiabat",
+        "add_nacv": true,
         "feat_dim": 128,
         "activation": "swish",
         "n_rbf": 20,
