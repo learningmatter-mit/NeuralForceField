@@ -11,8 +11,8 @@
         "smiles",
         "force_nacv_10"
     ],
-    "max_geoms": 1000,
-    "max_geoms_per_dset": 1000,
+    "max_geoms": null,
+    "max_geoms_per_dset": null,
     "save_dir": "/home/saxelrod/supercloud/models/switches/qchem_tl",
     "val_size": 0.1,
     "test_size": 0.1,
@@ -20,10 +20,10 @@
     "molsets": null,
     "chunk_size": 1000,
     "custom_name": "lin_reg",
-    "max_std_en": 3,
-    "max_std_force": 3,
-    "max_val_en": 300,
-    "max_val_force": 300,
+    "max_std_en": 1e10,
+    "max_std_force": 1e10,
+    "max_val_en": 1e10,
+    "max_val_force": 1e10,
     "make_splits": false,
     "deltas": [["energy_1", "energy_0"]],
     "all_calcs_for_geom": true,
@@ -31,6 +31,5 @@
     "job_dir": ".",
     "other_method_name": "sf_tddft_bhhlyp",
     "other_method_descrip": "GAMESS bhhlyp/6-31G* spin flip tddft",
-    "other_stoich_name": "azo_switches",
-    "max_stoich_specs": 1e10
+    "other_stoich_name": "azo_switches"
 }
