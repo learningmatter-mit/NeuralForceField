@@ -152,7 +152,7 @@ def query_converged(group_name,
     specs = Species.objects.filter(group__name=group_name)
 
     ####
-    # specs = specs.filter(smiles='c1ccc(/N=N/c2ccccc2)cc1')
+    # specs = specs.filter(smiles='c1ccc2c(c1)CSc1ccccc1/N=N/2')
     ####
 
     energy_dic = {}
@@ -190,63 +190,27 @@ def query_converged(group_name,
     return energy_dic, geom_dic
 
 
-def get_atoms(formula):
-    split = list(formula)
-    atoms = []
+def get_atom_count(formula):
+    dictio = dict(re.findall('([A-Z][a-z]?)([0-9]*)', formula))
+    for key, val in dictio.items():
+        dictio[key] = int(val) if val.isdigit() else 1
 
-    this_atom = [split[0]]
-
-    for i in range(1, len(split)):
-        atom = split[i]
-        if all([atom.lower() == atom, (not atom.isdigit()),
-                atom not in ['+', '-']]):
-            this_atom.append(atom)
-        else:
-            atoms.append("".join((this_atom)))
-            if not atom.isdigit() and atom not in ['+', '-']:
-                this_atom = [atom]
-    atoms = list(set(atoms))
-    return atoms
+    return dictio
 
 
 def all_atoms(ground_en):
     atom_list = []
     for formula in ground_en.keys():
-        atom_list += get_atoms(formula)
+        dictio = get_atom_count(formula)
+        atom_list += list(dictio.keys())
     atom_list = list(set(atom_list))
 
     return atom_list
 
 
-def atom_count(formula, atoms):
-    count = {atom: 0 for atom in atoms}
-
-    for atom in atoms:
-        if atom not in formula:
-            continue
-        index = formula.index(atom)
-        length = len(atom)
-
-        num_str = []
-        i = 0
-        while True:
-            if index + length + i >= len(formula):
-                break
-            num = formula[index + length + i]
-            if not num.isdigit():
-                break
-            num_str.append(num)
-            i += 1
-
-        num = "".join(num_str)
-        if num.isdigit():
-            num = int(num)
-        else:
-            num = 1
-
-        count[atom] += num
-
-    count_array = np.array([count[atom] for atom in atoms])
+def reg_atom_count(formula, atoms):
+    dictio = get_atom_count(formula)
+    count_array = np.array([dictio.get(atom, 0) for atom in atoms])
 
     return count_array
 
@@ -268,7 +232,8 @@ def get_stoich_data(group_name,
 
     atoms_list = all_atoms(ground_en)
     formulas = list(ground_en.keys())
-    x_in = np.stack([atom_count(formula, atoms_list) for formula in formulas])
+    x_in = np.stack([reg_atom_count(formula, atoms_list)
+                     for formula in formulas])
     y_out = np.array([[ground_en[formula]] for formula in formulas])
 
     return x_in, y_out, atoms_list, ground_en, geom_dic
@@ -280,6 +245,10 @@ def fit_stoich(x_in,
 
     clf = linear_model.LinearRegression()
     clf.fit(x_in, y_out)
+    pred = (clf.coef_ * x_in + clf.intercept_).sum(-1)
+    err = abs(pred - y_out).mean() * 627.5
+    print(("MAE between target energy and stoich "
+           "energy is %.3e kcal/mol" % err))
     fit_dic = {atom: coef for atom, coef in zip(
         atoms_list, clf.coef_.reshape(-1))}
     stoich_dict = {**fit_dic, "offset": clf.intercept_.item()}
@@ -366,7 +335,8 @@ def match_stoich(geom_dic,
                             compare_stoich_name=compare_stoich_name)
 
     atoms_list = all_atoms(main_en_dic)
-    x_in = np.stack([atom_count(formula, atoms_list) for formula in formulas])
+    x_in = np.stack([reg_atom_count(formula, atoms_list)
+                     for formula in formulas])
 
     stoich_dict = fit_stoich(x_in=x_in,
                              y_out=y_out,
@@ -463,7 +433,7 @@ def compute_stoich_reg(group_name,
                                  atoms_list=atoms_list)
 
     with open(save_path, 'w') as f_open:
-        json.dump(stoich_dict, f_open)
+        json.dump(stoich_dict, f_open, indent=4)
 
     return stoich_dict
 
