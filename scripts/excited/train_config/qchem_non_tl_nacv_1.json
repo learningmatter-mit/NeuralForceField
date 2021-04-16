@@ -1,0 +1,268 @@
+{
+    "model_params": {
+        "model_type": "PainnDiabat",
+        "add_nacv": true,
+        "feat_dim": 128,
+        "activation": "swish",
+        "n_rbf": 20,
+        "cutoff": 5.0,
+        "num_conv": 5,
+        "output_keys": [
+            "energy_0",
+            "energy_1"
+        ],
+        "grad_keys": [
+            "energy_0_grad",
+            "energy_1_grad"
+        ],
+        "diabat_keys": [
+            [
+                "d0",
+                "lam"
+            ],
+            [
+                "lam",
+                "d1"
+            ]
+        ],
+        "skip_connection": {
+            "d0": true,
+            "d1": true,
+            "lam": false
+        },
+        "learnable_k": true,
+        "conv_dropout": 0.0,
+        "readout_dropout": 0.0,
+        "pool_dic": {
+            "d0": {
+                "name": "sum",
+                "param": {}
+            },
+            "d1": {
+                "name": "sum",
+                "param": {}
+            },
+            "lam": {
+                "name": "attention",
+                "param": {
+                    "prob_func": "softmax",
+                    "feat_dim": 128,
+                    "att_act": "swish",
+                    "mol_fp_act": "swish",
+                    "num_out_layers": 2,
+                    "out_dim": 1
+                }
+            }
+        },
+        "cross_talk_dic": {
+            "modes": {
+                "gap_coupling_concat": [
+                    {
+                        "params": {
+                            "num_hidden": 128,
+                            "num_feat_layers": 2,
+                            "activation": "swish",
+                            "feat_dim": 128,
+                            "states": [
+                                0,
+                                1
+                            ]
+                        }
+                    }
+                ]
+            },
+            "pool_method": "mean"
+        }
+    },
+    "train_params": {
+        "sampler": {
+            "name": "BalancedFFSampler",
+            "apply_to": [
+                "train",
+                "val",
+                "test"
+            ],
+            "sampler_paths": {
+                "train": "train_sample_dict.json",
+                "val": "val_sample_dict.json",
+                "test": "test_sample_dict.json"
+            }
+        },
+        "batch_size": 32,
+        "mini_batches": 1,
+        "checkpoints_to_keep": 3,
+        "del_grad_interval": 100,
+        "log_every_n_epochs": 1,
+        "multi_loss_dict": [
+            {
+                "mse": [
+                    {
+                        "coef": 0.01,
+                        "params": {
+                            "key": "d0"
+                        }
+                    },
+                    {
+                        "coef": 0.01,
+                        "params": {
+                            "key": "d1"
+                        }
+                    },
+                    {
+                        "coef": 0.2,
+                        "params": {
+                            "key": "energy_0"
+                        }
+                    },
+                    {
+                        "coef": 1,
+                        "params": {
+                            "key": "energy_0_grad"
+                        }
+                    },
+                    {
+                        "coef": 0.1,
+                        "params": {
+                            "key": "energy_1"
+                        }
+                    },
+                    {
+                        "coef": 1,
+                        "params": {
+                            "key": "energy_1_grad"
+                        }
+                    },
+                    {
+                        "coef": 0.5,
+                        "params": {
+                            "key": "energy_1_energy_0_delta"
+                        }
+                    }
+                ]
+            },
+            {
+                "mse": [
+                    {
+                        "coef": 0.01,
+                        "params": {
+                            "key": "d0"
+                        }
+                    },
+                    {
+                        "coef": 0.01,
+                        "params": {
+                            "key": "d1"
+                        }
+                    },
+                    {
+                        "coef": 0.2,
+                        "params": {
+                            "key": "energy_0"
+                        }
+                    },
+                    {
+                        "coef": 1,
+                        "params": {
+                            "key": "energy_0_grad"
+                        }
+                    },
+                    {
+                        "coef": 0.1,
+                        "params": {
+                            "key": "energy_1"
+                        }
+                    },
+                    {
+                        "coef": 1,
+                        "params": {
+                            "key": "energy_1_grad"
+                        }
+                    },
+                    {
+                        "coef": 0.5,
+                        "params": {
+                            "key": "energy_1_energy_0_delta"
+                        }
+                    }
+                ],
+            "nacv": [
+                {
+                    "coef": 1,
+                    "params": {
+                        "key": "force_nacv_10",
+                        "abs": false,
+                        "max": false
+                    }
+                }
+            ]
+            },
+            {
+                "mse": [
+                    {
+                        "coef": 0.2,
+                        "params": {
+                            "key": "energy_0"
+                        }
+                    },
+                    {
+                        "coef": 0.1,
+                        "params": {
+                            "key": "energy_1"
+                        }
+                    },
+                    {
+                        "coef": 1.0,
+                        "params": {
+                            "key": "energy_0_grad"
+                        }
+                    },
+                    {
+                        "coef": 1.0,
+                        "params": {
+                            "key": "energy_1_grad"
+                        }
+                    },
+                    {
+                        "coef": 1.0,
+                        "params": {
+                            "key": "energy_1_energy_0_delta"
+                        }
+                    },
+                    {
+                        "coef": 100,
+                        "params": {
+                            "key": "energy_1_energy_0_delta",
+                            "cutoff": 4.6
+                        }
+                    }
+                ]
+            }
+        ],
+        "lr": [
+            1e-4,
+            1e-5,
+            1e-5
+        ],
+        "lr_min": [
+            1e-5,
+            1e-6,
+            1e-7
+        ],
+        "lr_decay": 0.5,
+        "reset_trainer": false,
+        "lr_patience": 10,
+        "max_epochs": 5000,
+        "metrics": [
+            "MeanAbsoluteError"
+        ],
+        "weightpath": "/home/gridsan/saxelrod/models/switches",
+        "model_name": "qchem_non_tl_nacv_1",
+        "mol_loss_norm": false,
+        "seed": 0,
+        "torch_par": false,
+        "use_slurm": true,
+        "needs_nbrs": true,
+        "needs_angles": false,
+        "cutoff": 5.0
+    }
+}
