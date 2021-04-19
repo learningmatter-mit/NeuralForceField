@@ -711,7 +711,11 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.hopping_probabilities = []
         self.time = self.time - self.dt
 
+        # ******************************************************************************************
+        # we should save every time there's a hop. But I'm not sure this works if the previous
+        # step wasn't saved
         self.modify_save()
+        # ******************************************************************************************
 
     def full_step(self, compute_internal_forces=True,
                   do_log=True):
