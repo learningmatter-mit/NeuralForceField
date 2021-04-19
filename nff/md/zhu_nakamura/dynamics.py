@@ -127,6 +127,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
                  num_states=2,
                  out_file=OUT_FILE,
                  log_file=LOG_FILE,
+                 save_period=None,
                  **kwargs):
         """
         Initializes a ZhuNakamura instance.
@@ -161,6 +162,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         self.out_file = out_file
         self.log_file = log_file
+        self.save_period = save_period if (save_period is not None) else self.dt
         self.setup_logging()
 
         # everything in a.u. other than positions (which are in angstrom)
@@ -395,7 +397,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
                                             + 1 / 2 * accel * self.dt ** 2
                                             ) * BOHR_RADIUS)
 
-    def velocity_step(self):
+    def velocity_step(self, do_log=True):
 
         new_accel = self.get_accel()
         self.velocities = self.velocities + 1 / 2 * \
@@ -411,8 +413,9 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         rel_ens = ", ".join(((self.energies - self.energies[0]) * 27.2
                              ).reshape(-1).astype("str").tolist())
 
-        self.log(f"Completed step {step}. Currently in state {self.surf}.")
-        self.log(f"Relative energies are {rel_ens} eV")
+        if do_log:
+            self.log(f"Completed step {step}. Currently in state {self.surf}.")
+            self.log(f"Relative energies are {rel_ens} eV")
 
     def md_step(self):
         """
@@ -1064,7 +1067,7 @@ class BatchedZhuNakamura:
         if trj.time < self.max_time:
             trj.save()
 
-    def step(self, get_new_neighbors):
+    def step(self, get_new_neighbors, do_save=True):
         """
         Take a step for each trajectory
         Args:
@@ -1089,7 +1092,7 @@ class BatchedZhuNakamura:
 
         for trj in self.zhu_trjs:
             # take a velocity step
-            trj.velocity_step()
+            trj.velocity_step(do_log=do_save)
 
         if self.explicit_diabat:
             self.add_diabat_forces()
@@ -1101,7 +1104,7 @@ class BatchedZhuNakamura:
             trj.full_step(compute_internal_forces=False)
 
         for trj in self.zhu_trjs:
-            if trj.time < self.max_time:
+            if trj.time < self.max_time and do_save:
                 trj.save()
 
         # pool = Pool(processes=1)
@@ -1130,12 +1133,17 @@ class BatchedZhuNakamura:
                                     get_new_neighbors=True)
         complete = False
         num_steps = 0
+        save_steps = int(self.save_period / self.dt)
 
         while not complete:
             num_steps += 1
             get_new_neighbors = np.mod(num_steps,
                                        self.nbr_update_period) == 0
-            self.step(get_new_neighbors=get_new_neighbors)
+            do_save = np.mod(num_steps, save_steps) == 0
+
+            self.step(get_new_neighbors=get_new_neighbors,
+                      do_save=do_save)
+
             print(f"Completed step {num_steps}")
 
             complete = all([trj.time >= self.max_time
