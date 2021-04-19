@@ -713,7 +713,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         self.modify_save()
 
-    def full_step(self, compute_internal_forces=True):
+    def full_step(self, compute_internal_forces=True,
+                  do_log=True):
         """
 
         Take a time step.
@@ -744,8 +745,9 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
             new_surf = probability_dic["new_surf"]
             old_surf = copy.deepcopy(self.surf)
 
-            self.log(f"Attempting hop from state {old_surf} to state "
-                     f"{new_surf}. Probability is {zhu_p}.")
+            if do_log:
+                self.log(f"Attempting hop from state {old_surf} to state "
+                         f"{new_surf}. Probability is {zhu_p}.")
 
             # decide whether or not to hop based on Zhu a, b, and p
             will_hop = self.should_hop(zhu_p)
@@ -754,12 +756,14 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
             if will_hop:
                 out = self.hop(new_surf)
                 if out != "err":
-                    self.log(f"Hopped from from state {old_surf} "
-                             f"to state {new_surf}.")
+                    if do_log:
+                        self.log(f"Hopped from from state {old_surf} "
+                                 f"to state {new_surf}.")
                     return
             else:
-                self.log(f"Did not hop from from state {old_surf} "
-                         f"to state {new_surf}.")
+                if do_log:
+                    self.log(f"Did not hop from from state {old_surf} "
+                             f"to state {new_surf}.")
 
     def run(self):
 
@@ -1107,7 +1111,8 @@ class BatchedZhuNakamura:
             # take a "full_step" with compute_internal_forces=False,
             # which just amounts to checking if you're at a crossing and
             # potentially hopping
-            trj.full_step(compute_internal_forces=False)
+            trj.full_step(compute_internal_forces=False,
+                          do_log=do_save)
 
         for trj in self.zhu_trjs:
             if trj.time < self.max_time and do_save:
