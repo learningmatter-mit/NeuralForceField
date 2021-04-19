@@ -555,13 +555,11 @@ class NeuralMetadynamics(NeuralFF):
 
         # given in mHartree / atom in CREST paper
         k_i = ((self.pushing_params['k_i'] / 1000
-                * units.Hartree * num_atoms)
-               * torch.ones(1, 1))
+                * units.Hartree * num_atoms))
 
         # given in Bohr^(-2) in CREST paper
         alpha_i = ((self.pushing_params['alpha_i']
-                    / units.Bohr ** 2)
-                   * torch.ones(1, 1))
+                    / units.Bohr ** 2))
 
         # only apply the bias to certain atoms
         bias_atoms = self.pushing_params.get("bias_atoms")
@@ -572,22 +570,51 @@ class NeuralMetadynamics(NeuralFF):
 
         return k_i, alpha_i, dsets, f_damp
 
+    def compute_rmsd_force(self,
+                           dsets,
+                           R_mat,
+                           v_bias,
+                           delta_i,
+                           alpha_i):
+
+        ref_nxyz_lst = dsets[1].props['nxyz']
+        num_refs = len(ref_nxyz_lst)
+        current_nxyz_lst = dsets[0].props['nxyz']
+        num_atoms = current_nxyz_lst[0].shape[0]
+
+        delta_i = delta_i.reshape(-1, 1, 1)
+        R_mat = R_mat.reshape(-1, 3, 3)
+
+        ref_xyz = torch.stack(ref_nxyz_lst)[:, :, 1:]
+        current_xyz = (torch.stack(current_nxyz_lst * num_refs)
+                       [:, :, 1:])
+
+        rotated_ref = torch.einsum('nij,nkj->nki', R_mat, ref_xyz)
+
+        rmsd_grad = (current_xyz - rotated_ref) / (num_atoms * delta_i)
+        v_grad = (v_bias * (-2 * alpha_i * delta_i) * rmsd_grad).sum(0)
+        force = -v_grad
+
+        return force
+
     def rmsd_push(self, atoms):
         if not self.old_atoms:
             return np.zeros((len(atoms), 3))
 
         k_i, alpha_i, dsets, f_damp = self.rmsd_prelims(atoms)
-        delta_i, _ = compute_distances(dataset=dsets[0],
-                                       device=self.device,
-                                       dataset_1=dsets[1])
+        delta_i, R_mat = compute_distances(dataset=dsets[0],
+                                           device=self.device,
+                                           dataset_1=dsets[1])
 
         # compute bias potential
         v_bias = (f_damp * k_i *
                   torch.exp(-alpha_i * delta_i ** 2)).sum()
 
-        # force is the negative gradient of the potential
-        f_bias = -((v_bias * (-2 * alpha_i * delta_i).sum())
-                   .repeat(len(atoms), 3))
+        f_bias = self.compute_rmsd_force(dsets=dsets,
+                                         R_mat=R_mat,
+                                         v_bias=v_bias,
+                                         delta_i=delta_i,
+                                         alpha_i=alpha_i)
 
         return f_bias.numpy()
 
