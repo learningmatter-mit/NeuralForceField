@@ -5,13 +5,13 @@ import torch
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 from ase.calculators.calculator import Calculator, all_changes
-import nff
 import nff.utils.constants as const
 from nff.nn.utils import torch_nbr_list
 from nff.utils.cuda import batch_to
 from nff.data.sparse import sparsify_array
 from nff.train.builders.model import load_model
-
+from nff.utils.geom import compute_distances
+from nff.data import Dataset
 
 DEFAULT_CUTOFF = 5.0
 
@@ -78,7 +78,7 @@ class AtomsBatch(Atoms):
 
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
         self.props['num_atoms'] = torch.LongTensor([len(self)])
- 
+
         return self.props
 
     def update_nbr_list(self):
@@ -95,13 +95,16 @@ class AtomsBatch(Atoms):
         """
 
         if self.nbr_torch:
-            edge_from, edge_to, offsets = torch_nbr_list(self, self.cutoff, device=self.device, directed=self.directed)
+            edge_from, edge_to, offsets = torch_nbr_list(
+                self, self.cutoff, device=self.device, directed=self.directed)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         else:
             self.wrap()
-            edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
+            edge_from, edge_to, offsets = neighbor_list(
+                'ijS', self, self.cutoff)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]].detach().cpu().numpy()
+            offsets = torch.Tensor(
+                offsets)[nbr_list[:, 1] > nbr_list[:, 0]].detach().cpu().numpy()
             nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
         # torch.sparse has no storage yet.
@@ -163,7 +166,7 @@ class BulkPhaseMaterials(Atoms):
         self.num_atoms = self.props.get('num_atoms', None)
         self.cutoff = cutoff
         self.nbr_torch = nbr_torch
-        self.device = device 
+        self.device = device
 
     def get_nxyz(self):
         """Gets the atomic number and the positions of the atoms
@@ -215,33 +218,38 @@ class BulkPhaseMaterials(Atoms):
             nxyz (torch.Tensor)
         """
         if self.nbr_torch:
-            edge_from, edge_to, offsets = torch_nbr_list(self, self.cutoff, device=self.device)
+            edge_from, edge_to, offsets = torch_nbr_list(
+                self, self.cutoff, device=self.device)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         else:
-            edge_from, edge_to, offsets = neighbor_list('ijS', self, self.cutoff) 
+            edge_from, edge_to, offsets = neighbor_list(
+                'ijS', self, self.cutoff)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]]#.numpy()
+            offsets = torch.Tensor(
+                offsets)[nbr_list[:, 1] > nbr_list[:, 0]]  # .numpy()
             nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
         if exclude_atoms_nbr_list:
             offsets_mat = torch.zeros(self.get_number_of_atoms(),
                                       self.get_number_of_atoms(), 3)
-            nbr_list_mat = torch.zeros(self.get_number_of_atoms(), 
+            nbr_list_mat = torch.zeros(self.get_number_of_atoms(),
                                        self.get_number_of_atoms()).to(torch.long)
-            atom_nbr_list_mat = torch.zeros(self.get_number_of_atoms(), 
+            atom_nbr_list_mat = torch.zeros(self.get_number_of_atoms(),
                                             self.get_number_of_atoms()).to(torch.long)
-            
+
             offsets_mat[nbr_list[:, 0], nbr_list[:, 1]] = offsets
             nbr_list_mat[nbr_list[:, 0], nbr_list[:, 1]] = 1
-            atom_nbr_list_mat[self.atoms_nbr_list[:, 0], self.atoms_nbr_list[:, 1]] = 1
+            atom_nbr_list_mat[self.atoms_nbr_list[:, 0],
+                              self.atoms_nbr_list[:, 1]] = 1
 
             nbr_list_mat = nbr_list_mat - atom_nbr_list_mat
             nbr_list = nbr_list_mat.nonzero()
-            offsets = offsets_mat[nbr_list[:,0], nbr_list[:,1], :]
+            offsets = offsets_mat[nbr_list[:, 0], nbr_list[:, 1], :]
 
         self.nbr_list = nbr_list
-        self.offsets = sparsify_array(offsets.matmul( torch.Tensor(self.get_cell())))
-        
+        self.offsets = sparsify_array(
+            offsets.matmul(torch.Tensor(self.get_cell())))
+
     def get_list_atoms(self):
 
         mol_split_idx = self.props['num_subgraphs'].tolist()
@@ -276,7 +284,7 @@ class BulkPhaseMaterials(Atoms):
 
         intra_nbr_list = torch.cat(intra_nbr_list)
         self.atoms_nbr_list = intra_nbr_list
-    
+
     def update_nbr_list(self):
         self.update_atoms_nbr_list(self.props['atoms_cutoff'])
         self.update_system_nbr_list(self.props['system_cutoff'])
@@ -291,6 +299,7 @@ class NeuralFF(Calculator):
         self,
         model,
         device='cpu',
+        en_key='energy',
         **kwargs
     ):
         """Creates a NeuralFF calculator.nff/io/ase.py
@@ -307,12 +316,13 @@ class NeuralFF(Calculator):
         self.model.eval()
         self.device = device
         self.to(device)
+        self.en_key = en_key
 
     def to(self, device):
         self.device = device
         self.model.to(device)
 
-    def calculate(
+    def _calculate(
         self,
         atoms=None,
         properties=['energy', 'forces'],
@@ -336,16 +346,17 @@ class NeuralFF(Calculator):
         batch = batch_to(atoms.get_batch(), self.device)
 
         # add keys so that the readout function can calculate these properties
-        batch['energy'] = []
-        batch['energy_grad'] = []
+        grad_key = self.en_key + "_grad"
+        batch[en_key] = []
+        batch[grad_key] = []
 
         prediction = self.model(batch)
 
         # change energy and force to numpy array
-        energy = prediction['energy'].detach().cpu(
-        ).numpy() * (1 / const.EV_TO_KCAL_MOL)
-        energy_grad = prediction['energy_grad'].detach(
-        ).cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+        energy = (prediction[en_key].detach()
+                  .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
+        energy_grad = (prediction[grad_key].detach()
+                       .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
 
         self.results = {
             'energy': energy.reshape(-1)
@@ -353,6 +364,9 @@ class NeuralFF(Calculator):
 
         if 'forces' in properties:
             self.results['forces'] = -energy_grad.reshape(-1, 3)
+
+    def calculate(*args, **kwargs):
+        return self._calculate(*args, **kwargs)
 
     @classmethod
     def from_file(
@@ -389,7 +403,7 @@ class EnsembleNFF(Calculator):
 
         Calculator.__init__(self, **kwargs)
         self.models = models
-        for m in self.models: 
+        for m in self.models:
             m.eval()
         self.device = device
         self.to(device)
@@ -462,7 +476,6 @@ class EnsembleNFF(Calculator):
 
         atoms.results = self.results.copy()
 
-
     @classmethod
     def from_files(
         cls,
@@ -488,7 +501,99 @@ class NeuralOptimizer:
 
     def run(self, fmax=0.2, steps=1000):
         epochs = steps // self.update_freq
-        
+
         for step in range(epochs):
             self.optimizer.run(fmax=fmax, steps=self.update_freq)
             self.optimizer.atoms.update_nbr_list()
+
+
+class NeuralMetadynamics(NeuralFF):
+    def __init__(self,
+                 model,
+                 pushing_params,
+                 old_atoms=None,
+                 device='cpu',
+                 en_key='energy',
+                 **kwargs):
+
+        NeuralFF.__init__(self,
+                          model=model,
+                          device=device,
+                          en_key=en_key,
+                          **kwargs)
+
+        self.pushing_params = pushing_params
+        self.old_atoms = old_atoms if (old_atoms is not None) else []
+
+    def make_dsets(self, atoms):
+        props_0 = {"nxyz": atoms.get_nxyz()}
+        props_1 = {"nxyz": [old_atoms.get_nxyz() for
+                            old_atoms in self.old_atoms]}
+
+        dset_0 = Dataset(props_0)
+        dset_1 = Dataset(props_1)
+
+        return dset_0, dset_1
+
+    def rmsd_prelims(self, atoms):
+
+        num_atoms = len(atoms)
+        # given in mHartree / atom in CREST paper
+        k_i = ((self.pushing_params['k_i'] * 1000
+                / const.EV_TO_AU * num_atoms)
+               .reshape(1, 1))
+
+        # given in Bohr^(-2) in CREST paper
+        alpha_i = ((self.pushing_params['alpha_i']
+                    / const.BOHR_RADIUS ** 2)
+                   .reshape(1, 1))
+
+        # only apply the bias to certain atoms
+        bias_atoms = self.pushing_params.get("bias_atoms")
+        if bias_atoms is None:
+            bias_atoms = torch.arange(num_atoms)
+
+        dsets = self.make_dsets(atoms)
+
+        return k_i, alpha_i, bias_atoms, dsets
+
+    def rmsd_push(self, atoms):
+        k_i, alpha_i, bias_atoms, dsets = self.rmsd_prelims(atoms)
+        _, delta_i = compute_distances(dataset=dsets[0],
+                                       device=self.device,
+                                       dataset_1=dsets[1])
+        # only apply to selected atoms
+        delta_i = delta_i[:, bias_atoms]
+        # compute bias potential
+        v_bias = k_i * torch.exp(-alpha_i * delta_i ** 2).sum()
+        # force is the negative gradient of the potential
+        f_bias = -((v_bias * (-2 * alpha_i * delta_i).sum())
+                   .repeat(len(atoms), 3))
+
+        return f_bias
+
+    def get_bias(self):
+        bias_type = self.pushing_params['bias_type']
+        if bias_type == "rmsd":
+            results = self.rmsd_push()
+        else:
+            raise NotImplementedError
+
+        return results
+
+    def append_atoms(self, atoms):
+        self.old_atoms.append(atoms)
+
+    def calculate(atoms):
+
+        self._calculate(atoms=atoms,
+                        properties=['energy', 'forces'],
+                        system_changes=all_changes)
+
+        # Add metadynamics forces
+        # Leave the energy as it is because we don't need
+        # and it's better to see the real NFF energy in the
+        # logger
+
+        f_bias = self.get_bias()
+        results['forces'] += f_bias
