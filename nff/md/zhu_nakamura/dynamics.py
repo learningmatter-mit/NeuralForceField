@@ -1144,7 +1144,8 @@ class BatchedZhuNakamura:
             self.step(get_new_neighbors=get_new_neighbors,
                       do_save=do_save)
 
-            print(f"Completed step {num_steps}")
+            if do_save:
+                print(f"Completed step {num_steps}")
 
             complete = all([trj.time >= self.max_time
                             for trj in self.zhu_trjs])
