@@ -846,6 +846,8 @@ class BatchedZhuNakamura:
         self.batch_size = batched_params["batch_size"]
         self.cutoff = batched_params["cutoff"]
         self.needs_angles = needs_angles
+        self.save_period = min([trj.save_period for trj in
+                                self.zhu_trjs])
 
     def make_zhu_trjs(self, atoms_list, zhu_params):
         """
