@@ -2,8 +2,13 @@ import os
 import numpy as np
 import pdb
 import copy
+import math
 
+from ase.optimize.optimize import Dynamics
 from ase.md.md import MolecularDynamics
+from ase import units
+from ase.md.velocitydistribution import (MaxwellBoltzmannDistribution,
+                                         Stationary, ZeroRotation)
 
 
 class NoseHoover(MolecularDynamics):
@@ -21,7 +26,7 @@ class NoseHoover(MolecularDynamics):
                  append_trajectory=True,
                  **kwargs):
 
-        if os.path.isfile(trajectory):
+        if os.path.isfile(str(trajectory)):
             os.remove(trajectory)
 
         MolecularDynamics.__init__(self,
@@ -222,8 +227,9 @@ class NoseHooverMetadynamics(NoseHoover):
                  temperature,
                  ttime,
                  geom_add_time,
-                 trajectory=None,
-                 logfile=None,
+                 max_steps=None,
+                 trajectory="mtd.trj",
+                 logfile="mtd.log",
                  loginterval=1,
                  **kwargs):
 
@@ -235,7 +241,8 @@ class NoseHooverMetadynamics(NoseHoover):
                             trajectory=trajectory,
                             logfile=logfile,
                             loginterval=loginterval,
-                            **kwargs)
+                            max_steps=max_steps,
+                            ** kwargs)
 
         self.geom_add_time = geom_add_time * units.fs
 
@@ -252,7 +259,7 @@ class NoseHooverMetadynamics(NoseHoover):
         self.max_steps = 0
 
         # number of steps until we add a new geom
-        steps_between_add = int(self.geom_add_time / self.timestep)
+        steps_between_add = int(self.geom_add_time / self.dt)
         steps_until_add = copy.deepcopy(steps_between_add)
 
         for _ in range(epochs):
@@ -262,5 +269,5 @@ class NoseHooverMetadynamics(NoseHoover):
 
             if self.nsteps >= steps_until_add:
                 # I think there's some sort of energy limit right?
-                self.atoms.calculator.append_atoms(self.atoms)
+                self.atoms.calc.append_atoms(copy.deepcopy(self.atoms))
                 steps_until_add += steps_between_add

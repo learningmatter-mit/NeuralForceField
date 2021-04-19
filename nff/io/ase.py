@@ -5,6 +5,8 @@ import torch
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 from ase.calculators.calculator import Calculator, all_changes
+from ase import units
+
 import nff.utils.constants as const
 from nff.nn.utils import torch_nbr_list
 from nff.utils.cuda import batch_to
@@ -347,13 +349,13 @@ class NeuralFF(Calculator):
 
         # add keys so that the readout function can calculate these properties
         grad_key = self.en_key + "_grad"
-        batch[en_key] = []
+        batch[self.en_key] = []
         batch[grad_key] = []
 
         prediction = self.model(batch)
 
         # change energy and force to numpy array
-        energy = (prediction[en_key].detach()
+        energy = (prediction[self.en_key].detach()
                   .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
         energy_grad = (prediction[grad_key].detach()
                        .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
@@ -377,8 +379,10 @@ class NeuralFF(Calculator):
     ):
 
         model = load_model(model_path)
-
-        return cls(model, device, **kwargs)
+        out = cls(model=model,
+                  device=device,
+                  **kwargs)
+        return out
 
 
 class EnsembleNFF(Calculator):
@@ -525,10 +529,10 @@ class NeuralMetadynamics(NeuralFF):
         self.pushing_params = pushing_params
         self.old_atoms = old_atoms if (old_atoms is not None) else []
 
-    def make_dsets(self, atoms):
-        props_0 = {"nxyz": atoms.get_nxyz()}
-        props_1 = {"nxyz": [old_atoms.get_nxyz() for
-                            old_atoms in self.old_atoms]}
+    def make_dsets(self, atoms, bias_atoms):
+        props_0 = {"nxyz": [torch.Tensor(atoms.get_nxyz()[bias_atoms, :])]}
+        props_1 = {"nxyz": [torch.Tensor(old_atoms.get_nxyz()[bias_atoms, :])
+                            for old_atoms in self.old_atoms]}
 
         dset_0 = Dataset(props_0)
         dset_1 = Dataset(props_1)
@@ -539,43 +543,45 @@ class NeuralMetadynamics(NeuralFF):
 
         num_atoms = len(atoms)
         # given in mHartree / atom in CREST paper
-        k_i = ((self.pushing_params['k_i'] * 1000
-                / const.EV_TO_AU * num_atoms)
-               .reshape(1, 1))
+        k_i = ((self.pushing_params['k_i'] / 1000
+                * units.Hartree * num_atoms)
+               * torch.ones(1, 1))
 
         # given in Bohr^(-2) in CREST paper
         alpha_i = ((self.pushing_params['alpha_i']
-                    / const.BOHR_RADIUS ** 2)
-                   .reshape(1, 1))
+                    / units.Bohr ** 2)
+                   * torch.ones(1, 1))
 
         # only apply the bias to certain atoms
         bias_atoms = self.pushing_params.get("bias_atoms")
         if bias_atoms is None:
             bias_atoms = torch.arange(num_atoms)
 
-        dsets = self.make_dsets(atoms)
+        dsets = self.make_dsets(atoms, bias_atoms)
 
-        return k_i, alpha_i, bias_atoms, dsets
+        return k_i, alpha_i, dsets
 
     def rmsd_push(self, atoms):
-        k_i, alpha_i, bias_atoms, dsets = self.rmsd_prelims(atoms)
-        _, delta_i = compute_distances(dataset=dsets[0],
+        if not self.old_atoms:
+            return np.zeros((len(atoms), 3))
+
+        k_i, alpha_i, dsets = self.rmsd_prelims(atoms)
+        delta_i, _ = compute_distances(dataset=dsets[0],
                                        device=self.device,
                                        dataset_1=dsets[1])
-        # only apply to selected atoms
-        delta_i = delta_i[:, bias_atoms]
+
         # compute bias potential
         v_bias = k_i * torch.exp(-alpha_i * delta_i ** 2).sum()
         # force is the negative gradient of the potential
         f_bias = -((v_bias * (-2 * alpha_i * delta_i).sum())
                    .repeat(len(atoms), 3))
 
-        return f_bias
+        return f_bias.numpy()
 
-    def get_bias(self):
+    def get_bias(self, atoms):
         bias_type = self.pushing_params['bias_type']
         if bias_type == "rmsd":
-            results = self.rmsd_push()
+            results = self.rmsd_push(atoms)
         else:
             raise NotImplementedError
 
@@ -584,16 +590,18 @@ class NeuralMetadynamics(NeuralFF):
     def append_atoms(self, atoms):
         self.old_atoms.append(atoms)
 
-    def calculate(atoms):
-
+    def calculate(self,
+                  atoms,
+                  properties=['energy', 'forces'],
+                  system_changes=all_changes):
         self._calculate(atoms=atoms,
-                        properties=['energy', 'forces'],
-                        system_changes=all_changes)
+                        properties=properties,
+                        system_changes=system_changes)
 
         # Add metadynamics forces
         # Leave the energy as it is because we don't need
         # and it's better to see the real NFF energy in the
         # logger
 
-        f_bias = self.get_bias()
-        results['forces'] += f_bias
+        f_bias = self.get_bias(atoms)
+        self.results['forces'] += f_bias
