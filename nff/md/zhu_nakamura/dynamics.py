@@ -1139,7 +1139,7 @@ class BatchedZhuNakamura:
                                     get_new_neighbors=True)
         complete = False
         num_steps = 0
-        save_steps = int(self.save_period / self.dt)
+        save_steps = int(self.save_period / (self.dt / FS_TO_AU))
 
         while not complete:
             num_steps += 1
