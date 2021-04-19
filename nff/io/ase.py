@@ -528,6 +528,7 @@ class NeuralMetadynamics(NeuralFF):
 
         self.pushing_params = pushing_params
         self.old_atoms = old_atoms if (old_atoms is not None) else []
+        self.steps_from_old = []
 
     def make_dsets(self, atoms, bias_atoms):
         props_0 = {"nxyz": [torch.Tensor(atoms.get_nxyz()[bias_atoms, :])]}
@@ -542,6 +543,16 @@ class NeuralMetadynamics(NeuralFF):
     def rmsd_prelims(self, atoms):
 
         num_atoms = len(atoms)
+
+        # f_damp is the turn-on on timescale, measured in
+        # number of steps. From https://pubs.acs.org/doi/pdf/
+        # 10.1021/acs.jctc.9b00143
+
+        kappa = self.pushing_params["kappa"]
+        steps_from_old = torch.Tensor(self.steps_from_old)
+        f_damp = (2 / (1 + torch.exp(-kappa * steps_from_old))
+                  - 1)
+
         # given in mHartree / atom in CREST paper
         k_i = ((self.pushing_params['k_i'] / 1000
                 * units.Hartree * num_atoms)
@@ -559,19 +570,21 @@ class NeuralMetadynamics(NeuralFF):
 
         dsets = self.make_dsets(atoms, bias_atoms)
 
-        return k_i, alpha_i, dsets
+        return k_i, alpha_i, dsets, f_damp
 
     def rmsd_push(self, atoms):
         if not self.old_atoms:
             return np.zeros((len(atoms), 3))
 
-        k_i, alpha_i, dsets = self.rmsd_prelims(atoms)
+        k_i, alpha_i, dsets, f_damp = self.rmsd_prelims(atoms)
         delta_i, _ = compute_distances(dataset=dsets[0],
                                        device=self.device,
                                        dataset_1=dsets[1])
 
         # compute bias potential
-        v_bias = k_i * torch.exp(-alpha_i * delta_i ** 2).sum()
+        v_bias = (f_damp * k_i *
+                  torch.exp(-alpha_i * delta_i ** 2)).sum()
+
         # force is the negative gradient of the potential
         f_bias = -((v_bias * (-2 * alpha_i * delta_i).sum())
                    .repeat(len(atoms), 3))
@@ -589,11 +602,14 @@ class NeuralMetadynamics(NeuralFF):
 
     def append_atoms(self, atoms):
         self.old_atoms.append(atoms)
+        self.steps_from_old.append(0)
 
     def calculate(self,
                   atoms,
                   properties=['energy', 'forces'],
-                  system_changes=all_changes):
+                  system_changes=all_changes,
+                  add_steps=True):
+
         self._calculate(atoms=atoms,
                         properties=properties,
                         system_changes=system_changes)
@@ -605,3 +621,7 @@ class NeuralMetadynamics(NeuralFF):
 
         f_bias = self.get_bias(atoms)
         self.results['forces'] += f_bias
+
+        if add_steps:
+            for i, step in enumerate(self.steps_from_old):
+                self.steps_from_old[i] = step + 1
