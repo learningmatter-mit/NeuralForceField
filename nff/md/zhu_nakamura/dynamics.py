@@ -17,7 +17,7 @@ from nff.md.nms import nms_sample
 from nff.utils.constants import BOHR_RADIUS, FS_TO_AU, AMU_TO_AU, ASE_TO_FS
 from nff.data import Dataset, collate_dicts
 from nff.utils.cuda import batch_to
-from nff.utils.constants import KCAL_TO_AU
+from nff.utils.constants import KCAL_TO_AU, KB_AU
 from nff.nn.utils import single_spec_nbrs
 from nff.train import load_model, batch_detach
 
@@ -162,7 +162,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         self.out_file = out_file
         self.log_file = log_file
-        self.save_period = save_period if (save_period is not None) else self.dt
+        self.save_period = save_period if (
+            save_period is not None) else self.dt
         self.setup_logging()
 
         # everything in a.u. other than positions (which are in angstrom)
@@ -717,7 +718,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.modify_save()
         # ******************************************************************************************
 
-    def full_step(self, compute_internal_forces=True,
+    def full_step(self,
+                  compute_internal_forces=True,
                   do_log=True):
         """
 
@@ -791,6 +793,73 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         # self.output_to_json()
         time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.log(f"Surface hopping completed normally at {time_str}.")
+
+
+class NoseHooverZN(ZhuNakamuraDynamics):
+    def __init__(self,
+                 temperature,
+                 ttime,
+                 **kwargs):
+
+        ZhuNakamuraDynamics.__init__(self, **kwargs)
+        self.zeta = 0.0
+        self.ttime = ttime
+        self.temp = temperature * KB_AU
+        self.n_dof = (3.0 * self.n_atom - 6)
+        self.targe_ekin = 0.5 * self.n_dof * self.temp
+        self.Q = self.n_dof * self.temp * (self.ttime * self.dt) ** 2
+
+    def get_kinetic_energy(self):
+        ke = np.sum(self.get_masses() * mol_norm(self.velocities) ** 2 / 2)
+        return ke
+
+    def position_step(self):
+
+        # get current acceleration and velocity
+        accel = self.get_accel()
+        self.old_accel = accel
+
+        delta_pos = (self.velocities * self.dt + 1 / 2 * BOHR_RADIUS * (
+            accel - self.zeta * self.velocities) * self.dt ** 2)
+        self.positions = self.positions + delta_pos
+
+    def velocity_step(self, do_log=True):
+
+        # NVT stuff
+        # make a half step in velocity
+        ke_0 = self.get_kinetic_energy()
+        self.velocities = (self.velocities + 0.5 * self.dt
+                           * (self.old_accel - self.zeta * self.velocities))
+
+        # make a half step in zeta
+        self.zeta = (self.zeta + 0.5 * self.dt /
+                     self.Q * (ke_0 - self.targe_ekin))
+
+        # make another half step in zeta
+        ke_1 = self.get_kinetic_energy()
+        self.zeta = (self.zeta + 0.5 * self.dt /
+                     self.Q * (ke_1 - self.targe_ekin))
+
+        # make another half step in velocity
+        new_accel = self.get_accel()
+        self.velocities = ((self.velocities + 0.5 * self.dt * new_accel) /
+                           (1 + 0.5 * self.dt * self.zeta))
+
+        # ZN stuff
+        # assume the current frame is in the trajectory until
+        # finding out otherwise
+        self.in_trj = True
+        # update surf (which also appends to surf_list)
+        self.surf = self.surf
+        self.time = self.time + self.dt
+
+        step = int(self.time/self.dt)
+        rel_ens = ", ".join(((self.energies - self.energies[0]) * 27.2
+                             ).reshape(-1).astype("str").tolist())
+
+        if do_log:
+            self.log(f"Completed step {step}. Currently in state {self.surf}.")
+            self.log(f"Relative energies are {rel_ens} eV")
 
 
 class BatchedZhuNakamura:
@@ -884,7 +953,11 @@ class BatchedZhuNakamura:
             these_params["out_file"] = f"{base_out_name}_{i}.csv"
             these_params["log_file"] = f"{base_log_name}_{i}.log"
 
-            zhu_trjs.append(ZhuNakamuraDynamics(atoms=atoms, **these_params))
+            thermostat = these_params.get("thermostat", "none").lower()
+            class_dic = {"none": ZhuNakamuraDynamics,
+                         "nosehoover": NoseHooverZN}
+            zn_class = class_dic[thermostat]
+            zhu_trjs.append(zn_class(atoms=atoms, **these_params))
 
         return zhu_trjs
 

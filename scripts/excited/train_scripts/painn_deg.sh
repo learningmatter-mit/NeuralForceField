@@ -16,7 +16,8 @@ source deactivate
 source ~/.bashrc
 source activate nff_new
 
-CONFIG="../train_config/painn_deg.json"
+# CONFIG="../train_config/painn_deg.json"
+CONFIG=$(echo "/home/saxelrod/training/*/job_info.json")
 
 # change to the number of GPUs you're using per node
 export SLURM_GPUS_PER_NODE=1

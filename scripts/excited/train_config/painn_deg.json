@@ -8,21 +8,15 @@
         "num_conv": 5,
         "output_keys": [
             "energy_0",
-            "energy_1",
-            "energy_2",
-            "energy_3"
+            "energy_1"
         ],
         "grad_keys": [
             "energy_0_grad",
-            "energy_1_grad",
-            "energy_2_grad",
-            "energy_3_grad"
+            "energy_1_grad"
         ],
         "skip_connection": {
             "energy_0": true,
-            "energy_1": true,
-            "energy_2": true,
-            "energy_3": true
+            "energy_1": true
         },
         "compute_delta": true,
         "learnable_k": true,
@@ -36,18 +30,11 @@
             "energy_1": {
                 "name": "sum",
                 "param": {}
-            },
-            "energy_2": {
-                "name": "sum",
-                "param": {}
-            },
-            "energy_3": {
-                "name": "sum",
-                "param": {}
             }
         }
     },
     "train_params": {
+        "device": 3,
         "batch_size": 10,
         "mini_batches": 1,
         "checkpoints_to_keep": 3,
@@ -59,13 +46,7 @@
                     {
                         "coef": 0.1,
                         "params": {
-                            "key": "energy_2_energy_1_delta"
-                        }
-                    },
-                    {
-                        "coef": 0.1,
-                        "params": {
-                            "key": "energy_3_energy_2_delta"
+                            "key": "energy_1_energy_0_delta"
                         }
                     },
                     {
@@ -81,19 +62,6 @@
                         }
                     },
                     {
-                        "coef": 0.1,
-                        "params": {
-                            "key": "energy_2"
-                        }
-                    },
-                    {
-                        "coef": 0.1,
-                        "params": {
-                            "key": "energy_3"
-                        }
-                    },
-
-                    {
                         "coef": 1,
                         "params": {
                             "key": "energy_0_grad"
@@ -103,18 +71,6 @@
                         "coef": 1,
                         "params": {
                             "key": "energy_1_grad"
-                        }
-                    },
-                    {
-                        "coef": 1,
-                        "params": {
-                            "key": "energy_2_grad"
-                        }
-                    },
-                    {
-                        "coef": 1,
-                        "params": {
-                            "key": "energy_3_grad"
                         }
                     }
                 ]
@@ -134,7 +90,7 @@
             "MeanAbsoluteError"
         ],
         "weightpath": "/home/saxelrod/rgb_nfs/dsets_deg",
-        "model_name": "GNBHRKFJIUUOQI-UHFFFAOYNA-N",
+        "model_name": "GNBHRKFJIUUOQI-UHFFFAOYNA-N_2",
         "mol_loss_norm": false,
         "seed": 0,
         "torch_par": false,

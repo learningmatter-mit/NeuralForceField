@@ -22,8 +22,8 @@ export NFFDIR="/home/saxelrod/repo/nff/master/NeuralForceField"
 
 # config=dset_config/qchem.json
 # config=dset_config/gamess.json
-# config=dset_config/deg.json
-config=dset_config/qchem_tl.json
+config=dset_config/deg.json
+# config=dset_config/qchem_tl.json
 
 # rm lin_stoich_190_70.json
 python make_dset.py --config_file $config

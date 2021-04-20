@@ -442,6 +442,7 @@ def en_trim(good_idx_dic,
 
     val = torch.stack(sub_dic[key])
     std = val.std()
+#    mean = val.mean()
     mean = val.mean()
 
     bad_idx = ((abs(val - mean) > max_std_en * std).nonzero()
@@ -466,7 +467,8 @@ def grad_trim(good_idx_dic,
 
     val = torch.stack(sub_dic[key])
     std = val.std(0)
-    mean = val.mean(0)
+#    mean = val.mean(0)
+    mean = val.mean()
 
     bad_idx = ((abs(val - mean) > max_std_force * std).nonzero()
                [:, 0]).tolist()
@@ -479,6 +481,7 @@ def grad_trim(good_idx_dic,
 
     for i in bad_idx:
         good_idx_dic[i] *= 0
+
     return good_idx_dic
 
 

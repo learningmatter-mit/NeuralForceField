@@ -35,6 +35,7 @@ KCAL_TO_AU = {
 }
 
 KB_EV = 0.0000861731
+KB_AU = 3.166815e-6
 EV_TO_AU = 1/27.2114
 
 # Hardness used in xtb, in eV. Source: Ghosh, D.C. and Islam, N., 2010.

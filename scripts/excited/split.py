@@ -74,8 +74,6 @@ def add_diabat(cluster_rmsds,
 
     """
 
-    # props =
-
     # is this the right order of the indexing?
     ref_rmsds = cluster_rmsds[:, :num_states]
 
@@ -593,6 +591,13 @@ def split_and_sample(dset, job_info):
     split_dic = make_split(dset=dset,
                            job_info=job_info)
 
+    ##
+    # import pdb
+    # pdb.set_trace()
+    # print({split: len(list(set(val['dset'].props['smiles'] )) )
+    #   for split, val in split_dic.items()})
+    ##
+
     print("Creating samplers and diabatic values for each split...")
 
     for key in tqdm(list(split_dic.keys())):
@@ -637,6 +642,9 @@ def split_and_sample(dset, job_info):
 
         split_dic[key] = {"dset": this_dset, "sampler": sampler}
 
+        # import pdb
+        # pdb.set_trace()
+
     return split_dic
 
 
@@ -657,6 +665,10 @@ def save_as_chunks(split_dic, job_info):
 
             dset_chunk = chunk_dic["dset"]
             dset_path = os.path.join(direc, f"{split}.pth.tar")
+
+            # import pdb
+            # pdb.set_trace()
+
             dset_chunk.save(dset_path)
 
             balance_dict = to_json(chunk_dic["balance_dict"])

@@ -648,14 +648,18 @@ def get_nn_quants(all_params):
 
     """
 
-    params = {**all_params['train_params'],
-              **all_params['model_params']}
-    model_name = params['model_name']
+    params = {**all_params,
+              **all_params.get('train_params', {}),
+              **all_params.get('model_params', {}),
+              **all_params.get('details', {})}
+    model_name = params.get('model_name', params['nnid'])
     base_dir = params['weightpath']
-    if not os.path.isdir(base_dir):
+    if not os.path.isdir(str(base_dir)):
         base_dir = params['mounted_weightpath']
     assert os.path.isdir(base_dir)
     weight_path = os.path.join(base_dir, str(model_name))
+    if not os.path.isdir(weight_path):
+        os.makedirs(weight_path)
 
     return model_name, params, weight_path
 
@@ -963,11 +967,11 @@ def build_loss(loss_coef,
                loss_type,
                multi_loss_dict):
 
-    if loss_coef is not None:
+    if multi_loss_dict is not None:
+        loss_fn = loss.build_multi_loss(multi_loss_dict)
+    elif loss_coef is not None:
         loss_builder = getattr(loss, "build_{}_loss".format(loss_type))
         loss_fn = loss_builder(loss_coef=loss_coef)
-    elif multi_loss_dict is not None:
-        loss_fn = loss.build_multi_loss(multi_loss_dict)
     else:
         raise Exception("Must specify either `loss_coef` or `multi_loss_dict`")
 
@@ -1267,8 +1271,10 @@ def add_args(all_params):
         args (list): extra arguments in `train`
     """
 
-    params = {**all_params['train_params'],
-              **all_params['model_params']}
+    params = {**all_params,
+              **all_params.get('train_params', {}),
+              **all_params.get('model_params', {}),
+              **all_params.get('details', {})}
     metric_names = params.get("metrics", DEFAULT_METRICS)
     base_keys = params.get("base_keys", params.get("output_keys", ["energy"]))
     grad_keys = params.get("grad_keys", ["energy_grad"])
