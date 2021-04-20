@@ -352,7 +352,7 @@ def remove_bias(layers):
             layers (list): list of dictionaries of the form {"name": "...",
                     "param": {...}}
     Returns:
-            new_layers (list): same idea as `layers`, but with "param" of 
+            new_layers (list): same idea as `layers`, but with "param" of
                     linear layers updated to contain {"bias": False}.
 
     """
@@ -370,6 +370,13 @@ def single_spec_nbrs(dset,
 
     xyz = torch.stack(dset.props['nxyz'])[:, :, 1:]
 
+    ###
+#    xyz = [dset.props['nxyz'][0],
+#          dset.props['nxyz'][0] * float('inf'),
+#          dset.props['nxyz'][1]]
+#    xyz = torch.stack(xyz)[:, :, 1:]
+    ###
+
     dist_mat = ((xyz[:, :, None, :] - xyz[:, None, :, :])
                 .to(device).norm(dim=-1))
     nbr_mask = (dist_mat <= cutoff) * (dist_mat > 0)
@@ -378,11 +385,18 @@ def single_spec_nbrs(dset,
     if not directed:
         nbrs = nbrs[nbrs[:, 2] > nbrs[:, 1]]
 
-    split_idx = (nbrs[:, 0][1:] != nbrs[:, 0][:-1]
-                 ).nonzero().reshape(-1) + 1
-    split_sizes = torch.cat([split_idx[0].reshape(-1),
-                             split_idx[1:] - split_idx[:-1],
-                             nbrs.shape[0] - split_idx[-1].reshape(-1)]).tolist()
+    split_idx = ((nbrs[:, 0][1:] != nbrs[:, 0][:-1])
+                .nonzero().reshape(-1) + 1)
+
+    split_sizes = []
+    num_mols = xyz.shape[0]
+    for i in range(num_mols):
+        match_nbrs = (nbrs[:, 0] == i)
+        if match_nbrs.shape[0] != 0:
+            split_size = match_nbrs.nonzero().shape[0]
+        else:
+            split_size = 0
+        split_sizes.append(split_size)
     split_nbrs = list(torch.split(nbrs[:, 1:].cpu(), split_sizes))
 
     return split_nbrs
