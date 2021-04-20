@@ -654,7 +654,7 @@ def get_nn_quants(all_params):
     base_dir = params['weightpath']
     if not os.path.isdir(base_dir):
         base_dir = params['mounted_weightpath']
-    assert os.path.isdir(base_dir
+    assert os.path.isdir(base_dir)
     weight_path = os.path.join(base_dir, str(model_name))
 
     return model_name, params, weight_path
