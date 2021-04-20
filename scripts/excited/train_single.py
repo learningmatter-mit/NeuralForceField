@@ -651,7 +651,11 @@ def get_nn_quants(all_params):
     params = {**all_params['train_params'],
               **all_params['model_params']}
     model_name = params['model_name']
-    weight_path = os.path.join(params['weightpath'], str(model_name))
+    base_dir = params['weightpath']
+    if not os.path.isdir(base_dir):
+        base_dir = params['mounted_weightpath']
+    assert os.path.isdir(base_dir
+    weight_path = os.path.join(base_dir, str(model_name))
 
     return model_name, params, weight_path
 
@@ -1211,8 +1215,8 @@ def train(gpu,
     # if the world size is 1, then allow the option of `device` being
     # something other than `gpu` (e.g. if you want to train on a cpu)
 
-    if world_size == 1 and params.get("device") == "cpu":
-        device = "cpu"
+    if world_size == 1:
+        device = params.get("device", 0)
     else:
         device = gpu
 
