@@ -631,6 +631,17 @@ class NeuralMetadynamics(NeuralFF):
         self.old_atoms.append(atoms)
         self.steps_from_old.append(0)
 
+        max_ref = self.pushing_params.get("max_ref")
+        if max_ref is None:
+            max_ref = float('inf')
+
+        if len(self.old_atoms) >= max_ref:
+            self.old_atoms = self.old_atoms[-max_ref:]
+            self.steps_from_old = self.steps_from_old[-max_ref:]
+
+        print(len(self.old_atoms))
+        print(len(self.steps_from_old))
+
     def calculate(self,
                   atoms,
                   properties=['energy', 'forces'],
