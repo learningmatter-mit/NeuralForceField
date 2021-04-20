@@ -1329,14 +1329,15 @@ class CombinedZhuNakamura:
         steps = int(self.ground_params["max_time"] /
                     self.ground_params["timestep"])
         equil_steps = int(self.ground_params["equil_time"] /
-                          self.ground_params["timestep"])
+                          self.ground_params["timestep"] )
 
         self.ground_dynamics.run(steps=steps)
-
         trj = Trajectory(self.ground_savefile)
 
+        loginterval = self.ground_params.get("loginterval", 1)
+        logged_equil = int(equil_steps / loginterval)
         possible_states = [trj[index] for index in
-                           range(equil_steps, len(trj))]
+                           range(logged_equil, len(trj))]
         random_indices = random.sample(range(len(possible_states)),
                                        self.num_trj)
         actual_states = [possible_states[index] for index in random_indices]
