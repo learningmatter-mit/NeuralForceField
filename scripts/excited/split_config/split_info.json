@@ -1,6 +1,6 @@
 {
-    "dset_path": "/nfs/rafagblab001/saxelrod/dsets_switches/0",
-    "model_path": "/nfs/rafagblab001/saxelrod/big_train_random_split",
+    "dset_path": "/home/saxelrod/supercloud/models/switches/1233/0",
+    "model_path": "/home/saxelrod/supercloud/models/switches/1233",
     "pruning": {
         "substruc_smiles": [
             [
@@ -44,7 +44,8 @@
             "zhu_kwargs": {
                 "upper_key": "energy_1",
                 "lower_key": "energy_0",
-                "expec_gap": 0.00551
+                "expec_gap": 0.00551,
+                "func_type": "gaussian"
             },
             "spec_weight": 0.6,
             "config_weight": 0.5,
@@ -86,7 +87,7 @@
             "test": 10000
         }
     },
-    "needs_nbrs": true,
-    "needs_angles": true,
+    "needs_nbrs": false,
+    "needs_angles": false,
     "cutoff": 5.0
 }
