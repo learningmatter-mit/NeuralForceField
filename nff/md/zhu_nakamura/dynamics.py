@@ -805,7 +805,8 @@ class NoseHooverZN(ZhuNakamuraDynamics):
         self.zeta = 0.0
         self.ttime = ttime
         self.temp = temperature * KB_AU
-        self.n_dof = (3.0 * self.n_atom - 6)
+        n_atom = len(self.atoms)
+        self.n_dof = (3.0 * n_atom - 6)
         self.targe_ekin = 0.5 * self.n_dof * self.temp
         self.Q = self.n_dof * self.temp * (self.ttime * self.dt) ** 2
 
@@ -1224,7 +1225,6 @@ class BatchedZhuNakamura:
         save_steps = int(self.save_period / (self.dt / FS_TO_AU))
 
         while not complete:
-            num_steps += 1
             get_new_neighbors = np.mod(num_steps,
                                        self.nbr_update_period) == 0
             do_save = np.mod(num_steps, save_steps) == 0
@@ -1237,6 +1237,7 @@ class BatchedZhuNakamura:
 
             complete = all([trj.time >= self.max_time
                             for trj in self.zhu_trjs])
+            num_steps += 1
 
         print("Neural ZN terminated normally.")
 
