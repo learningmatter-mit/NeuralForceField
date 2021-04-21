@@ -814,8 +814,11 @@ class NoseHooverZN(ZhuNakamuraDynamics):
         self.targe_ekin = 0.5 * self.n_dof * self.temp
         self.Q = self.n_dof * self.temp * (self.ttime * self.dt) ** 2
 
-    def get_kinetic_energy(self):
-        ke = np.sum(self.get_masses() * mol_norm(self.velocities) ** 2 / 2)
+    def get_kinetic_energy(self,
+                           vel=None):
+        if vel is None:
+            vel = self.velocities
+        ke = np.sum(self.get_masses() * mol_norm(vel) ** 2 / 2)
         return ke
 
     def position_step(self):
@@ -824,8 +827,10 @@ class NoseHooverZN(ZhuNakamuraDynamics):
         accel = self.get_accel()
         self.old_accel = accel
 
-        delta_pos = (self.velocities * self.dt + 1 / 2 * BOHR_RADIUS * (
-            accel - self.zeta * self.velocities) * self.dt ** 2)
+        delta_pos = self.velocities * self.dt
+        delta_pos += ((accel - self.zeta * self.velocities)
+                      * 0.5 * self.dt ** 2)
+        delta_pos *= BOHR_RADIUS
         self.positions = self.positions + delta_pos
 
     def velocity_step(self, do_log=True):
@@ -833,21 +838,24 @@ class NoseHooverZN(ZhuNakamuraDynamics):
         # NVT stuff
         # make a half step in velocity
         ke_0 = self.get_kinetic_energy()
-        self.velocities = (self.velocities + 0.5 * self.dt
-                           * (self.old_accel - self.zeta * self.velocities))
+
+        # don't update v yet because it will mess up the "append to
+        # velocity list" part of the velocity setter
+        v_half = (self.velocities + 0.5 * self.dt
+                  * (self.old_accel - self.zeta * self.velocities))
 
         # make a half step in zeta
-        self.zeta = (self.zeta + 0.5 * self.dt /
-                     self.Q * (ke_0 - self.targe_ekin))
+        z_half = (self.zeta + 0.5 * self.dt /
+                  self.Q * (ke_0 - self.targe_ekin))
 
         # make another half step in zeta
-        ke_1 = self.get_kinetic_energy()
-        self.zeta = (self.zeta + 0.5 * self.dt /
+        ke_1 = self.get_kinetic_energy(v_half)
+        self.zeta = (z_half + 0.5 * self.dt /
                      self.Q * (ke_1 - self.targe_ekin))
 
         # make another half step in velocity
         new_accel = self.get_accel()
-        self.velocities = ((self.velocities + 0.5 * self.dt * new_accel) /
+        self.velocities = ((v_half + 0.5 * self.dt * new_accel) /
                            (1 + 0.5 * self.dt * self.zeta))
 
         # ZN stuff
@@ -1008,7 +1016,6 @@ class BatchedZhuNakamura:
         dataset = Dataset(props=props,
                           units='kcal/mol',
                           check_props=False)
-
 
         try:
             if get_new_neighbors:
@@ -1340,7 +1347,7 @@ class CombinedZhuNakamura:
         steps = int(self.ground_params["max_time"] /
                     self.ground_params["timestep"])
         equil_steps = int(self.ground_params["equil_time"] /
-                          self.ground_params["timestep"] )
+                          self.ground_params["timestep"])
 
         self.ground_dynamics.run(steps=steps)
         trj = Trajectory(self.ground_savefile)
