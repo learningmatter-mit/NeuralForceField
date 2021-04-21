@@ -367,7 +367,10 @@ class NeuralFF(Calculator):
         if 'forces' in properties:
             self.results['forces'] = -energy_grad.reshape(-1, 3)
 
-    def calculate(*args, **kwargs):
+    def calculate(self,
+                  *args,
+                  **kwargs):
+
         return self._calculate(*args, **kwargs)
 
     @classmethod
