@@ -625,7 +625,11 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
                                               "new_surf": new_surf})
                 continue
 
-            self.update_diabatic_quants(lower_state, upper_state)
+            # another place it might fail with nan
+            try:
+                self.update_diabatic_quants(lower_state, upper_state)
+            except ValueError:
+                return
 
             # use context manager to ignore any divide by 0's
             with np.errstate(divide='ignore', invalid='ignore'):
@@ -1005,55 +1009,62 @@ class BatchedZhuNakamura:
                           units='kcal/mol',
                           check_props=False)
 
-        if get_new_neighbors:
-            # can stack the nxyz's and generate the neighbor list accordingly
-            # because all geoms correspond to the same molecule
-            nbrs = single_spec_nbrs(dset=dataset,
-                                    cutoff=self.cutoff,
-                                    device=self.device)
-            dataset.props['nbr_list'] = nbrs
 
-            # dataset.generate_neighbor_list(self.cutoff)
+        try:
+            if get_new_neighbors:
+                # can stack the nxyz's and generate the neighbor list accordingly
+                # because all geoms correspond to the same molecule
+                nbrs = single_spec_nbrs(dset=dataset,
+                                        cutoff=self.cutoff,
+                                        device=self.device)
+                dataset.props['nbr_list'] = nbrs
 
-            if self.needs_angles:
-                dataset.generate_angle_list()
+                # dataset.generate_neighbor_list(self.cutoff)
+
+                if self.needs_angles:
+                    dataset.generate_angle_list()
 
             dataset.props["num_atoms"] = dataset.props["num_atoms"].long()
+            self.props = dataset.props
+            loader = DataLoader(dataset,
+                                batch_size=self.batch_size,
+                                collate_fn=collate_dicts)
 
-        self.props = dataset.props
-        loader = DataLoader(dataset,
-                            batch_size=self.batch_size,
-                            collate_fn=collate_dicts)
+            for i, batch in enumerate(loader):
 
-        for i, batch in enumerate(loader):
+                batch = batch_to(batch, self.device)
+                results = self.model(batch)
+                results = batch_detach(results)
 
-            batch = batch_to(batch, self.device)
-            results = self.model(batch)
-            results = batch_detach(results)
+                for key in self.grad_keys:
+                    N = batch["num_atoms"].cpu().detach().numpy().tolist()
+                    results[key] = torch.split(results[key], N)
 
-            for key in self.grad_keys:
-                N = batch["num_atoms"].cpu().detach().numpy().tolist()
-                results[key] = torch.split(results[key], N)
+                current_trj = i * self.batch_size
 
-            current_trj = i * self.batch_size
+                for j, trj in enumerate(trjs[current_trj:
+                                             current_trj + self.batch_size]):
+                    energies = []
+                    forces = []
+                    for key in self.energy_keys:
+                        energy = (results[key][j].item())*KCAL_TO_AU["energy"]
 
-            for j, trj in enumerate(trjs[current_trj:
-                                         current_trj + self.batch_size]):
-                energies = []
-                forces = []
-                for key in self.energy_keys:
-                    energy = (results[key][j].item())*KCAL_TO_AU["energy"]
+                        force = (
+                            (-results[key + "_grad"][j]).detach(
+                            ).cpu().numpy()
+                        ) * KCAL_TO_AU["energy"]*KCAL_TO_AU["_grad"]
 
-                    force = (
-                        (-results[key + "_grad"][j]).detach(
-                        ).cpu().numpy()
-                    ) * KCAL_TO_AU["energy"]*KCAL_TO_AU["_grad"]
+                        energies.append(energy)
+                        forces.append(force)
 
-                    energies.append(energy)
-                    forces.append(force)
+                    trj.energies = np.array(energies)
+                    trj.forces = np.array(forces)
 
-                trj.energies = np.array(energies)
-                trj.forces = np.array(forces)
+        except Exception as e:
+            print(e)
+            print(dataset.props)
+            import pdb
+            pdb.post_mortem()
 
     def add_diabat_forces(self):
         diabat_trjs = []
