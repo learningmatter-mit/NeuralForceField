@@ -860,8 +860,8 @@ class NoseHooverZN(ZhuNakamuraDynamics):
         self.velocities = ((v_half + 0.5 * self.dt * new_accel) /
                            (1 + 0.5 * self.dt * self.zeta))
 
-        temp = self.get_kinetic_energy() / (1 / 2 * self.n_dof) / KB_AU
-        print("Temperature = %.2f K" % temp)
+        # temp = self.get_kinetic_energy() / (1 / 2 * self.n_dof) / KB_AU
+        # print("Temperature = %.2f K" % temp)
 
         # ZN stuff
         # assume the current frame is in the trajectory until
