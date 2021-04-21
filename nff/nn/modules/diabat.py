@@ -688,3 +688,43 @@ class CrossTalk(nn.Module):
                 final_results[key] = val
 
         return final_results
+
+
+class AdiabaticReadout(nn.Module):
+    def __init__(self,
+                 output_keys,
+                 grad_keys,
+                 abs_name):
+
+        self.abs_fn = self.get_abs(abs_name)
+        self.output_keys = output_keys
+        self.grad_keys = grad_keys
+
+    def get_abs(self, abs_name):
+        if abs_name == "abs":
+            return abs
+        elif abs_name in layer_types:
+            return layer_types[abs_name]()
+        else:
+            raise NotImplementedError
+
+    def forward(self,
+                results,
+                xyz):
+
+        ordered_keys = sorted(self.output_keys, key=lambda x:
+                              int(x.split("_")[-1]))
+
+        for i, key in enumerate(ordered_keys):
+            if i == 0:
+                continue
+            lower_key = ordered_keys[i - 1]
+            results[key] = results[lower_key] + self.abs_fn(results[key])
+
+        for key in self.grad_keys:
+            output = results[key.replace("_grad", "")]
+            grad = compute_grad(output=output,
+                                inputs=xyz)
+            results[key] = grad
+
+        return results

@@ -10,9 +10,8 @@ from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
                                   NbrEmbeddingBlock)
 from nff.nn.modules.schnet import (AttentionPool, SumPool, MolFpPool,
                                    MeanPool)
-from nff.nn.modules.diabat import DiabaticReadout
+from nff.nn.modules.diabat import DiabaticReadout, AdiabaticReadout
 from nff.nn.layers import (Diagonalize, ExpNormalBasis)
-
 
 POOL_DIC = {"sum": SumPool,
             "mean": MeanPool,
@@ -277,15 +276,6 @@ class PainnDiabat(Painn):
         energy_keys = modelparams["output_keys"]
         diabat_keys = modelparams["diabat_keys"]
         delta = modelparams.get("delta", False)
-
-        # sigma_delta_keys = modelparams.get("sigma_delta_keys")
-        # if delta:
-        #     assert len(diabat_keys) == 2
-        #     new_out_keys = [diabat_keys[0][1], *sigma_delta_keys]
-        # else:
-        #     new_out_keys = list(set(np.array(diabat_keys).reshape(-1)
-        #                             .tolist()))
-
         new_out_keys = list(set(np.array(diabat_keys).reshape(-1)
                                 .tolist()))
 
@@ -341,5 +331,33 @@ class PainnDiabat(Painn):
                                         add_nacv=add_nacv,
                                         add_grad=add_grad,
                                         add_gap=add_gap)
+
+        return results
+
+
+class PainnAdiabat(Painn):
+
+    def __init__(self, modelparams):
+        new_params = copy.deepcopy(modelparams)
+        new_params.update({"grad_keys": []})
+
+        super().__init__(new_params)
+
+        self.adiabatic_readout = AdiabaticReadout(
+            output_keys=self.output_keys,
+            grad_keys=modelparams["grad_keys"],
+            abs_name=modelparams["abs_fn"])
+
+    def forward(self,
+                batch,
+                xyz=None,
+                add_nacv=False,
+                add_grad=True,
+                add_gap=True):
+
+        results, xyz = self.run(batch=batch,
+                                xyz=xyz)
+        results = self.adiabatic_readout(results=results,
+                                         xyz=xyz)
 
         return results

@@ -34,7 +34,8 @@ layer_types = {
     "Dropout": torch.nn.Dropout,
     "LeakyReLU": torch.nn.LeakyReLU,
     "ELU":  torch.nn.ELU,
-    "swish": Swish
+    "swish": Swish,
+    "softplus": F.softplus
 }
 
 
