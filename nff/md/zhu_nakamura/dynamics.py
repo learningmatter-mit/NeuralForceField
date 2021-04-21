@@ -827,22 +827,24 @@ class NoseHooverZN(ZhuNakamuraDynamics):
         accel = self.get_accel()
         self.old_accel = accel
 
-        delta_pos = self.velocities * self.dt
-        delta_pos += ((accel - self.zeta * self.velocities)
-                      * 0.5 * self.dt ** 2)
-        delta_pos *= BOHR_RADIUS
+        delta_pos = (self.velocities * self.dt
+                     + (accel - self.zeta * self.velocities)
+                     * 0.5 * self.dt ** 2) * BOHR_RADIUS
         self.positions = self.positions + delta_pos
 
     def velocity_step(self, do_log=True):
 
         # NVT stuff
-        # make a half step in velocity
+
+        # ke before half velocity step
         ke_0 = self.get_kinetic_energy()
 
-        # don't update v yet because it will mess up the "append to
-        # velocity list" part of the velocity setter
-        v_half = (self.velocities + 0.5 * self.dt
-                  * (self.old_accel - self.zeta * self.velocities))
+        # make a half step in velocity
+        # (don't update v yet because it will mess up the "append to
+        # velocity list" part of the velocity setter)
+
+        v_half = (self.velocities + 0.5 * self.dt *
+                  (self.old_accel - self.zeta * self.velocities))
 
         # make a half step in zeta
         z_half = (self.zeta + 0.5 * self.dt /
@@ -857,6 +859,9 @@ class NoseHooverZN(ZhuNakamuraDynamics):
         new_accel = self.get_accel()
         self.velocities = ((v_half + 0.5 * self.dt * new_accel) /
                            (1 + 0.5 * self.dt * self.zeta))
+
+        temp = self.get_kinetic_energy() / (1 / 2 * self.n_dof) / KB_AU
+        print("Temperature = %.2f K" % temp)
 
         # ZN stuff
         # assume the current frame is in the trajectory until
