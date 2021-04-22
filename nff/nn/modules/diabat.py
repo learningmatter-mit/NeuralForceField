@@ -696,6 +696,8 @@ class AdiabaticReadout(nn.Module):
                  grad_keys,
                  abs_name):
 
+        super().__init__()
+        
         self.abs_fn = self.get_abs(abs_name)
         self.output_keys = output_keys
         self.grad_keys = grad_keys
