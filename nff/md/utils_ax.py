@@ -355,10 +355,10 @@ class ZhuNakamuraLogger:
         return present, freq_gt_2
 
     def modify_hop(self, new_list):
-        
+
         key = 'hopping_probability'
-        new_list[-2][key] = copy.deepcopy(new_list[-1][key])
-        new_list[-1][key] = []
+        new_list[-3][key] = copy.deepcopy(new_list[-2][key])
+        new_list[-3][key] = []
 
         return new_list
 
