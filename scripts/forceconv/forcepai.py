@@ -178,17 +178,57 @@ class ForcePai(nn.Module):
         )
 
         self.qp2_update = nn.ModuleList(
-            [nn.Sequential(Dense(in_features=2*feat_dim, 
-                                 out_features=feat_dim,
+            [nn.Sequential(Dense(in_features=feat_dim, 
+                                 out_features=feat_dim//2,
                                  bias=True,
                                  dropout_rate=conv_dropout,
                                  activation=to_module(activation)), 
-                           Dense(in_features=feat_dim, 
+                           Dense(in_features=feat_dim//2, 
                                  out_features=1,
                                  bias=True,
                                  dropout_rate=conv_dropout))
              for _ in range(num_conv)]
         )
+
+        # self.pp1_update = nn.ModuleList(
+        #     [nn.Sequential(Dense(in_features=feat_dim, 
+        #                          out_features=feat_dim//2,
+        #                          bias=True,
+        #                          dropout_rate=conv_dropout,
+        #                          activation=to_module(activation)), 
+        #                    Dense(in_features=feat_dim//2, 
+        #                          out_features=1,
+        #                          bias=True,
+        #                          dropout_rate=conv_dropout))
+        #      for _ in range(num_conv)]
+        # )
+
+        # self.pp2_update = nn.ModuleList(
+        #     [nn.Sequential(Dense(in_features=feat_dim, 
+        #                          out_features=feat_dim//2,
+        #                          bias=True,
+        #                          dropout_rate=conv_dropout,
+        #                          activation=to_module(activation)), 
+        #                    Dense(in_features=feat_dim//2, 
+        #                          out_features=1,
+        #                          bias=True,
+        #                          dropout_rate=conv_dropout))
+        #      for _ in range(num_conv)]
+        # )
+
+        # self.pp31_update = nn.ModuleList(
+        #     [GatedEquivariantBlock(feat_dim=feat_dim,
+        #                            activation=activation,
+        #                            dropout=conv_dropout)
+        #      for _ in range(num_conv)]
+        # )
+
+        # self.pp32_update = nn.ModuleList(
+        #     [GatedEquivariantBlock(feat_dim=feat_dim,
+        #                            activation=activation,
+        #                            dropout=conv_dropout)
+        #      for _ in range(num_conv)]
+        # )
 
         self.output_keys = output_keys
         # no skip connection in original paper
@@ -269,21 +309,23 @@ class ForcePai(nn.Module):
             # model the symmetric force between atoms
             # f_qq
             f_qq_block = self.qq_update[i]
-            f_qq = f_qq_block(s_i[nbrs[:, 0]] + s_i[nbrs[:, 1]]) * xyz_adjoint
+            f_qq = f_qq_block(s_i[nbrs[:, 0]] * s_i[nbrs[:, 1]]) * xyz_adjoint
             
-            # f_qp1
+            # f_qp
+            ## f_qp1
             f_qp1_block = self.qp1_update[i]
             f_qp1 = f_qp1_block(s_i[nbrs[:, 0]], v_i[nbrs[:, 1]]).sum(1)  # (N_e,M,3)->(N_e,3)
-            # f_qp2
+            ## f_qp2
             f_qp2_block = self.qp2_update[i]
             pr_dot = (v_i[nbrs[:,1]]*xyz_adjoint.unsqueeze(1)).sum(-1)  # (N_e,M,3)->(N_e,M)
-            f_qp2 = f_qp2_block(torch.cat([s_i[nbrs[:, 0]], pr_dot], dim=-1)) * xyz_adjoint
+            f_qp2 = f_qp2_block(s_i[nbrs[:, 0]] * pr_dot) * xyz_adjoint
             
             if  i== 0:
                 f_edge = f_qq + f_qp1 + f_qp2  # + fpp
             else: 
                 f_edge += f_qq + f_qp1 + f_qp2  # + fpp
             
+
         f_atom = scatter_add(f_edge, nbrs[:,0], dim=0, dim_size=graph_size) 
         results['energy_grad'] = f_atom
 
