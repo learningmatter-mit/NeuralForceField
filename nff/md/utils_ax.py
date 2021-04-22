@@ -295,11 +295,13 @@ class ZhuNakamuraLogger:
         self_dic = {key: getattr(self, key) for key in self.save_keys}
         save_dic = dict()
         for key, val in self_dic.items():
-            save_dic[key] = [sub_val.tolist()
-                             for sub_val in val] if hasattr(val[0], "tolist") else val
+            if hasattr(val[0], "tolist"):
+                save_dic[key] = [sub_val.tolist() for sub_val in val]
+            else:
+                save_dic[key] = val
 
-        save_dic["nxyz_list"] = [atoms_to_nxyz(
-            self.atoms, positions) for positions in save_dic["position_list"]]
+        save_dic["nxyz_list"] = [atoms_to_nxyz(self.atoms, positions) for
+                                 positions in save_dic["position_list"]]
         save_list = zhu_dic_to_list(save_dic)
 
         return save_list
@@ -310,10 +312,33 @@ class ZhuNakamuraLogger:
         """
 
         save_list = self.create_save_list()
-        csv_write(out_file=self.out_file, lst=save_list[-1:], method="append")
+        csv_write(out_file=self.out_file,
+                  lst=save_list[-1:],
+                  method="append")
 
         for key in self.save_keys:
             setattr(self, key, getattr(self, key)[-5:])
+
+    def ac_present(self,
+                   old_list,
+                   new_list):
+        """
+        Check if the previous AC step, whose properties you're updating,
+        was actually saved.
+
+        """
+
+        # Our current calcs go
+        # [AC on old surface (-3), step after AC (-2),
+        # AC on new surface (-1)]
+        # Meanwhile, the last thing saved, if saving every
+        # step, was [AC on old surface (-1)]
+
+        old_time = old_list[-1]["time"]
+        new_time = new_list[-3]["time"]
+
+        present = abs(old_time - new_time) < 1e-3
+        return present
 
     def modify_save(self):
         """
@@ -324,15 +349,51 @@ class ZhuNakamuraLogger:
 
         """
 
+        # old calculations, loaded from the csv
         old_list = csv_read(out_file=self.out_file)
-
+        # new list of calculations, which only go back
+        # 5 calcs
         new_list = self.create_save_list()
-        save_list = copy.deepcopy(old_list)
-        replace_length = len(new_list)
-        save_list[-(replace_length-1):] = new_list[:-1]
-        save_list.append(new_list[-1])
 
-        csv_write(out_file=self.out_file, lst=save_list, method="new")
+        # updated list of calculations with AC information
+        # (e.g. hopped, hopping probability, in_trj=False,
+        # etc.)
+        save_list = copy.deepcopy(old_list)
+
+        # Our current calcs go
+        # [AC on old surface (-3), step after AC (-2),
+        # AC on new surface (-1)]
+        # Meanwhile, the last thing saved was
+        # [AC on old surface (-1)] if every frame is
+        # being saved.
+
+        # check to see if [AC on old surface] was
+        # actually saved - may not be if we're not
+        # saving every frame
+        ac_present = self.ac_present(old_list=old_list,
+                                     new_list=new_list)
+
+        # update [AC on old surface] with the
+        # fact that it's not in the trj and that
+        # a hop occured
+
+        if ac_present:
+            # if it was already saved, then replace its
+            # information
+            save_list[-1] = new_list[-3]
+        else:
+            # if it wasn't saved, then add it to the save list
+            save_list.append(new_list[-3])
+
+        # append the calculation from step after AC
+        save_list.append(new_list[-2])
+
+        # save everything except [AC on new surface],
+        # because that will be saved with the regular
+        # save function in the next step anyway
+        csv_write(out_file=self.out_file,
+                  lst=save_list,
+                  method="new")
 
     def output_to_json(self):
         """
