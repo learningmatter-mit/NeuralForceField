@@ -183,7 +183,10 @@ class DiabaticReadout(nn.Module):
                         gap = results[f"energy_{j}"] - results[f"energy_{i}"]
                         nacv = ad_grad[i, j] / gap[k]
                         nacv_key = f"nacv_{i}{j}"
-                        results[nacv_key] = nacv
+                        if nacv_key not in results:
+                            results[nacv_key] = []
+                            add_keys.append(nacv_key)
+                        results[nacv_key].append(nacv)
 
         for key in add_keys:
             results[key] = torch.cat(results[key])

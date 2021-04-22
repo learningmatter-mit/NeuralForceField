@@ -19,6 +19,25 @@ def shrink_batch(batch):
     return new_batch
 
 
+def get_results(batch,
+                model,
+                device,
+                submodel,
+                loss_fn,
+                **kwargs):
+
+    batch = batch_to(batch, device)
+    model.to(device)
+    if submodel is not None:
+        results = getattr(model, submodel)(batch)
+    else:
+        results = model(batch, **kwargs)
+    results = batch_to(batch_detach(results), device)
+    eval_batch_loss = loss_fn(batch, results).data.cpu().numpy()
+
+    return results, eval_batch_loss
+
+
 def evaluate(model,
              loader,
              loss_fn,
@@ -27,6 +46,7 @@ def evaluate(model,
              loss_is_normalized=True,
              submodel=None,
              trim_batch=False,
+             catch_oom=True,
              **kwargs):
     """Evaluate the current state of the model using a given dataloader
     """
@@ -44,31 +64,33 @@ def evaluate(model,
         vsize = batch['nxyz'].size(0)
         n_eval += vsize
 
-        use_device = copy.deepcopy(device)
-        while True:
-            batch = batch_to(batch, use_device)
-            model.to(use_device)
-            try:
-                # e.g. if the result is a sum of results from two models,
-                # and you just want the prediction of one of those models
-                if submodel is not None:
-                    results = getattr(model, submodel)(batch)
-                else:
-                    results = model(batch, **kwargs)
-                results = batch_to(batch_detach(results), use_device)
-                eval_batch_loss = loss_fn(batch, results).data.cpu().numpy()
+        if catch_oom:
+            use_device = copy.deepcopy(device)
+            while True:
+                try:
+                    results, eval_batch_loss = get_results(batch=batch,
+                                                           model=model,
+                                                           device=use_device,
+                                                           submodel=submodel,
+                                                           loss_fn=loss_fn,
+                                                           **kwargs)
 
-                break
-
-            except RuntimeError as err:
-                if 'CUDA out of memory' in str(err):
-                    print(("CUDA out of memory. Doing this batch "
-                           "on cpu."))
-                    use_device = "cpu"
-                    torch.cuda.empty_cache()
-
-                else:
-                    raise err
+                    break
+                except RuntimeError as err:
+                    if 'CUDA out of memory' in str(err):
+                        print(("CUDA out of memory. Doing this batch "
+                               "on cpu."))
+                        use_device = "cpu"
+                        torch.cuda.empty_cache()
+                    else:
+                        raise err
+        else:
+            results, eval_batch_loss = get_results(batch=batch,
+                                                   model=model,
+                                                   device=device,
+                                                   submodel=submodel,
+                                                   loss_fn=loss_fn,
+                                                   **kwargs)
 
         if loss_is_normalized:
             eval_loss += eval_batch_loss * vsize

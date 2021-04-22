@@ -21,8 +21,6 @@ from nff.utils.constants import KCAL_TO_AU, KB_AU
 from nff.nn.utils import single_spec_nbrs
 from nff.train import load_model, batch_detach
 
-import multiprocessing as mp
-
 
 HBAR = 1
 OUT_FILE = "trj.csv"
