@@ -31,8 +31,10 @@ def get_energy(atoms):
 
     #ekin = ekin.detach().numpy()
 
-    print('Energy per atom: Epot = %.2fkcal/mol  Ekin = %.2fkcal/mol (T=%3.0fK)  '
-          'Etot = %.2fkcal/mol' % (epot, ekin, Temperature, epot + ekin))
+    print(('Energy per atom: Epot = %.2fkcal/mol  '
+           'Ekin = %.2fkcal/mol (T=%3.0fK)  '
+           'Etot = %.2fkcal/mol'
+           % (epot, ekin, Temperature, epot + ekin)))
     # print('Energy per atom: Epot = %.5feV  Ekin = %.5feV (T=%3.0fK)  '
     #      'Etot = %.5feV' % (epot, ekin, Temperature, (epot + ekin)))
     return epot, ekin, Temperature
@@ -62,20 +64,24 @@ def write_traj(filename, frames):
                     file.write(str(atom[0]) + " " + str(atom[1]) +
                                " " + str(atom[2]) + " " + str(atom[3]) + "\n")
             elif atom.shape[0] == 3:
-                file.write(
-                    "1" + " " + str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + "\n")
+                file.write(("1" + " " + str(atom[0]) + " "
+                            + str(atom[1]) + " " + str(atom[2]) + "\n"))
             else:
                 raise ValueError("wrong format")
     file.close()
 
 
 def mol_dot(vec1, vec2):
-    """ Say we have two vectors, each of which has the form [[fx1, fy1, fz1], [fx2, fy2, fz2], ...].
-    mol_dot returns an array of dot products between each element of the two vectors. """
+    """ Say we have two vectors, each of which has the form 
+    [[fx1, fy1, fz1], [fx2, fy2, fz2], ...].
+    mol_dot returns an array of dot products between each 
+    element of the two vectors. """
     v1 = np.array(vec1)
     v2 = np.array(vec2)
 
-    return np.transpose([np.dot(element1, element2) for element1, element2 in zip(v1, v2)])
+    out = np.transpose([np.dot(element1, element2) for
+                        element1, element2 in zip(v1, v2)])
+    return out
 
 
 def mol_norm(vec):
@@ -89,8 +95,9 @@ def atoms_to_nxyz(atoms, positions=None):
     if positions is None:
         positions = atoms.get_positions()
 
-    # don't make this a numpy array or it'll become type float64, which will mess up
-    # the tensor computation. Need it to be type float32.
+    # don't make this a numpy array or it'll become type float64,
+    # which will mess up the tensor computation. Need it to be
+    # type float32.
     nxyz = [[symbol, *position] for
             symbol, position in zip(atomic_numbers, positions)]
 
@@ -263,7 +270,6 @@ class ZhuNakamuraLogger:
             os.remove(self.log_file)
 
     # def save_as_pymol(self):
-
     #     """
     #     Save trajectory in pymol format
     #     """
@@ -273,11 +279,12 @@ class ZhuNakamuraLogger:
     #     for position, in_trj in zip(self.position_list, self.in_trj_list):
     #         if not in_trj:
     #             continue
-    #         nxyz = [[symbol, *(xyz.astype("str")).tolist()] for symbol, xyz in zip(symbols, position)]
+    #         nxyz = [[symbol, *(xyz.astype("str")).tolist()] for
+    #                 symbol, xyz in zip(symbols, position)]
     #         nxyz_list.append(nxyz)
     #     pymol_str = ""
     #     for xyz in nxyz_list:
-    #         pymol_str+="{}\nComment\n".format(self.Natom)
+    #         pymol_str += "{}\nComment\n".format(self.Natom)
     #         for sub in xyz:
     #             pymol_str += " ".join(sub) + "\n"
     #     with open(PYMOL_NAME, "w") as f:
@@ -338,7 +345,14 @@ class ZhuNakamuraLogger:
         new_time = new_list[-3]["time"]
 
         present = abs(old_time - new_time) < 1e-3
-        return present
+
+        # see if it saves every two frames. If so, it will save
+        # the next calc. If not then it won't
+        dt = abs(new_list[-1]["time"] - new_list[-2]["time"])
+        old_time = old_list[-1]["time"]
+        freq_gt_2 = len(old_list) * 2 * dt >= old_time
+
+        return present, freq_gt_2
 
     def modify_save(self):
         """
@@ -370,8 +384,9 @@ class ZhuNakamuraLogger:
         # check to see if [AC on old surface] was
         # actually saved - may not be if we're not
         # saving every frame
-        ac_present = self.ac_present(old_list=old_list,
-                                     new_list=new_list)
+        ac_present, freq_gt_2 = self.ac_present(
+            old_list=old_list,
+            new_list=new_list)
 
         # update [AC on old surface] with the
         # fact that it's not in the trj and that
@@ -391,6 +406,16 @@ class ZhuNakamuraLogger:
         # save everything except [AC on new surface],
         # because that will be saved with the regular
         # save function in the next step anyway
+
+        # but if we don't save frequently enough then we won't
+        # save this calc. This would be a problem because
+        # parsing identifies a hop geom as one whose surface
+        # doesn't match the previous surface. So in that case
+        # we add the calc.
+
+        if not freq_gt_2:
+            save_list.append(new_list[-1])
+
         csv_write(out_file=self.out_file,
                   lst=save_list,
                   method="new")
