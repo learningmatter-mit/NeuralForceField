@@ -13,9 +13,6 @@ from torch.nn import ModuleDict, Sequential
 from nff.nn.activations import shifted_softplus, Swish
 from nff.nn.layers import Dense
 
-import numpy as np
-import torch
-import torch.nn.functional as F
 
 __all__ = [
     "set_random_seed",
@@ -35,7 +32,7 @@ layer_types = {
     "LeakyReLU": torch.nn.LeakyReLU,
     "ELU":  torch.nn.ELU,
     "swish": Swish,
-    "softplus": F.softplus
+    "softplus": torch.nn.Softplus
 }
 
 
@@ -157,5 +154,3 @@ def make_directed(nbr_list):
 
     new_nbrs = torch.cat([nbr_list, nbr_list.flip(1)], dim=0)
     return new_nbrs, directed
-
-
