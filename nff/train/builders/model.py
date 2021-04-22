@@ -230,8 +230,7 @@ PARAMS_TYPE = {"SchNet":
                    "cutoff": float,
                    "num_conv": int,
                    "output_keys": list,
-                   "grad_keys": list,
-                   "abs_fn": str
+                   "grad_keys": list
 
                },
 

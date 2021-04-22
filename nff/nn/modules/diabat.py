@@ -697,7 +697,7 @@ class AdiabaticReadout(nn.Module):
                  abs_name):
 
         super().__init__()
-        
+
         self.abs_fn = self.get_abs(abs_name)
         self.output_keys = output_keys
         self.grad_keys = grad_keys
@@ -705,6 +705,8 @@ class AdiabaticReadout(nn.Module):
     def get_abs(self, abs_name):
         if abs_name == "abs":
             return abs
+        elif abs_name is None:
+            return lambda x: x
         elif abs_name in layer_types:
             return layer_types[abs_name]()
         else:
