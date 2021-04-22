@@ -160,8 +160,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         self.out_file = out_file
         self.log_file = log_file
-        self.save_period = save_period if (
-            save_period is not None) else self.dt
+        self.save_period = (save_period if save_period is
+                            not None else self.dt / FS_TO_AU)
         self.setup_logging()
 
         # everything in a.u. other than positions (which are in angstrom)
@@ -713,12 +713,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         # add a new empty hopping probability list
         self.hopping_probabilities = []
         self.time = self.time - self.dt
-
-        # ******************************************************************************************
-        # we should save every time there's a hop. But I'm not sure this works if the previous
-        # step wasn't saved
         self.modify_save()
-        # ******************************************************************************************
 
     def full_step(self,
                   compute_internal_forces=True,
@@ -1022,8 +1017,9 @@ class BatchedZhuNakamura:
 
         try:
             if get_new_neighbors:
-                # can stack the nxyz's and generate the neighbor list accordingly
-                # because all geoms correspond to the same molecule
+                # can stack the nxyz's and generate the neighbor list
+                # accordingly because all geoms correspond to the
+                # same molecule
                 nbrs = single_spec_nbrs(dset=dataset,
                                         cutoff=self.cutoff,
                                         device=self.device)
