@@ -358,7 +358,7 @@ class ZhuNakamuraLogger:
 
         key = 'hopping_probability'
         new_list[-3][key] = copy.deepcopy(new_list[-2][key])
-        new_list[-3][key] = []
+        new_list[-2][key] = []
 
         return new_list
 
