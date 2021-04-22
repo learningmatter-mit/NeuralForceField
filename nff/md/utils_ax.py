@@ -354,6 +354,14 @@ class ZhuNakamuraLogger:
 
         return present, freq_gt_2
 
+    def modify_hop(self, new_list):
+        
+        key = 'hopping_probability'
+        new_list[-2][key] = copy.deepcopy(new_list[-1][key])
+        new_list[-1][key] = []
+
+        return new_list
+
     def modify_save(self):
         """
         Modify a saved csv file (e.g., with Zhu hopping parameters calculated in the next step)
@@ -368,6 +376,11 @@ class ZhuNakamuraLogger:
         # new list of calculations, which only go back
         # 5 calcs
         new_list = self.create_save_list()
+
+        # put the hopping probability info into the second
+        # last calc, because that's where the hop really
+        # happened
+        new_list = self.modify_hop(new_list)
 
         # updated list of calculations with AC information
         # (e.g. hopped, hopping probability, in_trj=False,
