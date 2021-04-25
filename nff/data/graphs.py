@@ -126,7 +126,7 @@ def get_neighbor_list(xyz, cutoff=5, undirected=True):
     # neighbor list
     mask = (dist <= cutoff)
     mask[np.diag_indices(n)] = 0
-    nbr_list = mask.nonzero(as_bool=False)
+    nbr_list = mask.nonzero(as_tuple=False)
 
     if undirected:
         nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
@@ -446,7 +446,7 @@ def m_idx_of_angles(angle_list,
     mask *= (repeated_nbr == reshaped_angle)
 
     # get the indices where everything is true
-    idx = mask.nonzero(as_bool=False)[:, 1]
+    idx = mask.nonzero(as_tuple=False)[:, 1]
 
     return idx
 
@@ -551,7 +551,7 @@ def batch_angle_idx(nbrs):
     mask = ((nbrs[:, 1] == nbrs[:, 0, None])
             * (nbrs[:, 0] != nbrs[:, 1, None]))
     ji_idx = all_idx[mask]
-    kj_idx = mask.nonzero(as_bool=False)[:, 0]
+    kj_idx = mask.nonzero(as_tuple=False)[:, 0]
 
     return ji_idx, kj_idx
 
@@ -589,7 +589,7 @@ def full_angle_idx(batch):
         ji_idx, kj_idx = batch_angle_idx(nbrs)
 
         # map to these indices
-        map_indices = (conf_mask.nonzero(as_bool=False)
+        map_indices = (conf_mask.nonzero(as_tuple=False)
                        .reshape(-1))
         all_ji_idx.append(map_indices[ji_idx])
         all_kj_idx.append(map_indices[kj_idx])

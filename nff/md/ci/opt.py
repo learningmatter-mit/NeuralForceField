@@ -40,7 +40,7 @@ from ase.md.verlet import VelocityVerlet
 from ase.io.trajectory import Trajectory as AseTrajectory
 
 
-from nff.nn.models import PostProcessModel
+# from nff.nn.models import PostProcessModel
 from nff.io.ase_ax import NeuralFF, AtomsBatch
 from nff.train import load_model
 from nff.utils import constants as const

@@ -772,7 +772,10 @@ def concatenate_dict(*dicts):
     for key in keys:
         # flatten list of values
         values = []
-        for num_values, d in zip(values_per_dict, dicts):
+        num = len(dicts)
+        for i in tqdm(num):
+            num_values = values_per_dict[i]
+            d = dicts[i]
             val = d.get(key,
                         ([None] * num_values if num_values > 1 else None)
                         )
