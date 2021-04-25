@@ -29,7 +29,7 @@ class Dataset(TorchDataset):
         props (list of dicts): list of dictionaries containing all properties of the system.
             Keys are the name of the property and values are the properties. Each value
             is given by `props[idx][key]`. The only mandatory key is 'nxyz'. If inputting
-            energies, forces or hessians of different electronic states, the quantities 
+            energies, forces or hessians of different electronic states, the quantities
             should be distinguished with a "_n" suffix, where n = 0, 1, 2, ...
             Whatever name is given to the energy of state n, the corresponding force name
             must be the exact same name, but with "energy" replaced by "force".
@@ -60,17 +60,21 @@ class Dataset(TorchDataset):
     def __init__(self,
                  props,
                  units='kcal/mol',
-                 check_props=True):
+                 check_props=True,
+                 do_copy=True):
         """Constructor for Dataset class.
 
         Args:
             props (dictionary of lists): dictionary containing the
-                properties of the system. Each key has a list, and 
+                properties of the system. Each key has a list, and
                 all lists have the same length.
             units (str): units of the system.
         """
         if check_props:
-            self.props = self._check_dictionary(deepcopy(props))
+            if do_copy:
+                self.props = self._check_dictionary(deepcopy(props))
+            else:
+                self.props = self._check_dictionary(props)
         else:
             self.props = props
         self.units = units
@@ -164,9 +168,9 @@ class Dataset(TorchDataset):
                 props.update({key: to_tensor(val)})
 
             else:
-                assert len(val) == n_geoms, \
-                    'length of {} is not compatible with {} geometries'.format(
-                        key, n_geoms)
+                assert len(val) == n_geoms, (f'length of {key} is not '
+                                             f'compatible with {n_geoms} '
+                                             'geometries')
                 props[key] = to_tensor(val)
 
         return props
