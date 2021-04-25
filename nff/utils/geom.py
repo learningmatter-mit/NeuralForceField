@@ -76,7 +76,7 @@ def rotation_matrix_from_points(m0, m1):
     if f_good.shape[0] != 0:
         # Only do this if we have any good idx
         # Otherwise we'll run into issues with
-        # taking the argmax of an empty 
+        # taking the argmax of an empty
         # sequence
 
         w, V = np.linalg.eigh(f_good)
@@ -216,7 +216,10 @@ def compute_distances(dataset,
 
             distances = distances.transpose(0, 1)
 
-            all_indices = torch.ones_like(distances).nonzero().cpu()
+            all_indices = (torch.ones_like(distances)
+                           .nonzero(as_tuple=False)
+                           .cpu())
+
             all_indices[:, 0] += i_start
             all_indices[:, 1] += j_start
 

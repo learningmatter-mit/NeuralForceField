@@ -760,12 +760,12 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
                 out = self.hop(new_surf)
                 if out != "err":
                     if do_log:
-                        self.log(f"Hopped from from state {old_surf} "
+                        self.log(f"Hopped from state {old_surf} "
                                  f"to state {new_surf}.")
                     return
             else:
                 if do_log:
-                    self.log(f"Did not hop from from state {old_surf} "
+                    self.log(f"Did not hop from state {old_surf} "
                              f"to state {new_surf}.")
 
     def run(self):
@@ -938,8 +938,7 @@ class BatchedZhuNakamura:
         # for saving at intervals
         self.save_period = min([trj.save_period for trj in
                                 self.zhu_trjs])
-        self.dt = min([trj.dt for trj in
-                       self.zhu_trjs])
+        self.dt = min([trj.dt for trj in self.zhu_trjs])
 
     def make_zhu_trjs(self, atoms_list, zhu_params):
         """

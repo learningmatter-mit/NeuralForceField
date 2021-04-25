@@ -761,6 +761,9 @@ def concatenate_dict(*dicts):
 
         return [value]
 
+    # import pdb
+    # pdb.set_trace()
+
     # we have to see how many values the properties of each dictionary has.
     values_per_dict = [get_length_of_values(d) for d in dicts]
 
@@ -770,10 +773,9 @@ def concatenate_dict(*dicts):
         # flatten list of values
         values = []
         for num_values, d in zip(values_per_dict, dicts):
-            val = d.get(
-                key,
-                [None] * num_values if num_values > 1 else None
-            )
+            val = d.get(key,
+                        ([None] * num_values if num_values > 1 else None)
+                        )
             values += flatten_val(val)
         joint_dict[key] = values
 
