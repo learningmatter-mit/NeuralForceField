@@ -769,7 +769,7 @@ def concatenate_dict(*dicts):
 
     # creating the joint dicionary
     joint_dict = {}
-    for key in keys:
+    for key in tqdm(keys):
         # flatten list of values
         values = []
         num = len(dicts)
