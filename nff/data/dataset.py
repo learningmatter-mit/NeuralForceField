@@ -773,7 +773,7 @@ def concatenate_dict(*dicts):
         # flatten list of values
         values = []
         num = len(dicts)
-        for i in tqdm(num):
+        for i in tqdm(list(range(num))):
             num_values = values_per_dict[i]
             d = dicts[i]
             val = d.get(key,
