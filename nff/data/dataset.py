@@ -711,7 +711,19 @@ def concatenate_dict(*dicts):
     assert all([type(d) == dict for d in dicts]), \
         'all arguments have to be dictionaries'
 
-    keys = set(sum([list(d.keys()) for d in dicts], []))
+    # Old method
+    # keys = set(sum([list(d.keys()) for d in dicts], []))
+
+    # New method
+    keys = set()
+    for dic in dicts:
+        for key in dic.keys():
+            if key not in keys:
+                keys.add(key)
+
+    # While less pretty, the new method is MUCH faster. For example,
+    # for a dataset of size 600,000, the old method literally
+    # takes hours, while the new method takes 250 ms
 
     def is_list_of_lists(value):
         if isinstance(value, list):
@@ -761,21 +773,15 @@ def concatenate_dict(*dicts):
 
         return [value]
 
-    # import pdb
-    # pdb.set_trace()
-
     # we have to see how many values the properties of each dictionary has.
     values_per_dict = [get_length_of_values(d) for d in dicts]
 
     # creating the joint dicionary
     joint_dict = {}
-    for key in tqdm(keys):
+    for key in keys:
         # flatten list of values
         values = []
-        num = len(dicts)
-        for i in tqdm(list(range(num))):
-            num_values = values_per_dict[i]
-            d = dicts[i]
+        for num_values, d in zip(values_per_dict, dicts):
             val = d.get(key,
                         ([None] * num_values if num_values > 1 else None)
                         )

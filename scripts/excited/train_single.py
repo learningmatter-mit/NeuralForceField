@@ -756,12 +756,17 @@ def make_stats(trainer,
         h, hooks.PrintingHook)][0]
     final_stats = log_hook.aggregate(trainer, test=True)
 
-    stat_path = os.path.join(weight_path, "test_stats.json")
-    param_path = os.path.join(weight_path, "params.json")
+    # param_path = os.path.join(weight_path, "params.json")
 
-    with open(stat_path, 'w') as f_open:
-        json.dump(final_stats, f_open, sort_keys=True, indent=4)
-    log_train(f"Test stats saved in {stat_path}")
+    # save the stats in the model directory and in the job
+    # directory
+
+    for direc in [weight_path, os.getcwd()]:
+        stat_path = os.path.join(direc, "test_stats.json")
+
+        with open(stat_path, 'w') as f_open:
+            json.dump(final_stats, f_open, sort_keys=True, indent=4)
+        log_train(f"Test stats saved in {stat_path}")
 
     # put the validation loader and the old model back
     trainer.validation_loader = val_loader
