@@ -988,9 +988,9 @@ def plural(key):
 
 def get_train_params(params):
 
-    main_keys = ['loss',
-                 'loss_coef',
-                 'multi_loss_dict']
+    main_keys = ['multi_loss_dict',
+                 'loss',
+                 'loss_coef']
 
     other_keys = ['lr',
                   'lr_patience',
@@ -1013,9 +1013,9 @@ def get_train_params(params):
         else:
             train_params[plural_key] = [val]
 
-    use_key = [plural(key) for key in main_keys if plural(key) in
-               train_params][0]
-    num_types = len(train_params[use_key])
+    use_keys = [plural(key) for key in main_keys if plural(key) in
+               train_params]
+    num_types = max([len(train_params[use_key]) for use_key in use_keys])
 
     for key in other_keys:
         val = params[key]
@@ -1025,13 +1025,6 @@ def get_train_params(params):
             train_params[key] = [val] * num_types
 
     return train_params, num_types
-
-# def do_tl(model):
-#     if (isinstance(model, Painn) or 
-#         isinstance(model, PainnDiabat)):
-#         pass
-#     else:
-#         raise NotImplementedError
 
 def train_sequential(weight_path,
                      model,
@@ -1054,8 +1047,6 @@ def train_sequential(weight_path,
     loss_types = train_params.get("losses", [None] * num_types)
     multi_loss_dicts = train_params.get("multi_loss_dicts",
                                         [None] * num_types)
-    freeze_sequence = train_params.get("freeze_sequence",
-                                       float("inf"))
 
     param_path = os.path.join(weight_path, "params.json")
     with open(param_path, 'w') as f_open:
@@ -1110,9 +1101,6 @@ def train_sequential(weight_path,
             trainer.loss_fn = loss_fns[1]
             trainer.best_loss = float("inf")
             trainer.hooks = hooks_list[1]
-
-        # if i >= freeze_sequence:
-        #     do_tl(trainer._model)
 
         # to allow for Q-Chem TL
         trainer._model.add_nacv = params.get("add_nacv", False)
