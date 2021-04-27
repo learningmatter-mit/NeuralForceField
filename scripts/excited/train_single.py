@@ -1022,6 +1022,16 @@ def get_train_params(params):
                train_params]
     num_types = max([len(train_params[use_key]) for use_key in use_keys])
 
+    # get rid of any keys that don't have the maximum length (e.g. if for
+    # some reason you have `loss_coef` but also have `multi_loss_dict` of
+    # length 2)
+
+    for use_key in use_keys:
+        if use_key not in train_params:
+            continue
+        if len(train_params[use_key]) < num_types:
+            train_params.pop(use_key)
+
     for key in other_keys:
         val = params[key]
         if isinstance(val, list):
