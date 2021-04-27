@@ -6,7 +6,7 @@ import copy
 
 from torch.nn import ModuleDict, Sequential
 from nff.nn.activations import shifted_softplus
-from nff.nn.layers import Dense
+from nff.nn.layers import Dense, Diagonalize
 from nff.utils.scatter import scatter_add
 
 
@@ -19,7 +19,8 @@ layer_types = {
     "sigmoid": torch.nn.Sigmoid,
     "Dropout": torch.nn.Dropout,
     "LeakyReLU": torch.nn.LeakyReLU,
-    "ELU": torch.nn.ELU
+    "ELU": torch.nn.ELU,
+    "Diagonalize": Diagonalize
 }
 
 

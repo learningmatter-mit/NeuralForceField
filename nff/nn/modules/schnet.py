@@ -301,10 +301,18 @@ class NodeMultiTaskReadOut(nn.Module):
 
     def forward(self, r):
         predict_dict = dict()
+
+        # for backwards compatability
+        if not hasattr(self, "readout"):
+            self.readout = construct_module_dict(
+                self.multitaskdict['atom_readout'])
+            self.readout.to(r.device)
+
         for key in self.readout:
             predict_dict[key] = self.readout[key](r)
-        if self.post_readout is not None:
-            predict_dict = self.post_readout(predict_dict, self.multitaskdict)
+
+        if getattr(self, "post_readout", None) is not None:
+            predict_dict = self.post_readout(predict_dict)
 
         return predict_dict
 
