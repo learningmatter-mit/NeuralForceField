@@ -70,7 +70,8 @@ def unfreeze_painn_pooling(model):
 def painn_diabat_tl(model,
                     freeze_gap_embedding,
                     freeze_pooling,
-                    freeze_skip):
+                    freeze_skip,
+                    **kwargs):
 
     freeze_parameters(model)
     unfreeze_painn_readout(model=model,
@@ -78,6 +79,19 @@ def painn_diabat_tl(model,
     unfreeze_diabat_readout(model=model,
                             freeze_gap_embedding=freeze_gap_embedding)
 
+    unfreeze_pool = not freeze_pooling
+    if unfreeze_pool:
+        unfreeze_painn_pooling(model)
+
+
+def painn_tl(model,
+             freeze_pooling,
+             freeze_skip,
+             **kwargs):
+
+    freeze_parameters(model)
+    unfreeze_painn_readout(model=model,
+                           freeze_skip=freeze_skip)
     unfreeze_pool = not freeze_pooling
     if unfreeze_pool:
         unfreeze_painn_pooling(model)

@@ -314,6 +314,11 @@ class NodeMultiTaskReadOut(nn.Module):
         if getattr(self, "post_readout", None) is not None:
             predict_dict = self.post_readout(predict_dict)
 
+        ###
+        # predict_dict['energy_0'] = predict_dict['d0']
+        # predict_dict['energy_1'] = predict_dict['d1']
+        ###
+
         return predict_dict
 
 
