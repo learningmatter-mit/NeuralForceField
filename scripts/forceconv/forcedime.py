@@ -14,6 +14,14 @@ from nff.utils.scatter import scatter_add
 from torch.nn import ModuleDict
 
 
+EPS = 1e-15
+
+
+def norm(vec):
+    result = ((vec ** 2 + EPS).sum(-1)) ** 0.5
+    return result
+
+
 class ReadoutBlock(nn.Module):
     """
     Block to convert edge messages to both edge and angle fingerprints
@@ -50,7 +58,7 @@ class ReadoutBlock(nn.Module):
             ])
         # final dense layer without bias or activation
         self.edge_dense_layers.append(get_dense(embed_dim,
-                                           embed_dim,
+                                           1,
                                            activation=None,
                                            bias=False))
 
@@ -73,7 +81,7 @@ class ReadoutBlock(nn.Module):
             ])
         # final dense layer without bias or activation
         self.angle_dense_layers.append(get_dense(embed_dim,
-                                           embed_dim,
+                                           1,
                                            activation=None,
                                            bias=False))
 
@@ -234,17 +242,39 @@ class ForceDime(nn.Module):
         
         xyz, e_rbf, a_sbf, nbr_list, angle_list, num_atoms, z, kj_idx, ji_idx = self.get_prelims(batch)
         
-        edge_feats, angle_feats = self.atomwise(e_rbf, a_sbf, nbr_list, angle_list, num_atoms, z, kj_idx, ji_idx)
+        dis_feats, angle_feats = self.atomwise(e_rbf, a_sbf, nbr_list, angle_list, num_atoms, z, kj_idx, ji_idx)
 
-        # f_edge = self.edgereadout( m_ji ) * dis_vec
+        # prepare the adjoints
+        ## distance adjoints
+        r_ji = xyz[nbr_list[:, 0]] - xyz[nbr_list[:, 1]]
+        dis = norm(r_ji).unsqueeze(-1)
+        dis_adjoint = r_ji / dis  # N_e * 3
+        ## angle adjoints
+        ### points from j -> i
+        r_ji = xyz[angle_list[:, 0]] - xyz[angle_list[:, 1]]  # N_e*3
+        d_ji = norm(r_ji)[:, None, None]  # N_e*1*1
+        unit_ji = r_ji / d_ji  # N_e*3
+        kronecker_ji = r_ji.unsqueeze(-1) * r_ji.unsqueeze(-2)  # N_e*3*3
+        ### points from j -> k
+        r_jk = xyz[angle_list[:, 2]] - xyz[angle_list[:, 1]]  # N_e*3
+        d_jk = norm(r_jk)[:, None, None]  # N_e*1*1
+        unit_jk = r_jk / d_jk  # N_e*3
+        kronecker_jk = r_jk.unsqueeze(-1) * r_jk.unsqueeze(-2)  # N_e*3*3
+        ### identity matrix
+        eye = torch.eye(3).unsqueeze(0).to(xyz)  # 1*3*3
+        ### adjoint
+        angle_adjoint = torch.einsum('ijk,ij->ik', (-eye*d_ji + kronecker_ji/d_ji)/d_ji**2, unit_jk) + \
+                    torch.einsum('ijk,ij->ik', (-eye*d_jk + kronecker_jk/d_jk)/d_jk**2, unit_ji)
+        angle_adjoint = -1 / ((1-angle_adjoint**2) + EPS) ** 0.5  #  N_angle * 3
+
+        f_edge = dis_feats * dis_vec
+        f_edge = scatter_add(f_edge, nbr_list[:,0], dim=0, dim_size=num_atoms) - \
+            scatter_add(f_edge, nbr_list[:,1], dim=0, dim_size=num_atoms)
         
-        # dis_vec = xyz[nbr_list[:, 0]] - xyz[nbr_list[:, 1]]
-    
-        # f_atom = scatter_add(f_edge, nbr_list[:,0], dim=0, dim_size=num_atoms) - \
-        #     scatter_add(f_edge, nbr_list[:,1], dim=0, dim_size=num_atoms)
+        f_angle = angle_feats * angle_adjoint
+        f_angle = scatter_add(xxxxxxx, xxxxxx)  # TODO: implement here
         
-        # results = dict()
-        # results['energy_grad'] = f_atom
+        results = dict()
+        results['energy_grad'] = f_edge + f_angle
         
-        # TODO: finish invariant edge and angle feats, should implement adjoints now
         return edge_feats, angle_feats
