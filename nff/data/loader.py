@@ -171,12 +171,11 @@ class BalancedFFSampler(torch.utils.data.sampler.Sampler):
         return self.data_length
 
 
-class BatchedSpeciesLoader(BatchSampler):
+class BalancedBatchedSpecies(BatchSampler):
     def __init__(self,
                  base_sampler,
                  smiles_list,
                  batch_size,
-                 drop_last=False,
                  min_geoms=None):
         """
         min_geoms (int, optional): minimum number of geoms
@@ -187,7 +186,7 @@ class BatchedSpeciesLoader(BatchSampler):
         BatchSampler.__init__(self,
                               sampler=base_sampler,
                               batch_size=batch_size,
-                              drop_last=drop_last)
+                              drop_last=False)
 
         self.spec_dic = get_spec_dic({"smiles": smiles_list})
         self.rev_specs = self.reverse_spec_dic()
