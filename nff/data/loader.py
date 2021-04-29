@@ -210,6 +210,8 @@ class BalancedBatchedSpecies(BatchSampler):
             return
         invalid_specs = [key for key, val in self.spec_dic.items()
                          if len(val) < min_geoms]
+        if not invalid_specs:
+            return
         invalid_idx = torch.cat([self.spec_dic[spec] for spec
                                  in invalid_specs])
         self.sampler.balance_dict["weights"][invalid_idx] = 0
