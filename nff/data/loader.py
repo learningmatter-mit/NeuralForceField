@@ -251,4 +251,4 @@ class BalancedBatchedSpecies(BatchSampler):
             batch = []
 
     def __len__(self):
-        return len(self.sampler)
+        return len(self.sampler) // self.batch_size
