@@ -190,7 +190,7 @@ class ForceDime(nn.Module):
         nbr_list = batch["nbr_list"]
         angle_list = batch["angle_list"]
         nxyz = batch["nxyz"]
-        num_atoms = batch["num_atoms"].sum()
+        num_atoms = nxyz.shape[0] # batch["num_atoms"].sum()
 
         xyz = nxyz[:, 1:]
         z = nxyz[:, 0].long()
