@@ -47,6 +47,66 @@ class DistEmb(nn.Module):
         return output
 
 
+class GatedEquivariantBlock(nn.Module):
+    '''
+    the block presented in Fig. 3
+    use the invariant feature s_i to update the eqvariant feature v_j
+    '''
+    def __init__(self,
+                 feat_dim,
+                 activation,
+                 dropout):
+        super().__init__()
+        self.u_mat = Dense(in_features=feat_dim,
+                           out_features=feat_dim,
+                           bias=False)
+        self.v_mat = Dense(in_features=feat_dim,
+                           out_features=feat_dim,
+                           bias=False)
+        self.s_dense = nn.Sequential(Dense(in_features=2*feat_dim,
+                                           out_features=feat_dim,
+                                           bias=True,
+                                           dropout_rate=dropout,
+                                           activation=to_module(activation)),
+                                     Dense(in_features=feat_dim,
+                                           out_features=feat_dim,
+                                           bias=True,
+                                           dropout_rate=dropout))
+
+    def forward(self,
+                s_i,
+                v_j):
+
+        # v_j = (num_atoms, num_feats, 3)
+        # v_j.transpose(1, 2).reshape(-1, v_j.shape[1])
+        # = (num_atoms, 3, num_feats).reshape(-1, num_feats)
+        # = (num_atoms * 3, num_feats)
+        # -> So the same u gets applied to each atom
+        # and for each of the three dimensions, but differently
+        # for the different feature dimensions
+
+        v_tranpose = v_j.transpose(1, 2).reshape(-1, v_j.shape[1])
+
+        # now reshape it to (num_atoms, 3, num_feats) and transpose
+        # to get (num_atoms, num_feats, 3)
+
+        num_feats = v_j.shape[1]
+        u_v = (self.u_mat(v_tranpose).reshape(-1, 3, num_feats)
+               .transpose(1, 2))
+        v_v = (self.v_mat(v_tranpose).reshape(-1, 3, num_feats)
+               .transpose(1, 2))
+
+        v_v_norm = norm(v_v)
+        s_stack = torch.cat([s_i, v_v_norm], dim=-1)
+
+        a_vv = self.s_dense(s_stack).unsqueeze(-1)
+
+        # delta v update
+        delta_v_j = u_v * a_vv
+
+        return delta_v_j
+
+
 class ForcePai(nn.Module):
     def __init__(self,
                  modelparams):
@@ -97,24 +157,78 @@ class ForcePai(nn.Module):
              for _ in range(num_conv)]
         )
 
-        # construct edge update networks
-        # edge_update = [Dense(in_features=feat_dim, out_features=2*feat_dim), shifted_softplus()]
-        # for i in range(edge_update_depth):
-        #     edge_update.append(Dense(in_features=feat_dim, out_features=feat_dim))
-        #     edge_update.append(shifted_softplus())
-        # edge_update.append(Dense(in_features=2*feat_dim, out_features=feat_dim))
-        self.edge_update = nn.ModuleList(
+        self.qq_update = nn.ModuleList(
             [nn.Sequential(Dense(in_features=feat_dim, 
-                                 out_features=2*feat_dim,
+                                 out_features=feat_dim//2,
                                  bias=True,
                                  dropout_rate=conv_dropout,
                                  activation=to_module(activation)), 
-                           Dense(in_features=2*feat_dim, 
-                                 out_features=feat_dim,
+                           Dense(in_features=feat_dim//2, 
+                                 out_features=1,
                                  bias=True,
                                  dropout_rate=conv_dropout))
-            for _ in range(num_conv)]
+             for _ in range(num_conv)]
         )
+
+        self.qp1_update = nn.ModuleList(
+            [GatedEquivariantBlock(feat_dim=feat_dim,
+                                   activation=activation,
+                                   dropout=conv_dropout)
+             for _ in range(num_conv)]
+        )
+
+        self.qp2_update = nn.ModuleList(
+            [nn.Sequential(Dense(in_features=feat_dim, 
+                                 out_features=feat_dim//2,
+                                 bias=True,
+                                 dropout_rate=conv_dropout,
+                                 activation=to_module(activation)), 
+                           Dense(in_features=feat_dim//2, 
+                                 out_features=1,
+                                 bias=True,
+                                 dropout_rate=conv_dropout))
+             for _ in range(num_conv)]
+        )
+
+        # self.pp1_update = nn.ModuleList(
+        #     [nn.Sequential(Dense(in_features=feat_dim, 
+        #                          out_features=feat_dim//2,
+        #                          bias=True,
+        #                          dropout_rate=conv_dropout,
+        #                          activation=to_module(activation)), 
+        #                    Dense(in_features=feat_dim//2, 
+        #                          out_features=1,
+        #                          bias=True,
+        #                          dropout_rate=conv_dropout))
+        #      for _ in range(num_conv)]
+        # )
+
+        # self.pp2_update = nn.ModuleList(
+        #     [nn.Sequential(Dense(in_features=feat_dim, 
+        #                          out_features=feat_dim//2,
+        #                          bias=True,
+        #                          dropout_rate=conv_dropout,
+        #                          activation=to_module(activation)), 
+        #                    Dense(in_features=feat_dim//2, 
+        #                          out_features=1,
+        #                          bias=True,
+        #                          dropout_rate=conv_dropout))
+        #      for _ in range(num_conv)]
+        # )
+
+        # self.pp31_update = nn.ModuleList(
+        #     [GatedEquivariantBlock(feat_dim=feat_dim,
+        #                            activation=activation,
+        #                            dropout=conv_dropout)
+        #      for _ in range(num_conv)]
+        # )
+
+        # self.pp32_update = nn.ModuleList(
+        #     [GatedEquivariantBlock(feat_dim=feat_dim,
+        #                            activation=activation,
+        #                            dropout=conv_dropout)
+        #      for _ in range(num_conv)]
+        # )
 
         self.output_keys = output_keys
         # no skip connection in original paper
@@ -124,45 +238,26 @@ class ForcePai(nn.Module):
 
         num_readouts = num_conv if (self.skip) else 1
 
-        # edge readout 
-        self.edgereadout = Sequential(
-            Dense(in_features=feat_dim, 
-                  out_features=feat_dim*2, 
-                  bias=True, 
-                  dropout_rate=readout_dropout,
-                  activation=to_module(activation)),
-            Dense(in_features=feat_dim*2, 
-                  out_features=1, 
-                  bias=True,
-                  dropout_rate=readout_dropout)
-        )
-        # self.edgereadout = EdgeReadoutBlock(feat_dim=feat_dim,
-        #                                     activation=activation,
-        #                                     dropout=readout_dropout)
-        # self.readout_blocks = nn.ModuleList(
-        #     [ReadoutBlock(feat_dim=feat_dim,
-        #                   output_keys=output_keys,
-        #                   activation=activation,
-        #                   dropout=readout_dropout,
-        #                   means=means,
-        #                   stddevs=stddevs)
-        #      for _ in range(num_readouts)]
+        # # edge readout 
+        # self.edgereadout = Sequential(
+        #     Dense(in_features=feat_dim, 
+        #           out_features=feat_dim//2, 
+        #           bias=True, 
+        #           dropout_rate=readout_dropout,
+        #           activation=to_module(activation)),
+        #     Dense(in_features=feat_dim//2, 
+        #           out_features=1, 
+        #           bias=True,
+        #           dropout_rate=readout_dropout)
         # )
-
-        # if pool_dic is None:
-        #     self.pool_dic = {key: SumPool() for key
-        #                      in self.output_keys}
-        # else:
-        #     self.pool_dic = nn.ModuleDict({})
-        #     for out_key, sub_dic in pool_dic.items():
-        #         pool_name = sub_dic["name"].lower()
-        #         kwargs = sub_dic["param"]
-        #         pool_class = POOL_DIC[pool_name]
-        #         self.pool_dic[out_key] = pool_class(**kwargs)
 
     def atomwise(self,
                  batch,
                  xyz=None):
+        
+        '''
+            https://lammps.sandia.gov/doc/pair_dipole.html
+        '''
 
         # for backwards compatability
         if isinstance(self.skip, bool):
@@ -174,7 +269,7 @@ class ForcePai(nn.Module):
 
         if xyz is None:
             xyz = nxyz[:, 1:]
-            xyz.requires_grad = True
+            # xyz.requires_grad = True
 
         # node features
         z_numbers = nxyz[:, 0].long()
@@ -188,7 +283,7 @@ class ForcePai(nn.Module):
         # edge features
         dis_vec = r_ij
         dis = norm(r_ij)
-        xyz_adjoint = dis_vec / dis.unsqueeze(-1)
+        xyz_adjoint = dis_vec / dis.unsqueeze(-1)  # N_e * 3
         e_ij = self.dist_embed(dis)
 
         results = {}
@@ -211,15 +306,27 @@ class ForcePai(nn.Module):
             s_i = s_i + ds_update
             v_i = v_i + dv_update
 
-            # edge block
-            edge_update_block = self.edge_update[i]
-            de_update = edge_update_block(s_i[nbrs[:, 0]] + s_i[nbrs[:, 1]])
-            e_ij = e_ij + de_update
+            # model the symmetric force between atoms
+            # f_qq
+            f_qq_block = self.qq_update[i]
+            f_qq = f_qq_block(s_i[nbrs[:, 0]] * s_i[nbrs[:, 1]]) * xyz_adjoint
+            
+            # f_qp
+            ## f_qp1
+            f_qp1_block = self.qp1_update[i]
+            f_qp1 = f_qp1_block(s_i[nbrs[:, 0]], v_i[nbrs[:, 1]]).sum(1)  # (N_e,M,3)->(N_e,3)
+            ## f_qp2
+            f_qp2_block = self.qp2_update[i]
+            pr_dot = (v_i[nbrs[:,1]]*xyz_adjoint.unsqueeze(1)).sum(-1)  # (N_e,M,3)->(N_e,M)
+            f_qp2 = f_qp2_block(s_i[nbrs[:, 0]] * pr_dot) * xyz_adjoint
+            
+            if  i== 0:
+                f_edge = f_qq + f_qp1 + f_qp2  # + fpp
+            else: 
+                f_edge += f_qq + f_qp1 + f_qp2  # + fpp
+            
 
-        f_edge = self.edgereadout(e_ij) * xyz_adjoint
-        f_atom = scatter_add(f_edge, nbrs[:,0], dim=0, dim_size=graph_size) - \
-            scatter_add(f_edge, nbrs[:,1], dim=0, dim_size=graph_size)
-
+        f_atom = scatter_add(f_edge, nbrs[:,0], dim=0, dim_size=graph_size) 
         results['energy_grad'] = f_atom
 
         return results, xyz
