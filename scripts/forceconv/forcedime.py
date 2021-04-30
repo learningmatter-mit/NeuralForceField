@@ -264,12 +264,10 @@ class ForceDime(nn.Module):
         unit_jk = r_jk / d_jk.squeeze(-1)  # N_e*3
         ### adjoint_ji
         kronecker_ji = r_ji.unsqueeze(-1) * r_ji.unsqueeze(-2)  # N_e*3*3
-        angle_adjoint_ji = torch.einsum('ij,ijk->ik', unit_jk, (-eye*d_ji + kronecker_ji/d_ji)/d_ji**2)
-        angle_adjoint_ji = -1 / ((1-angle_adjoint_ji**2) + EPS) ** 0.5  #  N_angle*3
+        angle_adjoint_ji = torch.einsum('ijk,ij->ik', (-eye*d_ji + kronecker_ji/d_ji)/d_ji**2, unit_jk)
         ### adjoint_jk
         kronecker_jk = r_jk.unsqueeze(-1) * r_jk.unsqueeze(-2)  # N_e*3*3
-        angle_adjoint_jk = torch.einsum('ij,ijk->ik', unit_ji, (-eye*d_jk + kronecker_jk/d_jk)/d_jk**2)
-        angle_adjoint_jk = -1 / ((1-angle_adjoint_jk**2) + EPS) ** 0.5  #  N_angle*3
+        angle_adjoint_jk = torch.einsum('ijk,ij->ik', (-eye*d_jk + kronecker_jk/d_jk)/d_jk**2, unit_ji)
 
         f_edge = dis_feats * dis_adjoint
         f_edge = scatter_add(f_edge, nbr_list[:,0], dim=0, dim_size=num_atoms) - \
@@ -285,5 +283,4 @@ class ForceDime(nn.Module):
         results = dict()
         results['energy_grad'] = f_edge + f_angle
         
-        return results, dis_adjoint, angle_adjoint_ji, angle_adjoint_jk, dis_feats, angle_feats
-        # return results
+        return results

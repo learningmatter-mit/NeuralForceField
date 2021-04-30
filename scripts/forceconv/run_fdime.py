@@ -12,19 +12,19 @@ from train import train
 from forcedime import ForceDime
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-logdir", type=str)
+parser.add_argument("-logdir", type=str, default='mkxu/fpai_ethanol')
 parser.add_argument("-device", type=int, default=0)
-parser.add_argument("-data", type=str, default='ethanol_ccsd')
+parser.add_argument("-data", type=str, default='ethanol_dft')
 parser.add_argument("-id", type=int, default=None)
 parser.add_argument("--dry_run", action='store_true', default=False)
 params = vars(parser.parse_args())
 
 if params['dry_run']:
-    token = 'FSDXBSGDUZUQEDGDCYPCXFTRXFNYBVXVACKZQUWNSOKGKGFN'
+    token = 'GMBSZWXFWPHHUCXSDYLLCBBCBTKZUBVCBQRMCMXEFNEYGCFY'
     n_epochs = 2
     n_obs = 2
 else:
-    token = 'RXGPHWIUAMLHCDJCDBXEWRAUGGNEFECMOFITCRHCEOBRMGJU'
+    token = 'JGTKFUYDJMOKBMDFXICMGNEFBXOOSIPAVSGUWPSMJCVDWYMA'
     n_epochs = 2000 
     n_obs = 1000
 
@@ -49,10 +49,10 @@ if params['id'] == None:
             dict(name='batch_size', type='int', bounds=dict(min=2, max=6)),  # 4->64
             dict(name='n_bilinear', type='int', bounds=dict(min=2, max=4)),  # 4->16
             dict(name='cutoff', type='double', bounds=dict(min=3.5, max=6.0), precision=1),
-            dict(name='activation', type='categorical', categorical_values= ["Tanh" ,"ReLU" ,"shifted_softplus" ,
-                                                                            "sigmoid"  ,"Dropout"  ,"LeakyReLU",
-                                                                            "ELU" ,"swish"]),
-            dict(name='n_convolutions', type='int', bounds=dict(min=2, max=7)),
+            dict(name='activation', type='categorical', categorical_values= ["ReLU","shifted_softplus","LeakyReLU",
+                                                                             "ELU","swish"]),
+            # "Tanh", "ReLU", "shifted_softplus", "sigmoid", "Dropout", "LeakyReLU", "ELU", "swish"
+            dict(name='n_convolutions', type='int', bounds=dict(min=3, max=7)),
         ],
         observation_budget=n_obs, # how many iterations to run for the optimization
         parallel_bandwidth=10,
