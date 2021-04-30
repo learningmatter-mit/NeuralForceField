@@ -245,36 +245,45 @@ class ForceDime(nn.Module):
         dis_feats, angle_feats = self.atomwise(e_rbf, a_sbf, nbr_list, angle_list, num_atoms, z, kj_idx, ji_idx)
 
         # prepare the adjoints
+
         ## distance adjoints
         r_ji = xyz[nbr_list[:, 0]] - xyz[nbr_list[:, 1]]
         dis = norm(r_ji).unsqueeze(-1)
         dis_adjoint = r_ji / dis  # N_e * 3
+
         ## angle adjoints
+        ### identity matrix
+        eye = torch.eye(3).unsqueeze(0).to(xyz)  # 1*3*3
         ### points from j -> i
         r_ji = xyz[angle_list[:, 0]] - xyz[angle_list[:, 1]]  # N_e*3
         d_ji = norm(r_ji)[:, None, None]  # N_e*1*1
-        unit_ji = r_ji / d_ji  # N_e*3
-        kronecker_ji = r_ji.unsqueeze(-1) * r_ji.unsqueeze(-2)  # N_e*3*3
+        unit_ji = r_ji / d_ji.squeeze(-1)  # N_e*3
         ### points from j -> k
         r_jk = xyz[angle_list[:, 2]] - xyz[angle_list[:, 1]]  # N_e*3
         d_jk = norm(r_jk)[:, None, None]  # N_e*1*1
-        unit_jk = r_jk / d_jk  # N_e*3
+        unit_jk = r_jk / d_jk.squeeze(-1)  # N_e*3
+        ### adjoint_ji
+        kronecker_ji = r_ji.unsqueeze(-1) * r_ji.unsqueeze(-2)  # N_e*3*3
+        angle_adjoint_ji = torch.einsum('ij,ijk->ik', unit_jk, (-eye*d_ji + kronecker_ji/d_ji)/d_ji**2)
+        angle_adjoint_ji = -1 / ((1-angle_adjoint_ji**2) + EPS) ** 0.5  #  N_angle*3
+        ### adjoint_jk
         kronecker_jk = r_jk.unsqueeze(-1) * r_jk.unsqueeze(-2)  # N_e*3*3
-        ### identity matrix
-        eye = torch.eye(3).unsqueeze(0).to(xyz)  # 1*3*3
-        ### adjoint
-        angle_adjoint = torch.einsum('ijk,ij->ik', (-eye*d_ji + kronecker_ji/d_ji)/d_ji**2, unit_jk) + \
-                    torch.einsum('ijk,ij->ik', (-eye*d_jk + kronecker_jk/d_jk)/d_jk**2, unit_ji)
-        angle_adjoint = -1 / ((1-angle_adjoint**2) + EPS) ** 0.5  #  N_angle * 3
+        angle_adjoint_jk = torch.einsum('ij,ijk->ik', unit_ji, (-eye*d_jk + kronecker_jk/d_jk)/d_jk**2)
+        angle_adjoint_jk = -1 / ((1-angle_adjoint_jk**2) + EPS) ** 0.5  #  N_angle*3
 
-        f_edge = dis_feats * dis_vec
+        f_edge = dis_feats * dis_adjoint
         f_edge = scatter_add(f_edge, nbr_list[:,0], dim=0, dim_size=num_atoms) - \
             scatter_add(f_edge, nbr_list[:,1], dim=0, dim_size=num_atoms)
         
-        f_angle = angle_feats * angle_adjoint
-        f_angle = scatter_add(xxxxxxx, xxxxxx)  # TODO: implement here
+        f_angle_ji = angle_feats * angle_adjoint_ji
+        f_angle_jk = angle_feats * angle_adjoint_jk
+        f_angle = scatter_add(f_angle_ji, angle_list[:, 1], dim=0, dim_size=num_atoms) \
+            - scatter_add(f_angle_ji, angle_list[:, 0], dim=0, dim_size=num_atoms) \
+            + scatter_add(f_angle_jk, angle_list[:, 1], dim=0, dim_size=num_atoms) \
+            - scatter_add(f_angle_jk, angle_list[:, 0], dim=0, dim_size=num_atoms)
         
         results = dict()
         results['energy_grad'] = f_edge + f_angle
         
-        return edge_feats, angle_feats
+        return results, dis_adjoint, angle_adjoint_ji, angle_adjoint_jk, dis_feats, angle_feats
+        # return results
