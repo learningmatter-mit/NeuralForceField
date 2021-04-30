@@ -12,6 +12,7 @@ from nff.nn.activations import shifted_softplus
 from nff.nn.models import compute_angle
 from nff.utils.scatter import scatter_add
 from torch.nn import ModuleDict
+from nff.utils.tools import layer_types
 
 
 EPS = 1e-15
@@ -20,6 +21,10 @@ EPS = 1e-15
 def norm(vec):
     result = ((vec ** 2 + EPS).sum(-1)) ** 0.5
     return result
+
+
+def to_module(activation):
+    return layer_types[activation]()
 
 
 class ReadoutBlock(nn.Module):
@@ -54,13 +59,16 @@ class ReadoutBlock(nn.Module):
                           embed_dim,
                           activation=activation,
                           bias=True)
-                for _ in range(3)
+                for _ in range(2)
             ])
         # final dense layer without bias or activation
-        self.edge_dense_layers.append(get_dense(embed_dim,
-                                           1,
-                                           activation=None,
-                                           bias=False))
+        self.edge_dense_layers.append(nn.Sequential(Dense(in_features=embed_dim, 
+                                                        out_features=embed_dim//2,
+                                                        bias=True,
+                                                        activation=to_module(activation)), 
+                                                    Dense(in_features=embed_dim//2, 
+                                                        out_features=1,
+                                                        bias=True)))
 
 
         # dense layer to convert sbf angle representation
@@ -77,13 +85,16 @@ class ReadoutBlock(nn.Module):
                           embed_dim,
                           activation=activation,
                           bias=True)
-                for _ in range(3)
+                for _ in range(2)
             ])
         # final dense layer without bias or activation
-        self.angle_dense_layers.append(get_dense(embed_dim,
-                                           1,
-                                           activation=None,
-                                           bias=False))
+        self.angle_dense_layers.append(nn.Sequential(Dense(in_features=embed_dim, 
+                                                        out_features=embed_dim//2,
+                                                        bias=True,
+                                                        activation=to_module(activation)), 
+                                                    Dense(in_features=embed_dim//2, 
+                                                        out_features=1,
+                                                        bias=True)))
 
     def forward(self, m_ji, e_rbf, a_sbf, nbr_list, kj_idx, ji_idx):
 
