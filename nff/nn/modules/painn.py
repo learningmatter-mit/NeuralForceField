@@ -111,7 +111,9 @@ class InvariantMessage(nn.Module):
 
         # split into three components, so the tensor now has
         # shape n_atoms x 3 x feat_dim
-        out_reshape = output.reshape(output.shape[0], 3, -1)
+
+        feat_dim = s_j.shape[-1]
+        out_reshape = output.reshape(output.shape[0], 3, feat_dim)
 
         return out_reshape
 

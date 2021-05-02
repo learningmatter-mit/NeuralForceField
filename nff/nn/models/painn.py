@@ -324,7 +324,6 @@ class PainnDiabat(Painn):
 
         diabat_results, xyz = self.run(batch=batch,
                                        xyz=xyz)
-
         results = self.diabatic_readout(batch=batch,
                                         xyz=xyz,
                                         results=diabat_results,
