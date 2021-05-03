@@ -23,8 +23,8 @@ def train(params, trainparam, suggestionid, model, n_epochs, angle=False, train_
 
     train, val, test = split_train_validation_test(dataset, val_size=0.05, test_size=0.85)
     train_loader = DataLoader(train, batch_size=trainparam['batch_size'], collate_fn=collate_dicts)
-    val_loader = DataLoader(val, batch_size=128, collate_fn=collate_dicts)
-    test_loader = DataLoader(test, batch_size=128, collate_fn=collate_dicts)
+    val_loader = DataLoader(val, batch_size=32, collate_fn=collate_dicts)
+    test_loader = DataLoader(test, batch_size=32, collate_fn=collate_dicts)
 
     try:
         model = model(**trainparam)

@@ -59,7 +59,7 @@ class ReadoutBlock(nn.Module):
                           embed_dim,
                           activation=activation,
                           bias=True)
-                for _ in range(2)
+                for _ in range(1)
             ])
         # final dense layer without bias or activation
         self.edge_dense_layers.append(nn.Sequential(Dense(in_features=embed_dim, 
@@ -85,7 +85,7 @@ class ReadoutBlock(nn.Module):
                           embed_dim,
                           activation=activation,
                           bias=True)
-                for _ in range(2)
+                for _ in range(1)
             ])
         # final dense layer without bias or activation
         self.angle_dense_layers.append(nn.Sequential(Dense(in_features=embed_dim, 
@@ -284,14 +284,14 @@ class ForceDime(nn.Module):
         f_edge = scatter_add(f_edge, nbr_list[:,0], dim=0, dim_size=num_atoms) - \
             scatter_add(f_edge, nbr_list[:,1], dim=0, dim_size=num_atoms)
         
-        f_angle_ji = angle_feats * angle_adjoint_ji
-        f_angle_jk = angle_feats * angle_adjoint_jk
-        f_angle = scatter_add(f_angle_ji, angle_list[:, 1], dim=0, dim_size=num_atoms) \
-            - scatter_add(f_angle_ji, angle_list[:, 0], dim=0, dim_size=num_atoms) \
-            + scatter_add(f_angle_jk, angle_list[:, 1], dim=0, dim_size=num_atoms) \
-            - scatter_add(f_angle_jk, angle_list[:, 0], dim=0, dim_size=num_atoms)
+        # f_angle_ji = angle_feats * angle_adjoint_ji
+        # f_angle_jk = angle_feats * angle_adjoint_jk
+        # f_angle = scatter_add(f_angle_ji, angle_list[:, 1], dim=0, dim_size=num_atoms) \
+        #     - scatter_add(f_angle_ji, angle_list[:, 0], dim=0, dim_size=num_atoms) \
+        #     + scatter_add(f_angle_jk, angle_list[:, 1], dim=0, dim_size=num_atoms) \
+        #     - scatter_add(f_angle_jk, angle_list[:, 2], dim=0, dim_size=num_atoms)
         
         results = dict()
-        results['energy_grad'] = f_edge + f_angle
+        results['energy_grad'] = f_edge # + f_angle
         
         return results

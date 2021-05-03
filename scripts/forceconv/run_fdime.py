@@ -25,7 +25,7 @@ if params['dry_run']:
     n_obs = 2
 else:
     token = 'JGTKFUYDJMOKBMDFXICMGNEFBXOOSIPAVSGUWPSMJCVDWYMA'
-    n_epochs = 4000 
+    n_epochs = 2000 
     n_obs = 1000
 
 
@@ -49,12 +49,12 @@ if params['id'] == None:
             dict(name='envelope_p', type='int', bounds=dict(min=3, max=8), default=3),  # 6->16
             # 2**x
             dict(name='embed_dim', type='int', bounds=dict(min=7, max=8), default=7),  # 128->256
-            dict(name='batch_size', type='int', bounds=dict(min=3, max=7), default=5),  # 8->128
+            dict(name='batch_size', type='int', bounds=dict(min=3, max=5), default=5),  # 8->32
             # non-processed
-            dict(name='cutoff', type='double', bounds=dict(min=4.0, max=7.0), default=5.0, precision=1),
+            dict(name='cutoff', type='double', bounds=dict(min=4.5, max=7.0), default=5.0, precision=1),
             dict(name='activation', type='categorical', categorical_values= ["shifted_softplus","swish"], default="swish"),
             # "Tanh", "ReLU", "shifted_softplus", "sigmoid", "Dropout", "LeakyReLU", "ELU", "swish"
-            dict(name='n_convolutions', type='int', bounds=dict(min=4, max=8), default=6),
+            dict(name='n_convolutions', type='int', bounds=dict(min=3, max=7), default=6),
         ],
         observation_budget=n_obs, # how many iterations to run for the optimization
         parallel_bandwidth=10,
