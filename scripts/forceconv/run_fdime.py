@@ -9,10 +9,10 @@ import os
 import shutil
 
 from train import train
-from forcedime import ForceDime
+from forcedime import ForceDime, DimeNet
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-logdir", type=str, default='mkxu/fdime_ethanol')
+parser.add_argument("-logdir", type=str, default='mkxu/dimenet')
 parser.add_argument("-device", type=int, default=0)
 parser.add_argument("-data", type=str, default='ethanol_dft')
 parser.add_argument("-id", type=int, default=None)
@@ -80,7 +80,7 @@ while experiment.progress.observation_count < experiment.observation_budget:
     trainparam['batch_size'] = 2**trainparam['batch_size']
     print(trainparam)
 
-    test_mae = train(params, trainparam, suggestion.id, ForceDime, n_epochs, angle=True)
+    test_mae = train(params, trainparam, suggestion.id, DimeNet, n_epochs, angle=True)
     # updat result to server
     conn.experiments(experiment.id).observations().create(
       suggestion=suggestion.id,
