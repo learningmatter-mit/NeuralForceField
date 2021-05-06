@@ -341,6 +341,11 @@ class ZhuNakamuraLogger:
         # Meanwhile, the last thing saved, if saving every
         # step, was [AC on old surface (-1)]
 
+        if len(old_list) == 0:
+            present = False
+            freq_gt_2 = True
+            return present, freq_gt_2
+            
         old_time = old_list[-1]["time"]
         new_time = new_list[-3]["time"]
 
