@@ -343,9 +343,9 @@ class ZhuNakamuraLogger:
 
         if len(old_list) == 0:
             present = False
-            freq_gt_2 = True
+            freq_gt_2 = False
             return present, freq_gt_2
-            
+
         old_time = old_list[-1]["time"]
         new_time = new_list[-3]["time"]
 
