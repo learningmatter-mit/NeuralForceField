@@ -194,7 +194,7 @@ class ForceDime(nn.Module):
 
         xyz = nxyz[:, 1:]
         z = nxyz[:, 0].long()
-        xyz.requires_grad = False
+        xyz.requires_grad = True
 
         ji_idx = batch["ji_idx"]
         kj_idx = batch["kj_idx"]
@@ -204,7 +204,7 @@ class ForceDime(nn.Module):
                        dim=-1).reshape(-1, 1)
 
         # compute angles
-        alpha = compute_angle(xyz, angle_list)
+        alpha = compute_angle(xyz, angle_list).detach()
 
         # put the distances in the radial basis
         e_rbf = self.radial_basis(d)
@@ -213,7 +213,7 @@ class ForceDime(nn.Module):
         a_sbf = self.spherical_basis(d, alpha, kj_idx)
 
         return (xyz, e_rbf, a_sbf, nbr_list, angle_list, num_atoms,
-                z, kj_idx, ji_idx)
+                z, kj_idx, ji_idx, d, alpha)
 
     def atomwise(self, e_rbf, a_sbf, nbr_list, angle_list,
                          num_atoms, z, kj_idx, ji_idx):
@@ -251,7 +251,7 @@ class ForceDime(nn.Module):
 
     def forward(self, batch):
         
-        xyz, e_rbf, a_sbf, nbr_list, angle_list, num_atoms, z, kj_idx, ji_idx = self.get_prelims(batch)
+        xyz, e_rbf, a_sbf, nbr_list, angle_list, num_atoms, z, kj_idx, ji_idx, dis, alpha = self.get_prelims(batch)
         
         dis_feats, angle_feats = self.atomwise(e_rbf, a_sbf, nbr_list, angle_list, num_atoms, z, kj_idx, ji_idx)
 
@@ -280,9 +280,9 @@ class ForceDime(nn.Module):
         kronecker_jk = r_jk.unsqueeze(-1) * r_jk.unsqueeze(-2)  # N_e*3*3
         angle_adjoint_jk = torch.einsum('ijk,ij->ik', (-eye*d_jk + kronecker_jk/d_jk)/d_jk**2, unit_ji)
 
-        f_edge = dis_feats * dis_adjoint
-        f_edge = scatter_add(f_edge, nbr_list[:,0], dim=0, dim_size=num_atoms) - \
-            scatter_add(f_edge, nbr_list[:,1], dim=0, dim_size=num_atoms)
+        # f_edge = dis_feats * dis_adjoint
+        # f_edge = scatter_add(f_edge, nbr_list[:,0], dim=0, dim_size=num_atoms) - \
+        #     scatter_add(f_edge, nbr_list[:,1], dim=0, dim_size=num_atoms)
         
         # f_angle_ji = angle_feats * angle_adjoint_ji
         # f_angle_jk = angle_feats * angle_adjoint_jk
@@ -290,9 +290,15 @@ class ForceDime(nn.Module):
         #     - scatter_add(f_angle_ji, angle_list[:, 0], dim=0, dim_size=num_atoms) \
         #     + scatter_add(f_angle_jk, angle_list[:, 1], dim=0, dim_size=num_atoms) \
         #     - scatter_add(f_angle_jk, angle_list[:, 2], dim=0, dim_size=num_atoms)
+
+        # f_edge = torch.autograd.grad(outputs=dis, inputs=xyz, grad_outputs=dis_feats)[0]
+        # f_angle = torch.autograd.grad(outputs=alpha.unsqueeze(-1), inputs=xyz, grad_outputs=angle_feats)[0]
         
         results = dict()
-        results['energy_grad'] = f_edge # + f_angle
+        # results['energy_grad'] = f_edge + f_angle
+
+        E = dis_feats.mean()
+        results['energy_grad'] = torch.autograd.grad(outputs=E, inputs=xyz)[0]
         
         return results
 
