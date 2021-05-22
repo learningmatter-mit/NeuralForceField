@@ -9,6 +9,11 @@ import numpy as np
 from scipy.optimize import brentq
 from scipy import special as sp
 import sympy as sym
+import copy
+import torch
+import math
+
+EPS = 1e-15
 
 
 def Jn(r, n):
@@ -114,7 +119,9 @@ def associated_legendre_polynomials(l, zero_m_only=True):
     return P_l_m
 
 
-def real_sph_harm(l, zero_m_only=True, spherical_coordinates=True):
+def real_sph_harm(l,
+                  zero_m_only=True,
+                  spherical_coordinates=True):
     """
     Computes formula strings of the the real part of the spherical harmonics up to order l (excluded).
     Variables are either cartesian coordinates x,y,z on the unit sphere or spherical coordinates phi and theta.
@@ -160,3 +167,208 @@ def real_sph_harm(l, zero_m_only=True, spherical_coordinates=True):
                     2**0.5 * sph_harm_prefactor(i, -j) * S_m[j] * P_l_m[i][j])
 
     return Y_func_l_m
+
+
+"""
+Real spherical harmonics implemented for spookynet
+"""
+
+
+def A_m(x, y, m):
+    device = x.device
+    p_vals = torch.arange(0, m + 1,
+                          device=device)
+    q_vals = m - p_vals
+    x_p = x.reshape(-1, 1) ** p_vals
+    y_q = y.reshape(-1, 1) ** q_vals
+    sin = torch.sin(np.pi / 2 * (m - p_vals))
+    binoms = (torch.Tensor([sp.binom(m, p.item()) for p in p_vals])
+              .to(device))
+    out = (binoms * x_p * y_q * sin).sum(-1)
+
+    return out
+
+
+def B_m(x, y, m):
+    device = x.device
+    p_vals = torch.arange(0, m + 1, device=device)
+    q_vals = m - p_vals
+    x_p = x.reshape(-1, 1) ** p_vals
+    y_q = y.reshape(-1, 1) ** q_vals
+    sin = torch.cos(np.pi / 2 * (m - p_vals))
+    binoms = (torch.Tensor([sp.binom(m, int(p)) for p in p_vals])
+              .to(device))
+    out = (binoms * x_p * y_q * sin).sum(-1)
+
+    return out
+
+
+def c_plm(p, l, m):
+    terms = [(-1) ** p / (2 ** l),
+             sp.binom(l, p),
+             sp.binom(2 * l - 2 * p, l),
+             sp.factorial(l - 2 * p),
+             1 / sp.factorial(l - 2 * p - m)]
+    out = torch.Tensor(terms).prod()
+    return out
+
+
+def make_c_table(l_max):
+    c_table = {}
+    for l in range(l_max + 1):
+        for m in range(-l, l+1):
+            for p in range(0, math.floor((l - m) / 2) + 1):
+                c_table[(p, l, m)] = c_plm(p, l, m)
+    return c_table
+
+
+def pi_l_m(r,
+           z,
+           l,
+           m,
+           c_table):
+
+    device = r.device
+    pref = (sp.factorial(l - m) / sp.factorial(l + m)) ** 0.5
+    p_vals = (torch.arange(0, math.floor((l - m) / 2) + 1,
+                           device=device,
+                           dtype=torch.float))
+
+    c_coefs = (torch.Tensor([c_table[(int(p), l, m)] for p in p_vals])
+               .to(device))
+    r_p = r.reshape(-1, 1) ** (2 * p_vals - 1)
+    z_q = z.reshape(-1, 1) ** (l - 2 * p_vals - m)
+
+    out = pref * (c_coefs * r_p * z_q).sum(-1)
+
+    return out
+
+
+def norm(vec):
+    result = ((vec ** 2 + EPS).sum(-1)) ** 0.5
+    return result
+
+
+def y_lm(r_ij,
+         r,
+         l,
+         m,
+         c_table):
+
+    x = r_ij[:, 0]
+    y = r_ij[:, 1]
+    z = r_ij[:, 2]
+
+    pi = pi_l_m(r=r,
+                z=z,
+                l=l,
+                m=abs(m),
+                c_table=c_table)
+
+    if m < 0:
+        a = A_m(x, y, abs(m))
+        out = (2 ** 0.5) * pi * a
+    elif m == 0:
+        out = pi
+    elif m > 0:
+        b = B_m(x, y, abs(m))
+        out = (2 ** 0.5) * pi * b
+
+    return out
+
+
+def make_y_lm(l_max):
+    c_table = make_c_table(l_max)
+
+    def func(r_ij, r, l, m):
+        out = y_lm(r_ij=r_ij,
+                   r=r,
+                   l=l,
+                   m=m,
+                   c_table=c_table)
+
+        return out
+    return func
+
+
+def spooky_f_cut(r, r_cut):
+    out = torch.where(
+        r < r_cut,
+        torch.exp(-r ** 2 / ((r_cut - r) * (r_cut + 1))),
+        torch.Tensor([0]).to(r.device)
+    )
+
+    return out
+
+
+def b_k(x,
+        bern_k):
+    device = x.device
+    k_vals = (torch.arange(0, bern_k, device=device)
+              .to(torch.float))
+    binoms = (torch.Tensor([sp.binom(bern_k - 1, int(k))
+                            for k in k_vals])
+              .to(device))
+
+    out = binoms * (x ** k_vals) * (1-x) ** (bern_k - 1 - k_vals)
+    return out
+
+
+def rho_k(r,
+          r_cut,
+          bern_k,
+          gamma):
+
+    arg = torch.exp(-gamma * r)
+    out = b_k(arg, bern_k) * spooky_f_cut(r, r_cut)
+
+    return out
+
+
+def get_g_func(l,
+               r_cut,
+               bern_k,
+               gamma,
+               y_lm_fn):
+    def fn(r_ij):
+
+        r = norm(r_ij).reshape(-1, 1)
+        n_pairs = r_ij.shape[0]
+        device = r_ij.device
+
+        m_vals = list(range(-l, l + 1))
+        y = torch.stack([y_lm_fn(r_ij, r, l, m) for m in
+                         m_vals])
+        rho = rho_k(r, r_cut, bern_k, gamma)
+        g = torch.ones(n_pairs,
+                       bern_k,
+                       len(m_vals),
+                       device=device)
+        g = g * rho.reshape(n_pairs, -1, 1)
+        g = g * y.reshape(n_pairs, 1, -1)
+
+        return g
+
+    return fn
+
+
+def make_g_funcs(bern_k,
+                 gamma,
+                 r_cut,
+                 l_max=2):
+    y_lm_fn = make_y_lm(l_max)
+    g_funcs = {}
+    letters = {0: "s", 1: "p", 2: "d"}
+
+    for l in range(0, l_max + 1):
+
+        letter = letters[l]
+        name = f"g_{letter}"
+        g_func = get_g_func(l=l,
+                            r_cut=r_cut,
+                            bern_k=bern_k,
+                            gamma=gamma,
+                            y_lm_fn=y_lm_fn)
+        g_funcs[name] = copy.deepcopy(g_func)
+
+    return g_funcs

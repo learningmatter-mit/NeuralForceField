@@ -3,6 +3,8 @@ import math
 from rdkit import Chem
 import copy
 import math
+import os
+import json
 
 PERIODICTABLE = Chem.GetPeriodicTable()
 
@@ -88,11 +90,11 @@ AMU_TO_AU = 1.66e-27/(9.1093837015e-31)
 
 # Weird units used by Gaussian
 CM_TO_J = 1.98630e-23
-DYN_TO_J_PER_M  = 0.00001
+DYN_TO_J_PER_M = 0.00001
 ANGS_TO_M = 1e-10
 MDYN_PER_A_TO_J_PER_M = DYN_TO_J_PER_M / 1000 / ANGS_TO_M
 KG_TO_AMU = 1 / (1.66e-27)
-HBAR_SI = 6.626e-34/ (2 * math.pi)
+HBAR_SI = 6.626e-34 / (2 * math.pi)
 
 
 # Times
@@ -106,11 +108,11 @@ AMU_TO_AU = 1.66e-27/(9.1093837015e-31)
 
 # Weird units used by Gaussian
 CM_TO_J = 1.98630e-23
-DYN_TO_J_PER_M  = 0.00001
+DYN_TO_J_PER_M = 0.00001
 ANGS_TO_M = 1e-10
 MDYN_PER_A_TO_J_PER_M = DYN_TO_J_PER_M / 1000 / ANGS_TO_M
 KG_TO_AMU = 1 / (1.66e-27)
-HBAR_SI = 6.626e-34/ (2 * math.pi)
+HBAR_SI = 6.626e-34 / (2 * math.pi)
 
 AU_TO_KCAL = {
     'energy': HARTREE_TO_KCAL_MOL,
@@ -123,6 +125,10 @@ KCAL_TO_AU = {
 }
 
 
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                       "elec_config.json"), "r") as f:
+    ELEC_CONFIG = json.load(f)
+    ELEC_CONFIG = {int(key): val for key, val in ELEC_CONFIG.items()}
 
 
 def convert_units(props, conversion_dict):
@@ -147,6 +153,7 @@ def convert_units(props, conversion_dict):
 
     return props
 
+
 def exc_ev_to_hartree(props, add_ground_energy=False):
     """ Note: only converts excited state energies from ev to hartree, not gradients.
 
@@ -154,7 +161,7 @@ def exc_ev_to_hartree(props, add_ground_energy=False):
 
     assert "energy_0" in props.keys()
     exc_keys = [key for key in props.keys() if key.startswith('energy'
-        ) and 'grad' not in key and key != 'energy_0']
+                                                              ) and 'grad' not in key and key != 'energy_0']
     energy_0 = props['energy_0']
     new_props = copy.deepcopy(props)
 
@@ -164,4 +171,3 @@ def exc_ev_to_hartree(props, add_ground_energy=False):
             new_props[key] += energy_0
 
     return new_props
-

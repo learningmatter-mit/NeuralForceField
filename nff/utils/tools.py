@@ -10,7 +10,8 @@ import numpy as np
 import torch
 
 from torch.nn import ModuleDict, Sequential
-from nff.nn.activations import shifted_softplus, Swish
+from nff.nn.activations import (shifted_softplus, Swish,
+                                LearnableSwish)
 from nff.nn.layers import Dense
 
 
@@ -32,6 +33,7 @@ layer_types = {
     "LeakyReLU": torch.nn.LeakyReLU,
     "ELU":  torch.nn.ELU,
     "swish": Swish,
+    "learnable_swish": LearnableSwish,
     "softplus": torch.nn.Softplus
 }
 

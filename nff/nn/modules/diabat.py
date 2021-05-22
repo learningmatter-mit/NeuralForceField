@@ -180,6 +180,9 @@ class DiabaticReadout(nn.Module):
                     results[key].append(ad_grad[i, j])
 
                     if i != j:
+                        if not all([f"energy_{i}" in results,
+                                    f"energy_{j}" in results]):
+                            continue
                         gap = results[f"energy_{j}"] - results[f"energy_{i}"]
                         nacv = ad_grad[i, j] / gap[k]
                         nacv_key = f"nacv_{i}{j}"

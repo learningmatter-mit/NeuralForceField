@@ -1346,6 +1346,9 @@ class ScaleShift(nn.Module):
         return out
 
 
+def get_act(activation):
+    return layer_types[activation]()
+
 class TestModules(unittest.TestCase):
     def testBaseEdgeUpdate(self):
         # initialize basic graphs

@@ -145,6 +145,65 @@ class Dense(nn.Linear):
         return y
 
 
+def to_module(activation):
+    from nff.utils.tools import layer_types
+
+    return layer_types[activation]()
+
+
+class PreActivation(nn.Linear):
+
+    def __init__(
+        self,
+        in_features,
+        out_features,
+        activation,
+        bias=True,
+        dropout_rate=DEFAULT_DROPOUT_RATE,
+        weight_init=xavier_uniform_,
+        bias_init=zeros_initializer,
+    ):
+
+        self.weight_init = weight_init
+        self.bias_init = bias_init
+
+        super().__init__(in_features, out_features, bias)
+
+        if isinstance(activation, str):
+            activation = to_module(activation)
+
+        self.activation = activation
+        self.dropout = nn.Dropout(p=dropout_rate)
+
+    def reset_parameters(self):
+        """
+            Reinitialize model parameters.
+        """
+        self.weight_init(self.weight)
+        if self.bias is not None:
+            self.bias_init(self.bias)
+
+    def forward(self, inputs):
+        """
+        Args:
+            inputs (dict of torch.Tensor): SchNetPack format dictionary of input tensors.
+
+        Returns:
+            torch.Tensor: Output of the dense layer.
+        """
+
+        y = self.activation(inputs)
+        weights = self.weight.to(y.device)
+        bias = self.bias.to(y.device)
+
+        y = bias + torch.einsum('ij,kj->ki', weights, y)
+
+        if hasattr(self, "dropout"):
+            y = self.dropout(y)
+
+        return y
+
+
 class Envelope(nn.Module):
     """
     Layer for adding a polynomial envelope to the spherical and
