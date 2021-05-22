@@ -182,7 +182,8 @@ def A_m(x, y, m):
     x_p = x.reshape(-1, 1) ** p_vals
     y_q = y.reshape(-1, 1) ** q_vals
     sin = torch.sin(np.pi / 2 * (m - p_vals))
-    binoms = (torch.Tensor([sp.binom(m, p.item()) for p in p_vals])
+    binoms = (torch.Tensor([sp.binom(m, int(p))
+                            for p in p_vals])
               .to(device))
     out = (binoms * x_p * y_q * sin).sum(-1)
 
@@ -191,20 +192,22 @@ def A_m(x, y, m):
 
 def B_m(x, y, m):
     device = x.device
-    p_vals = torch.arange(0, m + 1, device=device)
+    p_vals = torch.arange(0, m + 1,
+                          device=device)
     q_vals = m - p_vals
     x_p = x.reshape(-1, 1) ** p_vals
     y_q = y.reshape(-1, 1) ** q_vals
-    sin = torch.cos(np.pi / 2 * (m - p_vals))
+    cos = torch.cos(np.pi / 2 * (m - p_vals))
     binoms = (torch.Tensor([sp.binom(m, int(p)) for p in p_vals])
               .to(device))
-    out = (binoms * x_p * y_q * sin).sum(-1)
+    out = (binoms * x_p * y_q * cos).sum(-1)
 
     return out
 
 
 def c_plm(p, l, m):
-    terms = [(-1) ** p / (2 ** l),
+    terms = [(-1) ** p,
+             1 / (2 ** l),
              sp.binom(l, p),
              sp.binom(2 * l - 2 * p, l),
              sp.factorial(l - 2 * p),
@@ -234,9 +237,10 @@ def pi_l_m(r,
                            device=device,
                            dtype=torch.float))
 
-    c_coefs = (torch.Tensor([c_table[(int(p), l, m)] for p in p_vals])
+    c_coefs = (torch.Tensor([c_table[(int(p), l, m)]
+                             for p in p_vals])
                .to(device))
-    r_p = r.reshape(-1, 1) ** (2 * p_vals - 1)
+    r_p = r.reshape(-1, 1) ** (2 * p_vals - l)
     z_q = z.reshape(-1, 1) ** (l - 2 * p_vals - m)
 
     out = pref * (c_coefs * r_p * z_q).sum(-1)
@@ -255,9 +259,9 @@ def y_lm(r_ij,
          m,
          c_table):
 
-    x = r_ij[:, 0]
-    y = r_ij[:, 1]
-    z = r_ij[:, 2]
+    x = r_ij[:, 0].reshape(-1, 1)
+    y = r_ij[:, 1].reshape(-1, 1)
+    z = r_ij[:, 2].reshape(-1, 1)
 
     pi = pi_l_m(r=r,
                 z=z,
@@ -273,6 +277,36 @@ def y_lm(r_ij,
     elif m > 0:
         b = B_m(x, y, abs(m))
         out = (2 ** 0.5) * pi * b
+
+    # if l == 1:
+    #     if m == -1:
+    #         compare = y / r
+    #     elif m == 0:
+    #         compare = z / r
+    #     elif m == 1:
+    #         compare = x / r
+
+    # elif l == 2:
+    #     if m == -2:
+    #         compare = (1 / 2 * ((15 / np.pi) ** 0.5)
+    #                    * x * y / r ** 2)
+    #     elif m == -1:
+    #         compare = (1 / 2 * ((15 / np.pi) ** 0.5)
+    #                    * z * y / r ** 2)
+    #     elif m == 0:
+    #         compare = (1 / 4 * ((5 / np.pi) ** 0.5)
+    #                    * (- x ** 2 - y ** 2 + 2 * z ** 2) / r ** 2)
+    #     elif m == 1:
+    #         compare = (1 / 2 * ((15 / np.pi) ** 0.5)
+    #                    * z * x / r ** 2)
+    #     elif m == 2:
+    #         compare = (1 / 4 * ((15 / np.pi) ** 0.5)
+    #                    * (x ** 2 - y ** 2) / r ** 2)
+
+    #     compare *= (4 * np.pi / (2 * l + 1)) ** 0.5
+    # if l in [1, 2]:
+    #     delta = out.reshape(-1) - compare.reshape(-1)
+    #     print(delta.abs().mean())
 
     return out
 
@@ -294,7 +328,7 @@ def make_y_lm(l_max):
 def spooky_f_cut(r, r_cut):
     out = torch.where(
         r < r_cut,
-        torch.exp(-r ** 2 / ((r_cut - r) * (r_cut + 1))),
+        torch.exp(-r ** 2 / ((r_cut - r) * (r_cut + r))),
         torch.Tensor([0]).to(r.device)
     )
 
@@ -322,6 +356,17 @@ def rho_k(r,
     arg = torch.exp(-gamma * r)
     out = b_k(arg, bern_k) * spooky_f_cut(r, r_cut)
 
+    # this_r = r[2]
+    # k = 3
+
+    # arg = torch.exp(-gamma * this_r)
+    # b = sp.binom(bern_k - 1, k) * (arg ** k
+    #     ) * (1 - arg) ** (bern_k - 1 -k)
+    # f = torch.exp(-this_r **2 / ((r_cut - this_r) * (r_cut + this_r)))
+    # compare = f * b
+
+    # print(abs(compare - out[2, 3]))
+
     return out
 
 
@@ -338,7 +383,7 @@ def get_g_func(l,
 
         m_vals = list(range(-l, l + 1))
         y = torch.stack([y_lm_fn(r_ij, r, l, m) for m in
-                         m_vals])
+                         m_vals]).transpose(0, 1)
         rho = rho_k(r, r_cut, bern_k, gamma)
         g = torch.ones(n_pairs,
                        bern_k,

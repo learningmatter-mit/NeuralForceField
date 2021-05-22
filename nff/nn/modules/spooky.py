@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 import sympy as sym
+import numpy as np
 
 from nff.utils.tools import layer_types
 from nff.nn.layers import PreActivation, Dense
@@ -94,9 +95,10 @@ class ElectronicEmbedding(nn.Module):
                                  bias=False)
         names = ['k_plus', 'k_minus', 'v_plus', 'v_minus']
         for name in names:
-            setattr(self, name, nn.Parameter(torch.ones(feat_dim)
-                                             .reshape(-1, 1)))
-            nn.init.xavier_uniform_(getattr(self, name))
+            val = nn.Parameter(torch.ones(feat_dim)
+                               .reshape(-1, 1))
+            nn.init.xavier_uniform_(val)
+            setattr(self, name, val)
 
     def forward(self,
                 psi,
@@ -180,20 +182,21 @@ class LocalInteraction(nn.Module):
 
         for letter in ["c", "s", "p", "d", "l"]:
             key = f"resmlp_{letter}"
-            setattr(self, key, Residual(feat_dim=feat_dim,
-                                        activation=activation,
-                                        dropout=dropout))
+            val = Residual(feat_dim=feat_dim,
+                           activation=activation,
+                           dropout=dropout)
+            setattr(self, key, val)
 
         for key in ["G_s", "G_p", "G_d"]:
             val = nn.Parameter(torch.ones(feat_dim,
                                           bern_k))
+            nn.init.xavier_uniform_(val)
             setattr(self, key, val)
 
         for key in ["P_1", "P_2", "D_1", "D_2"]:
             val = nn.Parameter(torch.ones(feat_dim,
                                           feat_dim))
             nn.init.xavier_uniform_(val)
-
             setattr(self, key, val)
 
         g_dic = make_g_funcs(bern_k=bern_k,
@@ -233,6 +236,7 @@ class LocalInteraction(nn.Module):
 
         per_nbr = (residual.reshape(n_nbrs, -1, 1)
                    * matmul)
+
         out = scatter_add(src=per_nbr,
                           index=nbrs[:, 0],
                           dim=0,
@@ -302,3 +306,85 @@ class LocalInteraction(nn.Module):
         out = self.resmlp_l(inp)
 
         return out
+
+
+def gram_schmidt_columns(X):
+    Q, R = np.linalg.qr(X)
+    return Q
+
+
+def gram_schmidt(vectors):
+    basis = []
+    w_vecs = []
+    for v in vectors:
+        w = v - np.sum(np.dot(v, b)*b for b in basis)
+        if (w > 1e-10).any():
+            basis.append(w/np.linalg.norm(w))
+        w_vecs.append(w)
+    return np.array(w_vecs)
+
+
+def make_rand_feats(feat_dim, rand_feat_dim):
+    mean = np.zeros(feat_dim)
+    cov = np.diag(np.ones(feat_dim))
+    omega = np.random.multivariate_normal(mean, cov, rand_feat_dim)
+
+    # import pdb
+    # pdb.set_trace()
+    # omega = torch.Tensor(gram_schmidt(omega))
+    omega = torch.Tensor(gram_schmidt_columns(omega))
+
+    return omega
+
+
+class FastAttention(nn.Module):
+    def __init__(self,
+                 feat_dim):
+
+        super().__init__()
+        self.omega = make_rand_feats(feat_dim,
+                                     rand_feat_dim=feat_dim)
+
+    def make_phi(self, x):
+        # m is random feature dim d is feature dim,
+        # and N is number of nodes.
+
+        # omega has dimension m x F
+        # x has dimension N x F
+
+        omega_x = torch.einsum('ij,kj->ki',
+                               self.omega, x)
+
+        m = omega_x.shape[1]
+        h = torch.exp(-(x ** 2).sum(-1) / 2).reshape(-1, 1)
+        phi = h / (m ** 0.5) * torch.exp(omega_x)
+
+        return phi
+
+    def forward(self, Q, K, V):
+
+        ###
+        # should follow the pseudocode in the paper
+        # so it scales properly
+        ###
+
+        # q has dimension N x F
+        # k has dimension N x F
+
+        Q_hat = self.make_phi(Q)
+        K_hat = self.make_phi(K)
+
+        n_nodes = Q.shape[0]
+        ones = torch.ones(n_nodes)
+        k_ones = torch.matmul(K_hat.transpose(0, 1), ones)
+
+        d_diag = torch.matmul(Q_hat, k_ones)
+        D_inv = torch.diag(1 / d_diag)
+
+        # replace with einsum when figured out
+
+        kv = torch.matmul(K_hat.transpose(0, 1), V)
+        qkv = torch.matmul(Q_hat, kv)
+        attention = torch.matmul(D_inv, qkv)
+
+        return attention
