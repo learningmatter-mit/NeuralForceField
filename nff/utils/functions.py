@@ -13,6 +13,8 @@ import copy
 import torch
 import math
 
+from nff.utils.constants import BOHR_RADIUS
+
 EPS = 1e-15
 
 
@@ -78,7 +80,8 @@ def bessel_basis(n, k):
         bess_basis_tmp = []
         for i in range(k):
             bess_basis_tmp += [sym.simplify(normalizer[order]
-                                            [i]*f[order].subs(x, zeros[order, i]*x))]
+                                            [i]*f[order].subs(
+                                                x, zeros[order, i]*x))]
         bess_basis += [bess_basis_tmp]
     return bess_basis
 
@@ -90,7 +93,8 @@ def sph_harm_prefactor(l, m):
     l: int, l>=0
     m: int, -l<=m<=l
     """
-    return ((2*l+1) * np.math.factorial(l-abs(m)) / (4*np.pi*np.math.factorial(l+abs(m))))**0.5
+    return ((2*l+1) * np.math.factorial(l-abs(m))
+            / (4*np.pi*np.math.factorial(l+abs(m))))**0.5
 
 
 def associated_legendre_polynomials(l, zero_m_only=True):
@@ -114,7 +118,8 @@ def associated_legendre_polynomials(l, zero_m_only=True):
                     P_l_m[i+1][i] = sym.simplify((2*i+1)*z*P_l_m[i][i])
                 for j in range(i + 2, l):
                     P_l_m[j][i] = sym.simplify(
-                        ((2*j-1) * z * P_l_m[j-1][i] - (i+j-1) * P_l_m[j-2][i]) / (j - i))
+                        ((2*j-1) * z * P_l_m[j-1][i]
+                            - (i+j-1) * P_l_m[j-2][i]) / (j - i))
 
     return P_l_m
 
@@ -278,36 +283,6 @@ def y_lm(r_ij,
         b = B_m(x, y, abs(m))
         out = (2 ** 0.5) * pi * b
 
-    # if l == 1:
-    #     if m == -1:
-    #         compare = y / r
-    #     elif m == 0:
-    #         compare = z / r
-    #     elif m == 1:
-    #         compare = x / r
-
-    # elif l == 2:
-    #     if m == -2:
-    #         compare = (1 / 2 * ((15 / np.pi) ** 0.5)
-    #                    * x * y / r ** 2)
-    #     elif m == -1:
-    #         compare = (1 / 2 * ((15 / np.pi) ** 0.5)
-    #                    * z * y / r ** 2)
-    #     elif m == 0:
-    #         compare = (1 / 4 * ((5 / np.pi) ** 0.5)
-    #                    * (- x ** 2 - y ** 2 + 2 * z ** 2) / r ** 2)
-    #     elif m == 1:
-    #         compare = (1 / 2 * ((15 / np.pi) ** 0.5)
-    #                    * z * x / r ** 2)
-    #     elif m == 2:
-    #         compare = (1 / 4 * ((15 / np.pi) ** 0.5)
-    #                    * (x ** 2 - y ** 2) / r ** 2)
-
-    #     compare *= (4 * np.pi / (2 * l + 1)) ** 0.5
-    # if l in [1, 2]:
-    #     delta = out.reshape(-1) - compare.reshape(-1)
-    #     print(delta.abs().mean())
-
     return out
 
 
@@ -355,17 +330,6 @@ def rho_k(r,
 
     arg = torch.exp(-gamma * r)
     out = b_k(arg, bern_k) * spooky_f_cut(r, r_cut)
-
-    # this_r = r[2]
-    # k = 3
-
-    # arg = torch.exp(-gamma * this_r)
-    # b = sp.binom(bern_k - 1, k) * (arg ** k
-    #     ) * (1 - arg) ** (bern_k - 1 -k)
-    # f = torch.exp(-this_r **2 / ((r_cut - this_r) * (r_cut + this_r)))
-    # compare = f * b
-
-    # print(abs(compare - out[2, 3]))
 
     return out
 
@@ -417,3 +381,19 @@ def make_g_funcs(bern_k,
         g_funcs[name] = copy.deepcopy(g_func)
 
     return g_funcs
+
+
+def zbl_phi(r_ij,
+            z_i,
+            z_j):
+    """
+    Phi function in the Ziegler-Biersack-Littmark nuclear
+    stopping potential
+    """
+    a = 0.8853 * BOHR_RADIUS / (z_i ** 0.23 + z_j ** 0.23)
+    x = r_ij / a
+    out = (0.1818 * torch.exp(-3.2 * x)
+           + 0.5099 * torch.exp(-0.9423 * x)
+           + 0.2802 * torch.exp(-0.4029 * x)
+           + 0.02817 * torch.exp(-0.2016 * x))
+    return out

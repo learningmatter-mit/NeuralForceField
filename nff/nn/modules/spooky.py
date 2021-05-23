@@ -1,13 +1,12 @@
 import torch
-import numpy as np
 from torch import nn
 from nff.nn.layers import PreActivation, Dense
 # from nff.nn.layers import (PainnRadialBasis, CosineEnvelope,
 #                            ExpNormalBasis, Dense)
 from nff.utils.tools import layer_types
-from nff.utils.scatter import scatter_add
+from nff.utils.scatter import scatter_add, compute_grad
 from nff.utils.constants import ELEC_CONFIG, KE_KCAL
-from nff.utils import make_g_funcs
+from nff.utils import make_g_funcs, spooky_f_cut, zbl_phi
 
 from performer_pytorch import FastAttention
 
@@ -421,12 +420,16 @@ class InteractionBlock(nn.Module):
                                              activation=activation,
                                              dropout=dropout)
 
-    def forward(self, x):
+    def forward(self,
+                x,
+                xyz,
+                nbrs):
 
         x_tilde = self.residual_1(x)
-        l = self.local(x_tilde)
+        l = self.local(xyz=xyz,
+                       x_tilde=x_tilde,
+                       nbrs=nbrs)
         n = self.non_local(x_tilde)
-
         x_t = self.residual_2(x_tilde + l + n)
         y_t = self.resmlp(x_t)
 
@@ -436,11 +439,11 @@ class InteractionBlock(nn.Module):
 def sigma(x):
     out = torch.where(x > 0,
                       torch.exp(-1 / x),
-                      torch.Tensor([0]))
+                      torch.Tensor([0]).to(x.device))
     return out
 
 
-def f_switch(r, r_on, r_off):
+def get_f_switch(r, r_on, r_off):
     arg = (r - r_on) / (r_off - r_on)
     num = sigma(1 - arg)
     denom = sigma(1 - arg) + sigma(arg)
@@ -450,10 +453,28 @@ def f_switch(r, r_on, r_off):
 
 
 class Electrostatics(nn.Module):
-    def __init__(self):
+    def __init__(self,
+                 feat_dim,
+                 r_cut,
+                 max_z=DEFAULT_MAX_Z):
         super().__init__()
 
-    def forward(self, q, xyz):
+        self.w = Dense(in_features=feat_dim,
+                       out_features=1,
+                       bias=False,
+                       activation=None)
+        self.z_embed = nn.Embedding(max_z, 1, padding_idx=0)
+        self.r_on = r_cut / 4
+        self.r_off = 3 * r_cut / 4
+
+    def f_switch(self, r):
+        out = get_f_switch(r=r,
+                           r_on=self.r_on,
+                           r_off=self.r_off)
+
+        return out
+
+    def get_en(self, q, xyz):
         n = xyz.shape[0]
         r_ij = (xyz.expand(n, n, 3) -
                 xyz.expand(n, n, 3).transpose(0, 1)
@@ -466,8 +487,181 @@ class Electrostatics(nn.Module):
         q_i = q[nbrs[:, 0]]
         q_j = q[nbrs[:, 1]]
         r = r_ij[nbrs[:, 0], nbrs[:, 1]]
-        arg_0 = f_switch(r) / (r ** 2 + 1) ** 0.5
-        arg_1 = (1 - f_switch(r)) / r
+        arg_0 = self.f_switch(r) / (r ** 2 + 1) ** 0.5
+        arg_1 = (1 - self.f_switch(r)) / r
         energy = (KE_KCAL * q_i * q_j * (arg_0 + arg_1)).sum()
 
         return energy
+
+    def get_charge(self, f, z, total_charge):
+        # f has dimension num_atoms x F
+        # self.w has dimension F
+
+        w_f = self.w(f)
+        q_z = self.z_embed(z)
+        pred_charge = w_f + q_z
+
+        num_atoms = f.shape[0]
+        correction = 1 / num_atoms * (total_charge - pred_charge.sum())
+
+        final_charge = pred_charge + correction
+
+        return final_charge
+
+    def forward(self,
+                f,
+                z,
+                xyz,
+                total_charge):
+
+        q = self.get_charge(f=f,
+                            z=z,
+                            total_charge=total_charge)
+        energy = self.get_en(q=q, xyz=xyz)
+
+        return energy, q
+
+
+class NuclearRepulsion(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self,
+                xyz,
+                z,
+                nbrs):
+
+        undirec = nbrs[nbrs[:, 1] > nbrs[:, 0]]
+        z_i = z[undirec[:, 0]]
+        z_j = z[undirec[:, 1]]
+        r_ij = ((xyz[undirec[:, 0]] - xyz[undirec[:, 1]])
+                .pow(2).sum(dim=2).sqrt())
+
+        phi = zbl_phi(r_ij=r_ij,
+                      z_i=z_i,
+                      z_j=z_j)
+        out = z_i * z_j / r_ij * spooky_f_cut(r_ij) * phi
+
+        return out
+
+
+class AtomwiseReadout(nn.Module):
+    def __init__(self, feat_dim):
+        super().__init__()
+        self.w_e = Dense(in_features=feat_dim,
+                         out_features=1,
+                         bias=False,
+                         activation=None)
+
+    def forward(self, f, num_atoms):
+        e_i = torch.split(self.w_e(f), num_atoms)
+        e_total = torch.cat([e.sum() for e in e_i])
+
+        return e_total
+
+
+class SpookyNet(nn.Module):
+    def __init__(self,
+                 output_keys,
+                 add_nuc_keys,
+                 feat_dim,
+                 r_cut,
+                 gamma,
+                 bern_k,
+                 num_conv,
+                 dropout=DEFAULT_DROPOUT,
+                 activation=DEFAULT_ACTIVATION,
+                 max_z=DEFAULT_MAX_Z):
+        super().__init__()
+
+        self.output_keys = output_keys
+        self.add_nuc_keys = add_nuc_keys
+        self.embedding = CombinedEmbedding(feat_dim,
+                                           activation=activation,
+                                           max_z=max_z)
+        self.interactions = nn.ModuleList([
+            InteractionBlock(feat_dim=feat_dim,
+                             r_cut=r_cut,
+                             gamma=gamma,
+                             bern_k=bern_k,
+                             activation=activation,
+                             dropout=dropout,
+                             max_z=max_z)
+            for _ in range(num_conv)
+        ])
+        self.atomwise_readout = nn.ModuleDict(
+            {
+                key: AtomwiseReadout(feat_dim=feat_dim)
+                for key in output_keys
+            }
+        )
+        self.electrostatics = nn.ModuleDict(
+            {
+                key: Electrostatics(feat_dim=feat_dim,
+                                    r_cut=r_cut,
+                                    max_z=max_z)
+                for key in output_keys
+            }
+        )
+        self.nuc_repulsion = NuclearRepulsion()
+
+    def forward(self,
+                batch,
+                grad_keys,
+                xyz=None):
+
+        nxyz = batch['nxyz']
+        nbrs = batch['nbr_list']
+        z = nxyz[:, 0].long()
+        if xyz is not None:
+            xyz = nxyz[:, 1:]
+            xyz.requires_grad = True
+
+        charge = batch['charge']
+        spin = batch['spin']
+        num_atoms = batch['num_atoms'].tolist()
+
+        x = self.embedding(charge=charge,
+                           spin=spin,
+                           z=z,
+                           num_atoms=num_atoms)
+
+        f = torch.zeros_like(x)
+        for i, interaction in enumerate(self.interactions):
+            x, y_t = interaction(x=x,
+                                 xyz=xyz,
+                                 nbrs=nbrs)
+
+            f = f + y_t
+
+        results = {}
+        for i, key in enumerate(self.output_keys):
+
+            atomwise_readout = self.atomwise_readout[key]
+            electrostatics = self.electrostatics[key]
+
+            learned_e = atomwise_readout(f=f,
+                                         num_atoms=num_atoms)
+            elec_e, q = electrostatics(f=f,
+                                       z=z,
+                                       xyz=xyz,
+                                       total_charge=charge)
+
+            total_e = learned_e + elec_e
+
+            if key in self.add_nuc_keys:
+                nuc_e = self.nuc_repulsion(xyz=xyz,
+                                           z=z,
+                                           nbrs=nbrs)
+                total_e = total_e + nuc_e
+
+            results.update({key: total_e,
+                            f"q_{key}": q})
+
+        for key in grad_keys:
+            base_key = key.replace("_grad", "")
+            grad = compute_grad(inputs=xyz,
+                                output=results[base_key])
+            results[key] = grad
+
+        return results
