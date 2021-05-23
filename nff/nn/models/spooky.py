@@ -134,8 +134,8 @@ class SpookyNet(nn.Module):
 
         if grad_keys is None:
             grad_keys = self.grad_keys
-        for key in grad_keys:
 
+        for key in grad_keys:
             base_key = key.replace("_grad", "")
             grad = compute_grad(inputs=xyz,
                                 output=results[base_key])
