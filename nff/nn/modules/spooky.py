@@ -59,11 +59,14 @@ class ResidualMLP(nn.Module):
     def __init__(self,
                  feat_dim,
                  activation=DEFAULT_ACTIVATION,
-                 dropout=DEFAULT_DROPOUT):
+                 dropout=DEFAULT_DROPOUT,
+                 bias=False):
 
+        super().__init__()
         residual = Residual(feat_dim=feat_dim,
                             activation=activation,
-                            dropout=dropout)
+                            dropout=dropout,
+                            bias=bias)
         self.block = nn.Sequential(residual,
                                    layer_types[activation](),
                                    nn.Linear(in_features=feat_dim,
@@ -611,7 +614,7 @@ class SpookyNet(nn.Module):
                 xyz=None):
 
         nxyz = batch['nxyz']
-        nbrs = batch['nbr_list']
+        nbrs = batch['neigbor_list']
         z = nxyz[:, 0].long()
         if xyz is not None:
             xyz = nxyz[:, 1:]
