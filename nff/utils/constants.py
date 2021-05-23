@@ -38,13 +38,18 @@ KCAL_TO_AU = {
 
 KB_EV = 0.0000861731
 KB_AU = 3.166815e-6
-EV_TO_AU = 1/27.2114
+EV_TO_AU = 1 / 27.2114
+
+# Coulomb's constant, in (kcal/mol) * (angs / e^2),
+# where e is the electron charge
+KE_KCAL = 332.07
 
 # Hardness used in xtb, in eV. Source: Ghosh, D.C. and Islam, N., 2010.
 # Semiempirical evaluation of the global hardness of the atoms
 # of 103 elements of the periodic table using the most probable
 # radii as their size descriptors. International Journal of
 # Quantum Chemistry, 110(6), pp.1206-1213.
+
 
 HARDNESS_EV = {"H": 6.4299,
                "He": 12.5449,

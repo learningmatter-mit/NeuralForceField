@@ -1,16 +1,15 @@
 import torch
-from torch import nn
-import sympy as sym
 import numpy as np
-
-from nff.utils.tools import layer_types
+from torch import nn
 from nff.nn.layers import PreActivation, Dense
 # from nff.nn.layers import (PainnRadialBasis, CosineEnvelope,
 #                            ExpNormalBasis, Dense)
+from nff.utils.tools import layer_types
 from nff.utils.scatter import scatter_add
-from nff.nn.modules.schnet import ScaleShift, get_act
-from nff.utils.constants import ELEC_CONFIG
+from nff.utils.constants import ELEC_CONFIG, KE_KCAL
 from nff.utils import make_g_funcs
+
+from performer_pytorch import FastAttention
 
 EPS = 1e-15
 DEFAULT_ACTIVATION = 'learnable_swish'
@@ -57,6 +56,25 @@ class Residual(nn.Module):
         return output
 
 
+class ResidualMLP(nn.Module):
+    def __init__(self,
+                 feat_dim,
+                 activation=DEFAULT_ACTIVATION,
+                 dropout=DEFAULT_DROPOUT):
+
+        residual = Residual(feat_dim=feat_dim,
+                            activation=activation,
+                            dropout=dropout)
+        self.block = nn.Sequential(residual,
+                                   layer_types[activation](),
+                                   nn.Linear(in_features=feat_dim,
+                                             out_features=feat_dim))
+
+    def forward(self, x):
+        output = self.block(x)
+        return output
+
+
 class NuclearEmbedding(nn.Module):
     def __init__(self,
                  feat_dim,
@@ -89,10 +107,10 @@ class ElectronicEmbedding(nn.Module):
                             bias=True,
                             activation=None)
         self.feat_dim = feat_dim
-        self.residual = Residual(feat_dim=feat_dim,
-                                 activation=activation,
-                                 dropout=dropout,
-                                 bias=False)
+        self.res_mlp = ResidualMLP(feat_dim=feat_dim,
+                                   activation=activation,
+                                   dropout=dropout,
+                                   bias=False)
         names = ['k_plus', 'k_minus', 'v_plus', 'v_minus']
         for name in names:
             val = nn.Parameter(torch.ones(feat_dim)
@@ -128,7 +146,7 @@ class ElectronicEmbedding(nn.Module):
 
             # dimension atoms_in_mol x F
             av = v * a_i.reshape(-1, 1)
-            this_e_psi = self.residual(av)
+            this_e_psi = self.res_mlp(av)
             e_psi[counter: counter + num_atoms[j]] = this_e_psi
             counter += num_atoms[j]
 
@@ -142,10 +160,12 @@ class CombinedEmbedding(nn.Module):
                  max_z=DEFAULT_MAX_Z):
 
         super().__init__()
-        self.nuc_embedding = NuclearEmbedding(feat_dim=feat_dim,
-                                              max_z=max_z)
-        self.charge_embedding = ElectronicEmbedding(feat_dim=feat_dim,
-                                                    activation=activation)
+        self.nuc_embedding = NuclearEmbedding(
+            feat_dim=feat_dim,
+            max_z=max_z)
+        self.charge_embedding = ElectronicEmbedding(
+            feat_dim=feat_dim,
+            activation=activation)
         self.spin_embedding = ElectronicEmbedding(feat_dim=feat_dim,
                                                   activation=activation)
 
@@ -182,9 +202,9 @@ class LocalInteraction(nn.Module):
 
         for letter in ["c", "s", "p", "d", "l"]:
             key = f"resmlp_{letter}"
-            val = Residual(feat_dim=feat_dim,
-                           activation=activation,
-                           dropout=dropout)
+            val = ResidualMLP(feat_dim=feat_dim,
+                              activation=activation,
+                              dropout=dropout)
             setattr(self, key, val)
 
         for key in ["G_s", "G_p", "G_d"]:
@@ -232,9 +252,9 @@ class LocalInteraction(nn.Module):
         n_nbrs = nbrs.shape[0]
 
         matmul = self.g_matmul(r_ij, orbital)
-        residual = res_block(x_j)
+        res_mlp = res_block(x_j)
 
-        per_nbr = (residual.reshape(n_nbrs, -1, 1)
+        per_nbr = (res_mlp.reshape(n_nbrs, -1, 1)
                    * matmul)
 
         out = scatter_add(src=per_nbr,
@@ -291,9 +311,6 @@ class LocalInteraction(nn.Module):
                                     orbital=orbital)
             quants.append(quant)
 
-        s_i = quants[0]
-        s_term = s_i.reshape(graph_size, -1)
-
         invariants = []
 
         for quant, orbital in zip(quants[1:],
@@ -302,89 +319,155 @@ class LocalInteraction(nn.Module):
                                         orbital)
             invariants.append(invariant)
 
+        s_i = quants[0]
+        s_term = s_i.reshape(graph_size, -1)
         inp = c_term + s_term + sum(invariants)
         out = self.resmlp_l(inp)
 
         return out
 
 
-def gram_schmidt_columns(X):
-    Q, R = np.linalg.qr(X)
-    return Q
-
-
-def gram_schmidt(vectors):
-    basis = []
-    w_vecs = []
-    for v in vectors:
-        w = v - np.sum(np.dot(v, b)*b for b in basis)
-        if (w > 1e-10).any():
-            basis.append(w/np.linalg.norm(w))
-        w_vecs.append(w)
-    return np.array(w_vecs)
-
-
-def make_rand_feats(feat_dim, rand_feat_dim):
-    mean = np.zeros(feat_dim)
-    cov = np.diag(np.ones(feat_dim))
-    omega = np.random.multivariate_normal(mean, cov, rand_feat_dim)
-
-    # import pdb
-    # pdb.set_trace()
-    # omega = torch.Tensor(gram_schmidt(omega))
-    omega = torch.Tensor(gram_schmidt_columns(omega))
-
-    return omega
-
-
-class FastAttention(nn.Module):
+class NonLocalInteraction(nn.Module):
     def __init__(self,
-                 feat_dim):
-
+                 feat_dim,
+                 activation=DEFAULT_ACTIVATION,
+                 dropout=DEFAULT_DROPOUT):
         super().__init__()
-        self.omega = make_rand_feats(feat_dim,
-                                     rand_feat_dim=feat_dim)
 
-    def make_phi(self, x):
-        # m is random feature dim d is feature dim,
-        # and N is number of nodes.
+        # no redraw should happen here - only if
+        # you call self attention of cross attention
+        # as wrappers
+        self.attn = FastAttention(dim_heads=feat_dim,
+                                  nb_features=feat_dim,
+                                  causal=False)
+        self.feat_dim = feat_dim
 
-        # omega has dimension m x F
-        # x has dimension N x F
+        for letter in ['q', 'k', 'v']:
+            key = f'resmlp_{letter}'
+            val = ResidualMLP(feat_dim=feat_dim,
+                              activation=activation,
+                              dropout=dropout)
+            setattr(self, key, val)
 
-        omega_x = torch.einsum('ij,kj->ki',
-                               self.omega, x)
+    def forward(self, x_tilde):
+        # x_tilde has dimension N x F
+        # N = number of nodes, F = feature dimension
 
-        m = omega_x.shape[1]
-        h = torch.exp(-(x ** 2).sum(-1) / 2).reshape(-1, 1)
-        phi = h / (m ** 0.5) * torch.exp(omega_x)
+        num_nodes = x_tilde.shape[0]
+        Q = self.resmlp_q(x_tilde).reshape(1,
+                                           1,
+                                           num_nodes,
+                                           self.feat_dim)
+        K = self.resmlp_k(x_tilde).reshape(1,
+                                           1,
+                                           num_nodes,
+                                           self.feat_dim)
+        V = self.resmlp_v(x_tilde).reshape(1,
+                                           1,
+                                           num_nodes,
+                                           self.feat_dim)
 
-        return phi
-
-    def forward(self, Q, K, V):
+        out = self.attn(Q, K, V).reshape(num_nodes,
+                                         self.feat_dim)
 
         ###
-        # should follow the pseudocode in the paper
-        # so it scales properly
-        ###
+        # real_Q = Q.reshape(num_nodes, self.feat_dim)
+        # real_k = K.reshape(num_nodes, self.feat_dim)
+        # real_V = V.reshape(num_nodes, self.feat_dim)
 
-        # q has dimension N x F
-        # k has dimension N x F
+        # A = torch.exp(torch.matmul(real_Q, real_k.transpose(0, 1))
+        #     / self.feat_dim ** 0.5)
+        # d = torch.matmul(A, torch.ones(num_nodes))
+        # D_inv = torch.diag(1 / d)
+        # real = torch.matmul(D_inv, torch.matmul(A, real_V))
 
-        Q_hat = self.make_phi(Q)
-        K_hat = self.make_phi(K)
+        # import pdb
+        # pdb.set_trace()
 
-        n_nodes = Q.shape[0]
-        ones = torch.ones(n_nodes)
-        k_ones = torch.matmul(K_hat.transpose(0, 1), ones)
+        # print(abs(out - real).mean())
+        ####
 
-        d_diag = torch.matmul(Q_hat, k_ones)
-        D_inv = torch.diag(1 / d_diag)
+        return out
 
-        # replace with einsum when figured out
 
-        kv = torch.matmul(K_hat.transpose(0, 1), V)
-        qkv = torch.matmul(Q_hat, kv)
-        attention = torch.matmul(D_inv, qkv)
+class InteractionBlock(nn.Module):
+    def __init__(self,
+                 feat_dim,
+                 r_cut,
+                 gamma,
+                 bern_k,
+                 activation=DEFAULT_ACTIVATION,
+                 dropout=DEFAULT_DROPOUT,
+                 max_z=DEFAULT_MAX_Z):
+        super().__init__()
 
-        return attention
+        self.residual_1 = Residual(feat_dim=feat_dim,
+                                   activation=activation,
+                                   dropout=dropout)
+        self.residual_2 = Residual(feat_dim=feat_dim,
+                                   activation=activation,
+                                   dropout=dropout)
+        self.res_mlp = ResidualMLP(feat_dim=feat_dim,
+                                   activation=activation,
+                                   dropout=dropout)
+        self.local = LocalInteraction(feat_dim=feat_dim,
+                                      bern_k=bern_k,
+                                      gamma=gamma,
+                                      r_cut=r_cut,
+                                      activation=activation,
+                                      max_z=max_z,
+                                      dropout=dropout)
+        self.non_local = NonLocalInteraction(feat_dim=feat_dim,
+                                             activation=activation,
+                                             dropout=dropout)
+
+    def forward(self, x):
+
+        x_tilde = self.residual_1(x)
+        l = self.local(x_tilde)
+        n = self.non_local(x_tilde)
+
+        x_t = self.residual_2(x_tilde + l + n)
+        y_t = self.resmlp(x_t)
+
+        return x_t, y_t
+
+
+def sigma(x):
+    out = torch.where(x > 0,
+                      torch.exp(-1 / x),
+                      torch.Tensor([0]))
+    return out
+
+
+def f_switch(r, r_on, r_off):
+    arg = (r - r_on) / (r_off - r_on)
+    num = sigma(1 - arg)
+    denom = sigma(1 - arg) + sigma(arg)
+    out = num / denom
+
+    return out
+
+
+class Electrostatics(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, q, xyz):
+        n = xyz.shape[0]
+        r_ij = (xyz.expand(n, n, 3) -
+                xyz.expand(n, n, 3).transpose(0, 1)
+                ).pow(2).sum(dim=2).sqrt()
+
+        mask = r_ij > 0
+        nbrs = mask.nonzero(as_tuple=False)
+        nbrs = nbrs[nbrs[:, 1] > nbrs[:, 0]]
+
+        q_i = q[nbrs[:, 0]]
+        q_j = q[nbrs[:, 1]]
+        r = r_ij[nbrs[:, 0], nbrs[:, 1]]
+        arg_0 = f_switch(r) / (r ** 2 + 1) ** 0.5
+        arg_1 = (1 - f_switch(r)) / r
+        energy = (KE_KCAL * q_i * q_j * (arg_0 + arg_1)).sum()
+
+        return energy
