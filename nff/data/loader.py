@@ -4,7 +4,8 @@ import copy
 
 from torch.utils.data.sampler import Sampler, BatchSampler
 
-REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'bonded_nbr_list', 'angle_list']
+REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'bonded_nbr_list',
+                'angle_list', 'mol_nbrs']
 NBR_LIST_KEYS = ['bond_idx', 'kj_idx', 'ji_idx']
 IGNORE_KEYS = ['rd_mols']
 

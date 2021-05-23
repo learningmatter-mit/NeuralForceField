@@ -24,8 +24,8 @@ class Swish(torch.nn.Module):
 
 class LearnableSwish(torch.nn.Module):
     def __init__(self,
-                 alpha=1,
-                 beta=1):
+                 alpha=1.0,
+                 beta=1.702):
         super().__init__()
         self.alpha = nn.Parameter(torch.Tensor([alpha]))
         self.beta = nn.Parameter(torch.Tensor([beta]))

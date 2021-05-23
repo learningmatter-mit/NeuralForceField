@@ -12,6 +12,7 @@ from nff.nn.models.cp3d import ChemProp3D, OnlyBondUpdateCP3D
 from nff.nn.models.dimenet import DimeNet, DimeNetDiabat, DimeNetDiabatDelta, DimeNetDelta
 from nff.nn.models.painn import Painn, PainnDiabat, PainnTransformer, PainnAdiabat
 from nff.nn.models.torchmd_net import TorchMDNet
+from nff.nn.models.spooky import SpookyNet
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -245,6 +246,17 @@ PARAMS_TYPE = {"SchNet":
                    "output_keys": list,
                    "grad_keys": list
 
+               },
+
+               "SpookyNet":
+               {
+                   "output_keys": list,
+                   "grad_keys": list,
+                   "feat_dim": int,
+                   "r_cut": float,
+                   "gamma": float,
+                   "bern_k": int,
+                   "num_conv": int
                }
 
                }
@@ -265,7 +277,8 @@ MODEL_DICT = {
     "PainnTransformer": PainnTransformer,
     "PainnDiabat": PainnDiabat,
     "PainnAdiabat": PainnAdiabat,
-    "TorchMDNet": TorchMDNet
+    "TorchMDNet": TorchMDNet,
+    "SpookyNet": SpookyNet
 
 }
 

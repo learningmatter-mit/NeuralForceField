@@ -156,3 +156,7 @@ def make_directed(nbr_list):
 
     new_nbrs = torch.cat([nbr_list, nbr_list.flip(1)], dim=0)
     return new_nbrs, directed
+
+def make_undirected(nbr_list):
+    nbrs = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
+    return nbrs

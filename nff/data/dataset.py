@@ -175,7 +175,10 @@ class Dataset(TorchDataset):
 
         return props
 
-    def generate_neighbor_list(self, cutoff, undirected=True):
+    def generate_neighbor_list(self,
+                               cutoff,
+                               undirected=True,
+                               key='nbr_list'):
         """Generates a neighbor list for each one of the atoms in the dataset.
             By default, does not consider periodic boundary conditions.
 
@@ -187,19 +190,19 @@ class Dataset(TorchDataset):
             TYPE: Description
         """
         if 'lattice' not in self.props:
-            self.props['nbr_list'] = [
+            self.props[key] = [
                 get_neighbor_list(nxyz[:, 1:4], cutoff, undirected)
                 for nxyz in self.props['nxyz']
             ]
             self.props['offsets'] = [
                 torch.sparse.FloatTensor(nbrlist.shape[0], 3)
-                for nbrlist in self.props['nbr_list']
+                for nbrlist in self.props[key]
             ]
         else:
             self._get_periodic_neighbor_list(cutoff, undirected)
-            return self.props['nbr_list'], self.props['offsets']
+            return self.props[key], self.props['offsets']
 
-        return self.props['nbr_list']
+        return self.props[key]
 
     def make_all_directed(self):
         make_dset_directed(self)

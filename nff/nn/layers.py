@@ -133,6 +133,7 @@ class Dense(nn.Linear):
         Returns:
             torch.Tensor: Output of the dense layer.
         """
+        self.to(inputs.device)
         y = super().forward(inputs)
 
         # kept for compatibility with earlier versions of nff
@@ -175,6 +176,7 @@ class PreActivation(nn.Linear):
         self.activation = activation
         self.dropout = nn.Dropout(p=dropout_rate)
 
+
     def reset_parameters(self):
         """
             Reinitialize model parameters.
@@ -194,9 +196,10 @@ class PreActivation(nn.Linear):
 
         y = self.activation(inputs)
         weights = self.weight.to(y.device)
-        bias = self.bias.to(y.device)
 
-        y = bias + torch.einsum('ij,kj->ki', weights, y)
+        y = torch.einsum('ij,kj->ki', weights, y)
+        if self.bias is not None:
+            y = y + self.bias.to(y.device)
 
         if hasattr(self, "dropout"):
             y = self.dropout(y)

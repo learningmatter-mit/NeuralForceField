@@ -33,7 +33,7 @@ Next install remaining pip requirements:
 
 ```bash
 conda activate nff
-pip install sigopt e3fp ipykernel
+pip install sigopt e3fp ipykernel performer-pytorch
 ```
 
 To ensure that the `nff` environment is accessible through Jupyter, add the the `nff` display name:

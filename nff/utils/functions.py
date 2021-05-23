@@ -13,7 +13,6 @@ import copy
 import torch
 import math
 
-from nff.utils.constants import BOHR_RADIUS
 
 EPS = 1e-15
 
@@ -381,19 +380,3 @@ def make_g_funcs(bern_k,
         g_funcs[name] = copy.deepcopy(g_func)
 
     return g_funcs
-
-
-def zbl_phi(r_ij,
-            z_i,
-            z_j):
-    """
-    Phi function in the Ziegler-Biersack-Littmark nuclear
-    stopping potential
-    """
-    a = 0.8853 * BOHR_RADIUS / (z_i ** 0.23 + z_j ** 0.23)
-    x = r_ij / a
-    out = (0.1818 * torch.exp(-3.2 * x)
-           + 0.5099 * torch.exp(-0.9423 * x)
-           + 0.2802 * torch.exp(-0.4029 * x)
-           + 0.02817 * torch.exp(-0.2016 * x))
-    return out

@@ -1,14 +1,13 @@
 import torch
 from torch import nn
-from nff.nn.layers import PreActivation, Dense
+from nff.nn.layers import PreActivation, Dense, zeros_initializer
 # from nff.nn.layers import (PainnRadialBasis, CosineEnvelope,
 #                            ExpNormalBasis, Dense)
-from nff.utils.tools import layer_types
-from nff.utils.scatter import scatter_add, compute_grad
-from nff.utils.constants import ELEC_CONFIG, KE_KCAL
-from nff.utils import make_g_funcs, spooky_f_cut, zbl_phi
+from nff.utils.tools import layer_types, make_undirected
+from nff.utils.scatter import scatter_add
+from nff.utils.constants import ELEC_CONFIG, KE_KCAL, BOHR_RADIUS
+from nff.utils import spooky_f_cut, make_y_lm, rho_k
 
-from performer_pytorch import FastAttention
 
 EPS = 1e-15
 DEFAULT_ACTIVATION = 'learnable_swish'
@@ -31,6 +30,55 @@ def get_elec_config(max_z):
     return elec_config
 
 
+def scatter_mol(atomwise,
+                num_atoms):
+    """
+    Add atomic contributions in a batch to their respective
+    geometries 
+    """
+
+    index = torch.zeros(sum(num_atoms),
+                        dtype=torch.long,
+                        device=atomwise.device)
+    for i, num in enumerate(num_atoms):
+        counter = sum(num_atoms[:i])
+        index[counter: counter + int(num)] = i
+
+    out = scatter_add(src=atomwise,
+                      index=index,
+                      dim=0,
+                      dim_size=len(num_atoms))
+
+    return out
+
+
+def scatter_pairwise(pairwise,
+                     num_atoms,
+                     nbrs):
+    """
+    Add pair-wise contributions in a batch to their respective
+    geometries 
+    """
+
+    mol_idx = []
+    for i, num in enumerate(num_atoms):
+        mol_idx += [i] * int(num)
+
+    mol_idx = torch.LongTensor(mol_idx)
+    nbr_to_mol = []
+    for pair, nbr in zip(pairwise, nbrs):
+        nbr_to_mol.append(mol_idx[nbr[0]])
+    nbr_to_mol = (torch.LongTensor(nbr_to_mol)
+                  .to(pairwise.device))
+
+    out = scatter_add(src=pairwise,
+                      index=nbr_to_mol,
+                      dim=0,
+                      dim_size=len(num_atoms))
+
+    return out
+
+
 class Residual(nn.Module):
     def __init__(self,
                  feat_dim,
@@ -39,16 +87,19 @@ class Residual(nn.Module):
                  bias=True):
 
         super().__init__()
-        self.block = nn.Sequential(PreActivation(in_features=feat_dim,
-                                                 out_features=feat_dim,
-                                                 activation=activation,
-                                                 dropout_rate=dropout,
-                                                 bias=bias),
-                                   PreActivation(in_features=feat_dim,
-                                                 out_features=feat_dim,
-                                                 activation=activation,
-                                                 dropout_rate=dropout,
-                                                 bias=bias))
+        self.block = nn.Sequential(
+            PreActivation(in_features=feat_dim,
+                          out_features=feat_dim,
+                          activation=activation,
+                          dropout_rate=dropout,
+                          bias=bias),
+            PreActivation(in_features=feat_dim,
+                          out_features=feat_dim,
+                          activation=activation,
+                          dropout_rate=dropout,
+                          bias=bias,
+                          weight_init=zeros_initializer)
+        )
 
     def forward(self, x):
         output = x + self.block(x)
@@ -70,7 +121,8 @@ class ResidualMLP(nn.Module):
         self.block = nn.Sequential(residual,
                                    layer_types[activation](),
                                    nn.Linear(in_features=feat_dim,
-                                             out_features=feat_dim))
+                                             out_features=feat_dim,
+                                             bias=bias))
 
     def forward(self, x):
         output = self.block(x)
@@ -87,11 +139,12 @@ class NuclearEmbedding(nn.Module):
         self.m_mat = Dense(in_features=20,
                            out_features=feat_dim,
                            bias=False,
-                           activation=None)
+                           activation=None,
+                           weight_init=zeros_initializer)
         self.z_embed = nn.Embedding(max_z, feat_dim, padding_idx=0)
 
     def forward(self, z):
-        d_z = self.elec_config[z.long()]
+        d_z = self.elec_config[z.long()].to(z.device)
         tilde_e_z = self.z_embed(z.long())
         e_z = self.m_mat(d_z) + tilde_e_z
 
@@ -109,15 +162,15 @@ class ElectronicEmbedding(nn.Module):
                             bias=True,
                             activation=None)
         self.feat_dim = feat_dim
-        self.res_mlp = ResidualMLP(feat_dim=feat_dim,
-                                   activation=activation,
-                                   dropout=dropout,
-                                   bias=False)
+        self.resmlp = ResidualMLP(feat_dim=feat_dim,
+                                  activation=activation,
+                                  dropout=dropout,
+                                  bias=False)
         names = ['k_plus', 'k_minus', 'v_plus', 'v_minus']
         for name in names:
-            val = nn.Parameter(torch.ones(feat_dim)
+            val = nn.Parameter(torch.zeros(feat_dim,
+                                           dtype=torch.float32)
                                .reshape(-1, 1))
-            nn.init.xavier_uniform_(val)
             setattr(self, name, val)
 
     def forward(self,
@@ -126,7 +179,7 @@ class ElectronicEmbedding(nn.Module):
                 num_atoms):
 
         q = self.linear(e_z)
-        split_qs = torch.split(q, num_atoms)
+        split_qs = torch.split(q, num_atoms.tolist())
         e_psi = torch.zeros_like(e_z)
 
         counter = 0
@@ -147,8 +200,8 @@ class ElectronicEmbedding(nn.Module):
             v = self.v_plus if (mol_psi >= 0) else self.v_minus
 
             # dimension atoms_in_mol x F
-            av = v * a_i.reshape(-1, 1)
-            this_e_psi = self.res_mlp(av)
+            av = a_i.reshape(-1, 1) * v.reshape(1, -1)
+            this_e_psi = self.resmlp(av)
             e_psi[counter: counter + num_atoms[j]] = this_e_psi
             counter += num_atoms[j]
 
@@ -190,6 +243,42 @@ class CombinedEmbedding(nn.Module):
         return x_0
 
 
+class GBlock(nn.Module):
+    def __init__(self,
+                 l,
+                 r_cut,
+                 bern_k,
+                 gamma):
+        super().__init__()
+        self.l = l
+        self.r_cut = r_cut
+        self.bern_k = bern_k
+        self.gamma = gamma
+        self.y_lm_fn = make_y_lm(l)
+
+    def forward(self, r_ij):
+        r = norm(r_ij).reshape(-1, 1)
+        n_pairs = r_ij.shape[0]
+        device = r_ij.device
+
+        m_vals = list(range(-self.l, self.l + 1))
+        y = torch.stack([self.y_lm_fn(r_ij, r, self.l, m) for m in
+                         m_vals]).transpose(0, 1)
+        rho = rho_k(r, self.r_cut, self.bern_k, self.gamma)
+
+        # import pdb
+        # pdb.set_trace()
+
+        g = torch.ones(n_pairs,
+                       self.bern_k,
+                       len(m_vals),
+                       device=device)
+        g = g * rho.reshape(n_pairs, -1, 1)
+        g = g * y.reshape(n_pairs, 1, -1)
+
+        return g
+
+
 class LocalInteraction(nn.Module):
     def __init__(self,
                  feat_dim,
@@ -221,13 +310,17 @@ class LocalInteraction(nn.Module):
             nn.init.xavier_uniform_(val)
             setattr(self, key, val)
 
-        g_dic = make_g_funcs(bern_k=bern_k,
-                             gamma=gamma,
-                             r_cut=r_cut,
-                             l_max=2)
+        gamma = nn.Parameter(torch.Tensor([gamma]))
+        gamma.data.clamp_(0.0)
 
-        for key, val in g_dic.items():
-            setattr(self, key, val)
+        letters = {0: "s", 1: "p", 2: "d"}
+        for l, letter in letters.items():
+            key = f"g_{letter}"
+            g_block = GBlock(l=l,
+                             r_cut=r_cut,
+                             bern_k=bern_k,
+                             gamma=gamma)
+            setattr(self, key, g_block)
 
     def g_matmul(self,
                  r_ij,
@@ -254,9 +347,9 @@ class LocalInteraction(nn.Module):
         n_nbrs = nbrs.shape[0]
 
         matmul = self.g_matmul(r_ij, orbital)
-        res_mlp = res_block(x_j)
+        resmlp = res_block(x_j)
 
-        per_nbr = (res_mlp.reshape(n_nbrs, -1, 1)
+        per_nbr = (resmlp.reshape(n_nbrs, -1, 1)
                    * matmul)
 
         out = scatter_add(src=per_nbr,
@@ -334,6 +427,9 @@ class NonLocalInteraction(nn.Module):
                  feat_dim,
                  activation=DEFAULT_ACTIVATION,
                  dropout=DEFAULT_DROPOUT):
+
+        from performer_pytorch import FastAttention
+
         super().__init__()
 
         # no redraw should happen here - only if
@@ -351,26 +447,35 @@ class NonLocalInteraction(nn.Module):
                               dropout=dropout)
             setattr(self, key, val)
 
-    def forward(self, x_tilde):
+    def forward(self,
+                x_tilde,
+                num_atoms):
+
         # x_tilde has dimension N x F
         # N = number of nodes, F = feature dimension
 
         num_nodes = x_tilde.shape[0]
-        Q = self.resmlp_q(x_tilde).reshape(1,
-                                           1,
-                                           num_nodes,
-                                           self.feat_dim)
-        K = self.resmlp_k(x_tilde).reshape(1,
-                                           1,
-                                           num_nodes,
-                                           self.feat_dim)
-        V = self.resmlp_v(x_tilde).reshape(1,
-                                           1,
-                                           num_nodes,
-                                           self.feat_dim)
+        Q = self.resmlp_q(x_tilde)
+        K = self.resmlp_k(x_tilde)
+        V = self.resmlp_v(x_tilde)
 
-        out = self.attn(Q, K, V).reshape(num_nodes,
-                                         self.feat_dim)
+        q_split = torch.split(Q, num_atoms.tolist())
+        k_split = torch.split(K, num_atoms.tolist())
+        v_split = torch.split(V, num_atoms.tolist())
+
+        out = torch.zeros(num_nodes,
+                          self.feat_dim,
+                          device=x_tilde.device)
+        for i, num in enumerate(num_atoms):
+            q = q_split[i].reshape(1, 1, -1, self.feat_dim)
+            k = k_split[i].reshape(1, 1, -1, self.feat_dim)
+            v = v_split[i].reshape(1, 1, -1, self.feat_dim)
+            att = self.attn(q, k, v).reshape(-1,
+                                             self.feat_dim)
+            counter = sum(num_atoms[:i])
+            out[counter: counter + num] = att
+
+        return out
 
         ###
         # real_Q = Q.reshape(num_nodes, self.feat_dim)
@@ -383,13 +488,15 @@ class NonLocalInteraction(nn.Module):
         # D_inv = torch.diag(1 / d)
         # real = torch.matmul(D_inv, torch.matmul(A, real_V))
 
+        # return real
+
+        ##
+
         # import pdb
         # pdb.set_trace()
 
         # print(abs(out - real).mean())
         ####
-
-        return out
 
 
 class InteractionBlock(nn.Module):
@@ -409,9 +516,9 @@ class InteractionBlock(nn.Module):
         self.residual_2 = Residual(feat_dim=feat_dim,
                                    activation=activation,
                                    dropout=dropout)
-        self.res_mlp = ResidualMLP(feat_dim=feat_dim,
-                                   activation=activation,
-                                   dropout=dropout)
+        self.resmlp = ResidualMLP(feat_dim=feat_dim,
+                                  activation=activation,
+                                  dropout=dropout)
         self.local = LocalInteraction(feat_dim=feat_dim,
                                       bern_k=bern_k,
                                       gamma=gamma,
@@ -426,13 +533,15 @@ class InteractionBlock(nn.Module):
     def forward(self,
                 x,
                 xyz,
-                nbrs):
+                nbrs,
+                num_atoms):
 
         x_tilde = self.residual_1(x)
         l = self.local(xyz=xyz,
                        x_tilde=x_tilde,
                        nbrs=nbrs)
-        n = self.non_local(x_tilde)
+        n = self.non_local(x_tilde,
+                           num_atoms=num_atoms)
         x_t = self.residual_2(x_tilde + l + n)
         y_t = self.resmlp(x_t)
 
@@ -477,194 +586,146 @@ class Electrostatics(nn.Module):
 
         return out
 
-    def get_en(self, q, xyz):
-        n = xyz.shape[0]
-        r_ij = (xyz.expand(n, n, 3) -
-                xyz.expand(n, n, 3).transpose(0, 1)
-                ).pow(2).sum(dim=2).sqrt()
-
-        mask = r_ij > 0
-        nbrs = mask.nonzero(as_tuple=False)
-        nbrs = nbrs[nbrs[:, 1] > nbrs[:, 0]]
-
-        q_i = q[nbrs[:, 0]]
-        q_j = q[nbrs[:, 1]]
-        r = r_ij[nbrs[:, 0], nbrs[:, 1]]
-        arg_0 = self.f_switch(r) / (r ** 2 + 1) ** 0.5
-        arg_1 = (1 - self.f_switch(r)) / r
-        energy = (KE_KCAL * q_i * q_j * (arg_0 + arg_1)).sum()
-
-        return energy
-
-    def get_charge(self, f, z, total_charge):
+    def get_charge(self,
+                   f,
+                   z,
+                   total_charge,
+                   num_atoms):
         # f has dimension num_atoms x F
         # self.w has dimension F
 
         w_f = self.w(f)
         q_z = self.z_embed(z)
-        pred_charge = w_f + q_z
+        charge = w_f + q_z
+        mol_sum = scatter_mol(atomwise=charge,
+                              num_atoms=num_atoms).reshape(-1)
+        correction = 1 / num_atoms * (total_charge - mol_sum)
+        for i, n in enumerate(num_atoms):
+            counter = num_atoms[:i].sum()
+            charge[counter: counter + n] += correction[i]
 
-        num_atoms = f.shape[0]
-        correction = 1 / num_atoms * (total_charge - pred_charge.sum())
+        return charge
 
-        final_charge = pred_charge + correction
+    def get_en(self,
+               q,
+               xyz,
+               num_atoms,
+               mol_nbrs):
 
-        return final_charge
+        r_ij = norm(xyz[mol_nbrs[:, 0]] - xyz[mol_nbrs[:, 1]])
+        q_i = q[mol_nbrs[:, 0]].reshape(-1)
+        q_j = q[mol_nbrs[:, 1]].reshape(-1)
+
+        arg_0 = self.f_switch(r_ij) / (r_ij ** 2 + 1) ** 0.5
+        arg_1 = (1 - self.f_switch(r_ij)) / r_ij
+        pairwise = (KE_KCAL * q_i * q_j * (arg_0 + arg_1))
+
+        energy = (scatter_pairwise(pairwise=pairwise,
+                                   num_atoms=num_atoms,
+                                   nbrs=mol_nbrs)
+                  .reshape(-1, 1))
+
+        return energy
 
     def forward(self,
                 f,
                 z,
                 xyz,
-                total_charge):
+                total_charge,
+                num_atoms,
+                mol_nbrs):
 
         q = self.get_charge(f=f,
                             z=z,
-                            total_charge=total_charge)
-        energy = self.get_en(q=q, xyz=xyz)
+                            total_charge=total_charge,
+                            num_atoms=num_atoms)
+        energy = self.get_en(q=q,
+                             xyz=xyz,
+                             num_atoms=num_atoms,
+                             mol_nbrs=mol_nbrs)
 
         return energy, q
 
 
 class NuclearRepulsion(nn.Module):
-    def __init__(self):
+    def __init__(self, r_cut):
         super().__init__()
+        self.r_cut = r_cut
+        self.d = torch.Tensor([0.8853 * BOHR_RADIUS])
+        self.z_exp = torch.Tensor([0.23])
+        self.c = torch.Tensor([0.1818, 0.5099, 0.2802, 0.02817])
+        self.exponents = torch.Tensor([3.2, 0.9423, 0.4029, 0.2016])
+
+        for key in ["d", "z_exp", "c", "exponents"]:
+            val = getattr(self, key)
+            new_val = nn.Parameter(val.reshape(-1, 1))
+            new_val.data.clamp_(0.0)
+            setattr(self, key, new_val)
+
+    def zbl_phi(self,
+                r_ij,
+                z_i,
+                z_j):
+
+        a = (self.d / (z_i ** self.z_exp + z_j ** self.z_exp)).reshape(-1)
+        c = self.c / self.c.sum()
+        out = (c * torch.exp(-self.exponents * (r_ij.reshape(-1) / a))
+               ).sum(0)
+
+        return out
 
     def forward(self,
                 xyz,
                 z,
-                nbrs):
+                nbrs,
+                num_atoms):
 
-        undirec = nbrs[nbrs[:, 1] > nbrs[:, 0]]
+        undirec = make_undirected(nbrs)
         z_i = z[undirec[:, 0]]
         z_j = z[undirec[:, 1]]
-        r_ij = ((xyz[undirec[:, 0]] - xyz[undirec[:, 1]])
-                .pow(2).sum(dim=2).sqrt())
+        r_ij = norm(xyz[undirec[:, 0]] - xyz[undirec[:, 1]])
 
-        phi = zbl_phi(r_ij=r_ij,
-                      z_i=z_i,
-                      z_j=z_j)
-        out = z_i * z_j / r_ij * spooky_f_cut(r_ij) * phi
+        phi = self.zbl_phi(r_ij=r_ij,
+                           z_i=z_i,
+                           z_j=z_j)
+        pairwise = (z_i * z_j / r_ij * spooky_f_cut(r_ij, self.r_cut)
+                    * phi)
+        energy = scatter_pairwise(pairwise=pairwise,
+                                  num_atoms=num_atoms,
+                                  nbrs=nbrs).reshape(-1, 1)
 
-        return out
+        return energy
 
 
 class AtomwiseReadout(nn.Module):
-    def __init__(self, feat_dim):
+    def __init__(self,
+                 feat_dim,
+                 max_z=DEFAULT_MAX_Z):
         super().__init__()
         self.w_e = Dense(in_features=feat_dim,
                          out_features=1,
                          bias=False,
                          activation=None)
+        self.z_bias = nn.Embedding(max_z, 1, padding_idx=0)
 
-    def forward(self, f, num_atoms):
-        e_i = torch.split(self.w_e(f), num_atoms)
-        e_total = torch.cat([e.sum() for e in e_i])
+    def forward(self,
+                z,
+                f,
+                num_atoms):
+
+        atomwise = self.w_e(f) + self.z_bias(z)
+        e_total = scatter_mol(atomwise=atomwise,
+                              num_atoms=num_atoms)
 
         return e_total
 
 
-class SpookyNet(nn.Module):
-    def __init__(self,
-                 output_keys,
-                 add_nuc_keys,
-                 feat_dim,
-                 r_cut,
-                 gamma,
-                 bern_k,
-                 num_conv,
-                 dropout=DEFAULT_DROPOUT,
-                 activation=DEFAULT_ACTIVATION,
-                 max_z=DEFAULT_MAX_Z):
-        super().__init__()
+def get_dipole(xyz,
+               q,
+               num_atoms):
 
-        self.output_keys = output_keys
-        self.add_nuc_keys = add_nuc_keys
-        self.embedding = CombinedEmbedding(feat_dim,
-                                           activation=activation,
-                                           max_z=max_z)
-        self.interactions = nn.ModuleList([
-            InteractionBlock(feat_dim=feat_dim,
-                             r_cut=r_cut,
-                             gamma=gamma,
-                             bern_k=bern_k,
-                             activation=activation,
-                             dropout=dropout,
-                             max_z=max_z)
-            for _ in range(num_conv)
-        ])
-        self.atomwise_readout = nn.ModuleDict(
-            {
-                key: AtomwiseReadout(feat_dim=feat_dim)
-                for key in output_keys
-            }
-        )
-        self.electrostatics = nn.ModuleDict(
-            {
-                key: Electrostatics(feat_dim=feat_dim,
-                                    r_cut=r_cut,
-                                    max_z=max_z)
-                for key in output_keys
-            }
-        )
-        self.nuc_repulsion = NuclearRepulsion()
+    qr = q * xyz
+    dipole = scatter_mol(atomwise=qr,
+                         num_atoms=num_atoms)
 
-    def forward(self,
-                batch,
-                grad_keys,
-                xyz=None):
-
-        nxyz = batch['nxyz']
-        nbrs = batch['neigbor_list']
-        z = nxyz[:, 0].long()
-        if xyz is not None:
-            xyz = nxyz[:, 1:]
-            xyz.requires_grad = True
-
-        charge = batch['charge']
-        spin = batch['spin']
-        num_atoms = batch['num_atoms'].tolist()
-
-        x = self.embedding(charge=charge,
-                           spin=spin,
-                           z=z,
-                           num_atoms=num_atoms)
-
-        f = torch.zeros_like(x)
-        for i, interaction in enumerate(self.interactions):
-            x, y_t = interaction(x=x,
-                                 xyz=xyz,
-                                 nbrs=nbrs)
-
-            f = f + y_t
-
-        results = {}
-        for i, key in enumerate(self.output_keys):
-
-            atomwise_readout = self.atomwise_readout[key]
-            electrostatics = self.electrostatics[key]
-
-            learned_e = atomwise_readout(f=f,
-                                         num_atoms=num_atoms)
-            elec_e, q = electrostatics(f=f,
-                                       z=z,
-                                       xyz=xyz,
-                                       total_charge=charge)
-
-            total_e = learned_e + elec_e
-
-            if key in self.add_nuc_keys:
-                nuc_e = self.nuc_repulsion(xyz=xyz,
-                                           z=z,
-                                           nbrs=nbrs)
-                total_e = total_e + nuc_e
-
-            results.update({key: total_e,
-                            f"q_{key}": q})
-
-        for key in grad_keys:
-            base_key = key.replace("_grad", "")
-            grad = compute_grad(inputs=xyz,
-                                output=results[base_key])
-            results[key] = grad
-
-        return results
+    return dipole
