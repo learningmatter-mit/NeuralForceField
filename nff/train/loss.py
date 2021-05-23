@@ -263,6 +263,30 @@ def build_mse_loss(loss_coef,
     return loss_fn
 
 
+def build_rmse_loss(loss_coef):
+    def loss_fn(ground_truth,
+                results):
+        loss = 0.0
+        for key, coef in loss_coef.items():
+            targ = ground_truth[key]
+            pred = results[key].view(targ.shape)
+
+            # select only properties which are given
+            valid_idx = torch.bitwise_not(torch.isnan(targ))
+            targ = targ[valid_idx]
+            pred = pred[valid_idx]
+
+            # import pdb
+            # pdb.set_trace()
+            if len(targ) != 0:
+                diff = mse_operation(targ=targ, pred=pred)
+                err_sq = coef * torch.mean(diff) ** 0.5
+                loss += err_sq
+
+        return loss
+    return loss_fn
+
+
 def build_cross_entropy_loss(loss_coef, correspondence_keys=None):
     """
     Build cross-entropy loss from loss_coef.

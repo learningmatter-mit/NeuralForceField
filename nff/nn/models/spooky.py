@@ -118,13 +118,11 @@ class SpookyNet(nn.Module):
                                            z=z,
                                            nbrs=nbrs,
                                            num_atoms=num_atoms)
-                # total_e = total_e + nuc_e
+                total_e += nuc_e
 
             dipole = get_dipole(xyz=xyz,
                                 q=q,
                                 num_atoms=num_atoms)
-
-
 
             suffix = "_" + key.split("_")[-1]
             if not any([i.isdigit() for i in suffix]):
@@ -137,14 +135,12 @@ class SpookyNet(nn.Module):
         if grad_keys is None:
             grad_keys = self.grad_keys
         for key in grad_keys:
+
             base_key = key.replace("_grad", "")
             grad = compute_grad(inputs=xyz,
                                 output=results[base_key])
             results[key] = grad
 
-        # import pdb
-        # pdb.set_trace()
-            
         return results
 
     def forward(self, *args, **kwargs):

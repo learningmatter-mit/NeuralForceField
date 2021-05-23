@@ -4,7 +4,7 @@ from nff.nn.layers import PreActivation, Dense, zeros_initializer
 # from nff.nn.layers import (PainnRadialBasis, CosineEnvelope,
 #                            ExpNormalBasis, Dense)
 from nff.utils.tools import layer_types, make_undirected
-from nff.utils.scatter import scatter_add
+from nff.utils.scatter import scatter_add  # , compute_grad
 from nff.utils.constants import ELEC_CONFIG, KE_KCAL, BOHR_RADIUS
 from nff.utils import spooky_f_cut, make_y_lm, rho_k
 
@@ -472,31 +472,11 @@ class NonLocalInteraction(nn.Module):
             v = v_split[i].reshape(1, 1, -1, self.feat_dim)
             att = self.attn(q, k, v).reshape(-1,
                                              self.feat_dim)
+
             counter = sum(num_atoms[:i])
             out[counter: counter + num] = att
 
         return out
-
-        ###
-        # real_Q = Q.reshape(num_nodes, self.feat_dim)
-        # real_k = K.reshape(num_nodes, self.feat_dim)
-        # real_V = V.reshape(num_nodes, self.feat_dim)
-
-        # A = torch.exp(torch.matmul(real_Q, real_k.transpose(0, 1))
-        #     / self.feat_dim ** 0.5)
-        # d = torch.matmul(A, torch.ones(num_nodes))
-        # D_inv = torch.diag(1 / d)
-        # real = torch.matmul(D_inv, torch.matmul(A, real_V))
-
-        # return real
-
-        ##
-
-        # import pdb
-        # pdb.set_trace()
-
-        # print(abs(out - real).mean())
-        ####
 
 
 class InteractionBlock(nn.Module):
@@ -549,17 +529,39 @@ class InteractionBlock(nn.Module):
 
 
 def sigma(x):
-    out = torch.where(x > 0,
+    out = torch.where(x > 1e-2,
                       torch.exp(-1 / x),
                       torch.Tensor([0]).to(x.device))
     return out
 
 
 def get_f_switch(r, r_on, r_off):
+
     arg = (r - r_on) / (r_off - r_on)
-    num = sigma(1 - arg)
-    denom = sigma(1 - arg) + sigma(arg)
-    out = num / denom
+    # x = 1 - arg
+    zero = torch.Tensor([0]).to(r.device)
+    one = torch.Tensor([1.0]).to(r.device)
+    # denom = 1 + torch.exp((-1 + 2 * x)/((-1 + x) * x))
+
+    x = arg
+    y = 1 - arg
+
+    out = torch.ones_like(x)
+    exp_arg = (x - y) / (x * y)
+    mask = (x > 0) * (y > 0)
+
+    # For numerical stability
+    # Anything > 34 will give under 1e-15
+
+    mask_zero = mask * (exp_arg >= 34)
+    mask_nonzero = mask * (exp_arg < 34)
+
+    out[mask_nonzero] = 1 / (1 + torch.exp(exp_arg[mask_nonzero]))
+    out[mask_zero] = zero
+
+    out[(x > 0) * (y <= 0)] = zero
+    out[(x <= 0) * (y > 0)] = one
+    out[(x <= 0) * (y <= 0)] = zero
 
     return out
 
@@ -669,7 +671,7 @@ class NuclearRepulsion(nn.Module):
 
         a = (self.d / (z_i ** self.z_exp + z_j ** self.z_exp)).reshape(-1)
         c = self.c / self.c.sum()
-        out = (c * torch.exp(-self.exponents * (r_ij.reshape(-1) / a))
+        out = (c * torch.exp(-self.exponents * r_ij.reshape(-1) / a)
                ).sum(0)
 
         return out
@@ -681,8 +683,8 @@ class NuclearRepulsion(nn.Module):
                 num_atoms):
 
         undirec = make_undirected(nbrs)
-        z_i = z[undirec[:, 0]]
-        z_j = z[undirec[:, 1]]
+        z_i = z[undirec[:, 0]].to(torch.float32)
+        z_j = z[undirec[:, 1]].to(torch.float32)
         r_ij = norm(xyz[undirec[:, 0]] - xyz[undirec[:, 1]])
 
         phi = self.zbl_phi(r_ij=r_ij,
