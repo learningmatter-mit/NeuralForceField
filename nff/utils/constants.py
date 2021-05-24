@@ -40,8 +40,8 @@ KB_EV = 0.0000861731
 KB_AU = 3.166815e-6
 EV_TO_AU = 1 / 27.2114
 
-# Coulomb's constant, in (kcal/mol) * (angs / e^2),
-# where e is the electron charge
+# Coulomb's constant, in (kcal/mol) * (A / e^2),
+# where A is Angstroms and e is the electron charge
 KE_KCAL = 332.07
 
 # Hardness used in xtb, in eV. Source: Ghosh, D.C. and Islam, N., 2010.
@@ -159,14 +159,17 @@ def convert_units(props, conversion_dict):
     return props
 
 
-def exc_ev_to_hartree(props, add_ground_energy=False):
-    """ Note: only converts excited state energies from ev to hartree, not gradients.
+def exc_ev_to_hartree(props,
+                      add_ground_energy=False):
+    """ Note: only converts excited state energies from ev to hartree, 
+    not gradients.
 
     """
 
     assert "energy_0" in props.keys()
-    exc_keys = [key for key in props.keys() if key.startswith('energy'
-                                                              ) and 'grad' not in key and key != 'energy_0']
+    exc_keys = [key for key in props.keys() if
+                key.startswith('energy') and 'grad' not in key
+                and key != 'energy_0']
     energy_0 = props['energy_0']
     new_props = copy.deepcopy(props)
 

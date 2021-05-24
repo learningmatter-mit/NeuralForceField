@@ -9,59 +9,141 @@ from nff.nn.modules.spooky import (DEFAULT_DROPOUT, DEFAULT_ACTIVATION,
                                    get_dipole)
 
 
+def default(val, def_val):
+    out = val if (val is not None) else def_val
+    return out
+
+
+def parse_optional(modelparams):
+    dropout = default(modelparams.get('dropout'),
+                      DEFAULT_DROPOUT)
+    activation = default(modelparams.get('activation'),
+                         DEFAULT_ACTIVATION)
+    max_z = default(modelparams.get('max_z'), DEFAULT_MAX_Z)
+
+    return dropout, activation, max_z
+
+
+def parse_add_ons(modelparams):
+    add_nuc_keys = default(modelparams.get('add_nuc_keys'),
+                           modelparams['output_keys'])
+    add_elec_keys = default(modelparams.get('add_elec_keys'),
+                            modelparams['output_keys'])
+    add_disp_keys = default(modelparams.get('add_disp_keys'),
+                            modelparams['output_keys'])
+
+    return add_nuc_keys, add_elec_keys, add_disp_keys
+
+
 class SpookyNet(nn.Module):
     def __init__(self,
                  modelparams):
+
         super().__init__()
 
-        output_keys = modelparams['output_keys']
-        grad_keys = modelparams['grad_keys']
         feat_dim = modelparams['feat_dim']
         r_cut = modelparams['r_cut']
-        gamma = modelparams['gamma']
-        bern_k = modelparams['bern_k']
-        num_conv = modelparams['num_conv']
-        add_disp = modelparams.get('add_disp', False)
-        add_nuc_keys = modelparams.get('add_nuc_keys')
-        dropout = modelparams.get('dropout', DEFAULT_DROPOUT)
-        activation = modelparams.get('activation', DEFAULT_ACTIVATION)
-        max_z = modelparams.get('max_z', DEFAULT_MAX_Z)
+        dropout, activation, max_z = parse_optional(modelparams)
+        add_ons = parse_add_ons(modelparams)
+        add_nuc_keys, add_elec_keys, add_disp_keys = add_ons
 
-        if add_disp:
-            raise NotImplementedError("Dispersion not implemented")
-
-        self.output_keys = output_keys
-        self.grad_keys = grad_keys
-        self.add_nuc_keys = (add_nuc_keys if (add_nuc_keys is not None)
-                             else output_keys)
-        self.embedding = CombinedEmbedding(feat_dim,
+        self.output_keys = modelparams['output_keys']
+        self.grad_keys = modelparams['grad_keys']
+        self.embedding = CombinedEmbedding(feat_dim=feat_dim,
                                            activation=activation,
                                            max_z=max_z)
         self.interactions = nn.ModuleList([
             InteractionBlock(feat_dim=feat_dim,
                              r_cut=r_cut,
-                             gamma=gamma,
-                             bern_k=bern_k,
+                             gamma=modelparams['gamma'],
+                             bern_k=modelparams['bern_k'],
                              activation=activation,
                              dropout=dropout,
                              max_z=max_z)
-            for _ in range(num_conv)
+            for _ in range(modelparams['num_conv'])
         ])
-        self.atomwise_readout = nn.ModuleDict(
-            {
-                key: AtomwiseReadout(feat_dim=feat_dim)
-                for key in output_keys
-            }
-        )
-        self.electrostatics = nn.ModuleDict(
-            {
-                key: Electrostatics(feat_dim=feat_dim,
-                                    r_cut=r_cut,
-                                    max_z=max_z)
-                for key in output_keys
-            }
-        )
-        self.nuc_repulsion = NuclearRepulsion(r_cut=r_cut)
+        self.atomwise_readout = nn.ModuleDict({
+            key: AtomwiseReadout(feat_dim=feat_dim)
+            for key in self.output_keys
+        })
+
+        self.electrostatics = nn.ModuleDict({
+            key: Electrostatics(feat_dim=feat_dim,
+                                r_cut=r_cut,
+                                max_z=max_z)
+            for key in add_elec_keys
+        })
+
+        self.nuc_repulsion = nn.ModuleDict({
+            key: NuclearRepulsion(r_cut=r_cut)
+            for key in add_nuc_keys
+        })
+
+        if add_disp_keys:
+            raise NotImplementedError("Dispersion not implemented")
+
+    def get_results(self,
+                    z,
+                    f,
+                    num_atoms,
+                    xyz,
+                    charge,
+                    mol_nbrs,
+                    nbrs):
+
+        results = {}
+        for key in self.output_keys:
+            atomwise_readout = self.atomwise_readout[key]
+            energy = atomwise_readout(z=z,
+                                      f=f,
+                                      num_atoms=num_atoms)
+
+            if key in self.electrostatics:
+                electrostatics = self.electrostatics[key]
+                elec_e, q = electrostatics(f=f,
+                                           z=z,
+                                           xyz=xyz,
+                                           total_charge=charge,
+                                           num_atoms=num_atoms,
+                                           mol_nbrs=mol_nbrs)
+                energy += elec_e
+
+            if key in self.nuc_repulsion:
+                nuc_repulsion = self.nuc_repulsion[key]
+                nuc_e = nuc_repulsion(xyz=xyz,
+                                      z=z,
+                                      nbrs=nbrs,
+                                      num_atoms=num_atoms)
+                energy += nuc_e
+
+            results.update({key: energy})
+
+            if key in self.electrostatics:
+                dipole = get_dipole(xyz=xyz,
+                                    q=q,
+                                    num_atoms=num_atoms)
+                suffix = "_" + key.split("_")[-1]
+                if not any([i.isdigit() for i in suffix]):
+                    suffix = ""
+                results.update({f"dipole{suffix}": dipole,
+                                f"q{suffix}": q})
+
+        return results
+
+    def add_grad(self,
+                 xyz,
+                 grad_keys,
+                 results):
+        if grad_keys is None:
+            grad_keys = self.grad_keys
+
+        for key in grad_keys:
+            base_key = key.replace("_grad", "")
+            grad = compute_grad(inputs=xyz,
+                                output=results[base_key])
+            results[key] = grad
+
+        return results
 
     def fwd(self,
             batch,
@@ -95,51 +177,17 @@ class SpookyNet(nn.Module):
 
             f = f + y_t
 
-        results = {}
-        for key in self.output_keys:
+        results = self.get_results(z=z,
+                                   f=f,
+                                   num_atoms=num_atoms,
+                                   xyz=xyz,
+                                   charge=charge,
+                                   mol_nbrs=mol_nbrs,
+                                   nbrs=nbrs)
 
-            atomwise_readout = self.atomwise_readout[key]
-            electrostatics = self.electrostatics[key]
-
-            learned_e = atomwise_readout(z=z,
-                                         f=f,
-                                         num_atoms=num_atoms)
-            elec_e, q = electrostatics(f=f,
-                                       z=z,
-                                       xyz=xyz,
-                                       total_charge=charge,
-                                       num_atoms=num_atoms,
-                                       mol_nbrs=mol_nbrs)
-
-            total_e = learned_e + elec_e
-
-            if key in self.add_nuc_keys:
-                nuc_e = self.nuc_repulsion(xyz=xyz,
-                                           z=z,
-                                           nbrs=nbrs,
-                                           num_atoms=num_atoms)
-                total_e += nuc_e
-
-            dipole = get_dipole(xyz=xyz,
-                                q=q,
-                                num_atoms=num_atoms)
-
-            suffix = "_" + key.split("_")[-1]
-            if not any([i.isdigit() for i in suffix]):
-                suffix = ""
-
-            results.update({key: total_e,
-                            f"q{suffix}": q,
-                            f"dipole{suffix}": dipole})
-
-        if grad_keys is None:
-            grad_keys = self.grad_keys
-
-        for key in grad_keys:
-            base_key = key.replace("_grad", "")
-            grad = compute_grad(inputs=xyz,
-                                output=results[base_key])
-            results[key] = grad
+        results = self.add_grad(xyz=xyz,
+                                grad_keys=grad_keys,
+                                results=results)
 
         return results
 

@@ -1,10 +1,8 @@
 import torch
 from torch import nn
 from nff.nn.layers import PreActivation, Dense, zeros_initializer
-# from nff.nn.layers import (PainnRadialBasis, CosineEnvelope,
-#                            ExpNormalBasis, Dense)
 from nff.utils.tools import layer_types, make_undirected
-from nff.utils.scatter import scatter_add  # , compute_grad
+from nff.utils.scatter import scatter_add
 from nff.utils.constants import ELEC_CONFIG, KE_KCAL, BOHR_RADIUS
 from nff.utils import spooky_f_cut, make_y_lm, rho_k
 
@@ -16,6 +14,10 @@ DEFAULT_DROPOUT = 0
 
 
 def norm(vec):
+    """
+    For stable norm calculation. PyTorch's implementation
+    can be unstable
+    """
     result = ((vec ** 2 + EPS).sum(-1)) ** 0.5
     return result
 
@@ -168,9 +170,8 @@ class ElectronicEmbedding(nn.Module):
                                   bias=False)
         names = ['k_plus', 'k_minus', 'v_plus', 'v_minus']
         for name in names:
-            val = nn.Parameter(torch.zeros(feat_dim,
-                                           dtype=torch.float32)
-                               .reshape(-1, 1))
+            val = nn.Parameter(torch.zeros(feat_dim, 1,
+                                           dtype=torch.float32))
             setattr(self, name, val)
 
     def forward(self,
@@ -470,8 +471,8 @@ class NonLocalInteraction(nn.Module):
             q = q_split[i].reshape(1, 1, -1, self.feat_dim)
             k = k_split[i].reshape(1, 1, -1, self.feat_dim)
             v = v_split[i].reshape(1, 1, -1, self.feat_dim)
-            att = self.attn(q, k, v).reshape(-1,
-                                             self.feat_dim)
+            att = (self.attn(q, k, v)
+                   .reshape(-1, self.feat_dim))
 
             counter = sum(num_atoms[:i])
             out[counter: counter + num] = att
@@ -528,31 +529,20 @@ class InteractionBlock(nn.Module):
         return x_t, y_t
 
 
-def sigma(x):
-    out = torch.where(x > 1e-2,
-                      torch.exp(-1 / x),
-                      torch.Tensor([0]).to(x.device))
-    return out
-
-
 def get_f_switch(r, r_on, r_off):
 
     arg = (r - r_on) / (r_off - r_on)
-    # x = 1 - arg
-    zero = torch.Tensor([0]).to(r.device)
-    one = torch.Tensor([1.0]).to(r.device)
-    # denom = 1 + torch.exp((-1 + 2 * x)/((-1 + x) * x))
-
     x = arg
     y = 1 - arg
-
-    out = torch.ones_like(x)
     exp_arg = (x - y) / (x * y)
-    mask = (x > 0) * (y > 0)
 
+    zero = torch.Tensor([0]).to(r.device)
+    one = torch.Tensor([1.0]).to(r.device)
+    out = torch.ones_like(x)
+
+    mask = (x > 0) * (y > 0)
     # For numerical stability
     # Anything > 34 will give under 1e-15
-
     mask_zero = mask * (exp_arg >= 34)
     mask_nonzero = mask * (exp_arg < 34)
 
@@ -593,8 +583,6 @@ class Electrostatics(nn.Module):
                    z,
                    total_charge,
                    num_atoms):
-        # f has dimension num_atoms x F
-        # self.w has dimension F
 
         w_f = self.w(f)
         q_z = self.z_embed(z)
@@ -618,7 +606,8 @@ class Electrostatics(nn.Module):
         q_i = q[mol_nbrs[:, 0]].reshape(-1)
         q_j = q[mol_nbrs[:, 1]].reshape(-1)
 
-        arg_0 = self.f_switch(r_ij) / (r_ij ** 2 + 1) ** 0.5
+        arg_0 = (self.f_switch(r_ij)
+                 / (r_ij ** 2 + BOHR_RADIUS ** 2) ** 0.5)
         arg_1 = (1 - self.f_switch(r_ij)) / r_ij
         pairwise = (KE_KCAL * q_i * q_j * (arg_0 + arg_1))
 
@@ -669,7 +658,8 @@ class NuclearRepulsion(nn.Module):
                 z_i,
                 z_j):
 
-        a = (self.d / (z_i ** self.z_exp + z_j ** self.z_exp)).reshape(-1)
+        a = ((self.d / (z_i ** self.z_exp + z_j ** self.z_exp))
+             .reshape(-1))
         c = self.c / self.c.sum()
         out = (c * torch.exp(-self.exponents * r_ij.reshape(-1) / a)
                ).sum(0)
@@ -690,8 +680,9 @@ class NuclearRepulsion(nn.Module):
         phi = self.zbl_phi(r_ij=r_ij,
                            z_i=z_i,
                            z_j=z_j)
-        pairwise = (z_i * z_j / r_ij * spooky_f_cut(r_ij, self.r_cut)
-                    * phi)
+        pairwise = (KE_KCAL * z_i * z_j / r_ij
+                    * phi
+                    * spooky_f_cut(r_ij, self.r_cut))
         energy = scatter_pairwise(pairwise=pairwise,
                                   num_atoms=num_atoms,
                                   nbrs=nbrs).reshape(-1, 1)
