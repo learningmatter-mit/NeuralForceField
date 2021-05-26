@@ -7,6 +7,8 @@ from torch.utils.data.sampler import Sampler, BatchSampler
 REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'bonded_nbr_list',
                 'angle_list', 'mol_nbrs']
 NBR_LIST_KEYS = ['bond_idx', 'kj_idx', 'ji_idx']
+MOL_IDX_KEYS = ['atomwise_mol_list', 'directed_nbr_mol_list',
+                'undirected_nbr_mol_list']
 IGNORE_KEYS = ['rd_mols']
 
 TYPE_KEYS = {
@@ -51,6 +53,13 @@ def collate_dicts(dicts):
             for key in NBR_LIST_KEYS:
                 if key in d:
                     d[key] = d[key] + int(n)
+
+    for key in MOL_IDX_KEYS:
+        if key not in dicts[0]:
+            continue
+        for i, d in enumerate(dicts):
+            d[key] += i
+
 
     # batching the data
     batch = {}

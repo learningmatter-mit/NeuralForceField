@@ -15,6 +15,7 @@ class DiabaticReadout(nn.Module):
                  diabat_keys,
                  grad_keys,
                  energy_keys,
+                 others_to_eig=None,
                  delta=False,
                  stochastic_dic=None,
                  cross_talk_dic=None,
@@ -30,6 +31,7 @@ class DiabaticReadout(nn.Module):
         self.stochastic_modules = self.make_stochastic(stochastic_dic)
         self.cross_talk = self.make_cross_talk(cross_talk_dic)
         self.hf = hellmann_feynman
+        self.others_to_eig = others_to_eig
 
     def make_cross_talk(self, cross_talk_dic):
         if cross_talk_dic is None:
@@ -84,17 +86,32 @@ class DiabaticReadout(nn.Module):
 
         return stochastic_modules
 
-    def results_to_dmat(self, results, num_atoms):
-        num_states = len(self.diabat_keys)
-        num_mols = len(num_atoms)
-        device = results[self.diabat_keys[0][0]].device
-        d_mat = torch.zeros(num_mols,
-                            num_states,
-                            num_states).to(device)
+    def quant_to_mat(self,
+                     num_atoms,
+                     results,
+                     diabat_keys):
+        num_states = len(diabat_keys)
+
+        test_result = results[diabat_keys[0][0]]
+        shape = test_result.shape
+        device = test_result.device
+
+        mat = torch.zeros(*shape,
+                          num_states,
+                          num_states).to(device)
+
         for i in range(num_states):
             for j in range(num_states):
-                diabat_key = self.diabat_keys[i][j]
-                d_mat[:, i, j] = results[diabat_key]
+                diabat_key = diabat_keys[i][j]
+                mat[..., i, j] = results[diabat_key]
+
+        return mat
+
+    def results_to_dmat(self, results, num_atoms):
+
+        d_mat = self.quant_to_mat(num_atoms=num_atoms,
+                                  results=results,
+                                  diabat_keys=self.diabat_keys)
 
         return d_mat
 
@@ -195,6 +212,50 @@ class DiabaticReadout(nn.Module):
             results[key] = torch.cat(results[key])
 
         return results
+
+    def quants_to_eig(self,
+                      num_atoms,
+                      results,
+                      u):
+        """
+        Convert other quantities (e.g. diabatic dipole
+        moments) into the adiabatic basis.
+
+        Args:
+            others_to_eig (list[list]): list of the form
+                [
+                    [[quantA_00, quantA_01], [quantA_01, quantA_11]],
+                    [[quantB_00, quantB_01], [quantB_01, quantB_11]]
+                ]
+        """
+
+        for other_keys in self.others_to_eig:
+
+            # mat has shape num_mols x num_states x num_states for a scalar,
+            # and num_mols x 3 x num_states x num_states for vector
+
+            mat = self.quant_to_mat(num_atoms=num_atoms,
+                                    results=results,
+                                    diabat_keys=other_keys)
+            # u has shape num_mols x num_states x num_states
+
+            to_eig = torch.einsum('nki, n...kl, nlj -> n...ij',
+                                  u, mat, u)
+
+            base_key = other_keys[0][0].split("_")[0]
+            num_states = len(other_keys)
+
+            for i in range(num_states):
+                for j in range(num_states):
+                    if j < i:
+                        continue
+                    if i == j:
+                        key = f"{base_key}_{i}"
+                    else:
+                        key = f"trans_{base_key}_{i}{j}"
+                    results[key] = to_eig[..., i, j]
+
+            return results
 
     def add_adiabat_grads(self,
                           xyz,
@@ -332,6 +393,11 @@ class DiabaticReadout(nn.Module):
         elif add_grad:
             results = self.add_adiabat_grads(xyz=xyz,
                                              results=results)
+
+        if getattr(self, "others_to_eig", None):
+            results = self.quants_to_eig(num_atoms=num_atoms,
+                                         results=results,
+                                         u=u)
 
         if add_gap:
             results = self.add_gap(results)

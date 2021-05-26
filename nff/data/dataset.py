@@ -204,11 +204,15 @@ class Dataset(TorchDataset):
 
         return self.props[key]
 
+    # def make_nbr_to_mol(self):
+    #     nbr_to_mol = []
+    #     for nbrs in self.props['nbr_list']:
+    #         nbrs_to_mol.append(torch.zeros(len(nbrs)))
+
     def make_all_directed(self):
         make_dset_directed(self)
 
     def generate_angle_list(self):
-
         self.make_all_directed()
 
         angles, nbrs = get_angle_list(self.props['nbr_list'])

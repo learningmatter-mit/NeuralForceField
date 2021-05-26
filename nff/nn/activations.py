@@ -32,8 +32,13 @@ class LearnableSwish(torch.nn.Module):
 
     def forward(self, x):
         device = x.device
-        alpha = self.alpha.to(device)
-        beta = self.beta.to(device)
+        alpha = self.alpha.to(device).clamp(0)
+        beta = self.beta.to(device).clamp(0)
 
-        output = (alpha * x) / (1 + torch.exp(-beta * x))
+        arg = beta * x
+        exp = torch.where(arg <= 20,
+                          torch.exp(-arg),
+                          torch.Tensor([0]).to(device)
+                          )
+        output = (alpha * x) / (1 + exp)
         return output

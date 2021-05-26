@@ -204,6 +204,100 @@ class PreActivation(nn.Linear):
         return y
 
 
+class BatchedPreActivation(nn.Conv1d):
+    """
+    Pre-activation layer that can convert an input to multiple different
+    outputs in parallel. This is equivalent to generating N preactivation 
+    layers and applying them in series to the input to generate N outputs, 
+    but done in parallel instead.
+    """
+
+    def __init__(
+        self,
+        in_features,
+        out_features,
+        num_out,
+        activation,
+        bias=True,
+        dropout_rate=DEFAULT_DROPOUT_RATE,
+        weight_init=xavier_uniform_,
+        bias_init=zeros_initializer,
+    ):
+
+        self.weight_init = weight_init
+        self.bias_init = bias_init
+
+        super().__init__(in_channels=num_out,
+                         out_channels=(num_out * out_features),
+                         kernel_size=in_features,
+                         groups=num_out,
+                         bias=bias)
+
+        # separate activations in case they're learnable
+        if activation is None:
+            self.activations = None
+        else:
+            self.activations = nn.ModuleList([to_module(activation)
+                                              for _ in range(num_out)])
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.num_out = num_out
+
+    def reset_parameters(self):
+        """
+            Reinitialize model parameters.
+        """
+        self.weight_init(self.weight)
+        if self.bias is not None:
+            self.bias_init(self.bias)
+
+    def forward(self, inputs):
+        """
+        Args:
+            inputs (dict of torch.Tensor): SchNetPack format dictionary of input tensors.
+
+        Returns:
+            torch.Tensor: Output of the dense layer.
+        """
+
+        if self.activations is None:
+            y = inputs.clone()
+        else:
+            y = torch.stack([act(i) for i, act in
+                             zip(inputs, self.activations)])
+
+        # switch ordering from (num_channels, num_samples, F)
+        # to (num_samples, num_channels, F)
+        y_transpose = y.transpose(0, 1)
+        y = super().forward(y_transpose)
+
+        if hasattr(self, "dropout"):
+            y = self.dropout(y)
+
+        # switch from (num_samples, F x num_channels)
+        # to (num_channels, num_samples, F)
+        num_channels, num_samples, feat_dim = inputs.shape
+
+        y = (y.reshape(num_samples, num_channels, feat_dim)
+             .transpose(0, 1))
+
+        # channel = 2
+        # sample = 7
+        # if self.activations:
+        #     test_inp = self.activations[2](inputs[channel, sample])
+        # else:
+        #     test_inp = inputs[channel, sample]
+        # test = torch.matmul(self.weight[channel * 128:
+        #                                 (channel + 1) * 128, 0, :],
+        #                     test_inp) + self.bias[channel * 128:
+        #                                           (channel + 1) * 128]
+        # import pdb
+        # pdb.set_trace()
+
+        # print(abs(y[channel, sample] - test).mean())
+
+        return y
+
+
 class Envelope(nn.Module):
     """
     Layer for adding a polynomial envelope to the spherical and

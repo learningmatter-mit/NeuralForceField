@@ -300,13 +300,20 @@ def make_y_lm(l_max):
 
 
 def spooky_f_cut(r, r_cut):
-    out = torch.where(
-        r < r_cut,
-        torch.exp(-r ** 2 / ((r_cut - r) * (r_cut + r))),
+    arg = r ** 2 / ((r_cut - r) * (r_cut + r))
+    # arg < 20 is for numerical stability
+    # Anything > 20 will give under 1e-9
+    output = torch.where(
+        (r < r_cut) * (arg < 20),
+        torch.exp(-arg),
         torch.Tensor([0]).to(r.device)
     )
 
-    return out
+    # output = 0.5 * (torch.cos((np.pi * r / r_cut)) + 1)
+    # exclude = r >= r_cut
+    # output[exclude] = 0
+
+    return output
 
 
 def b_k(x,

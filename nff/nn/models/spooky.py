@@ -3,10 +3,10 @@ from torch import nn
 from nff.utils.scatter import compute_grad
 from nff.utils.tools import make_directed, make_undirected
 from nff.nn.modules.spooky import (DEFAULT_DROPOUT, DEFAULT_ACTIVATION,
-                                   DEFAULT_MAX_Z, CombinedEmbedding,
-                                   InteractionBlock, AtomwiseReadout,
-                                   Electrostatics, NuclearRepulsion,
-                                   get_dipole)
+                                   DEFAULT_MAX_Z, DEFAULT_RES_LAYERS,
+                                   CombinedEmbedding, InteractionBlock,
+                                   AtomwiseReadout, Electrostatics,
+                                   NuclearRepulsion, get_dipole)
 
 
 def default(val, def_val):
@@ -20,8 +20,9 @@ def parse_optional(modelparams):
     activation = default(modelparams.get('activation'),
                          DEFAULT_ACTIVATION)
     max_z = default(modelparams.get('max_z'), DEFAULT_MAX_Z)
-
-    return dropout, activation, max_z
+    residual_layers = default(modelparams.get('residual_layers'),
+                              DEFAULT_RES_LAYERS)
+    return dropout, activation, max_z, residual_layers
 
 
 def parse_add_ons(modelparams):
@@ -30,7 +31,7 @@ def parse_add_ons(modelparams):
     add_elec_keys = default(modelparams.get('add_elec_keys'),
                             modelparams['output_keys'])
     add_disp_keys = default(modelparams.get('add_disp_keys'),
-                            modelparams['output_keys'])
+                            [])
 
     return add_nuc_keys, add_elec_keys, add_disp_keys
 
@@ -43,7 +44,8 @@ class SpookyNet(nn.Module):
 
         feat_dim = modelparams['feat_dim']
         r_cut = modelparams['r_cut']
-        dropout, activation, max_z = parse_optional(modelparams)
+        optional = parse_optional(modelparams)
+        dropout, activation, max_z, residual_layers = optional
         add_ons = parse_add_ons(modelparams)
         add_nuc_keys, add_elec_keys, add_disp_keys = add_ons
 
@@ -51,7 +53,8 @@ class SpookyNet(nn.Module):
         self.grad_keys = modelparams['grad_keys']
         self.embedding = CombinedEmbedding(feat_dim=feat_dim,
                                            activation=activation,
-                                           max_z=max_z)
+                                           max_z=max_z,
+                                           residual_layers=residual_layers)
         self.interactions = nn.ModuleList([
             InteractionBlock(feat_dim=feat_dim,
                              r_cut=r_cut,
@@ -59,7 +62,9 @@ class SpookyNet(nn.Module):
                              bern_k=modelparams['bern_k'],
                              activation=activation,
                              dropout=dropout,
-                             max_z=max_z)
+                             max_z=max_z,
+                             residual_layers=residual_layers,
+                             l_max=default(modelparams.get("l_max"), 2))
             for _ in range(modelparams['num_conv'])
         ])
         self.atomwise_readout = nn.ModuleDict({
@@ -114,6 +119,7 @@ class SpookyNet(nn.Module):
                                       z=z,
                                       nbrs=nbrs,
                                       num_atoms=num_atoms)
+
                 energy += nuc_e
 
             results.update({key: energy})
@@ -134,6 +140,7 @@ class SpookyNet(nn.Module):
                  xyz,
                  grad_keys,
                  results):
+
         if grad_keys is None:
             grad_keys = self.grad_keys
 
@@ -174,8 +181,7 @@ class SpookyNet(nn.Module):
                                  xyz=xyz,
                                  nbrs=nbrs,
                                  num_atoms=num_atoms)
-
-            f = f + y_t
+            f += y_t
 
         results = self.get_results(z=z,
                                    f=f,

@@ -175,7 +175,8 @@ class MessageBlock(MessageBase):
                 s_j,
                 v_j,
                 r_ij,
-                nbrs):
+                nbrs,
+                **kwargs):
 
         dist, unit = preprocess_r(r_ij)
         inv_out = self.inv_message(s_j=s_j,

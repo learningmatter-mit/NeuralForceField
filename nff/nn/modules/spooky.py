@@ -2,15 +2,32 @@ import torch
 from torch import nn
 from nff.nn.layers import PreActivation, Dense, zeros_initializer
 from nff.utils.tools import layer_types, make_undirected
-from nff.utils.scatter import scatter_add
+from nff.utils.scatter import scatter_add, compute_grad
 from nff.utils.constants import ELEC_CONFIG, KE_KCAL, BOHR_RADIUS
 from nff.utils import spooky_f_cut, make_y_lm, rho_k
 
+import time
 
 EPS = 1e-15
 DEFAULT_ACTIVATION = 'learnable_swish'
 DEFAULT_MAX_Z = 86
 DEFAULT_DROPOUT = 0
+DEFAULT_RES_LAYERS = 2
+
+
+def timing(func):
+    def report_time(*args, **kwargs):
+        start = time.time()
+        out = func(*args, **kwargs)
+        end = time.time()
+        delta = (end - start) * 1000
+        func_name = func.__name__
+        func_class = func.__class__.__name__
+        print("Took %.2f ms to run %s in %s" % (delta, func_name, func_class))
+
+        return out
+
+    return report_time
 
 
 def norm(vec):
@@ -32,24 +49,54 @@ def get_elec_config(max_z):
     return elec_config
 
 
+# def scatter_mol(atomwise,
+#                 atomwise_mol_list):
+#     """
+#     Add atomic contributions in a batch to their respective
+#     geometries. A simple sum is much faster than doing scatter_add
+#     because it takes a very long time to make the indices that
+#     map atom index to molecule.
+#     """
+
+#     graph_size = atomwise_mol_list[-1] + 1
+#     out = scatter_add(src=atomwise,
+#                       index=atomwise_mol_list,
+#                       dim=0,
+#                       dim_size=graph_size)
+
+#     return out
+
+
+# def scatter_pairwise(pairwise,
+#                      nbr_mol_list):
+#     """
+#     Add pair-wise contributions in a batch to their respective
+#     geometries
+#     """
+
+
+#     graph_size = nbr_mol_list[-1] + 1
+#     out = scatter_add(src=pairwise,
+#                       index=nbr_mol_list,
+#                       dim=0,
+#                       dim_size=graph_size)
+
+#     return out
+
 def scatter_mol(atomwise,
                 num_atoms):
     """
     Add atomic contributions in a batch to their respective
-    geometries 
+    geometries. A simple sum is much faster than doing scatter_add
+    because it takes a very long time to make the indices that 
+    map atom index to molecule.
     """
 
-    index = torch.zeros(sum(num_atoms),
-                        dtype=torch.long,
-                        device=atomwise.device)
-    for i, num in enumerate(num_atoms):
-        counter = sum(num_atoms[:i])
-        index[counter: counter + int(num)] = i
-
-    out = scatter_add(src=atomwise,
-                      index=index,
-                      dim=0,
-                      dim_size=len(num_atoms))
+    out = []
+    atom_split = torch.split(atomwise, num_atoms.tolist())
+    for split in atom_split:
+        out.append(split.sum(0))
+    out = torch.stack(out)
 
     return out
 
@@ -62,16 +109,23 @@ def scatter_pairwise(pairwise,
     geometries 
     """
 
+    # mol_idx = []
+    # for i, num in enumerate(num_atoms):
+    #     mol_idx += [i] * int(num)
+
+    # mol_idx = torch.LongTensor(mol_idx)
+    # nbr_to_mol = []
+    # for nbr in nbrs:
+    #     nbr_to_mol.append(mol_idx[nbr[0]])
+    # nbr_to_mol = torch.LongTensor(nbr_to_mol)
+
     mol_idx = []
     for i, num in enumerate(num_atoms):
         mol_idx += [i] * int(num)
 
-    mol_idx = torch.LongTensor(mol_idx)
-    nbr_to_mol = []
-    for pair, nbr in zip(pairwise, nbrs):
-        nbr_to_mol.append(mol_idx[nbr[0]])
-    nbr_to_mol = (torch.LongTensor(nbr_to_mol)
-                  .to(pairwise.device))
+    mol_idx = (torch.LongTensor(mol_idx)
+               .to(pairwise.device))
+    nbr_to_mol = mol_idx[nbrs[:, 0]]
 
     out = scatter_add(src=pairwise,
                       index=nbr_to_mol,
@@ -86,22 +140,25 @@ class Residual(nn.Module):
                  feat_dim,
                  activation=DEFAULT_ACTIVATION,
                  dropout=DEFAULT_DROPOUT,
+                 num_layers=DEFAULT_RES_LAYERS,
                  bias=True):
 
         super().__init__()
-        self.block = nn.Sequential(
+        block = [
             PreActivation(in_features=feat_dim,
                           out_features=feat_dim,
                           activation=activation,
                           dropout_rate=dropout,
-                          bias=bias),
-            PreActivation(in_features=feat_dim,
-                          out_features=feat_dim,
-                          activation=activation,
-                          dropout_rate=dropout,
-                          bias=bias,
-                          weight_init=zeros_initializer)
-        )
+                          bias=bias)
+            for _ in range(num_layers - 1)
+        ]
+        block.append(PreActivation(in_features=feat_dim,
+                                   out_features=feat_dim,
+                                   activation=activation,
+                                   dropout_rate=dropout,
+                                   bias=bias,
+                                   weight_init=zeros_initializer))
+        self.block = nn.Sequential(*block)
 
     def forward(self, x):
         output = x + self.block(x)
@@ -113,18 +170,21 @@ class ResidualMLP(nn.Module):
                  feat_dim,
                  activation=DEFAULT_ACTIVATION,
                  dropout=DEFAULT_DROPOUT,
-                 bias=False):
+                 bias=True,
+                 residual_layers=DEFAULT_RES_LAYERS):
 
         super().__init__()
         residual = Residual(feat_dim=feat_dim,
                             activation=activation,
                             dropout=dropout,
-                            bias=bias)
+                            bias=bias,
+                            num_layers=residual_layers)
+        dense = Dense(in_features=feat_dim,
+                      out_features=feat_dim,
+                      bias=bias)
         self.block = nn.Sequential(residual,
                                    layer_types[activation](),
-                                   nn.Linear(in_features=feat_dim,
-                                             out_features=feat_dim,
-                                             bias=bias))
+                                   dense)
 
     def forward(self, x):
         output = self.block(x)
@@ -157,7 +217,8 @@ class ElectronicEmbedding(nn.Module):
     def __init__(self,
                  feat_dim,
                  activation=DEFAULT_ACTIVATION,
-                 dropout=DEFAULT_DROPOUT):
+                 dropout=DEFAULT_DROPOUT,
+                 residual_layers=DEFAULT_RES_LAYERS):
         super().__init__()
         self.linear = Dense(in_features=feat_dim,
                             out_features=feat_dim,
@@ -167,7 +228,8 @@ class ElectronicEmbedding(nn.Module):
         self.resmlp = ResidualMLP(feat_dim=feat_dim,
                                   activation=activation,
                                   dropout=dropout,
-                                  bias=False)
+                                  bias=False,
+                                  residual_layers=residual_layers)
         names = ['k_plus', 'k_minus', 'v_plus', 'v_minus']
         for name in names:
             val = nn.Parameter(torch.zeros(feat_dim, 1,
@@ -213,7 +275,8 @@ class CombinedEmbedding(nn.Module):
     def __init__(self,
                  feat_dim,
                  activation=DEFAULT_ACTIVATION,
-                 max_z=DEFAULT_MAX_Z):
+                 max_z=DEFAULT_MAX_Z,
+                 residual_layers=DEFAULT_RES_LAYERS):
 
         super().__init__()
         self.nuc_embedding = NuclearEmbedding(
@@ -221,9 +284,12 @@ class CombinedEmbedding(nn.Module):
             max_z=max_z)
         self.charge_embedding = ElectronicEmbedding(
             feat_dim=feat_dim,
-            activation=activation)
-        self.spin_embedding = ElectronicEmbedding(feat_dim=feat_dim,
-                                                  activation=activation)
+            activation=activation,
+            residual_layers=residual_layers)
+        self.spin_embedding = ElectronicEmbedding(
+            feat_dim=feat_dim,
+            activation=activation,
+            residual_layers=residual_layers)
 
     def forward(self,
                 charge,
@@ -235,9 +301,9 @@ class CombinedEmbedding(nn.Module):
         e_q = self.charge_embedding(psi=charge,
                                     e_z=e_z,
                                     num_atoms=num_atoms)
-        e_s = self.charge_embedding(psi=spin,
-                                    e_z=e_z,
-                                    num_atoms=num_atoms)
+        e_s = self.spin_embedding(psi=spin,
+                                  e_z=e_z,
+                                  num_atoms=num_atoms)
 
         x_0 = e_z + e_q + e_s
 
@@ -254,22 +320,22 @@ class GBlock(nn.Module):
         self.l = l
         self.r_cut = r_cut
         self.bern_k = bern_k
-        self.gamma = gamma
+        self.gamma = nn.Parameter(torch.Tensor([gamma]))
         self.y_lm_fn = make_y_lm(l)
 
     def forward(self, r_ij):
+
         r = norm(r_ij).reshape(-1, 1)
         n_pairs = r_ij.shape[0]
         device = r_ij.device
 
         m_vals = list(range(-self.l, self.l + 1))
+        # is this for-loop slow?
         y = torch.stack([self.y_lm_fn(r_ij, r, self.l, m) for m in
                          m_vals]).transpose(0, 1)
-        rho = rho_k(r, self.r_cut, self.bern_k, self.gamma)
 
-        # import pdb
-        # pdb.set_trace()
-
+        gamma = self.gamma.clamp(0)
+        rho = rho_k(r, self.r_cut, self.bern_k, gamma)
         g = torch.ones(n_pairs,
                        self.bern_k,
                        len(m_vals),
@@ -286,37 +352,41 @@ class LocalInteraction(nn.Module):
                  bern_k,
                  gamma,
                  r_cut,
+                 l_max=2,
                  activation=DEFAULT_ACTIVATION,
                  max_z=DEFAULT_MAX_Z,
-                 dropout=DEFAULT_DROPOUT):
+                 dropout=DEFAULT_DROPOUT,
+                 residual_layers=DEFAULT_RES_LAYERS):
 
         super().__init__()
 
-        for letter in ["c", "s", "p", "d", "l"]:
-            key = f"resmlp_{letter}"
+        self.l_vals = list(range(l_max + 1))
+        for suffix in ["c", "l", *self.l_vals]:
+            key = f"resmlp_{suffix}"
             val = ResidualMLP(feat_dim=feat_dim,
                               activation=activation,
-                              dropout=dropout)
+                              dropout=dropout,
+                              residual_layers=residual_layers)
             setattr(self, key, val)
 
-        for key in ["G_s", "G_p", "G_d"]:
+        for l in self.l_vals:
+            key = f"G_{l}"
             val = nn.Parameter(torch.ones(feat_dim,
                                           bern_k))
             nn.init.xavier_uniform_(val)
             setattr(self, key, val)
 
-        for key in ["P_1", "P_2", "D_1", "D_2"]:
-            val = nn.Parameter(torch.ones(feat_dim,
-                                          feat_dim))
-            nn.init.xavier_uniform_(val)
-            setattr(self, key, val)
+        for l in self.l_vals[1:]:
+            # Called P_1, P_2, D_1, D_2 in original paper
+            keys = [f"mix_mat_{l}_1", f"mix_mat_{l}_2"]
+            for key in keys:
+                val = nn.Parameter(torch.ones(feat_dim,
+                                              feat_dim))
+                nn.init.xavier_uniform_(val)
+                setattr(self, key, val)
 
-        gamma = nn.Parameter(torch.Tensor([gamma]))
-        gamma.data.clamp_(0.0)
-
-        letters = {0: "s", 1: "p", 2: "d"}
-        for l, letter in letters.items():
-            key = f"g_{letter}"
+        for l in self.l_vals:
+            key = f"g_{l}"
             g_block = GBlock(l=l,
                              r_cut=r_cut,
                              bern_k=bern_k,
@@ -325,11 +395,11 @@ class LocalInteraction(nn.Module):
 
     def g_matmul(self,
                  r_ij,
-                 orbital):
+                 l):
 
-        g_func = getattr(self, f"g_{orbital}")
+        g_func = getattr(self, f"g_{l}")
         g = g_func(r_ij)
-        G = getattr(self, f"G_{orbital}")
+        G = getattr(self, f"G_{l}")
         # g: N_nbrs x K x (1, 3, or 5)
         # G: F x K
         # output: N_nbrs x F x (1, 3, or 5)
@@ -339,17 +409,16 @@ class LocalInteraction(nn.Module):
 
     def make_quant(self,
                    r_ij,
-                   x_j,
+                   x_tilde,
                    nbrs,
                    graph_size,
-                   orbital):
+                   l):
 
-        res_block = getattr(self, f"resmlp_{orbital}")
+        res_block = getattr(self, f"resmlp_{l}")
         n_nbrs = nbrs.shape[0]
 
-        matmul = self.g_matmul(r_ij, orbital)
-        resmlp = res_block(x_j)
-
+        matmul = self.g_matmul(r_ij, l)
+        resmlp = res_block(x_tilde)[nbrs[:, 1]]
         per_nbr = (resmlp.reshape(n_nbrs, -1, 1)
                    * matmul)
 
@@ -362,9 +431,9 @@ class LocalInteraction(nn.Module):
 
     def take_inner(self,
                    quant,
-                   orbital):
+                   l):
 
-        name = orbital.upper()
+        name = f"mix_mat_{l}"
 
         # dimensions F x F
         mat_1 = getattr(self, f"{name}_1")
@@ -392,32 +461,32 @@ class LocalInteraction(nn.Module):
 
         r_ij = xyz[nbrs[:, 1]] - xyz[nbrs[:, 0]]
         # dimension N_nbrs x F
-        x_j = x_tilde[nbrs[:, 1]]
+        # x_j = x_tilde[nbrs[:, 1]]
         graph_size = xyz.shape[0]
 
         c_term = self.resmlp_c(x_tilde)
-
-        orbitals = ['s', 'p', 'd']
         quants = []
-        for orbital in orbitals:
+
+        for l in self.l_vals:
             quant = self.make_quant(r_ij=r_ij,
-                                    x_j=x_j,
+                                    x_tilde=x_tilde,
                                     nbrs=nbrs,
                                     graph_size=graph_size,
-                                    orbital=orbital)
+                                    l=l)
             quants.append(quant)
 
         invariants = []
 
-        for quant, orbital in zip(quants[1:],
-                                  orbitals[1:]):
+        for quant, l in zip(quants[1:],
+                            self.l_vals[1:]):
             invariant = self.take_inner(quant,
-                                        orbital)
+                                        l)
             invariants.append(invariant)
 
         s_i = quants[0]
         s_term = s_i.reshape(graph_size, -1)
         inp = c_term + s_term + sum(invariants)
+
         out = self.resmlp_l(inp)
 
         return out
@@ -427,7 +496,8 @@ class NonLocalInteraction(nn.Module):
     def __init__(self,
                  feat_dim,
                  activation=DEFAULT_ACTIVATION,
-                 dropout=DEFAULT_DROPOUT):
+                 dropout=DEFAULT_DROPOUT,
+                 residual_layers=DEFAULT_RES_LAYERS):
 
         from performer_pytorch import FastAttention
 
@@ -445,8 +515,46 @@ class NonLocalInteraction(nn.Module):
             key = f'resmlp_{letter}'
             val = ResidualMLP(feat_dim=feat_dim,
                               activation=activation,
-                              dropout=dropout)
+                              dropout=dropout,
+                              residual_layers=residual_layers)
             setattr(self, key, val)
+
+    def pad(self,
+            Q,
+            K,
+            V,
+            num_atoms):
+
+        q_split = torch.split(Q, num_atoms)
+        k_split = torch.split(K, num_atoms)
+        v_split = torch.split(V, num_atoms)
+
+        q_pads = []
+        k_pads = []
+        v_pads = []
+
+        max_num_atoms = int(max(num_atoms))
+        for i, q in enumerate(q_split):
+            k = k_split[i]
+            v = v_split[i]
+            extra_pad = max_num_atoms - q.shape[0]
+            zeros = torch.zeros(extra_pad,
+                                self.feat_dim,
+                                device=Q.device)
+
+            q_pad = torch.cat([q, zeros])
+            k_pad = torch.cat([k, zeros])
+            v_pad = torch.cat([v, zeros])
+
+            q_pads.append(q_pad)
+            k_pads.append(k_pad)
+            v_pads.append(v_pad)
+
+        q_pads = torch.stack(q_pads)
+        k_pads = torch.stack(k_pads)
+        v_pads = torch.stack(v_pads)
+
+        return q_pads, k_pads, v_pads
 
     def forward(self,
                 x_tilde,
@@ -455,29 +563,20 @@ class NonLocalInteraction(nn.Module):
         # x_tilde has dimension N x F
         # N = number of nodes, F = feature dimension
 
-        num_nodes = x_tilde.shape[0]
         Q = self.resmlp_q(x_tilde)
         K = self.resmlp_k(x_tilde)
         V = self.resmlp_v(x_tilde)
 
-        q_split = torch.split(Q, num_atoms.tolist())
-        k_split = torch.split(K, num_atoms.tolist())
-        v_split = torch.split(V, num_atoms.tolist())
+        q_pad, k_pad, v_pad = self.pad(Q=Q,
+                                       K=K,
+                                       V=V,
+                                       num_atoms=num_atoms)
+        att = self.attn(q_pad.unsqueeze(0),
+                        k_pad.unsqueeze(0),
+                        v_pad.unsqueeze(0)).squeeze(0)
+        att = torch.cat([i[:n] for i, n in zip(att, num_atoms)])
 
-        out = torch.zeros(num_nodes,
-                          self.feat_dim,
-                          device=x_tilde.device)
-        for i, num in enumerate(num_atoms):
-            q = q_split[i].reshape(1, 1, -1, self.feat_dim)
-            k = k_split[i].reshape(1, 1, -1, self.feat_dim)
-            v = v_split[i].reshape(1, 1, -1, self.feat_dim)
-            att = (self.attn(q, k, v)
-                   .reshape(-1, self.feat_dim))
-
-            counter = sum(num_atoms[:i])
-            out[counter: counter + num] = att
-
-        return out
+        return att
 
 
 class InteractionBlock(nn.Module):
@@ -486,27 +585,33 @@ class InteractionBlock(nn.Module):
                  r_cut,
                  gamma,
                  bern_k,
+                 l_max=2,
                  activation=DEFAULT_ACTIVATION,
                  dropout=DEFAULT_DROPOUT,
-                 max_z=DEFAULT_MAX_Z):
+                 max_z=DEFAULT_MAX_Z,
+                 residual_layers=DEFAULT_RES_LAYERS):
         super().__init__()
 
         self.residual_1 = Residual(feat_dim=feat_dim,
                                    activation=activation,
-                                   dropout=dropout)
+                                   dropout=dropout,
+                                   num_layers=residual_layers)
         self.residual_2 = Residual(feat_dim=feat_dim,
                                    activation=activation,
-                                   dropout=dropout)
+                                   dropout=dropout,
+                                   num_layers=residual_layers)
         self.resmlp = ResidualMLP(feat_dim=feat_dim,
                                   activation=activation,
-                                  dropout=dropout)
+                                  dropout=dropout,
+                                  residual_layers=residual_layers)
         self.local = LocalInteraction(feat_dim=feat_dim,
                                       bern_k=bern_k,
                                       gamma=gamma,
                                       r_cut=r_cut,
                                       activation=activation,
                                       max_z=max_z,
-                                      dropout=dropout)
+                                      dropout=dropout,
+                                      l_max=l_max)
         self.non_local = NonLocalInteraction(feat_dim=feat_dim,
                                              activation=activation,
                                              dropout=dropout)
@@ -521,7 +626,7 @@ class InteractionBlock(nn.Module):
         l = self.local(xyz=xyz,
                        x_tilde=x_tilde,
                        nbrs=nbrs)
-        n = self.non_local(x_tilde,
+        n = self.non_local(x_tilde=x_tilde,
                            num_atoms=num_atoms)
         x_t = self.residual_2(x_tilde + l + n)
         y_t = self.resmlp(x_t)
@@ -542,9 +647,9 @@ def get_f_switch(r, r_on, r_off):
 
     mask = (x > 0) * (y > 0)
     # For numerical stability
-    # Anything > 34 will give under 1e-15
-    mask_zero = mask * (exp_arg >= 34)
-    mask_nonzero = mask * (exp_arg < 34)
+    # Anything > 20 will give under 1e-9
+    mask_zero = mask * (exp_arg >= 20)
+    mask_nonzero = mask * (exp_arg < 20)
 
     out[mask_nonzero] = 1 / (1 + torch.exp(exp_arg[mask_nonzero]))
     out[mask_zero] = zero
@@ -590,11 +695,16 @@ class Electrostatics(nn.Module):
         mol_sum = scatter_mol(atomwise=charge,
                               num_atoms=num_atoms).reshape(-1)
         correction = 1 / num_atoms * (total_charge - mol_sum)
+        new_charges = []
         for i, n in enumerate(num_atoms):
             counter = num_atoms[:i].sum()
-            charge[counter: counter + n] += correction[i]
+            old_val = charge[counter: counter + n]
+            new_val = old_val + correction[i]
+            new_charges.append(new_val)
 
-        return charge
+        new_charges = torch.cat(new_charges)
+
+        return new_charges
 
     def get_en(self,
                q,
@@ -650,7 +760,6 @@ class NuclearRepulsion(nn.Module):
         for key in ["d", "z_exp", "c", "exponents"]:
             val = getattr(self, key)
             new_val = nn.Parameter(val.reshape(-1, 1))
-            new_val.data.clamp_(0.0)
             setattr(self, key, new_val)
 
     def zbl_phi(self,
@@ -658,11 +767,16 @@ class NuclearRepulsion(nn.Module):
                 z_i,
                 z_j):
 
-        a = ((self.d / (z_i ** self.z_exp + z_j ** self.z_exp))
+        d = self.d.clamp(0)
+        z_exp = self.z_exp.clamp(0)
+        c = self.c.clamp(0)
+        exponents = self.exponents.clamp(0)
+
+        a = ((d / (z_i ** z_exp + z_j ** z_exp))
              .reshape(-1))
-        c = self.c / self.c.sum()
-        out = (c * torch.exp(-self.exponents * r_ij.reshape(-1) / a)
-               ).sum(0)
+
+        out = (c * torch.exp(-exponents * r_ij.reshape(-1) / a)
+               ).sum(0) / c.sum()
 
         return out
 
@@ -680,12 +794,54 @@ class NuclearRepulsion(nn.Module):
         phi = self.zbl_phi(r_ij=r_ij,
                            z_i=z_i,
                            z_j=z_j)
-        pairwise = (KE_KCAL * z_i * z_j / r_ij
-                    * phi
-                    * spooky_f_cut(r_ij, self.r_cut))
+        pairwise = (
+            KE_KCAL
+            * z_i * z_j / r_ij
+            * phi
+            * spooky_f_cut(r_ij, self.r_cut)
+        )
         energy = scatter_pairwise(pairwise=pairwise,
                                   num_atoms=num_atoms,
-                                  nbrs=nbrs).reshape(-1, 1)
+                                  nbrs=undirec).reshape(-1, 1)
+        # import pdb
+        # pdb.set_trace()
+
+        # grad = compute_grad(inputs=xyz, output=energy)
+
+        # this_z_i = z[undirec[:, 0][:36]]
+        # this_z_j = z[undirec[:, 1][:36]]
+        # this_rij = ((xyz[undirec[:, 0]] - xyz[undirec[:, 1]]
+        #              ) ** 2).sum(-1) ** 0.5
+        # test = KE_KCAL * this_z_i * this_z_j / this_rij[:36]
+        # test *= spooky_f_cut(this_rij[:36], self.r_cut)
+
+        # c_norm = self.c / self.c.sum()
+        # test *= (
+        #     (c_norm[0] * torch.exp(-this_rij[:36] / self.d[0]
+        #                            * self.exponents[0]
+        #                            * (this_z_i ** self.z_exp
+        #                               + this_z_j ** self.z_exp)))
+        #     + (c_norm[1] * torch.exp(-this_rij[:36] / self.d[0]
+        #                              * self.exponents[1]
+        #                              * (this_z_i ** self.z_exp
+        #                                 + this_z_j ** self.z_exp)))
+        #     + (c_norm[2] * torch.exp(-this_rij[:36] / self.d[0]
+        #                              * self.exponents[2]
+        #                              * (this_z_i ** self.z_exp
+        #                                 + this_z_j ** self.z_exp)))
+        #     + (c_norm[3] * torch.exp(-this_rij[:36] / self.d[0]
+        #                              * self.exponents[3]
+        #                              * (this_z_i ** self.z_exp
+        #                                 + this_z_j ** self.z_exp)))
+        # ).reshape(-1)
+
+        # import pdb
+        # pdb.set_trace()
+
+        # test = test.sum()
+
+        # print(test)
+        # print(energy[0])
 
         return energy
 
