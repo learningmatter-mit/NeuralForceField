@@ -533,8 +533,8 @@ def build_nacv_loss(loss_dict):
     params = loss_dict["params"]
     key = params["key"]
     coef = loss_dict["coef"]
-    take_abs = params["abs"]
-    take_max = params["max"]
+    take_abs = params.get("abs", False)
+    take_max = params.get("max", False)
 
     def loss_fn(ground_truth,
                 results,
@@ -585,6 +585,43 @@ def build_nacv_loss(loss_dict):
     return loss_fn
 
 
+def build_trans_dip_loss(loss_dict):
+
+    params = loss_dict["params"]
+    key = params["key"]
+    coef = loss_dict["coef"]
+
+    def loss_fn(ground_truth,
+                results,
+                **kwargs):
+
+        targ = ground_truth[key].reshape(-1, 3)
+        pred = results[key].reshape(-1, 3)
+
+        pos_delta = ((targ - pred) ** 2).sum(-1)
+        neg_delta = ((targ + pred) ** 2).sum(-1)
+
+        signs = (torch.ones(pos_delta.shape[0],
+                            dtype=torch.long)
+                 .to(pos_delta.device))
+        signs[neg_delta < pos_delta] = -1
+        targ = targ * signs.reshape(-1, 1)
+
+        targ = targ.reshape(-1)
+        pred = pred.reshape(-1)
+
+        valid_idx = torch.bitwise_not(torch.isnan(targ))
+        targ = targ[valid_idx]
+        pred = pred[valid_idx]
+
+        diff = mse_operation(targ, pred)
+        loss = coef * torch.mean(diff)
+
+        return loss
+
+    return loss_fn
+
+
 def name_to_func(name):
     dic = {
         "mse": build_mse_loss,
@@ -594,7 +631,8 @@ def name_to_func(name):
         "zhu_grad": build_zhu_grad_loss,
         "diabat_sign": build_diabat_sign_loss,
         "skewed_p": build_skewed_p_loss,
-        "nacv": build_nacv_loss
+        "nacv": build_nacv_loss,
+        'trans_dipole': build_trans_dip_loss
     }
     func = dic[name]
     return func
