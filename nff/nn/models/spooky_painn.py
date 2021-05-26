@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 import copy
 import numpy as np
@@ -177,8 +178,7 @@ class SpookyPainn(Painn):
                  charge,
                  nbrs,
                  mol_nbrs,
-                 num_atoms,
-                 features):
+                 num_atoms):
 
         electrostatics = getattr(self, "electrostatics", {})
         nuc_repulsion = getattr(self, "nuc_repulsion", {})
@@ -187,7 +187,6 @@ class SpookyPainn(Painn):
             if key in electrostatics:
                 elec_module = self.electrostatics[key]
 
-                # features = torch.zeros_like(features)
                 elec_e, q, dip_atom, full_dip = elec_module(
                     s_i=s_i,
                     v_i=v_i,
@@ -251,8 +250,7 @@ class SpookyPainn(Painn):
                       charge=batch['charge'],
                       nbrs=nbrs,
                       mol_nbrs=mol_nbrs,
-                      num_atoms=num_atoms,
-                      features=atomwise_out['features'])
+                      num_atoms=num_atoms)
 
         for key in self.grad_keys:
             output = all_results[key.replace("_grad", "")]
@@ -333,6 +331,8 @@ class SpookyPainnDiabat(SpookyPainn):
             hellmann_feynman=modelparams.get("hellmann_feynman", True),
             others_to_eig=others_to_eig)
         self.add_nacv = modelparams.get("add_nacv", False)
+        self.diabat_keys = diabat_keys
+        self.off_diag_keys = self.get_off_diag_keys()
 
     @property
     def _grad_keys(self):
@@ -342,6 +342,80 @@ class SpookyPainnDiabat(SpookyPainn):
     def _grad_keys(self, value):
         self.grad_keys = value
         self.diabatic_readout.grad_keys = value
+
+    def get_off_diag_keys(self):
+        num_states = len(self.diabat_keys)
+        off_diag = []
+        for i in range(num_states):
+            for j in range(num_states):
+                if j <= i:
+                    continue
+                off_diag.append(self.diabat_keys[i][j])
+        return off_diag
+
+    def get_diabat_charge(self,
+                          key,
+                          charge):
+
+        if key in self.off_diag_keys:
+            total_charge = torch.zeros_like(charge)
+        else:
+            total_charge = charge
+        return total_charge
+
+    def add_phys(self,
+                 results,
+                 s_i,
+                 v_i,
+                 xyz,
+                 z,
+                 charge,
+                 nbrs,
+                 mol_nbrs,
+                 num_atoms):
+        """
+        Over-write because transition charges must sum to 0, not
+        to the total charge
+        """
+
+        electrostatics = getattr(self, "electrostatics", {})
+        nuc_repulsion = getattr(self, "nuc_repulsion", {})
+
+        for key in self.output_keys:
+            if key in electrostatics:
+                elec_module = self.electrostatics[key]
+
+                # transition charges sum to 0
+
+                total_charge = self.get_diabat_charge(key=key,
+                                                      charge=charge)
+
+                elec_e, q, dip_atom, full_dip = elec_module(
+                    s_i=s_i,
+                    v_i=v_i,
+                    z=z,
+                    xyz=xyz,
+                    total_charge=total_charge,
+                    num_atoms=num_atoms,
+                    mol_nbrs=mol_nbrs)
+
+                results[key] = results[key] + elec_e.reshape(-1)
+
+            if key in nuc_repulsion:
+                nuc_module = self.nuc_repulsion[key]
+                nuc_e = nuc_module(xyz=xyz,
+                                   z=z,
+                                   nbrs=nbrs,
+                                   num_atoms=num_atoms)
+                results[key] = results[key] + nuc_e.reshape(-1)
+
+            if key in electrostatics:
+                suffix = "_" + key.split("_")[-1]
+                if not any([i.isdigit() for i in suffix]):
+                    suffix = ""
+                results.update({f"dipole{suffix}": full_dip,
+                                f"q{suffix}": q,
+                                f"dip_atom{suffix}": dip_atom})
 
     def forward(self,
                 batch,
