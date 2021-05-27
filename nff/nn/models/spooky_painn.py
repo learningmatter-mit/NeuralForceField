@@ -296,7 +296,7 @@ def get_others_to_eig(diabat_keys):
     for i in range(num_states):
         for j in range(num_states):
             val = others_to_eig[i][j]
-            others_to_eig[i][j] = "dipole_" + val
+            others_to_eig[i][j] = "dipole_" + val.split("_")[-1]
     return others_to_eig
 
 
