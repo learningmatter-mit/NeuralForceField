@@ -298,10 +298,10 @@ class CombinedEmbedding(nn.Module):
                 num_atoms):
 
         e_z = self.nuc_embedding(z)
-        e_q = self.charge_embedding(psi=charge,
+        e_q = self.charge_embedding(psi=charge.reshape(-1),
                                     e_z=e_z,
                                     num_atoms=num_atoms)
-        e_s = self.spin_embedding(psi=spin,
+        e_s = self.spin_embedding(psi=spin.reshape(-1),
                                   e_z=e_z,
                                   num_atoms=num_atoms)
 
@@ -567,10 +567,18 @@ class NonLocalInteraction(nn.Module):
         K = self.resmlp_k(x_tilde)
         V = self.resmlp_v(x_tilde)
 
-        q_pad, k_pad, v_pad = self.pad(Q=Q,
-                                       K=K,
-                                       V=V,
-                                       num_atoms=num_atoms)
+        if not isinstance(num_atoms, list):
+            num_atoms = num_atoms.tolist()
+
+        if len(list(set(num_atoms))) == 1:
+            q_pad = torch.stack(torch.split(Q, num_atoms))
+            k_pad = torch.stack(torch.split(K, num_atoms))
+            v_pad = torch.stack(torch.split(V, num_atoms))
+        else:
+            q_pad, k_pad, v_pad = self.pad(Q=Q,
+                                           K=K,
+                                           V=V,
+                                           num_atoms=num_atoms)
         att = self.attn(q_pad.unsqueeze(0),
                         k_pad.unsqueeze(0),
                         v_pad.unsqueeze(0)).squeeze(0)
