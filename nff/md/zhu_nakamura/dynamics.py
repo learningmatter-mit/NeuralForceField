@@ -1021,7 +1021,8 @@ class BatchedZhuNakamura:
                 # same molecule
                 nbrs = single_spec_nbrs(dset=dataset,
                                         cutoff=self.cutoff,
-                                        device=self.device)
+                                        device=self.device,
+                                        directed=True)
                 dataset.props['nbr_list'] = nbrs
 
                 # dataset.generate_neighbor_list(self.cutoff)

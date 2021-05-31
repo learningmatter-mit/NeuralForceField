@@ -1,8 +1,6 @@
 
 import os
 import numpy as np
-import copy
-import pdb
 import math
 
 from ase.md.md import MolecularDynamics
@@ -10,7 +8,6 @@ from ase.optimize.optimize import Dynamics
 from ase import units
 from ase.md.velocitydistribution import (MaxwellBoltzmannDistribution,
                                          Stationary, ZeroRotation)
-from ase.io.trajectory import Trajectory
 
 
 class NoseHoover(MolecularDynamics):

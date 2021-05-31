@@ -9,15 +9,14 @@ from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
 
 import nff.utils.constants as const
-from nff.train import load_model, evaluate
-from nff.utils.cuda import batch_to
+from nff.train import load_model
 from nff.data.sparse import sparsify_array
 from nff.data import Dataset
 from nff.nn.utils import torch_nbr_list
 
 
 DEFAULT_CUTOFF = 5.0
-
+DEFAULT_DIRECTED = False
 CONVERSION_DIC = {"ev": 1 / const.EV_TO_KCAL_MOL,
                   "au":  const.KCAL_TO_AU["energy"]}
 
@@ -33,6 +32,7 @@ class AtomsBatch(Atoms):
         props=None,
         cutoff=DEFAULT_CUTOFF,
         needs_angles=False,
+        undirected=(not DEFAULT_DIRECTED),
         **kwargs
     ):
         """
@@ -57,6 +57,7 @@ class AtomsBatch(Atoms):
         self.ji_idx = self.props.get('ji_idx')
         self.angle_list = self.props.get('angle_list')
         self.device = self.props.get("device", 0)
+        self.undirected = undirected
 
     def get_nxyz(self):
         """Gets the atomic number and the positions of the atoms
@@ -81,7 +82,6 @@ class AtomsBatch(Atoms):
             batch (dict): batch with the keys 'nxyz',
                 'num_atoms', 'nbr_list' and 'offsets'
         """
-
 
         if self.nbr_list is None:  # or self.offsets is None:
             self.update_nbr_list()
@@ -113,12 +113,13 @@ class AtomsBatch(Atoms):
 
         if self.needs_angles:
 
-            dataset = Dataset(
-                {key: [val] for key, val in self.props.items()}, check_props=False)
+            dataset = Dataset({key: [val] for key, val in
+                               self.props.items()}, check_props=False)
             if "nxyz" not in dataset.props:
                 dataset.props["nxyz"] = [self.get_nxyz()]
 
-            dataset.generate_neighbor_list(self.cutoff)
+            dataset.generate_neighbor_list(self.cutoff,
+                                           undirected=self.undirected)
             dataset.generate_angle_list()
 
             self.ji_idx = dataset.props['ji_idx'][0]
@@ -135,8 +136,10 @@ class AtomsBatch(Atoms):
                 offsets = np.zeros((self.nbr_list.shape[0], 3))
 
         else:
-            edge_from, edge_to, offsets = torch_nbr_list(
-                self, self.cutoff, self.device)
+            edge_from, edge_to, offsets = torch_nbr_list(self,
+                                                         self.cutoff,
+                                                         self.device,
+                                                         directed=(not self.undirected))
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
             self.nbr_list = nbr_list
 
@@ -159,13 +162,15 @@ class AtomsBatch(Atoms):
                    atoms,
                    props=None,
                    needs_angles=False,
-                   device=0):
+                   device=0,
+                   **kwargs):
         instance = cls(
             atoms,
             positions=atoms.positions,
             numbers=atoms.numbers,
             props=props,
-            needs_angles=needs_angles
+            needs_angles=needs_angles,
+            **kwargs
         )
 
         instance.device = device
@@ -210,7 +215,6 @@ class NeuralFF(Calculator):
         # don't compute any gradients that aren't needed in the
         # output keys
 
-
         if getattr(model, "grad_keys", []):
             keep_keys = [key for key in model.grad_keys
                          if key.replace("_grad", "") in self.output_keys]
@@ -253,7 +257,6 @@ class NeuralFF(Calculator):
             batch[key] = []
             if 'forces' in properties:
                 batch[key + "_grad"] = []
-
 
         prediction = self.model(batch)
 

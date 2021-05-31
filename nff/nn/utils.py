@@ -82,7 +82,10 @@ def get_default_readout(n_atom_basis):
     return default_readout
 
 
-def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
+def torch_nbr_list(atomsobject,
+                   cutoff,
+                   device='cuda:0',
+                   directed=True):
     """Pytorch implementations of nbr_list for minimum image convention, the offsets are only limited to 0, 1, -1:
     it means that no pair interactions is allowed for more than 1 periodic box length. It is so much faster than
     neighbor_list algorithm in ase.
@@ -102,7 +105,6 @@ def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
 
     if any(atomsobject.pbc):
         cell_dim = torch.Tensor(atomsobject.get_cell()).diag().to(device)
-
         offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + \
             dis_mat.lt(-0.5 * cell_dim).to(torch.float)
         dis_mat = dis_mat + offsets * cell_dim
@@ -370,14 +372,6 @@ def single_spec_nbrs(dset,
                      directed=True):
 
     xyz = torch.stack(dset.props['nxyz'])[:, :, 1:]
-
-    ###
-#    xyz = [dset.props['nxyz'][0],
-#          dset.props['nxyz'][0] * float('inf'),
-#          dset.props['nxyz'][1]]
-#    xyz = torch.stack(xyz)[:, :, 1:]
-    ###
-
     dist_mat = ((xyz[:, :, None, :] - xyz[:, None, :, :])
                 .to(device).norm(dim=-1))
     nbr_mask = (dist_mat <= cutoff) * (dist_mat > 0)
@@ -385,9 +379,6 @@ def single_spec_nbrs(dset,
 
     if not directed:
         nbrs = nbrs[nbrs[:, 2] > nbrs[:, 1]]
-
-    split_idx = ((nbrs[:, 0][1:] != nbrs[:, 0][:-1])
-                .nonzero().reshape(-1) + 1)
 
     split_sizes = []
     num_mols = xyz.shape[0]

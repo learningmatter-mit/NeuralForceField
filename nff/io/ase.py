@@ -16,6 +16,7 @@ from nff.utils.geom import compute_distances
 from nff.data import Dataset
 
 DEFAULT_CUTOFF = 5.0
+DEFAULT_DIRECTED = False
 
 
 class AtomsBatch(Atoms):
@@ -29,7 +30,7 @@ class AtomsBatch(Atoms):
         props={},
         cutoff=DEFAULT_CUTOFF,
         nbr_torch=False,
-        directed=False,
+        directed=DEFAULT_DIRECTED,
         **kwargs
     ):
         """
@@ -97,17 +98,22 @@ class AtomsBatch(Atoms):
         """
 
         if self.nbr_torch:
-            edge_from, edge_to, offsets = torch_nbr_list(
-                self, self.cutoff, device=self.device, directed=self.directed)
+            edge_from, edge_to, offsets = torch_nbr_list(self,
+                                                         self.cutoff,
+                                                         device=self.device,
+                                                         directed=self.directed)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         else:
             self.wrap()
-            edge_from, edge_to, offsets = neighbor_list(
-                'ijS', self, self.cutoff)
+            edge_from, edge_to, offsets = neighbor_list('ijS',
+                                                        self,
+                                                        self.cutoff)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            offsets = torch.Tensor(
-                offsets)[nbr_list[:, 1] > nbr_list[:, 0]].detach().cpu().numpy()
-            nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
+            offsets = torch.Tensor(offsets)
+            if not self.directed:
+                offsets = offsets[nbr_list[:, 1] > nbr_list[:, 0]]
+                nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
+            offsets = offsets.detach().cpu().numpy()
 
         # torch.sparse has no storage yet.
         #offsets = offsets.dot(self.get_cell())
@@ -149,6 +155,7 @@ class BulkPhaseMaterials(Atoms):
         cutoff=DEFAULT_CUTOFF,
         nbr_torch=False,
         device='cpu',
+        directed=DEFAULT_DIRECTED,
         **kwargs
     ):
         """
@@ -169,6 +176,7 @@ class BulkPhaseMaterials(Atoms):
         self.cutoff = cutoff
         self.nbr_torch = nbr_torch
         self.device = device
+        self.directed = directed
 
     def get_nxyz(self):
         """Gets the atomic number and the positions of the atoms
@@ -225,11 +233,13 @@ class BulkPhaseMaterials(Atoms):
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
         else:
             edge_from, edge_to, offsets = neighbor_list(
-                'ijS', self, self.cutoff)
+                'ijS',
+                self,
+                self.cutoff)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            offsets = torch.Tensor(
-                offsets)[nbr_list[:, 1] > nbr_list[:, 0]]  # .numpy()
-            nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
+            if not getattr(self, "directed", DEFAULT_DIRECTED):
+                offsets = offsets[nbr_list[:, 1] > nbr_list[:, 0]]
+                nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
         if exclude_atoms_nbr_list:
             offsets_mat = torch.zeros(self.get_number_of_atoms(),
@@ -280,7 +290,10 @@ class BulkPhaseMaterials(Atoms):
         for i, atoms in enumerate(Atoms_list):
             edge_from, edge_to = neighbor_list('ij', atoms, cutoff)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
+
+            if not self.directed:
+                nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
+
             intra_nbr_list.append(
                 self.props['num_subgraphs'][: i].sum() + nbr_list)
 
