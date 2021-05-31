@@ -793,7 +793,7 @@ class Electrostatics(nn.Module):
                mol_offsets):
 
         r_ij = norm(xyz[mol_nbrs[:, 0]] - xyz[mol_nbrs[:, 1]]
-            - mol_offsets)
+                    - mol_offsets)
         q_i = q[mol_nbrs[:, 0]].reshape(-1)
         q_j = q[mol_nbrs[:, 1]].reshape(-1)
 
@@ -911,8 +911,16 @@ class NuclearRepulsion(nn.Module):
         undirec = make_undirected(nbrs)
         z_i = z[undirec[:, 0]].to(torch.float32)
         z_j = z[undirec[:, 1]].to(torch.float32)
+
+        zero_offsets = (offsets == 0).all().item()
+        if zero_offsets:
+            offsets = 0
+        else:
+            msg = ("Need to implement a way to get undirected "
+                   "offsets")
+            raise NotImplementedError(msg)
         r_ij = norm(xyz[undirec[:, 0]] - xyz[undirec[:, 1]]
-            - offsets)
+                    - offsets)
 
         phi = self.zbl_phi(r_ij=r_ij,
                            z_i=z_i,

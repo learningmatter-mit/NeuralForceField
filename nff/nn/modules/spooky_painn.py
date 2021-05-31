@@ -444,7 +444,8 @@ class Electrostatics(nn.Module):
                 xyz,
                 total_charge,
                 num_atoms,
-                mol_nbrs):
+                mol_nbrs,
+                mol_offsets):
 
         q, dip_atom, full_dip = self.charge_and_dip(xyz=xyz,
                                                     s_i=s_i,
@@ -452,8 +453,9 @@ class Electrostatics(nn.Module):
                                                     z=z,
                                                     total_charge=total_charge,
                                                     num_atoms=num_atoms)
+
         # This is r_ij (=r_i - r_j), not r_ji
-        r_ij = xyz[mol_nbrs[:, 0]] - xyz[mol_nbrs[:, 1]]
+        r_ij = xyz[mol_nbrs[:, 0]] - xyz[mol_nbrs[:, 1]] - mol_offsets
         dist = norm(r_ij)
         # unit vector (r_i - r_j) / || r_i - r_j||
         unit_r_ij = r_ij / dist.reshape(-1, 1)
