@@ -30,7 +30,7 @@ def get_offsets(batch, key):
     nxyz = batch['nxyz']
     zero = torch.Tensor([0]).to(nxyz.device)
     offsets = batch.get(key, zero)
-    if offsets.is_sparse:
+    if isinstance(offsets, torch.Tensor) and offsets.is_sparse:
         offsets = offsets.to_dense()
     return offsets
 

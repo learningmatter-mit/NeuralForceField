@@ -28,6 +28,10 @@ UNDIRECTED = [SchNet,
               SchNetFeatures,
               OnlyBondUpdateCP3D]
 
+def check_directed(model, atoms):
+    model_cls = model.__class__.__name__
+    msg = f"{model_cls} needs a directed neighbor list"
+    assert atoms.directed, msg
 
 class AtomsBatch(Atoms):
     """Class to deal with the Neural Force Field and batch several
@@ -364,7 +368,8 @@ class NeuralFF(Calculator):
         """
 
         if not any([isinstance(self.model, i) for i in UNDIRECTED]):
-            assert (not atoms.directed)
+            check_directed(self.model, atoms)
+
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # run model
@@ -457,7 +462,7 @@ class EnsembleNFF(Calculator):
 
         for model in self.models:
             if not any([isinstance(model, i) for i in UNDIRECTED]):
-                assert (not atoms.directed)
+                check_directed(model, atoms)
 
         Calculator.calculate(self, atoms, properties, system_changes)
 
@@ -674,7 +679,7 @@ class NeuralMetadynamics(NeuralFF):
                   add_steps=True):
 
         if not any([isinstance(self.model, i) for i in UNDIRECTED]):
-            assert (not atoms.directed)
+            check_directed(self.model, atoms)
 
         super().calculate(atoms=atoms,
                           properties=properties,

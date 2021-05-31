@@ -27,6 +27,12 @@ UNDIRECTED = [SchNet,
               OnlyBondUpdateCP3D]
 
 
+def check_directed(model, atoms):
+    model_cls = model.__class__.__name__
+    msg = f"{model_cls} needs a directed neighbor list"
+    assert (not atoms.undirected), msg
+
+
 class AtomsBatch(Atoms):
     """Class to deal with the Neural Force Field and batch several
         Atoms objects.
@@ -250,7 +256,7 @@ class NeuralFF(Calculator):
         """
 
         if not any([isinstance(self.model, i) for i in UNDIRECTED]):
-            assert (not atomsbatch.undirected)
+            check_directed(self.model, atomsbatch)
 
         Calculator.calculate(self, atomsbatch, properties, system_changes)
 
