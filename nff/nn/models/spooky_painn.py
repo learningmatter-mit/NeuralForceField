@@ -120,7 +120,10 @@ class SpookyPainn(Painn):
             xyz.requires_grad = True
 
         z_numbers = nxyz[:, 0].long()
-        r_ij = xyz[nbrs[:, 1]] - xyz[nbrs[:, 0]]
+        # include offests
+
+        offsets = batch.get("offsets", 0)
+        r_ij = xyz[nbrs[:, 1]] - xyz[nbrs[:, 0]] - offsets
         s_i, v_i = self.embed_block(charge=charge,
                                     spin=spin,
                                     z=z_numbers,
@@ -177,8 +180,8 @@ class SpookyPainn(Painn):
                  z,
                  charge,
                  nbrs,
-                 mol_nbrs,
-                 num_atoms):
+                 num_atoms,
+                 batch):
 
         electrostatics = getattr(self, "electrostatics", {})
         nuc_repulsion = getattr(self, "nuc_repulsion", {})
@@ -187,6 +190,11 @@ class SpookyPainn(Painn):
             if key in electrostatics:
                 elec_module = self.electrostatics[key]
 
+                # put this here in case you're not doing
+                # electrostatics and don't want to store
+                # this big neighbor list in the dataset
+
+                mol_nbrs = make_undirected(batch['mol_nbrs'])
                 elec_e, q, dip_atom, full_dip = elec_module(
                     s_i=s_i,
                     v_i=v_i,
@@ -219,7 +227,6 @@ class SpookyPainn(Painn):
              atomwise_out,
              xyz,
              nbrs,
-             mol_nbrs,
              num_atoms,
              z,
              s_i,
@@ -249,8 +256,8 @@ class SpookyPainn(Painn):
                       z=z,
                       charge=batch['charge'],
                       nbrs=nbrs,
-                      mol_nbrs=mol_nbrs,
-                      num_atoms=num_atoms)
+                      num_atoms=num_atoms,
+                      batch=batch)
 
         for key in self.grad_keys:
             output = all_results[key.replace("_grad", "")]
@@ -265,7 +272,6 @@ class SpookyPainn(Painn):
             xyz=None):
 
         nbrs, _ = make_directed(batch['nbr_list'])
-        mol_nbrs = make_undirected(batch['mol_nbrs'])
         num_atoms = batch['num_atoms']
         z = batch['nxyz'][:, 0].long()
 
@@ -278,7 +284,6 @@ class SpookyPainn(Painn):
                                      atomwise_out=atomwise_out,
                                      xyz=xyz,
                                      nbrs=nbrs,
-                                     mol_nbrs=mol_nbrs,
                                      num_atoms=num_atoms,
                                      z=z,
                                      s_i=s_i,
@@ -371,8 +376,8 @@ class SpookyPainnDiabat(SpookyPainn):
                  z,
                  charge,
                  nbrs,
-                 mol_nbrs,
-                 num_atoms):
+                 num_atoms,
+                 batch):
         """
         Over-write because transition charges must sum to 0, not
         to the total charge
@@ -390,6 +395,7 @@ class SpookyPainnDiabat(SpookyPainn):
                 total_charge = self.get_diabat_charge(key=key,
                                                       charge=charge)
 
+                mol_nbrs = make_undirected(batch['mol_nbrs'])
                 elec_e, q, dip_atom, full_dip = elec_module(
                     s_i=s_i,
                     v_i=v_i,
