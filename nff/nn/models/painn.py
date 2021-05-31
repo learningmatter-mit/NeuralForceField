@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 import numpy as np
 import copy
@@ -8,7 +9,7 @@ from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
                                   TransformerMessageBlock,
                                   NbrEmbeddingBlock)
 from nff.nn.modules.schnet import (AttentionPool, SumPool, MolFpPool,
-                                   MeanPool)
+                                   MeanPool, get_rij)
 from nff.nn.modules.diabat import DiabaticReadout, AdiabaticReadout
 from nff.nn.layers import (Diagonalize, ExpNormalBasis)
 
@@ -110,10 +111,10 @@ class Painn(nn.Module):
 
         z_numbers = nxyz[:, 0].long()
 
-        # include offests
-
-        offsets = batch.get("offsets", 0)
-        r_ij = xyz[nbrs[:, 1]] - xyz[nbrs[:, 0]] - offsets
+        # get r_ij including offsets
+        r_ij = get_rij(xyz=xyz,
+                       batch=batch,
+                       nbrs=nbrs)
         s_i, v_i = self.embed_block(z_numbers,
                                     nbrs=nbrs,
                                     r_ij=r_ij)

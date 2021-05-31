@@ -26,6 +26,24 @@ EPSILON = 1e-15
 DEFAULT_BONDPRIOR_PARAM = {"k": 20.0}
 
 
+def get_offsets(batch, key):
+    nxyz = batch['nxyz']
+    zero = torch.Tensor([0]).to(nxyz.device)
+    offsets = batch.get(key, zero)
+    if offsets.is_sparse:
+        offsets = offsets.to_dense()
+    return offsets
+
+
+def get_rij(xyz,
+            batch,
+            nbrs):
+    offsets = get_offsets(batch, 'offsets')
+    r_ij = xyz[nbrs[:, 1]] - xyz[nbrs[:, 0]] - offsets
+
+    return r_ij
+
+
 class SchNetEdgeUpdate(EdgeUpdateModule):
     """
     Arxiv.1806.03146
@@ -1348,6 +1366,7 @@ class ScaleShift(nn.Module):
 
 def get_act(activation):
     return layer_types[activation]()
+
 
 class TestModules(unittest.TestCase):
     def testBaseEdgeUpdate(self):
