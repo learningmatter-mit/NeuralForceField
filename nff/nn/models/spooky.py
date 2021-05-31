@@ -7,6 +7,7 @@ from nff.nn.modules.spooky import (DEFAULT_DROPOUT, DEFAULT_ACTIVATION,
                                    CombinedEmbedding, InteractionBlock,
                                    AtomwiseReadout, Electrostatics,
                                    NuclearRepulsion, get_dipole)
+from nff.nn.modules.schnet import get_rij, get_offsets
 
 
 def default(val, def_val):
@@ -64,7 +65,8 @@ class SpookyNet(nn.Module):
                              dropout=dropout,
                              max_z=max_z,
                              residual_layers=residual_layers,
-                             l_max=default(modelparams.get("l_max"), 2))
+                             l_max=default(modelparams.get("l_max"), 2),
+                             fast_feats=modelparams.get("fast_feats"))
             for _ in range(modelparams['num_conv'])
         ])
         self.atomwise_readout = nn.ModuleDict({
@@ -94,8 +96,11 @@ class SpookyNet(nn.Module):
                     xyz,
                     charge,
                     mol_nbrs,
-                    nbrs):
+                    nbrs,
+                    batch):
 
+        mol_offsets = get_offsets(batch, 'mol_offsets')
+        offsets = get_offsets(batch, 'offsets')
         results = {}
         for key in self.output_keys:
             atomwise_readout = self.atomwise_readout[key]
@@ -110,7 +115,8 @@ class SpookyNet(nn.Module):
                                            xyz=xyz,
                                            total_charge=charge,
                                            num_atoms=num_atoms,
-                                           mol_nbrs=mol_nbrs)
+                                           mol_nbrs=mol_nbrs,
+                                           mol_offsets=mol_offsets)
                 energy += elec_e
 
             if key in self.nuc_repulsion:
@@ -118,7 +124,8 @@ class SpookyNet(nn.Module):
                 nuc_e = nuc_repulsion(xyz=xyz,
                                       z=z,
                                       nbrs=nbrs,
-                                      num_atoms=num_atoms)
+                                      num_atoms=num_atoms,
+                                      offsets=offsets)
 
                 energy += nuc_e
 
@@ -176,11 +183,16 @@ class SpookyNet(nn.Module):
                            num_atoms=num_atoms)
 
         f = torch.zeros_like(x)
+        # get r_ij including offsets
+        r_ij = get_rij(xyz=xyz,
+                       batch=batch,
+                       nbrs=nbrs)
         for i, interaction in enumerate(self.interactions):
             x, y_t = interaction(x=x,
                                  xyz=xyz,
                                  nbrs=nbrs,
-                                 num_atoms=num_atoms)
+                                 num_atoms=num_atoms,
+                                 r_ij=r_ij)
             f += y_t
 
         results = self.get_results(z=z,
@@ -189,7 +201,8 @@ class SpookyNet(nn.Module):
                                    xyz=xyz,
                                    charge=charge,
                                    mol_nbrs=mol_nbrs,
-                                   nbrs=nbrs)
+                                   nbrs=nbrs,
+                                   batch=batch)
 
         results = self.add_grad(xyz=xyz,
                                 grad_keys=grad_keys,

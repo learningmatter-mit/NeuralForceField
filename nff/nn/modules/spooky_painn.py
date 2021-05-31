@@ -80,15 +80,25 @@ class NonLocalInteraction(nn.Module):
         # and do attention in parallel
 
         # *_pad has dimension num_mols x num_nodes x F
-        q_pad, k_pad, v_pad = self.pad(Q=Q,
-                                       K=K,
-                                       V=V,
-                                       num_atoms=num_atoms)
+        if not isinstance(num_atoms, list):
+            num_atoms = num_atoms.tolist()
+
+        if len(list(set(num_atoms))) == 1:
+            pads = [torch.stack(torch.split(i, num_atoms))
+                    for i in [Q, K, V]]
+            q_pad, k_pad, v_pad = pads
+        else:
+            q_pad, k_pad, v_pad = self.pad(Q=Q,
+                                           K=K,
+                                           V=V,
+                                           num_atoms=num_atoms)
+
         att = self.attn(q_pad.unsqueeze(0),
                         k_pad.unsqueeze(0),
-                        v_pad.unsqueeze(0)).squeeze(0)
-        att = torch.cat([i[:n] for i, n in zip(att, num_atoms)])
+                        v_pad.unsqueeze(0)
+                        ).squeeze(0)
 
+        att = torch.cat([i[:n] for i, n in zip(att, num_atoms)])
         return att
 
 
@@ -497,8 +507,12 @@ class ElectronicEmbedding(nn.Module):
             # mol_q has dimension atoms_in_mol x F
             # k has dimension F x 1
             arg = (torch.einsum('ij, jk -> i', mol_q, k)
-                   / self.feat_dim ** 0.5)
-            num = torch.log(1 + torch.exp(arg))
+                   / self.feat_dim ** 0.5).reshape(-1, 1)
+            zero = torch.zeros_like(arg)
+            num = torch.logsumexp(
+                torch.cat([zero, arg], dim=-1),
+                dim=1
+            )
             denom = num.sum()
 
             # dimension atoms_in_mol

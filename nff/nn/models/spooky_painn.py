@@ -17,7 +17,7 @@ from nff.utils.tools import make_directed, make_undirected
 from nff.utils.scatter import compute_grad
 
 from nff.nn.modules.schnet import (AttentionPool, SumPool, MolFpPool,
-                                   MeanPool)
+                                   MeanPool, get_offsets, get_rij)
 
 POOL_DIC = {"sum": SumPool,
             "mean": MeanPool,
@@ -122,8 +122,10 @@ class SpookyPainn(Painn):
         z_numbers = nxyz[:, 0].long()
         # include offests
 
-        offsets = batch.get("offsets", 0)
-        r_ij = xyz[nbrs[:, 1]] - xyz[nbrs[:, 0]] - offsets
+        # get r_ij including offsets
+        r_ij = get_rij(xyz=xyz,
+                       batch=batch,
+                       nbrs=nbrs)
         s_i, v_i = self.embed_block(charge=charge,
                                     spin=spin,
                                     z=z_numbers,
@@ -185,6 +187,8 @@ class SpookyPainn(Painn):
 
         electrostatics = getattr(self, "electrostatics", {})
         nuc_repulsion = getattr(self, "nuc_repulsion", {})
+        mol_offsets = get_offsets(batch, 'mol_offsets')
+        offsets = get_offsets(batch, 'offsets')
 
         for key in self.output_keys:
             if key in electrostatics:
@@ -202,7 +206,8 @@ class SpookyPainn(Painn):
                     xyz=xyz,
                     total_charge=charge,
                     num_atoms=num_atoms,
-                    mol_nbrs=mol_nbrs)
+                    mol_nbrs=mol_nbrs,
+                    mol_offsets=mol_offsets)
 
                 results[key] = results[key] + elec_e.reshape(-1)
 
@@ -211,7 +216,8 @@ class SpookyPainn(Painn):
                 nuc_e = nuc_module(xyz=xyz,
                                    z=z,
                                    nbrs=nbrs,
-                                   num_atoms=num_atoms)
+                                   num_atoms=num_atoms,
+                                   offsets=offsets)
                 results[key] = results[key] + nuc_e.reshape(-1)
 
             if key in electrostatics:

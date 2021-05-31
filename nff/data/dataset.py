@@ -178,7 +178,8 @@ class Dataset(TorchDataset):
     def generate_neighbor_list(self,
                                cutoff,
                                undirected=True,
-                               key='nbr_list'):
+                               key='nbr_list',
+                               offset_key='offsets'):
         """Generates a neighbor list for each one of the atoms in the dataset.
             By default, does not consider periodic boundary conditions.
 
@@ -194,13 +195,16 @@ class Dataset(TorchDataset):
                 get_neighbor_list(nxyz[:, 1:4], cutoff, undirected)
                 for nxyz in self.props['nxyz']
             ]
-            self.props['offsets'] = [
+            self.props[offset_key] = [
                 torch.sparse.FloatTensor(nbrlist.shape[0], 3)
                 for nbrlist in self.props[key]
             ]
         else:
-            self._get_periodic_neighbor_list(cutoff, undirected)
-            return self.props[key], self.props['offsets']
+            self._get_periodic_neighbor_list(cutoff=cutoff,
+                                             undirected=undirected,
+                                             offset_key=offset_key,
+                                             nbr_key=key)
+            return self.props[key], self.props[offset_key]
 
         return self.props[key]
 
@@ -236,7 +240,11 @@ class Dataset(TorchDataset):
         add_kj_ji_parallel(self,
                            num_procs=num_procs)
 
-    def _get_periodic_neighbor_list(self, cutoff, undirected=False):
+    def _get_periodic_neighbor_list(self,
+                                    cutoff,
+                                    undirected=False,
+                                    offset_key='offsets',
+                                    nbr_key='nbr_list'):
         from nff.io.ase import AtomsBatch
 
         nbrlist = []
@@ -253,8 +261,8 @@ class Dataset(TorchDataset):
             nbrlist.append(nbrs)
             offsets.append(offs)
 
-        self.props['nbr_list'] = nbrlist
-        self.props['offsets'] = offsets
+        self.props[nbr_key] = nbrlist
+        self.props[offset_key] = offsets
         return
 
     def generate_bond_idx(self, num_procs=1):

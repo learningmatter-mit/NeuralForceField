@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.nn.functional import softplus
 from nff.nn.layers import PreActivation, Dense, zeros_initializer
 from nff.utils.tools import layer_types, make_undirected
 from nff.utils.scatter import scatter_add, compute_grad
@@ -13,6 +14,12 @@ DEFAULT_ACTIVATION = 'learnable_swish'
 DEFAULT_MAX_Z = 86
 DEFAULT_DROPOUT = 0
 DEFAULT_RES_LAYERS = 2
+
+
+ZBL = {"d": [0.8854 * BOHR_RADIUS],
+       "z_exp": [0.23],
+       "c": [0.1818, 0.5099, 0.2802, 0.02817],
+       "exponents": [3.2, 0.9423, 0.4028, 0.2016]}
 
 
 def timing(func):
@@ -207,6 +214,13 @@ class NuclearEmbedding(nn.Module):
 
     def forward(self, z):
         d_z = self.elec_config[z.long()].to(z.device)
+        if torch.isnan(d_z).any():
+            unique_z = torch.LongTensor(list(set(z.detach()
+                                                 .long().tolist())))
+            missing = (unique_z[self.elec_config[unique_z]
+                                .isnan()[:, 0]].reshape(-1).tolist())
+            msg = f"Missing elements {missing} from elec_config.json"
+            raise Exception(msg)
         tilde_e_z = self.z_embed(z.long())
         e_z = self.m_mat(d_z) + tilde_e_z
 
@@ -253,8 +267,12 @@ class ElectronicEmbedding(nn.Module):
             # mol_q has dimension atoms_in_mol x F
             # k has dimension F x 1
             arg = (torch.einsum('ij, jk -> i', mol_q, k)
-                   / self.feat_dim ** 0.5)
-            num = torch.log(1 + torch.exp(arg))
+                   / self.feat_dim ** 0.5).reshape(-1, 1)
+            zero = torch.zeros_like(arg)
+            num = torch.logsumexp(
+                torch.cat([zero, arg], dim=-1),
+                dim=1
+            )
             denom = num.sum()
 
             # dimension atoms_in_mol
@@ -320,8 +338,16 @@ class GBlock(nn.Module):
         self.l = l
         self.r_cut = r_cut
         self.bern_k = bern_k
-        self.gamma = nn.Parameter(torch.Tensor([gamma]))
+        self.gamma_inv = nn.Parameter(
+            torch.log(
+                torch.exp(torch.Tensor([gamma])) - 1
+            )
+        )
         self.y_lm_fn = make_y_lm(l)
+
+    @property
+    def gamma(self):
+        return softplus(self.gamma_inv)
 
     def forward(self, r_ij):
 
@@ -334,8 +360,7 @@ class GBlock(nn.Module):
         y = torch.stack([self.y_lm_fn(r_ij, r, self.l, m) for m in
                          m_vals]).transpose(0, 1)
 
-        gamma = self.gamma.clamp(0)
-        rho = rho_k(r, self.r_cut, self.bern_k, gamma)
+        rho = rho_k(r, self.r_cut, self.bern_k, self.gamma)
         g = torch.ones(n_pairs,
                        self.bern_k,
                        len(m_vals),
@@ -457,9 +482,9 @@ class LocalInteraction(nn.Module):
     def forward(self,
                 xyz,
                 x_tilde,
-                nbrs):
+                nbrs,
+                r_ij):
 
-        r_ij = xyz[nbrs[:, 1]] - xyz[nbrs[:, 0]]
         # dimension N_nbrs x F
         # x_j = x_tilde[nbrs[:, 1]]
         graph_size = xyz.shape[0]
@@ -495,6 +520,7 @@ class LocalInteraction(nn.Module):
 class NonLocalInteraction(nn.Module):
     def __init__(self,
                  feat_dim,
+                 nb_features=None,
                  activation=DEFAULT_ACTIVATION,
                  dropout=DEFAULT_DROPOUT,
                  residual_layers=DEFAULT_RES_LAYERS):
@@ -506,8 +532,11 @@ class NonLocalInteraction(nn.Module):
         # no redraw should happen here - only if
         # you call self attention of cross attention
         # as wrappers
+
+        if nb_features is None:
+            nb_features = 20 * feat_dim
         self.attn = FastAttention(dim_heads=feat_dim,
-                                  nb_features=feat_dim,
+                                  nb_features=nb_features,
                                   causal=False)
         self.feat_dim = feat_dim
 
@@ -563,26 +592,64 @@ class NonLocalInteraction(nn.Module):
         # x_tilde has dimension N x F
         # N = number of nodes, F = feature dimension
 
+        # import numpy as np
+
         Q = self.resmlp_q(x_tilde)
         K = self.resmlp_k(x_tilde)
-        V = self.resmlp_v(x_tilde)
+        V = self.resmlp_v(x_tilde)  # * self.feat_dim ** 0.5
+
+        # num_samples = Q.shape[0]
+        # feat_dim = self.feat_dim
+
+        # new_Q = torch.rand(num_samples, feat_dim).to(Q.device)
+        # new_K = torch.rand(num_samples, feat_dim).to(Q.device)
+        # new_V = torch.rand(num_samples, feat_dim).to(Q.device)
+
+        # import pdb
+        # pdb.set_trace()
+
+        # print(new_Q.mean(), Q.mean())
+        # print(new_Q.std(), Q.std())
 
         if not isinstance(num_atoms, list):
             num_atoms = num_atoms.tolist()
 
         if len(list(set(num_atoms))) == 1:
-            q_pad = torch.stack(torch.split(Q, num_atoms))
-            k_pad = torch.stack(torch.split(K, num_atoms))
-            v_pad = torch.stack(torch.split(V, num_atoms))
+            pads = [torch.stack(torch.split(i, num_atoms))
+                    for i in [Q, K, V]]
+            q_pad, k_pad, v_pad = pads
         else:
             q_pad, k_pad, v_pad = self.pad(Q=Q,
                                            K=K,
                                            V=V,
                                            num_atoms=num_atoms)
+
         att = self.attn(q_pad.unsqueeze(0),
                         k_pad.unsqueeze(0),
-                        v_pad.unsqueeze(0)).squeeze(0)
+                        v_pad.unsqueeze(0)
+                        ).squeeze(0)
+
         att = torch.cat([i[:n] for i, n in zip(att, num_atoms)])
+
+        # # # import pdb
+        # # # pdb.set_trace()
+
+        # base_att = []
+        # for i, q in enumerate(q_pad):
+        #     k = k_pad[i].detach()[:num_atoms[i]]
+        #     v = v_pad[i].detach()[:num_atoms[i]]
+        #     q = q[:num_atoms[i]]
+
+        #     A = torch.exp(torch.matmul(q.detach(),
+        #                                k.transpose(0, 1))
+        #                   / self.feat_dim ** 0.5)
+        #     ones = torch.ones(q.shape[0]).to(q.device)
+        #     D_inv = torch.diag(1 / torch.matmul(A, ones))
+        #     this_att = torch.matmul(D_inv, torch.matmul(A, v))
+        #     base_att.append(this_att)
+        # att = torch.cat(base_att)
+
+        # print(abs(base_att - att).mean() / abs(att).mean() * 100)
 
         return att
 
@@ -594,6 +661,7 @@ class InteractionBlock(nn.Module):
                  gamma,
                  bern_k,
                  l_max=2,
+                 fast_feats=None,
                  activation=DEFAULT_ACTIVATION,
                  dropout=DEFAULT_DROPOUT,
                  max_z=DEFAULT_MAX_Z,
@@ -622,18 +690,21 @@ class InteractionBlock(nn.Module):
                                       l_max=l_max)
         self.non_local = NonLocalInteraction(feat_dim=feat_dim,
                                              activation=activation,
-                                             dropout=dropout)
+                                             dropout=dropout,
+                                             nb_features=fast_feats)
 
     def forward(self,
                 x,
                 xyz,
                 nbrs,
-                num_atoms):
+                num_atoms,
+                r_ij):
 
         x_tilde = self.residual_1(x)
         l = self.local(xyz=xyz,
                        x_tilde=x_tilde,
-                       nbrs=nbrs)
+                       nbrs=nbrs,
+                       r_ij=r_ij)
         n = self.non_local(x_tilde=x_tilde,
                            num_atoms=num_atoms)
         x_t = self.residual_2(x_tilde + l + n)
@@ -718,9 +789,11 @@ class Electrostatics(nn.Module):
                q,
                xyz,
                num_atoms,
-               mol_nbrs):
+               mol_nbrs,
+               mol_offsets):
 
-        r_ij = norm(xyz[mol_nbrs[:, 0]] - xyz[mol_nbrs[:, 1]])
+        r_ij = norm(xyz[mol_nbrs[:, 0]] - xyz[mol_nbrs[:, 1]]
+            - mol_offsets)
         q_i = q[mol_nbrs[:, 0]].reshape(-1)
         q_j = q[mol_nbrs[:, 1]].reshape(-1)
 
@@ -734,6 +807,34 @@ class Electrostatics(nn.Module):
                                    nbrs=mol_nbrs)
                   .reshape(-1, 1))
 
+        # first_test_en = pairwise[24 * 23 // 2: 24 * 23].sum()
+
+        # test_en = 0
+
+        # for i, q_i in enumerate(q[24: 48]):
+        #     for j, q_j in enumerate(q[24: 48]):
+        #         if i <= j:
+        #             continue
+
+        #         this_r_ij = norm(xyz[i + 24] - xyz[j + 24])
+        #         arg_0 = (self.f_switch(this_r_ij)
+        #                  / (this_r_ij ** 2 + BOHR_RADIUS ** 2) ** 0.5)
+        #         arg_1 = (1 - self.f_switch(this_r_ij)) / this_r_ij
+        #         this_en = KE_KCAL * q_i * q_j * (arg_0 + arg_1)
+        #         test_en += this_en
+
+        # test_grad = compute_grad(xyz, test_en)[24: 48].detach()
+        # real_grad = compute_grad(xyz, energy)[24: 48].detach()
+
+        # import pdb
+        # pdb.set_trace()
+
+        # print(energy[1])
+        # print(first_test_en)
+        # print(test_en)
+        # print(test_grad)
+        # print(real_grad)
+
         return energy
 
     def forward(self,
@@ -742,7 +843,8 @@ class Electrostatics(nn.Module):
                 xyz,
                 total_charge,
                 num_atoms,
-                mol_nbrs):
+                mol_nbrs,
+                mol_offsets):
 
         q = self.get_charge(f=f,
                             z=z,
@@ -751,7 +853,8 @@ class Electrostatics(nn.Module):
         energy = self.get_en(q=q,
                              xyz=xyz,
                              num_atoms=num_atoms,
-                             mol_nbrs=mol_nbrs)
+                             mol_nbrs=mol_nbrs,
+                             mol_offsets=mol_offsets)
 
         return energy, q
 
@@ -760,31 +863,41 @@ class NuclearRepulsion(nn.Module):
     def __init__(self, r_cut):
         super().__init__()
         self.r_cut = r_cut
-        self.d = torch.Tensor([0.8853 * BOHR_RADIUS])
-        self.z_exp = torch.Tensor([0.23])
-        self.c = torch.Tensor([0.1818, 0.5099, 0.2802, 0.02817])
-        self.exponents = torch.Tensor([3.2, 0.9423, 0.4029, 0.2016])
 
-        for key in ["d", "z_exp", "c", "exponents"]:
-            val = getattr(self, key)
-            new_val = nn.Parameter(val.reshape(-1, 1))
-            setattr(self, key, new_val)
+        for key, val in ZBL.items():
+            # compute inverse softplus
+            val = torch.Tensor(val)
+            inv_val = nn.Parameter(torch.log(torch.exp(val) - 1)
+                                   .reshape(-1, 1))
+
+            setattr(self, key + "_inv", inv_val)
+
+    @property
+    def d(self):
+        return softplus(self.d_inv)
+
+    @property
+    def z_exp(self):
+        return softplus(self.z_exp_inv)
+
+    @property
+    def exponents(self):
+        return softplus(self.exponents_inv)
+
+    @property
+    def c(self):
+        return softplus(self.c_inv)
 
     def zbl_phi(self,
                 r_ij,
                 z_i,
                 z_j):
 
-        d = self.d.clamp(0)
-        z_exp = self.z_exp.clamp(0)
-        c = self.c.clamp(0)
-        exponents = self.exponents.clamp(0)
-
-        a = ((d / (z_i ** z_exp + z_j ** z_exp))
+        a = ((self.d / (z_i ** self.z_exp + z_j ** self.z_exp))
              .reshape(-1))
 
-        out = (c * torch.exp(-exponents * r_ij.reshape(-1) / a)
-               ).sum(0) / c.sum()
+        out = (self.c * torch.exp(-self.exponents * r_ij.reshape(-1) / a)
+               ).sum(0) / self.c.sum()
 
         return out
 
@@ -792,12 +905,14 @@ class NuclearRepulsion(nn.Module):
                 xyz,
                 z,
                 nbrs,
-                num_atoms):
+                num_atoms,
+                offsets):
 
         undirec = make_undirected(nbrs)
         z_i = z[undirec[:, 0]].to(torch.float32)
         z_j = z[undirec[:, 1]].to(torch.float32)
-        r_ij = norm(xyz[undirec[:, 0]] - xyz[undirec[:, 1]])
+        r_ij = norm(xyz[undirec[:, 0]] - xyz[undirec[:, 1]]
+            - offsets)
 
         phi = self.zbl_phi(r_ij=r_ij,
                            z_i=z_i,
