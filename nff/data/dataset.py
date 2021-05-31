@@ -17,9 +17,10 @@ from nff.data.parallel import (featurize_parallel, NUM_PROCS,
 from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
 from nff.data.features import add_morgan as external_morgan
 from nff.data.features import featurize_rdkit as external_rdkit
-from nff.data.graphs import (get_bond_idx, reconstruct_atoms, get_neighbor_list, generate_subgraphs,
-                             DISTANCETHRESHOLDICT_Z, get_angle_list, add_ji_kj,
-                             make_dset_directed)
+from nff.data.graphs import (get_bond_idx, reconstruct_atoms,
+                             get_neighbor_list,  generate_subgraphs,
+                             DISTANCETHRESHOLDICT_Z, get_angle_list,
+                             add_ji_kj, make_dset_directed)
 
 
 class Dataset(TorchDataset):
@@ -245,6 +246,7 @@ class Dataset(TorchDataset):
                                     undirected=False,
                                     offset_key='offsets',
                                     nbr_key='nbr_list'):
+
         from nff.io.ase import AtomsBatch
 
         nbrlist = []
@@ -255,7 +257,8 @@ class Dataset(TorchDataset):
                 positions=nxyz[:, 1:],
                 cell=lattice,
                 pbc=True,
-                cutoff=cutoff
+                cutoff=cutoff,
+                directed=(not undirected)
             )
             nbrs, offs = atoms.update_nbr_list()
             nbrlist.append(nbrs)
@@ -482,13 +485,10 @@ class Dataset(TorchDataset):
     def gen_bond_prior(self, cutoff, bond_len_dict=None):
         from nff.io.ase import AtomsBatch
 
-        from nff.io.ase import AtomsBatch
-
         if not self.props:
             raise TypeError("the dataset has no data yet")
 
         bond_dict = {}
-        bond_count_dict = {}
         mol_idx_dict = {}
 
         #---------This part can be simplified---------#
@@ -496,11 +496,13 @@ class Dataset(TorchDataset):
             z = self.props['nxyz'][i][:, 0]
             xyz = self.props['nxyz'][i][:, 1:4]
 
-            # generate arguments for ase Atoms boject
+            # generate arguments for ase Atoms object
+            cell = self.props['cell'][i] if 'cell' in self.props.keys(
+            ) else None
             ase_param = {"numbers": z,
                          "positions": xyz,
                          "pbc": True,
-                         "cell": self.props['cell'][i] if 'cell' in self.props.keys() else None}
+                         "cell": cell}
 
             atoms = Atoms(**ase_param)
             sys_name = self.props['smiles'][i]
@@ -545,11 +547,13 @@ class Dataset(TorchDataset):
             all_bond_len.append(torch.Tensor(bond_len_list).reshape(-1, 1))
 
             # update offsets
+            cell = self.props['cell'][i] if 'cell' in self.props.keys(
+            ) else None,
             ase_param = {"numbers": z,
                          "positions": xyz,
                          "pbc": True,
                          "cutoff": cutoff,
-                         "cell": self.props['cell'][i] if 'cell' in self.props.keys() else None,
+                         "cell": cell,
                          "nbr_torch": False}
 
             # the coordinates have been unwrapped and try to results offsets
