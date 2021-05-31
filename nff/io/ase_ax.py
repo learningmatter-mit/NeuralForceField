@@ -1,11 +1,7 @@
-import os
 import numpy as np
 import torch
-import pdb
 
 from ase import Atoms
-# from ase.neighborlist import neighbor_list
-
 from ase.calculators.calculator import Calculator, all_changes
 
 import nff.utils.constants as const
@@ -13,12 +9,22 @@ from nff.train import load_model
 from nff.data.sparse import sparsify_array
 from nff.data import Dataset
 from nff.nn.utils import torch_nbr_list
+from nff.nn.models.schnet import SchNet, SchNetDiabat
+from nff.nn.models.hybridgraph import HybridGraphConv
+from nff.nn.models.schnet_features import SchNetFeatures
+from nff.nn.models.cp3d import OnlyBondUpdateCP3D
 
 
 DEFAULT_CUTOFF = 5.0
 DEFAULT_DIRECTED = False
 CONVERSION_DIC = {"ev": 1 / const.EV_TO_KCAL_MOL,
                   "au":  const.KCAL_TO_AU["energy"]}
+
+UNDIRECTED = [SchNet,
+              SchNetDiabat,
+              HybridGraphConv,
+              SchNetFeatures,
+              OnlyBondUpdateCP3D]
 
 
 class AtomsBatch(Atoms):
@@ -242,6 +248,9 @@ class NeuralFF(Calculator):
             properties (list of str): 'energy', 'forces' or both
             system_changes (default from ase)
         """
+
+        if not any([isinstance(self.model, i) for i in UNDIRECTED]):
+            assert (not atomsbatch.undirected)
 
         Calculator.calculate(self, atomsbatch, properties, system_changes)
 

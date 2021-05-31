@@ -15,8 +15,18 @@ from nff.train.builders.model import load_model
 from nff.utils.geom import compute_distances
 from nff.data import Dataset
 
+from nff.nn.models.schnet import SchNet, SchNetDiabat
+from nff.nn.models.hybridgraph import HybridGraphConv
+from nff.nn.models.schnet_features import SchNetFeatures
+from nff.nn.models.cp3d import OnlyBondUpdateCP3D
+
 DEFAULT_CUTOFF = 5.0
 DEFAULT_DIRECTED = False
+UNDIRECTED = [SchNet,
+              SchNetDiabat,
+              HybridGraphConv,
+              SchNetFeatures,
+              OnlyBondUpdateCP3D]
 
 
 class AtomsBatch(Atoms):
@@ -337,7 +347,7 @@ class NeuralFF(Calculator):
         self.device = device
         self.model.to(device)
 
-    def _calculate(
+    def calculate(
         self,
         atoms=None,
         properties=['energy', 'forces'],
@@ -353,6 +363,8 @@ class NeuralFF(Calculator):
             system_changes (default from ase)
         """
 
+        if not any([isinstance(self.model, i) for i in UNDIRECTED]):
+            assert (not atoms.directed)
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # run model
@@ -379,12 +391,6 @@ class NeuralFF(Calculator):
 
         if 'forces' in properties:
             self.results['forces'] = -energy_grad.reshape(-1, 3)
-
-    def calculate(self,
-                  *args,
-                  **kwargs):
-
-        return self._calculate(*args, **kwargs)
 
     @classmethod
     def from_file(
@@ -448,6 +454,10 @@ class EnsembleNFF(Calculator):
             properties (list of str): 'energy', 'forces' or both
             system_changes (default from ase)
         """
+
+        for model in self.models:
+            if not any([isinstance(model, i) for i in UNDIRECTED]):
+                assert (not atoms.directed)
 
         Calculator.calculate(self, atoms, properties, system_changes)
 
@@ -534,12 +544,14 @@ class NeuralMetadynamics(NeuralFF):
                  old_atoms=None,
                  device='cpu',
                  en_key='energy',
+                 directed=DEFAULT_DIRECTED,
                  **kwargs):
 
         NeuralFF.__init__(self,
                           model=model,
                           device=device,
                           en_key=en_key,
+                          directed=DEFAULT_DIRECTED,
                           **kwargs)
 
         self.pushing_params = pushing_params
@@ -661,9 +673,12 @@ class NeuralMetadynamics(NeuralFF):
                   system_changes=all_changes,
                   add_steps=True):
 
-        self._calculate(atoms=atoms,
-                        properties=properties,
-                        system_changes=system_changes)
+        if not any([isinstance(self.model, i) for i in UNDIRECTED]):
+            assert (not atoms.directed)
+
+        super().calculate(atoms=atoms,
+                          properties=properties,
+                          system_changes=system_changes)
 
         # Add metadynamics forces
         # Leave the energy as it is because we don't need
