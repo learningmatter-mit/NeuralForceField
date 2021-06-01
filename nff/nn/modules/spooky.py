@@ -215,10 +215,10 @@ class NuclearEmbedding(nn.Module):
     def forward(self, z):
         d_z = self.elec_config[z.long()].to(z.device)
         if torch.isnan(d_z).any():
-            unique_z = torch.LongTensor(list(set(z.detach()
-                                                 .long().tolist())))
-            missing = (unique_z[self.elec_config[unique_z]
-                                .isnan()[:, 0]].reshape(-1).tolist())
+            z_list = z.detach().long().tolist()
+            unique_z = torch.LongTensor(list(set(z_list)))
+            nan_idx = self.elec_config[unique_z].isnan()[:, 0]
+            missing = unique_z[nan_idx].reshape(-1).tolist()
             msg = f"Missing elements {missing} from elec_config.json"
             raise Exception(msg)
         tilde_e_z = self.z_embed(z.long())
