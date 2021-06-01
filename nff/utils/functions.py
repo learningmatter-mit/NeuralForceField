@@ -1,8 +1,9 @@
 """
-Special functions for DimeNet.
-Taken directly from https://github.com/klicperajo/
-                    dimenet/blob/master/dimenet/model/
-                    layers/basis_utils.py 
+Special functions for DimeNet and SpookyNet.
+Dimenet functions taken directly from 
+https://github.com/klicperajo/
+dimenet/blob/master/dimenet/model/
+layers/basis_utils.py.
 """
 
 import numpy as np
@@ -16,6 +17,8 @@ import math
 
 EPS = 1e-15
 
+
+# DimeNet
 
 def Jn(r, n):
     """
@@ -173,10 +176,7 @@ def real_sph_harm(l,
     return Y_func_l_m
 
 
-"""
-Real spherical harmonics implemented for spookynet
-"""
-
+# SpookyNet
 
 def A_m(x, y, m):
     device = x.device
@@ -309,10 +309,6 @@ def spooky_f_cut(r, r_cut):
         torch.Tensor([0]).to(r.device)
     )
 
-    # output = 0.5 * (torch.cos((np.pi * r / r_cut)) + 1)
-    # exclude = r >= r_cut
-    # output[exclude] = 0
-
     return output
 
 
@@ -344,6 +340,7 @@ def get_g_func(l,
                bern_k,
                gamma,
                y_lm_fn):
+
     def fn(r_ij):
 
         r = norm(r_ij).reshape(-1, 1)

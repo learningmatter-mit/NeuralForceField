@@ -101,8 +101,6 @@ class SpookyNet(nn.Module):
                     mol_offsets,
                     mol_nbrs):
 
-
-
         results = {}
         for key in self.output_keys:
             atomwise_readout = self.atomwise_readout[key]
