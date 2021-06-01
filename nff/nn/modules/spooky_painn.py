@@ -447,6 +447,10 @@ class Electrostatics(nn.Module):
                 mol_nbrs,
                 mol_offsets):
 
+        idx = (mol_nbrs[:, 1] > mol_nbrs[:, 0])
+        mol_nbrs = mol_nbrs[idx]
+        mol_offsets = mol_offsets[idx]
+
         q, dip_atom, full_dip = self.charge_and_dip(xyz=xyz,
                                                     s_i=s_i,
                                                     v_i=v_i,

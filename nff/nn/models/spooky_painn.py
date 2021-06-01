@@ -13,7 +13,7 @@ from nff.nn.modules.painn import MessageBlock as PainnMessage
 from nff.nn.modules.spooky import NuclearRepulsion
 from nff.nn.modules.diabat import DiabaticReadout
 from nff.nn.layers import Diagonalize
-from nff.utils.tools import make_directed, make_undirected
+from nff.utils.tools import make_directed
 from nff.utils.scatter import compute_grad
 
 from nff.nn.modules.schnet import (AttentionPool, SumPool, MolFpPool,
@@ -187,8 +187,10 @@ class SpookyPainn(Painn):
 
         electrostatics = getattr(self, "electrostatics", {})
         nuc_repulsion = getattr(self, "nuc_repulsion", {})
-        mol_offsets = get_offsets(batch, 'mol_offsets')
         offsets = get_offsets(batch, 'offsets')
+
+        mol_nbrs = batch['mol_nbrs']
+        mol_offsets = get_offsets(batch, 'mol_offsets')
 
         for key in self.output_keys:
             if key in electrostatics:
@@ -198,7 +200,6 @@ class SpookyPainn(Painn):
                 # electrostatics and don't want to store
                 # this big neighbor list in the dataset
 
-                mol_nbrs, _ = make_undirected(batch['mol_nbrs'])
                 elec_e, q, dip_atom, full_dip = elec_module(
                     s_i=s_i,
                     v_i=v_i,
