@@ -260,8 +260,6 @@ class Dataset(TorchDataset):
                 cutoff=cutoff,
                 directed=(not undirected)
             )
-            import pdb
-            pdb.set_trace()
             nbrs, offs = atoms.update_nbr_list()
             nbrlist.append(nbrs)
             offsets.append(offs)

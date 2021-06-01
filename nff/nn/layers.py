@@ -192,12 +192,11 @@ class PreActivation(nn.Linear):
         """
 
         weights = self.weight.to(inputs.device)
-        # y = self.activation(inputs)
-        # y = torch.einsum('ij,kj->ki', weights, y)
-        y = inputs
+        y = self.activation(inputs)
+        y = torch.einsum('ij,kj->ki', weights, y)
 
-        # if self.bias is not None:
-        #     y = y + self.bias.to(y.device)
+        if self.bias is not None:
+            y = y + self.bias.to(y.device)
 
         if hasattr(self, "dropout"):
             y = self.dropout(y)

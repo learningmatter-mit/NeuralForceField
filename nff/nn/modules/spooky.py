@@ -713,9 +713,6 @@ class InteractionBlock(nn.Module):
                        r_ij=r_ij)
         n = self.non_local(x_tilde=x_tilde,
                            num_atoms=num_atoms)
-        # getting rid of the local interaction
-        # makes it stable because it can't
-        # learn or fit anything (and doesn't change)
         x_t = self.residual_2(x_tilde + l + n)
         y_t = self.resmlp(x_t)
 

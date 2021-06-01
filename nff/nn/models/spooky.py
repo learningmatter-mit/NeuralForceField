@@ -158,9 +158,6 @@ class SpookyNet(nn.Module):
                                 output=results[base_key])
             results[key] = grad
 
-            # import pdb
-            # pdb.set_trace()
-
         return results
 
     def fwd(self,
@@ -190,7 +187,7 @@ class SpookyNet(nn.Module):
         r_ij = get_rij(xyz=xyz,
                        batch=batch,
                        nbrs=nbrs)
-        f = 0
+        f = torch.zeros_like(x)
 
         for i, interaction in enumerate(self.interactions):
             x, y_t = interaction(x=x,
@@ -200,8 +197,6 @@ class SpookyNet(nn.Module):
                                  r_ij=r_ij)
             f = f + y_t
 
-        # f = x * xyz[:, 0].reshape(-1, 1)
-
         results = self.get_results(z=z,
                                    f=f,
                                    num_atoms=num_atoms,
@@ -210,10 +205,6 @@ class SpookyNet(nn.Module):
                                    mol_nbrs=mol_nbrs,
                                    nbrs=nbrs,
                                    batch=batch)
-
-        # import pdb
-        # pdb.set_trace()
-        # print(compute_grad(xyz, f))
 
         results = self.add_grad(xyz=xyz,
                                 grad_keys=grad_keys,
