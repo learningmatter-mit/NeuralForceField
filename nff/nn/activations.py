@@ -50,7 +50,6 @@ class LearnableSwish(torch.nn.Module):
         device = x.device
         alpha = self.alpha.to(device)
         beta = self.beta.to(device)
-        output = alpha / beta * torch.sigmoid(beta * x)
+        output = alpha / beta * F.silu(beta * x)
 
         return output
-
