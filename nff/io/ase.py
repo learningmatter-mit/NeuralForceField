@@ -138,10 +138,59 @@ class AtomsBatch(Atoms):
 
         return nbr_list, offsets
 
-    def batch_properties():
-        pass
+    def batch_update_nbr_list(self):
 
-    def batch_kinetic_energy():
+        Atoms_list = self.get_list_atoms()
+
+        ensemble_nbr_list = []
+        ensemble_offsets_list = []
+        for i, atoms in enumerate(Atoms_list):
+            # TODO: offsets is not updated here .....
+            edge_from, edge_to, offsets = torch_nbr_list(atoms, self.cutoff, device=self.device)
+            nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
+            offsets = torch.Tensor(offsets)[nbr_list[:, 1] > nbr_list[:, 0]]
+            nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
+            ensemble_nbr_list.append(
+                self.props['num_atoms'][: i].sum() + nbr_list)
+            ensemble_offsets_list.append(offsets)
+
+        ensemble_nbr_list = torch.cat(ensemble_nbr_list)
+        ensemble_offsets_list = torch.cat(ensemble_offsets_list)
+        self.nbr_list = ensemble_nbr_list
+        self.offsets = ensemble_offsets_list
+
+        return ensemble_nbr_list, ensemble_offsets_list
+    
+    def get_batch_energies(self):
+        
+        if self._calc is None:
+            raise RuntimeError('Atoms object has no calculator.')
+            
+        if hasattr(self._calc, 'get_potential_energies') is False:
+            raise RuntimeError('The calculator for atomwise energies is not implemented')
+            
+        energies = self.get_potential_energies()
+        
+        batched_energies = split_and_sum(torch.Tensor(self.get_potential_energies()),
+                                         self.props['num_atoms'].tolist())
+        
+        return batched_energies.detach().cpu().numpy()
+
+    def get_batch_kinetic_energy(self):
+
+        if self.get_momenta() is not np.zeros(self.get_momenta().shape):
+            atomwise_ke = torch.Tensor(0.5 * self.get_momenta() * self.get_velocities()).sum(-1)
+            batch_ke = split_and_sum(atomwise_ke, self.props['num_atoms'].tolist())
+            return batch_ke.detach().cpu().numpy()
+        
+        else:
+            print("No momenta are set for atoms")
+
+    def get_batch_T(self):
+    
+        return self.get_batch_KE() / (1.5 * units.kB * self.props['num_atoms'].detach().cpu().numpy() )
+
+    def batch_properties():
         pass
 
     def batch_virial():
