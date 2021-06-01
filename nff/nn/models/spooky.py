@@ -186,7 +186,7 @@ class SpookyNet(nn.Module):
                            z=z,
                            num_atoms=num_atoms)
 
-        # # get r_ij including offsets
+        # get r_ij including offsets
         r_ij = get_rij(xyz=xyz,
                        batch=batch,
                        nbrs=nbrs)
