@@ -183,23 +183,16 @@ class SpookyPainn(Painn):
                  charge,
                  nbrs,
                  num_atoms,
-                 batch):
+                 offsets,
+                 mol_offsets,
+                 mol_nbrs):
 
         electrostatics = getattr(self, "electrostatics", {})
         nuc_repulsion = getattr(self, "nuc_repulsion", {})
-        offsets = get_offsets(batch, 'offsets')
-
-        mol_nbrs = batch['mol_nbrs']
-        mol_offsets = get_offsets(batch, 'mol_offsets')
 
         for key in self.output_keys:
             if key in electrostatics:
                 elec_module = self.electrostatics[key]
-
-                # put this here in case you're not doing
-                # electrostatics and don't want to store
-                # this big neighbor list in the dataset
-
                 elec_e, q, dip_atom, full_dip = elec_module(
                     s_i=s_i,
                     v_i=v_i,
@@ -239,6 +232,10 @@ class SpookyPainn(Painn):
              s_i,
              v_i):
 
+        offsets = get_offsets(batch, 'offsets')
+        mol_offsets = get_offsets(batch, 'mol_offsets')
+        mol_nbrs = batch.get('mol_nbrs')
+
         if not hasattr(self, "output_keys"):
             self.output_keys = list(self.readout_blocks[0]
                                     .readoutdict.keys())
@@ -264,7 +261,9 @@ class SpookyPainn(Painn):
                       charge=batch['charge'],
                       nbrs=nbrs,
                       num_atoms=num_atoms,
-                      batch=batch)
+                      offsets=offsets,
+                      mol_offsets=mol_offsets,
+                      mol_nbrs=mol_nbrs)
 
         for key in self.grad_keys:
             output = all_results[key.replace("_grad", "")]

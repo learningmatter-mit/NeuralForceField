@@ -97,11 +97,11 @@ class SpookyNet(nn.Module):
                     xyz,
                     charge,
                     nbrs,
-                    batch):
+                    offsets,
+                    mol_offsets,
+                    mol_nbrs):
 
-        offsets = get_offsets(batch, 'offsets')
-        mol_offsets = get_offsets(batch, 'mol_offsets')
-        mol_nbrs = batch['mol_nbrs']
+
 
         results = {}
         for key in self.output_keys:
@@ -177,6 +177,9 @@ class SpookyNet(nn.Module):
         charge = batch['charge']
         spin = batch['spin']
         num_atoms = batch['num_atoms']
+        offsets = get_offsets(batch, 'offsets')
+        mol_offsets = get_offsets(batch, 'mol_offsets')
+        mol_nbrs = batch.get('mol_nbrs')
 
         x = self.embedding(charge=charge,
                            spin=spin,
@@ -203,7 +206,9 @@ class SpookyNet(nn.Module):
                                    xyz=xyz,
                                    charge=charge,
                                    nbrs=nbrs,
-                                   batch=batch)
+                                   offsets=offsets,
+                                   mol_offsets=mol_offsets,
+                                   mol_nbrs=mol_nbrs)
 
         results = self.add_grad(xyz=xyz,
                                 grad_keys=grad_keys,
