@@ -826,13 +826,11 @@ class NuclearRepulsion(nn.Module):
     def __init__(self, r_cut):
         super().__init__()
         self.r_cut = r_cut
-
         for key, val in ZBL.items():
             # compute inverse softplus
             val = torch.Tensor(val)
             inv_val = nn.Parameter(torch.log(torch.exp(val) - 1)
                                    .reshape(-1, 1))
-
             setattr(self, key + "_inv", inv_val)
 
     @property
