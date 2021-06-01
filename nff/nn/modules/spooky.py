@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch.nn.functional import softplus
 from nff.nn.layers import PreActivation, Dense, zeros_initializer
-from nff.utils.tools import layer_types, make_undirected
+from nff.utils.tools import layer_types
 from nff.utils.scatter import scatter_add
 from nff.utils.constants import ELEC_CONFIG, KE_KCAL, BOHR_RADIUS
 from nff.utils import spooky_f_cut, make_y_lm, rho_k
@@ -221,6 +221,7 @@ class NuclearEmbedding(nn.Module):
             missing = unique_z[nan_idx].reshape(-1).tolist()
             msg = f"Missing elements {missing} from elec_config.json"
             raise Exception(msg)
+
         tilde_e_z = self.z_embed(z.long())
         e_z = self.m_mat(d_z) + tilde_e_z
 
@@ -804,6 +805,10 @@ class Electrostatics(nn.Module):
                 mol_nbrs,
                 mol_offsets):
 
+        idx = (mol_nbrs[:, 1] > mol_nbrs[:, 0])
+        mol_nbrs = mol_nbrs[idx]
+        mol_offsets = mol_offsets[idx]
+
         q = self.get_charge(f=f,
                             z=z,
                             total_charge=total_charge,
@@ -866,19 +871,15 @@ class NuclearRepulsion(nn.Module):
                 num_atoms,
                 offsets):
 
-        undirec = make_undirected(nbrs)
+        idx = (nbrs[:, 1] > nbrs[:, 0])
+        undirec = nbrs[idx]
+        undirec_offsets = offsets[idx]
+
         z_i = z[undirec[:, 0]].to(torch.float32)
         z_j = z[undirec[:, 1]].to(torch.float32)
 
-        zero_offsets = (offsets == 0).all().item()
-        if zero_offsets:
-            offsets = 0
-        else:
-            msg = ("Need to implement a way to get undirected "
-                   "offsets")
-            raise NotImplementedError(msg)
         r_ij = norm(xyz[undirec[:, 0]] - xyz[undirec[:, 1]]
-                    - offsets)
+                    - undirec_offsets)
 
         phi = self.zbl_phi(r_ij=r_ij,
                            z_i=z_i,

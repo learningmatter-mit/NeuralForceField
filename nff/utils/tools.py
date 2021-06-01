@@ -158,5 +158,12 @@ def make_directed(nbr_list):
     return new_nbrs, directed
 
 def make_undirected(nbr_list):
+    gtr_ij = (nbr_list[:, 0] > nbr_list[:, 1]).any().item()
+    gtr_ji = (nbr_list[:, 1] > nbr_list[:, 0]).any().item()
+    directed = gtr_ij and gtr_ji
+
+    if not directed:
+        return nbr_list, directed
     nbrs = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
-    return nbrs
+    
+    return nbrs, directed

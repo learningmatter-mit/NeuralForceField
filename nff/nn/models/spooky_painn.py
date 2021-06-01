@@ -198,7 +198,7 @@ class SpookyPainn(Painn):
                 # electrostatics and don't want to store
                 # this big neighbor list in the dataset
 
-                mol_nbrs = make_undirected(batch['mol_nbrs'])
+                mol_nbrs, _ = make_undirected(batch['mol_nbrs'])
                 elec_e, q, dip_atom, full_dip = elec_module(
                     s_i=s_i,
                     v_i=v_i,
@@ -401,7 +401,7 @@ class SpookyPainnDiabat(SpookyPainn):
                 total_charge = self.get_diabat_charge(key=key,
                                                       charge=charge)
 
-                mol_nbrs = make_undirected(batch['mol_nbrs'])
+                mol_nbrs, _ = make_undirected(batch['mol_nbrs'])
                 elec_e, q, dip_atom, full_dip = elec_module(
                     s_i=s_i,
                     v_i=v_i,

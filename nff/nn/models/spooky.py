@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from nff.utils.scatter import compute_grad
-from nff.utils.tools import make_directed, make_undirected
+from nff.utils.tools import make_directed
 from nff.nn.modules.spooky import (DEFAULT_DROPOUT, DEFAULT_ACTIVATION,
                                    DEFAULT_MAX_Z, DEFAULT_RES_LAYERS,
                                    CombinedEmbedding, InteractionBlock,
@@ -96,12 +96,13 @@ class SpookyNet(nn.Module):
                     num_atoms,
                     xyz,
                     charge,
-                    mol_nbrs,
                     nbrs,
                     batch):
 
-        mol_offsets = get_offsets(batch, 'mol_offsets')
         offsets = get_offsets(batch, 'offsets')
+        mol_offsets = get_offsets(batch, 'mol_offsets')
+        mol_nbrs = batch['mol_nbrs']
+
         results = {}
         for key in self.output_keys:
             atomwise_readout = self.atomwise_readout[key]
@@ -167,7 +168,6 @@ class SpookyNet(nn.Module):
 
         nxyz = batch['nxyz']
         nbrs, _ = make_directed(batch['nbr_list'])
-        mol_nbrs = make_undirected(batch['mol_nbrs'])
 
         z = nxyz[:, 0].long()
         if xyz is None:
@@ -202,7 +202,6 @@ class SpookyNet(nn.Module):
                                    num_atoms=num_atoms,
                                    xyz=xyz,
                                    charge=charge,
-                                   mol_nbrs=mol_nbrs,
                                    nbrs=nbrs,
                                    batch=batch)
 
