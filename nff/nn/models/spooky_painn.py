@@ -78,7 +78,8 @@ class SpookyPainn(Painn):
                        n_rbf=n_rbf,
                        cutoff=cutoff,
                        learnable_k=learnable_k,
-                       dropout=conv_dropout)
+                       dropout=conv_dropout,
+                       fast_feats=modelparams.get("fast_feats"))
              for _ in range(num_conv)]
         )
 

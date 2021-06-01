@@ -428,6 +428,7 @@ class LocalInteraction(nn.Module):
         g_func = getattr(self, f"g_{l}")
         g = g_func(r_ij, r)
         G = getattr(self, f"G_{l}")
+
         # g: N_nbrs x K x (1, 3, or 5)
         # G: F x K
         # output: N_nbrs x F x (1, 3, or 5)
@@ -445,7 +446,6 @@ class LocalInteraction(nn.Module):
 
         res_block = getattr(self, f"resmlp_{l}")
         n_nbrs = nbrs.shape[0]
-
         matmul = self.g_matmul(r_ij=r_ij,
                                l=l,
                                r=r)
@@ -539,7 +539,7 @@ class NonLocalInteraction(nn.Module):
         # as wrappers
 
         if nb_features is None:
-            nb_features = 20 * feat_dim
+            nb_features = feat_dim
         self.attn = FastAttention(dim_heads=feat_dim,
                                   nb_features=nb_features,
                                   causal=False)
