@@ -69,6 +69,7 @@ class SpookyNet(nn.Module):
                              fast_feats=modelparams.get("fast_feats"))
             for _ in range(modelparams['num_conv'])
         ])
+
         self.atomwise_readout = nn.ModuleDict({
             key: AtomwiseReadout(feat_dim=feat_dim)
             for key in self.output_keys
@@ -157,6 +158,9 @@ class SpookyNet(nn.Module):
                                 output=results[base_key])
             results[key] = grad
 
+            # import pdb
+            # pdb.set_trace()
+
         return results
 
     def fwd(self,
@@ -182,18 +186,21 @@ class SpookyNet(nn.Module):
                            z=z,
                            num_atoms=num_atoms)
 
-        f = torch.zeros_like(x)
-        # get r_ij including offsets
+        # # get r_ij including offsets
         r_ij = get_rij(xyz=xyz,
                        batch=batch,
                        nbrs=nbrs)
+        f = 0
+
         for i, interaction in enumerate(self.interactions):
             x, y_t = interaction(x=x,
                                  xyz=xyz,
                                  nbrs=nbrs,
                                  num_atoms=num_atoms,
                                  r_ij=r_ij)
-            f += y_t
+            f = f + y_t
+
+        # f = x * xyz[:, 0].reshape(-1, 1)
 
         results = self.get_results(z=z,
                                    f=f,
@@ -203,6 +210,10 @@ class SpookyNet(nn.Module):
                                    mol_nbrs=mol_nbrs,
                                    nbrs=nbrs,
                                    batch=batch)
+
+        # import pdb
+        # pdb.set_trace()
+        # print(compute_grad(xyz, f))
 
         results = self.add_grad(xyz=xyz,
                                 grad_keys=grad_keys,

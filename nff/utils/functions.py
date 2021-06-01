@@ -324,7 +324,6 @@ def b_k(x,
     binoms = (torch.Tensor([sp.binom(bern_k - 1, int(k))
                             for k in k_vals])
               .to(device))
-
     out = binoms * (x ** k_vals) * (1-x) ** (bern_k - 1 - k_vals)
     return out
 

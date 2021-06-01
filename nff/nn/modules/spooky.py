@@ -349,9 +349,10 @@ class GBlock(nn.Module):
     def gamma(self):
         return softplus(self.gamma_inv)
 
-    def forward(self, r_ij):
+    def forward(self,
+                r_ij,
+                r):
 
-        r = norm(r_ij).reshape(-1, 1)
         n_pairs = r_ij.shape[0]
         device = r_ij.device
 
@@ -420,10 +421,11 @@ class LocalInteraction(nn.Module):
 
     def g_matmul(self,
                  r_ij,
-                 l):
+                 l,
+                 r):
 
         g_func = getattr(self, f"g_{l}")
-        g = g_func(r_ij)
+        g = g_func(r_ij, r)
         G = getattr(self, f"G_{l}")
         # g: N_nbrs x K x (1, 3, or 5)
         # G: F x K
@@ -437,16 +439,18 @@ class LocalInteraction(nn.Module):
                    x_tilde,
                    nbrs,
                    graph_size,
-                   l):
+                   l,
+                   r):
 
         res_block = getattr(self, f"resmlp_{l}")
         n_nbrs = nbrs.shape[0]
 
-        matmul = self.g_matmul(r_ij, l)
+        matmul = self.g_matmul(r_ij=r_ij,
+                               l=l,
+                               r=r)
         resmlp = res_block(x_tilde)[nbrs[:, 1]]
         per_nbr = (resmlp.reshape(n_nbrs, -1, 1)
                    * matmul)
-
         out = scatter_add(src=per_nbr,
                           index=nbrs[:, 0],
                           dim=0,
@@ -492,8 +496,10 @@ class LocalInteraction(nn.Module):
         c_term = self.resmlp_c(x_tilde)
         quants = []
 
+        r = norm(r_ij).reshape(-1, 1)
         for l in self.l_vals:
             quant = self.make_quant(r_ij=r_ij,
+                                    r=r,
                                     x_tilde=x_tilde,
                                     nbrs=nbrs,
                                     graph_size=graph_size,
@@ -707,6 +713,9 @@ class InteractionBlock(nn.Module):
                        r_ij=r_ij)
         n = self.non_local(x_tilde=x_tilde,
                            num_atoms=num_atoms)
+        # getting rid of the local interaction
+        # makes it stable because it can't
+        # learn or fit anything (and doesn't change)
         x_t = self.residual_2(x_tilde + l + n)
         y_t = self.resmlp(x_t)
 
