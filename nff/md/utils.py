@@ -34,6 +34,9 @@ class NeuralMDLogger(MDLogger):
             dat = (t,)
         else:
             dat = ()
+        if not isinstance(epot, float):
+            ekin = ekin/len(epot)
+            epot = sum(epot)/len(epot)
         dat += (epot+ekin, epot, ekin, temp)
         if self.stress:
             dat += tuple(self.atoms.get_stress() / units.GPa)

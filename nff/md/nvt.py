@@ -295,9 +295,9 @@ class BatchNoseHoover(MolecularDynamics):
         # Initialize simulation parameters
 
         # Q is chosen to be 6 N kT
-        self.dt = timestep
+        self.dt = timestep * units.fs
         self.Natom = atoms.get_number_of_atoms()
-        self.T = temperature
+        self.T = temperature * units.kB
         self.targeEkin = 0.5 * (3.0 * self.Natom) * self.T
         self.ttime = ttime  # * units.fs
         
@@ -322,7 +322,7 @@ class BatchNoseHoover(MolecularDynamics):
 
     def step(self):
 
-        # get current acceleration and velocity:
+        # get current acceleration and velocity
         accel = self.atoms.get_forces() / self.atoms.get_masses().reshape(-1, 1)
         vel = self.atoms.get_velocities()
         

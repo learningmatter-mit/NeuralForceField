@@ -14,6 +14,7 @@ from nff.data.sparse import sparsify_array
 from nff.train.builders.model import load_model
 from nff.utils.geom import compute_distances
 from nff.data import Dataset
+from nff.nn.graphop import *
 
 from nff.nn.models.schnet import SchNet, SchNetDiabat
 from nff.nn.models.hybridgraph import HybridGraphConv
@@ -89,13 +90,17 @@ class AtomsBatch(Atoms):
                 'num_atoms', 'nbr_list' and 'offsets'
         """
         if self.nbr_list is None or self.offsets is None:
-            self.update_nbr_list()
+            if type(self.props['num_atoms'].tolist() ) == int:
+                self.update_nbr_list()
+            elif type(self.props['num_atoms'].tolist() ) == list:
+                self.batch_update_nbr_list()
+            else:
+                raise RuntimeError('num_atoms should be a torch Long Tensor')
+                
         self.props['nbr_list'] = self.nbr_list
         self.props['offsets'] = self.offsets
-
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
-        self.props['num_atoms'] = torch.LongTensor([len(self)])
-
+ 
         return self.props
 
     def update_nbr_list(self):
@@ -138,6 +143,26 @@ class AtomsBatch(Atoms):
 
         return nbr_list, offsets
 
+    def get_list_atoms(self):
+
+        mol_split_idx = self.props['num_atoms'].tolist()
+
+        positions = torch.Tensor(self.get_positions())
+        Z = torch.LongTensor(self.get_atomic_numbers())
+
+        positions = list(positions.split(mol_split_idx))
+        Z = list(Z.split(mol_split_idx))
+
+        Atoms_list = []
+
+        for i, molecule_xyz in enumerate(positions):
+            Atoms_list.append(Atoms(Z[i].tolist(),
+                                    molecule_xyz.numpy(),
+                                    cell=self.cell,
+                                    pbc=self.pbc))
+
+        return Atoms_list
+    
     def batch_update_nbr_list(self):
 
         Atoms_list = self.get_list_atoms()

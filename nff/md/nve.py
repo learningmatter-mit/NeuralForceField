@@ -8,6 +8,7 @@ from ase import units
 from ase.md.md import MolecularDynamics
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
 from ase.md.verlet import VelocityVerlet
+from nff.md.nvt import BatchNoseHoover
 from ase.io import Trajectory
 
 import nff.utils.constants as const
@@ -120,8 +121,11 @@ class Dynamics:
             #     self.atomsbatch.set_positions(self.atoms.get_positions(wrap=True))
             #     self.atomsbatch.set_positions(reconstruct_atoms(atoms, self.atomsbatch.props['mol_idx']))
 
-            self.atomsbatch.update_nbr_list()
-
+            if self.mdparam['thermostat'] == BatchNoseHoover:
+                self.atomsbatch.batch_update_nbr_list()
+            else:
+                self.atomsbatch.update_nbr_list()
+                
         self.traj.close()
         
     
