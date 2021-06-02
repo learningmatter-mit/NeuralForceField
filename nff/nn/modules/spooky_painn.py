@@ -16,14 +16,17 @@ class NonLocalInteraction(nn.Module):
     def __init__(self,
                  feat_dim,
                  activation,
+                 nb_features=None,
                  dropout=DEFAULT_DROPOUT):
 
         from performer_pytorch import FastAttention
 
         super().__init__()
         self.feat_dim = feat_dim
+        if nb_features is None:
+            nb_features = feat_dim
         self.attn = FastAttention(dim_heads=feat_dim,
-                                  nb_features=feat_dim,
+                                  nb_features=nb_features,
                                   causal=False)
         self.dense = Dense(in_features=feat_dim,
                            out_features=(3 * feat_dim),
@@ -109,7 +112,8 @@ class MessageBlock(nn.Module):
                  n_rbf,
                  cutoff,
                  learnable_k,
-                 dropout):
+                 dropout,
+                 fast_feats):
         super().__init__()
         self.inv_message = InvariantMessage(feat_dim=feat_dim,
                                             activation=activation,
@@ -119,7 +123,8 @@ class MessageBlock(nn.Module):
                                             dropout=dropout)
         self.nl = NonLocalInteraction(feat_dim=feat_dim,
                                       activation=activation,
-                                      dropout=dropout)
+                                      dropout=dropout,
+                                      nb_features=fast_feats)
 
     def forward(self,
                 s_j,
@@ -446,6 +451,10 @@ class Electrostatics(nn.Module):
                 num_atoms,
                 mol_nbrs,
                 mol_offsets):
+
+        idx = (mol_nbrs[:, 1] > mol_nbrs[:, 0])
+        mol_nbrs = mol_nbrs[idx]
+        mol_offsets = mol_offsets[idx]
 
         q, dip_atom, full_dip = self.charge_and_dip(xyz=xyz,
                                                     s_i=s_i,

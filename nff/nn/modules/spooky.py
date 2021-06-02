@@ -2,8 +2,8 @@ import torch
 from torch import nn
 from torch.nn.functional import softplus
 from nff.nn.layers import PreActivation, Dense, zeros_initializer
-from nff.utils.tools import layer_types, make_undirected
-from nff.utils.scatter import scatter_add, compute_grad
+from nff.utils.tools import layer_types
+from nff.utils.scatter import scatter_add
 from nff.utils.constants import ELEC_CONFIG, KE_KCAL, BOHR_RADIUS
 from nff.utils import spooky_f_cut, make_y_lm, rho_k
 
@@ -215,12 +215,13 @@ class NuclearEmbedding(nn.Module):
     def forward(self, z):
         d_z = self.elec_config[z.long()].to(z.device)
         if torch.isnan(d_z).any():
-            unique_z = torch.LongTensor(list(set(z.detach()
-                                                 .long().tolist())))
-            missing = (unique_z[self.elec_config[unique_z]
-                                .isnan()[:, 0]].reshape(-1).tolist())
+            z_list = z.detach().long().tolist()
+            unique_z = torch.LongTensor(list(set(z_list)))
+            nan_idx = self.elec_config[unique_z].isnan()[:, 0]
+            missing = unique_z[nan_idx].reshape(-1).tolist()
             msg = f"Missing elements {missing} from elec_config.json"
             raise Exception(msg)
+
         tilde_e_z = self.z_embed(z.long())
         e_z = self.m_mat(d_z) + tilde_e_z
 
@@ -349,9 +350,10 @@ class GBlock(nn.Module):
     def gamma(self):
         return softplus(self.gamma_inv)
 
-    def forward(self, r_ij):
+    def forward(self,
+                r_ij,
+                r):
 
-        r = norm(r_ij).reshape(-1, 1)
         n_pairs = r_ij.shape[0]
         device = r_ij.device
 
@@ -420,11 +422,13 @@ class LocalInteraction(nn.Module):
 
     def g_matmul(self,
                  r_ij,
-                 l):
+                 l,
+                 r):
 
         g_func = getattr(self, f"g_{l}")
-        g = g_func(r_ij)
+        g = g_func(r_ij, r)
         G = getattr(self, f"G_{l}")
+
         # g: N_nbrs x K x (1, 3, or 5)
         # G: F x K
         # output: N_nbrs x F x (1, 3, or 5)
@@ -437,16 +441,17 @@ class LocalInteraction(nn.Module):
                    x_tilde,
                    nbrs,
                    graph_size,
-                   l):
+                   l,
+                   r):
 
         res_block = getattr(self, f"resmlp_{l}")
         n_nbrs = nbrs.shape[0]
-
-        matmul = self.g_matmul(r_ij, l)
+        matmul = self.g_matmul(r_ij=r_ij,
+                               l=l,
+                               r=r)
         resmlp = res_block(x_tilde)[nbrs[:, 1]]
         per_nbr = (resmlp.reshape(n_nbrs, -1, 1)
                    * matmul)
-
         out = scatter_add(src=per_nbr,
                           index=nbrs[:, 0],
                           dim=0,
@@ -486,14 +491,14 @@ class LocalInteraction(nn.Module):
                 r_ij):
 
         # dimension N_nbrs x F
-        # x_j = x_tilde[nbrs[:, 1]]
         graph_size = xyz.shape[0]
-
         c_term = self.resmlp_c(x_tilde)
         quants = []
 
+        r = norm(r_ij).reshape(-1, 1)
         for l in self.l_vals:
             quant = self.make_quant(r_ij=r_ij,
+                                    r=r,
                                     x_tilde=x_tilde,
                                     nbrs=nbrs,
                                     graph_size=graph_size,
@@ -534,7 +539,7 @@ class NonLocalInteraction(nn.Module):
         # as wrappers
 
         if nb_features is None:
-            nb_features = 20 * feat_dim
+            nb_features = feat_dim
         self.attn = FastAttention(dim_heads=feat_dim,
                                   nb_features=nb_features,
                                   causal=False)
@@ -592,24 +597,9 @@ class NonLocalInteraction(nn.Module):
         # x_tilde has dimension N x F
         # N = number of nodes, F = feature dimension
 
-        # import numpy as np
-
         Q = self.resmlp_q(x_tilde)
         K = self.resmlp_k(x_tilde)
-        V = self.resmlp_v(x_tilde)  # * self.feat_dim ** 0.5
-
-        # num_samples = Q.shape[0]
-        # feat_dim = self.feat_dim
-
-        # new_Q = torch.rand(num_samples, feat_dim).to(Q.device)
-        # new_K = torch.rand(num_samples, feat_dim).to(Q.device)
-        # new_V = torch.rand(num_samples, feat_dim).to(Q.device)
-
-        # import pdb
-        # pdb.set_trace()
-
-        # print(new_Q.mean(), Q.mean())
-        # print(new_Q.std(), Q.std())
+        V = self.resmlp_v(x_tilde)
 
         if not isinstance(num_atoms, list):
             num_atoms = num_atoms.tolist()
@@ -630,9 +620,6 @@ class NonLocalInteraction(nn.Module):
                         ).squeeze(0)
 
         att = torch.cat([i[:n] for i, n in zip(att, num_atoms)])
-
-        # # # import pdb
-        # # # pdb.set_trace()
 
         # base_att = []
         # for i, q in enumerate(q_pad):
@@ -807,34 +794,6 @@ class Electrostatics(nn.Module):
                                    nbrs=mol_nbrs)
                   .reshape(-1, 1))
 
-        # first_test_en = pairwise[24 * 23 // 2: 24 * 23].sum()
-
-        # test_en = 0
-
-        # for i, q_i in enumerate(q[24: 48]):
-        #     for j, q_j in enumerate(q[24: 48]):
-        #         if i <= j:
-        #             continue
-
-        #         this_r_ij = norm(xyz[i + 24] - xyz[j + 24])
-        #         arg_0 = (self.f_switch(this_r_ij)
-        #                  / (this_r_ij ** 2 + BOHR_RADIUS ** 2) ** 0.5)
-        #         arg_1 = (1 - self.f_switch(this_r_ij)) / this_r_ij
-        #         this_en = KE_KCAL * q_i * q_j * (arg_0 + arg_1)
-        #         test_en += this_en
-
-        # test_grad = compute_grad(xyz, test_en)[24: 48].detach()
-        # real_grad = compute_grad(xyz, energy)[24: 48].detach()
-
-        # import pdb
-        # pdb.set_trace()
-
-        # print(energy[1])
-        # print(first_test_en)
-        # print(test_en)
-        # print(test_grad)
-        # print(real_grad)
-
         return energy
 
     def forward(self,
@@ -845,6 +804,10 @@ class Electrostatics(nn.Module):
                 num_atoms,
                 mol_nbrs,
                 mol_offsets):
+
+        idx = (mol_nbrs[:, 1] > mol_nbrs[:, 0])
+        mol_nbrs = mol_nbrs[idx]
+        mol_offsets = mol_offsets[idx]
 
         q = self.get_charge(f=f,
                             z=z,
@@ -863,13 +826,11 @@ class NuclearRepulsion(nn.Module):
     def __init__(self, r_cut):
         super().__init__()
         self.r_cut = r_cut
-
         for key, val in ZBL.items():
             # compute inverse softplus
             val = torch.Tensor(val)
             inv_val = nn.Parameter(torch.log(torch.exp(val) - 1)
                                    .reshape(-1, 1))
-
             setattr(self, key + "_inv", inv_val)
 
     @property
@@ -908,19 +869,15 @@ class NuclearRepulsion(nn.Module):
                 num_atoms,
                 offsets):
 
-        undirec = make_undirected(nbrs)
+        idx = (nbrs[:, 1] > nbrs[:, 0])
+        undirec = nbrs[idx]
+        undirec_offsets = offsets[idx]
+
         z_i = z[undirec[:, 0]].to(torch.float32)
         z_j = z[undirec[:, 1]].to(torch.float32)
 
-        zero_offsets = (offsets == 0).all().item()
-        if zero_offsets:
-            offsets = 0
-        else:
-            msg = ("Need to implement a way to get undirected "
-                   "offsets")
-            raise NotImplementedError(msg)
         r_ij = norm(xyz[undirec[:, 0]] - xyz[undirec[:, 1]]
-                    - offsets)
+                    - undirec_offsets)
 
         phi = self.zbl_phi(r_ij=r_ij,
                            z_i=z_i,
@@ -934,45 +891,6 @@ class NuclearRepulsion(nn.Module):
         energy = scatter_pairwise(pairwise=pairwise,
                                   num_atoms=num_atoms,
                                   nbrs=undirec).reshape(-1, 1)
-        # import pdb
-        # pdb.set_trace()
-
-        # grad = compute_grad(inputs=xyz, output=energy)
-
-        # this_z_i = z[undirec[:, 0][:36]]
-        # this_z_j = z[undirec[:, 1][:36]]
-        # this_rij = ((xyz[undirec[:, 0]] - xyz[undirec[:, 1]]
-        #              ) ** 2).sum(-1) ** 0.5
-        # test = KE_KCAL * this_z_i * this_z_j / this_rij[:36]
-        # test *= spooky_f_cut(this_rij[:36], self.r_cut)
-
-        # c_norm = self.c / self.c.sum()
-        # test *= (
-        #     (c_norm[0] * torch.exp(-this_rij[:36] / self.d[0]
-        #                            * self.exponents[0]
-        #                            * (this_z_i ** self.z_exp
-        #                               + this_z_j ** self.z_exp)))
-        #     + (c_norm[1] * torch.exp(-this_rij[:36] / self.d[0]
-        #                              * self.exponents[1]
-        #                              * (this_z_i ** self.z_exp
-        #                                 + this_z_j ** self.z_exp)))
-        #     + (c_norm[2] * torch.exp(-this_rij[:36] / self.d[0]
-        #                              * self.exponents[2]
-        #                              * (this_z_i ** self.z_exp
-        #                                 + this_z_j ** self.z_exp)))
-        #     + (c_norm[3] * torch.exp(-this_rij[:36] / self.d[0]
-        #                              * self.exponents[3]
-        #                              * (this_z_i ** self.z_exp
-        #                                 + this_z_j ** self.z_exp)))
-        # ).reshape(-1)
-
-        # import pdb
-        # pdb.set_trace()
-
-        # test = test.sum()
-
-        # print(test)
-        # print(energy[0])
 
         return energy
 

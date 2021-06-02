@@ -27,18 +27,29 @@ class LearnableSwish(torch.nn.Module):
                  alpha=1.0,
                  beta=1.702):
         super().__init__()
-        self.alpha = nn.Parameter(torch.Tensor([alpha]))
-        self.beta = nn.Parameter(torch.Tensor([beta]))
+        self.alpha_inv = nn.Parameter(
+            torch.log(
+                torch.exp(torch.Tensor([alpha])) - 1
+            )
+        )
+        self.beta_inv = nn.Parameter(
+            torch.log(
+                torch.exp(torch.Tensor([beta])) - 1
+            )
+        )
+
+    @property
+    def alpha(self):
+        return F.softplus(self.alpha_inv)
+
+    @property
+    def beta(self):
+        return F.softplus(self.beta_inv)
 
     def forward(self, x):
         device = x.device
-        alpha = self.alpha.to(device).clamp(0)
-        beta = self.beta.to(device).clamp(0)
+        alpha = self.alpha.to(device)
+        beta = self.beta.to(device)
+        output = alpha / beta * F.silu(beta * x)
 
-        arg = beta * x
-        exp = torch.where(arg <= 20,
-                          torch.exp(-arg),
-                          torch.Tensor([0]).to(device)
-                          )
-        output = (alpha * x) / (1 + exp)
         return output

@@ -13,7 +13,7 @@ from nff.nn.modules.painn import MessageBlock as PainnMessage
 from nff.nn.modules.spooky import NuclearRepulsion
 from nff.nn.modules.diabat import DiabaticReadout
 from nff.nn.layers import Diagonalize
-from nff.utils.tools import make_directed, make_undirected
+from nff.utils.tools import make_directed
 from nff.utils.scatter import compute_grad
 
 from nff.nn.modules.schnet import (AttentionPool, SumPool, MolFpPool,
@@ -78,7 +78,8 @@ class SpookyPainn(Painn):
                        n_rbf=n_rbf,
                        cutoff=cutoff,
                        learnable_k=learnable_k,
-                       dropout=conv_dropout)
+                       dropout=conv_dropout,
+                       fast_feats=modelparams.get("fast_feats"))
              for _ in range(num_conv)]
         )
 
@@ -183,22 +184,16 @@ class SpookyPainn(Painn):
                  charge,
                  nbrs,
                  num_atoms,
-                 batch):
+                 offsets,
+                 mol_offsets,
+                 mol_nbrs):
 
         electrostatics = getattr(self, "electrostatics", {})
         nuc_repulsion = getattr(self, "nuc_repulsion", {})
-        mol_offsets = get_offsets(batch, 'mol_offsets')
-        offsets = get_offsets(batch, 'offsets')
 
         for key in self.output_keys:
             if key in electrostatics:
                 elec_module = self.electrostatics[key]
-
-                # put this here in case you're not doing
-                # electrostatics and don't want to store
-                # this big neighbor list in the dataset
-
-                mol_nbrs = make_undirected(batch['mol_nbrs'])
                 elec_e, q, dip_atom, full_dip = elec_module(
                     s_i=s_i,
                     v_i=v_i,
@@ -238,6 +233,10 @@ class SpookyPainn(Painn):
              s_i,
              v_i):
 
+        offsets = get_offsets(batch, 'offsets')
+        mol_offsets = get_offsets(batch, 'mol_offsets')
+        mol_nbrs = batch.get('mol_nbrs')
+
         if not hasattr(self, "output_keys"):
             self.output_keys = list(self.readout_blocks[0]
                                     .readoutdict.keys())
@@ -263,7 +262,9 @@ class SpookyPainn(Painn):
                       charge=batch['charge'],
                       nbrs=nbrs,
                       num_atoms=num_atoms,
-                      batch=batch)
+                      offsets=offsets,
+                      mol_offsets=mol_offsets,
+                      mol_nbrs=mol_nbrs)
 
         for key in self.grad_keys:
             output = all_results[key.replace("_grad", "")]
@@ -401,7 +402,7 @@ class SpookyPainnDiabat(SpookyPainn):
                 total_charge = self.get_diabat_charge(key=key,
                                                       charge=charge)
 
-                mol_nbrs = make_undirected(batch['mol_nbrs'])
+                mol_nbrs, _ = make_undirected(batch['mol_nbrs'])
                 elec_e, q, dip_atom, full_dip = elec_module(
                     s_i=s_i,
                     v_i=v_i,
