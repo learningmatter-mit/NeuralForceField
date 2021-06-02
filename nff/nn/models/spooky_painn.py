@@ -388,7 +388,9 @@ class SpookyPainnDiabat(SpookyPainn):
                  charge,
                  nbrs,
                  num_atoms,
-                 batch):
+                 offsets,
+                 mol_offsets,
+                 mol_nbrs):
         """
         Over-write because transition charges must sum to 0, not
         to the total charge
@@ -412,9 +414,10 @@ class SpookyPainnDiabat(SpookyPainn):
                     v_i=v_i,
                     z=z,
                     xyz=xyz,
-                    total_charge=total_charge,
+                    total_charge=charge,
                     num_atoms=num_atoms,
-                    mol_nbrs=mol_nbrs)
+                    mol_nbrs=mol_nbrs,
+                    mol_offsets=mol_offsets)
 
                 results[key] = results[key] + elec_e.reshape(-1)
 
@@ -423,7 +426,8 @@ class SpookyPainnDiabat(SpookyPainn):
                 nuc_e = nuc_module(xyz=xyz,
                                    z=z,
                                    nbrs=nbrs,
-                                   num_atoms=num_atoms)
+                                   num_atoms=num_atoms,
+                                   offsets=offsets)
                 results[key] = results[key] + nuc_e.reshape(-1)
 
             if key in electrostatics:
