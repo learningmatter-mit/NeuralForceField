@@ -159,6 +159,8 @@ class SpookyPainn(Painn):
             for key, skip in self.skip.items():
                 if not skip:
                     continue
+                if key not in new_results:
+                    continue
                 if key in results:
                     results[key] += new_results[key]
                 else:
@@ -168,6 +170,8 @@ class SpookyPainn(Painn):
             first_readout = self.readout_blocks[0]
             new_results = first_readout(s_i=s_i)
             for key, skip in self.skip.items():
+                if key not in new_results:
+                    continue
                 if not skip:
                     results[key] = new_results[key]
 
