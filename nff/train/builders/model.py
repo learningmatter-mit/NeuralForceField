@@ -280,9 +280,10 @@ PARAMS_TYPE = {"SchNet":
                    "cutoff": float,
                    "num_conv": int,
                    "output_keys": list,
-                   "grad_keys": list
-
+                   "grad_keys": list,
+                   "diabat_keys": list
                }
+               
                }
 
 MODEL_DICT = {
