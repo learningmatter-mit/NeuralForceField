@@ -144,6 +144,8 @@ class Painn(nn.Module):
             for key, skip in self.skip.items():
                 if not skip:
                     continue
+                if key not in new_results:
+                    continue
                 if key in results:
                     results[key] += new_results[key]
                 else:
