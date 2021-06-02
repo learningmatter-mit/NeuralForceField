@@ -16,10 +16,9 @@ class shifted_softplus(torch.nn.Module):
 class Swish(torch.nn.Module):
     def __init__(self):
         super().__init__()
-        self.sigmoid = torch.nn.Sigmoid()
 
     def forward(self, x):
-        return x * self.sigmoid(x)
+        return F.silu(x)
 
 
 class LearnableSwish(torch.nn.Module):
