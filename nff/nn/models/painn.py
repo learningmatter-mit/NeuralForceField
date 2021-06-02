@@ -155,6 +155,8 @@ class Painn(nn.Module):
             first_readout = self.readout_blocks[0]
             new_results = first_readout(s_i=s_i)
             for key, skip in self.skip.items():
+                if key not in new_results:
+                    continue
                 if not skip:
                     results[key] = new_results[key]
 
