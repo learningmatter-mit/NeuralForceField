@@ -380,15 +380,10 @@ def single_spec_nbrs(dset,
     if not directed:
         nbrs = nbrs[nbrs[:, 2] > nbrs[:, 1]]
 
-    split_sizes = []
+    split_nbrs = []
     num_mols = xyz.shape[0]
     for i in range(num_mols):
         match_nbrs = (nbrs[:, 0] == i)
-        if match_nbrs.shape[0] != 0:
-            split_size = match_nbrs.nonzero().shape[0]
-        else:
-            split_size = 0
-        split_sizes.append(split_size)
-    split_nbrs = list(torch.split(nbrs[:, 1:].cpu(), split_sizes))
-
+        split_nbrs.append(nbrs[match_nbrs][:, 1:])
+        
     return split_nbrs
