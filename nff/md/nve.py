@@ -121,7 +121,7 @@ class Dynamics:
             #     self.atomsbatch.set_positions(self.atoms.get_positions(wrap=True))
             #     self.atomsbatch.set_positions(reconstruct_atoms(atoms, self.atomsbatch.props['mol_idx']))
 
-            self.atomsbatch.batch_update_nbr_list()
+            self.atomsbatch.update_nbr_list()
                 
         self.traj.close()
         

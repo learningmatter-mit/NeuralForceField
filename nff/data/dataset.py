@@ -260,7 +260,7 @@ class Dataset(TorchDataset):
                 cutoff=cutoff,
                 directed=(not undirected)
             )
-            nbrs, offs = atoms.batch_update_nbr_list()
+            nbrs, offs = atoms.update_nbr_list()
             nbrlist+=nbrs
             offsets+=offs
 
@@ -558,7 +558,7 @@ class Dataset(TorchDataset):
 
             # the coordinates have been unwrapped and try to results offsets
             atoms = AtomsBatch(**ase_param)
-            atoms.batch_update_nbr_list()
+            atoms.update_nbr_list()
             all_offsets+=atoms.offsets
             all_nbr_list+=atoms.nbr_list
 

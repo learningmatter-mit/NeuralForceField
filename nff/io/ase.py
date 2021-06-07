@@ -90,7 +90,7 @@ class AtomsBatch(Atoms):
                 'num_atoms', 'nbr_list' and 'offsets'
         """
         if self.nbr_list is None or self.offsets is None:
-            self.batch_update_nbr_list()
+            self.update_nbr_list()
                 
         self.props['nbr_list'] = self.nbr_list
         self.props['offsets'] = self.offsets
@@ -121,7 +121,7 @@ class AtomsBatch(Atoms):
 
         return Atoms_list
     
-    def batch_update_nbr_list(self):
+    def update_nbr_list(self):
         """Update neighbor list and the periodic reindexing
             for the given Atoms object.
 
@@ -261,7 +261,7 @@ class BulkPhaseMaterials(Atoms):
                 'num_atoms', 'nbr_list' and 'offsets'
         """
         if self.nbr_list is None or self.offsets is None:
-            self.batch_update_nbr_list()
+            self.update_nbr_list()
             self.props['nbr_list'] = self.nbr_list
             self.props['atoms_nbr_list'] = self.atoms_nbr_list
             self.props['offsets'] = self.offsets
@@ -584,7 +584,7 @@ class NeuralOptimizer:
 
         for step in range(epochs):
             self.optimizer.run(fmax=fmax, steps=self.update_freq)
-            self.optimizer.atoms.batch_update_nbr_list()
+            self.optimizer.atoms.update_nbr_list()
 
 
 class NeuralMetadynamics(NeuralFF):
