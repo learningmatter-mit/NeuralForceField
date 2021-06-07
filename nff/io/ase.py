@@ -101,46 +101,6 @@ class AtomsBatch(Atoms):
  
         return self.props
 
-    def update_nbr_list(self):
-        """Update neighbor list and the periodic reindexing
-            for the given Atoms object.
-
-        Args:
-            cutoff (float): maximum cutoff for which atoms are
-                considered interacting.
-        Returns:
-            nbr_list (torch.LongTensor)
-            offsets (torch.Tensor)
-            nxyz (torch.Tensor)
-        """
-
-        if self.nbr_torch:
-            edge_from, edge_to, offsets = torch_nbr_list(self,
-                                                         self.cutoff,
-                                                         device=self.device,
-                                                         directed=self.directed)
-            nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-        else:
-            self.wrap()
-            edge_from, edge_to, offsets = neighbor_list('ijS',
-                                                        self,
-                                                        self.cutoff)
-            nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            offsets = torch.Tensor(offsets)
-            if not self.directed:
-                offsets = offsets[nbr_list[:, 1] > nbr_list[:, 0]]
-                nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
-            offsets = offsets.detach().cpu().numpy()
-
-        # torch.sparse has no storage yet.
-        #offsets = offsets.dot(self.get_cell())
-        offsets = sparsify_array(offsets.dot(self.get_cell()))
-
-        self.nbr_list = nbr_list
-        self.offsets = offsets
-
-        return nbr_list, offsets
-
     def get_list_atoms(self):
 
         mol_split_idx = self.props['num_atoms'].tolist()
@@ -301,7 +261,7 @@ class BulkPhaseMaterials(Atoms):
                 'num_atoms', 'nbr_list' and 'offsets'
         """
         if self.nbr_list is None or self.offsets is None:
-            self.update_nbr_list()
+            self.batch_update_nbr_list()
             self.props['nbr_list'] = self.nbr_list
             self.props['atoms_nbr_list'] = self.atoms_nbr_list
             self.props['offsets'] = self.offsets
@@ -624,7 +584,7 @@ class NeuralOptimizer:
 
         for step in range(epochs):
             self.optimizer.run(fmax=fmax, steps=self.update_freq)
-            self.optimizer.atoms.update_nbr_list()
+            self.optimizer.atoms.batch_update_nbr_list()
 
 
 class NeuralMetadynamics(NeuralFF):

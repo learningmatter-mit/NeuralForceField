@@ -122,7 +122,7 @@ class NoseHoover(MolecularDynamics):
         for _ in range(epochs):
             self.max_steps += steps_per_epoch
             Dynamics.run(self)
-            self.atoms.update_nbr_list()
+            self.atoms.batch_update_nbr_list()
 
 
 class NoseHooverChain(NoseHoover):
@@ -264,7 +264,7 @@ class NoseHooverMetadynamics(NoseHoover):
         for _ in range(epochs):
             self.max_steps += steps_per_epoch
             Dynamics.run(self)
-            self.atoms.update_nbr_list()
+            self.atoms.batch_update_nbr_list()
 
             if self.nsteps >= steps_until_add:
                 # I think there's some sort of energy limit right?

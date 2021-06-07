@@ -92,7 +92,7 @@ class TI:
         
         for step in range(epochs):
             self.integrator.run(self.mdparam['nbr_list_update_freq'])
-            self.atomsbatch.update_nbr_list()
+            self.atomsbatch.batch_update_nbr_list()
             self.atomsbatch.props['aggr_wgt'] += dlambda
             # update 
 
