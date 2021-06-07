@@ -14,6 +14,7 @@ from nff.data.sparse import sparsify_array
 from nff.train.builders.model import load_model
 from nff.utils.geom import compute_distances
 from nff.data import Dataset
+from nff.nn.graphop import split_and_sum
 
 from nff.nn.models.schnet import SchNet, SchNetDiabat
 from nff.nn.models.hybridgraph import HybridGraphConv
@@ -90,14 +91,36 @@ class AtomsBatch(Atoms):
         """
         if self.nbr_list is None or self.offsets is None:
             self.update_nbr_list()
+                
         self.props['nbr_list'] = self.nbr_list
         self.props['offsets'] = self.offsets
 
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
-        self.props['num_atoms'] = torch.LongTensor([len(self)])
-
+        if self.props.get('num_atoms') is None:
+            self.props['num_atoms'] = torch.LongTensor([len(self)])
+ 
         return self.props
 
+    def get_list_atoms(self):
+
+        mol_split_idx = self.props['num_atoms'].tolist()
+
+        positions = torch.Tensor(self.get_positions())
+        Z = torch.LongTensor(self.get_atomic_numbers())
+
+        positions = list(positions.split(mol_split_idx))
+        Z = list(Z.split(mol_split_idx))
+
+        Atoms_list = []
+
+        for i, molecule_xyz in enumerate(positions):
+            Atoms_list.append(Atoms(Z[i].tolist(),
+                                    molecule_xyz.numpy(),
+                                    cell=self.cell,
+                                    pbc=self.pbc))
+
+        return Atoms_list
+    
     def update_nbr_list(self):
         """Update neighbor list and the periodic reindexing
             for the given Atoms object.
@@ -111,37 +134,59 @@ class AtomsBatch(Atoms):
             nxyz (torch.Tensor)
         """
 
-        if self.nbr_torch:
-            edge_from, edge_to, offsets = torch_nbr_list(self,
-                                                         self.cutoff,
-                                                         device=self.device,
-                                                         directed=self.directed)
+        Atoms_list = self.get_list_atoms()
+
+        ensemble_nbr_list = []
+        ensemble_offsets_list = []
+        for i, atoms in enumerate(Atoms_list):
+            edge_from, edge_to, offsets = torch_nbr_list(atoms,
+                                                        self.cutoff,
+                                                        device=self.device,
+                                                        directed=self.directed)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
+            offsets = sparsify_array(offsets.dot(self.get_cell()))
+            ensemble_nbr_list.append(
+                self.props['num_atoms'][: i].sum() + nbr_list)
+            ensemble_offsets_list.append(offsets)
+
+        ensemble_nbr_list = torch.cat(ensemble_nbr_list)
+        ensemble_offsets_list = torch.cat(ensemble_offsets_list)
+
+        self.nbr_list = ensemble_nbr_list
+        self.offsets = ensemble_offsets_list
+
+        return ensemble_nbr_list, ensemble_offsets_list
+    
+    def get_batch_energies(self):
+        
+        if self._calc is None:
+            raise RuntimeError('Atoms object has no calculator.')
+            
+        if not hasattr(self._calc, 'get_potential_energies'):
+            raise RuntimeError('The calculator for atomwise energies is not implemented')
+            
+        energies = self.get_potential_energies()
+        
+        batched_energies = split_and_sum(torch.Tensor(energies),
+                                         self.props['num_atoms'].tolist())
+        
+        return batched_energies.detach().cpu().numpy()
+
+    def get_batch_kinetic_energy(self):
+
+        if not self.get_momenta().any():
+            atomwise_ke = torch.Tensor(0.5 * self.get_momenta() * self.get_velocities()).sum(-1)
+            batch_ke = split_and_sum(atomwise_ke, self.props['num_atoms'].tolist())
+            return batch_ke.detach().cpu().numpy()
+        
         else:
-            self.wrap()
-            edge_from, edge_to, offsets = neighbor_list('ijS',
-                                                        self,
-                                                        self.cutoff)
-            nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            offsets = torch.Tensor(offsets)
-            if not self.directed:
-                offsets = offsets[nbr_list[:, 1] > nbr_list[:, 0]]
-                nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
-            offsets = offsets.detach().cpu().numpy()
+            print("No momenta are set for atoms")
 
-        # torch.sparse has no storage yet.
-        #offsets = offsets.dot(self.get_cell())
-        offsets = sparsify_array(offsets.dot(self.get_cell()))
-
-        self.nbr_list = nbr_list
-        self.offsets = offsets
-
-        return nbr_list, offsets
+    def get_batch_T(self):
+    
+        return self.get_batch_KE() / (1.5 * units.kB * self.props['num_atoms'].detach().cpu().numpy() )
 
     def batch_properties():
-        pass
-
-    def batch_kinetic_energy():
         pass
 
     def batch_virial():
