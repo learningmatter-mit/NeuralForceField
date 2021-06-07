@@ -96,7 +96,7 @@ class AtomsBatch(Atoms):
         self.props['offsets'] = self.offsets
 
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
-        if self.props['num_atoms'] is None:
+        if self.props.get('num_atoms') is None:
             self.props['num_atoms'] = torch.LongTensor([len(self)])
  
         return self.props
@@ -184,8 +184,6 @@ class AtomsBatch(Atoms):
                                                         device=self.device,
                                                         directed=self.directed)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            offsets = torch.Tensor(offsets[nbr_list[:, 1] > nbr_list[:, 0]])
-            offsets = offsets.detach().cpu().numpy()
             offsets = sparsify_array(offsets.dot(self.get_cell()))
             ensemble_nbr_list.append(
                 self.props['num_atoms'][: i].sum() + nbr_list)
