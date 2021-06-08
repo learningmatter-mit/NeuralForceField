@@ -174,7 +174,7 @@ class AtomsBatch(Atoms):
 
     def get_batch_kinetic_energy(self):
 
-        if not self.get_momenta().any():
+        if self.get_momenta().any():
             atomwise_ke = torch.Tensor(0.5 * self.get_momenta() * self.get_velocities()).sum(-1)
             batch_ke = split_and_sum(atomwise_ke, self.props['num_atoms'].tolist())
             return batch_ke.detach().cpu().numpy()
