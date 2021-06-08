@@ -52,13 +52,13 @@ class NonLocalInteraction(nn.Module):
             k = k_split[i]
             v = v_split[i]
             extra_pad = max_num_atoms - q.shape[0]
-            zeros = torch.zeros(extra_pad,
-                                self.feat_dim,
-                                device=Q.device)
+            pad = -20 * torch.ones(extra_pad,
+                                   self.feat_dim,
+                                   device=Q.device)
 
-            q_pad = torch.cat([q, zeros])
-            k_pad = torch.cat([k, zeros])
-            v_pad = torch.cat([v, zeros])
+            q_pad = torch.cat([q, pad])
+            k_pad = torch.cat([k, pad])
+            v_pad = torch.cat([v, pad])
 
             q_pads.append(q_pad)
             k_pads.append(k_pad)
@@ -77,6 +77,9 @@ class NonLocalInteraction(nn.Module):
         Q, K, V = torch.split(self.dense(s),
                               [self.feat_dim] * 3,
                               dim=-1)
+
+        if not isinstance(num_atoms, list):
+            num_atoms = num_atoms.tolist()
 
         q_split = torch.split(Q, num_atoms)
         k_split = torch.split(K, num_atoms)
