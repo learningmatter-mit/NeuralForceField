@@ -78,11 +78,9 @@ class NonLocalInteraction(nn.Module):
                               [self.feat_dim] * 3,
                               dim=-1)
 
-        # # Pad the tensors and stack them so we can treat
-        # # different molceules as different attention heads
-        # # and do attention in parallel
+        # Doing this in parallel with multiple attention
+        # heads seems not to work?
 
-        # *_pad has dimension num_mols x num_nodes x F
         if not isinstance(num_atoms, list):
             num_atoms = num_atoms.tolist()
 
