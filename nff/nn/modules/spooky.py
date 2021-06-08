@@ -604,39 +604,54 @@ class NonLocalInteraction(nn.Module):
         if not isinstance(num_atoms, list):
             num_atoms = num_atoms.tolist()
 
-        if len(list(set(num_atoms))) == 1:
-            pads = [torch.stack(torch.split(i, num_atoms))
-                    for i in [Q, K, V]]
-            q_pad, k_pad, v_pad = pads
-        else:
-            q_pad, k_pad, v_pad = self.pad(Q=Q,
-                                           K=K,
-                                           V=V,
-                                           num_atoms=num_atoms)
+        # if len(list(set(num_atoms))) == 1:
+        #     pads = [torch.stack(torch.split(i, num_atoms))
+        #             for i in [Q, K, V]]
+        #     q_pad, k_pad, v_pad = pads
+        # else:
+        #     q_pad, k_pad, v_pad = self.pad(Q=Q,
+        #                                    K=K,
+        #                                    V=V,
+        #                                    num_atoms=num_atoms)
 
-        att = self.attn(q_pad.unsqueeze(0),
-                        k_pad.unsqueeze(0),
-                        v_pad.unsqueeze(0)
-                        ).squeeze(0)
+        # att = self.attn(q_pad.unsqueeze(0),
+        #                 k_pad.unsqueeze(0),
+        #                 v_pad.unsqueeze(0)
+        #                 ).squeeze(0)
 
-        att = torch.cat([i[:n] for i, n in zip(att, num_atoms)])
+        # att = torch.cat([i[:n] for i, n in zip(att, num_atoms)])
 
-        # base_att = []
-        # for i, q in enumerate(q_pad):
-        #     k = k_pad[i].detach()[:num_atoms[i]]
-        #     v = v_pad[i].detach()[:num_atoms[i]]
-        #     q = q[:num_atoms[i]]
+        q_split = torch.split(Q, num_atoms)
+        k_split = torch.split(K, num_atoms)
+        v_split = torch.split(V, num_atoms)
+        att = []
 
-        #     A = torch.exp(torch.matmul(q.detach(),
-        #                                k.transpose(0, 1))
-        #                   / self.feat_dim ** 0.5)
-        #     ones = torch.ones(q.shape[0]).to(q.device)
-        #     D_inv = torch.diag(1 / torch.matmul(A, ones))
-        #     this_att = torch.matmul(D_inv, torch.matmul(A, v))
-        #     base_att.append(this_att)
-        # att = torch.cat(base_att)
+        for i, q in enumerate(q_split):
+            k = k_split[i]
+            v = v_split[i]
 
-        # print(abs(base_att - att).mean() / abs(att).mean() * 100)
+            A = torch.exp(torch.matmul(q, k.transpose(0, 1))
+                          / self.feat_dim ** 0.5)
+            ones = torch.ones(q.shape[0]).to(q.device)
+            D_inv = torch.diag(1 / torch.matmul(A, ones))
+            this_att = torch.matmul(D_inv, torch.matmul(A, v))
+            att.append(this_att)
+
+        att = torch.cat(att)
+
+        # # print(abs(base_att - att).mean() / abs(att).mean() * 100)
+
+
+
+        # for i, q in enumerate(q_split):
+        #     q = q.unsqueeze(0).unsqueeze(0)
+        #     k = k_split[i].unsqueeze(0).unsqueeze(0)
+        #     v = v_split[i].unsqueeze(0).unsqueeze(0)
+        #     this_att = self.attn(q, k, v).reshape(-1, self.feat_dim)
+        #     att.append(this_att)
+
+        # att = torch.cat(att)
+
 
         return att
 

@@ -78,30 +78,24 @@ class NonLocalInteraction(nn.Module):
                               [self.feat_dim] * 3,
                               dim=-1)
 
-        # Pad the tensors and stack them so we can treat
-        # different molceules as different attention heads
-        # and do attention in parallel
+        q_split = torch.split(Q, num_atoms)
+        k_split = torch.split(K, num_atoms)
+        v_split = torch.split(V, num_atoms)
+        att = []
 
-        # *_pad has dimension num_mols x num_nodes x F
-        if not isinstance(num_atoms, list):
-            num_atoms = num_atoms.tolist()
+        for i, q in enumerate(q_split):
+            k = k_split[i]
+            v = v_split[i]
 
-        if len(list(set(num_atoms))) == 1:
-            pads = [torch.stack(torch.split(i, num_atoms))
-                    for i in [Q, K, V]]
-            q_pad, k_pad, v_pad = pads
-        else:
-            q_pad, k_pad, v_pad = self.pad(Q=Q,
-                                           K=K,
-                                           V=V,
-                                           num_atoms=num_atoms)
+            A = torch.exp(torch.matmul(q, k.transpose(0, 1))
+                          / self.feat_dim ** 0.5)
+            ones = torch.ones(q.shape[0]).to(q.device)
+            D_inv = torch.diag(1 / torch.matmul(A, ones))
+            this_att = torch.matmul(D_inv, torch.matmul(A, v))
+            att.append(this_att)
 
-        att = self.attn(q_pad.unsqueeze(0),
-                        k_pad.unsqueeze(0),
-                        v_pad.unsqueeze(0)
-                        ).squeeze(0)
+        att = torch.cat(att)
 
-        att = torch.cat([i[:n] for i, n in zip(att, num_atoms)])
         return att
 
 
