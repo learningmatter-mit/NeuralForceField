@@ -604,22 +604,22 @@ class NonLocalInteraction(nn.Module):
         if not isinstance(num_atoms, list):
             num_atoms = num_atoms.tolist()
 
-        if len(list(set(num_atoms))) == 1:
-            pads = [torch.stack(torch.split(i, num_atoms))
-                    for i in [Q, K, V]]
-            q_pad, k_pad, v_pad = pads
-        else:
-            q_pad, k_pad, v_pad = self.pad(Q=Q,
-                                           K=K,
-                                           V=V,
-                                           num_atoms=num_atoms)
+        # if len(list(set(num_atoms))) == 1:
+        #     pads = [torch.stack(torch.split(i, num_atoms))
+        #             for i in [Q, K, V]]
+        #     q_pad, k_pad, v_pad = pads
+        # else:
+        #     q_pad, k_pad, v_pad = self.pad(Q=Q,
+        #                                    K=K,
+        #                                    V=V,
+        #                                    num_atoms=num_atoms)
 
-        att = self.attn(q_pad.unsqueeze(0),
-                        k_pad.unsqueeze(0),
-                        v_pad.unsqueeze(0)
-                        ).squeeze(0)
+        # att = self.attn(q_pad.unsqueeze(0),
+        #                 k_pad.unsqueeze(0),
+        #                 v_pad.unsqueeze(0)
+        #                 ).squeeze(0)
 
-        att = torch.cat([i[:n] for i, n in zip(att, num_atoms)])
+        # att = torch.cat([i[:n] for i, n in zip(att, num_atoms)])
 
         # base_att = []
         # for i, q in enumerate(q_pad):
@@ -637,6 +637,20 @@ class NonLocalInteraction(nn.Module):
         # att = torch.cat(base_att)
 
         # print(abs(base_att - att).mean() / abs(att).mean() * 100)
+
+        q_split = torch.split(Q, num_atoms)
+        k_split = torch.split(K, num_atoms)
+        v_split = torch.split(V, num_atoms)
+        att = []
+
+        for i, q in enumerate(q_split):
+            q = q.unsqueeze(0).unsqueeze(0)
+            k = k_split[i].unsqueeze(0).unsqueeze(0)
+            v = v_split[i].unsqueeze(0).unsqueeze(0)
+            this_att = self.attn(q, k, v).reshape(-1, self.feat_dim)
+            att.append(this_att)
+
+        att = torch.cat(att)
 
         return att
 
