@@ -87,8 +87,7 @@ class NonLocalInteraction(nn.Module):
             k = k_split[i]
             v = v_split[i]
 
-            A = torch.exp(torch.matmul(q.detach(),
-                                       k.transpose(0, 1))
+            A = torch.exp(torch.matmul(q, k.transpose(0, 1))
                           / self.feat_dim ** 0.5)
             ones = torch.ones(q.shape[0]).to(q.device)
             D_inv = torch.diag(1 / torch.matmul(A, ones))
