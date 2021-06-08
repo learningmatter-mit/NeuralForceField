@@ -270,3 +270,110 @@ class NoseHooverMetadynamics(NoseHoover):
                 # I think there's some sort of energy limit right?
                 self.atoms.calc.append_atoms(copy.deepcopy(self.atoms))
                 steps_until_add += steps_between_add
+
+
+class BatchNoseHoover(MolecularDynamics):
+    def __init__(self,
+                 atoms,
+                 timestep,
+                 temperature,
+                 ttime,
+                 trajectory=None,
+                 logfile=None,
+                 loginterval=1,
+                 max_steps=None,
+                 nbr_update_period=20,
+                 **kwargs):
+
+        MolecularDynamics.__init__(self,
+                                   atoms,
+                                   timestep,
+                                   trajectory,
+                                   logfile,
+                                   loginterval)
+
+        # Initialize simulation parameters
+
+        # Q is chosen to be 6 N kT
+        self.dt = timestep * units.fs
+        self.Natom = atoms.get_number_of_atoms()
+        self.T = temperature * units.kB
+        self.targeEkin = 0.5 * (3.0 * self.Natom) * self.T
+        self.ttime = ttime  # * units.fs
+        
+        self.Q = 3.0 * self.Natom * self.T * (self.ttime * self.dt)**2
+        self.zeta = 0.0
+        self.num_steps = max_steps
+        self.n_steps = 0
+        self.nbr_update_period = nbr_update_period
+        
+        batch = atoms.get_batch()
+        
+        #Check for number of virtual variables
+        if batch.get('num_atoms', None) is not None:
+            self.Natom = batch.get('num_atoms', None).numpy()
+            self.n_sys = self.Natom.shape[0]
+            self.targeEkin = 0.5 * (3.0 * self.Natom) * self.T
+        else:
+            self.n_sys = 1
+
+        self.Q = np.array(3.0 * self.T * (self.ttime * self.dt)**2 * self.Natom )
+        self.zeta = np.array([0.0] * self.n_sys)
+
+    def step(self):
+
+        # get current acceleration and velocity
+        accel = self.atoms.get_forces() / self.atoms.get_masses().reshape(-1, 1)
+        vel = self.atoms.get_velocities()
+        
+        visc = (accel - \
+                    (self.zeta[None, : , None] * vel.reshape(-1, self.n_sys, 3)).reshape(-1, 3))
+        
+        # make full step in position
+        x = self.atoms.get_positions(wrap=True) + vel * self.dt + visc * (0.5 * self.dt ** 2)
+        self.atoms.set_positions(x)
+
+        # record current velocities
+        KE_0 = self.atoms.get_batch_kinetic_energy()
+
+        # make half a step in velocity
+        vel_half = vel + 0.5 * self.dt * visc
+        self.atoms.set_velocities(vel_half)
+
+        # make a full step in accelerations
+        f = self.atoms.get_forces()
+        accel = f / self.atoms.get_masses().reshape(-1, 1)
+
+        # make a half step in self.zeta
+        self.zeta = self.zeta + 0.5 * self.dt * \
+            (1/self.Q) * (KE_0 - self.targeEkin)
+
+        # make another halfstep in self.zeta
+        self.zeta = self.zeta + 0.5 * self.dt * \
+            (1/self.Q) * (self.atoms.get_batch_kinetic_energy() - self.targeEkin)
+
+        # make another half step in velocity
+        vel = (self.atoms.get_velocities() + 0.5 * self.dt * accel).reshape(self.n_sys, -1, 3) / \
+                        (1 + 0.5 * self.dt * self.zeta[:, None, None])
+        self.atoms.set_velocities(vel.reshape(-1 ,3))
+
+        return f
+    
+    def run(self, steps=None):
+
+        if steps is None:
+            steps = self.num_steps
+        total_steps = steps + self.nsteps
+        # return Dynamics.run(self)
+
+        epochs = math.ceil(total_steps / self.nbr_update_period)
+        # number of steps in between nbr updates
+        steps_per_epoch = int(total_steps / epochs)
+        # maximum number of steps starts at `steps_per_epoch`
+        # and increments after every nbr list update
+        self.max_steps = 0
+
+        for _ in range(epochs):
+            self.max_steps += steps_per_epoch
+            Dynamics.run(self)
+            self.atoms.update_nbr_list()
