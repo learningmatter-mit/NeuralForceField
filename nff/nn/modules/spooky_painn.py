@@ -78,22 +78,21 @@ class NonLocalInteraction(nn.Module):
                               [self.feat_dim] * 3,
                               dim=-1)
 
-        # Doing this in parallel with multiple attention
-        # heads seems not to work?
-
-        if not isinstance(num_atoms, list):
-            num_atoms = num_atoms.tolist()
-
         q_split = torch.split(Q, num_atoms)
         k_split = torch.split(K, num_atoms)
         v_split = torch.split(V, num_atoms)
         att = []
 
         for i, q in enumerate(q_split):
-            q = q.unsqueeze(0).unsqueeze(0)
-            k = k_split[i].unsqueeze(0).unsqueeze(0)
-            v = v_split[i].unsqueeze(0).unsqueeze(0)
-            this_att = self.attn(q, k, v).reshape(-1, self.feat_dim)
+            k = k_split[i]
+            v = v_split[i]
+
+            A = torch.exp(torch.matmul(q.detach(),
+                                       k.transpose(0, 1))
+                          / self.feat_dim ** 0.5)
+            ones = torch.ones(q.shape[0]).to(q.device)
+            D_inv = torch.diag(1 / torch.matmul(A, ones))
+            this_att = torch.matmul(D_inv, torch.matmul(A, v))
             att.append(this_att)
 
         att = torch.cat(att)
