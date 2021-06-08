@@ -261,8 +261,8 @@ class Dataset(TorchDataset):
                 directed=(not undirected)
             )
             nbrs, offs = atoms.update_nbr_list()
-            nbrlist+=nbrs
-            offsets+=offs
+            nbrlist.append(nbrs)
+            offsets.append(offs)
 
         self.props[nbr_key] = nbrlist
         self.props[offset_key] = offsets
@@ -559,8 +559,8 @@ class Dataset(TorchDataset):
             # the coordinates have been unwrapped and try to results offsets
             atoms = AtomsBatch(**ase_param)
             atoms.update_nbr_list()
-            all_offsets+=atoms.offsets
-            all_nbr_list+=atoms.nbr_list
+            all_offsets.append(atoms.offsets)
+            all_nbr_list.append(atoms.nbr_list)
 
         # update
         self.props['bond_len'] = all_bond_len
