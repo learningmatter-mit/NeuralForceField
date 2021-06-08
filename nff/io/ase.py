@@ -103,6 +103,9 @@ class AtomsBatch(Atoms):
 
     def get_list_atoms(self):
 
+        if self.props.get('num_atoms') is None:
+            self.props['num_atoms'] = torch.LongTensor([len(self)])
+
         mol_split_idx = self.props['num_atoms'].tolist()
 
         positions = torch.Tensor(self.get_positions())
