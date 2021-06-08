@@ -7,7 +7,9 @@ from nff.nn.layers import StochasticIncrease
 from nff.utils.scatter import compute_grad
 from nff.nn.layers import (Diagonalize, PainnRadialBasis, Dense,
                            Gaussian)
+from nff.nn.tensorgrad import general_batched_hessian
 from nff.utils.tools import layer_types
+from nff.utils import constants as const
 
 
 class DiabaticReadout(nn.Module):
@@ -802,5 +804,141 @@ class AdiabaticReadout(nn.Module):
             grad = compute_grad(output=output,
                                 inputs=xyz)
             results[key] = grad
+
+        return results
+
+
+class AdiabaticNacv(nn.Module):
+    def __init__(self,
+                 model,
+                 coupled_states=None,
+                 gap_threshold=0.5):
+
+        super().__init__()
+        self.model = model
+        self.output_keys = self.model.output_keys
+        self.grad_keys = self.model.grad_keys
+
+        self.coupled_states = self.get_coupled_states(coupled_states)
+        self.delta_keys = self.get_delta_keys()
+        self.gap_threshold = gap_threshold * const.EV_TO_KCAL_MOL
+
+    def get_coupled_states(self,
+                           coupled_states):
+        if coupled_states is not None:
+            return coupled_states
+
+        coupled_states = []
+        for i, e_i in enumerate(self.output_keys):
+            for j, e_j in enumerate(self.output_keys):
+                if j >= i:
+                    continue
+                needs_grad = [key + "_grad" in self.grad_keys
+                              for key in [e_i, e_j]]
+
+                if all(needs_grad):
+                    coupled_states.append([i, j])
+        return coupled_states
+
+    def get_delta_keys(self):
+        keys = []
+        for i, e_i in enumerate(self.model.output_keys):
+            for j, e_j in enumerate(self.model.output_keys):
+                if j >= i:
+                    continue
+                if [i, j] not in self.coupled_states:
+                    continue
+                key = f"{e_i}_{e_j}_delta"
+                keys.append(key)
+        return keys
+
+    def process_hess(self,
+                     batch,
+                     results,
+                     states):
+
+        e_i = self.output_keys[min(states)]
+        e_j = self.output_keys[max(states)]
+
+        key = f"{e_j}_{e_i}_delta"
+        hess_key = key + "_hess"
+
+        gap = results[key]
+        gap_hess = results[hess_key]
+
+        # need to do a singular value decomposition to get rid
+        # of the zero eigenvalues too
+
+        # Also need to just predict 0 if the gap is too high
+
+        return gap, gap_hess
+
+    def nacv_from_hess(self,
+                       batch,
+                       results,
+                       states):
+
+        gaps, gap_hess = self.process_hess(batch=batch,
+                                           results=results,
+                                           states=states)
+        nacvs = []
+
+        for gap, hess in zip(gaps, gap_hess):
+
+            # Return 0 if the gap is > threshold
+            # This is very inefficient right now because the
+            # Hessian is computed even if it doesn't get used
+
+            dim = int((hess.reshape(-1).shape[0]) ** 0.5)
+
+            if gap > self.gap_threshold:
+                nacv = (torch.zeros(dim // 3, 3)
+                        .to(gap.device))
+                nacvs.append(nacv)
+                continue
+
+            # if you simplify eqs. 5 and 6 in the SchNarc
+            # paper you get this
+
+            nacv_kron = (1 / 4 * gap * hess).reshape(dim, dim)
+
+            eigs, vecs = torch.symeig(nacv_kron, True)
+            argmax = eigs.argmax()
+            lam = eigs[argmax]
+            v = vecs[:, argmax]
+            nacv = v * (lam ** 0.5)
+
+            nacvs.append(nacv.reshape(-1, 3))
+
+        nacvs = torch.cat(nacvs)
+
+        return nacvs
+
+    def add_nacv(self,
+                 batch,
+                 results):
+
+        for states in self.coupled_states:
+            nacv = self.nacv_from_hess(batch=batch,
+                                       results=results,
+                                       states=states)
+            i = states[0]
+            j = states[1]
+            key = f"force_nacv_{i}{j}"
+
+            results[key] = nacv
+
+        return results
+
+    def forward(self,
+                batch):
+        device = batch['nxyz'].device
+        results = general_batched_hessian(batch=batch,
+                                          keys=self.delta_keys,
+                                          device=device,
+                                          model=self.model,
+                                          forward=None)
+        results = self.add_nacv(batch=batch,
+                                results=results)
 
         return results

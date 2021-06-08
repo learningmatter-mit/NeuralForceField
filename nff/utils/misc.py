@@ -470,3 +470,11 @@ def cat_props(props):
             new_props[key] = val
 
     return new_props
+
+
+def kron(a, b):
+    ein = torch.einsum("ab,cd-> acbd", a, b)
+    out = ein.view(a.size(0) * b.size(0),
+                   a.size(1) * b.size(1))
+
+    return out
