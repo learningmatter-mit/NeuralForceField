@@ -162,7 +162,8 @@ class MessageBlock(MessageBase):
                  n_rbf,
                  cutoff,
                  learnable_k,
-                 dropout):
+                 dropout,
+                 **kwargs):
         super().__init__()
         self.inv_message = InvariantMessage(feat_dim=feat_dim,
                                             activation=activation,
