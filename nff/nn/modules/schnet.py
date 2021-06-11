@@ -39,7 +39,9 @@ def get_rij(xyz,
             batch,
             nbrs):
     offsets = get_offsets(batch, 'offsets')
-    r_ij = xyz[nbrs[:, 1]] - xyz[nbrs[:, 0]] - offsets
+    # + offsets not - offsets because it's r_j - r_i,
+    # whereas for schnet we've coded it as r_i - r_j
+    r_ij = xyz[nbrs[:, 1]] - xyz[nbrs[:, 0]] + offsets
 
     return r_ij
 
