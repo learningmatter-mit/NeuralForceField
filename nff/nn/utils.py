@@ -100,7 +100,7 @@ def torch_nbr_list(atomsobject,
     Returns:
         i, j, cutoff: just like ase.neighborlist.neighbor_list
     """
-    xyz = torch.Tensor(atomsobject.get_positions(wrap=True)).to(device)
+    xyz = torch.Tensor(atomsobject.get_positions(wrap=False)).to(device)
     dis_mat = xyz[None, :, :] - xyz[:, None, :]
 
     if any(atomsobject.pbc):

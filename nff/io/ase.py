@@ -64,7 +64,8 @@ class AtomsBatch(Atoms):
         self.offsets = props.get('offsets', None)
         self.nbr_torch = nbr_torch
         self.directed = directed
-        self.num_atoms = props.get('num_atoms', len(self))
+        self.num_atoms = (props.get('num_atoms', torch.LongTensor([len(self)]))
+                         .reshape(-1))
         self.cutoff = cutoff
         self.device = 0
 
