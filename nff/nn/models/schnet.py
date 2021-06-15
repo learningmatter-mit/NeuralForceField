@@ -124,7 +124,10 @@ class SchNet(nn.Module):
 
         if xyz is None:
             xyz = batch["nxyz"][:, 1:4]
-            xyz.requires_grad = True
+
+            # this logic is required for adversarial attacks
+            if not xyz.requires_grad and xyz.grad_fn is None:
+                xyz.requires_grad = True
 
         r = batch["nxyz"][:, 0]
         N = batch["num_atoms"].reshape(-1).tolist()
