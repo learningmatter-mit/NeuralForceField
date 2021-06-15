@@ -64,6 +64,9 @@ This will use 60% of the dataset for training, 20% for validation and 20% for te
 #### Property predictor
 NFF also contains modules that predict properties from 3D geometries of conformers. These include the SchNet model, expanded to include multiple conformers, as well as the ChemProp3D (CP3D)  model, which also includes graph information. A series of scripts for these modules can be found in `scripts/cp3d`. An in-depth discussion of how to use these scripts can be found in `scripts/cp3d/README.md`.   
 
+#### Adversarial Attacks
+
+NFF allows the usage of NN ensembles to perform uncertainty quantification and adversarial sampling of geometries. The complete tutorials on how to perform such analysis is available at the [Atomistic Adversarial Attacks repository](https://github.com/learningmatter-mit/Atomistic-Adversarial-Attacks), and the theory behind this differentiable sampling strategy is available at [our paper](https://arxiv.org/abs/2101.11588) [7].
 
 ### Usage with Jupyter Notebooks and other scripts
 
@@ -96,5 +99,6 @@ J. Chem. Theory Comput. **15**(1), 448-455 (2019). [10.1021/acs.jctc.8b00908](ht
 
 * [6] S. Axelrod and R. Gomez-Bombarelli. *Molecular machine learning with conformer ensembles.* arXiv preprint (2020). [arXiv:2012.08452](https://arxiv.org/abs/2012.08452?fbclid=IwAR2KlinGWeEHTR99m8x9nu2caURqIg04nQkimqzYRcTIqFq6qgv6_RgmVzo).
 
+* [7] D. Schwalbe-Koda, A.R. Tan, and R. Gomez-Bombarelli. *Differentiable sampling of molecular geometries with uncertainty-based adversarial attacks.* arXiv preprint (2021). [arXiv:2101.11588](https://arxiv.org/abs/2101.11588).
 
 
