@@ -46,6 +46,7 @@ class AtomsBatch(Atoms):
         cutoff=DEFAULT_CUTOFF,
         nbr_torch=False,
         directed=DEFAULT_DIRECTED,
+        requires_large_offsets=False,
         **kwargs
     ):
         """
@@ -68,7 +69,7 @@ class AtomsBatch(Atoms):
                          .reshape(-1))
         self.cutoff = cutoff
         self.device = 0
-
+        self.requires_large_offsets=requires_large_offsets 
     def get_nxyz(self):
         """Gets the atomic number and the positions of the atoms
             inside the unit cell of the system.
@@ -146,7 +147,7 @@ class AtomsBatch(Atoms):
             edge_from, edge_to, offsets = torch_nbr_list(atoms,
                                                         self.cutoff,
                                                         device=self.device,
-                                                        directed=self.directed)
+                                                        directed=self.directed,requires_large_offsets=self.requires_large_offsets)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
             offsets = sparsify_array(offsets.dot(self.get_cell()))
             ensemble_nbr_list.append(
