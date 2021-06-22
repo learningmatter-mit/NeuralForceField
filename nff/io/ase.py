@@ -372,7 +372,7 @@ class BulkPhaseMaterials(Atoms):
 class NeuralFF(Calculator):
     """ASE calculator using a pretrained NeuralFF model"""
 
-    implemented_properties = ['energy', 'forces']
+    implemented_properties = ['energy', 'forces','stress']
 
     def __init__(
         self,
@@ -404,7 +404,7 @@ class NeuralFF(Calculator):
     def calculate(
         self,
         atoms=None,
-        properties=['energy', 'forces'],
+        properties=['energy', 'forces','stress'],
         system_changes=all_changes,
     ):
         """Calculates the desired properties for the given AtomsBatch.
@@ -413,7 +413,7 @@ class NeuralFF(Calculator):
             atoms (AtomsBatch): custom Atoms subclass that contains implementation
                 of neighbor lists, batching and so on. Avoids the use of the Dataset
                 to calculate using the models created.
-            properties (list of str): 'energy', 'forces' or both
+            properties (list of str): 'energy', 'forces' or both and also stress
             system_changes (default from ase)
         """
 
@@ -439,6 +439,8 @@ class NeuralFF(Calculator):
                   .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
         energy_grad = (prediction[grad_key].detach()
                        .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
+        stress=(prediction['stress_volume'].detach()
+                       .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
 
         self.results = {
             'energy': energy.reshape(-1)
@@ -446,6 +448,8 @@ class NeuralFF(Calculator):
 
         if 'forces' in properties:
             self.results['forces'] = -energy_grad.reshape(-1, 3)
+        if 'stress' in properties:
+            self.results['stress']=stress*(1/atoms.get_volume())
 
     @classmethod
     def from_file(

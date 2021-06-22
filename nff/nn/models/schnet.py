@@ -1,4 +1,6 @@
+import torch
 from torch import nn
+from nff.utils.scatter import compute_grad
 
 from nff.nn.layers import DEFAULT_DROPOUT_RATE
 from nff.nn.modules import (
@@ -131,9 +133,8 @@ class SchNet(nn.Module):
 
         # offsets take care of periodic boundary conditions
         offsets = batch.get("offsets", 0)
-
-        e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
-             offsets).pow(2).sum(1).sqrt()[:, None]
+        r_ij=xyz[a[:, 0]] - xyz[a[:, 1]] - offsets
+        e = r_ij.pow(2).sum(1).sqrt()[:, None]
 
         # ensuring image atoms have the same vectors of their corresponding
         # atom inside the unit cell
@@ -144,7 +145,7 @@ class SchNet(nn.Module):
             dr = conv(r=r, e=e, a=a)
             r = r + dr
 
-        return r, N, xyz
+        return r, N, xyz, r_ij, a
 
     def forward(self, batch, xyz=None, **kwargs):
         """Summary
@@ -157,11 +158,27 @@ class SchNet(nn.Module):
             dict: dictionary of results
 
         """
+        '''
+        Added stress calculation like in painn
+        '''
 
-        r, N, xyz = self.convolve(batch, xyz)
+        r, N, xyz,r_ij,a = self.convolve(batch, xyz)
         r = self.atomwisereadout(r)
         results = batch_and_sum(r, N, list(batch.keys()), xyz)
-
+        Z=compute_grad(output=results['energy'],inputs=r_ij)
+        if batch['num_atoms'].shape[0]==1:
+            results['stress_volume']=torch.matmul(Z.t(),r_ij)
+        else:
+            allstress=[]
+            #for i in range(batch['num_atoms'].shape[0]):
+            #    for j in range(batch['num_atoms'][: i].sum().item(),batch['num_atoms'][: i+1].sum().item()):
+            for j in range(batch['nxyz'].shape[0]):
+                allstress.append(torch.matmul(Z[torch.where(a[:,0]==j)].t(),r_ij[torch.where(a[:,0]==j)]))
+            allstress=torch.stack(allstress)
+            NN = batch["num_atoms"].detach().cpu().tolist()
+            split_val = torch.split(allstress, NN)
+            results['stress_volume']=torch.stack([i.sum(0) for i in split_val])
+ 
         return results
 
 
