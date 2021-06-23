@@ -147,7 +147,7 @@ class SchNet(nn.Module):
 
         return r, N, xyz, r_ij, a
 
-    def forward(self, batch, xyz=None, **kwargs):
+    def forward(self, batch, xyz=None,requires_stress=False,**kwargs):
         """Summary
 
         Args:
@@ -165,19 +165,20 @@ class SchNet(nn.Module):
         r, N, xyz,r_ij,a = self.convolve(batch, xyz)
         r = self.atomwisereadout(r)
         results = batch_and_sum(r, N, list(batch.keys()), xyz)
-        Z=compute_grad(output=results['energy'],inputs=r_ij)
-        if batch['num_atoms'].shape[0]==1:
-            results['stress_volume']=torch.matmul(Z.t(),r_ij)
-        else:
-            allstress=[]
-            #for i in range(batch['num_atoms'].shape[0]):
-            #    for j in range(batch['num_atoms'][: i].sum().item(),batch['num_atoms'][: i+1].sum().item()):
-            for j in range(batch['nxyz'].shape[0]):
-                allstress.append(torch.matmul(Z[torch.where(a[:,0]==j)].t(),r_ij[torch.where(a[:,0]==j)]))
-            allstress=torch.stack(allstress)
-            NN = batch["num_atoms"].detach().cpu().tolist()
-            split_val = torch.split(allstress, NN)
-            results['stress_volume']=torch.stack([i.sum(0) for i in split_val])
+        if requires_stress:
+           Z=compute_grad(output=results['energy'],inputs=r_ij)
+           if batch['num_atoms'].shape[0]==1:
+              results['stress_volume']=torch.matmul(Z.t(),r_ij)
+           else:
+              allstress=[]
+              #for i in range(batch['num_atoms'].shape[0]):
+              #    for j in range(batch['num_atoms'][: i].sum().item(),batch['num_atoms'][: i+1].sum().item()):
+              for j in range(batch['nxyz'].shape[0]):
+                  allstress.append(torch.matmul(Z[torch.where(a[:,0]==j)].t(),r_ij[torch.where(a[:,0]==j)]))
+              allstress=torch.stack(allstress)
+              NN = batch["num_atoms"].detach().cpu().tolist()
+              split_val = torch.split(allstress, NN)
+              results['stress_volume']=torch.stack([i.sum(0) for i in split_val])
  
         return results
 

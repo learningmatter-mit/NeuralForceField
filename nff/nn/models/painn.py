@@ -204,7 +204,8 @@ class Painn(nn.Module):
 
     def run(self,
             batch,
-            xyz=None):
+            xyz=None,
+            requires_stress=False):
         '''
         Added stress as output. Needs to be divided by lattice volume to get actual stress. For batching for loop seemed unavoidable. will change later.
         stress considers both for crystal and molecules. For crystals need to divide by lattice volume. r_ij considers offsets which is different for molecules and crystals 
@@ -217,24 +218,25 @@ class Painn(nn.Module):
 
         if getattr(self, "compute_delta", False):
             all_results = self.add_delta(all_results)
-        Z=compute_grad(output=all_results['energy'],inputs=r_ij) 
-        if batch['num_atoms'].shape[0]==1:
-            all_results['stress_volume']=torch.matmul(Z.t(),r_ij)
-        else:
-            allstress=[]
-            #for i in range(batch['num_atoms'].shape[0]):
-            #    for j in range(batch['num_atoms'][: i].sum().item(),batch['num_atoms'][: i+1].sum().item()):
-            for j in range(batch['nxyz'].shape[0]):    
-                allstress.append(torch.matmul(Z[torch.where(nbrs[:,0]==j)].t(),r_ij[torch.where(nbrs[:,0]==j)]))
-            allstress=torch.stack(allstress)
-            N = batch["num_atoms"].detach().cpu().tolist()
-            split_val = torch.split(allstress, N)
-            all_results['stress_volume']=torch.stack([i.sum(0) for i in split_val])
+        if requires_stress:
+           Z=compute_grad(output=all_results['energy'],inputs=r_ij) 
+           if batch['num_atoms'].shape[0]==1:
+               all_results['stress_volume']=torch.matmul(Z.t(),r_ij)
+           else:
+               allstress=[]
+               #for i in range(batch['num_atoms'].shape[0]):
+               #    for j in range(batch['num_atoms'][: i].sum().item(),batch['num_atoms'][: i+1].sum().item()):
+               for j in range(batch['nxyz'].shape[0]):    
+                   allstress.append(torch.matmul(Z[torch.where(nbrs[:,0]==j)].t(),r_ij[torch.where(nbrs[:,0]==j)]))
+               allstress=torch.stack(allstress)
+               N = batch["num_atoms"].detach().cpu().tolist()
+               split_val = torch.split(allstress, N)
+               all_results['stress_volume']=torch.stack([i.sum(0) for i in split_val])
         return all_results, xyz
 
     def forward(self,
                 batch,
-                xyz=None):
+                xyz=None,requires_stress=False):
         """
         Call the model
         Args:
@@ -244,7 +246,7 @@ class Painn(nn.Module):
         """
 
         results, _ = self.run(batch=batch,
-                              xyz=xyz)
+                              xyz=xyz,requires_stress=requires_stress)
 
         return results
 

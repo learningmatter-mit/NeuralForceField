@@ -413,7 +413,7 @@ class NeuralFF(Calculator):
             atoms (AtomsBatch): custom Atoms subclass that contains implementation
                 of neighbor lists, batching and so on. Avoids the use of the Dataset
                 to calculate using the models created.
-            properties (list of str): 'energy', 'forces' or both and also stress
+            properties (list of str): 'energy', 'forces' or both and also stress for only schnet and painn
             system_changes (default from ase)
         """
 
@@ -432,7 +432,7 @@ class NeuralFF(Calculator):
         batch[self.en_key] = []
         batch[grad_key] = []
 
-        prediction = self.model(batch)
+        prediction = self.model(batch,requires_stress=True)
 
         # change energy and force to numpy array
         energy = (prediction[self.en_key].detach()
