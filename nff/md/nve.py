@@ -60,7 +60,8 @@ class Dynamics:
         # attach log file
         self.integrator.attach(NeuralMDLogger(self.integrator, 
                                         self.atomsbatch, 
-                                        self.mdparam['thermo_filename'], 
+                                        self.mdparam['thermo_filename'],
+                                        stress='stress' in self.atomsbatch.calc.properties,
                                         mode='a'), interval=self.mdparam['save_frequency'])
         
     def setup_restart(self, restart_param):
@@ -104,7 +105,8 @@ class Dynamics:
         # attach log file
         self.integrator.attach(NeuralMDLogger(self.integrator, 
                                         self.atomsbatch, 
-                                        self.restart_param['thermo_filename'], 
+                                        self.restart_param['thermo_filename'],
+                                         stress='stress' in self.atomsbatch.calc.properties,
                                         mode='a'), interval=self.mdparam['save_frequency'])
         
         self.mdparam['steps'] = restart_param['steps']
