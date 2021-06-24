@@ -61,6 +61,7 @@ def evaluate(model,
     all_batches = []
 
     for batch in tqdm(loader):
+
         vsize = batch['nxyz'].size(0)
         n_eval += vsize
 

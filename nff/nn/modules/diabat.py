@@ -914,7 +914,7 @@ class AdiabaticNacv(nn.Module):
 
         return nacvs
 
-    def add_nacv(self,
+    def nacv_add(self,
                  batch,
                  results):
 
@@ -930,15 +930,46 @@ class AdiabaticNacv(nn.Module):
 
         return results
 
+    def fix_pad(self,
+                batch,
+                results):
+        num_atoms = batch['num_atoms']
+        if not isinstance(num_atoms, list):
+            num_atoms = num_atoms.tolist()
+
+        max_atoms = max(num_atoms)
+        pad_num_atoms = [max_atoms] * len(num_atoms)
+
+        for key in self.grad_keys:
+            real = []
+            split = list(torch.split(results[key],
+                                     pad_num_atoms))
+            for val, num in zip(split, num_atoms):
+                real.append(val[:num])
+            real = torch.cat(real)
+
+            results[key] = real
+
+        return results
+
     def forward(self,
-                batch):
+                batch,
+                report_hess=False):
+
         device = batch['nxyz'].device
         results = general_batched_hessian(batch=batch,
                                           keys=self.delta_keys,
                                           device=device,
                                           model=self.model,
                                           forward=None)
-        results = self.add_nacv(batch=batch,
+        results = self.nacv_add(batch=batch,
                                 results=results)
+        results = self.fix_pad(batch=batch,
+                               results=results)
+
+        if not report_hess:
+            for key in list(results.keys()):
+                if 'hess' in key:
+                    results.pop(key)
 
         return results

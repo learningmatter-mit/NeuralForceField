@@ -29,10 +29,12 @@ UNDIRECTED = [SchNet,
               SchNetFeatures,
               OnlyBondUpdateCP3D]
 
+
 def check_directed(model, atoms):
     model_cls = model.__class__.__name__
     msg = f"{model_cls} needs a directed neighbor list"
     assert atoms.directed, msg
+
 
 class AtomsBatch(Atoms):
     """Class to deal with the Neural Force Field and batch several
@@ -66,10 +68,12 @@ class AtomsBatch(Atoms):
         self.nbr_torch = nbr_torch
         self.directed = directed
         self.num_atoms = (props.get('num_atoms', torch.LongTensor([len(self)]))
-                         .reshape(-1))
+                          .reshape(-1))
+        self.props['num_atoms'] = self.num_atoms
         self.cutoff = cutoff
         self.device = 0
-        self.requires_large_offsets=requires_large_offsets 
+        self.requires_large_offsets = requires_large_offsets
+
     def get_nxyz(self):
         """Gets the atomic number and the positions of the atoms
             inside the unit cell of the system.
@@ -93,14 +97,14 @@ class AtomsBatch(Atoms):
         """
         if self.nbr_list is None or self.offsets is None:
             self.update_nbr_list()
-                
+
         self.props['nbr_list'] = self.nbr_list
         self.props['offsets'] = self.offsets
 
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
         if self.props.get('num_atoms') is None:
             self.props['num_atoms'] = torch.LongTensor([len(self)])
- 
+
         return self.props
 
     def get_list_atoms(self):
@@ -125,7 +129,7 @@ class AtomsBatch(Atoms):
                                     pbc=self.pbc))
 
         return Atoms_list
-    
+
     def update_nbr_list(self):
         """Update neighbor list and the periodic reindexing
             for the given Atoms object.
@@ -144,10 +148,12 @@ class AtomsBatch(Atoms):
         ensemble_nbr_list = []
         ensemble_offsets_list = []
         for i, atoms in enumerate(Atoms_list):
-            edge_from, edge_to, offsets = torch_nbr_list(atoms,
-                                                        self.cutoff,
-                                                        device=self.device,
-                                                        directed=self.directed,requires_large_offsets=self.requires_large_offsets)
+            edge_from, edge_to, offsets = torch_nbr_list(
+                atoms,
+                self.cutoff,
+                device=self.device,
+                directed=self.directed,
+                requires_large_offsets=self.requires_large_offsets)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
             offsets = sparsify_array(offsets.dot(self.get_cell()))
             ensemble_nbr_list.append(
@@ -155,41 +161,51 @@ class AtomsBatch(Atoms):
             ensemble_offsets_list.append(offsets)
 
         ensemble_nbr_list = torch.cat(ensemble_nbr_list)
-        ensemble_offsets_list = torch.cat(ensemble_offsets_list)
+
+        if all([isinstance(i, int) for i in ensemble_offsets_list]):
+            ensemble_offsets_list = torch.Tensor(ensemble_offsets_list)
+        else:
+            ensemble_offsets_list = torch.cat(ensemble_offsets_list)
 
         self.nbr_list = ensemble_nbr_list
         self.offsets = ensemble_offsets_list
 
         return ensemble_nbr_list, ensemble_offsets_list
-    
+
     def get_batch_energies(self):
-        
+
         if self._calc is None:
             raise RuntimeError('Atoms object has no calculator.')
-            
+
         if not hasattr(self._calc, 'get_potential_energies'):
-            raise RuntimeError('The calculator for atomwise energies is not implemented')
-            
+            raise RuntimeError(
+                'The calculator for atomwise energies is not implemented')
+
         energies = self.get_potential_energies()
-        
+
         batched_energies = split_and_sum(torch.Tensor(energies),
                                          self.props['num_atoms'].tolist())
-        
+
         return batched_energies.detach().cpu().numpy()
 
     def get_batch_kinetic_energy(self):
 
         if self.get_momenta().any():
-            atomwise_ke = torch.Tensor(0.5 * self.get_momenta() * self.get_velocities()).sum(-1)
-            batch_ke = split_and_sum(atomwise_ke, self.props['num_atoms'].tolist())
+            atomwise_ke = torch.Tensor(
+                0.5 * self.get_momenta() * self.get_velocities()).sum(-1)
+            batch_ke = split_and_sum(
+                atomwise_ke, self.props['num_atoms'].tolist())
             return batch_ke.detach().cpu().numpy()
-        
+
         else:
             print("No momenta are set for atoms")
 
     def get_batch_T(self):
-    
-        return self.get_batch_KE() / (1.5 * units.kB * self.props['num_atoms'].detach().cpu().numpy() )
+
+        T = (self.get_batch_KE()
+             / (1.5 * units.kB * self.props['num_atoms']
+                .detach().cpu().numpy()))
+        return T
 
     def batch_properties():
         pass
@@ -308,10 +324,12 @@ class BulkPhaseMaterials(Atoms):
         if exclude_atoms_nbr_list:
             offsets_mat = torch.zeros(self.get_number_of_atoms(),
                                       self.get_number_of_atoms(), 3)
-            nbr_list_mat = torch.zeros(self.get_number_of_atoms(),
-                                       self.get_number_of_atoms()).to(torch.long)
-            atom_nbr_list_mat = torch.zeros(self.get_number_of_atoms(),
-                                            self.get_number_of_atoms()).to(torch.long)
+            nbr_list_mat = (torch.zeros(self.get_number_of_atoms(),
+                                        self.get_number_of_atoms())
+                            .to(torch.long))
+            atom_nbr_list_mat = (torch.zeros(self.get_number_of_atoms(),
+                                             self.get_number_of_atoms())
+                                 .to(torch.long))
 
             offsets_mat[nbr_list[:, 0], nbr_list[:, 1]] = offsets
             nbr_list_mat[nbr_list[:, 0], nbr_list[:, 1]] = 1
@@ -407,6 +425,7 @@ class NeuralFF(Calculator):
     def calculate(
         self,
         atoms=None,
+        properties=['energy', 'forces'],
         system_changes=all_changes,
     ):
         """Calculates the desired properties for the given AtomsBatch.
@@ -420,6 +439,10 @@ class NeuralFF(Calculator):
 
         if not any([isinstance(self.model, i) for i in UNDIRECTED]):
             check_directed(self.model, atoms)
+
+        # for backwards compatability
+        if getattr(self, "properties", None) is None:
+            self.properties = properties
 
         Calculator.calculate(self, atoms, self.properties, system_changes)
 
@@ -451,7 +474,7 @@ class NeuralFF(Calculator):
         if requires_stress:
             stress = (prediction['stress_volume'].detach()
                       .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
-            self.results['stress']= stress * (1 / atoms.get_volume())
+            self.results['stress'] = stress * (1 / atoms.get_volume())
 
     @classmethod
     def from_file(
@@ -469,8 +492,8 @@ class NeuralFF(Calculator):
 
 
 class EnsembleNFF(Calculator):
-    """Produces an ensemble of NFF calculators to predict the discrepancy between
-        the properties"""
+    """Produces an ensemble of NFF calculators to predict the
+        discrepancy between the properties"""
     implemented_properties = ['energy', 'forces']
 
     def __init__(

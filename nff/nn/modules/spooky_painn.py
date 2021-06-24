@@ -52,6 +52,9 @@ class NonLocalInteraction(nn.Module):
             k = k_split[i]
             v = v_split[i]
             extra_pad = max_num_atoms - q.shape[0]
+            # this doesn't work because q and k get
+            # multiplied together to give +400
+            
             pad = -20 * torch.ones(extra_pad,
                                    self.feat_dim,
                                    device=Q.device)

@@ -116,6 +116,7 @@ def adj_nbrs_and_z(batch, xyz, max_dim, stacked):
         # add dummy atomic numbers for these new nan's
         new_z = torch.cat([new_z[:dim],
                            torch.Tensor([float("nan")]).to(new_z.device),
+                           # torch.Tensor([float("1")]).to(new_z.device),
                            new_z[dim:]])
 
     # change the neighbor list in the batch
@@ -300,6 +301,8 @@ def general_batched_hessian(batch,
                             device,
                             model=None,
                             forward=None):
+
+    # doesn't seem to work for painn, at least with non-locality
 
     assert any([i is not None for i in [model, forward]])
     xyz, stack_xyz, results = results_from_stack(batch=batch,
