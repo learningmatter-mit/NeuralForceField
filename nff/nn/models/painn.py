@@ -86,6 +86,8 @@ class Painn(nn.Module):
         else:
             self.pool_dic = nn.ModuleDict({})
             for out_key, sub_dic in pool_dic.items():
+                if out_key not in self.output_keys:
+                    continue
                 pool_name = sub_dic["name"].lower()
                 kwargs = sub_dic["param"]
                 pool_class = POOL_DIC[pool_name]
