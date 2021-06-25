@@ -90,6 +90,8 @@ class SpookyNet(nn.Module):
         if add_disp_keys:
             raise NotImplementedError("Dispersion not implemented")
 
+        self.r_cut = r_cut
+
     def get_results(self,
                     z,
                     f,
@@ -159,6 +161,12 @@ class SpookyNet(nn.Module):
 
         return results
 
+    def set_cutoff(self):
+        if hasattr(self, "cutoff"):
+            return
+        interac = self.interactions[0]
+        self.cutoff = interac.local.g_0.r_cut
+
     def fwd(self,
             batch,
             xyz=None,
@@ -184,10 +192,12 @@ class SpookyNet(nn.Module):
                            z=z,
                            num_atoms=num_atoms)
 
-        # get r_ij including offsets
-        r_ij = get_rij(xyz=xyz,
-                       batch=batch,
-                       nbrs=nbrs)
+        # get r_ij including offsets and removing neighbor skin
+        self.set_cutoff()
+        r_ij, nbrs = get_rij(xyz=xyz,
+                             batch=batch,
+                             nbrs=nbrs,
+                             cutoff=self.cutoff)
         f = torch.zeros_like(x)
 
         for i, interaction in enumerate(self.interactions):

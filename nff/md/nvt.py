@@ -118,6 +118,7 @@ class NoseHoover(MolecularDynamics):
         # maximum number of steps starts at `steps_per_epoch`
         # and increments after every nbr list update
         self.max_steps = 0
+        self.atoms.update_nbr_list()
 
         for _ in range(epochs):
             self.max_steps += steps_per_epoch
@@ -261,6 +262,8 @@ class NoseHooverMetadynamics(NoseHoover):
         steps_between_add = int(self.geom_add_time / self.dt)
         steps_until_add = copy.deepcopy(steps_between_add)
 
+        self.atoms.update_nbr_list()
+
         for _ in range(epochs):
             self.max_steps += steps_per_epoch
             Dynamics.run(self)
@@ -300,16 +303,16 @@ class BatchNoseHoover(MolecularDynamics):
         self.T = temperature * units.kB
         self.targeEkin = 0.5 * (3.0 * self.Natom) * self.T
         self.ttime = ttime  # * units.fs
-        
+
         self.Q = 3.0 * self.Natom * self.T * (self.ttime * self.dt)**2
         self.zeta = 0.0
         self.num_steps = max_steps
         self.n_steps = 0
         self.nbr_update_period = nbr_update_period
-        
+
         batch = atoms.get_batch()
-        
-        #Check for number of virtual variables
+
+        # Check for number of virtual variables
         if batch.get('num_atoms', None) is not None:
             self.Natom = batch.get('num_atoms', None).numpy()
             self.n_sys = self.Natom.shape[0]
@@ -317,20 +320,24 @@ class BatchNoseHoover(MolecularDynamics):
         else:
             self.n_sys = 1
 
-        self.Q = np.array(3.0 * self.T * (self.ttime * self.dt)**2 * self.Natom )
+        self.Q = np.array(
+            3.0 * self.T * (self.ttime * self.dt)**2 * self.Natom)
         self.zeta = np.array([0.0] * self.n_sys)
 
     def step(self):
 
         # get current acceleration and velocity
-        accel = self.atoms.get_forces() / self.atoms.get_masses().reshape(-1, 1)
+        accel = (self.atoms.get_forces()
+                 / self.atoms.get_masses().reshape(-1, 1))
         vel = self.atoms.get_velocities()
-        
-        visc = (accel - \
-                    (self.zeta[None, : , None] * vel.reshape(-1, self.n_sys, 3)).reshape(-1, 3))
-        
+
+        visc = (accel - (self.zeta[None, :, None]
+                         * vel.reshape(-1, self.n_sys, 3))
+                .reshape(-1, 3))
+
         # make full step in position
-        x = self.atoms.get_positions(wrap=True) + vel * self.dt + visc * (0.5 * self.dt ** 2)
+        x = self.atoms.get_positions(
+            wrap=True) + vel * self.dt + visc * (0.5 * self.dt ** 2)
         self.atoms.set_positions(x)
 
         # record current velocities
@@ -349,16 +356,18 @@ class BatchNoseHoover(MolecularDynamics):
             (1/self.Q) * (KE_0 - self.targeEkin)
 
         # make another halfstep in self.zeta
-        self.zeta = self.zeta + 0.5 * self.dt * \
-            (1/self.Q) * (self.atoms.get_batch_kinetic_energy() - self.targeEkin)
+        self.zeta = (self.zeta + 0.5 * self.dt * (1 / self.Q)
+                     * (self.atoms.get_batch_kinetic_energy()
+                        - self.targeEkin))
 
         # make another half step in velocity
-        vel = (self.atoms.get_velocities() + 0.5 * self.dt * accel).reshape(self.n_sys, -1, 3) / \
-                        (1 + 0.5 * self.dt * self.zeta[:, None, None])
-        self.atoms.set_velocities(vel.reshape(-1 ,3))
+        vel = ((self.atoms.get_velocities()
+                + 0.5 * self.dt * accel).reshape(self.n_sys, -1, 3) /
+               (1 + 0.5 * self.dt * self.zeta[:, None, None]))
+        self.atoms.set_velocities(vel.reshape(-1, 3))
 
         return f
-    
+
     def run(self, steps=None):
 
         if steps is None:
@@ -372,6 +381,7 @@ class BatchNoseHoover(MolecularDynamics):
         # maximum number of steps starts at `steps_per_epoch`
         # and increments after every nbr list update
         self.max_steps = 0
+        self.atoms.update_nbr_list()
 
         for _ in range(epochs):
             self.max_steps += steps_per_epoch

@@ -23,6 +23,7 @@ from nff.nn.models.cp3d import OnlyBondUpdateCP3D
 
 DEFAULT_CUTOFF = 5.0
 DEFAULT_DIRECTED = False
+DEFAULT_SKIN = 1.0
 UNDIRECTED = [SchNet,
               SchNetDiabat,
               HybridGraphConv,
@@ -46,9 +47,9 @@ class AtomsBatch(Atoms):
         *args,
         props={},
         cutoff=DEFAULT_CUTOFF,
-        nbr_torch=False,
         directed=DEFAULT_DIRECTED,
         requires_large_offsets=False,
+        cutoff_skin=DEFAULT_SKIN,
         **kwargs
     ):
         """
@@ -58,6 +59,9 @@ class AtomsBatch(Atoms):
             nbr_list (None, optional): Description
             pbc_index (None, optional): Description
             cutoff (TYPE, optional): Description
+            cutoff_skin (float): extra distance added to cutoff
+                to ensure we don't miss neighbors between nbr
+                list updates.
             **kwargs: Description
         """
         super().__init__(*args, **kwargs)
@@ -65,12 +69,13 @@ class AtomsBatch(Atoms):
         self.props = props
         self.nbr_list = props.get('nbr_list', None)
         self.offsets = props.get('offsets', None)
-        self.nbr_torch = nbr_torch
         self.directed = directed
-        self.num_atoms = (props.get('num_atoms', torch.LongTensor([len(self)]))
+        self.num_atoms = (props.get('num_atoms',
+                                    torch.LongTensor([len(self)]))
                           .reshape(-1))
         self.props['num_atoms'] = self.num_atoms
         self.cutoff = cutoff
+        self.cutoff_skin = cutoff_skin
         self.device = 0
         self.requires_large_offsets = requires_large_offsets
 
@@ -150,7 +155,7 @@ class AtomsBatch(Atoms):
         for i, atoms in enumerate(Atoms_list):
             edge_from, edge_to, offsets = torch_nbr_list(
                 atoms,
-                self.cutoff,
+                (self.cutoff + self.cutoff_skin),
                 device=self.device,
                 directed=self.directed,
                 requires_large_offsets=self.requires_large_offsets)

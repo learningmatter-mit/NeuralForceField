@@ -100,6 +100,7 @@ class SpookyPainn(Painn):
 
         if add_disp_keys:
             raise NotImplementedError("Dispersion not implemented")
+        self.cutoff = cutoff
 
     def atomwise(self,
                  batch,
@@ -123,10 +124,13 @@ class SpookyPainn(Painn):
         z_numbers = nxyz[:, 0].long()
         # include offests
 
-        # get r_ij including offsets
-        r_ij = get_rij(xyz=xyz,
-                       batch=batch,
-                       nbrs=nbrs)
+        # get r_ij including offsets and excluding
+        # anything in the neighbor skin
+        self.set_cutoff()
+        r_ij, nbrs = get_rij(xyz=xyz,
+                             batch=batch,
+                             nbrs=nbrs,
+                             cutoff=self.cutoff)
         s_i, v_i = self.embed_block(charge=charge,
                                     spin=spin,
                                     z=z_numbers,
@@ -280,7 +284,8 @@ class SpookyPainn(Painn):
 
     def run(self,
             batch,
-            xyz=None):
+            xyz=None,
+            **kwargs):
 
         nbrs, _ = make_directed(batch['nbr_list'])
         num_atoms = batch['num_atoms']

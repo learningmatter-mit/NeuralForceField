@@ -37,13 +37,57 @@ def get_offsets(batch, key):
 
 def get_rij(xyz,
             batch,
-            nbrs):
+            nbrs,
+            cutoff):
+
     offsets = get_offsets(batch, 'offsets')
     # + offsets not - offsets because it's r_j - r_i,
     # whereas for schnet we've coded it as r_i - r_j
     r_ij = xyz[nbrs[:, 1]] - xyz[nbrs[:, 0]] + offsets
 
-    return r_ij
+    # remove nbr skin (extra distance added to cutoff
+    # to catch atoms that become neighbors between nbr
+    # list updates)
+    dist = (r_ij.detach() ** 2).sum(-1) ** 0.5
+    use_nbrs = (dist <= cutoff)
+
+    r_ij = r_ij[use_nbrs]
+    nbrs = nbrs[use_nbrs]
+
+    return r_ij, nbrs
+
+
+def add_stress(batch,
+               all_results,
+               nbrs,
+               r_ij):
+    """
+    Add stress as output. Needs to be divided by lattice volume to get actual stress. 
+    For batching for loop seemed unavoidable. will change later.
+    stress considers both for crystal and molecules. 
+    For crystals need to divide by lattice volume. 
+    r_ij considers offsets which is different for molecules and crystals.
+    """
+
+    Z = compute_grad(output=all_results['energy'],
+                     inputs=r_ij)
+    if batch['num_atoms'].shape[0] == 1:
+        all_results['stress_volume'] = torch.matmul(Z.t(), r_ij)
+    else:
+        allstress = []
+        for j in range(batch['nxyz'].shape[0]):
+            allstress.append(
+                torch.matmul(
+                    Z[torch.where(nbrs[:, 0] == j)].t(),
+                    r_ij[torch.where(nbrs[:, 0] == j)]
+                )
+            )
+        allstress = torch.stack(allstress)
+        N = batch["num_atoms"].detach().cpu().tolist()
+        split_val = torch.split(allstress, N)
+        all_results['stress_volume'] = torch.stack([i.sum(0)
+                                                    for i in split_val])
+    return all_results
 
 
 class SchNetEdgeUpdate(EdgeUpdateModule):

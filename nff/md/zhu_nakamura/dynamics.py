@@ -27,6 +27,7 @@ OUT_FILE = "trj.csv"
 LOG_FILE = "trj.log"
 DEF_EXPLICIT_DIABAT = False
 DEF_MAX_GAP_HOP = float("inf")
+DEFAULT_SKIN = 1.0
 
 METHOD_DIC = {
     "nosehoover": NoseHoover,
@@ -893,6 +894,9 @@ class BatchedZhuNakamura:
         model (torch.nn): neural network model
         batch_size (int): size of batches to be fed into network
         cutoff (float): neighbor list cutoff in schnet
+        cutoff_skin (float): extra amount of distance to add to cutoff
+            to deal with atoms becoming neighbors between neighbor list
+            updates 
 
     """
 
@@ -933,6 +937,8 @@ class BatchedZhuNakamura:
 
         self.batch_size = batched_params["batch_size"]
         self.cutoff = batched_params["cutoff"]
+        self.cutoff_skin = batched_params.get("cutoff_skin",
+                                              DEFAULT_SKIN)
         self.needs_angles = needs_angles
 
         # for saving at intervals
@@ -996,7 +1002,9 @@ class BatchedZhuNakamura:
 
         return new_props
 
-    def update_energies_forces(self, trjs, get_new_neighbors):
+    def update_energies_forces(self,
+                               trjs,
+                               get_new_neighbors):
         """
         Update the energies and forces for the molecules of each trajectory.
         Args:
@@ -1014,63 +1022,56 @@ class BatchedZhuNakamura:
                           units='kcal/mol',
                           check_props=False)
 
-        try:
-            if get_new_neighbors:
-                # can stack the nxyz's and generate the neighbor list
-                # accordingly because all geoms correspond to the
-                # same molecule
-                nbrs = single_spec_nbrs(dset=dataset,
-                                        cutoff=self.cutoff,
-                                        device=self.device,
-                                        directed=True)
-                dataset.props['nbr_list'] = nbrs
+        if get_new_neighbors:
+            # can stack the nxyz's and generate the neighbor list
+            # accordingly because all geoms correspond to the
+            # same molecule
+            nbrs = single_spec_nbrs(dset=dataset,
+                                    cutoff=(self.cutoff +
+                                            self.cutoff_skin),
+                                    device=self.device,
+                                    directed=True)
+            dataset.props['nbr_list'] = nbrs
 
-                # dataset.generate_neighbor_list(self.cutoff)
+            # dataset.generate_neighbor_list(self.cutoff)
 
-                if self.needs_angles:
-                    dataset.generate_angle_list()
+            if self.needs_angles:
+                dataset.generate_angle_list()
 
-            dataset.props["num_atoms"] = dataset.props["num_atoms"].long()
-            self.props = dataset.props
-            loader = DataLoader(dataset,
-                                batch_size=self.batch_size,
-                                collate_fn=collate_dicts)
+        dataset.props["num_atoms"] = dataset.props["num_atoms"].long()
+        self.props = dataset.props
+        loader = DataLoader(dataset,
+                            batch_size=self.batch_size,
+                            collate_fn=collate_dicts)
 
-            for i, batch in enumerate(loader):
+        for i, batch in enumerate(loader):
+            batch = batch_to(batch, self.device)
+            results = self.model(batch)
+            results = batch_detach(results)
 
-                batch = batch_to(batch, self.device)
-                results = self.model(batch)
-                results = batch_detach(results)
+            for key in self.grad_keys:
+                N = batch["num_atoms"].cpu().detach().numpy().tolist()
+                results[key] = torch.split(results[key], N)
 
-                for key in self.grad_keys:
-                    N = batch["num_atoms"].cpu().detach().numpy().tolist()
-                    results[key] = torch.split(results[key], N)
+            current_trj = i * self.batch_size
 
-                current_trj = i * self.batch_size
+            for j, trj in enumerate(trjs[current_trj:
+                                         current_trj + self.batch_size]):
+                energies = []
+                forces = []
+                for key in self.energy_keys:
+                    energy = (results[key][j].item())*KCAL_TO_AU["energy"]
 
-                for j, trj in enumerate(trjs[current_trj:
-                                             current_trj + self.batch_size]):
-                    energies = []
-                    forces = []
-                    for key in self.energy_keys:
-                        energy = (results[key][j].item())*KCAL_TO_AU["energy"]
+                    force = (
+                        (-results[key + "_grad"][j]).detach(
+                        ).cpu().numpy()
+                    ) * KCAL_TO_AU["energy"]*KCAL_TO_AU["_grad"]
 
-                        force = (
-                            (-results[key + "_grad"][j]).detach(
-                            ).cpu().numpy()
-                        ) * KCAL_TO_AU["energy"]*KCAL_TO_AU["_grad"]
+                    energies.append(energy)
+                    forces.append(force)
 
-                        energies.append(energy)
-                        forces.append(force)
-
-                    trj.energies = np.array(energies)
-                    trj.forces = np.array(forces)
-
-        except Exception as e:
-            print(e)
-            print(dataset.props)
-            import pdb
-            pdb.post_mortem()
+                trj.energies = np.array(energies)
+                trj.forces = np.array(forces)
 
     def add_diabat_forces(self):
         diabat_trjs = []
@@ -1172,7 +1173,9 @@ class BatchedZhuNakamura:
         if trj.time < self.max_time:
             trj.save()
 
-    def step(self, get_new_neighbors, do_save=True):
+    def step(self,
+             get_new_neighbors,
+             do_save=True):
         """
         Take a step for each trajectory
         Args:

@@ -1,15 +1,13 @@
-import torch
 from torch import nn
 import numpy as np
 import copy
-from nff.utils.scatter import compute_grad
 from nff.utils.tools import make_directed
 from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
                                   EmbeddingBlock, ReadoutBlock,
                                   TransformerMessageBlock,
                                   NbrEmbeddingBlock)
 from nff.nn.modules.schnet import (AttentionPool, SumPool, MolFpPool,
-                                   MeanPool, get_rij)
+                                   MeanPool, get_rij, add_stress)
 from nff.nn.modules.diabat import DiabaticReadout, AdiabaticReadout
 from nff.nn.layers import (Diagonalize, ExpNormalBasis)
 
@@ -92,6 +90,14 @@ class Painn(nn.Module):
                 self.pool_dic[out_key] = pool_class(**kwargs)
 
         self.compute_delta = modelparams.get("compute_delta", False)
+        self.cutoff = cutoff
+
+    def set_cutoff(self):
+        if hasattr(self, "cutoff"):
+            return
+        msg = self.message_blocks[0]
+        dist_embed = msg.inv_message.dist_embed
+        self.cutoff = dist_embed.f_cut.cutoff
 
     def atomwise(self,
                  batch,
@@ -111,10 +117,14 @@ class Painn(nn.Module):
 
         z_numbers = nxyz[:, 0].long()
 
-        # get r_ij including offsets
-        r_ij = get_rij(xyz=xyz,
-                       batch=batch,
-                       nbrs=nbrs)
+        # get r_ij including offsets and excluding
+        # anything in the neighbor skin
+        self.set_cutoff()
+        r_ij, nbrs = get_rij(xyz=xyz,
+                             batch=batch,
+                             nbrs=nbrs,
+                             cutoff=self.cutoff)
+
         s_i, v_i = self.embed_block(z_numbers,
                                     nbrs=nbrs,
                                     r_ij=r_ij)
@@ -162,7 +172,7 @@ class Painn(nn.Module):
 
         results['features'] = s_i
 
-        return results, xyz, r_ij,nbrs
+        return results, xyz, r_ij, nbrs
 
     def pool(self,
              batch,
@@ -206,12 +216,9 @@ class Painn(nn.Module):
             batch,
             xyz=None,
             requires_stress=False):
-        '''
-        Added stress as output. Needs to be divided by lattice volume to get actual stress. For batching for loop seemed unavoidable. will change later.
-        stress considers both for crystal and molecules. For crystals need to divide by lattice volume. r_ij considers offsets which is different for molecules and crystals 
-        '''
+
         atomwise_out, xyz, r_ij, nbrs = self.atomwise(batch=batch,
-                                          xyz=xyz)
+                                                      xyz=xyz)
         all_results, xyz = self.pool(batch=batch,
                                      atomwise_out=atomwise_out,
                                      xyz=xyz)
@@ -219,24 +226,15 @@ class Painn(nn.Module):
         if getattr(self, "compute_delta", False):
             all_results = self.add_delta(all_results)
         if requires_stress:
-           Z=compute_grad(output=all_results['energy'],inputs=r_ij) 
-           if batch['num_atoms'].shape[0]==1:
-               all_results['stress_volume']=torch.matmul(Z.t(),r_ij)
-           else:
-               allstress=[]
-               #for i in range(batch['num_atoms'].shape[0]):
-               #    for j in range(batch['num_atoms'][: i].sum().item(),batch['num_atoms'][: i+1].sum().item()):
-               for j in range(batch['nxyz'].shape[0]):    
-                   allstress.append(torch.matmul(Z[torch.where(nbrs[:,0]==j)].t(),r_ij[torch.where(nbrs[:,0]==j)]))
-               allstress=torch.stack(allstress)
-               N = batch["num_atoms"].detach().cpu().tolist()
-               split_val = torch.split(allstress, N)
-               all_results['stress_volume']=torch.stack([i.sum(0) for i in split_val])
+            all_results = add_stress(batch=batch,
+                                     all_results=all_results,
+                                     nbrs=nbrs,
+                                     r_ij=r_ij)
         return all_results, xyz
 
     def forward(self,
                 batch,
-                xyz=None,requires_stress=False):
+                xyz=None, requires_stress=False):
         """
         Call the model
         Args:
@@ -246,7 +244,7 @@ class Painn(nn.Module):
         """
 
         results, _ = self.run(batch=batch,
-                              xyz=xyz,requires_stress=requires_stress)
+                              xyz=xyz, requires_stress=requires_stress)
 
         return results
 

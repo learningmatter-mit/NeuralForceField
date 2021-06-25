@@ -1,11 +1,11 @@
-import torch
 from torch import nn
-from nff.utils.scatter import compute_grad
 
 from nff.nn.layers import DEFAULT_DROPOUT_RATE
 from nff.nn.modules import (
     SchNetConv,
-    NodeMultiTaskReadOut
+    NodeMultiTaskReadOut,
+    get_rij,
+    add_stress
 )
 
 
@@ -104,8 +104,18 @@ class SchNet(nn.Module):
             multitaskdict=readoutdict, post_readout=post_readout
         )
         self.device = None
+        self.cutoff = cutoff
 
-    def convolve(self, batch, xyz=None):
+    def set_cutoff(self):
+        if hasattr(self, "cutoff"):
+            return
+        gauss_centers = (self.convolutions[0].moduledict
+                         ['message_edge_filter'][0].offsets)
+        self.cutoff = gauss_centers[-1] - gauss_centers[0]
+
+    def convolve(self,
+                 batch,
+                 xyz=None):
         """
 
         Apply the convolutional layers to the batch.
@@ -131,13 +141,16 @@ class SchNet(nn.Module):
         N = batch["num_atoms"].reshape(-1).tolist()
         a = batch["nbr_list"]
 
-        # offsets take care of periodic boundary conditions
-        offsets = batch.get("offsets", 0)
-        r_ij=xyz[a[:, 0]] - xyz[a[:, 1]] - offsets
-        e = r_ij.pow(2).sum(1).sqrt()[:, None]
+        # get r_ij including offsets and excluding
+        # anything in the neighbor skin
+        self.set_cutoff()
+        r_ij, a = get_rij(xyz=xyz,
+                          batch=batch,
+                          nbrs=a,
+                          cutoff=self.cutoff)
+        dist = r_ij.pow(2).sum(1).sqrt()
+        e = dist[:, None]
 
-        # ensuring image atoms have the same vectors of their corresponding
-        # atom inside the unit cell
         r = self.atom_embed(r.long()).squeeze()
 
         # update function includes periodic boundary conditions
@@ -147,9 +160,12 @@ class SchNet(nn.Module):
 
         return r, N, xyz, r_ij, a
 
-    def forward(self, batch, xyz=None,requires_stress=False,**kwargs):
+    def forward(self,
+                batch,
+                xyz=None,
+                requires_stress=False,
+                **kwargs):
         """Summary
-
         Args:
             batch (dict): dictionary of props
             xyz (torch.tensor): (optional) coordinates
@@ -158,28 +174,16 @@ class SchNet(nn.Module):
             dict: dictionary of results
 
         """
-        '''
-        Added stress calculation like in painn
-        '''
 
-        r, N, xyz,r_ij,a = self.convolve(batch, xyz)
+        r, N, xyz, r_ij, a = self.convolve(batch, xyz)
         r = self.atomwisereadout(r)
         results = batch_and_sum(r, N, list(batch.keys()), xyz)
         if requires_stress:
-           Z=compute_grad(output=results['energy'],inputs=r_ij)
-           if batch['num_atoms'].shape[0]==1:
-              results['stress_volume']=torch.matmul(Z.t(),r_ij)
-           else:
-              allstress=[]
-              #for i in range(batch['num_atoms'].shape[0]):
-              #    for j in range(batch['num_atoms'][: i].sum().item(),batch['num_atoms'][: i+1].sum().item()):
-              for j in range(batch['nxyz'].shape[0]):
-                  allstress.append(torch.matmul(Z[torch.where(a[:,0]==j)].t(),r_ij[torch.where(a[:,0]==j)]))
-              allstress=torch.stack(allstress)
-              NN = batch["num_atoms"].detach().cpu().tolist()
-              split_val = torch.split(allstress, NN)
-              results['stress_volume']=torch.stack([i.sum(0) for i in split_val])
- 
+            results = add_stress(batch=batch,
+                                 all_results=results,
+                                 nbrs=a,
+                                 r_ij=r_ij)
+
         return results
 
 
