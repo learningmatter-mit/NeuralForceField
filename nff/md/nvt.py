@@ -53,6 +53,8 @@ class NoseHoover(MolecularDynamics):
         self.zeta = 0.0
         self.num_steps = max_steps
         self.n_steps = 0
+        self.max_steps = 0
+
         self.nbr_update_period = nbr_update_period
 
         # initial Maxwell-Boltmann temperature for atoms
@@ -115,7 +117,7 @@ class NoseHoover(MolecularDynamics):
         steps_per_epoch = int(steps / epochs)
         # maximum number of steps starts at `steps_per_epoch`
         # and increments after every nbr list update
-        self.max_steps = 0
+        #self.max_steps = 0
         self.atoms.update_nbr_list()
 
         for _ in range(epochs):
@@ -157,7 +159,7 @@ class NoseHooverChain(NoseHoover):
         self.N_dof = 3.0 * self.Natom - 6
         q_0 = self.N_dof * self.T * (self.ttime * self.dt) ** 2
         q_n = self.T * (self.ttime * self.dt) ** 2
-
+        
         self.Q = 2 * np.array([q_0, *([q_n] * (num_chains-1))])
         self.p_zeta = np.array([0.0]*num_chains)
 
@@ -243,6 +245,7 @@ class NoseHooverMetadynamics(NoseHoover):
                             ** kwargs)
 
         self.geom_add_time = geom_add_time * units.fs
+        self.max_steps = 0
 
     def run(self, steps=None):
         if steps is None:
@@ -253,7 +256,7 @@ class NoseHooverMetadynamics(NoseHoover):
         steps_per_epoch = int(steps / epochs)
         # maximum number of steps starts at `steps_per_epoch`
         # and increments after every nbr list update
-        self.max_steps = 0
+        #self.max_steps = 0
 
         # number of steps until we add a new geom
         steps_between_add = int(self.geom_add_time / self.dt)
@@ -306,6 +309,7 @@ class BatchNoseHoover(MolecularDynamics):
         self.num_steps = max_steps
         self.n_steps = 0
         self.nbr_update_period = nbr_update_period
+        self.max_steps = 0
 
         batch = atoms.get_batch()
 
@@ -375,7 +379,7 @@ class BatchNoseHoover(MolecularDynamics):
         steps_per_epoch = int(steps / epochs)
         # maximum number of steps starts at `steps_per_epoch`
         # and increments after every nbr list update
-        self.max_steps = 0
+        #self.max_steps = 0
         self.atoms.update_nbr_list()
 
         for _ in range(epochs):
