@@ -1,4 +1,4 @@
-
+import copy
 import os
 import numpy as np
 import math
@@ -106,7 +106,7 @@ class NoseHoover(MolecularDynamics):
 
         if steps is None:
             steps = self.num_steps
-        total_steps = steps + self.nsteps
+        total_steps = copy.deepcopy(steps + self.nsteps)
         # return Dynamics.run(self)
 
         epochs = math.ceil(total_steps / self.nbr_update_period)

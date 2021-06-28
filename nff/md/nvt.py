@@ -109,7 +109,7 @@ class NoseHoover(MolecularDynamics):
 
         if steps is None:
             steps = self.num_steps
-        total_steps = steps + self.nsteps
+        total_steps = copy.deepcopy(steps + self.nsteps)
         # return Dynamics.run(self)
 
         epochs = math.ceil(total_steps / self.nbr_update_period)
@@ -250,7 +250,7 @@ class NoseHooverMetadynamics(NoseHoover):
         if steps is None:
             steps = self.num_steps
 
-        total_steps = steps + self.nsteps
+        total_steps = copy.deepcopy(steps + self.nsteps)
         epochs = math.ceil(total_steps / self.nbr_update_period)
         # number of steps in between nbr updates
         steps_per_epoch = int(total_steps / epochs)
@@ -372,7 +372,7 @@ class BatchNoseHoover(MolecularDynamics):
 
         if steps is None:
             steps = self.num_steps
-        total_steps = steps + self.nsteps
+        total_steps = copy.deepcopy(steps + self.nsteps)
         # return Dynamics.run(self)
 
         epochs = math.ceil(total_steps / self.nbr_update_period)
