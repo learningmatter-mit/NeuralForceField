@@ -53,6 +53,7 @@ class NoseHoover(MolecularDynamics):
         self.num_steps = max_steps
         self.n_steps = 0
         self.nbr_update_period = nbr_update_period
+        self.max_steps = 0
 
         # initial Maxwell-Boltmann temperature for atoms
         if maxwell_temp is not None:
@@ -112,7 +113,7 @@ class NoseHoover(MolecularDynamics):
         steps_per_epoch = int(steps / epochs)
         # maximum number of steps starts at `steps_per_epoch`
         # and increments after every nbr list update
-        self.max_steps = 0
+        # self.max_steps = 0
 
         for _ in range(epochs):
             self.max_steps += steps_per_epoch
@@ -160,6 +161,7 @@ class NoseHooverChain(MolecularDynamics):
         self.p_zeta = np.array([0.0]*num_chains)
         self.num_steps = max_steps
         self.n_steps = 0
+        self.max_steps = 0
 
         # initial Maxwell-Boltmann temperature for atoms
         if maxwell_temp is not None:
@@ -231,7 +233,7 @@ class NoseHooverChain(MolecularDynamics):
         steps_per_epoch = int(steps / epochs)
         # maximum number of steps starts at `steps_per_epoch`
         # and increments after every nbr list update
-        self.max_steps = 0
+        # self.max_steps = 0
 
         for _ in range(epochs):
             self.max_steps += steps_per_epoch
