@@ -1,4 +1,4 @@
-from torch import nn
+from torch import nn, Tensor
 
 from nff.nn.layers import DEFAULT_DROPOUT_RATE
 from nff.nn.modules import (
@@ -12,6 +12,8 @@ from nff.nn.modules import (
 from nff.nn.modules.diabat import DiabaticReadout
 from nff.nn.graphop import batch_and_sum
 from nff.nn.utils import get_default_readout
+
+from nff.utils.scatter import scatter_add
 
 
 class SchNet(nn.Module):
@@ -77,6 +79,11 @@ class SchNet(nn.Module):
         cutoff = modelparams["cutoff"]
         trainable_gauss = modelparams.get("trainable_gauss", False)
         dropout_rate = modelparams.get("dropout_rate", DEFAULT_DROPOUT_RATE)
+
+        self.excl_vol = modelparams.get("excl_vol", False)
+        if self.excl_vol:
+            self.power = modelparams["V_ex_power"]
+            self.sigma = modelparams["V_ex_sigma"]
 
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
 
@@ -160,6 +167,13 @@ class SchNet(nn.Module):
 
         return r, N, xyz, r_ij, a
 
+    def V_ex(self, r_ij, nbr_list, xyz):
+
+        dist = (r_ij).pow(2).sum(1).sqrt()
+        potential = ((dist.reciprocal() * self.sigma).pow(self.power))
+        
+        return scatter_add(potential,nbr_list[:, 0], dim_size=xyz.shape[0])[:, None]
+
     def forward(self,
                 batch,
                 xyz=None,
@@ -177,6 +191,12 @@ class SchNet(nn.Module):
 
         r, N, xyz, r_ij, a = self.convolve(batch, xyz)
         r = self.atomwisereadout(r)
+
+        if self.excl_vol:
+            # Excluded Volume interactions 
+            r_ex = self.V_ex(r_ij, a, xyz)
+            r['energy'] += r_ex
+
         results = batch_and_sum(r, N, list(batch.keys()), xyz)
         if requires_stress:
             results = add_stress(batch=batch,
