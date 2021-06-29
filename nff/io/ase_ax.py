@@ -16,6 +16,7 @@ from nff.nn.models.cp3d import OnlyBondUpdateCP3D
 
 
 DEFAULT_CUTOFF = 5.0
+DEFAULT_SKIN = 1.0
 DEFAULT_DIRECTED = False
 CONVERSION_DIC = {"ev": 1 / const.EV_TO_KCAL_MOL,
                   "au":  const.KCAL_TO_AU["energy"]}
@@ -45,6 +46,7 @@ class AtomsBatch(Atoms):
         cutoff=DEFAULT_CUTOFF,
         needs_angles=False,
         undirected=(not DEFAULT_DIRECTED),
+        cutoff_skin=DEFAULT_SKIN,
         **kwargs
     ):
         """
@@ -63,6 +65,7 @@ class AtomsBatch(Atoms):
         self.offsets = self.props.get('offsets', None)
         self.num_atoms = self.props.get('num_atoms', len(self))
         self.cutoff = cutoff
+        self.cutoff_skin = cutoff_skin
 
         self.needs_angles = needs_angles
         self.kj_idx = self.props.get('kj_idx')
@@ -130,7 +133,7 @@ class AtomsBatch(Atoms):
             if "nxyz" not in dataset.props:
                 dataset.props["nxyz"] = [self.get_nxyz()]
 
-            dataset.generate_neighbor_list(self.cutoff,
+            dataset.generate_neighbor_list((self.cutoff + self.cutoff_skin),
                                            undirected=self.undirected)
             dataset.generate_angle_list()
 
@@ -149,7 +152,7 @@ class AtomsBatch(Atoms):
 
         else:
             edge_from, edge_to, offsets = torch_nbr_list(self,
-                                                         self.cutoff,
+                                                         (self.cutoff + self.cutoff_skin),
                                                          self.device,
                                                          directed=(not self.undirected))
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
