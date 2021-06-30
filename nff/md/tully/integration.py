@@ -75,6 +75,10 @@ class NeuralTully:
     def props(self):
         return self.props_list[-1]
 
+    @props.setter
+    def props(self, value):
+        self.props_list.append(value)
+
     def update_props(self,
                      needs_nbrs):
 
@@ -91,7 +95,8 @@ class NeuralTully:
                             num_states=self.num_states,
                             surf=self.surf,
                             max_gap_hop=self.max_gap_hop)
-        self.props_list.append(props)
+
+        self.props = props
 
     def get_new_surf(self, p_hop):
 
@@ -138,7 +143,6 @@ class NeuralTully:
         # and use different time-steps for each
 
         c = self.step_c(dc_dt)
-
 
         p_hop = get_p_hop(c=c,
                           T=T,

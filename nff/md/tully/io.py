@@ -489,6 +489,11 @@ def compute_T(results,
             nacv = results[f'nacv_{i}{j}'].numpy()
             T[..., i, j] = (vel * nacv).sum(-1)
 
+            # anything that's nan has too big a gap
+            # for hopping and should therefore have T=0
+            nan_idx = T.isnan()
+            T[nan_idx] = 0
+
     coupling = np.einsum('nij, nj-> ni', T, c)
 
     return T, coupling
@@ -532,7 +537,10 @@ def get_a(c):
 def get_p_hop(c,
               T,
               dt,
-              surf):
+              surfs):
+    """
+    surfs has dimension num_samples
+    """
 
     a = get_a(c)
 
@@ -542,15 +550,17 @@ def get_p_hop(c,
 
     b = -2 * np.real(np.conj(a) * T)
 
-    # b[..., surf] has dimension num_samples x num_states
-    # a[..., surf, surf] has dimension num_samples
+    # a_surf has dimension num_samples x 1
+    a_surf = torch.stack([sample_a[surf, surf] for
+                          sample_a, surf in zip(a, surfs)]).reshape(-1, 1)
 
-    a_surf = a[..., surf, surf].reshape(-1, 1)
+    # b_surf has dimension num_samples x num_states
+    b_surf = torch.stack([sample_b[:, surf] for
+                          sample_b, surf in zip(b, surfs)])
 
     # p has dimension num_samples x num_states, for the
     # hopping probability of each sample to all other
     # states
-
-    p = dt * b[..., surf] / a_surf
+    p = dt * b_surf / a_surf
 
     return p
