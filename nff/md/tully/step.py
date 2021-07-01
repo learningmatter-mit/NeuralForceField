@@ -4,9 +4,13 @@ Functions for performing a Tully time step
 
 import copy
 import random
+from functools import partial
 
 import numpy as np
-from nff.md.tully.io import get_p_hop
+from nff.md.tully.io import get_p_hop, get_dc_dt
+
+# TO-DO:
+# - Add decoherence
 
 
 def get_new_surf(p_hop,
@@ -122,3 +126,75 @@ def try_hop(c,
     new_surfs[frustrated] = surfs[frustrated]
 
     return new_surfs, new_vel
+
+
+def runge_c(c,
+            vel,
+            results,
+            elec_dt,
+            hbar=1):
+    """
+    Runge-Kutta step for c
+    """
+
+    deriv = partial(get_dc_dt,
+                    vel=vel,
+                    results=results,
+                    hbar=hbar)
+
+    k1 = deriv(c)
+    k2 = deriv(c + elec_dt * k1 / 2)
+    k3 = deriv(c + elec_dt * k2 / 2)
+    k4 = deriv(c + elec_dt * k3)
+
+    new_c = c + 1 / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+
+    return new_c
+
+
+def verlet_step_1(forces,
+                  surfs,
+                  vel,
+                  xyz,
+                  mass,
+                  nuc_dt):
+
+    # `forces` has dimension (num_samples x num_states
+    # x num_atoms x 3)
+    # `surfs` has dimension `num_samples`
+
+    surf_forces = np.take_along_axis(
+        forces, surfs.reshape(-1, 1, 1, 1),
+        axis=1
+    ).squeeze(1)
+
+    # `surf_forces` has dimension (num_samples x
+    #  num_atoms x 3)
+    # `mass` has dimension `num_samples`
+    accel = surf_forces / mass.reshape(-1, 1, 1)
+
+    # `vel` and `xyz` each have dimension
+    # (num_samples x num_atoms x 3)
+
+    new_xyz = xyz + vel * nuc_dt + 0.5 * accel * nuc_dt ** 2
+    new_vel = vel + 0.5 * nuc_dt * accel
+
+    return new_xyz, new_vel
+
+
+def verlet_step_2(forces,
+                  surfs,
+                  vel,
+                  xyz,
+                  mass,
+                  nuc_dt):
+
+    surf_forces = np.take_along_axis(
+        forces, surfs.reshape(-1, 1, 1, 1),
+        axis=1
+    ).squeeze(1)
+
+    accel = surf_forces / mass.reshape(-1, 1, 1)
+    new_vel = vel + 0.5 * nuc_dt * accel
+
+    return new_vel

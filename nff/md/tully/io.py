@@ -17,6 +17,9 @@ def check_hop(model,
               max_gap_hop,
               surf,
               num_states):
+
+    ## **** this won't work - assumes surf is an integer
+
     """
     `max_gap_hop` in a.u.
     """
@@ -371,7 +374,8 @@ def batched_calc(model,
     return results
 
 
-def concat_and_conv(results_list):
+def concat_and_conv(results_list,
+                    num_atoms):
     """
     Concatenate results from separate batches and convert
     to atomic units
@@ -381,20 +385,24 @@ def concat_and_conv(results_list):
     all_results = {}
     conv = const.KCAL_TO_AU
 
+    grad_shape = [-1, num_atoms, 3]
+
     for key in keys:
         val = torch.cat([i[key] for i in results_list])
 
         if 'energy_grad' in key or 'force_nacv' in key:
             val *= conv['energy'] * conv['grad']
+            val = val.reshape(*grad_shape)
         elif 'energy' in key:
             val *= conv['energy']
         elif 'nacv' in key:
             val *= conv['grad']
+            val = val.reshape(*grad_shape)
         else:
             msg = f"{key} has no known conversion"
             raise NotImplementedError(msg)
 
-        all_results[key] = val
+        all_results[key] = val.numpy()
 
     return all_results
 
@@ -468,7 +476,9 @@ def get_results(model,
                                max_gap_hop=max_gap_hop)
         results_list.append(results)
 
-    all_results = concat_and_conv(results_list)
+    num_atoms = len(nxyz_list[0])
+    all_results = concat_and_conv(results_list=results_list,
+                                  num_atoms=num_atoms)
 
     return all_results
 
@@ -486,7 +496,7 @@ def compute_T(results,
         for j in range(num_states):
             if i == j:
                 continue
-            nacv = results[f'nacv_{i}{j}'].numpy()
+            nacv = results[f'nacv_{i}{j}']
             T[..., i, j] = (vel * nacv).sum(-1)
 
             # anything that's nan has too big a gap
@@ -502,12 +512,12 @@ def compute_T(results,
 def get_dc_dt(c,
               vel,
               results,
-              num_states,
               hbar=1):
 
+    num_states = c.shape[-1]
     # energies have shape num_samples x num_states
-    ens = torch.cat([results[f'energy_{i}'].reshape(-1, 1)
-                     for i in range(num_states)], dim=-1).numpy()
+    ens = np.concatenate([results[f'energy_{i}'].reshape(-1, 1)
+                          for i in range(num_states)], axis=-1)
     w = ens / hbar
 
     # T has dimension num_samples x (num_states x num_states)
@@ -551,12 +561,12 @@ def get_p_hop(c,
     b = -2 * np.real(np.conj(a) * T)
 
     # a_surf has dimension num_samples x 1
-    a_surf = torch.stack([sample_a[surf, surf] for
-                          sample_a, surf in zip(a, surfs)]).reshape(-1, 1)
+    a_surf = np.stack([sample_a[surf, surf] for
+                       sample_a, surf in zip(a, surfs)]).reshape(-1, 1)
 
     # b_surf has dimension num_samples x num_states
-    b_surf = torch.stack([sample_b[:, surf] for
-                          sample_b, surf in zip(b, surfs)])
+    b_surf = np.stack([sample_b[:, surf] for
+                       sample_b, surf in zip(b, surfs)])
 
     # p has dimension num_samples x num_states, for the
     # hopping probability of each sample to all other
