@@ -5,7 +5,8 @@ from nff.utils import constants as const
 from nff.md.utils_ax import atoms_to_nxyz
 from nff.md.tully.io import get_results
 from nff.md.tully.step import (runge_c, try_hop,
-                               verlet_step_1, verlet_step_2)
+                               verlet_step_1, verlet_step_2,
+                               decoherence)
 
 
 class NeuralTully:
@@ -244,6 +245,19 @@ class NeuralTully:
                                          nacv=self.nacv,
                                          mass=self.mass,
                                          energy=self.energy)
+
+            c, delta_P, delta_R = decoherence(c=c,
+                                              surfs=self.surfs,
+                                              new_surfs=new_surfs,
+                                              delta_P=self.delta_P,
+                                              delta_R=self.delta_R,
+                                              nacv=self.nacv,
+                                              energy=self.energy,
+                                              forces=self.forces,
+                                              mass=self.mass)
+
+            self.delta_P = delta_P
+            self.delta_R = delta_R
 
             # if any sample hopped then it was within the cutoff
             # gap, which means we have forces for the other states

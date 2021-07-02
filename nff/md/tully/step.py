@@ -14,6 +14,7 @@ from nff.md.tully.io import get_p_hop, get_dc_dt
 # - Fix the hopping criterion for multiple states
 # - Use Eq. (39) for the velocity re-scaling
 
+
 def get_new_surf(p_hop,
                  num_states,
                  surfs):
@@ -212,3 +213,16 @@ def verlet_step_2(forces,
     new_vel = vel + 0.5 * nuc_dt * accel
 
     return new_vel
+
+
+def decoherence(c,
+                surfs,
+                new_surfs,
+                delta_P,
+                delta_R,
+                nacv,
+                energy,
+                forces,
+                mass):
+
+    pass
