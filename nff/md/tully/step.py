@@ -11,7 +11,8 @@ from nff.md.tully.io import get_p_hop, get_dc_dt
 
 # TO-DO:
 # - Add decoherence
-
+# - Fix the hopping criterion for multiple states
+# - Use Eq. (39) for the velocity re-scaling
 
 def get_new_surf(p_hop,
                  num_states,

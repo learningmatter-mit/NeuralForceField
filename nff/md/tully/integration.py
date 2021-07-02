@@ -32,6 +32,14 @@ class NeuralTully:
 
         self.atoms_list = atoms_list
         self.vel = self.get_vel()
+        # terms for decoherence correction
+        self.delta_R = 0
+        self.delta_P = 0
+        self.c = self.init_c()
+        self.T = None
+
+        self.t = 0
+        self.props = None
         self.num_atoms = [len(atoms) for atoms
                           in self.atoms_list]
         self.num_samples = len(atoms_list)
@@ -46,13 +54,9 @@ class NeuralTully:
         self.elec_nuc_scale = (nuc_dt // elec_dt)
         self.nuc_dt = self.elec_nuc_scale * elec_dt * const.FS_TO_AU
 
-        self.t = 0
         self.max_time = max_time * const.FS_TO_AU
         self.nbr_update_period = nbr_update_period
         self.nbr_list = None
-        self.c = self.init_c()
-        self.T = None
-        self.props = None
         self.max_gap_hop = max_gap_hop
 
         self.save_file = save_file
@@ -279,13 +283,10 @@ class NeuralTully:
 
         counter = 0
         for _ in range(epochs):
+            for i in range(self.nbr_update_period):
+                needs_nbrs = (i == 0)
+                self.step(needs_nbrs=needs_nbrs)
 
-            self.step(needs_nbrs=True)
-            counter += 1
-            remain_steps = self.nbr_update_period - 1
-
-            for _ in range(remain_steps):
-                self.step(needs_nbrs=False)
                 counter += 1
                 if counter % self.save_period == 0:
                     self.save()
