@@ -303,7 +303,7 @@ def verlet_step_2(forces,
     return new_vel
 
 
-def get_delta_F(forces):
+def delta_F_for_tau(forces):
 
     num_samples = forces.shape[0]
     num_states = forces.shape[1]
@@ -336,7 +336,7 @@ def get_tau_d(forces,
     # delta_R, delta_P, and force_nacv have shape
     # num_samples x num_states x num_states x num_atoms x 3
 
-    delta_F = get_delta_F(forces)
+    delta_F = delta_F_for_tau(forces)
     diag_delta_R = get_diag_delta_R(delta_R)
 
     term_1 = (delta_F * diag_delta_R).sum((-1, -2)) / (2 * hbar)
@@ -358,7 +358,7 @@ def get_tau_reset(forces,
                   hbar=1,
                   zeta=1):
 
-    delta_F = get_delta_F(forces)
+    delta_F = delta_F_for_tau(forces)
     diag_delta_R = get_diag_delta_R(delta_R)
 
     tau_reset = -(delta_F * diag_delta_R).sum((-1, -2)) / (2 * hbar)
@@ -366,17 +366,60 @@ def get_tau_reset(forces,
     return tau_reset
 
 
+def matmul(a, b):
+    """
+    Matrix multiplication in electronic subspace
+    """
+
+    out = np.einsum('ijk..., ikl...-> ijl...', a, b)
+    return out
+
+
 def commute(a, b):
     """
     Commute two operators
     """
 
-    fwd = np.einsum('ijk..., ikl...-> ijl...', a, b)
-    rev = np.einsum('ijk..., ikl...-> ijl...', b, a)
-
-    comm = fwd - rev
+    comm = matmul(a, b) - matmul(b, a)
 
     return comm
+
+
+def get_term_3(nacv,
+               delta,
+               vel):
+    num_samples = nacv.shape[0]
+    num_states = nacv.shape[1]
+    num_atoms = nacv.shape[3]
+
+    d_beta = np.zeros((num_samples, num_states, num_states,
+                       3 * num_atoms, 3 * num_atoms))
+
+    d_beta += nacv.reshape(num_samples, num_states,
+                           num_states, 1, 3 * num_atoms,)
+
+    delta_R_alpha = np.zeros((num_samples,
+                              num_states,
+                              num_states,
+                              3 * num_atoms,
+                              3 * num_atoms))
+
+    delta_R_alpha += delta.reshape(num_samples,
+                                   num_states,
+                                   num_states,
+                                   3 * num_atoms, 1)
+
+    vel_reshape = vel.reshape(num_samples, 1, 1, 1, 3 * num_atoms)
+    term_3 = -(commute(d_beta, delta_R_alpha)
+               * vel_reshape
+               ).sum(-1)
+    term_3 = term_3.reshape(num_samples,
+                            num_states,
+                            num_states,
+                            num_atoms,
+                            3)
+
+    return term_3
 
 
 def decoherence_T_R(pot_V,
@@ -397,52 +440,18 @@ def decoherence_T_R(pot_V,
 
     term_2 = delta_P / mass.reshape(1, 1, 1, -1, 1)
 
-    # `vel` has dimension num_samples x num_atoms x 3
-    # `nacv` has dimension num_samples x num_states
-    # x num_states x num_atoms x 3
-
-    # need to make a 3N x 3N matrix of [vel * nacv, delta_R]
-    # and sum over one of the dimensions
-
-    num_samples = nacv.shape[0]
-    num_states = nacv.shape[1]
-    num_atoms = nacv.shape[3]
-
-    d_beta = np.zeros((num_samples, num_states, num_states,
-                       3 * num_atoms, 3 * num_atoms))
-
-    d_beta += nacv.reshape(num_samples, num_states,
-                           num_states, 1, 3 * num_atoms,)
-
-    delta_R_alpha = np.zeros((num_samples,
-                              num_states,
-                              num_states,
-                              3 * num_atoms,
-                              3 * num_atoms))
-
-    delta_R_alpha += delta_R.reshape(num_samples,
-                                     num_states,
-                                     num_states,
-                                     3 * num_atoms, 1)
-
-    vel_reshape = vel.reshape(num_samples, 1, 1, 1, 3 * num_atoms)
-    term_3 = -(commute(d_beta, delta_R_alpha)
-               * vel_reshape
-               ).sum(-1)
-    term_3 = term_3.reshape(num_samples,
-                            num_states,
-                            num_states,
-                            num_atoms,
-                            3)
+    term_3 = get_term_3(nacv=nacv,
+                        delta=delta_R,
+                        vel=vel)
 
     T_R = term_1 + term_2 + term_3
 
     return T_R
 
 
-def decoherence_T_ii(T_R,
+def decoherence_T_ii(T,
                      surfs):
-    T_ii = np.take_along_axis(arr=T_R,
+    T_ii = np.take_along_axis(arr=T,
                               indices=surfs.reshape(-1, 1, 1, 1, 1),
                               axis=1
                               ).squeeze(1)
@@ -452,8 +461,8 @@ def decoherence_T_ii(T_R,
                               axis=1
                               ).squeeze(1)
 
-    num_states = T_R.shape[1]
-    num_samples = T_R.shape[0]
+    num_states = T.shape[1]
+    num_samples = T.shape[0]
     delta = np.eye(num_states).reshape(
         1,
         num_states,
@@ -483,7 +492,7 @@ def deriv_delta_R(pot_V,
                           vel=vel,
                           hbar=hbar)
 
-    T_ii_delta = decoherence_T_ii(T_R=T_R,
+    T_ii_delta = decoherence_T_ii(T=T_R,
                                   surfs=surfs)
 
     deriv = T_R - T_ii_delta
@@ -491,16 +500,135 @@ def deriv_delta_R(pot_V,
     return deriv
 
 
+def get_F_alpha(force_nacv,
+                forces):
+
+    num_samples = force_nacv.shape[0]
+    num_states = force_nacv.shape[1]
+    num_atoms = force_nacv.shape[3]
+
+    diag_idx = np.arange(num_states)
+    row_idx = np.arange(num_states) * num_states
+    idx = diag_idx + row_idx
+
+    F_alpha = np.zeros((num_samples,
+                        num_states * num_states,
+                        num_atoms,
+                        3))
+    # forces on diagonal
+    np.put_along_axis(arr=F_alpha,
+                      indices=idx.reshape(1, -1, 1, 1),
+                      values=forces,
+                      axis=1)
+
+    F_alpha = F_alpha.reshape(num_samples,
+                              num_states,
+                              num_states,
+                              num_atoms,
+                              3)
+
+    # - force nacv on off-diagonal (force nacv is the
+    # positive gradient so it needs a negative in front)
+    F_alpha -= force_nacv
+
+    return F_alpha
+
+
+def get_F_alpha_sh(forces,
+                   surfs):
+
+    num_samples = forces.shape[0]
+    num_states = forces.shape[1]
+    num_atoms = forces.shape[-2]
+
+    F_sh = np.take_along_axis(arr=forces,
+                              indices=surfs.reshape(-1, 1, 1, 1),
+                              axis=1)
+    F_sh = F_sh.reshape(num_samples,
+                        1,
+                        1,
+                        num_atoms,
+                        3)
+    id_elec = np.eye(num_states, num_states).reshape(1,
+                                                     num_states,
+                                                     num_states,
+                                                     1,
+                                                     1)
+
+    F_sh_id = F_sh * id_elec
+
+    return F_sh_id
+
+
+def get_delta_F(force_nacv,
+                forces,
+                surfs):
+
+    F_alpha = get_F_alpha(force_nacv=force_nacv,
+                          forces=forces)
+    F_alpha_sh = get_F_alpha_sh(forces=forces,
+                                surfs=surfs)
+    delta_F = F_alpha - F_alpha_sh
+
+    return delta_F
+
+
 def decoherence_T_P(pot_V,
-                    delta_R,
                     delta_P,
                     nacv,
-                    mass,
+                    force_nacv,
+                    forces,
+                    surfs,
                     vel,
+                    sigma,
                     hbar=1):
-    """
-    Should the nacv be included in delta F?
-    """
+
+    term_1 = -1j / hbar * commute(pot_V, delta_P)
+
+    delta_F = get_delta_F(force_nacv=force_nacv,
+                          forces=forces,
+                          surfs=surfs)
+    term_2 = 1 / 2 * (matmul(delta_F, sigma)
+                      + matmul(sigma, delta_F))
+
+    term_3 = get_term_3(nacv=nacv,
+                        delta=delta_P,
+                        vel=vel)
+
+    T_P = term_1 + term_2 + term_3
+
+    return T_P
+
+
+def deriv_delta_P(pot_V,
+                  delta_P,
+                  nacv,
+                  force_nacv,
+                  forces,
+                  surfs,
+                  vel,
+                  sigma,
+                  hbar=1):
+
+    T_P = decoherence_T_P(pot_V=pot_V,
+                          delta_P=delta_P,
+                          nacv=nacv,
+                          force_nacv=force_nacv,
+                          forces=forces,
+                          surfs=surfs,
+                          vel=vel,
+                          sigma=sigma,
+                          hbar=hbar)
+
+    T_ii_delta = decoherence_T_ii(T_R=T_P,
+                                  surfs=surfs)
+
+    deriv = T_P - T_ii_delta
+
+    return deriv
+
+
+def deriv_sigma():
     pass
 
 

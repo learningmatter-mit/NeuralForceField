@@ -43,6 +43,7 @@ class NeuralTully:
         self.delta_R = 0
         self.delta_P = 0
         self.c = self.init_c()
+        self.sigma = self.init_sigma()
         self.T = None
 
         self.t = 0
@@ -84,6 +85,29 @@ class NeuralTully:
         c = np.zeros((self.num_samples, self.num_states))
         c[:, self.surfs[0]] = 1
         return c
+
+    def init_sigma(self):
+        """
+        Electronic density matrix
+        """
+
+        # c has dimension num_samples x num_states
+        # sigma has dimension num_samples x num_states
+        # x num_states
+
+        sigma = np.ones((self.num_samples,
+                         self.num_states,
+                         self.num_states),
+                        dtype=np.complex128)
+
+        sigma = self.c.reshape(self.num_samples,
+                               self.num_states,
+                               1)
+        sigma *= np.conj(self.c.reshape(self.num_samples,
+                                        1,
+                                        self.num_states))
+
+        return sigma
 
     @property
     def U(self):
@@ -186,30 +210,6 @@ class NeuralTully:
         )
 
         return V
-
-    @property
-    def sigma(self):
-        """
-        Electronic density matrix
-        """
-
-        # c has dimension num_samples x num_states
-        # sigma has dimension num_samples x num_states
-        # x num_states
-
-        _sigma = np.ones((self.num_samples,
-                          self.num_states,
-                          self.num_states),
-                         dtype=np.complex128)
-        
-        _sigma = self.c.reshape(self.num_samples,
-                                 self.num_states,
-                                 1)
-        _sigma *= np.conj(self.c.reshape(self.num_samples,
-                                         1,
-                                         self.num_states))
-
-        return _sigma
 
     @property
     def state_dict(self):
