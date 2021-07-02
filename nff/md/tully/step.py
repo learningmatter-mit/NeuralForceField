@@ -7,12 +7,96 @@ import random
 from functools import partial
 
 import numpy as np
-from nff.md.tully.io import get_p_hop, get_dc_dt
 
 # TO-DO:
 # - Add decoherence
 # - Fix the hopping criterion for multiple states
 # - Use Eq. (39) for the velocity re-scaling
+
+
+def compute_T(nacv,
+              vel,
+              c):
+
+    # vel has shape num_samples x num_atoms x 3
+    # nacv has shape num_samples x num_states x num_states
+    # x num_atoms x 3
+    # T has shape num_samples x (num_states x num_states)
+
+    T = (vel.reshape(vel.shape[0], 1, 1, -1, 3)
+         * nacv).sum(-1).sum(-1)
+
+    # anything that's nan has too big a gap
+    # for hopping and should therefore have T=0
+    T[np.isnan(T)] = 0
+
+    coupling = np.einsum('nij, nj-> ni', T, c)
+
+    return T, coupling
+
+
+def get_dc_dt(c,
+              vel,
+              nacv,
+              energy,
+              hbar=1):
+
+    # energies have shape num_samples x num_states
+    w = energy / hbar
+
+    # T has dimension num_samples x (num_states x num_states)
+    T, coupling = compute_T(nacv=nacv,
+                            vel=vel,
+                            c=c)
+
+    dc_dt = -(1j * w * c + coupling)
+
+    return dc_dt, T
+
+
+def get_a(c):
+    # a has dimension num_samples x (num_states x num_states)
+    num_samples = c.shape[0]
+    num_states = c.shape[1]
+
+    a = np.zeros(num_samples, num_states, num_states)
+    for i in range(num_states):
+        for j in range(num_states):
+            a[..., i, j] = (np.conj(c[..., i])
+                            * c[..., j])
+    return a
+
+
+def get_p_hop(c,
+              T,
+              dt,
+              surfs):
+    """
+    surfs has dimension num_samples
+    """
+
+    a = get_a(c)
+
+    # T, a and b have dimension
+    # num_samples x (num_states x num_states).
+    # The diagonals of T (and hence b) are zero.
+
+    b = -2 * np.real(np.conj(a) * T)
+
+    # a_surf has dimension num_samples x 1
+    a_surf = np.stack([sample_a[surf, surf] for
+                       sample_a, surf in zip(a, surfs)]).reshape(-1, 1)
+
+    # b_surf has dimension num_samples x num_states
+    b_surf = np.stack([sample_b[:, surf] for
+                       sample_b, surf in zip(b, surfs)])
+
+    # p has dimension num_samples x num_states, for the
+    # hopping probability of each sample to all other
+    # states
+    p = dt * b_surf / a_surf
+
+    return p
 
 
 def get_new_surf(p_hop,
@@ -145,7 +229,8 @@ def try_hop(c,
 
 def runge_c(c,
             vel,
-            results,
+            nacv,
+            energy,
             elec_dt,
             hbar=1):
     """
@@ -154,7 +239,8 @@ def runge_c(c,
 
     deriv = partial(get_dc_dt,
                     vel=vel,
-                    results=results,
+                    nacv=nacv,
+                    energy=energy,
                     hbar=hbar)
 
     k1, T1 = deriv(c)

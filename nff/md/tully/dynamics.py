@@ -8,6 +8,10 @@ from nff.md.tully.step import (runge_c, try_hop,
                                verlet_step_1, verlet_step_2,
                                decoherence)
 
+# TO-DO:
+# - Move the dc/dt and T stuff from io to step, and make it
+# use nacvs/energies without needing `results`
+
 
 class NeuralTully:
     def __init__(self,
@@ -234,8 +238,10 @@ class NeuralTully:
         for _ in range(self.elec_nuc_scale):
             c, T = runge_c(c=self.c,
                            vel=self.vel,
-                           results=self.props,
-                           elec_dt=self.elec_dt)
+                           nacv=self.nacv,
+                           energy=self.energy,
+                           elec_dt=self.elec_dt,
+                           hbar=1)
 
             new_surfs, new_vel = try_hop(c=c,
                                          T=T,
