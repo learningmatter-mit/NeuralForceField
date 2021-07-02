@@ -24,7 +24,7 @@ def compute_T(nacv,
     # T has shape num_samples x (num_states x num_states)
 
     T = (vel.reshape(vel.shape[0], 1, 1, -1, 3)
-         * nacv).sum(-1).sum(-1)
+         * nacv).sum((-1, -2))
 
     # anything that's nan has too big a gap
     # for hopping and should therefore have T=0
@@ -220,7 +220,7 @@ def try_hop(c,
                       new_surfs=new_surfs)
 
     # reset any frustrated hops
-    frustrated = np.isnan(new_vel).any(-1).any(-1).nonzero()[0]
+    frustrated = np.isnan(new_vel).any((-1, -2)).nonzero()[0]
     new_vel[frustrated] = vel[frustrated]
     new_surfs[frustrated] = surfs[frustrated]
 
