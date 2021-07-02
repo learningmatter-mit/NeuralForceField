@@ -3,7 +3,6 @@ Link between Tully surface hopping and NFF models.
 """
 import torch
 from torch.utils.data import DataLoader
-import numpy as np
 
 from nff.train import batch_to, batch_detach
 from nff.nn.utils import single_spec_nbrs
@@ -234,35 +233,35 @@ def run_model(model,
               device,
               surf,
               max_gap_hop,
-              num_states):
+              num_states,
+              all_grads):
     """
     `max_gap_hop` in a.u.
     """
 
     batch = batch_to(batch, device)
 
-    # Don't automatically compute the gradients
-    # and nacv because we may only need the gradient
-    # on one state if there's no chance of hopping
-    # to another
-
-    xyz = batch['nxyz'][:, 1:]
-    xyz.requires_grad = True
+    if all_grads:
+        xyz = None
+    else:
+        xyz = batch['nxyz'][:, 1:]
+        xyz.requires_grad = True
 
     results = model(batch,
                     xyz=xyz,
                     add_nacv=False,
-                    add_grad=False,
+                    add_grad=all_grads,
                     add_gap=True,
                     add_u=True)
 
-    results = add_grad(model=model,
-                       batch=batch,
-                       xyz=xyz,
-                       results=results,
-                       max_gap_hop=max_gap_hop,
-                       surf=surf,
-                       num_states=num_states)
+    if not all_grads:
+        results = add_grad(model=model,
+                           batch=batch,
+                           xyz=xyz,
+                           results=results,
+                           max_gap_hop=max_gap_hop,
+                           surf=surf,
+                           num_states=num_states)
 
     results = batch_detach(results)
 
@@ -351,7 +350,8 @@ def batched_calc(model,
                  old_U,
                  num_states,
                  surf,
-                 max_gap_hop):
+                 max_gap_hop,
+                 all_grads):
     """
     Get model results from a batch, including
     nacv phase correction
@@ -362,7 +362,8 @@ def batched_calc(model,
                         device=device,
                         surf=surf,
                         max_gap_hop=max_gap_hop,
-                        num_states=num_states)
+                        num_states=num_states,
+                        all_grads=all_grads)
 
     if old_U is not None:
         results = correct_nacv(batch=batch,
@@ -452,7 +453,8 @@ def get_results(model,
                 old_U,
                 num_states,
                 surf,
-                max_gap_hop):
+                max_gap_hop,
+                all_grads):
     """
     `nxyz_list` assumed to be in Angstroms
     """
@@ -473,7 +475,8 @@ def get_results(model,
                                old_U=old_U,
                                num_states=num_states,
                                surf=surf,
-                               max_gap_hop=max_gap_hop)
+                               max_gap_hop=max_gap_hop,
+                               all_grads=all_grads)
         results_list.append(results)
 
     num_atoms = nxyz.shape[1]

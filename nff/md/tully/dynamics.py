@@ -6,7 +6,7 @@ from nff.md.utils_ax import atoms_to_nxyz
 from nff.md.tully.io import get_results
 from nff.md.tully.step import (runge_c, try_hop,
                                verlet_step_1, verlet_step_2,
-                               decoherence)
+                               add_decoherence)
 
 # TO-DO:
 # - Move the dc/dt and T stuff from io to step, and make it
@@ -16,27 +16,29 @@ from nff.md.tully.step import (runge_c, try_hop,
 class NeuralTully:
     def __init__(self,
                  atoms_list,
-                 cutoff,
-                 cutoff_skin,
                  device,
                  batch_size,
                  num_states,
                  surf,
                  nuc_dt,
                  elec_dt,
-                 max_gap_hop,
                  max_time,
-                 nbr_update_period,
-                 save_file,
-                 minimal_save_file,
-                 log_file,
-                 save_period):
+                 cutoff,
+                 cutoff_skin=1.0,
+                 max_gap_hop=0.018,
+                 nbr_update_period=20,
+                 save_period=10,
+                 save_file='zn.pickle',
+                 minimal_save_file='zn_small.pickle',
+                 log_file='zn.log',
+                 decoherence=True):
         """
         `max_gap_hop` in a.u.
         """
 
         self.atoms_list = atoms_list
         self.vel = self.get_vel()
+        self.decoherence = decoherence
         # terms for decoherence correction
         self.delta_R = 0
         self.delta_P = 0
@@ -115,6 +117,34 @@ class NeuralTully:
         return _nacv
 
     @property
+    def gap(self):
+        num_samples = self.energy.shape[0]
+        num_states = self.energy.shape[1]
+
+        _gap = np.zeros((num_samples, num_states, num_states))
+        _gap -= self.energy.reshape(num_samples, 1, num_states)
+        _gap += self.energy.reshape(num_samples, num_states, 1)
+
+        return _gap
+
+    @property
+    def force_nacv(self):
+
+        # self.gap has shape num_samples x num_states x num_states
+        # `nacv` has shape num_samples x num_states x num_states
+        # x num_atoms x 3
+
+        gap = self.gap.reshape(self.num_samples,
+                               self.num_states,
+                               self.num_states,
+                               1,
+                               1)
+
+        _force_nacv = self.nacv * gap
+
+        return _force_nacv
+
+    @property
     def mass(self):
         _mass = (self.atoms_list[0].get_masses()
                  * const.AMU_TO_AU)
@@ -138,9 +168,54 @@ class NeuralTully:
             atoms.set_positions(xyz)
 
     @property
+    def pot_V(self):
+        """
+        Potential energy matrix
+        """
+        V = np.zeros((self.num_samples,
+                      self.num_states,
+                      self.num_states))
+        idx = np.arange(self.num_states)
+        np.put_along_axis(
+            V,
+            idx.reshape(1, -1, 1),
+            self.energy.reshape(self.num_samples,
+                                self.num_states,
+                                1),
+            axis=2
+        )
+
+        return V
+
+    @property
+    def sigma(self):
+        """
+        Electronic density matrix
+        """
+
+        # c has dimension num_samples x num_states
+        # sigma has dimension num_samples x num_states
+        # x num_states
+
+        _sigma = np.ones((self.num_samples,
+                          self.num_states,
+                          self.num_states),
+                         dtype=np.complex128)
+        
+        _sigma = self.c.reshape(self.num_samples,
+                                 self.num_states,
+                                 1)
+        _sigma *= np.conj(self.c.reshape(self.num_samples,
+                                         1,
+                                         self.num_states))
+
+        return _sigma
+
+    @property
     def state_dict(self):
         _state_dict = {"nxyz": self.nxyz,
                        "nacv": self.nacv,
+                       "force_nacv": self.force_nacv,
                        "energy": self.energy,
                        "forces": self.forces,
                        "U": self.U,
@@ -228,7 +303,8 @@ class NeuralTully:
                             old_U=self.U,
                             num_states=self.num_states,
                             surf=self.surfs,
-                            max_gap_hop=self.max_gap_hop)
+                            max_gap_hop=self.max_gap_hop,
+                            all_grads=self.decoherence)
 
         self.props = props
 
@@ -252,15 +328,15 @@ class NeuralTully:
                                          mass=self.mass,
                                          energy=self.energy)
 
-            c, delta_P, delta_R = decoherence(c=c,
-                                              surfs=self.surfs,
-                                              new_surfs=new_surfs,
-                                              delta_P=self.delta_P,
-                                              delta_R=self.delta_R,
-                                              nacv=self.nacv,
-                                              energy=self.energy,
-                                              forces=self.forces,
-                                              mass=self.mass)
+            c, delta_P, delta_R = add_decoherence(c=c,
+                                                  surfs=self.surfs,
+                                                  new_surfs=new_surfs,
+                                                  delta_P=self.delta_P,
+                                                  delta_R=self.delta_R,
+                                                  nacv=self.nacv,
+                                                  energy=self.energy,
+                                                  forces=self.forces,
+                                                  mass=self.mass)
 
             self.delta_P = delta_P
             self.delta_R = delta_R

@@ -12,6 +12,8 @@ import numpy as np
 # - Add decoherence
 # - Fix the hopping criterion for multiple states
 # - Use Eq. (39) for the velocity re-scaling
+# - Must compute forces on all states at each step
+# if using the decoherence correction
 
 
 def compute_T(nacv,
@@ -301,14 +303,220 @@ def verlet_step_2(forces,
     return new_vel
 
 
-def decoherence(c,
-                surfs,
-                new_surfs,
-                delta_P,
-                delta_R,
-                nacv,
-                energy,
-                forces,
-                mass):
+def get_delta_F(forces):
+
+    num_samples = forces.shape[0]
+    num_states = forces.shape[1]
+    num_atoms = forces.shape[-2]
+
+    delta_F = np.zeros((num_samples, num_states, num_states, num_atoms, 3))
+    delta_F += forces.reshape(num_samples, num_states, 1, num_atoms, 3)
+    delta_F -= forces.reshape(num_samples, 1, num_states, num_atoms, 3)
+
+    return delta_F
+
+
+def get_diag_delta_R(delta_R):
+
+    num_states = delta_R.shape[1]
+    diag_delta_R = np.take_along_axis(delta_R, np.arange(num_states)
+                                      .reshape(1, -1, 1, 1, 1), axis=2
+                                      ).repeat(num_states, axis=2)
+    return diag_delta_R
+
+
+def get_tau_d(forces,
+              energy,
+              force_nacv,
+              delta_R,
+              hbar=1,
+              zeta=1):
+
+    # tau_d^{ni} has shape num_samples x num_states x num_states
+    # delta_R, delta_P, and force_nacv have shape
+    # num_samples x num_states x num_states x num_atoms x 3
+
+    delta_F = get_delta_F(forces)
+    diag_delta_R = get_diag_delta_R(delta_R)
+
+    term_1 = (delta_F * diag_delta_R).sum((-1, -2)) / (2 * hbar)
+    term_2 = - 2 * abs(zeta / hbar * (
+        force_nacv.transpose((0, 2, 1, 3, 4))
+        * diag_delta_R)
+        .sum((-1, -2))
+    )
+
+    tau = term_1 + term_2
+
+    return tau
+
+
+def get_tau_reset(forces,
+                  energy,
+                  force_nacv,
+                  delta_R,
+                  hbar=1,
+                  zeta=1):
+
+    delta_F = get_delta_F(forces)
+    diag_delta_R = get_diag_delta_R(delta_R)
+
+    tau_reset = -(delta_F * diag_delta_R).sum((-1, -2)) / (2 * hbar)
+
+    return tau_reset
+
+
+def commute(a, b):
+    """
+    Commute two operators
+    """
+
+    fwd = np.einsum('ijk..., ikl...-> ijl...', a, b)
+    rev = np.einsum('ijk..., ikl...-> ijl...', b, a)
+
+    comm = fwd - rev
+
+    return comm
+
+
+def decoherence_T_R(pot_V,
+                    delta_R,
+                    delta_P,
+                    nacv,
+                    mass,
+                    vel,
+                    hbar=1):
+
+    # pot_V has dimension num_samples x num_states x num_states
+
+    term_1 = -1j / hbar * commute(pot_V, delta_R)
+
+    # mass has dimension `num_atoms`
+    # `delta_P` has dimension num_samples x num_states
+    # x num_states x num_atoms x 3
+
+    term_2 = delta_P / mass.reshape(1, 1, 1, -1, 1)
+
+    # `vel` has dimension num_samples x num_atoms x 3
+    # `nacv` has dimension num_samples x num_states
+    # x num_states x num_atoms x 3
+
+    # need to make a 3N x 3N matrix of [vel * nacv, delta_R]
+    # and sum over one of the dimensions
+
+    num_samples = nacv.shape[0]
+    num_states = nacv.shape[1]
+    num_atoms = nacv.shape[3]
+
+    d_beta = np.zeros((num_samples, num_states, num_states,
+                       3 * num_atoms, 3 * num_atoms))
+
+    d_beta += nacv.reshape(num_samples, num_states,
+                           num_states, 1, 3 * num_atoms,)
+
+    delta_R_alpha = np.zeros((num_samples,
+                              num_states,
+                              num_states,
+                              3 * num_atoms,
+                              3 * num_atoms))
+
+    delta_R_alpha += delta_R.reshape(num_samples,
+                                     num_states,
+                                     num_states,
+                                     3 * num_atoms, 1)
+
+    vel_reshape = vel.reshape(num_samples, 1, 1, 1, 3 * num_atoms)
+    term_3 = -(commute(d_beta, delta_R_alpha)
+               * vel_reshape
+               ).sum(-1)
+    term_3 = term_3.reshape(num_samples,
+                            num_states,
+                            num_states,
+                            num_atoms,
+                            3)
+
+    T_R = term_1 + term_2 + term_3
+
+    return T_R
+
+
+def decoherence_T_ii(T_R,
+                     surfs):
+    T_ii = np.take_along_axis(arr=T_R,
+                              indices=surfs.reshape(-1, 1, 1, 1, 1),
+                              axis=1
+                              ).squeeze(1)
+
+    T_ii = np.take_along_axis(arr=T_ii,
+                              indices=surfs.reshape(-1, 1, 1, 1),
+                              axis=1
+                              ).squeeze(1)
+
+    num_states = T_R.shape[1]
+    num_samples = T_R.shape[0]
+    delta = np.eye(num_states).reshape(
+        1,
+        num_states,
+        num_states,
+        1,
+        1)
+
+    T_ii_delta = T_ii.reshape(num_samples, 1, 1, -1, 3) * delta
+
+    return T_ii_delta
+
+
+def deriv_delta_R(pot_V,
+                  delta_R,
+                  delta_P,
+                  nacv,
+                  mass,
+                  vel,
+                  surfs,
+                  hbar=1):
+
+    T_R = decoherence_T_R(pot_V=pot_V,
+                          delta_R=delta_R,
+                          delta_P=delta_P,
+                          nacv=nacv,
+                          mass=mass,
+                          vel=vel,
+                          hbar=hbar)
+
+    T_ii_delta = decoherence_T_ii(T_R=T_R,
+                                  surfs=surfs)
+
+    deriv = T_R - T_ii_delta
+
+    return deriv
+
+
+def decoherence_T_P(pot_V,
+                    delta_R,
+                    delta_P,
+                    nacv,
+                    mass,
+                    vel,
+                    hbar=1):
+    """
+    Should the nacv be included in delta F?
+    """
+    pass
+
+
+def add_decoherence(c,
+                    surfs,
+                    new_surfs,
+                    delta_P,
+                    delta_R,
+                    nacv,
+                    energy,
+                    forces,
+                    mass):
+    """
+    Landry, B.R. and Subotnik, J.E., 2012. How to recover Marcus theory with 
+    fewest switches surface hopping: Add just a touch of decoherence. The 
+    Journal of chemical physics, 137(22), p.22A513.
+    """
 
     pass
