@@ -1,11 +1,9 @@
 import numpy as np
-import random
-import copy
+import pickle
 
 from nff.utils import constants as const
 from nff.md.utils_ax import atoms_to_nxyz
-from nff.md.tully.io import (get_results, get_dc_dt,
-                             get_p_hop)
+from nff.md.tully.io import get_results
 from nff.md.tully.step import (runge_c, try_hop,
                                verlet_step_1, verlet_step_2)
 
@@ -21,12 +19,19 @@ class NeuralTully:
                  surf,
                  nuc_dt,
                  elec_dt,
-                 max_gap_hop):
+                 max_gap_hop,
+                 max_time,
+                 nbr_update_period,
+                 save_file,
+                 minimal_save_file,
+                 log_file,
+                 save_period):
         """
         `max_gap_hop` in a.u.
         """
 
         self.atoms_list = atoms_list
+        self.vel = self.get_vel()
         self.num_atoms = [len(atoms) for atoms
                           in self.atoms_list]
         self.num_samples = len(atoms_list)
@@ -37,14 +42,32 @@ class NeuralTully:
         self.batch_size = batch_size
         self.num_states = num_states
         self.surfs = np.ones_like(self.num_samples) * surf
-        self.elec_dt = elec_dt
+        self.elec_dt = elec_dt * const.FS_TO_AU
         self.elec_nuc_scale = (nuc_dt // elec_dt)
-        self.nuc_dt = self.elec_nuc_scale * elec_dt
+        self.nuc_dt = self.elec_nuc_scale * elec_dt * const.FS_TO_AU
 
         self.t = 0
+        self.max_time = max_time * const.FS_TO_AU
+        self.nbr_update_period = nbr_update_period
         self.nbr_list = None
-        self.props_list = [{"c": self.init_c()}]
+        self.c = self.init_c()
+        self.T = None
+        self.props = None
         self.max_gap_hop = max_gap_hop
+
+        self.save_file = save_file
+        self.minimal_save_file = minimal_save_file
+        self.log_file = log_file
+        self.save_period = save_period
+
+        self.log_template = self.setup_logging()
+
+    def get_vel(self):
+        vel = np.stack([atoms.get_velocities()
+                        for atoms in self.atoms_list])
+        vel /= const.BOHR_RADIUS * const.ASE_TO_FS * const.FS_TO_AU
+
+        return vel
 
     def init_c(self):
         c = np.zeros((self.num_samples, self.num_states))
@@ -52,39 +75,10 @@ class NeuralTully:
         return c
 
     @property
-    def c(self):
-        return self.props_list[-1]["c"]
-
-    @c.setter
-    def c(self, value):
-        self.props_list[-1]["c"] = value
-
-    @property
-    def nxyz_list(self):
-        lst = [atoms_to_nxyz(atoms) for atoms in
-               self.atoms_list]
-
-        return lst
-
-    @property
-    def old_U(self):
-        if not self.props_list:
+    def U(self):
+        if not self.props:
             return
-        return self.props_list[-1]["U"]
-
-    @property
-    def vel(self):
-        _vel = np.stack([atoms.get_velocities()
-                         for atoms in self.atoms_list])
-        return _vel
-
-    @property
-    def props(self):
-        return self.props_list[-1]
-
-    @props.setter
-    def props(self, value):
-        self.props_list.append(value)
+        return self.props["U"]
 
     @property
     def forces(self):
@@ -94,14 +88,39 @@ class NeuralTully:
         return _forces
 
     @property
+    def energy(self):
+        _energy = np.stack([-self.props[f'energy_{i}']
+                            for i in range(self.num_states)],
+                           axis=1)
+        return _energy
+
+    @property
+    def nacv(self):
+        _nacv = np.zeros((self.num_samples, self.num_states,
+                          self.num_states, self.num_atoms, 3))
+        for i in range(self.num_states):
+            for j in range(self.num_states):
+                if i == j:
+                    continue
+                _nacv[:, i, j, :] = self.props[f'nacv_{i}{j}']
+        return _nacv
+
+    @property
     def mass(self):
         _mass = (self.atoms_list[0].get_masses()
                  * const.AMU_TO_AU)
         return _mass
 
     @property
+    def nxyz(self):
+        _nxyz = np.stack([atoms_to_nxyz(atoms) for atoms in
+                          self.atoms_list])
+
+        return _nxyz
+
+    @property
     def xyz(self):
-        _xyz = np.stack(self.nxyz_list)[..., 1:]
+        _xyz = self.nxyz[..., 1:]
         return _xyz
 
     @xyz.setter
@@ -109,16 +128,87 @@ class NeuralTully:
         for atoms, xyz in zip(self.atoms_list, val):
             atoms.set_positions(xyz)
 
-    @vel.setter
-    def vel(self, val):
-        for atoms, this_vel in zip(self.atoms_list, val):
-            atoms.set_velocities(this_vel)
+    @property
+    def state_dict(self):
+        _state_dict = {"nxyz": self.nxyz,
+                       "nacv": self.nacv,
+                       "energy": self.energy,
+                       "forces": self.forces,
+                       "U": self.U,
+                       "t": self.t,
+                       "vel": self.vel,
+                       "c": self.c,
+                       "T": self.T,
+                       "surfs": self.surfs}
+        return _state_dict
+
+    @property
+    def minimal_state_dict(self):
+        keys = ['nxyz', 'energy', 'surfs', 't']
+        minimal = {key: self.state_dict[key]
+                   for key in keys}
+
+        return minimal
+
+    def save(self):
+        with open(self.save_file, "ab") as f:
+            pickle.dump(self.state_dict, f)
+
+        with open(self.minimal_save_file, "ab") as f:
+            pickle.dump(self.minimal_state_dict, f)
+
+    def setup_logging(self):
+
+        states = [f"State {i}" for i in range(self.num_states)]
+        hdr = "%-9s " % "Time [ps]"
+        for state in states:
+            hdr += "%15s " % state
+
+        with open(self.log_file, 'w') as f:
+            f.write(hdr)
+
+        template = "%-10.4f "
+        for state in states:
+            template += "%12.4f%%"
+
+        return template
+
+    def log(self):
+        time = self.t / const.FS_TO_AU / 1000
+        pcts = []
+        for i in range(self.num_states):
+            num_surf = (self.surfs == i).sum()
+            pct = num_surf / self.num_samples * 100
+            pcts.append(pct)
+
+        text = self.template % (time, *pcts)
+
+        with open(self.log_file, 'a') as f:
+            f.write(text)
+
+    @classmethod
+    def from_file(cls,
+                  file,
+                  max_time=None):
+
+        state_dicts = []
+        with open(file, 'rb') as f:
+            while True:
+                try:
+                    state_dict = pickle.load(f)
+                    state_dicts.append(state_dict)
+                except EOFError:
+                    break
+                time = state_dict['t']
+                if max_time is not None and time > max_time:
+                    break
+        return state_dicts
 
     def update_props(self,
                      needs_nbrs):
 
         props = get_results(model=self.model,
-                            nxyz_list=self.nxyz_list,
+                            nxyz=self.nxyz,
                             nbr_list=self.nbr_list,
                             num_atoms=self.num_atoms,
                             needs_nbrs=needs_nbrs,
@@ -126,7 +216,7 @@ class NeuralTully:
                             cutoff_skin=self.cutoff_skin,
                             device=self.device,
                             batch_size=self.batch_size,
-                            old_U=self.old_U,
+                            old_U=self.U,
                             num_states=self.num_states,
                             surf=self.surfs,
                             max_gap_hop=self.max_gap_hop)
@@ -134,24 +224,44 @@ class NeuralTully:
         self.props = props
 
     def step(self, needs_nbrs):
-        # outer loop to move nuclei
-        new_xyz, new_vel = verlet_step_1(self.forces,
-                                         self.surfs,
-                                         vel=self.vel,
-                                         xyz=self.xyz,
-                                         mass=self.mass,
-                                         nuc_dt=self.nuc_dt)
-        self.xyz = new_xyz
-        self.vel = new_vel
 
         # inner loop to propagate electronic wavefunction
         for _ in range(self.elec_nuc_scale):
-            c = runge_c(c=self.c,
-                        vel=self.vel,
-                        results=self.props,
-                        elec_dt=self.elec_dt)
+            c, T = runge_c(c=self.c,
+                           vel=self.vel,
+                           results=self.props,
+                           elec_dt=self.elec_dt)
+
+            new_surfs, new_vel = try_hop(c=c,
+                                         T=T,
+                                         dt=self.elec_dt,
+                                         surfs=self.surfs,
+                                         vel=self.vel,
+                                         nacv=self.nacv,
+                                         mass=self.mass,
+                                         energy=self.energy)
+
+            # if any sample hopped then it was within the cutoff
+            # gap, which means we have forces for the other states
+            # which we can use for the rest of this inner loop
+
+            self.surfs = new_surfs
+            self.vel = new_vel
             self.c = c
+            self.T = T
             self.t += self.elec_dt
+
+        # outer loop to move nuclei
+        # xyz converted to a.u. for the step and then
+        # back to Angstrom after
+        new_xyz, new_vel = verlet_step_1(self.forces,
+                                         self.surfs,
+                                         vel=self.vel,
+                                         xyz=self.xyz / const.BOHR_RADIUS,
+                                         mass=self.mass,
+                                         nuc_dt=self.nuc_dt)
+        self.xyz = new_xyz * const.BOHR_RADIUS
+        self.vel = new_vel
 
         self.update_props(needs_nbrs)
         new_vel = verlet_step_2(forces=self.forces,
@@ -161,30 +271,21 @@ class NeuralTully:
                                 mass=self.mass,
                                 nuc_dt=self.nuc_dt)
         self.vel = new_vel
+        self.log()
 
-    # def step(self,
-    #          needs_nbrs):
+    def run(self):
+        steps = self.max_time // self.nuc_dt
+        epochs = steps // self.nbr_update_period
 
-    #     self.update_props(needs_nbrs)
+        counter = 0
+        for _ in range(epochs):
 
-    #     dc_dt, T = get_dc_dt(c=self.c,
-    #                          vel=self.vel,
-    #                          results=self.props,
-    #                          num_states=self.num_states)
+            self.step(needs_nbrs=True)
+            counter += 1
+            remain_steps = self.nbr_update_period - 1
 
-    #     # need to step c, the positions, and the velocities,
-    #     # and use different time-steps for each
-
-    #     c = self.step_c(dc_dt)
-
-    #     p_hop = get_p_hop(c=c,
-    #                       T=T,
-    #                       dt=self.dt,
-    #                       surf=self.surf)
-
-    #     new_surf = self.get_new_surf(p_hop)
-    #     if new_surf != self.surf:
-    #         self.rescale()
-    #         self.surf = new_surf
-
-    #     self.decoherence()
+            for _ in range(remain_steps):
+                self.step(needs_nbrs=False)
+                counter += 1
+                if counter % self.save_period == 0:
+                    self.save()

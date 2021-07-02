@@ -18,8 +18,7 @@ def check_hop(model,
               surf,
               num_states):
 
-    ## **** this won't work - assumes surf is an integer
-
+    # **** this won't work - assumes surf is an integer
     """
     `max_gap_hop` in a.u.
     """
@@ -407,7 +406,7 @@ def concat_and_conv(results_list,
     return all_results
 
 
-def make_loader(nxyz_list,
+def make_loader(nxyz,
                 nbr_list,
                 num_atoms,
                 needs_nbrs,
@@ -416,7 +415,8 @@ def make_loader(nxyz_list,
                 device,
                 batch_size):
 
-    props = {"nxyz": nxyz_list,
+    props = {"nxyz": [torch.Tensor(i)
+                      for i in nxyz],
              "num_atoms": num_atoms}
 
     dataset = Dataset(props=props,
@@ -441,7 +441,7 @@ def make_loader(nxyz_list,
 
 
 def get_results(model,
-                nxyz_list,
+                nxyz,
                 nbr_list,
                 num_atoms,
                 needs_nbrs,
@@ -457,7 +457,7 @@ def get_results(model,
     `nxyz_list` assumed to be in Angstroms
     """
 
-    loader = make_loader(nxyz_list=nxyz_list,
+    loader = make_loader(nxyz=nxyz,
                          nbr_list=nbr_list,
                          num_atoms=num_atoms,
                          needs_nbrs=needs_nbrs,

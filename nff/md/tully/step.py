@@ -60,11 +60,24 @@ def rescale(energy,
     new_en = np.take_along_axis(energy, new_surfs.reshape(-1, 1),
                                 -1).reshape(-1)
 
-    # `nacv` and `vel` each have dimension
-    # num_samples x num_atoms x 3
+    # `vel` has dimension num_samples x num_atoms x 3
+    # `nacv` has dimension num_samples x num_states
+    # x num_states x num_atoms x 3
 
-    norm = np.linalg.norm(nacv, axis=-1)
-    nac_dir = nacv / norm.reshape(*nacv.shape[:-1], 1)
+    ones = [1] * 4
+    start_nacv = np.take_along_axis(nacv, surfs
+                                    .reshape(-1, *ones),
+                                    axis=1)
+    pair_nacv = np.take_along_axis(start_nacv, new_surfs
+                                   .reshape(-1, *ones),
+                                   axis=2
+                                   ).squeeze(1).squeeze(1)
+
+    norm = np.linalg.norm(pair_nacv, axis=-1)
+    # for anything that didn't hop
+    norm[norm == 0] = 1
+
+    nac_dir = pair_nacv / norm.reshape(*pair_nacv.shape[:-1], 1)
     num_samples = vel.shape[0]
 
     v_par = ((nac_dir * vel).sum(-1)
@@ -142,14 +155,14 @@ def runge_c(c,
                     results=results,
                     hbar=hbar)
 
-    k1 = deriv(c)
-    k2 = deriv(c + elec_dt * k1 / 2)
-    k3 = deriv(c + elec_dt * k2 / 2)
-    k4 = deriv(c + elec_dt * k3)
+    k1, T1 = deriv(c)
+    k2, T2 = deriv(c + elec_dt * k1 / 2)
+    k3, T3 = deriv(c + elec_dt * k2 / 2)
+    k4, T4 = deriv(c + elec_dt * k3)
 
     new_c = c + 1 / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
 
-    return new_c
+    return new_c, T1
 
 
 def verlet_step_1(forces,
