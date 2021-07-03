@@ -480,7 +480,8 @@ def deriv_delta_R(pot_V,
                   mass,
                   vel,
                   surfs,
-                  hbar=1):
+                  hbar=1,
+                  **kwargs):
 
     T_R = decoherence_T_R(pot_V=pot_V,
                           delta_R=delta_R,
@@ -606,7 +607,8 @@ def deriv_delta_P(pot_V,
                   surfs,
                   vel,
                   sigma,
-                  hbar=1):
+                  hbar=1,
+                  **kwargs):
 
     T_P = decoherence_T_P(pot_V=pot_V,
                           delta_P=delta_P,
@@ -634,7 +636,8 @@ def deriv_sigma(pot_V,
                 surfs,
                 vel,
                 sigma,
-                hbar=1):
+                hbar=1,
+                **kwargs):
 
     F_alpha = get_F_alpha(force_nacv=force_nacv,
                           forces=forces)
@@ -732,33 +735,24 @@ def runge_delta(pot_V,
                                   mass=mass,
                                   hbar=hbar)
 
-    partial_P, partial_R, partial_sigma = partials
-
+    init_vals = [delta_P, sigma, delta_R]
+    vals = copy.deepcopy(init_vals)
+    names = ["delta_P", "sigma", "delta_R"]
     ks = []
+
     steps = [elec_dt / 2, elec_dt / 2, elec_dt]
 
-    this_P = delta_P
-    this_sigma = sigma
-    this_R = delta_R
-
     for i in range(4):
-        k_P = partial_P(delta_P=this_P,
-                        sigma=this_sigma)
-        k_R = partial_R(delta_R=this_R,
-                        delta_P=this_P)
-        k_sigma = partial_sigma(delta_R=this_R,
-                                sigma=this_sigma)
-
-        ks.append([k_P, k_R, k_sigma])
+        kwargs = {name: val for name, val in
+                  zip(names, vals)}
+        ks.append([func(**kwargs)
+                   for func in partials])
 
         if i == 3:
             break
 
-        this_P, this_sigma, this_R = [
-            delta_P + k_P * steps[i],
-            delta_R + k_R * steps[i],
-            sigma + k_sigma * steps[i]
-        ]
+        vals = [init + k * steps[i]
+                for init, k in zip(init_vals, ks)]
 
     ks = np.array(ks)
     weights = np.array([1, 2, 2, 1]) / 6
