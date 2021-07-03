@@ -628,8 +628,40 @@ def deriv_delta_P(pot_V,
     return deriv
 
 
-def deriv_sigma():
-    pass
+def deriv_sigma(pot_V,
+                delta_R,
+                nacv,
+                force_nacv,
+                forces,
+                surfs,
+                vel,
+                sigma,
+                hbar=1):
+
+    F_alpha = get_F_alpha(force_nacv=force_nacv,
+                          forces=forces)
+
+    term_1 = -1j / hbar * commute(pot_V, sigma)
+    term_2 = 1j / hbar * commute(F_alpha,
+                                 delta_R).sum((-1, -2))
+    # `vel` has shape num_samples x num_atoms x 3
+    # `nacv` has shape num_samples x num_states x
+    # num_states x num_atoms x 3
+
+    num_samples = nacv.shape[0]
+    num_atoms = nacv.shape[-2]
+
+    vel_reshape = vel.reshape(num_samples,
+                              1,
+                              1,
+                              num_atoms,
+                              3)
+    term_3 = (-commute(vel_reshape * nacv, sigma)
+              .sum((-1, -2)))
+
+    deriv = term_1 + term_2 + term_3
+
+    return deriv
 
 
 def add_decoherence(c,
