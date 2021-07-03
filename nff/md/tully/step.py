@@ -12,8 +12,6 @@ import numpy as np
 # - Add decoherence
 # - Fix the hopping criterion for multiple states
 # - Use Eq. (39) for the velocity re-scaling
-# - Must compute forces on all states at each step
-# if using the decoherence correction
 
 
 def compute_T(nacv,
@@ -662,6 +660,114 @@ def deriv_sigma(pot_V,
     deriv = term_1 + term_2 + term_3
 
     return deriv
+
+
+def get_delta_partials(pot_V,
+                       delta_P,
+                       delta_R,
+                       nacv,
+                       force_nacv,
+                       forces,
+                       surfs,
+                       vel,
+                       sigma,
+                       mass,
+                       hbar=1):
+
+    partial_P = partial(deriv_delta_P,
+                        pot_V=pot_V,
+                        nacv=nacv,
+                        force_nacv=force_nacv,
+                        forces=forces,
+                        surfs=surfs,
+                        vel=vel,
+                        hbar=hbar)
+
+    # missing: delta_R, delta_P
+
+    partial_R = partial(deriv_delta_R,
+                        pot_V=pot_V,
+                        nacv=nacv,
+                        mass=mass,
+                        vel=vel,
+                        surfs=surfs,
+                        hbar=hbar)
+
+    # missing: delta_R, sigma
+
+    partial_sigma = partial(deriv_sigma,
+                            pot_V=pot_V,
+                            nacv=nacv,
+                            force_nacv=force_nacv,
+                            forces=forces,
+                            surfs=surfs,
+                            vel=vel,
+                            hbar=hbar)
+
+    return partial_P, partial_R, partial_sigma
+
+
+def runge_delta(pot_V,
+                delta_P,
+                delta_R,
+                nacv,
+                force_nacv,
+                forces,
+                surfs,
+                vel,
+                sigma,
+                mass,
+                elec_dt,
+                hbar=1):
+
+    partials = get_delta_partials(pot_V=pot_V,
+                                  delta_P=delta_P,
+                                  delta_R=delta_R,
+                                  nacv=nacv,
+                                  force_nacv=force_nacv,
+                                  forces=forces,
+                                  surfs=surfs,
+                                  vel=vel,
+                                  sigma=sigma,
+                                  mass=mass,
+                                  hbar=hbar)
+
+    partial_P, partial_R, partial_sigma = partials
+
+    ks = []
+    steps = [elec_dt / 2, elec_dt / 2, elec_dt]
+
+    this_P = delta_P
+    this_sigma = sigma
+    this_R = delta_R
+
+    for i in range(4):
+        k_P = partial_P(delta_P=this_P,
+                        sigma=this_sigma)
+        k_R = partial_R(delta_R=this_R,
+                        delta_P=this_P)
+        k_sigma = partial_sigma(delta_R=this_R,
+                                sigma=this_sigma)
+
+        ks.append([k_P, k_R, k_sigma])
+
+        if i == 3:
+            break
+
+        this_P, this_sigma, this_R = [
+            delta_P + k_P * steps[i],
+            delta_R + k_R * steps[i],
+            sigma + k_sigma * steps[i]
+        ]
+
+    ks = np.array(ks)
+    weights = np.array([1, 2, 2, 1]) / 6
+
+    new_delta_P = delta_P + (weights * ks[:, 0]).sum(0)
+    new_delta_R = delta_R + (weights * ks[:, 1]).sum(0)
+    new_sigma = sigma + (weights * ks[:, 2]).sum(0)
+
+    return new_delta_P, new_delta_R, new_sigma
 
 
 def add_decoherence(c,
