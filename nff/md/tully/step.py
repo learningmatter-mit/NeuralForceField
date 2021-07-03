@@ -735,33 +735,28 @@ def runge_delta(pot_V,
                                   mass=mass,
                                   hbar=hbar)
 
-    init_vals = [delta_P, sigma, delta_R]
-    vals = copy.deepcopy(init_vals)
-    names = ["delta_P", "sigma", "delta_R"]
-    ks = []
+    init_vals = np.array([delta_P, sigma, delta_R])
+    intermed_vals = copy.deepcopy(init_vals)
+    final_vals = copy.deepcopy(init_vals)
 
-    steps = [elec_dt / 2, elec_dt / 2, elec_dt]
+    steps = np.array([elec_dt / 2, elec_dt / 2, elec_dt])
+    weights = np.array([1, 2, 2, 1]) * elec_dt / 6
+    names = ["delta_P", "sigma", "delta_R"]
 
     for i in range(4):
         kwargs = {name: val for name, val in
-                  zip(names, vals)}
-        ks.append([func(**kwargs)
-                   for func in partials])
+                  zip(names, intermed_vals)}
+        ks = np.array([func(**kwargs)
+                       for func in partials])
+
+        final_vals += weights[i] * ks
 
         if i == 3:
             break
 
-        vals = [init + k * steps[i]
-                for init, k in zip(init_vals, ks)]
+        intermed_vals = init_vals + ks * steps[i]
 
-    ks = np.array(ks)
-    weights = np.array([1, 2, 2, 1]) / 6
-
-    new_delta_P = delta_P + (weights * ks[:, 0]).sum(0)
-    new_delta_R = delta_R + (weights * ks[:, 1]).sum(0)
-    new_sigma = sigma + (weights * ks[:, 2]).sum(0)
-
-    return new_delta_P, new_delta_R, new_sigma
+    return tuple(final_vals)
 
 
 def add_decoherence(c,
