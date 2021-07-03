@@ -723,38 +723,39 @@ def runge_delta(pot_V,
                 elec_dt,
                 hbar=1):
 
-    partials = get_delta_partials(pot_V=pot_V,
-                                  delta_P=delta_P,
-                                  delta_R=delta_R,
-                                  nacv=nacv,
-                                  force_nacv=force_nacv,
-                                  forces=forces,
-                                  surfs=surfs,
-                                  vel=vel,
-                                  sigma=sigma,
-                                  mass=mass,
-                                  hbar=hbar)
+    derivs = get_delta_partials(pot_V=pot_V,
+                                delta_P=delta_P,
+                                delta_R=delta_R,
+                                nacv=nacv,
+                                force_nacv=force_nacv,
+                                forces=forces,
+                                surfs=surfs,
+                                vel=vel,
+                                sigma=sigma,
+                                mass=mass,
+                                hbar=hbar)
 
     init_vals = np.array([delta_P, sigma, delta_R])
     intermed_vals = copy.deepcopy(init_vals)
     final_vals = copy.deepcopy(init_vals)
 
-    steps = np.array([elec_dt / 2, elec_dt / 2, elec_dt])
-    weights = np.array([1, 2, 2, 1]) * elec_dt / 6
+    step_size = np.array([0.5, 0.5, 1])
+    final_weight = np.array([1, 2, 2, 1]) / 6
     names = ["delta_P", "sigma", "delta_R"]
 
     for i in range(4):
         kwargs = {name: val for name, val in
                   zip(names, intermed_vals)}
-        ks = np.array([func(**kwargs)
-                       for func in partials])
+        k_i = np.array([deriv(**kwargs)
+                        for deriv in derivs])
 
-        final_vals += weights[i] * ks
+        final_vals += k_i * elec_dt * final_weight[i]
 
         if i == 3:
             break
 
-        intermed_vals = init_vals + ks * steps[i]
+        intermed_vals = init_vals + (k_i * elec_dt
+                                     * step_size[i])
 
     return tuple(final_vals)
 
