@@ -261,7 +261,7 @@ def run_model(model,
 
     results = model(batch,
                     xyz=xyz,
-                    add_nacv=False,
+                    add_nacv=all_grads,
                     add_grad=all_grads,
                     add_gap=True,
                     add_u=True)
@@ -282,14 +282,15 @@ def run_model(model,
 
 def get_phases(U, old_U):
     # U has dimension samples X N x N
-    uu = torch.einsum("...jk, ...kl -> ...jl",
-                      U, old_U)
+    uu = np.einsum("...jk, ...kl -> ...jl",
+                   U, old_U)
 
     # Take the diagonal elements and get their signs
     num_states = U.shape[-1]
-    uu_diag = torch.cat([uu[..., i, i].reshape(-1, 1)
-                         for i in range(num_states)], dim=-1)
-    new_phases = uu_diag.sign()
+    uu_diag = np.concatenate([uu[..., i, i].reshape(-1, 1)
+                              for i in range(num_states)],
+                             axis=-1)
+    new_phases = np.sign(uu_diag)
 
     return new_phases
 
@@ -403,16 +404,16 @@ def concat_and_conv(results_list,
         val = torch.cat([i[key] for i in results_list])
 
         if 'energy_grad' in key or 'force_nacv' in key:
-            val *= conv['energy'] * conv['grad']
+            val *= conv['energy'] * conv['_grad']
             val = val.reshape(*grad_shape)
         elif 'energy' in key:
             val *= conv['energy']
         elif 'nacv' in key:
-            val *= conv['grad']
+            val *= conv['_grad']
             val = val.reshape(*grad_shape)
-        else:
-            msg = f"{key} has no known conversion"
-            raise NotImplementedError(msg)
+        # else:
+        #     msg = f"{key} has no known conversion"
+        #     raise NotImplementedError(msg)
 
         all_results[key] = val.numpy()
 
@@ -429,12 +430,11 @@ def make_loader(nxyz,
                 batch_size):
 
     props = {"nxyz": [torch.Tensor(i)
-                      for i in nxyz],
-             "num_atoms": num_atoms}
+                      for i in nxyz]}
 
     dataset = Dataset(props=props,
                       units='kcal/mol',
-                      check_props=False)
+                      check_props=True)
 
     if needs_nbrs or nbr_list is None:
         nbrs = single_spec_nbrs(dset=dataset,
@@ -524,7 +524,7 @@ def load_json(file):
 def make_dataset(nxyz,
                  all_params):
     props = {
-        'nxyz': nxyz
+        'nxyz': [torch.Tensor(nxyz)]
     }
 
     cutoff = all_params["cutoff"]

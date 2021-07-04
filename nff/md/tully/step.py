@@ -59,7 +59,8 @@ def get_a(c):
     num_samples = c.shape[0]
     num_states = c.shape[1]
 
-    a = np.zeros(num_samples, num_states, num_states)
+    a = np.zeros((num_samples, num_states, num_states),
+                 dtype='complex128')
     for i in range(num_states):
         for j in range(num_states):
             a[..., i, j] = (np.conj(c[..., i])
@@ -120,10 +121,10 @@ def get_new_surf(p_hop,
             if i == surf:
                 continue
 
-            p = p_hop[idx]
+            state_p = p[i]
             rnd = np.random.rand()
 
-            hop = (p > rnd)
+            hop = (state_p > rnd)
             if hop:
                 new_surf = i
                 break
@@ -175,16 +176,21 @@ def rescale(energy,
     # `ke_par` has dimension num_samples
 
     ke_par = (1 / 2 * mass.reshape(1, -1, 1)
-              * v_par ** 2).sum([-1, -2])
+              * v_par ** 2).sum((-1, -2))
 
     # The scaling factor for the velocities
     # Has dimension `num_samples`
 
-    scale = (old_en + ke_par - new_en) / ke_par
+    with np.errstate(divide='ignore',
+                     invalid='ignore'):
+        scale = (old_en + ke_par - new_en) / ke_par
+        scale[ke_par == 0] = np.nan
 
     # Anything less than zero leads to no hop
     scale[scale < 0] = np.nan
     scale = scale ** 0.5
+    scale = scale.reshape(-1, 1, 1)
+
     new_vel = scale * v_par + vel - v_par
 
     return new_vel
@@ -224,7 +230,7 @@ def try_hop(c,
     new_vel[frustrated] = vel[frustrated]
     new_surfs[frustrated] = surfs[frustrated]
 
-    return new_surfs, new_vel
+    return new_surfs, new_vel, p_hop
 
 
 def runge_c(c,
@@ -271,8 +277,8 @@ def verlet_step_1(forces,
 
     # `surf_forces` has dimension (num_samples x
     #  num_atoms x 3)
-    # `mass` has dimension `num_samples`
-    accel = surf_forces / mass.reshape(-1, 1, 1)
+    # `mass` has dimension `num_atoms`
+    accel = surf_forces / mass.reshape(1, -1, 1)
 
     # `vel` and `xyz` each have dimension
     # (num_samples x num_atoms x 3)
@@ -295,7 +301,7 @@ def verlet_step_2(forces,
         axis=1
     ).squeeze(1)
 
-    accel = surf_forces / mass.reshape(-1, 1, 1)
+    accel = surf_forces / mass.reshape(1, -1, 1)
     new_vel = vel + 0.5 * nuc_dt * accel
 
     return new_vel

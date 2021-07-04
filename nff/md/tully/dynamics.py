@@ -17,6 +17,8 @@ from nff.md.tully.step import (runge_c, try_hop,
                                )
 from nff.md.nvt_ax import NoseHoover, NoseHooverChain
 
+# TO-DO:
+# - Add a maximum gap for hopping
 
 METHOD_DIC = {
     "nosehoover": NoseHoover,
@@ -30,7 +32,7 @@ class NeuralTully:
                  device,
                  batch_size,
                  num_states,
-                 surf,
+                 initial_surf,
                  nuc_dt,
                  elec_dt,
                  max_time,
@@ -53,17 +55,12 @@ class NeuralTully:
         self.vel = self.get_vel()
         self.decoherence = decoherence
         # terms for decoherence correction
-        self.delta_R = 0
-        self.delta_P = 0
-        self.c = self.init_c()
-        self.sigma = self.init_sigma()
         self.T = None
         self.model = self.load_model(model_path)
 
         self.t = 0
         self.props = None
-        self.num_atoms = [len(atoms) for atoms
-                          in self.atoms_list]
+        self.num_atoms = len(self.atoms_list[0])
         self.num_samples = len(atoms_list)
 
         self.cutoff = cutoff
@@ -71,9 +68,10 @@ class NeuralTully:
         self.device = device
         self.batch_size = batch_size
         self.num_states = num_states
-        self.surfs = np.ones_like(self.num_samples) * surf
+        self.surfs = np.ones(self.num_samples,
+                             dtype=np.int) * initial_surf
         self.elec_dt = elec_dt * const.FS_TO_AU
-        self.elec_nuc_scale = (nuc_dt // elec_dt)
+        self.elec_nuc_scale = int(nuc_dt / elec_dt)
         self.nuc_dt = self.elec_nuc_scale * elec_dt * const.FS_TO_AU
 
         self.max_time = max_time * const.FS_TO_AU
@@ -87,6 +85,15 @@ class NeuralTully:
         self.save_period = save_period
 
         self.log_template = self.setup_logging()
+        self.c = self.init_c()
+        self.p_hop = 0
+
+        if not self.decoherence:
+            return
+
+        self.delta_R = 0
+        self.delta_P = 0
+        self.sigma = self.init_sigma()
 
     def load_model(self, model_path):
         param_path = os.path.join(model_path, 'params.json')
@@ -105,7 +112,9 @@ class NeuralTully:
         return vel
 
     def init_c(self):
-        c = np.zeros((self.num_samples, self.num_states))
+        c = np.zeros((self.num_samples,
+                      self.num_states),
+                     dtype='complex128')
         c[:, self.surfs[0]] = 1
         return c
 
@@ -143,11 +152,15 @@ class NeuralTully:
         _forces = np.stack([-self.props[f'energy_{i}_grad']
                             for i in range(self.num_states)],
                            axis=1)
+        _forces = (_forces.reshape(self.num_samples, -1,
+                                   self.num_states, 3)
+                   .transpose(0, 2, 1, 3))
+
         return _forces
 
     @property
     def energy(self):
-        _energy = np.stack([self.props[f'energy_{i}']
+        _energy = np.stack([self.props[f'energy_{i}'].reshape(-1)
                             for i in range(self.num_states)],
                            axis=1)
         return _energy
@@ -270,6 +283,8 @@ class NeuralTully:
         hdr = "%-9s " % "Time [ps]"
         for state in states:
             hdr += "%15s " % state
+        hdr += "%15s " % "|c|"
+        hdr += "%15s " % "Hop prob."
 
         with open(self.log_file, 'w') as f:
             f.write(hdr)
@@ -277,6 +292,8 @@ class NeuralTully:
         template = "%-10.4f "
         for state in states:
             template += "%12.4f%%"
+        template += "%12.4f"
+        template += "%12.4f"
 
         return template
 
@@ -288,10 +305,13 @@ class NeuralTully:
             pct = num_surf / self.num_samples * 100
             pcts.append(pct)
 
-        text = self.template % (time, *pcts)
+        norm_c = np.mean(np.linalg.norm(self.c, axis=1))
+        p_avg = np.mean(np.max(self.p_hop, axis=1))
+        text = self.log_template % (time, *pcts,
+                                    norm_c, p_avg)
 
         with open(self.log_file, 'a') as f:
-            f.write(text)
+            f.write("\n" + text)
 
     @classmethod
     def from_file(cls,
@@ -389,25 +409,30 @@ class NeuralTully:
         # this should be out of the electronic loop because according to sharc,
         # surface hopping is only performed once per time step
 
-        new_surfs, new_vel = try_hop(c=c,
-                                     T=T,
-                                     dt=self.elec_dt,
-                                     surfs=self.surfs,
-                                     vel=self.vel,
-                                     nacv=self.nacv,
-                                     mass=self.mass,
-                                     energy=self.energy)
+        new_surfs, new_vel, p_hop = try_hop(c=c,
+                                            T=T,
+                                            dt=self.elec_dt,
+                                            surfs=self.surfs,
+                                            vel=self.vel,
+                                            nacv=self.nacv,
+                                            mass=self.mass,
+                                            energy=self.energy)
 
         self.surfs = new_surfs
         self.vel = new_vel
+        self.p_hop = p_hop
 
         self.log()
 
     def run(self):
-        steps = self.max_time // self.nuc_dt
-        epochs = steps // self.nbr_update_period
+        steps = int(self.max_time / self.nuc_dt)
+        epochs = int(steps // self.nbr_update_period)
 
         counter = 0
+
+        self.model.to(self.device)
+        self.update_props(needs_nbrs=True)
+
         for _ in range(epochs):
             for i in range(self.nbr_update_period):
                 needs_nbrs = (i == 0)
@@ -427,7 +452,10 @@ class CombinedNeuralTully:
         self.ground_dynamics = self.init_ground(atoms=atoms,
                                                 ground_params=ground_params)
         self.ground_params = ground_params
+        self.ground_savefile = ground_params.get("savefile")
+
         self.tully_params = tully_params
+        self.num_trj = tully_params['num_trj']
 
     def init_ground(self,
                     atoms,
@@ -474,7 +502,12 @@ class CombinedNeuralTully:
         all_params = load_json(file)
         atomsbatch = get_atoms(all_params)
         ground_params = all_params['ground_params']
+
         tully_params = all_params['tully_params']
+        model_path = os.path.join(all_params['weightpath'],
+                                  str(all_params["nnid"]))
+        tully_params.update({"model_path": model_path,
+                             "device": all_params["device"]})
 
         instance = cls(atoms=atomsbatch,
                        ground_params=ground_params,
@@ -484,5 +517,13 @@ class CombinedNeuralTully:
 
 
 if __name__ == '__main__':
-    combined_tully = CombinedNeuralTully.from_file('job_info.json')
-    combined_tully.run()
+    path = ('/home/saxelrod/Repo/projects/master/NeuralForceField/nff/md'
+            '/tully/job_info.json')
+
+    try:
+        combined_tully = CombinedNeuralTully.from_file(path)
+        combined_tully.run()
+    except Exception as e:
+        print(e)
+        import pdb
+        pdb.post_mortem()

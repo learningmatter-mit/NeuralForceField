@@ -2,579 +2,201 @@
     "coords": [
         {
             "element": "C",
-            "x": -6.189362,
-            "y": -1.719626,
-            "z": 1.783328
+            "x": -3.470561,
+            "y": 2.276912,
+            "z": -0.939635
         },
         {
             "element": "C",
-            "x": -5.597768,
-            "y": -0.301362,
-            "z": 1.679148
+            "x": -2.533,
+            "y": 1.174919,
+            "z": -0.532205
         },
         {
             "element": "C",
-            "x": -6.638319,
-            "y": 0.615526,
-            "z": 0.992327
+            "x": -2.500861,
+            "y": -0.026234,
+            "z": -1.232472
         },
         {
             "element": "C",
-            "x": -5.313137,
-            "y": 0.217301,
-            "z": 3.109736
+            "x": -1.673769,
+            "y": -1.069097,
+            "z": -0.852273
         },
         {
             "element": "C",
-            "x": -4.285846,
-            "y": -0.277234,
-            "z": 0.876847
+            "x": -1.668018,
+            "y": -2.372501,
+            "z": -1.599079
         },
         {
             "element": "C",
-            "x": -3.733481,
-            "y": -1.423159,
-            "z": 0.286801
-        },
-        {
-            "element": "C",
-            "x": -2.498723,
-            "y": -1.426443,
-            "z": -0.390797
-        },
-        {
-            "element": "C",
-            "x": -2.094592,
-            "y": -2.694556,
-            "z": -1.186588
-        },
-        {
-            "element": "C",
-            "x": -3.286686,
-            "y": -3.668554,
-            "z": -1.340568
-        },
-        {
-            "element": "C",
-            "x": -1.697271,
-            "y": -2.264327,
-            "z": -2.618326
-        },
-        {
-            "element": "C",
-            "x": -0.960984,
-            "y": -3.489927,
-            "z": -0.498769
-        },
-        {
-            "element": "C",
-            "x": -1.771805,
-            "y": -0.194005,
-            "z": -0.427849
+            "x": -0.816595,
+            "y": -0.878691,
+            "z": 0.236076
         },
         {
             "element": "N",
-            "x": -0.405186,
-            "y": -0.014121,
-            "z": -0.789502
+            "x": -0.070482,
+            "y": -2.020076,
+            "z": 0.666351
         },
         {
             "element": "N",
-            "x": 0.425917,
-            "y": -0.742855,
-            "z": -0.170469
+            "x": 1.159212,
+            "y": -2.077234,
+            "z": 0.684868
         },
         {
             "element": "C",
-            "x": 1.785388,
-            "y": -0.320403,
-            "z": -0.224013
+            "x": 2.016666,
+            "y": -1.05778,
+            "z": 0.174913
         },
         {
             "element": "C",
-            "x": 2.351927,
-            "y": -0.153773,
-            "z": 1.088155
+            "x": 1.834705,
+            "y": -0.402798,
+            "z": -1.039309
         },
         {
             "element": "C",
-            "x": 1.70013,
-            "y": -0.729046,
-            "z": 2.375688
+            "x": 2.798071,
+            "y": 0.485086,
+            "z": -1.488064
         },
         {
             "element": "C",
-            "x": 1.54034,
-            "y": -2.260841,
-            "z": 2.214329
+            "x": 3.932784,
+            "y": 0.736047,
+            "z": -0.731129
         },
         {
             "element": "C",
-            "x": 0.328598,
-            "y": -0.086783,
-            "z": 2.69271
+            "x": 4.12056,
+            "y": 0.070313,
+            "z": 0.471185
         },
         {
             "element": "C",
-            "x": 2.598174,
-            "y": -0.493763,
-            "z": 3.611084
+            "x": 3.178295,
+            "y": -0.843104,
+            "z": 0.909221
         },
         {
             "element": "C",
-            "x": 3.565864,
-            "y": 0.54463,
-            "z": 1.181835
+            "x": -0.844354,
+            "y": 0.298069,
+            "z": 0.983702
         },
         {
             "element": "C",
-            "x": 4.269087,
-            "y": 1.015667,
-            "z": 0.05921
+            "x": -0.000377,
+            "y": 0.488643,
+            "z": 2.212823
         },
         {
             "element": "C",
-            "x": 5.564615,
-            "y": 1.822044,
-            "z": 0.251134
-        },
-        {
-            "element": "C",
-            "x": 5.240167,
-            "y": 3.097645,
-            "z": 1.065959
-        },
-        {
-            "element": "C",
-            "x": 6.189123,
-            "y": 2.246454,
-            "z": -1.091332
-        },
-        {
-            "element": "C",
-            "x": 6.594919,
-            "y": 0.962308,
-            "z": 1.022316
-        },
-        {
-            "element": "C",
-            "x": 3.765313,
-            "y": 0.674859,
-            "z": -1.204252
-        },
-        {
-            "element": "C",
-            "x": 2.548266,
-            "y": -0.007977,
-            "z": -1.394691
-        },
-        {
-            "element": "C",
-            "x": 2.203026,
-            "y": -0.51919,
-            "z": -2.817438
-        },
-        {
-            "element": "C",
-            "x": 1.830545,
-            "y": -2.017084,
-            "z": -2.719409
-        },
-        {
-            "element": "C",
-            "x": 1.075635,
-            "y": 0.302565,
-            "z": -3.484193
-        },
-        {
-            "element": "C",
-            "x": 3.426489,
-            "y": -0.436489,
-            "z": -3.760726
-        },
-        {
-            "element": "C",
-            "x": -2.38709,
-            "y": 1.035134,
-            "z": -0.003487
-        },
-        {
-            "element": "C",
-            "x": -1.77477,
-            "y": 2.434634,
-            "z": -0.286326
-        },
-        {
-            "element": "C",
-            "x": -2.717704,
-            "y": 3.564042,
-            "z": 0.186092
-        },
-        {
-            "element": "C",
-            "x": -1.597023,
-            "y": 2.59891,
-            "z": -1.81585
-        },
-        {
-            "element": "C",
-            "x": -0.420352,
-            "y": 2.656873,
-            "z": 0.427937
-        },
-        {
-            "element": "C",
-            "x": -3.614931,
-            "y": 0.941016,
-            "z": 0.670341
+            "x": -1.709301,
+            "y": 1.307377,
+            "z": 0.573979
         },
         {
             "element": "H",
-            "x": -6.447371,
-            "y": -2.134284,
-            "z": 0.787673
+            "x": -3.50608,
+            "y": 2.387679,
+            "z": -2.020764
         },
         {
             "element": "H",
-            "x": -7.120342,
-            "y": -1.696189,
-            "z": 2.385354
+            "x": -3.168682,
+            "y": 3.2302,
+            "z": -0.51503
         },
         {
             "element": "H",
-            "x": -5.488305,
-            "y": -2.42208,
-            "z": 2.278121
+            "x": -4.486556,
+            "y": 2.075147,
+            "z": -0.602421
         },
         {
             "element": "H",
-            "x": -6.284966,
-            "y": 1.664084,
-            "z": 0.928908
+            "x": -3.146771,
+            "y": -0.159486,
+            "z": -2.087469
         },
         {
             "element": "H",
-            "x": -6.850394,
-            "y": 0.268179,
-            "z": -0.039376
+            "x": -0.739653,
+            "y": -2.520618,
+            "z": -2.149819
         },
         {
             "element": "H",
-            "x": -7.592062,
-            "y": 0.615678,
-            "z": 1.560412
+            "x": -2.485693,
+            "y": -2.41287,
+            "z": -2.312194
         },
         {
             "element": "H",
-            "x": -6.242982,
-            "y": 0.219136,
-            "z": 3.716238
+            "x": -1.760404,
+            "y": -3.210894,
+            "z": -0.913181
         },
         {
             "element": "H",
-            "x": -4.914427,
-            "y": 1.25136,
-            "z": 3.098269
+            "x": 0.959896,
+            "y": -0.592452,
+            "z": -1.634382
         },
         {
             "element": "H",
-            "x": -4.56741,
-            "y": -0.424865,
-            "z": 3.621053
+            "x": 2.658717,
+            "y": 0.984353,
+            "z": -2.433068
         },
         {
             "element": "H",
-            "x": -4.290478,
-            "y": -2.363053,
-            "z": 0.346505
+            "x": 4.673671,
+            "y": 1.434528,
+            "z": -1.084348
         },
         {
             "element": "H",
-            "x": -2.985257,
-            "y": -4.500333,
-            "z": -2.008961
+            "x": 5.008509,
+            "y": 0.246742,
+            "z": 1.055951
         },
         {
             "element": "H",
-            "x": -3.591141,
-            "y": -4.123019,
-            "z": -0.376274
+            "x": 3.322298,
+            "y": -1.400002,
+            "z": 1.820081
         },
         {
             "element": "H",
-            "x": -4.172675,
-            "y": -3.176955,
-            "z": -1.790709
+            "x": 0.076936,
+            "y": -0.427884,
+            "z": 2.791387
         },
         {
             "element": "H",
-            "x": -1.368167,
-            "y": -3.142689,
-            "z": -3.210685
+            "x": -0.432013,
+            "y": 1.253997,
+            "z": 2.850906
         },
         {
             "element": "H",
-            "x": -2.562659,
-            "y": -1.802003,
-            "z": -3.135519
+            "x": 1.011671,
+            "y": 0.79908,
+            "z": 1.961519
         },
         {
             "element": "H",
-            "x": -0.876968,
-            "y": -1.52763,
-            "z": -2.62651
-        },
-        {
-            "element": "H",
-            "x": -0.724332,
-            "y": -4.403949,
-            "z": -1.082552
-        },
-        {
-            "element": "H",
-            "x": -1.273088,
-            "y": -3.802537,
-            "z": 0.518631
-        },
-        {
-            "element": "H",
-            "x": -0.047868,
-            "y": -2.881819,
-            "z": -0.387874
-        },
-        {
-            "element": "H",
-            "x": 0.849981,
-            "y": -2.500989,
-            "z": 1.388298
-        },
-        {
-            "element": "H",
-            "x": 2.520081,
-            "y": -2.739311,
-            "z": 2.010367
-        },
-        {
-            "element": "H",
-            "x": 1.131259,
-            "y": -2.699927,
-            "z": 3.148171
-        },
-        {
-            "element": "H",
-            "x": -0.05971,
-            "y": -0.490793,
-            "z": 3.651053
-        },
-        {
-            "element": "H",
-            "x": -0.420519,
-            "y": -0.296297,
-            "z": 1.908357
-        },
-        {
-            "element": "H",
-            "x": 0.423408,
-            "y": 1.011814,
-            "z": 2.801977
-        },
-        {
-            "element": "H",
-            "x": 2.124485,
-            "y": -0.965559,
-            "z": 4.495207
-        },
-        {
-            "element": "H",
-            "x": 2.724079,
-            "y": 0.583683,
-            "z": 3.841912
-        },
-        {
-            "element": "H",
-            "x": 3.603588,
-            "y": -0.945775,
-            "z": 3.492206
-        },
-        {
-            "element": "H",
-            "x": 3.987743,
-            "y": 0.731406,
-            "z": 2.176057
-        },
-        {
-            "element": "H",
-            "x": 4.501311,
-            "y": 3.729642,
-            "z": 0.532493
-        },
-        {
-            "element": "H",
-            "x": 6.158274,
-            "y": 3.700087,
-            "z": 1.228738
-        },
-        {
-            "element": "H",
-            "x": 4.816465,
-            "y": 2.851401,
-            "z": 2.060011
-        },
-        {
-            "element": "H",
-            "x": 6.479394,
-            "y": 1.371309,
-            "z": -1.707489
-        },
-        {
-            "element": "H",
-            "x": 5.49491,
-            "y": 2.872743,
-            "z": -1.687651
-        },
-        {
-            "element": "H",
-            "x": 7.10581,
-            "y": 2.843145,
-            "z": -0.908701
-        },
-        {
-            "element": "H",
-            "x": 7.537115,
-            "y": 1.528809,
-            "z": 1.176285
-        },
-        {
-            "element": "H",
-            "x": 6.835774,
-            "y": 0.0367,
-            "z": 0.460813
-        },
-        {
-            "element": "H",
-            "x": 6.216135,
-            "y": 0.662382,
-            "z": 2.019763
-        },
-        {
-            "element": "H",
-            "x": 4.348843,
-            "y": 0.94353,
-            "z": -2.089921
-        },
-        {
-            "element": "H",
-            "x": 2.695105,
-            "y": -2.60564,
-            "z": -2.350266
-        },
-        {
-            "element": "H",
-            "x": 0.98989,
-            "y": -2.199403,
-            "z": -2.029934
-        },
-        {
-            "element": "H",
-            "x": 1.542256,
-            "y": -2.411688,
-            "z": -3.71534
-        },
-        {
-            "element": "H",
-            "x": 0.143764,
-            "y": 0.262922,
-            "z": -2.895978
-        },
-        {
-            "element": "H",
-            "x": 1.370647,
-            "y": 1.369072,
-            "z": -3.560791
-        },
-        {
-            "element": "H",
-            "x": 0.880254,
-            "y": -0.075167,
-            "z": -4.509569
-        },
-        {
-            "element": "H",
-            "x": 3.166138,
-            "y": -0.914452,
-            "z": -4.726749
-        },
-        {
-            "element": "H",
-            "x": 3.719215,
-            "y": 0.608804,
-            "z": -3.98598
-        },
-        {
-            "element": "H",
-            "x": 4.309053,
-            "y": -0.965909,
-            "z": -3.34835
-        },
-        {
-            "element": "H",
-            "x": -2.271008,
-            "y": 4.542072,
-            "z": -0.083332
-        },
-        {
-            "element": "H",
-            "x": -2.861534,
-            "y": 3.560365,
-            "z": 1.28581
-        },
-        {
-            "element": "H",
-            "x": -3.714095,
-            "y": 3.509784,
-            "z": -0.297158
-        },
-        {
-            "element": "H",
-            "x": -1.212479,
-            "y": 3.614394,
-            "z": -2.046368
-        },
-        {
-            "element": "H",
-            "x": -0.87998,
-            "y": 1.860201,
-            "z": -2.212209
-        },
-        {
-            "element": "H",
-            "x": -2.565951,
-            "y": 2.471191,
-            "z": -2.340482
-        },
-        {
-            "element": "H",
-            "x": -0.066395,
-            "y": 3.692601,
-            "z": 0.242334
-        },
-        {
-            "element": "H",
-            "x": -0.525525,
-            "y": 2.526158,
-            "z": 1.523129
-        },
-        {
-            "element": "H",
-            "x": 0.359275,
-            "y": 1.962612,
-            "z": 0.066686
-        },
-        {
-            "element": "H",
-            "x": -4.074619,
-            "y": 1.859455,
-            "z": 1.053104
+            "x": -1.738921,
+            "y": 2.222326,
+            "z": 1.146379
         }
     ],
     "worker_name": "neuralzn",
@@ -594,7 +216,7 @@
         "nff": "/home/gridsan/saxelrod/repo/nff/master/NeuralForceField",
         "gres": 1,
         "htvs": "/home/gridsan/saxelrod/repo/htvs/master/htvs",
-        "nnid": 1308,
+        "nnid": 1302,
         "seed": 0,
         "skip": 20,
         "conda": "/home/gridsan/saxelrod/miniconda3",
@@ -607,6 +229,7 @@
             1e-05,
             1e-06
         ],
+        "memory": null,
         "nprocs": 4,
         "metrics": [
             "MeanAbsoluteError"
@@ -624,22 +247,60 @@
                 "train": "train_sample_dict.json"
             }
         },
+        "version": null,
         "add_nacv": true,
         "feat_dim": 128,
         "lr_decay": 0.5,
         "max_time": 30240,
+        "nodename": null,
         "num_conv": 5,
         "pool_dic": {
-            "energy_0": {
+            "d0": {
                 "name": "sum",
                 "param": {}
             },
-            "energy_1": {
+            "d1": {
+                "name": "sum",
+                "param": {}
+            },
+            "lam": {
+                "name": "attention",
+                "param": {
+                    "att_act": "swish",
+                    "out_dim": 1,
+                    "feat_dim": 128,
+                    "prob_func": "softmax",
+                    "mol_fp_act": "swish",
+                    "num_out_layers": 2
+                }
+            },
+            "d_00": {
+                "name": "sum",
+                "param": {}
+            },
+            "d_01": {
+                "name": "sum",
+                "param": {}
+            },
+            "d_02": {
+                "name": "sum",
+                "param": {}
+            },
+            "d_11": {
+                "name": "sum",
+                "param": {}
+            },
+            "d_12": {
+                "name": "sum",
+                "param": {}
+            },
+            "d_22": {
                 "name": "sum",
                 "param": {}
             }
         },
         "priority": 4,
+        "software": null,
         "exclusive": false,
         "grad_keys": [
             "energy_0_grad",
@@ -653,12 +314,12 @@
         "activation": "swish",
         "batch_size": 60,
         "max_epochs": 5000,
-        "model_type": "Painn",
+        "model_type": "PainnDiabat",
         "needs_nbrs": true,
         "partitions": [
             "normal"
         ],
-        "weightpath": "/home/gridsan/saxelrod/models/switches",
+        "weightpath": "/home/saxelrod/supercloud/models/switches",
         "zhu_params": {
             "log_file": "trj.log",
             "max_time": 5000,
@@ -670,153 +331,23 @@
             "initial_surf": 1,
             "initial_time": 0.0
         },
-        "dset_params": {
-            "lr": [
-                0.0001,
-                1e-05,
-                1e-05
+        "diabat_keys": [
+            [
+                "d_00",
+                "d_01",
+                "d_02"
             ],
-            "charge": 0,
-            "deltas": [
-                [
-                    "energy_1",
-                    "energy_0"
-                ]
+            [
+                "d_01",
+                "d_11",
+                "d_12"
             ],
-            "lr_min": [
-                1e-05,
-                1e-06,
-                1e-06
-            ],
-            "molsets": null,
-            "pruning": {
-                "substruc_smiles": [
-                    [
-                        "N(=N/c1ccccc1)\\c2ccccc2"
-                    ]
-                ],
-                "stereo_in_substruc": false
-            },
-            "max_geoms": null,
-            "splitting": {
-                "seed": 0,
-                "split_sizes": {
-                    "val": 5000
-                },
-                "num_parallel": 1,
-                "species_splits": {
-                    "test": [
-                        "holdout_test"
-                    ]
-                }
-            },
-            "max_std_en": 10,
-            "max_val_en": 450,
-            "needs_nbrs": false,
-            "split_type": "isom_balanced",
-            "weightpath": "/home/gridsan/saxelrod/models/switches",
-            "dset_version": 2,
-            "method_names": [
-                "sf_tddft_bhhlyp"
-            ],
-            "needs_angles": false,
-            "diabatization": {
-                "diabatic_keys": [
-                    [
-                        "d0",
-                        "lam"
-                    ],
-                    [
-                        "lam",
-                        "d1"
-                    ]
-                ],
-                "max_diabat_rmsd": 0.15,
-                "num_diabat_states": 2,
-                "diabat_assignments": {
-                    "0": [
-                        "energy_0",
-                        "energy_1"
-                    ],
-                    "1": [
-                        "energy_1",
-                        "energy_0"
-                    ]
-                }
-            },
-            "max_std_force": 10,
-            "max_val_force": 450,
-            "method_snames": [
-                "sf_tddft_bhhlyp"
-            ],
-            "required_keys": [
-                "energy_0_grad",
-                "smiles",
-                "geom_id",
-                "nxyz",
-                "force_nacv_10",
-                "energy_1",
-                "energy_1_grad",
-                "energy_0",
-                "charge",
-                "spin"
-            ],
-            "job_chunk_size": 1000,
-            "stoich_job_dir": "/home/saxelrod/htvs/djangochem/neuralnet/utils/dataset/json_files",
-            "balanced_sampling": {
-                "ref_config": {
-                    "type": "equil",
-                    "kwargs": {
-                        "device": "cpu",
-                        "group_name": "switches",
-                        "method_names": [
-                            "dft_d3_gga_bp86",
-                            "dft_hyb_bhhlyp",
-                            "sf_tddft_bhhlyp"
-                        ],
-                        "substruc_idx": [
-                            3,
-                            4,
-                            5,
-                            6
-                        ],
-                        "method_descrips": [
-                            "Orca bp86/def2-SVP D3 DFT RI",
-                            "Orca BHHLYP/6-31G* DFT",
-                            "GAMESS bhhlyp/6-31G* spin flip tddft"
-                        ],
-                        "pref_method_idx": 0,
-                        "ref_smiles_list": [
-                            "N(=N/c1ccccc1)\\c2ccccc2",
-                            "N(=N/c1ccccc1)/c2ccccc2"
-                        ],
-                        "substruc_smiles": "N(=N/c1ccccc1)\\c2ccccc2"
-                    }
-                },
-                "balance_type": "spec_config_zhu_balance",
-                "sampler_kwargs": {
-                    "device": "cpu",
-                    "extra_rmsd": 0.25,
-                    "zhu_kwargs": {
-                        "expec_gap": 0.00551,
-                        "func_type": "gaussian",
-                        "lower_key": "energy_0",
-                        "upper_key": "energy_1"
-                    },
-                    "zhu_weight": 0.5,
-                    "spec_weight": 0.6,
-                    "config_weight": 0.5,
-                    "extra_category": true
-                }
-            },
-            "all_calcs_for_geom": false,
-            "custom_stoich_name": "lin_reg",
-            "max_geoms_per_dset": null,
-            "mounted_weightpath": "/home/saxelrod/supercloud/models/switches",
-            "method_descriptions": [
-                "QChem bhhlyp/6-31gs SF-TDDFT"
+            [
+                "d_02",
+                "d_12",
+                "d_22"
             ]
-        },
+        ],
         "learnable_k": true,
         "lr_patience": 10,
         "max_samples": 2500,
@@ -832,103 +363,50 @@
         ],
         "mini_batches": 1,
         "needs_angles": false,
-        "compute_delta": true,
         "ground_params": {
             "ttime": 50,
             "logfile": "ground.log",
-            "max_time": 15000,
+            "max_time": 50,
             "savefile": "ground.trj",
             "timestep": 0.5,
-            "equil_time": 1000,
+            "equil_time": 1,
             "thermostat": "nosehoover",
             "loginterval": 10,
             "temperature": 300
         },
         "hops_and_last": true,
         "mol_loss_norm": false,
-        "quantum_yield": {
-            "max_rmsd": null,
-            "ref_geoms": [
-                {
-                    "azo_cis": {
-                        "pk": 144463205,
-                        "ref_idx": [
-                            3,
-                            4,
-                            5,
-                            6
-                        ],
-                        "this_idx": [
-                            11,
-                            12,
-                            13,
-                            14
-                        ]
-                    },
-                    "azo_trans": {
-                        "pk": 144528925,
-                        "ref_idx": [
-                            3,
-                            4,
-                            5,
-                            6
-                        ],
-                        "this_idx": [
-                            11,
-                            12,
-                            13,
-                            14
-                        ]
-                    }
-                },
-                {
-                    "this_cis": {
-                        "pk": 144461985,
-                        "ref_idx": [
-                            11,
-                            12,
-                            13,
-                            14
-                        ],
-                        "this_idx": [
-                            11,
-                            12,
-                            13,
-                            14
-                        ]
-                    },
-                    "this_trans": {
-                        "pk": 144529487,
-                        "ref_idx": [
-                            11,
-                            12,
-                            13,
-                            14
-                        ],
-                        "this_idx": [
-                            11,
-                            12,
-                            13,
-                            14
-                        ]
-                    }
-                }
-            ],
-            "count_excited": false
-        },
         "reset_trainer": false,
         "batched_params": {
             "cutoff": 5.0,
             "device": 0,
             "num_trj": 500,
-            "batch_size": 80,
+            "batch_size": 110,
             "nbr_update_period": 20
         },
-        "retry_attempts": 5,
+        "cross_talk_dic": null,
         "save_frequency": 100,
         "multi_loss_dict": [
             {
                 "mse": [
+                    {
+                        "coef": 0.01,
+                        "params": {
+                            "key": "d_00"
+                        }
+                    },
+                    {
+                        "coef": 0.01,
+                        "params": {
+                            "key": "d_11"
+                        }
+                    },
+                    {
+                        "coef": 0.01,
+                        "params": {
+                            "key": "d_22"
+                        }
+                    },
                     {
                         "coef": 0.2,
                         "params": {
@@ -959,57 +437,34 @@
                             "key": "energy_1_energy_0_delta"
                         }
                     }
-                ]
-            },
-            {
-                "mse": [
+                ],
+                "nacv": [
                     {
-                        "coef": 0.2,
+                        "coef": 1,
                         "params": {
-                            "key": "energy_0"
-                        }
-                    },
-                    {
-                        "coef": 0.1,
-                        "params": {
-                            "key": "energy_1"
-                        }
-                    },
-                    {
-                        "coef": 1.0,
-                        "params": {
-                            "key": "energy_0_grad"
-                        }
-                    },
-                    {
-                        "coef": 1.0,
-                        "params": {
-                            "key": "energy_1_grad"
-                        }
-                    },
-                    {
-                        "coef": 1.0,
-                        "params": {
-                            "key": "energy_1_energy_0_delta"
-                        }
-                    },
-                    {
-                        "coef": 100,
-                        "params": {
-                            "key": "energy_1_energy_0_delta",
-                            "cutoff": 4.6
+                            "abs": false,
+                            "key": "force_nacv_10",
+                            "max": false
                         }
                     }
                 ]
             }
         ],
+        "num_ionic_steps": null,
         "readout_dropout": 0.0,
         "skip_connection": {
-            "energy_0": true,
-            "energy_1": true
+            "d0": true,
+            "d1": true,
+            "lam": false,
+            "d_00": false,
+            "d_01": false,
+            "d_02": false,
+            "d_11": false,
+            "d_12": false,
+            "d_22": false
         },
         "compute_platform": "supercloud",
-        "dataset_on_build": false,
+        "dataset_on_build": true,
         "del_grad_interval": 100,
         "geoms_per_species": 1,
         "sampling_mol_sets": null,
@@ -1017,7 +472,7 @@
         "validation_config": "bhhlyp_6-31gs_sf_tddft_engrad",
         "log_every_n_epochs": 1,
         "mounted_weightpath": "/home/saxelrod/supercloud/models/switches",
-        "checkpoints_to_keep": 1000,
+        "checkpoints_to_keep": 3,
         "validation_mol_sets": null,
         "starting_geom_methods": [
             "dft_hyb_bhhlyp",
@@ -1025,7 +480,22 @@
         ],
         "validation_method_name": "sf_tddft_bhhlyp",
         "converged_starting_geom": false,
-        "validation_method_description": "GAMESS bhhlyp/6-31G* spin flip tddft"
+        "validation_method_description": "GAMESS bhhlyp/6-31G* spin flip tddft",
+        "tully_params": {
+            "log_file": "trj.log",
+            "num_trj": 5,
+            "max_time": 5000,
+            "out_file": "trj.csv",
+            "nuc_dt": 0.5,
+            "elec_dt": 0.02,
+            "num_states": 2,
+            "max_gap_hop": 0.021673306772908366,
+            "save_period": 30,
+            "initial_surf": 1,
+            "initial_time": 0.0,
+            "cutoff": 5.0,
+            "batch_size": 5
+        }
     },
     "project_name": "switches",
     "parent_class": "Geom"
