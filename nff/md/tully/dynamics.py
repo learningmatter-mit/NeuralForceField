@@ -3,20 +3,19 @@ import pickle
 import os
 import copy
 import json
+import random
 
-from ase import Atoms
-from nff.io.ase_ax import NeuralFF, AtomsBatch
+from ase.io.trajectory import Trajectory
 
 from nff.train import load_model
 from nff.utils import constants as const
 from nff.md.utils_ax import atoms_to_nxyz
-from nff.md.tully.io import get_results
+from nff.md.tully.io import get_results, load_json, get_atoms
 from nff.md.tully.step import (runge_c, try_hop,
                                verlet_step_1, verlet_step_2,
                                # add_decoherence
                                )
 from nff.md.nvt_ax import NoseHoover, NoseHooverChain
-
 
 
 METHOD_DIC = {
@@ -44,7 +43,7 @@ class NeuralTully:
                  save_file='zn.pickle',
                  minimal_save_file='zn_small.pickle',
                  log_file='zn.log',
-                 decoherence=True,
+                 decoherence=False,
                  **kwargs):
         """
         `max_gap_hop` in a.u.
@@ -97,17 +96,6 @@ class NeuralTully:
         model = load_model(model_path, params, params['model_type'])
 
         return model
-
-    def init_ground(self,
-                    atoms,
-                    ground_params):
-        ase_ground_params = copy.deepcopy(ground_params)
-        ase_ground_params["trajectory"] = ground_params.get("savefile")
-
-        method = METHOD_DIC[ase_ground_params["thermostat"]]
-        ground_dynamics = method(atoms, **ase_ground_params)
-
-        return ground_dynamics
 
     def get_vel(self):
         vel = np.stack([atoms.get_velocities()
@@ -430,19 +418,71 @@ class NeuralTully:
                     self.save()
 
 
+class CombinedNeuralTully:
+    def __init__(self,
+                 atoms,
+                 ground_params,
+                 tully_params):
+
+        self.ground_dynamics = self.init_ground(atoms=atoms,
+                                                ground_params=ground_params)
+        self.ground_params = ground_params
+        self.tully_params = tully_params
+
+    def init_ground(self,
+                    atoms,
+                    ground_params):
+
+        ase_ground_params = copy.deepcopy(ground_params)
+        ase_ground_params["trajectory"] = ground_params.get("savefile")
+
+        method = METHOD_DIC[ase_ground_params["thermostat"]]
+        ground_dynamics = method(atoms, **ase_ground_params)
+
+        return ground_dynamics
+
+    def sample_ground_geoms(self):
+        steps = int(self.ground_params["max_time"] /
+                    self.ground_params["timestep"])
+        equil_steps = int(self.ground_params["equil_time"] /
+                          self.ground_params["timestep"])
+
+        self.ground_dynamics.run(steps=steps)
+
+        trj = Trajectory(self.ground_savefile)
+
+        loginterval = self.ground_params.get("loginterval", 1)
+        logged_equil = int(equil_steps / loginterval)
+        possible_states = [trj[index] for index in
+                           range(logged_equil, len(trj))]
+        random_indices = random.sample(range(len(possible_states)),
+                                       self.num_trj)
+        actual_states = [possible_states[index] for index in random_indices]
+
+        return actual_states
+
+    def run(self):
+        atoms_list = self.sample_ground_geoms()
+        tully = NeuralTully(atoms_list=atoms_list,
+                            **self.tully_params)
+        tully.run()
+
+    @classmethod
+    def from_file(cls,
+                  file):
+
+        all_params = load_json(file)
+        atomsbatch = get_atoms(all_params)
+        ground_params = all_params['ground_params']
+        tully_params = all_params['tully_params']
+
+        instance = cls(atoms=atomsbatch,
+                       ground_params=ground_params,
+                       tully_params=tully_params)
+
+        return instance
+
+
 if __name__ == '__main__':
-    # atoms_list doesn't work and we're forgetting
-    # the classical MD to start
-
-    with open('job_info.json', 'r') as f:
-        info = json.load(f)
-
-    atoms = Atoms(nxyz[:, 0], positions=nxyz[:, 1:])
-    atomsbatch = AtomsBatch.from_atoms(atoms=atoms,
-                                       props=batched_props,
-                                       needs_angles=needs_angles,
-                                       device=device,
-                                       undirected=False)
-
-    tully = NeuralTully(**info.details)
-    tully.run()
+    combined_tully = CombinedNeuralTully.from_file('job_info.json')
+    combined_tully.run()

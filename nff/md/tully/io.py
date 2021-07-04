@@ -1,14 +1,26 @@
 """
-Link between Tully surface hopping and NFF models.
+Link between Tully surface hopping and both NFF models
+and JSON parameter files.
 """
+import json
+import os
+
 import torch
 from torch.utils.data import DataLoader
+import numpy as np
+
+from rdkit import Chem
+from ase import Atoms
 
 from nff.train import batch_to, batch_detach
 from nff.nn.utils import single_spec_nbrs
 from nff.data import Dataset, collate_dicts
 from nff.utils import constants as const
 from nff.utils.scatter import compute_grad
+from nff.io.ase_ax import NeuralFF, AtomsBatch
+
+PERIODICTABLE = Chem.GetPeriodicTable()
+ANGLE_MODELS = ["DimeNet", "DimeNetDiabat", "DimeNetDiabatDelta"]
 
 
 def check_hop(model,
@@ -484,3 +496,111 @@ def get_results(model,
                                   num_atoms=num_atoms)
 
     return all_results
+
+
+def coords_to_xyz(coords):
+    nxyz = []
+    for dic in coords:
+        directions = ['x', 'y', 'z']
+        n = float(PERIODICTABLE.GetAtomicNumber(dic["element"]))
+        xyz = [dic[i] for i in directions]
+        nxyz.append([n, *xyz])
+    return np.array(nxyz)
+
+
+def load_json(file):
+
+    with open(file, 'r') as f:
+        info = json.load(f)
+
+    details = info['details']
+    all_params = {key: val for key, val in info.items()
+                  if key != "details"}
+    all_params.update(details)
+
+    return all_params
+
+
+def make_dataset(nxyz,
+                 all_params):
+    props = {
+        'nxyz': nxyz
+    }
+
+    cutoff = all_params["cutoff"]
+
+    dataset = Dataset(props.copy(), units='kcal/mol')
+    dataset.generate_neighbor_list(cutoff=cutoff,
+                                   undirected=False)
+
+    model_type = all_params.get("model_type")
+    needs_angles = (model_type in ANGLE_MODELS)
+    if needs_angles:
+        dataset.generate_angle_list()
+
+    return dataset, needs_angles
+
+
+def get_batched_props(dataset):
+    batched_props = {}
+    for key, val in dataset.props.items():
+        if type(val[0]) is torch.Tensor and len(val[0].shape) == 0:
+            batched_props.update({key: val[0].reshape(-1)})
+        else:
+            batched_props.update({key: val[0]})
+    return batched_props
+
+
+def add_calculator(atomsbatch,
+                   model_path,
+                   all_params,
+                   batched_props):
+
+    param_path = os.path.join(model_path, 'params.json')
+    with open(param_path, 'r') as f:
+        params = json.load(f)
+
+    model_type = params['model_type']
+    device = params.get('device', 'cuda')
+    needs_angles = (model_type in ANGLE_MODELS)
+
+    nff_ase = NeuralFF.from_file(
+        model_path=model_path,
+        device=device,
+        output_keys=["energy_0"],
+        conversion="ev",
+        params=all_params,
+        model_type=model_type,
+        needs_angles=needs_angles,
+        dataset_props=batched_props
+    )
+
+    atomsbatch.set_calculator(nff_ase)
+
+
+def get_atoms(all_params):
+
+    coords = all_params["coords"]
+    nxyz = coords_to_xyz(coords)
+    atoms = Atoms(nxyz[:, 0],
+                  positions=nxyz[:, 1:])
+
+    dataset, needs_angles = make_dataset(nxyz=nxyz,
+                                         all_params=all_params)
+    batched_props = get_batched_props(dataset)
+    device = all_params.get('device', 'cuda')
+
+    atomsbatch = AtomsBatch.from_atoms(atoms=atoms,
+                                       props=batched_props,
+                                       needs_angles=needs_angles,
+                                       device=device,
+                                       undirected=False)
+
+    model_path = os.path.join(all_params['weightpath'],
+                              str(all_params["nnid"]))
+    add_calculator(atomsbatch=atomsbatch,
+                   model_path=model_path,
+                   all_params=all_params,
+                   batched_props=batched_props)
+
+    return atomsbatch

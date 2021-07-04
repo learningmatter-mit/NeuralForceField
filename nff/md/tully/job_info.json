@@ -1,413 +1,1032 @@
-import numpy as np
-import pickle
-import os
-
-from nff.train import load_model
-from nff.utils import constants as const
-from nff.md.utils_ax import atoms_to_nxyz
-from nff.md.tully.io import get_results
-from nff.md.tully.step import (runge_c, try_hop,
-                               verlet_step_1, verlet_step_2,
-                               # add_decoherence
-                               )
-
-import json
-
-class NeuralTully:
-    def __init__(self,
-                 atoms_list,
-                 device,
-                 batch_size,
-                 num_states,
-                 surf,
-                 nuc_dt,
-                 elec_dt,
-                 max_time,
-                 cutoff,
-                 model_path,
-                 cutoff_skin=1.0,
-                 max_gap_hop=0.018,
-                 nbr_update_period=20,
-                 save_period=10,
-                 save_file='zn.pickle',
-                 minimal_save_file='zn_small.pickle',
-                 log_file='zn.log',
-                 decoherence=True,
-                 **kwargs):
-        """
-        `max_gap_hop` in a.u.
-        """
-
-        self.atoms_list = atoms_list
-        self.vel = self.get_vel()
-        self.decoherence = decoherence
-        # terms for decoherence correction
-        self.delta_R = 0
-        self.delta_P = 0
-        self.c = self.init_c()
-        self.sigma = self.init_sigma()
-        self.T = None
-        self.model = self.load_model(model_path)
-
-        self.t = 0
-        self.props = None
-        self.num_atoms = [len(atoms) for atoms
-                          in self.atoms_list]
-        self.num_samples = len(atoms_list)
-
-        self.cutoff = cutoff
-        self.cutoff_skin = cutoff_skin
-        self.device = device
-        self.batch_size = batch_size
-        self.num_states = num_states
-        self.surfs = np.ones_like(self.num_samples) * surf
-        self.elec_dt = elec_dt * const.FS_TO_AU
-        self.elec_nuc_scale = (nuc_dt // elec_dt)
-        self.nuc_dt = self.elec_nuc_scale * elec_dt * const.FS_TO_AU
-
-        self.max_time = max_time * const.FS_TO_AU
-        self.nbr_update_period = nbr_update_period
-        self.nbr_list = None
-        self.max_gap_hop = max_gap_hop
-
-        self.save_file = save_file
-        self.minimal_save_file = minimal_save_file
-        self.log_file = log_file
-        self.save_period = save_period
-
-        self.log_template = self.setup_logging()
-
-    def load_model(self, model_path):
-    	param_path = os.path.join(model_path, 'params.json')
-    	with open(param_path, 'r') as f:
-    		params = json.load(f)
-
-    	model = load_model(model_path, params, params['model_type'])
-
-    	return model
-
-    def get_vel(self):
-        vel = np.stack([atoms.get_velocities()
-                        for atoms in self.atoms_list])
-        vel /= const.BOHR_RADIUS * const.ASE_TO_FS * const.FS_TO_AU
-
-        return vel
-
-    def init_c(self):
-        c = np.zeros((self.num_samples, self.num_states))
-        c[:, self.surfs[0]] = 1
-        return c
-
-    def init_sigma(self):
-        """
-        Electronic density matrix
-        """
-
-        # c has dimension num_samples x num_states
-        # sigma has dimension num_samples x num_states
-        # x num_states
-
-        sigma = np.ones((self.num_samples,
-                         self.num_states,
-                         self.num_states),
-                        dtype=np.complex128)
-
-        sigma = self.c.reshape(self.num_samples,
-                               self.num_states,
-                               1)
-        sigma *= np.conj(self.c.reshape(self.num_samples,
-                                        1,
-                                        self.num_states))
-
-        return sigma
-
-    @property
-    def U(self):
-        if not self.props:
-            return
-        return self.props["U"]
-
-    @property
-    def forces(self):
-        _forces = np.stack([-self.props[f'energy_{i}_grad']
-                            for i in range(self.num_states)],
-                           axis=1)
-        return _forces
-
-    @property
-    def energy(self):
-        _energy = np.stack([self.props[f'energy_{i}']
-                            for i in range(self.num_states)],
-                           axis=1)
-        return _energy
-
-    @property
-    def nacv(self):
-        _nacv = np.zeros((self.num_samples, self.num_states,
-                          self.num_states, self.num_atoms, 3))
-        for i in range(self.num_states):
-            for j in range(self.num_states):
-                if i == j:
-                    continue
-                _nacv[:, i, j, :] = self.props[f'nacv_{i}{j}']
-        return _nacv
-
-    @property
-    def gap(self):
-        num_samples = self.energy.shape[0]
-        num_states = self.energy.shape[1]
-
-        _gap = np.zeros((num_samples, num_states, num_states))
-        _gap -= self.energy.reshape(num_samples, 1, num_states)
-        _gap += self.energy.reshape(num_samples, num_states, 1)
-
-        return _gap
-
-    @property
-    def force_nacv(self):
-
-        # self.gap has shape num_samples x num_states x num_states
-        # `nacv` has shape num_samples x num_states x num_states
-        # x num_atoms x 3
-
-        gap = self.gap.reshape(self.num_samples,
-                               self.num_states,
-                               self.num_states,
-                               1,
-                               1)
-
-        _force_nacv = self.nacv * gap
-
-        return _force_nacv
-
-    @property
-    def mass(self):
-        _mass = (self.atoms_list[0].get_masses()
-                 * const.AMU_TO_AU)
-        return _mass
-
-    @property
-    def nxyz(self):
-        _nxyz = np.stack([atoms_to_nxyz(atoms) for atoms in
-                          self.atoms_list])
-
-        return _nxyz
-
-    @property
-    def xyz(self):
-        _xyz = self.nxyz[..., 1:]
-        return _xyz
-
-    @xyz.setter
-    def xyz(self, val):
-        for atoms, xyz in zip(self.atoms_list, val):
-            atoms.set_positions(xyz)
-
-    @property
-    def pot_V(self):
-        """
-        Potential energy matrix
-        """
-        V = np.zeros((self.num_samples,
-                      self.num_states,
-                      self.num_states))
-        idx = np.arange(self.num_states)
-        np.put_along_axis(
-            V,
-            idx.reshape(1, -1, 1),
-            self.energy.reshape(self.num_samples,
-                                self.num_states,
-                                1),
-            axis=2
-        )
-
-        return V
-
-    @property
-    def state_dict(self):
-        _state_dict = {"nxyz": self.nxyz,
-                       "nacv": self.nacv,
-                       "force_nacv": self.force_nacv,
-                       "energy": self.energy,
-                       "forces": self.forces,
-                       "U": self.U,
-                       "t": self.t,
-                       "vel": self.vel,
-                       "c": self.c,
-                       "T": self.T,
-                       "surfs": self.surfs}
-        return _state_dict
-
-    @property
-    def minimal_state_dict(self):
-        keys = ['nxyz', 'energy', 'surfs', 't']
-        minimal = {key: self.state_dict[key]
-                   for key in keys}
-
-        return minimal
-
-    def save(self):
-        with open(self.save_file, "ab") as f:
-            pickle.dump(self.state_dict, f)
-
-        with open(self.minimal_save_file, "ab") as f:
-            pickle.dump(self.minimal_state_dict, f)
-
-    def setup_logging(self):
-
-        states = [f"State {i}" for i in range(self.num_states)]
-        hdr = "%-9s " % "Time [ps]"
-        for state in states:
-            hdr += "%15s " % state
-
-        with open(self.log_file, 'w') as f:
-            f.write(hdr)
-
-        template = "%-10.4f "
-        for state in states:
-            template += "%12.4f%%"
-
-        return template
-
-    def log(self):
-        time = self.t / const.FS_TO_AU / 1000
-        pcts = []
-        for i in range(self.num_states):
-            num_surf = (self.surfs == i).sum()
-            pct = num_surf / self.num_samples * 100
-            pcts.append(pct)
-
-        text = self.template % (time, *pcts)
-
-        with open(self.log_file, 'a') as f:
-            f.write(text)
-
-    @classmethod
-    def from_file(cls,
-                  file,
-                  max_time=None):
-
-        state_dicts = []
-        with open(file, 'rb') as f:
-            while True:
-                try:
-                    state_dict = pickle.load(f)
-                    state_dicts.append(state_dict)
-                except EOFError:
-                    break
-                time = state_dict['t']
-                if max_time is not None and time > max_time:
-                    break
-        return state_dicts
-
-    def update_props(self,
-                     needs_nbrs):
-
-        props = get_results(model=self.model,
-                            nxyz=self.nxyz,
-                            nbr_list=self.nbr_list,
-                            num_atoms=self.num_atoms,
-                            needs_nbrs=needs_nbrs,
-                            cutoff=self.cutoff,
-                            cutoff_skin=self.cutoff_skin,
-                            device=self.device,
-                            batch_size=self.batch_size,
-                            old_U=self.U,
-                            num_states=self.num_states,
-                            surf=self.surfs,
-                            max_gap_hop=self.max_gap_hop,
-                            # all_grads=self.decoherence
-                            all_grads=True
-                            )
-
-        self.props = props
-
-    def step(self, needs_nbrs):
-
-        # inner loop to propagate electronic wavefunction
-        for _ in range(self.elec_nuc_scale):
-            c, T = runge_c(c=self.c,
-                           vel=self.vel,
-                           nacv=self.nacv,
-                           energy=self.energy,
-                           elec_dt=self.elec_dt,
-                           hbar=1)
-
-            # c, delta_P, delta_R = add_decoherence(c=c,
-            #                                       surfs=self.surfs,
-            #                                       new_surfs=new_surfs,
-            #                                       delta_P=self.delta_P,
-            #                                       delta_R=self.delta_R,
-            #                                       nacv=self.nacv,
-            #                                       energy=self.energy,
-            #                                       forces=self.forces,
-            #                                       mass=self.mass)
-
-            # self.delta_P = delta_P
-            # self.delta_R = delta_R
-
-            # if any sample hopped then it was within the cutoff
-            # gap, which means we have forces for the other states
-            # which we can use for the rest of this inner loop
-
-            self.c = c
-            self.T = T
-            self.t += self.elec_dt
-
-        # outer loop to move nuclei
-        # xyz converted to a.u. for the step and then
-        # back to Angstrom after
-        new_xyz, new_vel = verlet_step_1(self.forces,
-                                         self.surfs,
-                                         vel=self.vel,
-                                         xyz=self.xyz / const.BOHR_RADIUS,
-                                         mass=self.mass,
-                                         nuc_dt=self.nuc_dt)
-        self.xyz = new_xyz * const.BOHR_RADIUS
-        self.vel = new_vel
-
-        self.update_props(needs_nbrs)
-        new_vel = verlet_step_2(forces=self.forces,
-                                surfs=self.surfs,
-                                vel=self.vel,
-                                xyz=self.xyz,
-                                mass=self.mass,
-                                nuc_dt=self.nuc_dt)
-        self.vel = new_vel
-
-        # this should be out of the electronic loop because according to sharc,
-        # surface hopping is only performed once per time step
-
-        new_surfs, new_vel = try_hop(c=c,
-                                     T=T,
-                                     dt=self.elec_dt,
-                                     surfs=self.surfs,
-                                     vel=self.vel,
-                                     nacv=self.nacv,
-                                     mass=self.mass,
-                                     energy=self.energy)
-
-        self.surfs = new_surfs
-        self.vel = new_vel
-
-        self.log()
-
-    def run(self):
-        steps = self.max_time // self.nuc_dt
-        epochs = steps // self.nbr_update_period
-
-        counter = 0
-        for _ in range(epochs):
-            for i in range(self.nbr_update_period):
-                needs_nbrs = (i == 0)
-                self.step(needs_nbrs=needs_nbrs)
-
-                counter += 1
-                if counter % self.save_period == 0:
-                    self.save()
-
-if __name__ == '__main__':
-	with open('job_info.json', 'r') as f:
-		info = json.load(f)
-	tully = NeuralTully(**info.details)
-	tully.run()
+{
+    "coords": [
+        {
+            "element": "C",
+            "x": -6.189362,
+            "y": -1.719626,
+            "z": 1.783328
+        },
+        {
+            "element": "C",
+            "x": -5.597768,
+            "y": -0.301362,
+            "z": 1.679148
+        },
+        {
+            "element": "C",
+            "x": -6.638319,
+            "y": 0.615526,
+            "z": 0.992327
+        },
+        {
+            "element": "C",
+            "x": -5.313137,
+            "y": 0.217301,
+            "z": 3.109736
+        },
+        {
+            "element": "C",
+            "x": -4.285846,
+            "y": -0.277234,
+            "z": 0.876847
+        },
+        {
+            "element": "C",
+            "x": -3.733481,
+            "y": -1.423159,
+            "z": 0.286801
+        },
+        {
+            "element": "C",
+            "x": -2.498723,
+            "y": -1.426443,
+            "z": -0.390797
+        },
+        {
+            "element": "C",
+            "x": -2.094592,
+            "y": -2.694556,
+            "z": -1.186588
+        },
+        {
+            "element": "C",
+            "x": -3.286686,
+            "y": -3.668554,
+            "z": -1.340568
+        },
+        {
+            "element": "C",
+            "x": -1.697271,
+            "y": -2.264327,
+            "z": -2.618326
+        },
+        {
+            "element": "C",
+            "x": -0.960984,
+            "y": -3.489927,
+            "z": -0.498769
+        },
+        {
+            "element": "C",
+            "x": -1.771805,
+            "y": -0.194005,
+            "z": -0.427849
+        },
+        {
+            "element": "N",
+            "x": -0.405186,
+            "y": -0.014121,
+            "z": -0.789502
+        },
+        {
+            "element": "N",
+            "x": 0.425917,
+            "y": -0.742855,
+            "z": -0.170469
+        },
+        {
+            "element": "C",
+            "x": 1.785388,
+            "y": -0.320403,
+            "z": -0.224013
+        },
+        {
+            "element": "C",
+            "x": 2.351927,
+            "y": -0.153773,
+            "z": 1.088155
+        },
+        {
+            "element": "C",
+            "x": 1.70013,
+            "y": -0.729046,
+            "z": 2.375688
+        },
+        {
+            "element": "C",
+            "x": 1.54034,
+            "y": -2.260841,
+            "z": 2.214329
+        },
+        {
+            "element": "C",
+            "x": 0.328598,
+            "y": -0.086783,
+            "z": 2.69271
+        },
+        {
+            "element": "C",
+            "x": 2.598174,
+            "y": -0.493763,
+            "z": 3.611084
+        },
+        {
+            "element": "C",
+            "x": 3.565864,
+            "y": 0.54463,
+            "z": 1.181835
+        },
+        {
+            "element": "C",
+            "x": 4.269087,
+            "y": 1.015667,
+            "z": 0.05921
+        },
+        {
+            "element": "C",
+            "x": 5.564615,
+            "y": 1.822044,
+            "z": 0.251134
+        },
+        {
+            "element": "C",
+            "x": 5.240167,
+            "y": 3.097645,
+            "z": 1.065959
+        },
+        {
+            "element": "C",
+            "x": 6.189123,
+            "y": 2.246454,
+            "z": -1.091332
+        },
+        {
+            "element": "C",
+            "x": 6.594919,
+            "y": 0.962308,
+            "z": 1.022316
+        },
+        {
+            "element": "C",
+            "x": 3.765313,
+            "y": 0.674859,
+            "z": -1.204252
+        },
+        {
+            "element": "C",
+            "x": 2.548266,
+            "y": -0.007977,
+            "z": -1.394691
+        },
+        {
+            "element": "C",
+            "x": 2.203026,
+            "y": -0.51919,
+            "z": -2.817438
+        },
+        {
+            "element": "C",
+            "x": 1.830545,
+            "y": -2.017084,
+            "z": -2.719409
+        },
+        {
+            "element": "C",
+            "x": 1.075635,
+            "y": 0.302565,
+            "z": -3.484193
+        },
+        {
+            "element": "C",
+            "x": 3.426489,
+            "y": -0.436489,
+            "z": -3.760726
+        },
+        {
+            "element": "C",
+            "x": -2.38709,
+            "y": 1.035134,
+            "z": -0.003487
+        },
+        {
+            "element": "C",
+            "x": -1.77477,
+            "y": 2.434634,
+            "z": -0.286326
+        },
+        {
+            "element": "C",
+            "x": -2.717704,
+            "y": 3.564042,
+            "z": 0.186092
+        },
+        {
+            "element": "C",
+            "x": -1.597023,
+            "y": 2.59891,
+            "z": -1.81585
+        },
+        {
+            "element": "C",
+            "x": -0.420352,
+            "y": 2.656873,
+            "z": 0.427937
+        },
+        {
+            "element": "C",
+            "x": -3.614931,
+            "y": 0.941016,
+            "z": 0.670341
+        },
+        {
+            "element": "H",
+            "x": -6.447371,
+            "y": -2.134284,
+            "z": 0.787673
+        },
+        {
+            "element": "H",
+            "x": -7.120342,
+            "y": -1.696189,
+            "z": 2.385354
+        },
+        {
+            "element": "H",
+            "x": -5.488305,
+            "y": -2.42208,
+            "z": 2.278121
+        },
+        {
+            "element": "H",
+            "x": -6.284966,
+            "y": 1.664084,
+            "z": 0.928908
+        },
+        {
+            "element": "H",
+            "x": -6.850394,
+            "y": 0.268179,
+            "z": -0.039376
+        },
+        {
+            "element": "H",
+            "x": -7.592062,
+            "y": 0.615678,
+            "z": 1.560412
+        },
+        {
+            "element": "H",
+            "x": -6.242982,
+            "y": 0.219136,
+            "z": 3.716238
+        },
+        {
+            "element": "H",
+            "x": -4.914427,
+            "y": 1.25136,
+            "z": 3.098269
+        },
+        {
+            "element": "H",
+            "x": -4.56741,
+            "y": -0.424865,
+            "z": 3.621053
+        },
+        {
+            "element": "H",
+            "x": -4.290478,
+            "y": -2.363053,
+            "z": 0.346505
+        },
+        {
+            "element": "H",
+            "x": -2.985257,
+            "y": -4.500333,
+            "z": -2.008961
+        },
+        {
+            "element": "H",
+            "x": -3.591141,
+            "y": -4.123019,
+            "z": -0.376274
+        },
+        {
+            "element": "H",
+            "x": -4.172675,
+            "y": -3.176955,
+            "z": -1.790709
+        },
+        {
+            "element": "H",
+            "x": -1.368167,
+            "y": -3.142689,
+            "z": -3.210685
+        },
+        {
+            "element": "H",
+            "x": -2.562659,
+            "y": -1.802003,
+            "z": -3.135519
+        },
+        {
+            "element": "H",
+            "x": -0.876968,
+            "y": -1.52763,
+            "z": -2.62651
+        },
+        {
+            "element": "H",
+            "x": -0.724332,
+            "y": -4.403949,
+            "z": -1.082552
+        },
+        {
+            "element": "H",
+            "x": -1.273088,
+            "y": -3.802537,
+            "z": 0.518631
+        },
+        {
+            "element": "H",
+            "x": -0.047868,
+            "y": -2.881819,
+            "z": -0.387874
+        },
+        {
+            "element": "H",
+            "x": 0.849981,
+            "y": -2.500989,
+            "z": 1.388298
+        },
+        {
+            "element": "H",
+            "x": 2.520081,
+            "y": -2.739311,
+            "z": 2.010367
+        },
+        {
+            "element": "H",
+            "x": 1.131259,
+            "y": -2.699927,
+            "z": 3.148171
+        },
+        {
+            "element": "H",
+            "x": -0.05971,
+            "y": -0.490793,
+            "z": 3.651053
+        },
+        {
+            "element": "H",
+            "x": -0.420519,
+            "y": -0.296297,
+            "z": 1.908357
+        },
+        {
+            "element": "H",
+            "x": 0.423408,
+            "y": 1.011814,
+            "z": 2.801977
+        },
+        {
+            "element": "H",
+            "x": 2.124485,
+            "y": -0.965559,
+            "z": 4.495207
+        },
+        {
+            "element": "H",
+            "x": 2.724079,
+            "y": 0.583683,
+            "z": 3.841912
+        },
+        {
+            "element": "H",
+            "x": 3.603588,
+            "y": -0.945775,
+            "z": 3.492206
+        },
+        {
+            "element": "H",
+            "x": 3.987743,
+            "y": 0.731406,
+            "z": 2.176057
+        },
+        {
+            "element": "H",
+            "x": 4.501311,
+            "y": 3.729642,
+            "z": 0.532493
+        },
+        {
+            "element": "H",
+            "x": 6.158274,
+            "y": 3.700087,
+            "z": 1.228738
+        },
+        {
+            "element": "H",
+            "x": 4.816465,
+            "y": 2.851401,
+            "z": 2.060011
+        },
+        {
+            "element": "H",
+            "x": 6.479394,
+            "y": 1.371309,
+            "z": -1.707489
+        },
+        {
+            "element": "H",
+            "x": 5.49491,
+            "y": 2.872743,
+            "z": -1.687651
+        },
+        {
+            "element": "H",
+            "x": 7.10581,
+            "y": 2.843145,
+            "z": -0.908701
+        },
+        {
+            "element": "H",
+            "x": 7.537115,
+            "y": 1.528809,
+            "z": 1.176285
+        },
+        {
+            "element": "H",
+            "x": 6.835774,
+            "y": 0.0367,
+            "z": 0.460813
+        },
+        {
+            "element": "H",
+            "x": 6.216135,
+            "y": 0.662382,
+            "z": 2.019763
+        },
+        {
+            "element": "H",
+            "x": 4.348843,
+            "y": 0.94353,
+            "z": -2.089921
+        },
+        {
+            "element": "H",
+            "x": 2.695105,
+            "y": -2.60564,
+            "z": -2.350266
+        },
+        {
+            "element": "H",
+            "x": 0.98989,
+            "y": -2.199403,
+            "z": -2.029934
+        },
+        {
+            "element": "H",
+            "x": 1.542256,
+            "y": -2.411688,
+            "z": -3.71534
+        },
+        {
+            "element": "H",
+            "x": 0.143764,
+            "y": 0.262922,
+            "z": -2.895978
+        },
+        {
+            "element": "H",
+            "x": 1.370647,
+            "y": 1.369072,
+            "z": -3.560791
+        },
+        {
+            "element": "H",
+            "x": 0.880254,
+            "y": -0.075167,
+            "z": -4.509569
+        },
+        {
+            "element": "H",
+            "x": 3.166138,
+            "y": -0.914452,
+            "z": -4.726749
+        },
+        {
+            "element": "H",
+            "x": 3.719215,
+            "y": 0.608804,
+            "z": -3.98598
+        },
+        {
+            "element": "H",
+            "x": 4.309053,
+            "y": -0.965909,
+            "z": -3.34835
+        },
+        {
+            "element": "H",
+            "x": -2.271008,
+            "y": 4.542072,
+            "z": -0.083332
+        },
+        {
+            "element": "H",
+            "x": -2.861534,
+            "y": 3.560365,
+            "z": 1.28581
+        },
+        {
+            "element": "H",
+            "x": -3.714095,
+            "y": 3.509784,
+            "z": -0.297158
+        },
+        {
+            "element": "H",
+            "x": -1.212479,
+            "y": 3.614394,
+            "z": -2.046368
+        },
+        {
+            "element": "H",
+            "x": -0.87998,
+            "y": 1.860201,
+            "z": -2.212209
+        },
+        {
+            "element": "H",
+            "x": -2.565951,
+            "y": 2.471191,
+            "z": -2.340482
+        },
+        {
+            "element": "H",
+            "x": -0.066395,
+            "y": 3.692601,
+            "z": 0.242334
+        },
+        {
+            "element": "H",
+            "x": -0.525525,
+            "y": 2.526158,
+            "z": 1.523129
+        },
+        {
+            "element": "H",
+            "x": 0.359275,
+            "y": 1.962612,
+            "z": 0.066686
+        },
+        {
+            "element": "H",
+            "x": -4.074619,
+            "y": 1.859455,
+            "z": 1.053104
+        }
+    ],
+    "worker_name": "neuralzn",
+    "job_key": 53957510,
+    "uuid": "dc4cfd47-766f-49d6-9a75-87abaa10dea7",
+    "priority": 4,
+    "inchikey": "WXDVPHQQUSLGIL-HEFFKOSUNA-N",
+    "smiles": "CC(C)(C)c1cc(C(C)(C)C)c(/N=N/c2c(C(C)(C)C)cc(C(C)(C)C)cc2C(C)(C)C)c(C(C)(C)C)c1",
+    "multiplicity": 1,
+    "charge": 0,
+    "details": {
+        "lr": [
+            0.0001,
+            1e-05
+        ],
+        "qy": true,
+        "nff": "/home/gridsan/saxelrod/repo/nff/master/NeuralForceField",
+        "gres": 1,
+        "htvs": "/home/gridsan/saxelrod/repo/htvs/master/htvs",
+        "nnid": 1308,
+        "seed": 0,
+        "skip": 20,
+        "conda": "/home/gridsan/saxelrod/miniconda3",
+        "n_rbf": 20,
+        "steps": 125000,
+        "T_init": 450,
+        "cutoff": 5.0,
+        "device": 0,
+        "lr_min": [
+            1e-05,
+            1e-06
+        ],
+        "nprocs": 4,
+        "metrics": [
+            "MeanAbsoluteError"
+        ],
+        "sampler": {
+            "name": "BalancedFFSampler",
+            "apply_to": [
+                "train",
+                "val",
+                "test"
+            ],
+            "sampler_paths": {
+                "val": "val_sample_dict.json",
+                "test": "test_sample_dict.json",
+                "train": "train_sample_dict.json"
+            }
+        },
+        "add_nacv": true,
+        "feat_dim": 128,
+        "lr_decay": 0.5,
+        "max_time": 30240,
+        "num_conv": 5,
+        "pool_dic": {
+            "energy_0": {
+                "name": "sum",
+                "param": {}
+            },
+            "energy_1": {
+                "name": "sum",
+                "param": {}
+            }
+        },
+        "priority": 4,
+        "exclusive": false,
+        "grad_keys": [
+            "energy_0_grad",
+            "energy_1_grad"
+        ],
+        "md_config": "neuralzn",
+        "scheduler": true,
+        "time_step": 0.5,
+        "torch_par": false,
+        "use_slurm": true,
+        "activation": "swish",
+        "batch_size": 60,
+        "max_epochs": 5000,
+        "model_type": "Painn",
+        "needs_nbrs": true,
+        "partitions": [
+            "normal"
+        ],
+        "weightpath": "/home/gridsan/saxelrod/models/switches",
+        "zhu_params": {
+            "log_file": "trj.log",
+            "max_time": 5000,
+            "out_file": "trj.csv",
+            "timestep": 0.5,
+            "num_states": 2,
+            "max_gap_hop": 0.021673306772908366,
+            "save_period": 30,
+            "initial_surf": 1,
+            "initial_time": 0.0
+        },
+        "dset_params": {
+            "lr": [
+                0.0001,
+                1e-05,
+                1e-05
+            ],
+            "charge": 0,
+            "deltas": [
+                [
+                    "energy_1",
+                    "energy_0"
+                ]
+            ],
+            "lr_min": [
+                1e-05,
+                1e-06,
+                1e-06
+            ],
+            "molsets": null,
+            "pruning": {
+                "substruc_smiles": [
+                    [
+                        "N(=N/c1ccccc1)\\c2ccccc2"
+                    ]
+                ],
+                "stereo_in_substruc": false
+            },
+            "max_geoms": null,
+            "splitting": {
+                "seed": 0,
+                "split_sizes": {
+                    "val": 5000
+                },
+                "num_parallel": 1,
+                "species_splits": {
+                    "test": [
+                        "holdout_test"
+                    ]
+                }
+            },
+            "max_std_en": 10,
+            "max_val_en": 450,
+            "needs_nbrs": false,
+            "split_type": "isom_balanced",
+            "weightpath": "/home/gridsan/saxelrod/models/switches",
+            "dset_version": 2,
+            "method_names": [
+                "sf_tddft_bhhlyp"
+            ],
+            "needs_angles": false,
+            "diabatization": {
+                "diabatic_keys": [
+                    [
+                        "d0",
+                        "lam"
+                    ],
+                    [
+                        "lam",
+                        "d1"
+                    ]
+                ],
+                "max_diabat_rmsd": 0.15,
+                "num_diabat_states": 2,
+                "diabat_assignments": {
+                    "0": [
+                        "energy_0",
+                        "energy_1"
+                    ],
+                    "1": [
+                        "energy_1",
+                        "energy_0"
+                    ]
+                }
+            },
+            "max_std_force": 10,
+            "max_val_force": 450,
+            "method_snames": [
+                "sf_tddft_bhhlyp"
+            ],
+            "required_keys": [
+                "energy_0_grad",
+                "smiles",
+                "geom_id",
+                "nxyz",
+                "force_nacv_10",
+                "energy_1",
+                "energy_1_grad",
+                "energy_0",
+                "charge",
+                "spin"
+            ],
+            "job_chunk_size": 1000,
+            "stoich_job_dir": "/home/saxelrod/htvs/djangochem/neuralnet/utils/dataset/json_files",
+            "balanced_sampling": {
+                "ref_config": {
+                    "type": "equil",
+                    "kwargs": {
+                        "device": "cpu",
+                        "group_name": "switches",
+                        "method_names": [
+                            "dft_d3_gga_bp86",
+                            "dft_hyb_bhhlyp",
+                            "sf_tddft_bhhlyp"
+                        ],
+                        "substruc_idx": [
+                            3,
+                            4,
+                            5,
+                            6
+                        ],
+                        "method_descrips": [
+                            "Orca bp86/def2-SVP D3 DFT RI",
+                            "Orca BHHLYP/6-31G* DFT",
+                            "GAMESS bhhlyp/6-31G* spin flip tddft"
+                        ],
+                        "pref_method_idx": 0,
+                        "ref_smiles_list": [
+                            "N(=N/c1ccccc1)\\c2ccccc2",
+                            "N(=N/c1ccccc1)/c2ccccc2"
+                        ],
+                        "substruc_smiles": "N(=N/c1ccccc1)\\c2ccccc2"
+                    }
+                },
+                "balance_type": "spec_config_zhu_balance",
+                "sampler_kwargs": {
+                    "device": "cpu",
+                    "extra_rmsd": 0.25,
+                    "zhu_kwargs": {
+                        "expec_gap": 0.00551,
+                        "func_type": "gaussian",
+                        "lower_key": "energy_0",
+                        "upper_key": "energy_1"
+                    },
+                    "zhu_weight": 0.5,
+                    "spec_weight": 0.6,
+                    "config_weight": 0.5,
+                    "extra_category": true
+                }
+            },
+            "all_calcs_for_geom": false,
+            "custom_stoich_name": "lin_reg",
+            "max_geoms_per_dset": null,
+            "mounted_weightpath": "/home/saxelrod/supercloud/models/switches",
+            "method_descriptions": [
+                "QChem bhhlyp/6-31gs SF-TDDFT"
+            ]
+        },
+        "learnable_k": true,
+        "lr_patience": 10,
+        "max_samples": 2500,
+        "max_species": 400,
+        "only_ground": false,
+        "output_keys": [
+            "energy_0",
+            "energy_1"
+        ],
+        "conv_dropout": 0.0,
+        "method_names": [
+            "sf_tddft_bhhlyp"
+        ],
+        "mini_batches": 1,
+        "needs_angles": false,
+        "compute_delta": true,
+        "ground_params": {
+            "ttime": 50,
+            "logfile": "ground.log",
+            "max_time": 15000,
+            "savefile": "ground.trj",
+            "timestep": 0.5,
+            "equil_time": 1000,
+            "thermostat": "nosehoover",
+            "loginterval": 10,
+            "temperature": 300
+        },
+        "hops_and_last": true,
+        "mol_loss_norm": false,
+        "quantum_yield": {
+            "max_rmsd": null,
+            "ref_geoms": [
+                {
+                    "azo_cis": {
+                        "pk": 144463205,
+                        "ref_idx": [
+                            3,
+                            4,
+                            5,
+                            6
+                        ],
+                        "this_idx": [
+                            11,
+                            12,
+                            13,
+                            14
+                        ]
+                    },
+                    "azo_trans": {
+                        "pk": 144528925,
+                        "ref_idx": [
+                            3,
+                            4,
+                            5,
+                            6
+                        ],
+                        "this_idx": [
+                            11,
+                            12,
+                            13,
+                            14
+                        ]
+                    }
+                },
+                {
+                    "this_cis": {
+                        "pk": 144461985,
+                        "ref_idx": [
+                            11,
+                            12,
+                            13,
+                            14
+                        ],
+                        "this_idx": [
+                            11,
+                            12,
+                            13,
+                            14
+                        ]
+                    },
+                    "this_trans": {
+                        "pk": 144529487,
+                        "ref_idx": [
+                            11,
+                            12,
+                            13,
+                            14
+                        ],
+                        "this_idx": [
+                            11,
+                            12,
+                            13,
+                            14
+                        ]
+                    }
+                }
+            ],
+            "count_excited": false
+        },
+        "reset_trainer": false,
+        "batched_params": {
+            "cutoff": 5.0,
+            "device": 0,
+            "num_trj": 500,
+            "batch_size": 80,
+            "nbr_update_period": 20
+        },
+        "retry_attempts": 5,
+        "save_frequency": 100,
+        "multi_loss_dict": [
+            {
+                "mse": [
+                    {
+                        "coef": 0.2,
+                        "params": {
+                            "key": "energy_0"
+                        }
+                    },
+                    {
+                        "coef": 1,
+                        "params": {
+                            "key": "energy_0_grad"
+                        }
+                    },
+                    {
+                        "coef": 0.1,
+                        "params": {
+                            "key": "energy_1"
+                        }
+                    },
+                    {
+                        "coef": 1,
+                        "params": {
+                            "key": "energy_1_grad"
+                        }
+                    },
+                    {
+                        "coef": 0.5,
+                        "params": {
+                            "key": "energy_1_energy_0_delta"
+                        }
+                    }
+                ]
+            },
+            {
+                "mse": [
+                    {
+                        "coef": 0.2,
+                        "params": {
+                            "key": "energy_0"
+                        }
+                    },
+                    {
+                        "coef": 0.1,
+                        "params": {
+                            "key": "energy_1"
+                        }
+                    },
+                    {
+                        "coef": 1.0,
+                        "params": {
+                            "key": "energy_0_grad"
+                        }
+                    },
+                    {
+                        "coef": 1.0,
+                        "params": {
+                            "key": "energy_1_grad"
+                        }
+                    },
+                    {
+                        "coef": 1.0,
+                        "params": {
+                            "key": "energy_1_energy_0_delta"
+                        }
+                    },
+                    {
+                        "coef": 100,
+                        "params": {
+                            "key": "energy_1_energy_0_delta",
+                            "cutoff": 4.6
+                        }
+                    }
+                ]
+            }
+        ],
+        "readout_dropout": 0.0,
+        "skip_connection": {
+            "energy_0": true,
+            "energy_1": true
+        },
+        "compute_platform": "supercloud",
+        "dataset_on_build": false,
+        "del_grad_interval": 100,
+        "geoms_per_species": 1,
+        "sampling_mol_sets": null,
+        "training_mol_sets": null,
+        "validation_config": "bhhlyp_6-31gs_sf_tddft_engrad",
+        "log_every_n_epochs": 1,
+        "mounted_weightpath": "/home/saxelrod/supercloud/models/switches",
+        "checkpoints_to_keep": 1000,
+        "validation_mol_sets": null,
+        "starting_geom_methods": [
+            "dft_hyb_bhhlyp",
+            "molecular_mechanics_mmff94"
+        ],
+        "validation_method_name": "sf_tddft_bhhlyp",
+        "converged_starting_geom": false,
+        "validation_method_description": "GAMESS bhhlyp/6-31G* spin flip tddft"
+    },
+    "project_name": "switches",
+    "parent_class": "Geom"
+}
