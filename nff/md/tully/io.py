@@ -388,7 +388,8 @@ def batched_calc(model,
 
 
 def concat_and_conv(results_list,
-                    num_atoms):
+                    num_atoms,
+                    diabat_keys):
     """
     Concatenate results from separate batches and convert
     to atomic units
@@ -406,7 +407,7 @@ def concat_and_conv(results_list,
         if 'energy_grad' in key or 'force_nacv' in key:
             val *= conv['energy'] * conv['_grad']
             val = val.reshape(*grad_shape)
-        elif 'energy' in key:
+        elif 'energy' in key or key in diabat_keys:
             val *= conv['energy']
         elif 'nacv' in key:
             val *= conv['_grad']
@@ -466,7 +467,8 @@ def get_results(model,
                 num_states,
                 surf,
                 max_gap_hop,
-                all_grads):
+                all_grads,
+                diabat_keys):
     """
     `nxyz_list` assumed to be in Angstroms
     """
@@ -493,7 +495,8 @@ def get_results(model,
 
     num_atoms = nxyz.shape[1]
     all_results = concat_and_conv(results_list=results_list,
-                                  num_atoms=num_atoms)
+                                  num_atoms=num_atoms,
+                                  diabat_keys=diabat_keys)
 
     return all_results
 

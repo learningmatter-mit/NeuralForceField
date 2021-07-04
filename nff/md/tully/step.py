@@ -7,6 +7,7 @@ import random
 from functools import partial
 
 import numpy as np
+import scipy
 
 # TO-DO:
 # - Add decoherence
@@ -30,7 +31,8 @@ def compute_T(nacv,
     # for hopping and should therefore have T=0
     T[np.isnan(T)] = 0
 
-    coupling = np.einsum('nij, nj-> ni', T, c)
+    num_states = nacv.shape[1]
+    coupling = np.einsum('nij, nj-> ni', T, c[:, :num_states])
 
     return T, coupling
 
@@ -257,6 +259,46 @@ def runge_c(c,
     new_c = c + 1 / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
 
     return new_c, T1
+
+
+def diabatic_c(c,
+               elec_substeps,
+               old_H_d,
+               new_H_d,
+               new_U,
+               old_U,
+               nuc_dt,
+               hbar=1):
+
+    num_samples = old_H_d.shape[0]
+    num_states = old_H_d.shape[1]
+    n = elec_substeps
+
+    exp = (np.eye(num_states, num_states)
+           .reshape(1, num_states, num_states)
+           .repeat(num_samples, axis=0))
+
+    delta_tau = nuc_dt / n
+
+    for i in range(1, n + 1):
+        new_exp = np.stack(
+            [scipy.linalg.expm(
+                -1j / hbar * (
+                    old_H_d[k] + i / n * (new_H_d[k] - old_H_d[k])
+                )
+                * delta_tau)
+             for k in range(num_samples)]
+        )
+        exp = np.einsum('ijk, ikl -> ijl', exp, new_exp)
+
+    # new_U has dimension num_samples x num_states x num_states
+    T = old_U
+    T_inv = new_U.transpose(0, 2, 1)
+
+    c_new = np.einsum('ijk, ikl, ilm, im -> ij',
+                      T_inv, exp, T, c)
+
+    return c_new
 
 
 def verlet_step_1(forces,
