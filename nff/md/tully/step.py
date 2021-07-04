@@ -400,7 +400,8 @@ def get_term_3(nacv,
                               num_states,
                               num_states,
                               3 * num_atoms,
-                              3 * num_atoms))
+                              3 * num_atoms),
+                             dtype='complex128')
 
     delta_R_alpha += delta.reshape(num_samples,
                                    num_states,
@@ -528,6 +529,8 @@ def get_F_alpha(force_nacv,
 
     # - force nacv on off-diagonal (force nacv is the
     # positive gradient so it needs a negative in front)
+
+    # Make sure force_nacv has zeros on the diagonal
     F_alpha -= force_nacv
 
     return F_alpha
@@ -565,6 +568,7 @@ def get_delta_F(force_nacv,
 
     F_alpha = get_F_alpha(force_nacv=force_nacv,
                           forces=forces)
+
     F_alpha_sh = get_F_alpha_sh(forces=forces,
                                 surfs=surfs)
     delta_F = F_alpha - F_alpha_sh
@@ -596,7 +600,7 @@ def decoherence_T_P(pot_V,
 
     T_P = term_1 + term_2 + term_3
 
-    return T_P
+    return T_P  # , term_1, term_2, term_3
 
 
 def deriv_delta_P(pot_V,
@@ -620,7 +624,7 @@ def deriv_delta_P(pot_V,
                           sigma=sigma,
                           hbar=hbar)
 
-    T_ii_delta = decoherence_T_ii(T_R=T_P,
+    T_ii_delta = decoherence_T_ii(T=T_P,
                                   surfs=surfs)
 
     deriv = T_P - T_ii_delta
@@ -735,29 +739,33 @@ def runge_delta(pot_V,
                                 mass=mass,
                                 hbar=hbar)
 
-    init_vals = np.array([delta_P, sigma, delta_R])
+    init_vals = [delta_P, delta_R, sigma]
     intermed_vals = copy.deepcopy(init_vals)
     final_vals = copy.deepcopy(init_vals)
+    num_vals = len(init_vals)
 
     step_size = np.array([0.5, 0.5, 1])
     final_weight = np.array([1, 2, 2, 1]) / 6
-    names = ["delta_P", "sigma", "delta_R"]
+    names = ["delta_P", "delta_R", "sigma"]
 
     for i in range(4):
         kwargs = {name: val for name, val in
                   zip(names, intermed_vals)}
-        k_i = np.array([deriv(**kwargs)
-                        for deriv in derivs])
+        k_i = [deriv(**kwargs)
+               for deriv in derivs]
 
-        final_vals += k_i * elec_dt * final_weight[i]
+        intermed_vals = []
+        for n in range(num_vals):
+            if isinstance(final_vals[n], np.ndarray):
+                final_vals[n] = final_vals[n].astype('complex128')
 
-        if i == 3:
-            break
+            final_vals[n] += k_i[n] * elec_dt * final_weight[i]
+            if i == 3:
+                continue
+            intermed_vals.append(init_vals[n] + (
+                k_i[n] * elec_dt * step_size[i]))
 
-        intermed_vals = init_vals + (k_i * elec_dt
-                                     * step_size[i])
-
-    return tuple(final_vals)
+    return final_vals
 
 
 def add_decoherence(c,
