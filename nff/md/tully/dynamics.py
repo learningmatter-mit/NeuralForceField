@@ -13,7 +13,6 @@ from nff.utils import constants as const
 from nff.md.utils_ax import atoms_to_nxyz
 from nff.md.tully.io import get_results, load_json, get_atoms
 from nff.md.tully.step import (
-    # runge_c,
     try_hop,
     verlet_step_1, verlet_step_2,
     # add_decoherence
@@ -22,7 +21,11 @@ from nff.md.tully.step import (
 from nff.md.nvt_ax import NoseHoover, NoseHooverChain
 
 # TO-DO:
-# - Add a maximum gap for hopping
+# - Make a save version that just write the atoms
+# to a `Trajectory` file
+# - Fix p_hop for multiple states
+# - Check everything in detail
+# - Add decoherence
 
 METHOD_DIC = {
     "nosehoover": NoseHoover,
@@ -37,7 +40,7 @@ class NeuralTully:
                  batch_size,
                  num_states,
                  initial_surf,
-                 nuc_dt,
+                 dt,
                  elec_substeps,
                  max_time,
                  cutoff,
@@ -78,7 +81,7 @@ class NeuralTully:
         self.surfs = np.ones(self.num_samples,
                              dtype=np.int) * initial_surf
 
-        self.nuc_dt = nuc_dt * const.FS_TO_AU
+        self.dt = dt * const.FS_TO_AU
         self.elec_substeps = elec_substeps
 
         self.max_time = max_time * const.FS_TO_AU
@@ -338,7 +341,7 @@ class NeuralTully:
     def setup_logging(self):
 
         states = [f"State {i}" for i in range(self.num_states)]
-        hdr = "%-9s " % "Time [ps]"
+        hdr = "%-9s " % "Time [fs]"
         for state in states:
             hdr += "%15s " % state
         hdr += "%15s " % "|c|"
@@ -347,7 +350,7 @@ class NeuralTully:
         with open(self.log_file, 'w') as f:
             f.write(hdr)
 
-        template = "%-10.4f "
+        template = "%-10.1f "
         for i, state in enumerate(states):
             template += "%15.4f%%"
         template += "%15.4f"
@@ -356,7 +359,7 @@ class NeuralTully:
         return template
 
     def log(self):
-        time = self.t / const.FS_TO_AU / 1000
+        time = self.t / const.FS_TO_AU
         pcts = []
         for i in range(self.num_states):
             num_surf = (self.surfs == i).sum()
@@ -420,7 +423,7 @@ class NeuralTully:
         #                vel=self.vel,
         #                nacv=self.nacv,
         #                energy=self.energy,
-        #                elec_dt=self.nuc_dt / self.elec_substeps,
+        #                elec_dt=self.dt / self.elec_substeps,
         #                hbar=1)
 
         # c, delta_P, delta_R = add_decoherence(c=c,
@@ -442,12 +445,11 @@ class NeuralTully:
 
         # self.c = c
         # self.T = T
-        # self.t += self.nuc_dt / self.elec_substeps
+        # self.t += self.dt / self.elec_substeps
 
         old_H_d = copy.deepcopy(self.H_d)
         old_U = copy.deepcopy(self.U)
 
-        # outer loop to move nuclei
         # xyz converted to a.u. for the step and then
         # back to Angstrom after
         new_xyz, new_vel = verlet_step_1(self.forces,
@@ -455,7 +457,7 @@ class NeuralTully:
                                          vel=self.vel,
                                          xyz=self.xyz / const.BOHR_RADIUS,
                                          mass=self.mass,
-                                         nuc_dt=self.nuc_dt)
+                                         dt=self.dt)
         self.xyz = new_xyz * const.BOHR_RADIUS
         self.vel = new_vel
 
@@ -465,7 +467,7 @@ class NeuralTully:
                                 vel=self.vel,
                                 xyz=self.xyz,
                                 mass=self.mass,
-                                nuc_dt=self.nuc_dt)
+                                dt=self.dt)
         self.vel = new_vel
 
         # propagate c in diabatic basis
@@ -474,7 +476,7 @@ class NeuralTully:
                             new_H_d=self.H_d,
                             old_U=old_U,
                             new_U=self.U,
-                            nuc_dt=self.nuc_dt,
+                            dt=self.dt,
                             elec_substeps=self.elec_substeps)
 
         self.T, _ = compute_T(nacv=self.nacv,
@@ -484,22 +486,23 @@ class NeuralTully:
         c = self.c[:, :self.num_states]
         new_surfs, new_vel, p_hop = try_hop(c=c,
                                             T=self.T,
-                                            dt=self.nuc_dt,
+                                            dt=self.dt,
                                             surfs=self.surfs,
                                             vel=self.vel,
                                             nacv=self.nacv,
                                             mass=self.mass,
-                                            energy=self.energy)
+                                            energy=self.energy,
+                                            max_gap_hop=self.max_gap_hop)
 
         self.surfs = new_surfs
         self.vel = new_vel
         self.p_hop = p_hop
-        self.t += self.nuc_dt
+        self.t += self.dt
 
         self.log()
 
     def run(self):
-        steps = math.ceil(self.max_time / self.nuc_dt)
+        steps = math.ceil(self.max_time / self.dt)
         epochs = math.ceil(steps / self.nbr_update_period)
 
         counter = 0

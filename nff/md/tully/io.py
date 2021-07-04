@@ -305,18 +305,18 @@ def update_phase(new_phases,
     phase = ((new_phases[:, i] * new_phases[:, j])
              .reshape(-1, 1, 1))
 
-    updated = torch.stack(
-        torch.split(results[key], num_atoms)
-    ) * phase
+    updated = np.concatenate(
+        np.split(results[key], num_atoms)
+    ).reshape(-1, num_atoms[0], 3) * phase
 
     results[key] = updated
 
     return results
 
 
-def correct_nacv(batch,
-                 results,
+def correct_nacv(results,
                  old_U,
+                 num_atoms,
                  num_states):
     """
     Stack the non-adiabatic couplings and correct their
@@ -330,8 +330,6 @@ def correct_nacv(batch,
     # Stack NACVs and multiply by new phases
     # They can be stacked because only one type of molecule
     # is used in a batched simulation
-
-    num_atoms = batch['num_atoms'].tolist()
 
     for i in range(num_states):
         for j in range(num_states):
@@ -360,7 +358,6 @@ def correct_nacv(batch,
 def batched_calc(model,
                  batch,
                  device,
-                 old_U,
                  num_states,
                  surf,
                  max_gap_hop,
@@ -377,12 +374,6 @@ def batched_calc(model,
                         max_gap_hop=max_gap_hop,
                         num_states=num_states,
                         all_grads=all_grads)
-
-    if old_U is not None:
-        results = correct_nacv(batch=batch,
-                               results=results,
-                               old_U=old_U,
-                               num_states=num_states)
 
     return results
 
@@ -486,17 +477,21 @@ def get_results(model,
         results = batched_calc(model=model,
                                batch=batch,
                                device=device,
-                               old_U=old_U,
                                num_states=num_states,
                                surf=surf,
                                max_gap_hop=max_gap_hop,
                                all_grads=all_grads)
         results_list.append(results)
 
-    num_atoms = nxyz.shape[1]
     all_results = concat_and_conv(results_list=results_list,
                                   num_atoms=num_atoms,
                                   diabat_keys=diabat_keys)
+
+    if old_U is not None:
+        results = correct_nacv(results=all_results,
+                               old_U=old_U,
+                               num_atoms=[num_atoms] * old_U.shape[0],
+                               num_states=num_states)
 
     return all_results
 

@@ -97,18 +97,26 @@ def get_p_hop(c,
     # p has dimension num_samples x num_states, for the
     # hopping probability of each sample to all other
     # states
-    p = dt * b_surf / a_surf
+
+    # p is real anyway - taking the real part just gets rid of
+    # the  + 0j parts
+
+    p = np.real(dt * b_surf / a_surf)
 
     return p
 
 
 def get_new_surf(p_hop,
                  num_states,
-                 surfs):
+                 surfs,
+                 max_gap_hop,
+                 energy):
 
     new_surfs = []
 
-    for p, surf in zip(p_hop, surfs):
+    for j, surf in enumerate(surfs):
+
+        p = p_hop[j]
 
         # To avoid biasing in the direction of one hop vs. another,
         # we randomly shuffle the order of self.hopping_probabilities
@@ -126,7 +134,11 @@ def get_new_surf(p_hop,
             state_p = p[i]
             rnd = np.random.rand()
 
+            gap = abs(energy[j][i] - energy[j][surf])
             hop = (state_p > rnd)
+            if max_gap_hop is not None:
+                hop = hop and gap <= max_gap_hop
+
             if hop:
                 new_surf = i
                 break
@@ -137,22 +149,62 @@ def get_new_surf(p_hop,
     return new_surfs
 
 
+def solve_quadratic(vel,
+                    nac_dir,
+                    old_en,
+                    new_en,
+                    mass):
+    a = (1 / (2 * mass.reshape(1, -1, 1))
+         * nac_dir ** 2).sum((-1, -2)).astype('complex128')
+    b = (vel * nac_dir).sum((-1, -2)).astype('complex128')
+    c = (new_en - old_en).astype('complex128')
+
+    sqrt = np.sqrt(b ** 2 - 4 * a * c)
+    scale_pos = (-b + sqrt) / (2 * a)
+    scale_neg = (-b - sqrt) / (2 * a)
+
+    # take solution with smallest absolute value of
+    # scaling factor
+    scales = np.concatenate([scale_pos.reshape(-1, 1),
+                             scale_neg.reshape(-1, 1)],
+                            axis=1)
+    scale_argmin = np.argmin(abs(scales), axis=1)
+    scale = np.take_along_axis(scales,
+                               scale_argmin.reshape(-1, 1),
+                               axis=1)
+
+    # ignore anything imaginary
+    # if (np.imag(scale) != 0).any():
+    #     import pdb
+    #     pdb.set_trace()
+
+    scale[np.imag(scale) != 0] = np.nan
+    scale = np.real(scale)
+
+    return scale
+
+
 def rescale(energy,
             vel,
             nacv,
             mass,
             surfs,
             new_surfs):
+    """
+    Velocity re-scaling, from:
 
+    Landry, B.R. and Subotnik, J.E., 2012. How to recover Marcus theory with 
+    fewest switches surface hopping: Add just a touch of decoherence. The 
+    Journal of chemical physics, 137(22), p.22A513.
+    """
+
+    # old and new energies
     old_en = np.take_along_axis(energy, surfs.reshape(-1, 1),
                                 -1).reshape(-1)
     new_en = np.take_along_axis(energy, new_surfs.reshape(-1, 1),
                                 -1).reshape(-1)
 
-    # `vel` has dimension num_samples x num_atoms x 3
-    # `nacv` has dimension num_samples x num_states
-    # x num_states x num_atoms x 3
-
+    # nacvs connecting old to new surfaces
     ones = [1] * 4
     start_nacv = np.take_along_axis(nacv, surfs
                                     .reshape(-1, *ones),
@@ -162,38 +214,35 @@ def rescale(energy,
                                    axis=2
                                    ).squeeze(1).squeeze(1)
 
+    # nacv unit vector
     norm = np.linalg.norm(pair_nacv, axis=-1)
     # for anything that didn't hop
-    norm[norm == 0] = 1
-
+    norm[norm == 0] = np.nan
     nac_dir = pair_nacv / norm.reshape(*pair_nacv.shape[:-1], 1)
-    num_samples = vel.shape[0]
 
-    v_par = ((nac_dir * vel).sum(-1)
-             .reshape(num_samples, -1, 1) * nac_dir)
+    # solve quadratic equation for momentum rescaling
+    scale = solve_quadratic(vel=vel,
+                            nac_dir=nac_dir,
+                            old_en=old_en,
+                            new_en=new_en,
+                            mass=mass)
 
-    # `mass` has dimension num_atoms
-    # 1/2 mv^2 has dimension
-    # num_samples x num_atoms x 3
-    # `ke_par` has dimension num_samples
+    # scale the velocity
+    new_vel = (scale.reshape(-1, 1, 1) * nac_dir
+               / mass.reshape(1, -1, 1)
+               + vel)
 
-    ke_par = (1 / 2 * mass.reshape(1, -1, 1)
-              * v_par ** 2).sum((-1, -2))
+    # if not np.isnan(scale).all():
+    #     import pdb
+    #     pdb.set_trace()
 
-    # The scaling factor for the velocities
-    # Has dimension `num_samples`
+    #     idx = np.bitwise_not(np.isnan(scale)).nonzero()[0][0]
 
-    with np.errstate(divide='ignore',
-                     invalid='ignore'):
-        scale = (old_en + ke_par - new_en) / ke_par
-        scale[ke_par == 0] = np.nan
+    #     new_ke = (new_vel[idx] ** 2 * mass.reshape(1, -1, 1)).sum() / 2
+    #     old_ke = (vel[idx] ** 2 * mass.reshape(1, -1, 1)).sum() / 2
 
-    # Anything less than zero leads to no hop
-    scale[scale < 0] = np.nan
-    scale = scale ** 0.5
-    scale = scale.reshape(-1, 1, 1)
-
-    new_vel = scale * v_par + vel - v_par
+    #     new_e = new_ke + energy[idx][new_surfs[idx]]
+    #     old_e = old_ke + energy[idx][surfs[idx]]
 
     return new_vel
 
@@ -205,7 +254,8 @@ def try_hop(c,
             vel,
             nacv,
             mass,
-            energy):
+            energy,
+            max_gap_hop):
     """
     `energy` has dimension num_samples x num_states
     """
@@ -218,7 +268,9 @@ def try_hop(c,
     num_states = energy.shape[-1]
     new_surfs = get_new_surf(p_hop=p_hop,
                              num_states=num_states,
-                             surfs=surfs)
+                             surfs=surfs,
+                             max_gap_hop=max_gap_hop,
+                             energy=energy)
 
     new_vel = rescale(energy=energy,
                       vel=vel,
@@ -267,7 +319,7 @@ def diabatic_c(c,
                new_H_d,
                new_U,
                old_U,
-               nuc_dt,
+               dt,
                hbar=1):
 
     num_samples = old_H_d.shape[0]
@@ -278,7 +330,7 @@ def diabatic_c(c,
            .reshape(1, num_states, num_states)
            .repeat(num_samples, axis=0))
 
-    delta_tau = nuc_dt / n
+    delta_tau = dt / n
 
     for i in range(1, n + 1):
         new_exp = np.stack(
@@ -306,7 +358,7 @@ def verlet_step_1(forces,
                   vel,
                   xyz,
                   mass,
-                  nuc_dt):
+                  dt):
 
     # `forces` has dimension (num_samples x num_states
     # x num_atoms x 3)
@@ -325,8 +377,8 @@ def verlet_step_1(forces,
     # `vel` and `xyz` each have dimension
     # (num_samples x num_atoms x 3)
 
-    new_xyz = xyz + vel * nuc_dt + 0.5 * accel * nuc_dt ** 2
-    new_vel = vel + 0.5 * nuc_dt * accel
+    new_xyz = xyz + vel * dt + 0.5 * accel * dt ** 2
+    new_vel = vel + 0.5 * dt * accel
 
     return new_xyz, new_vel
 
@@ -336,7 +388,7 @@ def verlet_step_2(forces,
                   vel,
                   xyz,
                   mass,
-                  nuc_dt):
+                  dt):
 
     surf_forces = np.take_along_axis(
         forces, surfs.reshape(-1, 1, 1, 1),
@@ -344,7 +396,7 @@ def verlet_step_2(forces,
     ).squeeze(1)
 
     accel = surf_forces / mass.reshape(1, -1, 1)
-    new_vel = vel + 0.5 * nuc_dt * accel
+    new_vel = vel + 0.5 * dt * accel
 
     return new_vel
 
