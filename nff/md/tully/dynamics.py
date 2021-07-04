@@ -5,8 +5,10 @@ import copy
 import json
 import random
 import math
+import argparse
 
 from ase.io.trajectory import Trajectory
+from ase import Atoms
 
 from nff.train import load_model
 from nff.utils import constants as const
@@ -21,8 +23,9 @@ from nff.md.tully.step import (
 from nff.md.nvt_ax import NoseHoover, NoseHooverChain
 
 # TO-DO:
-# - Make a save version that just write the atoms
-# to a `Trajectory` file
+# - Figure out if the three-state diabatization for
+# c propagation actually makes sense
+# - Make sure that the hop geoms get saved
 # - Fix p_hop for multiple states
 # - Check everything in detail
 # - Add decoherence
@@ -90,6 +93,7 @@ class NeuralTully:
 
         self.save_file = save_file
         self.minimal_save_file = minimal_save_file
+
         self.log_file = log_file
         self.save_period = save_period
 
@@ -97,12 +101,20 @@ class NeuralTully:
         self.c = self.init_c()
         self.p_hop = 0
 
+        self.clear_pickles()
+
         if not self.decoherence:
             return
 
         self.delta_R = 0
         self.delta_P = 0
         self.sigma = self.init_sigma()
+
+    def clear_pickles(self):
+        for file in [self.save_file, self.minimal_save_file,
+                     self.log_file]:
+            if os.path.isfile(file):
+                os.remove(file)
 
     def load_model(self, model_path):
         param_path = os.path.join(model_path, 'params.json')
@@ -313,7 +325,7 @@ class NeuralTully:
                        "energy": self.energy,
                        "forces": self.forces,
                        "U": self.U,
-                       "t": self.t,
+                       "t": self.t * const.FS_TO_AU,
                        "vel": self.vel,
                        "c": self.c,
                        "T": self.T,
@@ -371,7 +383,7 @@ class NeuralTully:
         with open(self.log_file, 'a') as f:
             f.write("\n" + text)
 
-        print(self.c[0])
+        # print(self.c[0])
 
     @classmethod
     def from_pickles(cls,
@@ -389,7 +401,17 @@ class NeuralTully:
                 time = state_dict['t']
                 if max_time is not None and time > max_time:
                     break
-        return state_dicts
+
+        num_samples = state_dicts[0]['nxyz'].shape[0]
+        trjs = [[] for _ in range(num_samples)]
+
+        for state_dict in state_dicts:
+            for i, nxyz in enumerate(state_dict['nxyz']):
+                atoms = Atoms(nxyz[:, 0],
+                              positions=nxyz[:, 1:])
+                trjs[i].append(atoms)
+
+        return state_dicts, trjs
 
     def update_props(self,
                      needs_nbrs):
@@ -514,9 +536,13 @@ class NeuralTully:
                 needs_nbrs = (i == 0)
                 self.step(needs_nbrs=needs_nbrs)
 
-                counter += 1
                 if counter % self.save_period == 0:
                     self.save()
+
+                counter += 1
+
+        with open(self.log_file, 'a') as f:
+            f.write('\nNeural Tully terminated normally.')
 
 
 class CombinedNeuralTully:
@@ -532,13 +558,6 @@ class CombinedNeuralTully:
 
         self.tully_params = tully_params
         self.num_trj = tully_params['num_trj']
-
-        self.clear_loggers()
-
-    def clear_loggers(self):
-        log_file = self.tully_params['log_file']
-        if os.path.isfile(log_file):
-            os.remove(log_file)
 
     def init_ground(self,
                     atoms,
@@ -604,14 +623,18 @@ class CombinedNeuralTully:
         return instance
 
 
-if __name__ == '__main__':
-    path = ('/home/saxelrod/Repo/projects/master/NeuralForceField/nff/md'
-            '/tully/job_info.json')
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--params_file',
+                        type=str,
+                        help='Info file with parameters',
+                        default='job_info.json')
+    args = parser.parse_args()
 
-    try:
-        combined_tully = CombinedNeuralTully.from_file(path)
-        combined_tully.run()
-    except Exception as e:
-        print(e)
-        import pdb
-        pdb.post_mortem()
+    path = args.params_file
+    combined_tully = CombinedNeuralTully.from_file(path)
+    combined_tully.run()
+
+
+if __name__ == '__main__':
+    main()
