@@ -282,15 +282,23 @@ def run_model(model,
 
 def get_phases(U, old_U):
     # U has dimension samples X N x N
-    uu = np.einsum("...jk, ...kl -> ...jl",
+    # Compute U.U^T
+    uu = np.einsum("...jk, ...lk -> ...jl",
                    U, old_U)
 
-    # Take the diagonal elements and get their signs
+    # Take the element in each row with the
+    # largest absolute value, not just the diagonal.
+    # When the two diabatic states switch energy
+    # orderings through a CI, the adiabatic states
+    # that are most similar to each other will have
+    # different orderings.
+
     num_states = U.shape[-1]
-    uu_diag = np.concatenate([uu[..., i, i].reshape(-1, 1)
-                              for i in range(num_states)],
-                             axis=-1)
-    new_phases = np.sign(uu_diag)
+    max_idx = abs(uu).argmax(axis=1)
+    uu_max = np.take_along_axis(uu,
+                                max_idx.reshape(-1, num_states, 1),
+                                axis=-1)
+    new_phases = np.sign(uu_max).squeeze(-1)
 
     return new_phases
 
@@ -320,12 +328,15 @@ def correct_nacv(results,
                  num_states):
     """
     Stack the non-adiabatic couplings and correct their
-    phases.
+    phases. Also correct the phases of U.
     """
 
     # get phase correction
     new_phases = get_phases(U=results["U"],
                             old_U=old_U)
+
+    results["U"] = (results["U"] * new_phases
+                    .reshape(*new_phases.shape, 1))
 
     # Stack NACVs and multiply by new phases
     # They can be stacked because only one type of molecule
@@ -344,6 +355,7 @@ def correct_nacv(results,
 
                 if key not in results:
                     continue
+
                 results = update_phase(
                     new_phases=new_phases,
                     i=i,

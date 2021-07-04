@@ -232,18 +232,6 @@ def rescale(energy,
                / mass.reshape(1, -1, 1)
                + vel)
 
-    # if not np.isnan(scale).all():
-    #     import pdb
-    #     pdb.set_trace()
-
-    #     idx = np.bitwise_not(np.isnan(scale)).nonzero()[0][0]
-
-    #     new_ke = (new_vel[idx] ** 2 * mass.reshape(1, -1, 1)).sum() / 2
-    #     old_ke = (vel[idx] ** 2 * mass.reshape(1, -1, 1)).sum() / 2
-
-    #     new_e = new_ke + energy[idx][new_surfs[idx]]
-    #     old_e = old_ke + energy[idx][surfs[idx]]
-
     return new_vel
 
 
@@ -279,7 +267,7 @@ def try_hop(c,
                       surfs=surfs,
                       new_surfs=new_surfs)
 
-    # reset any frustrated hops
+    # reset any frustrated hops or things that didn't hop
     frustrated = np.isnan(new_vel).any((-1, -2)).nonzero()[0]
     new_vel[frustrated] = vel[frustrated]
     new_surfs[frustrated] = surfs[frustrated]

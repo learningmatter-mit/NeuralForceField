@@ -62,7 +62,6 @@ class NeuralTully:
         self.atoms_list = atoms_list
         self.vel = self.get_vel()
         self.decoherence = decoherence
-        # terms for decoherence correction
         self.T = None
         self.model = self.load_model(model_path)
 
@@ -123,9 +122,7 @@ class NeuralTully:
 
     def init_c(self):
         c = np.zeros((self.num_samples,
-                      # self.num_states,
-                      self.num_diabat
-                      ),
+                      self.num_diabat),
                      dtype='complex128')
         c[:, self.surfs[0]] = 1
         return c
@@ -373,6 +370,8 @@ class NeuralTully:
 
         with open(self.log_file, 'a') as f:
             f.write("\n" + text)
+
+        print(self.c[0])
 
     @classmethod
     def from_pickles(cls,

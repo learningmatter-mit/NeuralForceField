@@ -225,28 +225,6 @@
         "T_init": 450,
         "cutoff": 5.0,
         "device": 0,
-        "lr_min": [
-            1e-05,
-            1e-06
-        ],
-        "memory": null,
-        "nprocs": 4,
-        "metrics": [
-            "MeanAbsoluteError"
-        ],
-        "sampler": {
-            "name": "BalancedFFSampler",
-            "apply_to": [
-                "train",
-                "val",
-                "test"
-            ],
-            "sampler_paths": {
-                "val": "val_sample_dict.json",
-                "test": "test_sample_dict.json",
-                "train": "train_sample_dict.json"
-            }
-        },
         "version": null,
         "add_nacv": true,
         "feat_dim": 128,
@@ -320,17 +298,6 @@
             "normal"
         ],
         "weightpath": "/home/saxelrod/supercloud/models/switches",
-        "zhu_params": {
-            "log_file": "trj.log",
-            "max_time": 5000,
-            "out_file": "trj.csv",
-            "timestep": 0.5,
-            "num_states": 2,
-            "max_gap_hop": 0.021673306772908366,
-            "save_period": 30,
-            "initial_surf": 1,
-            "initial_time": 0.0
-        },
         "diabat_keys": [
             [
                 "d_00",
@@ -379,70 +346,6 @@
         "reset_trainer": false,
         "cross_talk_dic": null,
         "save_frequency": 100,
-        "multi_loss_dict": [
-            {
-                "mse": [
-                    {
-                        "coef": 0.01,
-                        "params": {
-                            "key": "d_00"
-                        }
-                    },
-                    {
-                        "coef": 0.01,
-                        "params": {
-                            "key": "d_11"
-                        }
-                    },
-                    {
-                        "coef": 0.01,
-                        "params": {
-                            "key": "d_22"
-                        }
-                    },
-                    {
-                        "coef": 0.2,
-                        "params": {
-                            "key": "energy_0"
-                        }
-                    },
-                    {
-                        "coef": 1,
-                        "params": {
-                            "key": "energy_0_grad"
-                        }
-                    },
-                    {
-                        "coef": 0.1,
-                        "params": {
-                            "key": "energy_1"
-                        }
-                    },
-                    {
-                        "coef": 1,
-                        "params": {
-                            "key": "energy_1_grad"
-                        }
-                    },
-                    {
-                        "coef": 0.5,
-                        "params": {
-                            "key": "energy_1_energy_0_delta"
-                        }
-                    }
-                ],
-                "nacv": [
-                    {
-                        "coef": 1,
-                        "params": {
-                            "abs": false,
-                            "key": "force_nacv_10",
-                            "max": false
-                        }
-                    }
-                ]
-            }
-        ],
         "num_ionic_steps": null,
         "readout_dropout": 0.0,
         "skip_connection": {
