@@ -206,7 +206,7 @@ def add_grad(model,
 
     # split batches and results into those that require NACVs
     # and gradients on all states, and those that only require
-    # the gradient on the currnet state
+    # the gradient on the current state
 
     splits, can_hop = split_all(model=model,
                                 xyz=xyz,
@@ -240,40 +240,75 @@ def add_grad(model,
     return results
 
 
+# def add_active_grads(batch,
+#                      results,
+#                      xyz,
+#                      surfs,
+#                      num_states):
+
+#     num_samples = len(batch['num_atoms'])
+#     num_atoms = batch['num_atoms'][0].item()
+
+#     new_results = {f'energy_{i}_grad':
+#                    np.ones(num_samples, num_atoms, 3)
+#                    * float('nan')
+#                    for i in range(num_states)}
+
+
 def run_model(model,
               batch,
               device,
               surf,
               max_gap_hop,
               num_states,
-              all_grads):
+              all_engrads,
+              nacv):
     """
     `max_gap_hop` in a.u.
     """
 
     batch = batch_to(batch, device)
 
-    if all_grads:
-        xyz = None
-    else:
-        xyz = batch['nxyz'][:, 1:]
-        xyz.requires_grad = True
+    # # case 1: we only want one state gradient
+    # separate_grads = (not nacv) and (not all_engrads)
+    # if separate_grads:
+    #     xyz = batch['nxyz'][:, 1:]
+    #     xyz.requires_grad = True
 
+    # # case 2: we want both state gradients but
+    # # no nacv
+    # # Or case 3: we want both state gradients and nacv
+    # else:
+    #     xyz = None
+
+    xyz = None
+
+    model.add_nacv = nacv
     results = model(batch,
                     xyz=xyz,
-                    add_nacv=all_grads,
-                    add_grad=all_grads,
+                    add_nacv=nacv,
+                    # add_grad=all_engrads,
+                    add_grad=True,
                     add_gap=True,
                     add_u=True)
 
-    if not all_grads:
-        results = add_grad(model=model,
-                           batch=batch,
-                           xyz=xyz,
-                           results=results,
-                           max_gap_hop=max_gap_hop,
-                           surf=surf,
-                           num_states=num_states)
+    # If we use NACV then we can come back to what's commented
+    # out below, where you only ask for gradients NACVs among states
+    # close to each other
+
+    # For now just take the gradient on the active surfaces
+
+    # if separate_grads:
+    #     results = add_active_grads()
+
+    # if not all_grads:
+    #     results = add_grad(model=model,
+    #                        batch=batch,
+    #                        xyz=xyz,
+    #                        results=results,
+    #                        max_gap_hop=max_gap_hop,
+    #                        surf=surf,
+    #                        num_states=num_states)
 
     results = batch_detach(results)
 
@@ -373,7 +408,8 @@ def batched_calc(model,
                  num_states,
                  surf,
                  max_gap_hop,
-                 all_grads):
+                 all_engrads,
+                 nacv):
     """
     Get model results from a batch, including
     nacv phase correction
@@ -385,7 +421,8 @@ def batched_calc(model,
                         surf=surf,
                         max_gap_hop=max_gap_hop,
                         num_states=num_states,
-                        all_grads=all_grads)
+                        all_engrads=all_engrads,
+                        nacv=nacv)
 
     return results
 
@@ -457,6 +494,22 @@ def make_loader(nxyz,
     return loader
 
 
+def timing(func):
+    import time
+
+    def my_func(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time()
+        delta = end - start
+        print("%.2f seconds" % delta)
+
+        return result
+
+    return my_func
+
+
+@timing
 def get_results(model,
                 nxyz,
                 nbr_list,
@@ -470,7 +523,8 @@ def get_results(model,
                 num_states,
                 surf,
                 max_gap_hop,
-                all_grads,
+                all_engrads,
+                nacv,
                 diabat_keys):
     """
     `nxyz_list` assumed to be in Angstroms
@@ -492,7 +546,8 @@ def get_results(model,
                                num_states=num_states,
                                surf=surf,
                                max_gap_hop=max_gap_hop,
-                               all_grads=all_grads)
+                               all_engrads=all_engrads,
+                               nacv=nacv)
         results_list.append(results)
 
     all_results = concat_and_conv(results_list=results_list,

@@ -7,6 +7,7 @@ import random
 import math
 import argparse
 from functools import partial
+import shutil
 
 from ase.io.trajectory import Trajectory
 from ase import Atoms
@@ -20,15 +21,18 @@ from nff.md.tully.step import (
     verlet_step_1, verlet_step_2,
     truhlar_decoherence,
     # add_decoherence
-    diabatic_c, compute_T
+    diabatic_c,
+    compute_T,
+    get_p_hop
 )
 from nff.md.nvt_ax import NoseHoover, NoseHooverChain
 
 # TO-DO:
+# - Make sure nff in supercloud has torch 1.9
+# - If only doing diabatic propagation, then don't compute NACVs
 # - Figure out if the three-step propagator is actually working
-# - Fix p_hop for multiple states
 # - Check everything in detail
-# - Add decoherence
+
 
 METHOD_DIC = {
     "nosehoover": NoseHoover,
@@ -38,8 +42,7 @@ METHOD_DIC = {
 DECOHERENCE_DIC = {"truhlar": truhlar_decoherence}
 
 TULLY_LOG_FILE = 'tully.log'
-TULLY_SAVE_FILE = 'tully.pickle'
-TULLY_MINIMAL_SAVE = 'tully_small.pickle'
+TULLY_SAVE_DIR = 'tully_pickles'
 
 
 class NeuralTully:
@@ -56,7 +59,9 @@ class NeuralTully:
                  model_path,
                  diabat_keys,
                  explicit_diabat_prop,
-                 log_all_hops=False,
+                 simple_vel_scale=False,
+                 diabat_propagate=True,
+                 hop_eqn='sharc',
                  cutoff_skin=1.0,
                  max_gap_hop=0.018,
                  nbr_update_period=20,
@@ -95,22 +100,22 @@ class NeuralTully:
         self.nbr_list = None
         self.max_gap_hop = max_gap_hop
 
-        self.save_file = TULLY_SAVE_FILE
-        self.minimal_save_file = TULLY_MINIMAL_SAVE
-
+        self.save_dir = TULLY_SAVE_DIR
         self.log_file = TULLY_LOG_FILE
         self.save_period = save_period
 
         self.log_template = self.setup_logging()
         self.p_hop = 0
-        self.any_hopped = False
+        self.just_hopped = None
         self.explicit_diabat = explicit_diabat_prop
-        self.log_all_hops = log_all_hops
         self.c = self.init_c()
 
-        self.clear_pickles()
-
+        self.setup_save()
         self.decoherence = self.init_decoherence(params=decoherence)
+        self.decoherence_type = decoherence['name']
+        self.hop_eqn = hop_eqn
+        self.diabat_propagate = diabat_propagate
+        self.simple_vel_scale = simple_vel_scale
 
         # if not self.decoherence:
         #     return
@@ -118,6 +123,11 @@ class NeuralTully:
         # self.delta_R = 0
         # self.delta_P = 0
         # self.sigma = self.init_sigma()
+
+    def setup_save(self):
+        if os.path.isdir(self.save_dir):
+            shutil.rmtree(self.save_dir)
+        os.makedirs(self.save_dir)
 
     def init_decoherence(self, params):
         if not params:
@@ -131,12 +141,6 @@ class NeuralTully:
                        **kwargs)
 
         return func
-
-    def clear_pickles(self):
-        for file in [self.save_file, self.minimal_save_file,
-                     self.log_file]:
-            if os.path.isfile(file):
-                os.remove(file)
 
     def load_model(self, model_path):
         param_path = os.path.join(model_path, 'params.json')
@@ -228,7 +232,10 @@ class NeuralTully:
             for j in range(self.num_states):
                 if i == j:
                     continue
-                _nacv[:, i, j, :] = self.props[f'nacv_{i}{j}']
+                key = f'nacv_{i}{j}'
+                if key not in self.props:
+                    return
+                _nacv[:, i, j, :] = self.props[key]
         return _nacv
 
     @property
@@ -249,13 +256,17 @@ class NeuralTully:
         # `nacv` has shape num_samples x num_states x num_states
         # x num_atoms x 3
 
+        nacv = self.nacv
+        if nacv is None:
+            return
+
         gap = self.gap.reshape(self.num_samples,
                                self.num_states,
                                self.num_states,
                                1,
                                1)
 
-        _force_nacv = self.nacv * gap
+        _force_nacv = nacv * gap
 
         return _force_nacv
 
@@ -285,7 +296,7 @@ class NeuralTully:
     @property
     def pot_V(self):
         """
-        Potential energy matrix
+        Potential energy matrix in n_adiabat x n_adiabat space
         """
 
         V = np.zeros((self.num_samples,
@@ -306,7 +317,7 @@ class NeuralTully:
     @property
     def full_pot_V(self):
         """
-        Potential energy matrix
+        Potential energy matrix in full n_diabat x n_diabat space
         """
 
         V = np.zeros((self.num_samples,
@@ -360,6 +371,19 @@ class NeuralTully:
         return _state_dict
 
     @property
+    def per_trj_state_dict(self):
+
+        state_dict = self.state_dict
+        state_dicts = [{key: val[i] for key, val
+                        in state_dict.items() if key != "t"
+                        and val is not None}
+                       for i in range(self.num_samples)]
+        for i, dic in enumerate(state_dicts):
+            state_dicts[i]["t"] = self.state_dict["t"]
+
+        return state_dicts
+
+    @property
     def minimal_state_dict(self):
         keys = ['nxyz', 'energy', 'surfs', 't']
         minimal = {key: self.state_dict[key]
@@ -367,14 +391,34 @@ class NeuralTully:
 
         return minimal
 
-    def save(self):
-        with open(self.save_file, "ab") as f:
+    def save_together(self, save_file):
+        """
+        Save all the data together in one pickle. 
+        Doesn't work well when you want to save every
+        hop geometry because then you end up saving all
+        trajectories together in a step when only one had
+        a hop.
+        """
+        with open(save_file, "ab") as f:
             pickle.dump(self.state_dict, f)
 
-        with open(self.minimal_save_file, "ab") as f:
-            pickle.dump(self.minimal_state_dict, f)
+    def save(self, idx=None):
+        if idx is None:
+            idx = list(range(self.num_samples))
+
+        state_dicts = {i: dic for i, dic in
+                       enumerate(self.per_trj_state_dict)}
+
+        for i in idx:
+            path = os.path.join(self.save_dir, f'trj_{i}.pickle')
+            dic = state_dicts[i]
+            with open(path, "ab") as f:
+                pickle.dump(dic, f)
 
     def setup_logging(self):
+
+        if os.path.isfile(self.log_file):
+            os.remove(self.log_file)
 
         states = [f"State {i}" for i in range(self.num_states)]
         hdr = "%-9s " % "Time [fs]"
@@ -413,9 +457,9 @@ class NeuralTully:
         # print(self.c[0])
 
     @classmethod
-    def from_pickles(cls,
-                     file,
-                     max_time=None):
+    def from_pickle(cls,
+                    file,
+                    max_time=None):
 
         state_dicts = []
         with open(file, 'rb') as f:
@@ -429,19 +473,35 @@ class NeuralTully:
                 if max_time is not None and time > max_time:
                     break
 
-        num_samples = state_dicts[0]['nxyz'].shape[0]
+        sample_nxyz = state_dicts[0]['nxyz']
+        # whether this is a single trajectory or multiple
+        single = len(sample_nxyz.shape) == 2
+        num_samples = 1 if single else sample_nxyz.shape[0]
         trjs = [[] for _ in range(num_samples)]
 
         for state_dict in state_dicts:
-            for i, nxyz in enumerate(state_dict['nxyz']):
+            nxyz = state_dict['nxyz']
+            if single:
+                nxyz = [nxyz]
+            for i, nxyz in enumerate(nxyz):
                 atoms = Atoms(nxyz[:, 0],
                               positions=nxyz[:, 1:])
                 trjs[i].append(atoms)
+
+        if single:
+            trjs = trjs[0]
 
         return state_dicts, trjs
 
     def update_props(self,
                      needs_nbrs):
+
+        # if we're doing subotnik decoherence we need
+        # gradients in each state + NACVs
+
+        all_engrads = 'subotnik' in self.decoherence_type
+        needs_nacv = ('subotnik' in self.decoherence_type) or (
+            not self.diabat_propagate)
 
         props = get_results(model=self.model,
                             nxyz=self.nxyz,
@@ -456,48 +516,58 @@ class NeuralTully:
                             num_states=self.num_states,
                             surf=self.surfs,
                             max_gap_hop=self.max_gap_hop,
-                            # all_grads=self.decoherence
-                            all_grads=True,
-                            diabat_keys=self.unique_diabats
-                            )
+                            all_engrads=all_engrads,
+                            nacv=needs_nacv,
+                            diabat_keys=self.unique_diabats)
 
         self.props = props
 
+    def do_hop(self,
+               old_c,
+               P):
+        self.p_hop = get_p_hop(hop_eqn=self.hop_eqn,
+                               old_c=old_c,
+                               new_c=self.c,
+                               P=P,
+                               surfs=self.surfs,
+                               c=self.c,
+                               T=self.T,
+                               dt=self.dt)
+
+        c = self.c[:, :self.num_states]
+        new_surfs, new_vel = try_hop(c=c,
+                                     p_hop=self.p_hop,
+                                     surfs=self.surfs,
+                                     vel=self.vel,
+                                     nacv=self.nacv,
+                                     mass=self.mass,
+                                     energy=self.energy,
+                                     max_gap_hop=self.max_gap_hop,
+                                     simple_scale=self.simple_vel_scale)
+
+        return new_surfs, new_vel
+
+    def add_decoherence(self):
+        if not self.decoherence:
+            return
+
+        if self.explicit_diabat:
+            energy = self.full_energy
+        else:
+            energy = self.energy
+
+        self.c = self.decoherence(c=self.c,
+                                  surfs=self.surfs,
+                                  energy=energy,
+                                  vel=self.vel,
+                                  dt=self.dt,
+                                  mass=self.mass)
+
     def step(self, needs_nbrs):
-
-        # inner loop to propagate electronic wavefunction
-        # for _ in range(self.elec_substeps):
-        # c, T = runge_c(c=self.c,
-        #                vel=self.vel,
-        #                nacv=self.nacv,
-        #                energy=self.energy,
-        #                elec_dt=self.dt / self.elec_substeps,
-        #                hbar=1)
-
-        # c, delta_P, delta_R = add_decoherence(c=c,
-        #                                       surfs=self.surfs,
-        #                                       new_surfs=new_surfs,
-        #                                       delta_P=self.delta_P,
-        #                                       delta_R=self.delta_R,
-        #                                       nacv=self.nacv,
-        #                                       energy=self.energy,
-        #                                       forces=self.forces,
-        #                                       mass=self.mass)
-
-        # self.delta_P = delta_P
-        # self.delta_R = delta_R
-
-        # if any sample hopped then it was within the cutoff
-        # gap, which means we have forces for the other states
-        # which we can use for the rest of this inner loop
-
-        # self.c = c
-        # self.T = T
-        # self.t += self.dt / self.elec_substeps
-
         old_H_d = copy.deepcopy(self.H_d)
         old_H_ad = copy.deepcopy(self.pot_V)
         old_U = copy.deepcopy(self.U)
+        old_c = copy.deepcopy(self.c)
 
         # xyz converted to a.u. for the step and then
         # back to Angstrom after
@@ -519,50 +589,38 @@ class NeuralTully:
                                 dt=self.dt)
         self.vel = new_vel
 
-        # propagate c in diabatic basis
-        self.c = diabatic_c(c=self.c,
-                            old_H_d=old_H_d,
-                            new_H_d=self.H_d,
-                            old_H_ad=old_H_ad,
-                            new_H_ad=self.pot_V,
-                            old_U=old_U,
-                            new_U=self.U,
-                            dt=self.dt,
-                            elec_substeps=self.elec_substeps,
-                            explicit_diabat=self.explicit_diabat)
+        import pdb
+        pdb.set_trace()
 
-        self.T, _ = compute_T(nacv=self.nacv,
-                              vel=self.vel,
-                              c=self.c)
+        if self.diabat_propagate:
+            # propagate c in diabatic basis
+            self.c, P = diabatic_c(c=self.c,
+                                   old_H_d=old_H_d,
+                                   new_H_d=self.H_d,
+                                   old_H_ad=old_H_ad,
+                                   new_H_ad=self.pot_V,
+                                   old_U=old_U,
+                                   new_U=self.U,
+                                   dt=self.dt,
+                                   elec_substeps=self.elec_substeps,
+                                   explicit_diabat=self.explicit_diabat)
+        else:
+            self.T, _ = compute_T(nacv=self.nacv,
+                                  vel=self.vel,
+                                  c=self.c)
 
-        c = self.c[:, :self.num_states]
-        new_surfs, new_vel, p_hop = try_hop(c=c,
-                                            T=self.T,
-                                            dt=self.dt,
-                                            surfs=self.surfs,
-                                            vel=self.vel,
-                                            nacv=self.nacv,
-                                            mass=self.mass,
-                                            energy=self.energy,
-                                            max_gap_hop=self.max_gap_hop)
+            raise NotImplementedError
 
-        self.any_hopped = (new_surfs != self.surfs).any()
+        new_surfs, new_vel = self.do_hop(old_c=old_c,
+                                         P=P)
+
+        self.just_hopped = (new_surfs != self.surfs).nonzero()[0]
         self.surfs = new_surfs
         self.vel = new_vel
-        self.p_hop = p_hop
         self.t += self.dt
 
+        self.add_decoherence()
         self.log()
-
-        if not self.decoherence:
-            return
-
-        self.c = self.decoherence(c=self.c,
-                                  surfs=self.surfs,
-                                  energy=self.energy,
-                                  vel=self.vel,
-                                  dt=self.dt,
-                                  mass=self.mass)
 
     def run(self):
         steps = math.ceil(self.max_time / self.dt)
@@ -581,9 +639,8 @@ class NeuralTully:
                 if counter % self.save_period == 0:
                     self.save()
 
-                # save the geoms if any just hopped
-                elif self.any_hopped and self.log_all_hops:
-                    self.save()
+                # save any geoms that just hopped
+                self.save(idx=self.just_hopped)
 
                 counter += 1
 
@@ -597,25 +654,32 @@ class CombinedNeuralTully:
                  ground_params,
                  tully_params):
 
+        reload_ground = tully_params.get("reload_ground", False)
         self.ground_dynamics = self.init_ground(atoms=atoms,
-                                                ground_params=ground_params)
+                                                ground_params=ground_params,
+                                                reload_ground=reload_ground)
         self.ground_params = ground_params
         self.ground_savefile = ground_params.get("savefile")
 
         self.tully_params = tully_params
         self.num_trj = tully_params['num_trj']
+        self.reload_ground = reload_ground
 
     def init_ground(self,
                     atoms,
-                    ground_params):
+                    ground_params,
+                    reload_ground):
 
         ase_ground_params = copy.deepcopy(ground_params)
         ase_ground_params["trajectory"] = ground_params.get("savefile")
         logfile = ase_ground_params['logfile']
 
         if os.path.isfile(logfile):
+            if reload_ground:
+                return
             os.remove(logfile)
 
+        self.reload_ground = False
         method = METHOD_DIC[ase_ground_params["thermostat"]]
         ground_dynamics = method(atoms, **ase_ground_params)
 
@@ -627,7 +691,8 @@ class CombinedNeuralTully:
         equil_steps = math.ceil(self.ground_params["equil_time"] /
                                 self.ground_params["timestep"])
 
-        self.ground_dynamics.run(steps=steps)
+        if not self.reload_ground:
+            self.ground_dynamics.run(steps=steps)
 
         trj = Trajectory(self.ground_savefile)
 

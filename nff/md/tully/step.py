@@ -3,16 +3,10 @@ Functions for performing a Tully time step
 """
 
 import copy
-import random
 from functools import partial
 
 import numpy as np
-import scipy
-
-# TO-DO:
-# - Add decoherence
-# - Fix the hopping criterion for multiple states
-# - Use Eq. (39) for the velocity re-scaling
+import torch
 
 
 def compute_T(nacv,
@@ -70,12 +64,13 @@ def get_a(c):
     return a
 
 
-def get_p_hop(c,
-              T,
-              dt,
-              surfs):
+def get_tully_p(c,
+                T,
+                dt,
+                surfs,
+                **kwargs):
     """
-    surfs has dimension num_samples
+    Tully surface hopping probability
     """
 
     a = get_a(c)
@@ -106,47 +101,110 @@ def get_p_hop(c,
     return p
 
 
+def get_sharc_p(old_c,
+                new_c,
+                P,
+                surfs,
+                **kwargs):
+    """
+    P is the propagator.
+    """
+
+    num_samples = old_c.shape[0]
+    num_states = old_c.shape[1]
+    other_surfs = get_other_surfs(surfs=surfs,
+                                  num_states=num_states,
+                                  num_samples=num_samples)
+
+    c_beta_t = np.take_along_axis(old_c,
+                                  surfs.reshape(-1, 1),
+                                  axis=-1)
+    c_beta_dt = np.take_along_axis(new_c,
+                                   surfs.reshape(-1, 1),
+                                   axis=-1)
+
+    c_alpha_dt = np.take_along_axis(new_c,
+                                    other_surfs,
+                                    axis=-1)
+
+    # `P` has dimension num_samples x num_states x num_states
+
+    P_alpha_beta = np.take_along_axis(np.take_along_axis(
+        P,
+        surfs.reshape(-1, 1, 1),
+        axis=-1).squeeze(-1),
+        other_surfs,
+        axis=-1
+    )
+
+    P_beta_beta = np.take_along_axis(np.take_along_axis(
+        P,
+        surfs.reshape(-1, 1, 1),
+        axis=-1).squeeze(-1),
+        surfs.reshape(-1, 1),
+        axis=-1
+    )
+
+    # h_alpha is the transition probability from the current state
+    # to alpha
+
+    num = np.real(c_alpha_dt * np.conj(P_alpha_beta) * np.conj(c_beta_t))
+    denom = abs(c_beta_t) ** 2 - np.real(c_beta_dt * np.conj(P_beta_beta)
+                                         * np.conj(c_beta_t))
+    pref = 1 - abs(c_beta_dt) ** 2 / abs(c_beta_t) ** 2
+
+    h = np.zeros((num_samples, num_states))
+    np.put_along_axis(h,
+                      other_surfs,
+                      pref * num / denom,
+                      axis=-1)
+    h[h < 0] = 0
+
+    return h
+
+
+def get_p_hop(hop_eqn='sharc',
+              **kwargs):
+
+    if hop_eqn == 'sharc':
+        p = get_sharc_p(**kwargs)
+    elif hop_eqn == 'tully':
+        p = get_tully_p(**kwargs)
+    else:
+        raise NotImplementedError
+
+    return p
+
+
 def get_new_surf(p_hop,
-                 num_states,
                  surfs,
                  max_gap_hop,
                  energy):
 
-    new_surfs = []
+    num_samples = p_hop.shape[0]
+    lhs = np.concatenate([np.zeros(num_samples).reshape(-1, 1),
+                          p_hop.cumsum(axis=-1)],
+                         axis=-1)[:, :-1]
+    rhs = lhs + p_hop
+    r = np.random.rand()
+    hop = (lhs < r) * (r <= rhs)
+    hop_idx = np.stack(hop.nonzero(), axis=-1)
 
-    for j, surf in enumerate(surfs):
+    new_surfs = copy.deepcopy(surfs)
+    new_surfs[hop_idx[:, 0]] = hop_idx[:, 1]
 
-        p = p_hop[j]
+    if max_gap_hop is None:
+        return new_surfs
 
-        # To avoid biasing in the direction of one hop vs. another,
-        # we randomly shuffle the order of self.hopping_probabilities
-        # each time.
-
-        idx = list(range(num_states))
-        random.shuffle(idx)
-
-        new_surf = copy.deepcopy(surf)
-
-        for i in idx:
-            if i == surf:
-                continue
-
-            state_p = p[i]
-            rnd = np.random.rand()
-
-            gap = abs(energy[j][i] - energy[j][surf])
-            hop = (state_p > rnd)
-            if max_gap_hop is not None:
-                hop = hop and gap <= max_gap_hop
-
-            if hop:
-                new_surf = i
-                break
-
-        new_surfs.append(new_surf)
-    new_surfs = np.array(new_surfs)
-
-    return new_surfs
+    old_en = np.take_along_axis(energy,
+                                surfs.reshape(-1, 1),
+                                axis=-1).squeeze(-1)
+    new_en = np.take_along_axis(energy,
+                                new_surfs.reshape(-1, 1),
+                                axis=-1).squeeze(-1)
+    gaps = abs(old_en - new_en)
+    bad_idx = gaps >= max_gap_hop
+    new_surfs[bad_idx] = surfs[bad_idx]
 
 
 def solve_quadratic(vel,
@@ -184,18 +242,43 @@ def solve_quadratic(vel,
     return scale
 
 
+def get_simple_scale(mass,
+                     new_en,
+                     old_en,
+                     vel):
+
+    m = mass.reshape(1, -1, 1)
+    gap = old_en - new_en
+    arg = ((2 * gap + (m * vel ** 2).sum((-1, -2)))
+           .astype('complex128'))
+    num = np.sqrt(arg)
+    denom = np.sqrt((m * vel ** 2).sum((-1, -2)))
+
+    v_scale = num / denom
+
+    # reset frustrated hops
+    v_scale[np.imag(v_scale) != 0] = np.nan
+    v_scale = np.real(v_scale)
+
+    return v_scale
+
+
 def rescale(energy,
             vel,
             nacv,
             mass,
             surfs,
-            new_surfs):
+            new_surfs,
+            simple_scale):
     """
     Velocity re-scaling, from:
 
     Landry, B.R. and Subotnik, J.E., 2012. How to recover Marcus theory with 
     fewest switches surface hopping: Add just a touch of decoherence. The 
     Journal of chemical physics, 137(22), p.22A513.
+
+    If no NACV is available, the KE is simply rescaled to conserve energy.
+    This is the default in SHARC.
     """
 
     # old and new energies
@@ -203,6 +286,14 @@ def rescale(energy,
                                 -1).reshape(-1)
     new_en = np.take_along_axis(energy, new_surfs.reshape(-1, 1),
                                 -1).reshape(-1)
+
+    if simple_scale or nacv is None:
+        v_scale = get_simple_scale(mass=mass,
+                                   new_en=new_en,
+                                   old_en=old_en,
+                                   vel=vel)
+        new_vel = v_scale.reshape(-1, 1, 1) * vel
+        return new_vel
 
     # nacvs connecting old to new surfaces
     ones = [1] * 4
@@ -236,26 +327,19 @@ def rescale(energy,
 
 
 def try_hop(c,
-            T,
-            dt,
+            p_hop,
             surfs,
             vel,
             nacv,
             mass,
             energy,
-            max_gap_hop):
+            max_gap_hop,
+            simple_scale):
     """
     `energy` has dimension num_samples x num_states
     """
 
-    p_hop = get_p_hop(c=c,
-                      T=T,
-                      dt=dt,
-                      surfs=surfs)
-
-    num_states = energy.shape[-1]
     new_surfs = get_new_surf(p_hop=p_hop,
-                             num_states=num_states,
                              surfs=surfs,
                              max_gap_hop=max_gap_hop,
                              energy=energy)
@@ -265,14 +349,15 @@ def try_hop(c,
                       nacv=nacv,
                       mass=mass,
                       surfs=surfs,
-                      new_surfs=new_surfs)
+                      new_surfs=new_surfs,
+                      simple_scale=simple_scale)
 
     # reset any frustrated hops or things that didn't hop
     frustrated = np.isnan(new_vel).any((-1, -2)).nonzero()[0]
     new_vel[frustrated] = vel[frustrated]
     new_surfs[frustrated] = surfs[frustrated]
 
-    return new_surfs, new_vel, p_hop
+    return new_surfs, new_vel
 
 
 def runge_c(c,
@@ -336,7 +421,7 @@ def diabatic_c(c,
                new_U,
                old_U,
                dt,
-               explicit_diabat=True,
+               explicit_diabat,
                hbar=1,
                old_H_d=None,
                new_H_d=None,
@@ -366,14 +451,12 @@ def diabatic_c(c,
     delta_tau = dt / n
 
     for i in range(1, n + 1):
-        new_exp = np.stack(
-            [scipy.linalg.expm(
-                -1j / hbar * (
-                    old_H_d[k] + i / n * (new_H_d[k] - old_H_d[k])
-                )
-                * delta_tau)
-             for k in range(num_samples)]
-        )
+        new_exp = torch.tensor(
+            -1j / hbar * (
+                old_H_d + i / n * (new_H_d - old_H_d)
+            )
+            * delta_tau
+        ).matrix_exp().numpy()
         exp = np.einsum('ijk, ikl -> ijl', exp, new_exp)
 
     if explicit_diabat:
@@ -382,14 +465,16 @@ def diabatic_c(c,
         T_inv = new_U.transpose(0, 2, 1)
 
     if explicit_diabat:
-        c_new = np.einsum('ijk, ikl, ilm, im -> ij',
-                          T_inv, exp, T, c)
+        P = np.einsum('ijk, ikl, ilm -> ijm',
+                      T_inv, exp, T)
     else:
         # if implicit, T(t) = identity
-        c_new = np.einsum('ijk, ikl, il -> ij',
-                          T_inv, exp, c)
+        P = np.einsum('ijk, ikl -> ijl',
+                      T_inv, exp)
 
-    return c_new
+    c_new = np.einsum('ijk, ik -> ij', P, c)
+
+    return c_new, P
 
 
 def verlet_step_1(forces,
@@ -925,6 +1010,17 @@ def add_decoherence(c,
     pass
 
 
+def get_other_surfs(surfs,
+                    num_states,
+                    num_samples):
+    all_surfs = (np.arange(num_states).reshape(-1, 1)
+                 .repeat(num_samples, 1).transpose())
+    other_idx = all_surfs != surfs.reshape(-1, 1)
+    other_surfs = all_surfs[other_idx].reshape(num_samples, -1)
+
+    return other_surfs
+
+
 def truhlar_decoherence(c,
                         surfs,
                         energy,
@@ -944,10 +1040,9 @@ def truhlar_decoherence(c,
     num_samples = c.shape[0]
     num_states = c.shape[1]
 
-    all_surfs = (np.arange(num_states).reshape(-1, 1)
-                 .repeat(num_samples, 1).transpose())
-    other_idx = all_surfs != surfs.reshape(-1, 1)
-    other_surfs = all_surfs[other_idx].reshape(num_samples, -1)
+    other_surfs = get_other_surfs(surfs=surfs,
+                                  num_states=num_states,
+                                  num_samples=num_samples)
 
     c_m = np.take_along_axis(c,
                              surfs.reshape(-1, 1),

@@ -176,8 +176,7 @@ class DiabaticReadout(nn.Module):
                       xyz,
                       results,
                       num_atoms,
-                      u,
-                      add_u=False):
+                      u):
 
         results, diabat_grads = self.get_diabat_grads(results=results,
                                                       xyz=xyz,
@@ -216,9 +215,6 @@ class DiabaticReadout(nn.Module):
 
         for key in add_keys:
             results[key] = torch.cat(results[key])
-
-        if add_u:
-            results["U"] = u
 
         return results
 
@@ -395,12 +391,14 @@ class DiabaticReadout(nn.Module):
         results, u = self.add_diag(results=results,
                                    num_atoms=num_atoms)
 
+        if add_u:
+            results["U"] = u
+
         if add_grad and add_nacv:
             results = self.add_all_grads(xyz=xyz,
                                          results=results,
                                          num_atoms=num_atoms,
-                                         u=u,
-                                         add_u=add_u)
+                                         u=u)
         elif add_grad:
             results = self.add_adiabat_grads(xyz=xyz,
                                              results=results)

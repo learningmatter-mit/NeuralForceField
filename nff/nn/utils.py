@@ -381,7 +381,7 @@ def single_spec_nbrs(dset,
     dist_mat = ((xyz[:, :, None, :] - xyz[:, None, :, :])
                 .to(device).norm(dim=-1))
     nbr_mask = (dist_mat <= cutoff) * (dist_mat > 0)
-    nbrs = nbr_mask.nonzero()
+    nbrs = nbr_mask.nonzero(as_tuple=False)
 
     if not directed:
         nbrs = nbrs[nbrs[:, 2] > nbrs[:, 1]]
@@ -391,5 +391,5 @@ def single_spec_nbrs(dset,
     for i in range(num_mols):
         match_nbrs = (nbrs[:, 0] == i)
         split_nbrs.append(nbrs[match_nbrs][:, 1:])
-        
+
     return split_nbrs

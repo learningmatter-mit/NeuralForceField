@@ -6,7 +6,6 @@ import inspect
 
 import torch
 from torch.autograd import grad
-from torch.autograd.gradcheck import zero_gradients
 import torch.nn.functional as F
 
 
@@ -22,6 +21,8 @@ def compute_jacobian(inputs, output, device):
     Returns:
         torch.Tensor: size (N_in, N_in, N_out)
     """
+    from torch.autograd.gradcheck import zero_gradients
+
     assert inputs.requires_grad
 
     num_classes = output.size()[1]
