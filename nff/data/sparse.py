@@ -11,7 +11,7 @@ def sparsify_tensor(tensor):
     returns:
         sparse (torch.sparse.Tensor)
     """
-    ij = tensor.nonzero()
+    ij = tensor.nonzero(as_tuple=False)
 
     if len(ij) > 0:
         v = tensor[ij[:, 0], ij[:, 1]]

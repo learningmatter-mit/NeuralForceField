@@ -114,11 +114,11 @@ def torch_nbr_list(atomsobject,
             offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + \
               dis_mat.lt(-0.5 * cell_dim).to(torch.float)
         dis_mat=dis_mat+offsets*cell_dim
-        
+
     dis_sq = dis_mat.pow(2).sum(-1)
     mask = (dis_sq < cutoff ** 2) & (dis_sq != 0)
 
-    nbr_list = mask.nonzero()
+    nbr_list = mask.nonzero(as_tuple=False)
     if not directed:
         nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 

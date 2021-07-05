@@ -137,8 +137,11 @@ class DiabaticReadout(nn.Module):
         d_mat = self.results_to_dmat(results, num_atoms)
         # ad_energies, u = torch.symeig(d_mat, True)
         ad_energies, u = self.compute_eig(d_mat)
-        results.update({key: ad_energies[:, i].reshape(-1, 1)
-                        for i, key in enumerate(self.energy_keys)})
+        # results.update({key: ad_energies[:, i].reshape(-1, 1)
+        #                 for i, key in enumerate(self.energy_keys)})
+
+        results.update({f'energy_{i}': ad_energies[:, i].reshape(-1, 1)
+                        for i in range(ad_energies.shape[1])})
 
         return results, u
 
@@ -173,7 +176,8 @@ class DiabaticReadout(nn.Module):
                       xyz,
                       results,
                       num_atoms,
-                      u):
+                      u,
+                      add_u=False):
 
         results, diabat_grads = self.get_diabat_grads(results=results,
                                                       xyz=xyz,
@@ -212,6 +216,9 @@ class DiabaticReadout(nn.Module):
 
         for key in add_keys:
             results[key] = torch.cat(results[key])
+
+        if add_u:
+            results["U"] = u
 
         return results
 
@@ -358,7 +365,8 @@ class DiabaticReadout(nn.Module):
                 results,
                 add_nacv=False,
                 add_grad=True,
-                add_gap=True):
+                add_gap=True,
+                add_u=False):
 
         if not hasattr(self, "delta"):
             self.delta = False
@@ -391,7 +399,8 @@ class DiabaticReadout(nn.Module):
             results = self.add_all_grads(xyz=xyz,
                                          results=results,
                                          num_atoms=num_atoms,
-                                         u=u)
+                                         u=u,
+                                         add_u=add_u)
         elif add_grad:
             results = self.add_adiabat_grads(xyz=xyz,
                                              results=results)

@@ -301,14 +301,59 @@ def runge_c(c,
     return new_c, T1
 
 
+def get_implicit_diabat(c,
+                        elec_substeps,
+                        old_H_ad,
+                        new_H_ad,
+                        new_U,
+                        old_U,
+                        dt,
+                        hbar=1):
+
+    num_ad = c.shape[1]
+    S = np.einsum('...ij, ...kj -> ...ik',
+                  old_U,
+                  new_U)[:, :num_ad, :num_ad]
+
+    s_t_s = np.einsum('...ji, ...jk -> ...ik', S, S)
+    lam, O = np.linalg.eigh(s_t_s)
+    lam_half = np.stack([np.diag(i ** (-1 / 2))
+                         for i in lam])
+
+    T = np.einsum('...ij, ...jk, ...kl, ...ml -> ...im',
+                  S, O, lam_half, O)
+    T_inv = T.transpose(0, 2, 1)
+
+    old_H_d = old_H_ad
+    new_H_d = np.einsum('...ij, ...jk, ...lk -> ...il',
+                        T, new_H_ad, T)
+
+    return old_H_d, new_H_d, T_inv
+
+
 def diabatic_c(c,
                elec_substeps,
-               old_H_d,
-               new_H_d,
                new_U,
                old_U,
                dt,
-               hbar=1):
+               explicit_diabat=True,
+               hbar=1,
+               old_H_d=None,
+               new_H_d=None,
+               old_H_ad=None,
+               new_H_ad=None
+               ):
+
+    if not explicit_diabat:
+        old_H_d, new_H_d, T_inv = get_implicit_diabat(
+            c=c,
+            elec_substeps=elec_substeps,
+            old_H_ad=old_H_ad,
+            new_H_ad=new_H_ad,
+            new_U=new_U,
+            old_U=old_U,
+            dt=dt,
+            hbar=hbar)
 
     num_samples = old_H_d.shape[0]
     num_states = old_H_d.shape[1]
@@ -331,12 +376,18 @@ def diabatic_c(c,
         )
         exp = np.einsum('ijk, ikl -> ijl', exp, new_exp)
 
-    # new_U has dimension num_samples x num_states x num_states
-    T = old_U
-    T_inv = new_U.transpose(0, 2, 1)
+    if explicit_diabat:
+        # new_U has dimension num_samples x num_states x num_states
+        T = old_U
+        T_inv = new_U.transpose(0, 2, 1)
 
-    c_new = np.einsum('ijk, ikl, ilm, im -> ij',
-                      T_inv, exp, T, c)
+    if explicit_diabat:
+        c_new = np.einsum('ijk, ikl, ilm, im -> ij',
+                          T_inv, exp, T, c)
+    else:
+        # if implicit, T(t) = identity
+        c_new = np.einsum('ijk, ikl, il -> ij',
+                          T_inv, exp, c)
 
     return c_new
 
@@ -872,3 +923,64 @@ def add_decoherence(c,
     """
 
     pass
+
+
+def truhlar_decoherence(c,
+                        surfs,
+                        energy,
+                        vel,
+                        dt,
+                        mass,
+                        hbar=1,
+                        C=0.1,
+                        **kwargs):
+    """
+    Originally attributed to Truhlar, cited from
+    G. Granucci and M. Persico. "Critical appraisal of the
+    fewest switches algorithm for surface hopping."" J. Chem. Phys.,
+    126, 134 114 (2007).
+    """
+
+    num_samples = c.shape[0]
+    num_states = c.shape[1]
+
+    all_surfs = (np.arange(num_states).reshape(-1, 1)
+                 .repeat(num_samples, 1).transpose())
+    other_idx = all_surfs != surfs.reshape(-1, 1)
+    other_surfs = all_surfs[other_idx].reshape(num_samples, -1)
+
+    c_m = np.take_along_axis(c,
+                             surfs.reshape(-1, 1),
+                             axis=-1)
+
+    E_m = np.take_along_axis(energy,
+                             surfs.reshape(-1, 1),
+                             axis=-1)
+
+    c_k = np.take_along_axis(c,
+                             other_surfs,
+                             axis=-1)
+
+    E_k = np.take_along_axis(energy,
+                             other_surfs,
+                             axis=-1)
+
+    # vel has shape num_samples x num_atoms x 3
+    E_kin = (1 / 2 * mass.reshape(1, -1, 1) * vel ** 2).sum((-1, -2))
+    tau_km = hbar / abs(E_k - E_m) * (1 + C / E_kin.reshape(-1, 1))
+    c_k_prime = c_k * np.exp(-dt / tau_km)
+    c_m_prime = c_m * ((1 - (abs(c_k_prime) ** 2).sum(-1)).reshape(-1, 1)
+                       / abs(c_m ** 2)) ** 0.5
+
+    new_c = np.zeros_like(c)
+    np.put_along_axis(new_c,
+                      surfs.reshape(-1, 1),
+                      c_m_prime,
+                      axis=-1)
+
+    np.put_along_axis(new_c,
+                      other_surfs,
+                      c_k_prime,
+                      axis=-1)
+
+    return new_c

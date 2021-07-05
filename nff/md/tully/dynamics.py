@@ -6,6 +6,7 @@ import json
 import random
 import math
 import argparse
+from functools import partial
 
 from ase.io.trajectory import Trajectory
 from ase import Atoms
@@ -17,15 +18,14 @@ from nff.md.tully.io import get_results, load_json, get_atoms
 from nff.md.tully.step import (
     try_hop,
     verlet_step_1, verlet_step_2,
+    truhlar_decoherence,
     # add_decoherence
     diabatic_c, compute_T
 )
 from nff.md.nvt_ax import NoseHoover, NoseHooverChain
 
 # TO-DO:
-# - Figure out if the three-state diabatization for
-# c propagation actually makes sense
-# - Make sure that the hop geoms get saved
+# - Figure out if the three-step propagator is actually working
 # - Fix p_hop for multiple states
 # - Check everything in detail
 # - Add decoherence
@@ -34,6 +34,12 @@ METHOD_DIC = {
     "nosehoover": NoseHoover,
     "nosehooverchain": NoseHooverChain
 }
+
+DECOHERENCE_DIC = {"truhlar": truhlar_decoherence}
+
+TULLY_LOG_FILE = 'tully.log'
+TULLY_SAVE_FILE = 'tully.pickle'
+TULLY_MINIMAL_SAVE = 'tully_small.pickle'
 
 
 class NeuralTully:
@@ -49,14 +55,13 @@ class NeuralTully:
                  cutoff,
                  model_path,
                  diabat_keys,
+                 explicit_diabat_prop,
+                 log_all_hops=False,
                  cutoff_skin=1.0,
                  max_gap_hop=0.018,
                  nbr_update_period=20,
-                 save_period=10,
-                 save_file='zn.pickle',
-                 minimal_save_file='zn_small.pickle',
-                 log_file='zn.log',
-                 decoherence=False,
+                 save_period=30,
+                 decoherence=None,
                  **kwargs):
         """
         `max_gap_hop` in a.u.
@@ -64,7 +69,6 @@ class NeuralTully:
 
         self.atoms_list = atoms_list
         self.vel = self.get_vel()
-        self.decoherence = decoherence
         self.T = None
         self.model = self.load_model(model_path)
 
@@ -91,24 +95,42 @@ class NeuralTully:
         self.nbr_list = None
         self.max_gap_hop = max_gap_hop
 
-        self.save_file = save_file
-        self.minimal_save_file = minimal_save_file
+        self.save_file = TULLY_SAVE_FILE
+        self.minimal_save_file = TULLY_MINIMAL_SAVE
 
-        self.log_file = log_file
+        self.log_file = TULLY_LOG_FILE
         self.save_period = save_period
 
         self.log_template = self.setup_logging()
-        self.c = self.init_c()
         self.p_hop = 0
+        self.any_hopped = False
+        self.explicit_diabat = explicit_diabat_prop
+        self.log_all_hops = log_all_hops
+        self.c = self.init_c()
 
         self.clear_pickles()
 
-        if not self.decoherence:
+        self.decoherence = self.init_decoherence(params=decoherence)
+
+        # if not self.decoherence:
+        #     return
+
+        # self.delta_R = 0
+        # self.delta_P = 0
+        # self.sigma = self.init_sigma()
+
+    def init_decoherence(self, params):
+        if not params:
             return
 
-        self.delta_R = 0
-        self.delta_P = 0
-        self.sigma = self.init_sigma()
+        name = params['name']
+        kwargs = params.get('kwargs', {})
+
+        method = DECOHERENCE_DIC[name]
+        func = partial(method,
+                       **kwargs)
+
+        return func
 
     def clear_pickles(self):
         for file in [self.save_file, self.minimal_save_file,
@@ -133,8 +155,13 @@ class NeuralTully:
         return vel
 
     def init_c(self):
+        if self.explicit_diabat:
+            num_states = self.num_diabat
+        else:
+            num_states = self.num_states
+
         c = np.zeros((self.num_samples,
-                      self.num_diabat),
+                      num_states),
                      dtype='complex128')
         c[:, self.surfs[0]] = 1
         return c
@@ -325,7 +352,7 @@ class NeuralTully:
                        "energy": self.energy,
                        "forces": self.forces,
                        "U": self.U,
-                       "t": self.t * const.FS_TO_AU,
+                       "t": self.t / const.FS_TO_AU,
                        "vel": self.vel,
                        "c": self.c,
                        "T": self.T,
@@ -469,6 +496,7 @@ class NeuralTully:
         # self.t += self.dt / self.elec_substeps
 
         old_H_d = copy.deepcopy(self.H_d)
+        old_H_ad = copy.deepcopy(self.pot_V)
         old_U = copy.deepcopy(self.U)
 
         # xyz converted to a.u. for the step and then
@@ -495,10 +523,13 @@ class NeuralTully:
         self.c = diabatic_c(c=self.c,
                             old_H_d=old_H_d,
                             new_H_d=self.H_d,
+                            old_H_ad=old_H_ad,
+                            new_H_ad=self.pot_V,
                             old_U=old_U,
                             new_U=self.U,
                             dt=self.dt,
-                            elec_substeps=self.elec_substeps)
+                            elec_substeps=self.elec_substeps,
+                            explicit_diabat=self.explicit_diabat)
 
         self.T, _ = compute_T(nacv=self.nacv,
                               vel=self.vel,
@@ -515,12 +546,23 @@ class NeuralTully:
                                             energy=self.energy,
                                             max_gap_hop=self.max_gap_hop)
 
+        self.any_hopped = (new_surfs != self.surfs).any()
         self.surfs = new_surfs
         self.vel = new_vel
         self.p_hop = p_hop
         self.t += self.dt
 
         self.log()
+
+        if not self.decoherence:
+            return
+
+        self.c = self.decoherence(c=self.c,
+                                  surfs=self.surfs,
+                                  energy=self.energy,
+                                  vel=self.vel,
+                                  dt=self.dt,
+                                  mass=self.mass)
 
     def run(self):
         steps = math.ceil(self.max_time / self.dt)
@@ -537,6 +579,10 @@ class NeuralTully:
                 self.step(needs_nbrs=needs_nbrs)
 
                 if counter % self.save_period == 0:
+                    self.save()
+
+                # save the geoms if any just hopped
+                elif self.any_hopped and self.log_all_hops:
                     self.save()
 
                 counter += 1
@@ -633,7 +679,13 @@ def main():
 
     path = args.params_file
     combined_tully = CombinedNeuralTully.from_file(path)
-    combined_tully.run()
+
+    try:
+        combined_tully.run()
+    except Exception as e:
+        print(e)
+        import pdb
+        pdb.post_mortem()
 
 
 if __name__ == '__main__':
