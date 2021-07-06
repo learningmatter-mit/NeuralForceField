@@ -281,6 +281,7 @@ def run_model(model,
     # else:
     #     xyz = None
 
+
     xyz = None
 
     model.add_nacv = nacv
@@ -290,7 +291,8 @@ def run_model(model,
                     # add_grad=all_engrads,
                     add_grad=True,
                     add_gap=True,
-                    add_u=True)
+                    add_u=True,
+                    inference=True)
 
     # If we use NACV then we can come back to what's commented
     # out below, where you only ask for gradients NACVs among states
@@ -509,7 +511,7 @@ def timing(func):
     return my_func
 
 
-@timing
+# @timing
 def get_results(model,
                 nxyz,
                 nbr_list,

@@ -416,6 +416,38 @@ def get_implicit_diabat(c,
     return old_H_d, new_H_d, T_inv
 
 
+def adiabatic_c(c,
+                elec_substeps,
+                old_H_plus_nacv,
+                new_H_plus_nacv,
+                dt,
+                hbar=1):
+
+    num_samples = old_H_plus_nacv.shape[0]
+    num_states = old_H_plus_nacv.shape[1]
+    n = elec_substeps
+
+    exp = (np.eye(num_states, num_states)
+           .reshape(1, num_states, num_states)
+           .repeat(num_samples, axis=0))
+
+    delta_tau = dt / n
+
+    for i in range(1, n + 1):
+        new_exp = torch.tensor(
+            -1j / hbar * (
+                old_H_plus_nacv + i / n * (new_H_plus_nacv - old_H_plus_nacv)
+            )
+            * delta_tau
+        ).matrix_exp().numpy()
+        exp = np.einsum('ijk, ikl -> ijl', exp, new_exp)
+
+    P = exp
+    c_new = np.einsum('ijk, ik -> ij', P, c)
+
+    return c_new, P
+
+
 def diabatic_c(c,
                elec_substeps,
                new_U,
@@ -426,8 +458,7 @@ def diabatic_c(c,
                old_H_d=None,
                new_H_d=None,
                old_H_ad=None,
-               new_H_ad=None
-               ):
+               new_H_ad=None):
 
     if not explicit_diabat:
         old_H_d, new_H_d, T_inv = get_implicit_diabat(
@@ -463,8 +494,6 @@ def diabatic_c(c,
         # new_U has dimension num_samples x num_states x num_states
         T = old_U
         T_inv = new_U.transpose(0, 2, 1)
-
-    if explicit_diabat:
         P = np.einsum('ijk, ikl, ilm -> ijm',
                       T_inv, exp, T)
     else:
@@ -1064,8 +1093,20 @@ def truhlar_decoherence(c,
     E_kin = (1 / 2 * mass.reshape(1, -1, 1) * vel ** 2).sum((-1, -2))
     tau_km = hbar / abs(E_k - E_m) * (1 + C / E_kin.reshape(-1, 1))
     c_k_prime = c_k * np.exp(-dt / tau_km)
-    c_m_prime = c_m * ((1 - (abs(c_k_prime) ** 2).sum(-1)).reshape(-1, 1)
-                       / abs(c_m ** 2)) ** 0.5
+
+    num = 1 - (abs(c_k_prime) ** 2).sum(-1)
+    # in case some c_k's are slightly over 1 due to
+    # numerical error
+    num[num < 0] = 0
+
+    c_m_prime = c_m * (
+        num.reshape(-1, 1)
+        / abs(c_m) ** 2
+    ) ** 0.5
+
+    # if np.isnan(c_m_prime).any():
+    #     import pdb
+    #     pdb.set_trace()
 
     new_c = np.zeros_like(c)
     np.put_along_axis(new_c,

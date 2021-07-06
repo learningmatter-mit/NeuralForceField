@@ -7,7 +7,7 @@ import random
 import math
 import argparse
 from functools import partial
-import shutil
+
 
 from ase.io.trajectory import Trajectory
 from ase import Atoms
@@ -21,6 +21,7 @@ from nff.md.tully.step import (
     verlet_step_1, verlet_step_2,
     truhlar_decoherence,
     # add_decoherence
+    adiabatic_c,
     diabatic_c,
     compute_T,
     get_p_hop
@@ -28,9 +29,8 @@ from nff.md.tully.step import (
 from nff.md.nvt_ax import NoseHoover, NoseHooverChain
 
 # TO-DO:
-# - Make sure nff in supercloud has torch 1.9
-# - If only doing diabatic propagation, then don't compute NACVs
 # - Figure out if the three-step propagator is actually working
+# by comparing with propagation using the nacv
 # - Check everything in detail
 
 
@@ -42,7 +42,7 @@ METHOD_DIC = {
 DECOHERENCE_DIC = {"truhlar": truhlar_decoherence}
 
 TULLY_LOG_FILE = 'tully.log'
-TULLY_SAVE_DIR = 'tully_pickles'
+TULLY_SAVE_FILE = 'tully.pickle'
 
 
 class NeuralTully:
@@ -59,8 +59,8 @@ class NeuralTully:
                  model_path,
                  diabat_keys,
                  explicit_diabat_prop,
+                 diabat_propagate,
                  simple_vel_scale=False,
-                 diabat_propagate=True,
                  hop_eqn='sharc',
                  cutoff_skin=1.0,
                  max_gap_hop=0.018,
@@ -100,8 +100,8 @@ class NeuralTully:
         self.nbr_list = None
         self.max_gap_hop = max_gap_hop
 
-        self.save_dir = TULLY_SAVE_DIR
         self.log_file = TULLY_LOG_FILE
+        self.save_file = TULLY_SAVE_FILE
         self.save_period = save_period
 
         self.log_template = self.setup_logging()
@@ -125,9 +125,8 @@ class NeuralTully:
         # self.sigma = self.init_sigma()
 
     def setup_save(self):
-        if os.path.isdir(self.save_dir):
-            shutil.rmtree(self.save_dir)
-        os.makedirs(self.save_dir)
+        if os.path.isfile(self.save_file):
+            os.remove(self.save_file)
 
     def init_decoherence(self, params):
         if not params:
@@ -336,6 +335,20 @@ class NeuralTully:
         return V
 
     @property
+    def H_plus_nacv(self):
+        if self.nacv is None:
+            return
+        pot_V = self.pot_V
+        nac_term = (self.nacv *
+                    self.vel.reshape(self.num_samples,
+                                     1,
+                                     1,
+                                     self.num_atoms,
+                                     3)
+                    ).sum((-1, -2))
+        return pot_V + nac_term
+
+    @property
     def H_d(self):
         _H_d = np.zeros((self.num_samples,
                          self.num_diabat,
@@ -391,29 +404,34 @@ class NeuralTully:
 
         return minimal
 
-    def save_together(self, save_file):
-        """
-        Save all the data together in one pickle. 
-        Doesn't work well when you want to save every
-        hop geometry because then you end up saving all
-        trajectories together in a step when only one had
-        a hop.
-        """
-        with open(save_file, "ab") as f:
-            pickle.dump(self.state_dict, f)
-
     def save(self, idx=None):
         if idx is None:
-            idx = list(range(self.num_samples))
+            with open(self.save_file, "ab") as f:
+                pickle.dump(self.state_dict, f)
+            return
 
-        state_dicts = {i: dic for i, dic in
-                       enumerate(self.per_trj_state_dict)}
+        if idx.size == 0:
+            return
 
-        for i in idx:
-            path = os.path.join(self.save_dir, f'trj_{i}.pickle')
-            dic = state_dicts[i]
-            with open(path, "ab") as f:
-                pickle.dump(dic, f)
+        state_dict = self.state_dict
+        use_dict = {}
+        idx = set(idx)
+
+        for key, val in state_dict.items():
+            if key == 't':
+                continue
+            if val is None:
+                continue
+
+            use_val = []
+            for i, v in enumerate(val):
+                this_val = v if (i in idx) else None
+                use_val.append(this_val)
+            use_dict[key] = use_val
+        use_dict['t'] = state_dict['t']
+
+        with open(self.save_file, "ab") as f:
+            pickle.dump(use_dict, f)
 
     def setup_logging(self):
 
@@ -484,6 +502,9 @@ class NeuralTully:
             if single:
                 nxyz = [nxyz]
             for i, nxyz in enumerate(nxyz):
+                if nxyz is None:
+                    trjs[i].append(None)
+                    continue
                 atoms = Atoms(nxyz[:, 0],
                               positions=nxyz[:, 1:])
                 trjs[i].append(atoms)
@@ -501,7 +522,8 @@ class NeuralTully:
 
         all_engrads = 'subotnik' in self.decoherence_type
         needs_nacv = ('subotnik' in self.decoherence_type) or (
-            not self.diabat_propagate)
+            not self.diabat_propagate) or (
+            self.hop_eqn == 'tully')
 
         props = get_results(model=self.model,
                             nxyz=self.nxyz,
@@ -566,6 +588,7 @@ class NeuralTully:
     def step(self, needs_nbrs):
         old_H_d = copy.deepcopy(self.H_d)
         old_H_ad = copy.deepcopy(self.pot_V)
+        old_H_plus_nacv = copy.deepcopy(self.H_plus_nacv)
         old_U = copy.deepcopy(self.U)
         old_c = copy.deepcopy(self.c)
 
@@ -589,9 +612,6 @@ class NeuralTully:
                                 dt=self.dt)
         self.vel = new_vel
 
-        import pdb
-        pdb.set_trace()
-
         if self.diabat_propagate:
             # propagate c in diabatic basis
             self.c, P = diabatic_c(c=self.c,
@@ -605,11 +625,16 @@ class NeuralTully:
                                    elec_substeps=self.elec_substeps,
                                    explicit_diabat=self.explicit_diabat)
         else:
+            self.c, P = adiabatic_c(c=self.c,
+                                    elec_substeps=self.elec_substeps,
+                                    old_H_plus_nacv=old_H_plus_nacv,
+                                    new_H_plus_nacv=self.H_plus_nacv,
+                                    dt=self.dt)
+
+        if self.nacv is not None:
             self.T, _ = compute_T(nacv=self.nacv,
                                   vel=self.vel,
                                   c=self.c)
-
-            raise NotImplementedError
 
         new_surfs, new_vel = self.do_hop(old_c=old_c,
                                          P=P)
@@ -635,7 +660,6 @@ class NeuralTully:
             for i in range(self.nbr_update_period):
                 needs_nbrs = (i == 0)
                 self.step(needs_nbrs=needs_nbrs)
-
                 if counter % self.save_period == 0:
                     self.save()
 
