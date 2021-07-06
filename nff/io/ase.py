@@ -211,7 +211,7 @@ class AtomsBatch(Atoms):
 
     def get_batch_T(self):
 
-        T = (self.get_batch_KE()
+        T = (self.get_batch_kinetic_energy()
              / (1.5 * units.kB * self.props['num_atoms']
                 .detach().cpu().numpy()))
         return T
