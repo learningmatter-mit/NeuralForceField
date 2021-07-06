@@ -114,11 +114,11 @@ def torch_nbr_list(atomsobject,
             offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + \
               dis_mat.lt(-0.5 * cell_dim).to(torch.float)
         dis_mat=dis_mat+offsets*cell_dim
-        
+
     dis_sq = dis_mat.pow(2).sum(-1)
     mask = (dis_sq < cutoff ** 2) & (dis_sq != 0)
 
-    nbr_list = mask.nonzero()
+    nbr_list = mask.nonzero(as_tuple=False)
     if not directed:
         nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
@@ -381,7 +381,7 @@ def single_spec_nbrs(dset,
     dist_mat = ((xyz[:, :, None, :] - xyz[:, None, :, :])
                 .to(device).norm(dim=-1))
     nbr_mask = (dist_mat <= cutoff) * (dist_mat > 0)
-    nbrs = nbr_mask.nonzero()
+    nbrs = nbr_mask.nonzero(as_tuple=False)
 
     if not directed:
         nbrs = nbrs[nbrs[:, 2] > nbrs[:, 1]]
@@ -391,5 +391,5 @@ def single_spec_nbrs(dset,
     for i in range(num_mols):
         match_nbrs = (nbrs[:, 0] == i)
         split_nbrs.append(nbrs[match_nbrs][:, 1:])
-        
+
     return split_nbrs

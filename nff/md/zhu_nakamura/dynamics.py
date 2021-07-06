@@ -3,9 +3,8 @@ import numpy as np
 import random
 import torch
 import copy
-# from multiprocessing import Pool
 
-from torch.multiprocessing import Pool, set_start_method
+from torch.multiprocessing import set_start_method
 
 
 from torch.utils.data import DataLoader

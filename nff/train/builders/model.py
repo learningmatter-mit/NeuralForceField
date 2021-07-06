@@ -384,5 +384,5 @@ def load_model(path, params=None, model_type=None, **kwargs):
         else:
             raise FileNotFoundError("{} was not found".format(path))
 
-        model.load_state_dict(state_dict["model"])
+        model.load_state_dict(state_dict["model"], strict=False)
         return model
