@@ -50,6 +50,7 @@ class AtomsBatch(Atoms):
         directed=DEFAULT_DIRECTED,
         requires_large_offsets=False,
         cutoff_skin=DEFAULT_SKIN,
+        device=0,
         **kwargs
     ):
         """
@@ -66,6 +67,9 @@ class AtomsBatch(Atoms):
         """
         super().__init__(*args, **kwargs)
 
+        # import pdb
+        # pdb.set_trace()
+        
         self.props = props
         self.nbr_list = props.get('nbr_list', None)
         self.offsets = props.get('offsets', None)
@@ -76,7 +80,7 @@ class AtomsBatch(Atoms):
         self.props['num_atoms'] = self.num_atoms
         self.cutoff = cutoff
         self.cutoff_skin = cutoff_skin
-        self.device = 0
+        self.device = device
         self.requires_large_offsets = requires_large_offsets
 
     def get_nxyz(self):
@@ -207,7 +211,7 @@ class AtomsBatch(Atoms):
 
     def get_batch_T(self):
 
-        T = (self.get_batch_KE()
+        T = (self.get_batch_kinetic_energy()
              / (1.5 * units.kB * self.props['num_atoms']
                 .detach().cpu().numpy()))
         return T

@@ -49,6 +49,7 @@ __pycache__
 *.txt
 *.mpg
 *.traj
+*.pickle
 
 # slurm output files
 slurm*.out

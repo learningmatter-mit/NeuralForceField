@@ -137,15 +137,19 @@ class DiabaticReadout(nn.Module):
         d_mat = self.results_to_dmat(results, num_atoms)
         # ad_energies, u = torch.symeig(d_mat, True)
         ad_energies, u = self.compute_eig(d_mat)
-        results.update({key: ad_energies[:, i].reshape(-1, 1)
-                        for i, key in enumerate(self.energy_keys)})
+        # results.update({key: ad_energies[:, i].reshape(-1, 1)
+        #                 for i, key in enumerate(self.energy_keys)})
+
+        results.update({f'energy_{i}': ad_energies[:, i].reshape(-1, 1)
+                        for i in range(ad_energies.shape[1])})
 
         return results, u
 
     def get_diabat_grads(self,
                          results,
                          xyz,
-                         num_atoms):
+                         num_atoms,
+                         inference):
 
         num_states = len(self.diabat_keys)
         total_atoms = sum(num_atoms)
@@ -165,7 +169,10 @@ class DiabaticReadout(nn.Module):
                 else:
                     grad = compute_grad(inputs=xyz,
                                         output=results[diabat_key])
-                    results[grad_key] = grad
+                
+                if inference:
+                    grad = grad.detach()
+                results[grad_key] = grad
                 diabat_grads[i, j, :, :] = grad
         return results, diabat_grads
 
@@ -173,11 +180,13 @@ class DiabaticReadout(nn.Module):
                       xyz,
                       results,
                       num_atoms,
-                      u):
+                      u,
+                      inference):
 
         results, diabat_grads = self.get_diabat_grads(results=results,
                                                       xyz=xyz,
-                                                      num_atoms=num_atoms)
+                                                      num_atoms=num_atoms,
+                                                      inference=inference)
         split_grads = torch.split(diabat_grads,
                                   num_atoms, dim=2)
 
@@ -261,12 +270,15 @@ class DiabaticReadout(nn.Module):
 
     def add_adiabat_grads(self,
                           xyz,
-                          results):
+                          results,
+                          inference):
 
         for key in self.energy_keys:
             val = results[key]
             grad = compute_grad(inputs=xyz,
                                 output=val)
+            if inference:
+                grad = grad.detach()
             results[key + "_grad"] = grad
 
         return results
@@ -358,7 +370,9 @@ class DiabaticReadout(nn.Module):
                 results,
                 add_nacv=False,
                 add_grad=True,
-                add_gap=True):
+                add_gap=True,
+                add_u=False,
+                inference=False):
 
         if not hasattr(self, "delta"):
             self.delta = False
@@ -387,14 +401,19 @@ class DiabaticReadout(nn.Module):
         results, u = self.add_diag(results=results,
                                    num_atoms=num_atoms)
 
+        if add_u:
+            results["U"] = u
+
         if add_grad and add_nacv:
             results = self.add_all_grads(xyz=xyz,
                                          results=results,
                                          num_atoms=num_atoms,
-                                         u=u)
+                                         u=u,
+                                         inference=inference)
         elif add_grad:
             results = self.add_adiabat_grads(xyz=xyz,
-                                             results=results)
+                                             results=results,
+                                             inference=inference)
 
         if getattr(self, "others_to_eig", None):
             results = self.quants_to_eig(num_atoms=num_atoms,
