@@ -337,8 +337,8 @@ class BatchNoseHoover(MolecularDynamics):
                 .reshape(-1, 3))
 
         # make full step in position
-        x = self.atoms.get_positions(
-            wrap=True) + vel * self.dt + visc * (0.5 * self.dt ** 2)
+        x = self.atoms.get_positions() + vel * self.dt + \
+                visc * (0.5 * self.dt ** 2)
         self.atoms.set_positions(x)
 
         # record current velocities
