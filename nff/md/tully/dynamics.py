@@ -16,22 +16,15 @@ from nff.train import load_model
 from nff.utils import constants as const
 from nff.md.utils_ax import atoms_to_nxyz
 from nff.md.tully.io import get_results, load_json, get_atoms
-from nff.md.tully.step import (
-    try_hop,
-    verlet_step_1, verlet_step_2,
-    truhlar_decoherence,
-    # add_decoherence
-    adiabatic_c,
-    diabatic_c,
-    compute_T,
-    get_p_hop
-)
-from nff.md.nvt_ax import NoseHoover, NoseHooverChain
+from nff.md.tully.step import (try_hop,
+                               verlet_step_1, verlet_step_2,
+                               truhlar_decoherence,
+                               adiabatic_c,
+                               diabatic_c,
+                               compute_T,
+                               get_p_hop)
 
-# TO-DO:
-# - Figure out if the three-step propagator is actually working
-# by comparing with propagation using the nacv
-# - Check everything in detail
+from nff.md.nvt_ax import NoseHoover, NoseHooverChain
 
 
 METHOD_DIC = {
@@ -214,6 +207,7 @@ class NeuralTully:
         _energy = np.stack([self.props[f'energy_{i}'].reshape(-1)
                             for i in range(self.num_states)],
                            axis=1)
+
         return _energy
 
     @property
@@ -221,6 +215,7 @@ class NeuralTully:
         _energy = np.stack([self.props[f'energy_{i}'].reshape(-1)
                             for i in range(self.num_diabat)],
                            axis=1)
+
         return _energy
 
     @property
@@ -235,6 +230,7 @@ class NeuralTully:
                 if key not in self.props:
                     return
                 _nacv[:, i, j, :] = self.props[key]
+
         return _nacv
 
     @property
@@ -265,7 +261,7 @@ class NeuralTully:
                                1,
                                1)
 
-        _force_nacv = nacv * gap
+        _force_nacv = -nacv * gap
 
         return _force_nacv
 
@@ -273,6 +269,7 @@ class NeuralTully:
     def mass(self):
         _mass = (self.atoms_list[0].get_masses()
                  * const.AMU_TO_AU)
+
         return _mass
 
     @property
@@ -285,6 +282,7 @@ class NeuralTully:
     @property
     def xyz(self):
         _xyz = self.nxyz[..., 1:]
+
         return _xyz
 
     @xyz.setter
@@ -339,13 +337,14 @@ class NeuralTully:
         if self.nacv is None:
             return
         pot_V = self.pot_V
-        nac_term = (self.nacv *
+        nac_term = -1j * (self.nacv *
                     self.vel.reshape(self.num_samples,
                                      1,
                                      1,
                                      self.num_atoms,
                                      3)
                     ).sum((-1, -2))
+
         return pot_V + nac_term
 
     @property
@@ -517,13 +516,14 @@ class NeuralTully:
     def update_props(self,
                      needs_nbrs):
 
-        # if we're doing subotnik decoherence we need
-        # gradients in each state + NACVs
-
+        # this isn't being used yet
         all_engrads = 'subotnik' in self.decoherence_type
-        needs_nacv = ('subotnik' in self.decoherence_type) or (
-            not self.diabat_propagate) or (
-            self.hop_eqn == 'tully')
+        # this is being used
+        needs_nacv = (
+            ('subotnik' in self.decoherence_type)
+            or (not self.diabat_propagate)
+            or (self.hop_eqn == 'tully')
+        )
 
         props = get_results(model=self.model,
                             nxyz=self.nxyz,
@@ -554,7 +554,8 @@ class NeuralTully:
                                surfs=self.surfs,
                                c=self.c,
                                T=self.T,
-                               dt=self.dt)
+                               dt=self.dt,
+                               num_adiabat=self.num_states)
 
         c = self.c[:, :self.num_states]
         new_surfs, new_vel = try_hop(c=c,
@@ -572,12 +573,7 @@ class NeuralTully:
     def add_decoherence(self):
         if not self.decoherence:
             return
-
-        if self.explicit_diabat:
-            energy = self.full_energy
-        else:
-            energy = self.energy
-
+        energy = self.full_energy if self.explicit_diabat else self.energy
         self.c = self.decoherence(c=self.c,
                                   surfs=self.surfs,
                                   energy=energy,
@@ -591,6 +587,10 @@ class NeuralTully:
         old_H_plus_nacv = copy.deepcopy(self.H_plus_nacv)
         old_U = copy.deepcopy(self.U)
         old_c = copy.deepcopy(self.c)
+
+        ##
+        old_force_nacv = copy.deepcopy(self.force_nacv)
+        ##
 
         # xyz converted to a.u. for the step and then
         # back to Angstrom after
@@ -607,7 +607,6 @@ class NeuralTully:
         new_vel = verlet_step_2(forces=self.forces,
                                 surfs=self.surfs,
                                 vel=self.vel,
-                                xyz=self.xyz,
                                 mass=self.mass,
                                 dt=self.dt)
         self.vel = new_vel
@@ -623,7 +622,9 @@ class NeuralTully:
                                    new_U=self.U,
                                    dt=self.dt,
                                    elec_substeps=self.elec_substeps,
-                                   explicit_diabat=self.explicit_diabat)
+                                   explicit_diabat=self.explicit_diabat,
+                                   old_H_plus_nacv=old_H_plus_nacv,
+                                   new_H_plus_nacv=self.H_plus_nacv)
         else:
             self.c, P = adiabatic_c(c=self.c,
                                     elec_substeps=self.elec_substeps,
@@ -678,30 +679,30 @@ class CombinedNeuralTully:
                  ground_params,
                  tully_params):
 
-        reload_ground = tully_params.get("reload_ground", False)
+        self.reload_ground = tully_params.get("reload_ground", False)
         self.ground_dynamics = self.init_ground(atoms=atoms,
-                                                ground_params=ground_params,
-                                                reload_ground=reload_ground)
+                                                ground_params=ground_params)
         self.ground_params = ground_params
         self.ground_savefile = ground_params.get("savefile")
 
         self.tully_params = tully_params
         self.num_trj = tully_params['num_trj']
-        self.reload_ground = reload_ground
 
     def init_ground(self,
                     atoms,
-                    ground_params,
-                    reload_ground):
+                    ground_params):
 
         ase_ground_params = copy.deepcopy(ground_params)
         ase_ground_params["trajectory"] = ground_params.get("savefile")
         logfile = ase_ground_params['logfile']
+        trj_file = ase_ground_params["trajectory"]
 
         if os.path.isfile(logfile):
-            if reload_ground:
-                return
             os.remove(logfile)
+        if os.path.isfile(trj_file):
+            if self.reload_ground:
+                return
+            os.remove(trj_file)
 
         self.reload_ground = False
         method = METHOD_DIC[ase_ground_params["thermostat"]]

@@ -64,16 +64,29 @@ def get_a(c):
     return a
 
 
+def remove_self_hop(p,
+                    surfs):
+
+    same_surfs = surfs.reshape(-1, 1)
+    np.put_along_axis(p,
+                      same_surfs,
+                      np.zeros_like(same_surfs),
+                      axis=-1)
+
+    return p
+
+
 def get_tully_p(c,
                 T,
                 dt,
                 surfs,
+                num_adiabat,
                 **kwargs):
     """
     Tully surface hopping probability
     """
 
-    a = get_a(c)
+    a = get_a(c)[:, :num_adiabat, :num_adiabat]
 
     # T, a and b have dimension
     # num_samples x (num_states x num_states).
@@ -94,9 +107,16 @@ def get_tully_p(c,
     # states
 
     # p is real anyway - taking the real part just gets rid of
-    # the  + 0j parts
+    # the +0j parts
 
     p = np.real(dt * b_surf / a_surf)
+
+    # no hopping from current state to self
+    p = remove_self_hop(p=p,
+                        surfs=surfs)
+
+    # only hop among adiabatic states of interest
+    p = p[:, :num_adiabat]
 
     return p
 
@@ -105,6 +125,7 @@ def get_sharc_p(old_c,
                 new_c,
                 P,
                 surfs,
+                num_adiabat,
                 **kwargs):
     """
     P is the propagator.
@@ -112,6 +133,7 @@ def get_sharc_p(old_c,
 
     num_samples = old_c.shape[0]
     num_states = old_c.shape[1]
+
     other_surfs = get_other_surfs(surfs=surfs,
                                   num_states=num_states,
                                   num_samples=num_samples)
@@ -160,6 +182,9 @@ def get_sharc_p(old_c,
                       axis=-1)
     h[h < 0] = 0
 
+    # only hop among adiabatic states of interest
+    h = h[:, :num_adiabat]
+
     return h
 
 
@@ -186,7 +211,7 @@ def get_new_surf(p_hop,
                           p_hop.cumsum(axis=-1)],
                          axis=-1)[:, :-1]
     rhs = lhs + p_hop
-    r = np.random.rand()
+    r = np.random.rand(num_samples).reshape(-1, 1)
     hop = (lhs < r) * (r <= rhs)
     hop_idx = np.stack(hop.nonzero(), axis=-1)
 
@@ -205,6 +230,8 @@ def get_new_surf(p_hop,
     gaps = abs(old_en - new_en)
     bad_idx = gaps >= max_gap_hop
     new_surfs[bad_idx] = surfs[bad_idx]
+
+    return new_surfs
 
 
 def solve_quadratic(vel,
@@ -230,11 +257,6 @@ def solve_quadratic(vel,
     scale = np.take_along_axis(scales,
                                scale_argmin.reshape(-1, 1),
                                axis=1)
-
-    # ignore anything imaginary
-    # if (np.imag(scale) != 0).any():
-    #     import pdb
-    #     pdb.set_trace()
 
     scale[np.imag(scale) != 0] = np.nan
     scale = np.real(scale)
@@ -386,6 +408,19 @@ def runge_c(c,
     return new_c, T1
 
 
+def remove_T_nan(T, S):
+    num_states = S.shape[1]
+    nan_idx = np.bitwise_not(np.isfinite(T))
+
+    num_nan = int(nan_idx.nonzero()[0].reshape(-1).shape[0]
+                  / num_states ** 2)
+    eye = (np.eye(num_states).reshape(-1, num_states, num_states)
+           .repeat(num_nan, axis=0)).reshape(-1)
+    T[nan_idx] = eye
+
+    return T
+
+
 def get_implicit_diabat(c,
                         elec_substeps,
                         old_H_ad,
@@ -396,17 +431,23 @@ def get_implicit_diabat(c,
                         hbar=1):
 
     num_ad = c.shape[1]
-    S = np.einsum('...ij, ...kj -> ...ik',
-                  old_U,
-                  new_U)[:, :num_ad, :num_ad]
+    S = np.einsum('...ki, ...kj -> ...ij',
+                  old_U, new_U)[:, :num_ad, :num_ad]
 
     s_t_s = np.einsum('...ji, ...jk -> ...ik', S, S)
     lam, O = np.linalg.eigh(s_t_s)
-    lam_half = np.stack([np.diag(i ** (-1 / 2))
-                         for i in lam])
 
+    # in case any eigenvalues are 0 or slightly negative
+    with np.errstate(divide='ignore', invalid='ignore'):
+        lam_half = np.stack([np.diag(i ** (-1 / 2))
+                             for i in lam])
     T = np.einsum('...ij, ...jk, ...kl, ...ml -> ...im',
                   S, O, lam_half, O)
+
+    # set T to the identity for any cases in which one of
+    # the eigenvalues is 0
+    T = remove_T_nan(T=T, S=S)
+
     T_inv = T.transpose(0, 2, 1)
 
     old_H_d = old_H_ad
@@ -421,7 +462,8 @@ def adiabatic_c(c,
                 old_H_plus_nacv,
                 new_H_plus_nacv,
                 dt,
-                hbar=1):
+                hbar=1,
+                **kwargs):
 
     num_samples = old_H_plus_nacv.shape[0]
     num_states = old_H_plus_nacv.shape[1]
@@ -458,7 +500,8 @@ def diabatic_c(c,
                old_H_d=None,
                new_H_d=None,
                old_H_ad=None,
-               new_H_ad=None):
+               new_H_ad=None,
+               **kwargs):
 
     if not explicit_diabat:
         old_H_d, new_H_d, T_inv = get_implicit_diabat(
@@ -482,6 +525,7 @@ def diabatic_c(c,
     delta_tau = dt / n
 
     for i in range(1, n + 1):
+
         new_exp = torch.tensor(
             -1j / hbar * (
                 old_H_d + i / n * (new_H_d - old_H_d)
@@ -502,6 +546,8 @@ def diabatic_c(c,
                       T_inv, exp)
 
     c_new = np.einsum('ijk, ik -> ij', P, c)
+
+    # print(abs(c_new[30]) ** 2)
 
     return c_new, P
 
@@ -539,7 +585,6 @@ def verlet_step_1(forces,
 def verlet_step_2(forces,
                   surfs,
                   vel,
-                  xyz,
                   mass,
                   dt):
 
@@ -1103,10 +1148,6 @@ def truhlar_decoherence(c,
         num.reshape(-1, 1)
         / abs(c_m) ** 2
     ) ** 0.5
-
-    # if np.isnan(c_m_prime).any():
-    #     import pdb
-    #     pdb.set_trace()
 
     new_c = np.zeros_like(c)
     np.put_along_axis(new_c,
