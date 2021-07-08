@@ -10,6 +10,7 @@ from nff.nn.modules.schnet import (AttentionPool, SumPool, MolFpPool,
                                    MeanPool, get_rij, add_stress)
 from nff.nn.modules.diabat import DiabaticReadout, AdiabaticReadout
 from nff.nn.layers import (Diagonalize, ExpNormalBasis)
+from nff.utils.scatter import scatter_add
 
 POOL_DIC = {"sum": SumPool,
             "mean": MeanPool,
@@ -42,6 +43,11 @@ class Painn(nn.Module):
         means = modelparams.get("means")
         stddevs = modelparams.get("stddevs")
         pool_dic = modelparams.get("pool_dic")
+
+        self.excl_vol = modelparams.get("excl_vol", False)
+        if self.excl_vol:
+            self.power = modelparams["V_ex_power"]
+            self.sigma = modelparams["V_ex_sigma"]
 
         self.grad_keys = modelparams["grad_keys"]
         self.embed_block = EmbeddingBlock(feat_dim=feat_dim)
@@ -214,6 +220,13 @@ class Painn(nn.Module):
                                 all_results[e_j])
         return all_results
 
+    def V_ex(self, r_ij, nbr_list, xyz):
+
+        dist = (r_ij).pow(2).sum(1).sqrt()
+        potential = ((dist.reciprocal() * self.sigma).pow(self.power))
+        
+        return scatter_add(potential,nbr_list[:, 0], dim_size=xyz.shape[0])[:, None]
+
     def run(self,
             batch,
             xyz=None,
@@ -221,6 +234,12 @@ class Painn(nn.Module):
 
         atomwise_out, xyz, r_ij, nbrs = self.atomwise(batch=batch,
                                                       xyz=xyz)
+
+        if self.excl_vol:
+            # Excluded Volume interactions 
+            r_ex = self.V_ex(r_ij, nbrs, xyz)
+            atomwise_out['energy'] += r_ex
+             
         all_results, xyz = self.pool(batch=batch,
                                      atomwise_out=atomwise_out,
                                      xyz=xyz)

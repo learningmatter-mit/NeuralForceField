@@ -1,4 +1,4 @@
-from torch import nn, Tensor
+from torch import nn
 
 from nff.nn.layers import DEFAULT_DROPOUT_RATE
 from nff.nn.modules import (
