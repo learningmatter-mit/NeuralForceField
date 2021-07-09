@@ -338,12 +338,12 @@ class NeuralTully:
             return
         pot_V = self.pot_V
         nac_term = -1j * (self.nacv *
-                    self.vel.reshape(self.num_samples,
-                                     1,
-                                     1,
-                                     self.num_atoms,
-                                     3)
-                    ).sum((-1, -2))
+                          self.vel.reshape(self.num_samples,
+                                           1,
+                                           1,
+                                           self.num_atoms,
+                                           3)
+                          ).sum((-1, -2))
 
         return pot_V + nac_term
 
@@ -374,6 +374,7 @@ class NeuralTully:
                        "force_nacv": self.force_nacv,
                        "energy": self.energy,
                        "forces": self.forces,
+                       "H_d": self.H_d,
                        "U": self.U,
                        "t": self.t / const.FS_TO_AU,
                        "vel": self.vel,
@@ -381,27 +382,6 @@ class NeuralTully:
                        "T": self.T,
                        "surfs": self.surfs}
         return _state_dict
-
-    @property
-    def per_trj_state_dict(self):
-
-        state_dict = self.state_dict
-        state_dicts = [{key: val[i] for key, val
-                        in state_dict.items() if key != "t"
-                        and val is not None}
-                       for i in range(self.num_samples)]
-        for i, dic in enumerate(state_dicts):
-            state_dicts[i]["t"] = self.state_dict["t"]
-
-        return state_dicts
-
-    @property
-    def minimal_state_dict(self):
-        keys = ['nxyz', 'energy', 'surfs', 't']
-        minimal = {key: self.state_dict[key]
-                   for key in keys}
-
-        return minimal
 
     def save(self, idx=None):
         if idx is None:
@@ -587,10 +567,6 @@ class NeuralTully:
         old_H_plus_nacv = copy.deepcopy(self.H_plus_nacv)
         old_U = copy.deepcopy(self.U)
         old_c = copy.deepcopy(self.c)
-
-        ##
-        old_force_nacv = copy.deepcopy(self.force_nacv)
-        ##
 
         # xyz converted to a.u. for the step and then
         # back to Angstrom after
