@@ -559,10 +559,10 @@ def get_results(model,
                                   diabat_keys=diabat_keys)
 
     if old_U is not None:
-        results = correct_nacv(results=all_results,
-                               old_U=old_U,
-                               num_atoms=[num_atoms] * old_U.shape[0],
-                               num_states=num_states)
+        all_results = correct_nacv(results=all_results,
+                                   old_U=old_U,
+                                   num_atoms=[num_atoms] * old_U.shape[0],
+                                   num_states=num_states)
 
     return all_results
 

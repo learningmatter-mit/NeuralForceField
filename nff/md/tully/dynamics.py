@@ -1,3 +1,13 @@
+"""
+Script for running Tully surface hopping dynamics. Note
+that PyTorch version >=1.9 is required for the matrix
+exponentiation in the propagator. Older versions were not
+build for complex numbers, and so their matrix exponentials
+of complex numbers return nonsense. Numpy does not have
+matrix exponentiation and SciPy can only do one batch at a
+time, so we need to use PyTorch to do it efficiently.
+"""
+
 import numpy as np
 import pickle
 import os
