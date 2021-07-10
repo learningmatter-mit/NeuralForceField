@@ -649,9 +649,9 @@ class NeuralTully:
                 self.step(needs_nbrs=needs_nbrs)
                 if counter % self.save_period == 0:
                     self.save()
-
-                # save any geoms that just hopped
-                self.save(idx=self.just_hopped)
+                else:
+                    # save any geoms that just hopped
+                    self.save(idx=self.just_hopped)
 
                 counter += 1
 
