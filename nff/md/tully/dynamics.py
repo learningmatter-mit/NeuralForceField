@@ -63,13 +63,13 @@ class NeuralTully:
                  diabat_keys,
                  explicit_diabat_prop,
                  diabat_propagate,
-                 simple_vel_scale=False,
-                 hop_eqn='sharc',
-                 cutoff_skin=1.0,
-                 max_gap_hop=0.018,
-                 nbr_update_period=20,
-                 save_period=30,
-                 decoherence=None,
+                 simple_vel_scale,
+                 hop_eqn,
+                 cutoff_skin,
+                 max_gap_hop,
+                 nbr_update_period,
+                 save_period,
+                 decoherence,
                  **kwargs):
         """
         `max_gap_hop` in a.u.

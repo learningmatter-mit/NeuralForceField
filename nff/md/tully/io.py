@@ -329,10 +329,17 @@ def get_phases(U, old_U):
     # different orderings.
 
     num_states = U.shape[-1]
-    max_idx = abs(S).argmax(axis=2)
-    S_max = np.take_along_axis(S, max_idx
-                               .reshape(-1, 1, num_states), axis=1)
-    new_phases = np.sign(S_max).squeeze(1)
+
+    max_idx = abs(S).argmax(axis=1)
+    num_samples = S.shape[0]
+
+    S_max = np.take_along_axis(
+        S.transpose(0, 2, 1),
+        max_idx.reshape(num_samples, num_states, 1),
+        axis=2
+    ).transpose(0, 2, 1)
+
+    new_phases = np.sign(S_max)
 
     return new_phases
 
@@ -344,7 +351,7 @@ def update_phase(new_phases,
                  key,
                  num_atoms):
 
-    phase = ((new_phases[:, i] * new_phases[:, j])
+    phase = ((new_phases[:, :, i] * new_phases[:, :, j])
              .reshape(-1, 1, 1))
 
     updated = np.concatenate(
@@ -369,12 +376,7 @@ def correct_nacv(results,
     new_phases = get_phases(U=results["U"],
                             old_U=old_U)
 
-    new_U = (results["U"] *
-             new_phases
-             .reshape(new_phases.shape[0],
-                      1,
-                      new_phases.shape[1]))
-
+    new_U = results["U"] * new_phases
     results["U"] = new_U
 
     # Stack NACVs and multiply by new phases
