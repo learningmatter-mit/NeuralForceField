@@ -9,7 +9,7 @@ This code repository is developed in the Learning Matter Lab (led by prof. Rafae
 This software requires the following packages:
 
 - [scikit-learn=0.23.1](http://scikit-learn.org/stable/)
-- [PyTorch=1.4](http://pytorch.org)
+- [PyTorch=1.9](http://pytorch.org)
 - [ase=3.19.1](https://wiki.fysik.dtu.dk/ase/)
 - [pandas=1.0.5](https://pandas.pydata.org/)
 - [networkx=2.4](https://networkx.github.io/)
@@ -26,7 +26,7 @@ We highly recommend to create a `conda` environment to run the code. To do that,
 
 ```bash
 conda upgrade conda
-conda create -n nff python=3.7 scikit-learn pytorch=1.7 cudatoolkit=10.2 ase pandas pymatgen sympy rdkit hyperopt jq openbabel -c pytorch -c conda-forge -c rdkit -c openbabel
+conda create -n nff python=3.7 scikit-learn pytorch=1.9 cudatoolkit=10.2 ase pandas pymatgen sympy rdkit hyperopt jq openbabel -c pytorch -c conda-forge -c rdkit -c openbabel
 ```
 
 Next install remaining pip requirements:

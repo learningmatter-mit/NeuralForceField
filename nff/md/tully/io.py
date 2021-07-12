@@ -281,7 +281,6 @@ def run_model(model,
     # else:
     #     xyz = None
 
-
     xyz = None
 
     model.add_nacv = nacv
@@ -318,12 +317,11 @@ def run_model(model,
 
 
 def get_phases(U, old_U):
-    # U has dimension samples X N x N
-    # Compute U.U^T
-    uu = np.einsum("...jk, ...lk -> ...jl",
-                   U, old_U)
+    # Compute overlap
+    S = np.einsum('...ki, ...kj -> ...ij',
+                  old_U, U)
 
-    # Take the element in each row with the
+    # Take the element in each column with the
     # largest absolute value, not just the diagonal.
     # When the two diabatic states switch energy
     # orderings through a CI, the adiabatic states
@@ -331,11 +329,17 @@ def get_phases(U, old_U):
     # different orderings.
 
     num_states = U.shape[-1]
-    max_idx = abs(uu).argmax(axis=1)
-    uu_max = np.take_along_axis(uu,
-                                max_idx.reshape(-1, num_states, 1),
-                                axis=-1)
-    new_phases = np.sign(uu_max).squeeze(-1)
+
+    max_idx = abs(S).argmax(axis=1)
+    num_samples = S.shape[0]
+
+    S_max = np.take_along_axis(
+        S.transpose(0, 2, 1),
+        max_idx.reshape(num_samples, num_states, 1),
+        axis=2
+    ).transpose(0, 2, 1)
+
+    new_phases = np.sign(S_max)
 
     return new_phases
 
@@ -347,7 +351,7 @@ def update_phase(new_phases,
                  key,
                  num_atoms):
 
-    phase = ((new_phases[:, i] * new_phases[:, j])
+    phase = ((new_phases[:, :, i] * new_phases[:, :, j])
              .reshape(-1, 1, 1))
 
     updated = np.concatenate(
@@ -372,8 +376,8 @@ def correct_nacv(results,
     new_phases = get_phases(U=results["U"],
                             old_U=old_U)
 
-    results["U"] = (results["U"] * new_phases
-                    .reshape(*new_phases.shape, 1))
+    new_U = results["U"] * new_phases
+    results["U"] = new_U
 
     # Stack NACVs and multiply by new phases
     # They can be stacked because only one type of molecule
@@ -557,10 +561,10 @@ def get_results(model,
                                   diabat_keys=diabat_keys)
 
     if old_U is not None:
-        results = correct_nacv(results=all_results,
-                               old_U=old_U,
-                               num_atoms=[num_atoms] * old_U.shape[0],
-                               num_states=num_states)
+        all_results = correct_nacv(results=all_results,
+                                   old_U=old_U,
+                                   num_atoms=[num_atoms] * old_U.shape[0],
+                                   num_states=num_states)
 
     return all_results
 
