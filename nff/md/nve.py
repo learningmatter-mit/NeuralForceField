@@ -47,7 +47,7 @@ class Dynamics:
         integrator = self.mdparam['thermostat']
 
         self.integrator = integrator(
-            self.atomsbatch, **self.mdparam['thermostat_params'])
+            self.atomsbatch, **self.mdparam['thermostat_params'], **self.mdparam)
 
         # attach trajectory dump
         self.traj = Trajectory(

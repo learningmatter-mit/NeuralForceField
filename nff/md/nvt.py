@@ -281,19 +281,25 @@ class BatchNoseHoover(MolecularDynamics):
                  timestep,
                  temperature,
                  ttime,
+                 T_init=None,
                  trajectory=None,
                  logfile=None,
                  loginterval=1,
                  max_steps=None,
                  nbr_update_period=20,
+                 append_trajectory=True,
                  **kwargs):
 
+        if os.path.isfile(str(trajectory)):
+            os.remove(trajectory)
+
         MolecularDynamics.__init__(self,
-                                   atoms,
-                                   timestep,
-                                   trajectory,
-                                   logfile,
-                                   loginterval)
+                                   atoms=atoms,
+                                   timestep=timestep * units.fs,
+                                   trajectory=trajectory,
+                                   logfile=logfile,
+                                   loginterval=loginterval,
+                                   append_trajectory=append_trajectory)
 
         # Initialize simulation parameters
 
@@ -326,6 +332,25 @@ class BatchNoseHoover(MolecularDynamics):
         self.Q = np.array(
             (3.0 * self.Natom - 6) * self.T * (self.ttime * self.dt)**2 )
         self.zeta = np.array([0.0] * self.n_sys)
+
+        if T_init is None:
+            T_init = self.T / units.kB
+
+        # intialize system momentum
+        momenta = []
+        # split AtomsBatch into separate Atoms objects
+        for atoms in self.atoms.get_list_atoms():
+            # set MaxwellBoltzmannDistribution for each Atoms objects separately
+            MaxwellBoltzmannDistribution(atoms,
+                                        temperature_K = T_init)
+            Stationary(atoms)  # zero linear momentum
+            ZeroRotation(atoms)
+            
+            # set momenta for the individual Atoms objects within the AtomsBatch
+            momenta.append(atoms.get_momenta())
+        
+        momenta = np.concatenate(momenta)
+        self.atoms.set_momenta(momenta)
 
     def step(self):
 
