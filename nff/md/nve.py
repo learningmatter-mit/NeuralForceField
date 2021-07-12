@@ -38,10 +38,20 @@ class Dynamics:
         # todo: structure optimization before starting
 
         # intialize system momentum
-        MaxwellBoltzmannDistribution(
-            self.atomsbatch, self.mdparam['T_init'] * units.kB)
-        Stationary(self.atomsbatch)  # zero linear momentum
-        ZeroRotation(self.atomsbatch)
+        momenta = []
+        # split AtomsBatch into separate Atoms objects
+        for atoms in self.atomsbatch.get_list_atoms():
+            # set MaxwellBoltzmannDistribution for each Atoms objects separately
+            MaxwellBoltzmannDistribution(atoms,
+                                        temperature_K = self.mdparam['T_init'])
+            Stationary(atoms)  # zero linear momentum
+            ZeroRotation(atoms)
+            
+            # set momenta for the individual Atoms objects within the AtomsBatch
+            momenta.append(atoms.get_momenta())
+        
+        momenta = np.concatenate(momenta)
+        self.atomsbatch.set_momenta(momenta)
 
         # set thermostats
         integrator = self.mdparam['thermostat']

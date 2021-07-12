@@ -301,10 +301,12 @@ class BatchNoseHoover(MolecularDynamics):
         self.dt = timestep * units.fs
         self.Natom = atoms.get_number_of_atoms()
         self.T = temperature * units.kB
-        self.targeEkin = 0.5 * (3.0 * self.Natom) * self.T
+
+        # no rotation or translation, so target kinetic energy
+        # is 1/2 (3N - 6) kT
+        self.targeEkin = 0.5 * (3.0 * self.Natom - 6) * self.T
         self.ttime = ttime  # * units.fs
 
-        self.Q = 3.0 * self.Natom * self.T * (self.ttime * self.dt)**2
         self.zeta = 0.0
         self.num_steps = max_steps
         self.n_steps = 0
@@ -317,12 +319,12 @@ class BatchNoseHoover(MolecularDynamics):
         if batch.get('num_atoms', None) is not None:
             self.Natom = batch.get('num_atoms', None).numpy()
             self.n_sys = self.Natom.shape[0]
-            self.targeEkin = 0.5 * (3.0 * self.Natom) * self.T
+            self.targeEkin = 0.5 * (3.0 * self.Natom - 6) * self.T
         else:
             self.n_sys = 1
 
         self.Q = np.array(
-            3.0 * self.T * (self.ttime * self.dt)**2 * self.Natom)
+            (3.0 * self.Natom - 6) * self.T * (self.ttime * self.dt)**2 )
         self.zeta = np.array([0.0] * self.n_sys)
 
     def step(self):
@@ -332,8 +334,8 @@ class BatchNoseHoover(MolecularDynamics):
                  / self.atoms.get_masses().reshape(-1, 1))
         vel = self.atoms.get_velocities()
 
-        visc = (accel - (self.zeta[None, :, None]
-                         * vel.reshape(-1, self.n_sys, 3))
+        visc = (accel - (self.zeta[:, None, None]
+                         * vel.reshape(self.n_sys, -1, 3))
                 .reshape(-1, 3))
 
         # make full step in position
@@ -362,9 +364,9 @@ class BatchNoseHoover(MolecularDynamics):
                         - self.targeEkin))
 
         # make another half step in velocity
-        vel = ((self.atoms.get_velocities()
-                + 0.5 * self.dt * accel).reshape(self.n_sys, -1, 3) /
-               (1 + 0.5 * self.dt * self.zeta[:, None, None]))
+        scal = (1 + 0.5 * self.dt * self.zeta[:, None, None])
+        vel = np.divide((self.atoms.get_velocities()
+                + 0.5 * self.dt * accel).reshape(self.n_sys, -1, 3), scal)
         self.atoms.set_velocities(vel.reshape(-1, 3))
 
         return f
