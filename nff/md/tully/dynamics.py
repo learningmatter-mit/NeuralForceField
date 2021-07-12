@@ -445,6 +445,18 @@ class NeuralTully:
 
         return template
 
+    def clean_c_p(self):
+        c_states = self.c.shape[-1]
+        c = (self.c[np.bitwise_not(np.isnan(self.c))]
+             .reshape(-1, c_states))
+
+        p_states = self.p_hop.shape[-1]
+        p_nan_idx = np.isnan(self.p_hop).any(-1)
+        p_fine_idx = np.bitwise_not(p_nan_idx)
+        p = self.p_hop[p_fine_idx].reshape(-1, p_states)
+
+        return c, p
+
     def log(self):
         time = self.t / const.FS_TO_AU
         pcts = []
@@ -453,8 +465,9 @@ class NeuralTully:
             pct = num_surf / self.num_samples * 100
             pcts.append(pct)
 
-        norm_c = np.mean(np.linalg.norm(self.c, axis=1))
-        p_avg = np.mean(np.max(self.p_hop, axis=1))
+        c, p = self.clean_c_p()
+        norm_c = np.mean(np.linalg.norm(c, axis=1))
+        p_avg = np.mean(np.max(p, axis=1))
         text = self.log_template % (time, *pcts,
                                     norm_c, p_avg)
 

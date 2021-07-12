@@ -1142,6 +1142,7 @@ def truhlar_decoherence(c,
     num = 1 - (abs(c_k_prime) ** 2).sum(-1)
     # in case some c_k's are slightly over 1 due to
     # numerical error
+
     num[num < 0] = 0
 
     c_m_prime = c_m * (

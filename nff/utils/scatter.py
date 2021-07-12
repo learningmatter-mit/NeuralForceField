@@ -3,7 +3,8 @@ from torch.autograd import grad
 
 
 def compute_grad(inputs,
-                 output):
+                 output,
+                 allow_unused=False):
     """Compute gradient of the scalar output with respect to inputs.
 
     Args:
@@ -20,7 +21,8 @@ def compute_grad(inputs,
                       inputs,
                       grad_outputs=output.data.new(output.shape).fill_(1),
                       create_graph=True,
-                      retain_graph=True)
+                      retain_graph=True,
+                      allow_unused=allow_unused)
 
     return gradspred
 

@@ -126,9 +126,16 @@ class DiabaticReadout(nn.Module):
             ad_energies, u = self.diag(d_mat)
         # otherwise do numerically
         else:
+            # catch any nans - if you leave them before
+            # calculating the eigenvectors then they will
+            # raise an error
+            nan_idx = torch.isnan(d_mat).any(-1).any(-1)
+            d_mat[nan_idx, :, :] = 0
+
+            # diagonalize
             ad_energies, u = torch.symeig(d_mat, True)
 
-        return ad_energies, u
+        return ad_energies, u, nan_idx
 
     def add_diag(self,
                  results,
@@ -136,14 +143,14 @@ class DiabaticReadout(nn.Module):
 
         d_mat = self.results_to_dmat(results, num_atoms)
         # ad_energies, u = torch.symeig(d_mat, True)
-        ad_energies, u = self.compute_eig(d_mat)
+        ad_energies, u, nan_idx = self.compute_eig(d_mat)
         # results.update({key: ad_energies[:, i].reshape(-1, 1)
         #                 for i, key in enumerate(self.energy_keys)})
 
         results.update({f'energy_{i}': ad_energies[:, i].reshape(-1, 1)
                         for i in range(ad_energies.shape[1])})
 
-        return results, u
+        return results, u, nan_idx
 
     def get_diabat_grads(self,
                          results,
@@ -168,8 +175,9 @@ class DiabaticReadout(nn.Module):
                     grad = results[grad_key]
                 else:
                     grad = compute_grad(inputs=xyz,
-                                        output=results[diabat_key])
-                
+                                        output=results[diabat_key],
+                                        allow_unused=True)
+
                 if inference:
                     grad = grad.detach()
                 results[grad_key] = grad
@@ -276,7 +284,8 @@ class DiabaticReadout(nn.Module):
         for key in self.energy_keys:
             val = results[key]
             grad = compute_grad(inputs=xyz,
-                                output=val)
+                                output=val,
+                                allow_unused=True)
             if inference:
                 grad = grad.detach()
             results[key + "_grad"] = grad
@@ -364,6 +373,63 @@ class DiabaticReadout(nn.Module):
 
         return results
 
+    def idx_to_grad_idx(self,
+                        num_atoms,
+                        nan_idx):
+
+        if isinstance(num_atoms, torch.Tensor):
+            atom_tens = num_atoms
+        else:
+            atom_tens = torch.LongTensor(num_atoms)
+
+        end_idx = torch.cumsum(atom_tens, dim=0)
+        start_idx = torch.cat([torch.tensor([0]).to(end_idx.device),
+                               end_idx[:-1]])
+        start_end = torch.stack([start_idx, end_idx], dim=-1)
+        nan_start_end = start_end[nan_idx]
+
+        return nan_start_end
+
+    def get_all_keys(self):
+
+        num_states = len(self.diabat_keys)
+        unique_diabats = list(
+            set(
+                np.array(self.diabat_keys)
+                .reshape(-1).tolist()
+            )
+        )
+        adiabat_keys = [f'energy_{i}' for i in range(num_states)]
+
+        en_keys = unique_diabats + adiabat_keys
+        grad_keys = [i + "_grad" for i in en_keys]
+        grad_keys += [f"force_nacv_{i}{j}" for i in range(num_states)
+                      for j in range(num_states)]
+        grad_keys += [f"nacv_{i}{j}" for i in range(num_states)
+                      for j in range(num_states)]
+
+        return en_keys, grad_keys
+
+    def add_nans(self,
+                 batch,
+                 results,
+                 nan_idx):
+
+        en_keys, grad_keys = self.get_all_keys()
+        nan_grad_idx = self.idx_to_grad_idx(num_atoms=batch['num_atoms'],
+                                            nan_idx=nan_idx)
+
+        for key in [*en_keys, 'U']:
+            if key not in results:
+                continue
+            results[key][nan_idx] = float('nan')
+
+        for key in grad_keys:
+            if key not in results:
+                continue
+            for idx in nan_grad_idx:
+                results[key][idx[0]: idx[1]] = float('nan')
+
     def forward(self,
                 batch,
                 xyz,
@@ -398,8 +464,8 @@ class DiabaticReadout(nn.Module):
 
         # calculation of adiabats and their gradients
 
-        results, u = self.add_diag(results=results,
-                                   num_atoms=num_atoms)
+        results, u, nan_idx = self.add_diag(results=results,
+                                            num_atoms=num_atoms)
 
         if add_u:
             results["U"] = u
@@ -414,6 +480,13 @@ class DiabaticReadout(nn.Module):
             results = self.add_adiabat_grads(xyz=xyz,
                                              results=results,
                                              inference=inference)
+
+        # add back any nan's that were originally set to zeros
+        # to avoid an error in diagonalization
+
+        self.add_nans(batch=batch,
+                      results=results,
+                      nan_idx=nan_idx)
 
         if getattr(self, "others_to_eig", None):
             results = self.quants_to_eig(num_atoms=num_atoms,
@@ -821,7 +894,8 @@ class AdiabaticReadout(nn.Module):
         for key in self.grad_keys:
             output = results[key.replace("_grad", "")]
             grad = compute_grad(output=output,
-                                inputs=xyz)
+                                inputs=xyz,
+                                allow_unused=True)
             results[key] = grad
 
         return results

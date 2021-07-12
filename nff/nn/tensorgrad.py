@@ -42,7 +42,9 @@ def compute_jacobian(inputs, output, device):
     return torch.transpose(jacobian, dim0=0, dim1=1)
 
 
-def compute_grad(inputs, output):
+def compute_grad(inputs,
+                 output,
+                 allow_unused=False):
     '''
     Args:
         inputs (torch.Tensor): size (N_in, )
@@ -57,7 +59,8 @@ def compute_grad(inputs, output):
                       inputs,
                       grad_outputs=output.data.new(output.shape).fill_(1),
                       create_graph=True,
-                      retain_graph=True)
+                      retain_graph=True,
+                      allow_unused=allow_unused)
 
     return gradspred
 
