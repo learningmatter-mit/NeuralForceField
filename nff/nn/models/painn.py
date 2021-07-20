@@ -1,6 +1,7 @@
 from torch import nn
 import numpy as np
 import copy
+from nff.train import batch_detach
 from nff.utils.tools import make_directed
 from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
                                   EmbeddingBlock, ReadoutBlock,
@@ -185,7 +186,8 @@ class Painn(nn.Module):
     def pool(self,
              batch,
              atomwise_out,
-             xyz):
+             xyz,
+             inference=False):
 
         if not hasattr(self, "output_keys"):
             self.output_keys = list(self.readout_blocks[0]
@@ -206,6 +208,9 @@ class Painn(nn.Module):
                                atomwise_output=atomwise_out,
                                grad_keys=grad_keys,
                                out_keys=[key])
+
+            if inference:
+                results = batch_detach(results)
             all_results.update(results)
 
         return all_results, xyz
@@ -224,25 +229,27 @@ class Painn(nn.Module):
 
         dist = (r_ij).pow(2).sum(1).sqrt()
         potential = ((dist.reciprocal() * self.sigma).pow(self.power))
-        
-        return scatter_add(potential,nbr_list[:, 0], dim_size=xyz.shape[0])[:, None]
+
+        return scatter_add(potential, nbr_list[:, 0], dim_size=xyz.shape[0])[:, None]
 
     def run(self,
             batch,
             xyz=None,
-            requires_stress=False):
+            requires_stress=False,
+            inference=False):
 
         atomwise_out, xyz, r_ij, nbrs = self.atomwise(batch=batch,
                                                       xyz=xyz)
 
         if getattr(self, "excl_vol", None):
-            # Excluded Volume interactions 
+            # Excluded Volume interactions
             r_ex = self.V_ex(r_ij, nbrs, xyz)
             atomwise_out['energy'] += r_ex
-             
+
         all_results, xyz = self.pool(batch=batch,
                                      atomwise_out=atomwise_out,
-                                     xyz=xyz)
+                                     xyz=xyz,
+                                     inference=inference)
 
         if getattr(self, "compute_delta", False):
             all_results = self.add_delta(all_results)
@@ -255,7 +262,9 @@ class Painn(nn.Module):
 
     def forward(self,
                 batch,
-                xyz=None, requires_stress=False):
+                xyz=None,
+                requires_stress=False,
+                inference=False):
         """
         Call the model
         Args:
@@ -265,7 +274,9 @@ class Painn(nn.Module):
         """
 
         results, _ = self.run(batch=batch,
-                              xyz=xyz, requires_stress=requires_stress)
+                              xyz=xyz,
+                              requires_stress=requires_stress,
+                              inference=inference)
 
         return results
 
@@ -354,7 +365,8 @@ class PainnDiabat(Painn):
                 add_grad=True,
                 add_gap=True,
                 add_u=False,
-                inference=False):
+                inference=False,
+                do_nan=True):
 
         # for backwards compatability
         self.grad_keys = []
@@ -376,7 +388,8 @@ class PainnDiabat(Painn):
                                         add_grad=add_grad,
                                         add_gap=add_gap,
                                         add_u=add_u,
-                                        inference=inference)
+                                        inference=inference,
+                                        do_nan=do_nan)
 
         return results
 

@@ -438,7 +438,8 @@ class DiabaticReadout(nn.Module):
                 add_grad=True,
                 add_gap=True,
                 add_u=False,
-                inference=False):
+                inference=False,
+                do_nan=True):
 
         if not hasattr(self, "delta"):
             self.delta = False
@@ -484,7 +485,8 @@ class DiabaticReadout(nn.Module):
         # add back any nan's that were originally set to zeros
         # to avoid an error in diagonalization
 
-        self.add_nans(batch=batch,
+        if do_nan:
+            self.add_nans(batch=batch,
                       results=results,
                       nan_idx=nan_idx)
 
@@ -1047,14 +1049,16 @@ class AdiabaticNacv(nn.Module):
 
     def forward(self,
                 batch,
-                report_hess=False):
+                report_hess=False,
+                **kwargs):
 
         device = batch['nxyz'].device
         results = general_batched_hessian(batch=batch,
                                           keys=self.delta_keys,
                                           device=device,
                                           model=self.model,
-                                          forward=None)
+                                          forward=None,
+                                          **kwargs)
         results = self.nacv_add(batch=batch,
                                 results=results)
         results = self.fix_pad(batch=batch,
