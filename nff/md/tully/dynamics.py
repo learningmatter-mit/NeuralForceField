@@ -199,6 +199,8 @@ class NeuralTully:
     def U(self):
         if not self.props:
             return
+        if "U" not in self.props:
+            return
         return self.props["U"]
 
     @property
@@ -206,8 +208,10 @@ class NeuralTully:
         _forces = np.stack([-self.props[f'energy_{i}_grad']
                             for i in range(self.num_states)],
                            axis=1)
-        _forces = (_forces.reshape(self.num_samples, -1,
-                                   self.num_states, 3)
+        _forces = (_forces.reshape(self.num_samples,
+                                   -1,
+                                   self.num_states,
+                                   3)
                    .transpose(0, 2, 1, 3))
 
         return _forces
@@ -359,6 +363,10 @@ class NeuralTully:
 
     @property
     def H_d(self):
+        diabat_keys = getattr(self, "diabat_keys", [])
+        if not all([i in self.props for i in diabat_keys]):
+            return
+
         _H_d = np.zeros((self.num_samples,
                          self.num_diabat,
                          self.num_diabat))
@@ -585,14 +593,18 @@ class NeuralTully:
                                   mass=self.mass)
 
     def step(self, needs_nbrs):
-        old_H_d = copy.deepcopy(self.H_d)
+        if self.diabat_propagate:
+            old_H_d = copy.deepcopy(self.H_d)
+            old_U = copy.deepcopy(self.U)
+
         old_H_ad = copy.deepcopy(self.pot_V)
         old_H_plus_nacv = copy.deepcopy(self.H_plus_nacv)
-        old_U = copy.deepcopy(self.U)
+
         old_c = copy.deepcopy(self.c)
 
         # xyz converted to a.u. for the step and then
         # back to Angstrom after
+
         new_xyz, new_vel = verlet_step_1(self.forces,
                                          self.surfs,
                                          vel=self.vel,
