@@ -378,10 +378,6 @@ def get_results(nxyz,
                 nacv_config,
                 grad_details,
                 nacv_details):
-    """
-    Issues:
-    - There's no good way to do sign-tracking
-    """
 
     is_sf = check_sf(grad_config=grad_config,
                      nacv_config=nacv_config)

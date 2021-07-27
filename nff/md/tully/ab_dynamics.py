@@ -2,19 +2,23 @@
 Ab initio version of Tully's surface hopping
 """
 
+import argparse
 import os
+import numpy as np
 
 from nff.md.tully.dynamics import NeuralTully
-# from nff.md.tully.io import load_json, get_atoms
+from nff.md.tully.io import load_json, get_atoms
 
 from nff.md.tully.ab_io import get_results as ab_results
 
 
 """
 To-do:
-- Sign tracking
+- Sign tracking. Either force nacv delta/sigma or based on the
+  signs of the orbital excitation amplitudes
 - Putting htvs in the path so the parsers can be imported
 """
+
 
 class AbTully(NeuralTully):
     def __init__(self,
@@ -67,26 +71,43 @@ class AbTully(NeuralTully):
         """
         - Need to read xyz and vel from json and convert to atoms
         objects (dumb but easiest)
-    
+
         - Read charge from the json file 
 
         """
 
-        pass
+        all_params = load_json(file)
 
-        # all_params = load_json(file)
-        # atomsbatch = get_atoms(all_params)
-        # ground_params = all_params['ground_params']
+        vel = np.array(all_params['velocities'])
+        atoms = get_atoms(all_params)
 
-        # tully_params = all_params['tully_params']
-        # model_path = os.path.join(all_params['weightpath'],
-        #                           str(all_params["nnid"]))
-        # tully_params.update({"model_path": model_path,
-        #                      "device": all_params["device"],
-        #                      "diabat_keys": all_params["diabat_keys"]})
+        atoms.set_velocities(vel)
+        atoms_list = [atoms]
 
-        # instance = cls(atoms=atomsbatch,
-        #                ground_params=ground_params,
-        #                tully_params=tully_params)
+        instance = cls(atoms_list=atoms_list,
+                       **all_params)
 
-        # return instance
+        return instance
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--params_file',
+                        type=str,
+                        help='Info file with parameters',
+                        default='job_info.json')
+    args = parser.parse_args()
+
+    path = args.params_file
+    ab_tully = AbTully.from_file(path)
+
+    try:
+        ab_tully.run()
+    except Exception as e:
+        print(e)
+        import pdb
+        pdb.post_mortem()
+
+
+if __name__ == '__main__':
+    main()
