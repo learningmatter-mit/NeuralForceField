@@ -25,14 +25,6 @@ To-do:
 
 """
 
-NEURAL_ARGS = ['device',
-               'batch_size',
-               'cutoff',
-               'model_path',
-               'diabat_keys',
-               'cutoff_skin',
-               'nbr_update_period']
-
 
 def load_params(file):
     all_params = load_json(file)

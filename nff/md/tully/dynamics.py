@@ -363,7 +363,7 @@ class NeuralTully:
 
     @property
     def H_d(self):
-        diabat_keys = getattr(self, "diabat_keys", [])
+        diabat_keys = getattr(self, "diabat_keys", [None])
         if not all([i in self.props for i in diabat_keys]):
             return
 
