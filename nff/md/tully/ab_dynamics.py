@@ -16,16 +16,6 @@ from nff.md.tully.ab_io import get_results as ab_results
 from nff.utils import constants as const
 
 
-"""
-To-do:
-
-- Check the units on nacv and forces
-- Sign tracking. Either force nacv delta/sigma or with a Q-Chem
-  wavefunction overlap calculation (that would suck)
-
-"""
-
-
 def load_params(file):
     all_params = load_json(file)
 
@@ -71,7 +61,7 @@ class AbTully(NeuralTully):
         self.T = None
 
         self.t = 0
-        self.props = None
+        self.props = {}
         self.num_atoms = len(self.atoms_list[0])
         self.num_samples = len(atoms_list)
         self.num_states = num_states
@@ -121,9 +111,43 @@ class AbTully(NeuralTully):
 
         return _forces
 
+    def correct_phase(self,
+                      old_force_nacv):
+
+        if old_force_nacv is None:
+            return
+
+        new_force_nacv = self.force_nacv
+        new_nacv = self.nacv
+
+        delta = np.max(np.linalg.norm(old_force_nacv - new_force_nacv,
+                                      axis=((-1, -2))), axis=-1)
+        sigma = np.max(np.linalg.norm(old_force_nacv + new_force_nacv,
+                                      axis=((-1, -2))), axis=-1)
+
+        delta = delta.reshape(*delta.shape, 1, 1, 1)
+        sigma = sigma.reshape(*sigma.shape, 1, 1, 1)
+
+        phase = (-1) ** (delta > sigma)
+
+        print(np.linalg.norm(old_force_nacv - new_force_nacv))
+        print(np.linalg.norm(old_force_nacv + new_force_nacv))
+        print(phase.squeeze((-1, -2, -3)))
+
+        new_force_nacv = new_force_nacv * phase
+        new_nacv = new_nacv * phase
+
+        num_states = new_nacv.shape[1]
+        for i in range(num_states):
+            for j in range(num_states):
+                self.props[f'force_nacv_{i}{j}'] = new_force_nacv[:, i, j]
+                self.props[f'nacv_{i}{j}'] = new_nacv[:, i, j]
+
     def update_props(self,
                      *args,
                      **kwargs):
+
+        old_force_nacv = self.force_nacv
 
         job_dir = os.path.join(os.getcwd(), str(self.step_num))
         if not os.path.isdir(job_dir):
@@ -138,6 +162,8 @@ class AbTully(NeuralTully):
                            nacv_config=self.nacv_config,
                            grad_details=self.grad_details,
                            nacv_details=self.nacv_details)
+
+        self.correct_phase(old_force_nacv=old_force_nacv)
 
         self.props = props
         self.step_num += 1

@@ -81,7 +81,7 @@ class NeuralTully:
         self.model = self.load_model(model_path)
 
         self.t = 0
-        self.props = None
+        self.props = {}
         self.num_atoms = len(self.atoms_list[0])
         self.num_samples = len(atoms_list)
         self.diabat_keys = diabat_keys
