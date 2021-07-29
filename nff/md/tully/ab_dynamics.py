@@ -161,7 +161,9 @@ class AbTully(NeuralTully):
         old_force_nacv = copy.deepcopy(self.force_nacv)
 
         job_dir = os.path.join(os.getcwd(), str(self.step_num))
-        if not os.path.isdir(job_dir):
+        if os.path.isdir(job_dir):
+            shutil.rmtree(job_dir)
+        else:
             os.makedirs(job_dir)
 
         props = ab_results(nxyz=self.nxyz,
@@ -214,7 +216,9 @@ class AbTully(NeuralTully):
         new_job_dir = os.path.join(os.getcwd(),
                                    f"{self.step_num}_extra")
 
-        if not os.path.isdir(new_job_dir):
+        if os.path.isdir(new_job_dir):
+            shutil.rmtree(new_job_dir)
+        else:
             os.makedirs(new_job_dir)
 
         props = ab_results(nxyz=self.nxyz,
