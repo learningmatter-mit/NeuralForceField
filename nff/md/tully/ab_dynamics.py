@@ -3,10 +3,12 @@ Ab initio version of Tully's surface hopping
 """
 
 import argparse
+import shutil
 import os
 import math
 import numpy as np
 from ase import Atoms
+import copy
 
 from nff.md.tully.dynamics import (NeuralTully,
                                    TULLY_LOG_FILE,
@@ -77,13 +79,12 @@ class AbTully(NeuralTully):
         self.log_file = TULLY_LOG_FILE
         self.save_file = TULLY_SAVE_FILE
 
-        self.log_template = self.setup_logging()
+        self.log_template = self.setup_logging(remove_old=False)
         self.p_hop = 0
         self.just_hopped = None
         self.explicit_diabat = False
         self.c = self.init_c()
 
-        self.setup_save()
         self.decoherence = self.init_decoherence(params=decoherence)
         self.decoherence_type = decoherence['name']
         self.hop_eqn = hop_eqn
@@ -100,6 +101,11 @@ class AbTully(NeuralTully):
 
         self.step_num = 0
 
+        # only works if you don't use `self.setup_save()`,
+        # which deletes the pickle file
+        if os.path.isfile(TULLY_SAVE_FILE):
+            self.restart()
+
     @property
     def forces(self):
         inf = np.ones((self.num_atoms,
@@ -110,6 +116,11 @@ class AbTully(NeuralTully):
         _forces = _forces.reshape(1, *_forces.shape)
 
         return _forces
+
+    @forces.setter
+    def forces(self, _forces):
+        for i in range(self.num_states):
+            self.props[f'energy_{i}_grad'] = -_forces[:, i]
 
     def correct_phase(self,
                       old_force_nacv):
@@ -147,7 +158,7 @@ class AbTully(NeuralTully):
                      *args,
                      **kwargs):
 
-        old_force_nacv = self.force_nacv
+        old_force_nacv = copy.deepcopy(self.force_nacv)
 
         job_dir = os.path.join(os.getcwd(), str(self.step_num))
         if not os.path.isdir(job_dir):
@@ -176,6 +187,14 @@ class AbTully(NeuralTully):
                         for atoms in self.atoms_list])
 
         return vel
+
+    def restart(self):
+        super().restart()
+        self.step_num = int(self.t / self.dt) + 1
+
+        last_dir = str(self.step_num)
+        if os.path.isdir(last_dir):
+            shutil.rmtree(last_dir)
 
     def run(self):
         steps = math.ceil(self.max_time / self.dt)
