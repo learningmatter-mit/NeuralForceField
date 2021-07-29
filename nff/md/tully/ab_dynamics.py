@@ -212,7 +212,7 @@ class AbTully(NeuralTully):
             return
 
         new_job_dir = os.path.join(os.getcwd(),
-                                   f"{self.step_num - 1}_extra")
+                                   f"{self.step_num}_extra")
 
         if not os.path.isdir(new_job_dir):
             os.makedirs(new_job_dir)
