@@ -196,16 +196,77 @@ class AbTully(NeuralTully):
         if os.path.isdir(last_dir):
             shutil.rmtree(last_dir)
 
+    def new_force_calc(self):
+        """
+        Extra force calc on new state after hop
+        """
+
+        surf = self.surfs[0]
+        needs_calc = np.bitwise_not(
+            np.isfinite(
+                self.forces[0, surf]
+            )
+        ).any()
+
+        if not needs_calc:
+            return
+
+        new_job_dir = os.path.join(os.getcwd(),
+                                   f"{self.step_num - 1}_extra")
+
+        if not os.path.isdir(new_job_dir):
+            os.makedirs(new_job_dir)
+
+        props = ab_results(nxyz=self.nxyz,
+                           charge=self.charge,
+                           num_states=self.num_states,
+                           surf=surf,
+                           job_dir=new_job_dir,
+                           grad_config=self.grad_config,
+                           nacv_config=self.nacv_config,
+                           grad_details=self.grad_details,
+                           nacv_details=self.nacv_details,
+                           calc_nacv=False)
+
+        key = f'energy_{surf}_grad'
+        self.props[key] = props[key]
+
     def run(self):
-        steps = math.ceil(self.max_time / self.dt)
-        self.update_props()
+        steps = math.ceil((self.max_time - self.dt) / self.dt)
+        if self.step_num == 0:
+            self.update_props()
 
         for _ in range(steps):
-            self.step(needs_nbrs=False)
+            # if just hopped to new state, then we need to do a force
+            # calculation on the new state too
+            self.new_force_calc()
             self.save()
+            self.step(needs_nbrs=False)
 
         with open(self.log_file, 'a') as f:
             f.write('\nTully surface hopping terminated normally.')
+
+    ####################################################
+    def do_hop(self,
+               old_c,
+               P):
+
+        new_surfs = copy.deepcopy(self.surfs)
+        if self.step_num == 3:
+            new_surfs *= 0
+        new_vel = self.vel
+
+        if self.step_num == 3:
+            self.p_hop = np.ones((self.num_samples, self.num_states))
+        else:
+            self.p_hop = np.zeros((self.num_samples, self.num_states))
+
+        if self.step_num == 3:
+            self.c[:, 0] = 1
+            self.c[:, 1] = 0
+
+        return new_surfs, new_vel
+    ####################################################
 
     @classmethod
     def from_file(cls,

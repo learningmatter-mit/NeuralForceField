@@ -249,7 +249,8 @@ def run_sf(job_dir,
            grad_details,
            nacv_details,
            grad_config,
-           nacv_config):
+           nacv_config,
+           calc_nacv=True):
 
     procs = []
     if grad_config == 'bhhlyp_6-31gs_sf_tddft_engrad_qchem':
@@ -264,16 +265,17 @@ def run_sf(job_dir,
     else:
         raise NotImplementedError
 
-    if nacv_config == "bhhlyp_6-31gs_sf_tddft_nacv_qchem":
-        p = bhhlyp_6_31gs_sf_tddft_nacv_qchem(nxyz=nxyz,
-                                              details=nacv_details,
-                                              charge=charge,
-                                              num_states=num_states,
-                                              job_dir=job_dir)
+    if calc_nacv:
+        if nacv_config == "bhhlyp_6-31gs_sf_tddft_nacv_qchem":
+            p = bhhlyp_6_31gs_sf_tddft_nacv_qchem(nxyz=nxyz,
+                                                  details=nacv_details,
+                                                  charge=charge,
+                                                  num_states=num_states,
+                                                  job_dir=job_dir)
 
-        procs.append(p)
-    else:
-        raise NotImplementedError
+            procs.append(p)
+        else:
+            raise NotImplementedError
 
     for p in procs:
         p.wait()
@@ -322,15 +324,19 @@ def check_sf(grad_config,
 
 
 def parse_sf(job_dir,
-             nacv_config):
+             nacv_config,
+             calc_nacv=True):
 
     nacv_dir = os.path.join(job_dir, 'nacv')
     grad_dir = os.path.join(job_dir, 'grad')
 
     en_dics = parse_sf_ens(job_dir=grad_dir)
     grad_dics = parse_sf_grads(job_dir=grad_dir)
-    nacv_dic = parse_sf_nacv(job_dir=nacv_dir,
+    if calc_nacv:
+        nacv_dic = parse_sf_nacv(job_dir=nacv_dir,
                              conifg_name=nacv_config)
+    else:
+        nacv_dic = {}
 
     return en_dics, grad_dics, nacv_dic
 
@@ -379,6 +385,8 @@ def nacv_to_arr(results,
     keys = ['deriv_nacv_etf', 'force_nacv']
 
     for key in keys:
+        if key not in nacv_dic:
+            continue
         sub_dic = nacv_dic[key]
         for start_state, sub_sub in sub_dic.items():
             for end_state, nacv in sub_sub.items():
@@ -417,14 +425,16 @@ def combine_results(singlets,
 
 def parse(job_dir,
           grad_config,
-          nacv_config):
+          nacv_config,
+          calc_nacv=True):
 
     is_sf = check_sf(grad_config=grad_config,
                      nacv_config=nacv_config)
 
     if is_sf:
         en_dics, grad_dics, nacv_dic = parse_sf(job_dir=job_dir,
-                                                nacv_config=nacv_config)
+                                                nacv_config=nacv_config,
+                                                calc_nacv=calc_nacv)
 
         singlet_path = get_singlet_path(job_dir)
         with open(singlet_path, 'r') as f:
@@ -449,7 +459,8 @@ def get_results(nxyz,
                 grad_config,
                 nacv_config,
                 grad_details,
-                nacv_details):
+                nacv_details,
+                calc_nacv=True):
 
     is_sf = check_sf(grad_config=grad_config,
                      nacv_config=nacv_config)
@@ -463,13 +474,15 @@ def get_results(nxyz,
                grad_details=grad_details,
                nacv_details=nacv_details,
                grad_config=grad_config,
-               nacv_config=nacv_config)
+               nacv_config=nacv_config,
+               calc_nacv=calc_nacv)
 
     else:
         raise NotImplementedError
 
     results = parse(job_dir=job_dir,
                     grad_config=grad_config,
-                    nacv_config=nacv_config)
+                    nacv_config=nacv_config,
+                    calc_nacv=calc_nacv)
 
     return results

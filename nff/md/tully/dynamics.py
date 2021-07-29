@@ -494,7 +494,7 @@ class NeuralTully:
         hdr += "%15s " % "|c|"
         hdr += "%15s " % "Hop prob."
 
-        if remove_old:
+        if not os.path.isfile(self.log_file) or remove_old:
             with open(self.log_file, 'w') as f:
                 f.write(hdr)
 
@@ -700,7 +700,6 @@ class NeuralTully:
             self.T, _ = compute_T(nacv=self.nacv,
                                   vel=self.vel,
                                   c=self.c)
-
         new_surfs, new_vel = self.do_hop(old_c=old_c,
                                          P=P)
 
@@ -713,13 +712,14 @@ class NeuralTully:
         self.log()
 
     def run(self):
-        steps = math.ceil(self.max_time / self.dt)
+        steps = math.ceil((self.max_time - self.t) / self.dt)
         epochs = math.ceil(steps / self.nbr_update_period)
 
         counter = 0
 
         self.model.to(self.device)
-        self.update_props(needs_nbrs=True)
+        if self.t == 0:
+            self.update_props(needs_nbrs=True)
 
         for _ in range(epochs):
             for i in range(self.nbr_update_period):
