@@ -192,11 +192,7 @@ class AbTully(NeuralTully):
 
     def restart(self):
         super().restart()
-        self.step_num = int(self.t / self.dt) + 1
-
-        last_dir = str(self.step_num)
-        if os.path.isdir(last_dir):
-            shutil.rmtree(last_dir)
+        self.step_num = int(self.t / self.dt) + 2
 
     def new_force_calc(self):
         """
@@ -214,7 +210,7 @@ class AbTully(NeuralTully):
             return
 
         new_job_dir = os.path.join(os.getcwd(),
-                                   f"{self.step_num}_extra")
+                                   f"{self.step_num - 1}_extra")
 
         if os.path.isdir(new_job_dir):
             shutil.rmtree(new_job_dir)
