@@ -246,28 +246,6 @@ class AbTully(NeuralTully):
         with open(self.log_file, 'a') as f:
             f.write('\nTully surface hopping terminated normally.')
 
-    ####################################################
-    def do_hop(self,
-               old_c,
-               P):
-
-        new_surfs = copy.deepcopy(self.surfs)
-        if self.step_num == 3:
-            new_surfs *= 0
-        new_vel = self.vel
-
-        if self.step_num == 3:
-            self.p_hop = np.ones((self.num_samples, self.num_states))
-        else:
-            self.p_hop = np.zeros((self.num_samples, self.num_states))
-
-        if self.step_num == 3:
-            self.c[:, 0] = 1
-            self.c[:, 1] = 0
-
-        return new_surfs, new_vel
-    ####################################################
-
     @classmethod
     def from_file(cls,
                   file):
