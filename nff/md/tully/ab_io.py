@@ -253,6 +253,7 @@ def run_sf(job_dir,
            calc_nacv=True):
 
     procs = []
+    proc_names = []
     if grad_config == 'bhhlyp_6-31gs_sf_tddft_engrad_qchem':
         p = bhhlyp_6_31gs_sf_tddft_engrad_qchem(nxyz=nxyz,
                                                 details=grad_details,
@@ -261,6 +262,7 @@ def run_sf(job_dir,
                                                 job_dir=job_dir)
 
         procs.append(p)
+        proc_names.append("Q-Chem engrad")
 
     else:
         raise NotImplementedError
@@ -274,11 +276,16 @@ def run_sf(job_dir,
                                                   job_dir=job_dir)
 
             procs.append(p)
+            proc_names.append("Q-Chem NACV")
+
         else:
             raise NotImplementedError
 
-    for p in procs:
-        p.wait()
+    for i, p in enumerate(procs):
+        exit_code = p.wait()
+        if exit_code != 0:
+            msg = f"{proc_names[i]} returned an error"
+            raise Exception(msg)
 
 
 def parse_sf_grads(job_dir):
