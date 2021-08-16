@@ -130,7 +130,11 @@ class DiabaticReadout(nn.Module):
             # calculating the eigenvectors then they will
             # raise an error
             nan_idx = torch.isnan(d_mat).any(-1).any(-1)
-            d_mat[nan_idx, :, :] = 0
+
+            # import pdb
+            # pdb.set_trace()
+
+            # d_mat[nan_idx, :, :] = 0
 
             # diagonalize
             ad_energies, u = torch.symeig(d_mat, True)
@@ -413,7 +417,8 @@ class DiabaticReadout(nn.Module):
     def add_nans(self,
                  batch,
                  results,
-                 nan_idx):
+                 nan_idx,
+                 train):
 
         en_keys, grad_keys = self.get_all_keys()
         nan_grad_idx = self.idx_to_grad_idx(num_atoms=batch['num_atoms'],
@@ -422,13 +427,20 @@ class DiabaticReadout(nn.Module):
         for key in [*en_keys, 'U']:
             if key not in results:
                 continue
-            results[key][nan_idx] = float('nan')
+
+            if train:
+                continue
+
+            results[key][nan_idx] *= float('nan')
 
         for key in grad_keys:
             if key not in results:
                 continue
             for idx in nan_grad_idx:
-                results[key][idx[0]: idx[1]] = float('nan')
+                if train:
+                    continue
+                results[key][idx[0]: idx[1]] = (results[key][idx[0]: idx[1]]
+                                                * float('nan'))
 
     def forward(self,
                 batch,
@@ -487,8 +499,9 @@ class DiabaticReadout(nn.Module):
 
         if do_nan:
             self.add_nans(batch=batch,
-                      results=results,
-                      nan_idx=nan_idx)
+                          results=results,
+                          nan_idx=nan_idx,
+                          train=(not inference))
 
         if getattr(self, "others_to_eig", None):
             results = self.quants_to_eig(num_atoms=num_atoms,
