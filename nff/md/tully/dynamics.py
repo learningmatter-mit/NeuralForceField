@@ -397,7 +397,8 @@ class NeuralTully:
     @property
     def H_d(self):
         diabat_keys = getattr(self, "diabat_keys", [None])
-        if not all([i in self.props for i in diabat_keys]):
+        reshaped = np.array(diabat_keys).reshape(-1).tolist()
+        if not all([i in self.props for i in reshaped]):
             return
 
         _H_d = np.zeros((self.num_samples,
@@ -780,7 +781,7 @@ class CombinedNeuralTully:
         equil_steps = math.ceil(self.ground_params["equil_time"] /
                                 self.ground_params["timestep"])
 
-        if not self.reload_ground:
+        if self.ground_dynamics is not None:
             self.ground_dynamics.run(steps=steps)
 
         trj = Trajectory(self.ground_savefile)
@@ -806,15 +807,18 @@ class CombinedNeuralTully:
                   file):
 
         all_params = load_json(file)
-        atomsbatch = get_atoms(all_params)
         ground_params = all_params['ground_params']
+        atomsbatch = get_atoms(all_params=all_params,
+                               ground_params=ground_params)
 
         tully_params = all_params['tully_params']
-        model_path = os.path.join(all_params['weightpath'],
-                                  str(all_params["nnid"]))
-        tully_params.update({"model_path": model_path,
-                             "device": all_params["device"],
-                             "diabat_keys": all_params["diabat_keys"]})
+        if 'weightpath' in all_params:
+            model_path = os.path.join(all_params['weightpath'],
+                                      str(all_params["nnid"]))
+        else:
+            model_path = all_params['model_path']
+
+        tully_params.update({"model_path": model_path})
 
         instance = cls(atoms=atomsbatch,
                        ground_params=ground_params,
