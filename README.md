@@ -10,14 +10,14 @@ We highly recommend creating a `conda` environment to run the code. To do that, 
 
 ```bash
 conda upgrade conda
-conda create -n nff python=3.7 scikit-learn pytorch=1.9 cudatoolkit=10.2 ase pandas pymatgen sympy rdkit hyperopt jq openbabel jupyter notebook matplotlib -c pytorch -c conda-forge -c rdkit -c openbabel
+conda create -n nff python=3.7.10 scikit-learn==0.24.1 pytorch=1.9.0 cudatoolkit=10.2 ase==3.21.1 pandas==1.2.2 pymatgen==2021.2.16 sympy==1.7.1 rdkit==2020.09.4 hyperopt==0.2.5 jq==1.6 openbabel==3.1.1 -c pytorch -c conda-forge -c rdkit -c openbabel
 ```
 
 Next install remaining pip requirements:
 
 ```bash
 conda activate nff
-pip install sigopt e3fp ipykernel performer-pytorch ipykernel==5.5.0 ipython==7.20.0 widgetsnbextension==3.5.1 jupyterlab_widgets==1.0.0 ipywidgets==7.6.3 nglview==3.0.1 
+pip install sigopt==7.3.0  e3fp==1.2.3 ipykernel==5.5.0 performer-pytorch==1.0.11 nglview==3.0.1
 ```
 
 To ensure that the `nff` environment is accessible through Jupyter, add the the `nff` display name:
