@@ -37,7 +37,7 @@ export NFFDIR=<path to NFF>
 export PYTHONPATH=$NFFDIR:$PYTHONPATH
 ```
 
-This is useful if you'll be modifying the NFF code, because modifications won't change the code if it's been installed through `pip`.
+This is useful if you'll be modifying the NFF code, because modifications in the download folder won't change anything in the conda directory where it's been installed. 
 
 
 ## Usage
