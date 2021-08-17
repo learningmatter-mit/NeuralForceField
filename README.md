@@ -6,35 +6,18 @@ This code repository is developed in the Learning Matter Lab (led by prof. Rafae
 
 ## Installation from source
 
-This software requires the following packages:
-
-- [scikit-learn=0.23.1](http://scikit-learn.org/stable/)
-- [PyTorch=1.9](http://pytorch.org)
-- [ase=3.19.1](https://wiki.fysik.dtu.dk/ase/)
-- [pandas=1.0.5](https://pandas.pydata.org/)
-- [networkx=2.4](https://networkx.github.io/)
-- [pymatgen=2020.7.3](https://pymatgen.org/)
-- [sympy=1.6.1](https://www.sympy.org/)
-- [rdkit=2020.03.3](https://www.rdkit.org/)
-- [sigopt=5.3.1](https://sigopt.com/)
-- [e3fp=1.2.1](https://github.com/keiserlab/e3fp)
-- [ipykernel==5.3.0](https://github.com/ipython/ipykernel)
-- [hyperopt=0.2.5](https://github.com/hyperopt/hyperopt)
-- [openbabel=2.4.1](https://github.com/openbabel/openbabel)
-
-
-We highly recommend to create a `conda` environment to run the code. To do that, use the following commands:
+We highly recommend creating a `conda` environment to run the code. To do that, use the following commands:
 
 ```bash
 conda upgrade conda
-conda create -n nff python=3.7 scikit-learn pytorch=1.9 cudatoolkit=10.2 ase pandas pymatgen sympy rdkit hyperopt jq openbabel jupyter notebook matplotlib nglview -c pytorch -c conda-forge -c rdkit -c openbabel
+conda create -n nff python=3.7 scikit-learn pytorch=1.9 cudatoolkit=10.2 ase pandas pymatgen sympy rdkit hyperopt jq openbabel jupyter notebook matplotlib -c pytorch -c conda-forge -c rdkit -c openbabel
 ```
 
 Next install remaining pip requirements:
 
 ```bash
 conda activate nff
-pip install sigopt e3fp ipykernel performer-pytorch
+pip install sigopt e3fp ipykernel performer-pytorch ipykernel==5.5.0 ipython==7.20.0 widgetsnbextension==3.5.1 jupyterlab_widgets==1.0.0 ipywidgets==7.6.3 nglview==3.0.1 
 ```
 
 To ensure that the `nff` environment is accessible through Jupyter, add the the `nff` display name:
