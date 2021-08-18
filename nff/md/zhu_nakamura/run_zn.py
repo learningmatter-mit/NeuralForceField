@@ -50,7 +50,7 @@ def make_dataset(nxyz, all_params):
         'nxyz': nxyz
     }
 
-    cutoff = all_params["cutoff"]
+    cutoff = all_params["ground_params"]["cutoff"]
 
     dataset = Dataset(props.copy(), units='kcal/mol')
     dataset.generate_neighbor_list(cutoff=cutoff,
@@ -83,8 +83,11 @@ def make_trj(all_params,
     batched_params = all_params["batched_params"]
     ground_params = all_params["ground_params"]
 
-    weight_path = os.path.join(all_params['weightpath'],
-                               str(all_params["nnid"]))
+    if "model_path" in all_params:
+        weight_path = all_params["model_path"]
+    else:
+        weight_path = os.path.join(all_params['weightpath'],
+                                   str(all_params["nnid"]))
     batched_params.update({"weight_path": weight_path})
 
     nxyz = torch.cat(dataset.props["nxyz"])
@@ -123,11 +126,16 @@ def make_trj(all_params,
     # don't calculate nacv - unecessary for ZN and requires
     # N(N+1)/2 gradients for N states instead of N
     nff_ase.model.add_nacv = False
+
+    # get the cutoff and skin
+
     atomsbatch = AtomsBatch.from_atoms(atoms=atoms,
                                        props=batched_props,
                                        needs_angles=needs_angles,
                                        device=device,
-                                       undirected=False)
+                                       undirected=False,
+                                       cutoff=batched_params["cutoff"],
+                                       cutoff_skin=batched_params["cutoff_skin"])
 
     atomsbatch.set_calculator(nff_ase)
     zn = CombinedZhuNakamura(atoms=atomsbatch,
@@ -159,7 +167,7 @@ def main():
                         help="file containing all parameters")
     args = parser.parse_args()
     job_params = load_params(args.paramsfile)
-    details = job_params["details"]
+    details = job_params.get("details", {})
     all_params = {**details,
                   **{key: val for key, val in job_params.items()
                      if key != "details"}}
