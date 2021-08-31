@@ -129,7 +129,7 @@ class DiabaticReadout(nn.Module):
             # catch any nans - if you leave them before
             # calculating the eigenvectors then they will
             # raise an error
-            nan_idx = torch.isnan(d_mat).any(-1).any(-1)
+            nan_idx = torch.bitwise_not(torch.isfinite(d_mat)).any(-1).any(-1)
 
             # import pdb
             # pdb.set_trace()
