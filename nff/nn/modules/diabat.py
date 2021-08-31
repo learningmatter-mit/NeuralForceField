@@ -117,7 +117,10 @@ class DiabaticReadout(nn.Module):
 
         return d_mat
 
-    def compute_eig(self, d_mat):
+    def compute_eig(self,
+                    d_mat,
+                    train):
+
         dim = d_mat.shape[-1]
         # do analytically if possible to avoid sign ambiguity
         # in the eigenvectors, which leads to worse training
@@ -131,10 +134,8 @@ class DiabaticReadout(nn.Module):
             # raise an error
             nan_idx = torch.bitwise_not(torch.isfinite(d_mat)).any(-1).any(-1)
 
-            # import pdb
-            # pdb.set_trace()
-
-            # d_mat[nan_idx, :, :] = 0
+            if not train:
+                d_mat[nan_idx, :, :] = 0
 
             # diagonalize
             ad_energies, u = torch.symeig(d_mat, True)
@@ -143,11 +144,13 @@ class DiabaticReadout(nn.Module):
 
     def add_diag(self,
                  results,
-                 num_atoms):
+                 num_atoms,
+                 train):
 
         d_mat = self.results_to_dmat(results, num_atoms)
         # ad_energies, u = torch.symeig(d_mat, True)
-        ad_energies, u, nan_idx = self.compute_eig(d_mat)
+        ad_energies, u, nan_idx = self.compute_eig(d_mat,
+                                                   train=train)
         # results.update({key: ad_energies[:, i].reshape(-1, 1)
         #                 for i, key in enumerate(self.energy_keys)})
 
@@ -478,7 +481,8 @@ class DiabaticReadout(nn.Module):
         # calculation of adiabats and their gradients
 
         results, u, nan_idx = self.add_diag(results=results,
-                                            num_atoms=num_atoms)
+                                            num_atoms=num_atoms,
+                                            train=(not inference))
 
         if add_u:
             results["U"] = u
