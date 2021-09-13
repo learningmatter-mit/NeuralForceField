@@ -584,7 +584,10 @@ def load_json(file):
     with open(file, 'r') as f:
         info = json.load(f)
 
-    details = info['details']
+    if 'details' in info:
+        details = info['details']
+    else:
+        details = {}
     all_params = {key: val for key, val in info.items()
                   if key != "details"}
     all_params.update(details)
@@ -593,18 +596,19 @@ def load_json(file):
 
 
 def make_dataset(nxyz,
-                 all_params):
+                 ground_params):
     props = {
         'nxyz': [torch.Tensor(nxyz)]
     }
 
-    cutoff = all_params["cutoff"]
+    cutoff = ground_params["cutoff"]
+    cutoff_skin = ground_params["cutoff_skin"]
 
     dataset = Dataset(props.copy(), units='kcal/mol')
-    dataset.generate_neighbor_list(cutoff=cutoff,
+    dataset.generate_neighbor_list(cutoff=(cutoff + cutoff_skin),
                                    undirected=False)
 
-    model_type = all_params.get("model_type")
+    model_type = ground_params["model_type"]
     needs_angles = (model_type in ANGLE_MODELS)
     if needs_angles:
         dataset.generate_angle_list()
@@ -624,15 +628,10 @@ def get_batched_props(dataset):
 
 def add_calculator(atomsbatch,
                    model_path,
-                   all_params,
+                   model_type,
+                   device,
                    batched_props):
 
-    param_path = os.path.join(model_path, 'params.json')
-    with open(param_path, 'r') as f:
-        params = json.load(f)
-
-    model_type = params['model_type']
-    device = params.get('device', 'cuda')
     needs_angles = (model_type in ANGLE_MODELS)
 
     nff_ase = NeuralFF.from_file(
@@ -640,7 +639,7 @@ def add_calculator(atomsbatch,
         device=device,
         output_keys=["energy_0"],
         conversion="ev",
-        params=all_params,
+        params=None,
         model_type=model_type,
         needs_angles=needs_angles,
         dataset_props=batched_props
@@ -649,7 +648,8 @@ def add_calculator(atomsbatch,
     atomsbatch.set_calculator(nff_ase)
 
 
-def get_atoms(all_params):
+def get_atoms(ground_params,
+              all_params):
 
     coords = all_params["coords"]
     nxyz = coords_to_xyz(coords)
@@ -657,21 +657,26 @@ def get_atoms(all_params):
                   positions=nxyz[:, 1:])
 
     dataset, needs_angles = make_dataset(nxyz=nxyz,
-                                         all_params=all_params)
+                                         ground_params=ground_params)
     batched_props = get_batched_props(dataset)
-    device = all_params.get('device', 'cuda')
+    device = ground_params.get('device', 'cuda')
 
     atomsbatch = AtomsBatch.from_atoms(atoms=atoms,
                                        props=batched_props,
                                        needs_angles=needs_angles,
                                        device=device,
-                                       undirected=False)
+                                       undirected=False,
+                                       cutoff_skin=ground_params['cutoff_skin'])
 
-    model_path = os.path.join(all_params['weightpath'],
-                              str(all_params["nnid"]))
+    if 'model_path' in all_params:
+        model_path = all_params['model_path']
+    else:
+        model_path = os.path.join(all_params['weightpath'],
+                                  str(all_params["nnid"]))
     add_calculator(atomsbatch=atomsbatch,
                    model_path=model_path,
-                   all_params=all_params,
+                   model_type=ground_params["model_type"],
+                   device=device,
                    batched_props=batched_props)
 
     return atomsbatch

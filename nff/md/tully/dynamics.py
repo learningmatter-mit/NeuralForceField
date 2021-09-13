@@ -81,7 +81,7 @@ class NeuralTully:
         self.model = self.load_model(model_path)
 
         self.t = 0
-        self.props = None
+        self.props = {}
         self.num_atoms = len(self.atoms_list[0])
         self.num_samples = len(atoms_list)
         self.diabat_keys = diabat_keys
@@ -119,6 +119,9 @@ class NeuralTully:
         self.hop_eqn = hop_eqn
         self.diabat_propagate = diabat_propagate
         self.simple_vel_scale = simple_vel_scale
+
+        if os.path.isfile(TULLY_SAVE_FILE):
+            self.restart()
 
         # if not self.decoherence:
         #     return
@@ -199,18 +202,31 @@ class NeuralTully:
     def U(self):
         if not self.props:
             return
+        if "U" not in self.props:
+            return
         return self.props["U"]
+
+    @U.setter
+    def U(self, _U):
+        self.props['U'] = _U
 
     @property
     def forces(self):
         _forces = np.stack([-self.props[f'energy_{i}_grad']
                             for i in range(self.num_states)],
                            axis=1)
-        _forces = (_forces.reshape(self.num_samples, -1,
-                                   self.num_states, 3)
+        _forces = (_forces.reshape(self.num_samples,
+                                   -1,
+                                   self.num_states,
+                                   3)
                    .transpose(0, 2, 1, 3))
 
         return _forces
+
+    @forces.setter
+    def forces(self, _forces):
+        for i in range(self.num_states):
+            self.props[f'energy_{i}_grad'] = -_forces[:, i]
 
     @property
     def energy(self):
@@ -219,6 +235,11 @@ class NeuralTully:
                            axis=1)
 
         return _energy
+
+    @energy.setter
+    def energy(self, _energy):
+        for i in range(self.num_states):
+            self.props[f'energy_{i}'] = _energy[:, i]
 
     @property
     def full_energy(self):
@@ -242,6 +263,17 @@ class NeuralTully:
                 _nacv[:, i, j, :] = self.props[key]
 
         return _nacv
+
+    @nacv.setter
+    def nacv(self, _nacv):
+        if _nacv is None:
+            return
+        for i in range(self.num_states):
+            for j in range(self.num_states):
+                if i == j:
+                    continue
+                key = f'nacv_{i}{j}'
+                self.props[key] = _nacv[:, i, j, :]
 
     @property
     def gap(self):
@@ -299,6 +331,11 @@ class NeuralTully:
     def xyz(self, val):
         for atoms, xyz in zip(self.atoms_list, val):
             atoms.set_positions(xyz)
+
+    @nxyz.setter
+    def nxyz(self, _nxyz):
+        for atoms, this_nxyz in zip(self.atoms_list, _nxyz):
+            atoms.set_positions(this_nxyz[:, 1:])
 
     @property
     def pot_V(self):
@@ -359,6 +396,11 @@ class NeuralTully:
 
     @property
     def H_d(self):
+        diabat_keys = getattr(self, "diabat_keys", [None])
+        reshaped = np.array(diabat_keys).reshape(-1).tolist()
+        if not all([i in self.props for i in reshaped]):
+            return
+
         _H_d = np.zeros((self.num_samples,
                          self.num_diabat,
                          self.num_diabat))
@@ -370,6 +412,16 @@ class NeuralTully:
                                    .reshape(-1))
 
         return _H_d
+
+    @H_d.setter
+    def H_d(self, _H_d):
+        diabat_keys = getattr(self, "diabat_keys", None)
+        if not diabat_keys:
+            return
+        for i in range(self.num_diabat):
+            for j in range(self.num_diabat):
+                diabat_key = self.diabat_keys[i][j]
+                self.props[diabat_key] = _H_d[..., i, j]
 
     @property
     def unique_diabats(self):
@@ -422,10 +474,19 @@ class NeuralTully:
         with open(self.save_file, "ab") as f:
             pickle.dump(use_dict, f)
 
-    def setup_logging(self):
+    @state_dict.setter
+    def state_dict(self, dic):
+        for key, val in dic.items():
+            if key in ['force_nacv']:
+                continue
+            setattr(self, key, val)
+        self.t *= const.FS_TO_AU
 
-        if os.path.isfile(self.log_file):
-            os.remove(self.log_file)
+    def restart(self):
+        state_dicts, _ = NeuralTully.from_pickle(TULLY_SAVE_FILE)
+        self.state_dict = state_dicts[-1]
+
+    def setup_logging(self, remove_old=True):
 
         states = [f"State {i}" for i in range(self.num_states)]
         hdr = "%-9s " % "Time [fs]"
@@ -434,8 +495,9 @@ class NeuralTully:
         hdr += "%15s " % "|c|"
         hdr += "%15s " % "Hop prob."
 
-        with open(self.log_file, 'w') as f:
-            f.write(hdr)
+        if not os.path.isfile(self.log_file) or remove_old:
+            with open(self.log_file, 'w') as f:
+                f.write(hdr)
 
         template = "%-10.1f "
         for i, state in enumerate(states):
@@ -585,14 +647,18 @@ class NeuralTully:
                                   mass=self.mass)
 
     def step(self, needs_nbrs):
-        old_H_d = copy.deepcopy(self.H_d)
+        if self.diabat_propagate:
+            old_H_d = copy.deepcopy(self.H_d)
+            old_U = copy.deepcopy(self.U)
+
         old_H_ad = copy.deepcopy(self.pot_V)
         old_H_plus_nacv = copy.deepcopy(self.H_plus_nacv)
-        old_U = copy.deepcopy(self.U)
+
         old_c = copy.deepcopy(self.c)
 
         # xyz converted to a.u. for the step and then
         # back to Angstrom after
+
         new_xyz, new_vel = verlet_step_1(self.forces,
                                          self.surfs,
                                          vel=self.vel,
@@ -635,7 +701,6 @@ class NeuralTully:
             self.T, _ = compute_T(nacv=self.nacv,
                                   vel=self.vel,
                                   c=self.c)
-
         new_surfs, new_vel = self.do_hop(old_c=old_c,
                                          P=P)
 
@@ -648,13 +713,14 @@ class NeuralTully:
         self.log()
 
     def run(self):
-        steps = math.ceil(self.max_time / self.dt)
+        steps = math.ceil((self.max_time - self.t) / self.dt)
         epochs = math.ceil(steps / self.nbr_update_period)
 
         counter = 0
 
         self.model.to(self.device)
-        self.update_props(needs_nbrs=True)
+        if self.t == 0:
+            self.update_props(needs_nbrs=True)
 
         for _ in range(epochs):
             for i in range(self.nbr_update_period):
@@ -715,7 +781,7 @@ class CombinedNeuralTully:
         equil_steps = math.ceil(self.ground_params["equil_time"] /
                                 self.ground_params["timestep"])
 
-        if not self.reload_ground:
+        if self.ground_dynamics is not None:
             self.ground_dynamics.run(steps=steps)
 
         trj = Trajectory(self.ground_savefile)
@@ -741,15 +807,18 @@ class CombinedNeuralTully:
                   file):
 
         all_params = load_json(file)
-        atomsbatch = get_atoms(all_params)
         ground_params = all_params['ground_params']
+        atomsbatch = get_atoms(all_params=all_params,
+                               ground_params=ground_params)
 
         tully_params = all_params['tully_params']
-        model_path = os.path.join(all_params['weightpath'],
-                                  str(all_params["nnid"]))
-        tully_params.update({"model_path": model_path,
-                             "device": all_params["device"],
-                             "diabat_keys": all_params["diabat_keys"]})
+        if 'weightpath' in all_params:
+            model_path = os.path.join(all_params['weightpath'],
+                                      str(all_params["nnid"]))
+        else:
+            model_path = all_params['model_path']
+
+        tully_params.update({"model_path": model_path})
 
         instance = cls(atoms=atomsbatch,
                        ground_params=ground_params,

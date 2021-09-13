@@ -136,6 +136,8 @@ def csv_read(out_file):
         for key, value in dic.items():
             if 'nan' in value:
                 value = value.replace('nan', "float('nan')")
+            if 'inf' in value:
+                value = value.replace('inf', "float('inf')")
             dic[key] = eval(value)
 
     return new_dic_list

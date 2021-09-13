@@ -1,39 +1,23 @@
 # Neural Force Field
 
-The Neural Force Field (NFF) code is an API based on SchNet [1-4], DimeNet [5], and PaiNN [6]. It provides an interface to train and evaluate neural networks for force fields. It can also be used as a property predictor that uses both 3D geometries and 2D graph information [7].
+The Neural Force Field (NFF) code is an API based on SchNet [1-4], DimeNet [5], PaiNN [6] and DANN [7]. It provides an interface to train and evaluate neural networks for force fields. It can also be used as a property predictor that uses both 3D geometries and 2D graph information [8].
 
 This code repository is developed in the Learning Matter Lab (led by prof. Rafael Gomez-Bombarelli) at MIT. Please do not distribute.
 
 ## Installation from source
 
-This software requires the following packages:
-
-- [scikit-learn=0.23.1](http://scikit-learn.org/stable/)
-- [PyTorch=1.9](http://pytorch.org)
-- [ase=3.19.1](https://wiki.fysik.dtu.dk/ase/)
-- [pandas=1.0.5](https://pandas.pydata.org/)
-- [networkx=2.4](https://networkx.github.io/)
-- [pymatgen=2020.7.3](https://pymatgen.org/)
-- [sympy=1.6.1](https://www.sympy.org/)
-- [rdkit=2020.03.3](https://www.rdkit.org/)
-- [sigopt=5.3.1](https://sigopt.com/)
-- [e3fp=1.2.1](https://github.com/keiserlab/e3fp)
-- [ipykernel==5.3.0](https://github.com/ipython/ipykernel)
-- [hyperopt=0.2.5](https://github.com/hyperopt/hyperopt)
-- [openbabel=2.4.1](https://github.com/openbabel/openbabel)
-
-We highly recommend to create a `conda` environment to run the code. To do that, use the following commands:
+We highly recommend creating a `conda` environment to run the code. To do that, use the following commands:
 
 ```bash
 conda upgrade conda
-conda create -n nff python=3.7 scikit-learn pytorch=1.9 cudatoolkit=10.2 ase pandas pymatgen sympy rdkit hyperopt jq openbabel -c pytorch -c conda-forge -c rdkit -c openbabel
+conda create -n nff python=3.7.10 scikit-learn==0.24.1 pytorch=1.9.0 cudatoolkit=10.2 ase==3.21.1 pandas==1.2.2 pymatgen==2021.2.16 sympy==1.7.1 rdkit==2020.09.4 hyperopt==0.2.5 jq==1.6 openbabel==3.1.1 -c pytorch -c conda-forge -c rdkit -c openbabel
 ```
 
 Next install remaining pip requirements:
 
 ```bash
 conda activate nff
-pip install sigopt e3fp ipykernel performer-pytorch
+pip install sigopt==7.3.0  e3fp==1.2.3 ipykernel==5.5.0 performer-pytorch==1.0.11 nglview==3.0.1
 ```
 
 To ensure that the `nff` environment is accessible through Jupyter, add the the `nff` display name:
@@ -41,12 +25,19 @@ To ensure that the `nff` environment is accessible through Jupyter, add the the 
 python -m ipykernel install --user --name nff --display-name "Python [conda env:nff"]
 ```
 
-Finally, install the `nff` package by running:
+If you would like to install NFF as a package, you can do so by running
 
 ```bash
 pip install .
 ```
 
+Otherwise you can put NFF in your python path by adding the following lines to `~/.bashrc` (linux) or `~/.bash_profile` (mac):
+```bash
+export NFFDIR=<path to NFF>
+export PYTHONPATH=$NFFDIR:$PYTHONPATH
+```
+
+This is useful if you'll be modifying the NFF code, because modifications in the download folder won't change anything in the conda directory where it's been installed. 
 
 
 ## Usage
@@ -96,6 +87,8 @@ J. Chem. Theory Comput. **15**(1), 448-455 (2019). [10.1021/acs.jctc.8b00908](ht
 
 * [6] K. T. Schütt, O. T. Unke, M. Gastegger. *Equivariant message passing for the prediction of tensorial properties and molecular spectra*. arXiv preprint, 2021. [arXiv:2102.03150](https://arxiv.org/pdf/2102.03150.pdf)
 
-* [7] S. Axelrod and R. Gomez-Bombarelli. *Molecular machine learning with conformer ensembles.* arXiv preprint (2020). [arXiv:2012.08452](https://arxiv.org/abs/2012.08452?fbclid=IwAR2KlinGWeEHTR99m8x9nu2caURqIg04nQkimqzYRcTIqFq6qgv6_RgmVzo).
+* [7] S. Axelrod, E. Shakhnovich, R. Gómez-Bombarelli. *Excited state, non-adiabatic dynamics of large photoswitchable molecules using a chemically transferable machine learning potential.* arXiv preprint (2021). [arXiv:2108.04879](https://arxiv.org/pdf/2108.04879.pdf)
+
+* [8] S. Axelrod and R. Gomez-Bombarelli. *Molecular machine learning with conformer ensembles.* arXiv preprint (2020). [arXiv:2012.08452](https://arxiv.org/abs/2012.08452?fbclid=IwAR2KlinGWeEHTR99m8x9nu2caURqIg04nQkimqzYRcTIqFq6qgv6_RgmVzo).
 
 
