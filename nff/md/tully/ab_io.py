@@ -174,7 +174,7 @@ def run_job(config_name,
                jobspec=jobspec,
                job_dir=job_dir)
 
-    cmd = f"cd {job_dir} && bash job.sh"
+    cmd = f"cd {job_dir} && bash job.sh && rm *fchk"
     p = bash_command(cmd)
 
     return p
