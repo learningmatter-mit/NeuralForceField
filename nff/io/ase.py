@@ -454,6 +454,8 @@ class NeuralFF(Calculator):
             system_changes (default from ase)
         """
 
+
+
         if not any([isinstance(self.model, i) for i in UNDIRECTED]):
             check_directed(self.model, atoms)
 
