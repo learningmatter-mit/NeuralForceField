@@ -21,7 +21,8 @@ def compute_jacobian(inputs, output, device):
     Returns:
         torch.Tensor: size (N_in, N_in, N_out)
     """
-    from torch.autograd.gradcheck import zero_gradients
+
+    # from torch.autograd.gradcheck import zero_gradients
 
     assert inputs.requires_grad
 
@@ -33,7 +34,9 @@ def compute_jacobian(inputs, output, device):
         jacobian = jacobian.to(device)
 
     for i in range(num_classes):
-        zero_gradients(inputs)
+        # zero_gradients(inputs)
+        inputs.grad = None
+        
         grad_output.zero_()
         grad_output[:, i] = 1
         output.backward(grad_output, retain_graph=True)
@@ -242,7 +245,8 @@ def schnet_batched_hessians(batch,
 
 def results_from_stack(batch,
                        model=None,
-                       forward=None):
+                       forward=None,
+                       **kwargs):
 
     batch['nxyz'] = batch['nxyz'].detach()
     stack_xyz, xyz, batch = pad(batch)
@@ -262,7 +266,8 @@ def results_from_stack(batch,
                          "Please modify the model so that it can take "
                          "an external xyz."))
     results = forward(batch=batch,
-                      xyz=xyz)
+                      xyz=xyz,
+                      **kwargs)
 
     return xyz, stack_xyz, results
 
@@ -304,14 +309,16 @@ def general_batched_hessian(batch,
                             keys,
                             device,
                             model=None,
-                            forward=None):
+                            forward=None,
+                            **kwargs):
 
     # doesn't seem to work for painn, at least with non-locality
 
     assert any([i is not None for i in [model, forward]])
     xyz, stack_xyz, results = results_from_stack(batch=batch,
                                                  model=model,
-                                                 forward=forward)
+                                                 forward=forward,
+                                                 **kwargs)
     results = hess_from_results(results=results,
                                 xyz=xyz,
                                 stack_xyz=stack_xyz,

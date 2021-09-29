@@ -478,7 +478,8 @@ def adiabatic_c(c,
     for i in range(1, n + 1):
         new_exp = torch.tensor(
             -1j / hbar * (
-                old_H_plus_nacv + i / n * (new_H_plus_nacv - old_H_plus_nacv)
+                old_H_plus_nacv + i / n *
+                (new_H_plus_nacv - old_H_plus_nacv)
             )
             * delta_tau
         ).matrix_exp().numpy()

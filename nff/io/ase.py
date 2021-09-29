@@ -69,7 +69,7 @@ class AtomsBatch(Atoms):
 
         # import pdb
         # pdb.set_trace()
-        
+
         self.props = props
         self.nbr_list = props.get('nbr_list', None)
         self.offsets = props.get('offsets', None)
@@ -104,6 +104,7 @@ class AtomsBatch(Atoms):
             batch (dict): batch with the keys 'nxyz',
                 'num_atoms', 'nbr_list' and 'offsets'
         """
+
         if self.nbr_list is None or self.offsets is None:
             self.update_nbr_list()
 
@@ -156,6 +157,7 @@ class AtomsBatch(Atoms):
 
         ensemble_nbr_list = []
         ensemble_offsets_list = []
+
         for i, atoms in enumerate(Atoms_list):
             edge_from, edge_to, offsets = torch_nbr_list(
                 atoms,
@@ -164,10 +166,15 @@ class AtomsBatch(Atoms):
                 directed=self.directed,
                 requires_large_offsets=self.requires_large_offsets)
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            offsets = sparsify_array(offsets.dot(self.get_cell()))
+            these_offsets = sparsify_array(offsets.dot(self.get_cell()))
+
+            # non-periodic
+            if isinstance(these_offsets, int):
+                these_offsets = torch.Tensor(offsets)
+
             ensemble_nbr_list.append(
                 self.props['num_atoms'][: i].sum() + nbr_list)
-            ensemble_offsets_list.append(offsets)
+            ensemble_offsets_list.append(these_offsets)
 
         ensemble_nbr_list = torch.cat(ensemble_nbr_list)
 
@@ -290,6 +297,7 @@ class BulkPhaseMaterials(Atoms):
             batch (dict): batch with the keys 'nxyz',
                 'num_atoms', 'nbr_list' and 'offsets'
         """
+
         if self.nbr_list is None or self.offsets is None:
             self.update_nbr_list()
             self.props['nbr_list'] = self.nbr_list
@@ -446,6 +454,8 @@ class NeuralFF(Calculator):
             system_changes (default from ase)
         """
 
+
+
         if not any([isinstance(self.model, i) for i in UNDIRECTED]):
             check_directed(self.model, atoms)
 
@@ -469,6 +479,7 @@ class NeuralFF(Calculator):
         prediction = self.model(batch, requires_stress=requires_stress)
 
         # change energy and force to numpy array
+
         energy = (prediction[self.en_key].detach()
                   .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
         energy_grad = (prediction[grad_key].detach()

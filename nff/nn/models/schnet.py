@@ -192,7 +192,7 @@ class SchNet(nn.Module):
         r, N, xyz, r_ij, a = self.convolve(batch, xyz)
         r = self.atomwisereadout(r)
 
-        if self.excl_vol:
+        if getattr(self, "excl_vol", None):
             # Excluded Volume interactions 
             r_ex = self.V_ex(r_ij, a, xyz)
             r['energy'] += r_ex

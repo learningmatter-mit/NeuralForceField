@@ -117,7 +117,10 @@ class DiabaticReadout(nn.Module):
 
         return d_mat
 
-    def compute_eig(self, d_mat):
+    def compute_eig(self,
+                    d_mat,
+                    train):
+
         dim = d_mat.shape[-1]
         # do analytically if possible to avoid sign ambiguity
         # in the eigenvectors, which leads to worse training
@@ -129,8 +132,10 @@ class DiabaticReadout(nn.Module):
             # catch any nans - if you leave them before
             # calculating the eigenvectors then they will
             # raise an error
-            nan_idx = torch.isnan(d_mat).any(-1).any(-1)
-            d_mat[nan_idx, :, :] = 0
+            nan_idx = torch.bitwise_not(torch.isfinite(d_mat)).any(-1).any(-1)
+
+            if not train:
+                d_mat[nan_idx, :, :] = 0
 
             # diagonalize
             ad_energies, u = torch.symeig(d_mat, True)
@@ -139,11 +144,13 @@ class DiabaticReadout(nn.Module):
 
     def add_diag(self,
                  results,
-                 num_atoms):
+                 num_atoms,
+                 train):
 
         d_mat = self.results_to_dmat(results, num_atoms)
         # ad_energies, u = torch.symeig(d_mat, True)
-        ad_energies, u, nan_idx = self.compute_eig(d_mat)
+        ad_energies, u, nan_idx = self.compute_eig(d_mat,
+                                                   train=train)
         # results.update({key: ad_energies[:, i].reshape(-1, 1)
         #                 for i, key in enumerate(self.energy_keys)})
 
@@ -413,7 +420,8 @@ class DiabaticReadout(nn.Module):
     def add_nans(self,
                  batch,
                  results,
-                 nan_idx):
+                 nan_idx,
+                 train):
 
         en_keys, grad_keys = self.get_all_keys()
         nan_grad_idx = self.idx_to_grad_idx(num_atoms=batch['num_atoms'],
@@ -422,13 +430,20 @@ class DiabaticReadout(nn.Module):
         for key in [*en_keys, 'U']:
             if key not in results:
                 continue
-            results[key][nan_idx] = float('nan')
+
+            if train:
+                continue
+
+            results[key][nan_idx] *= float('nan')
 
         for key in grad_keys:
             if key not in results:
                 continue
             for idx in nan_grad_idx:
-                results[key][idx[0]: idx[1]] = float('nan')
+                if train:
+                    continue
+                results[key][idx[0]: idx[1]] = (results[key][idx[0]: idx[1]]
+                                                * float('nan'))
 
     def forward(self,
                 batch,
@@ -438,7 +453,8 @@ class DiabaticReadout(nn.Module):
                 add_grad=True,
                 add_gap=True,
                 add_u=False,
-                inference=False):
+                inference=False,
+                do_nan=True):
 
         if not hasattr(self, "delta"):
             self.delta = False
@@ -465,7 +481,8 @@ class DiabaticReadout(nn.Module):
         # calculation of adiabats and their gradients
 
         results, u, nan_idx = self.add_diag(results=results,
-                                            num_atoms=num_atoms)
+                                            num_atoms=num_atoms,
+                                            train=(not inference))
 
         if add_u:
             results["U"] = u
@@ -484,9 +501,11 @@ class DiabaticReadout(nn.Module):
         # add back any nan's that were originally set to zeros
         # to avoid an error in diagonalization
 
-        self.add_nans(batch=batch,
-                      results=results,
-                      nan_idx=nan_idx)
+        if do_nan:
+            self.add_nans(batch=batch,
+                          results=results,
+                          nan_idx=nan_idx,
+                          train=(not inference))
 
         if getattr(self, "others_to_eig", None):
             results = self.quants_to_eig(num_atoms=num_atoms,
@@ -1047,14 +1066,16 @@ class AdiabaticNacv(nn.Module):
 
     def forward(self,
                 batch,
-                report_hess=False):
+                report_hess=False,
+                **kwargs):
 
         device = batch['nxyz'].device
         results = general_batched_hessian(batch=batch,
                                           keys=self.delta_keys,
                                           device=device,
                                           model=self.model,
-                                          forward=None)
+                                          forward=None,
+                                          **kwargs)
         results = self.nacv_add(batch=batch,
                                 results=results)
         results = self.fix_pad(batch=batch,

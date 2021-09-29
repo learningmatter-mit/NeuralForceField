@@ -528,6 +528,32 @@ def build_diabat_sign_loss(loss_dict):
     return loss_fn
 
 
+def correct_nacv_sign(pred,
+                      targ,
+                      num_atoms):
+
+    targ_list = torch.split(targ, num_atoms)
+    pred_list = torch.split(pred, num_atoms)
+    signs = []
+
+    for targ_batch, pred_batch in zip(targ_list,
+                                      pred_list):
+        pos_delta = ((targ_batch - pred_batch).abs()
+                     .mean().item())
+        neg_delta = ((targ_batch + pred_batch).abs()
+                     .mean().item())
+        sign = 1 if (pos_delta < neg_delta) else -1
+        signs.append(sign)
+
+    sign_tensor = (torch.cat([sign * torch.ones(n, 3)
+                              for sign, n in zip(signs, num_atoms)])
+                   .to(targ.device))
+
+    targ = targ * sign_tensor
+
+    return pred, targ
+
+
 def build_nacv_loss(loss_dict):
 
     params = loss_dict["params"]
@@ -544,29 +570,15 @@ def build_nacv_loss(loss_dict):
         pred = results[key]
 
         if take_abs:
+
             targ = abs(targ)
             pred = abs(pred)
 
         else:
             num_atoms = ground_truth["num_atoms"].tolist()
-            targ_list = torch.split(targ, num_atoms)
-            pred_list = torch.split(pred, num_atoms)
-            signs = []
-
-            for targ_batch, pred_batch in zip(targ_list,
-                                              pred_list):
-                pos_delta = ((targ_batch - pred_batch).abs()
-                             .mean().item())
-                neg_delta = ((targ_batch + pred_batch).abs()
-                             .mean().item())
-                sign = 1 if (pos_delta < neg_delta) else -1
-                signs.append(sign)
-
-            sign_tensor = (torch.cat([sign * torch.ones(n, 3)
-                                      for sign, n in zip(signs, num_atoms)])
-                           .to(targ.device))
-
-            targ = targ * sign_tensor
+            pred, targ = correct_nacv_sign(pred=pred,
+                                           targ=targ,
+                                           num_atoms=num_atoms)
 
         valid_idx = torch.bitwise_not(torch.isnan(targ))
         targ = targ[valid_idx]

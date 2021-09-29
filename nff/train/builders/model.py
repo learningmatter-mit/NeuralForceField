@@ -1,7 +1,8 @@
 """Helper functions to create models, functions and other classes
-    while checking for the validity of hyperparameters.
+	while checking for the validity of hyperparameters.
 """
 import os
+import json
 import numpy as np
 import torch
 from nff.nn.models.schnet import SchNet, SchNetDiabat
@@ -289,7 +290,7 @@ PARAMS_TYPE = {"SchNet":
                    "grad_keys": list,
                    "diabat_keys": list
                }
-               
+
                }
 
 MODEL_DICT = {
@@ -326,7 +327,7 @@ def check_parameters(params_type, params):
     """Check whether the parameters correspond to the specified types
 
     Args:
-        params (dict)
+            params (dict)
     """
     for key, val in params.items():
         if key in params_type and not isinstance(val, params_type[key]):
@@ -341,11 +342,11 @@ def get_model(params, model_type="SchNet", **kwargs):
     """Create new model with the given parameters.
 
     Args:
-        params (dict): parameters used to construct the model
-        model_type (str): name of the model to be used
+            params (dict): parameters used to construct the model
+            model_type (str): name of the model to be used
 
     Returns:
-        model (nff.nn.models)
+            model (nff.nn.models)
     """
 
     check_parameters(PARAMS_TYPE[model_type], params)
@@ -354,18 +355,35 @@ def get_model(params, model_type="SchNet", **kwargs):
     return model
 
 
+def load_params(param_path):
+    with open(param_path, "r") as f:
+        info = json.load(f)
+    keys = ['details', 'modelparams']
+    params = None
+    for key in keys:
+        if key in info:
+            params = info[key]
+            break
+    if params is None:
+        params = info
+
+    model_type = params['model_type']
+
+    return params, model_type
+
+
 def load_model(path, params=None, model_type=None, **kwargs):
     """Load pretrained model from the path. If no epoch is specified,
-        load the best model.
+            load the best model.
 
     Args:
-        path (str): path where the model was trained.
-        params (dict, optional): Any parameters you need to instantiate
-            a model before loading its state dict. This is required for DimeNet,
-            in which you can't pickle the model directly.
-        model_type (str, optional): name of the model to be used
+            path (str): path where the model was trained.
+            params (dict, optional): Any parameters you need to instantiate
+                    a model before loading its state dict. This is required for DimeNet,
+                    in which you can't pickle the model directly.
+            model_type (str, optional): name of the model to be used
     Returns:
-        model
+            model
     """
 
     try:
@@ -376,6 +394,10 @@ def load_model(path, params=None, model_type=None, **kwargs):
         else:
             raise FileNotFoundError("{} was not found".format(path))
     except (FileNotFoundError, EOFError, RuntimeError):
+
+        param_path = os.path.join(path, "params.json")
+        if os.path.isfile(param_path):
+            params, model_type = load_params(param_path)
 
         assert params is not None, "Must specify params if you want to load the state dict"
         assert model_type is not None, "Must specify the model type if you want to load the state dict"
