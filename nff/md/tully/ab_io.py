@@ -4,6 +4,7 @@ from jinja2 import Template
 from rdkit import Chem
 import time
 import numpy as np
+import copy
 
 from chemconfigs.parsers.qchem import (get_cis_grads,
                                        get_nacv,
