@@ -63,7 +63,7 @@ def render_config(config_name,
                   jobspec,
                   job_dir,
                   num_parallel,
-                  run_parallel=False):
+                  run_parallel=True):
 
     files = get_files(config, jobspec)
 
