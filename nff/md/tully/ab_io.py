@@ -62,15 +62,18 @@ def render_config(config_name,
                   config,
                   jobspec,
                   job_dir,
-                  num_parallel):
+                  num_parallel,
+                  run_parallel=False):
 
     files = get_files(config, jobspec)
 
     # use 1 / num_parallel * total number of cores
     # in this job
     this_jobspec = copy.deepcopy(jobspec)
-    nprocs = this_jobspec['details']['nprocs']
-    this_jobspec['details']['nprocs'] = int(nprocs / num_parallel)
+
+    if run_parallel:
+        nprocs = this_jobspec['details']['nprocs']
+        this_jobspec['details']['nprocs'] = int(nprocs / num_parallel)
 
     for file in files:
         temp_path = os.path.join(config_dir, file)
