@@ -60,9 +60,17 @@ def render_config(config_name,
                   config_dir,
                   config,
                   jobspec,
-                  job_dir):
+                  job_dir,
+                  num_parallel):
 
     files = get_files(config, jobspec)
+
+    # use 1 / num_parallel * total number of cores
+    # in this job
+    this_jobspec = copy.deepcopy(jobspec)
+    nprocs = this_jobspec.details['nprocs']
+    this_jobspec.details['nprocs'] = int(nprocs / num_parallel)
+
     for file in files:
         temp_path = os.path.join(config_dir, file)
         write_path = os.path.join(job_dir, file)
@@ -71,12 +79,12 @@ def render_config(config_name,
             temp_text = f.read()
 
         render(temp_text=temp_text,
-               jobspec=jobspec,
+               jobspec=this_jobspec,
                write_path=write_path)
 
     info_path = os.path.join(job_dir, 'job_info.json')
     with open(info_path, 'w') as f:
-        json.dump(jobspec, f, indent=4)
+        json.dump(this_jobspec, f, indent=4)
 
 
 def translate_dir(direc):
@@ -106,7 +114,8 @@ def load_config(config_name,
 
 def render_all(config_name,
                jobspec,
-               job_dir):
+               job_dir,
+               num_parallel):
 
     htvs_dir = jobspec['details']['htvs']
     config, config_dir = load_config(config_name=config_name,
@@ -116,7 +125,8 @@ def render_all(config_name,
                   config_dir=config_dir,
                   config=config,
                   jobspec=jobspec,
-                  job_dir=job_dir)
+                  job_dir=job_dir,
+                  num_parallel=num_parallel)
 
 
 def get_coords(nxyz):
@@ -168,11 +178,13 @@ def sf_nacv_jobspec(jobspec,
 
 def run_job(config_name,
             jobspec,
-            job_dir):
+            job_dir,
+            num_parallel):
 
     render_all(config_name=config_name,
                jobspec=jobspec,
-               job_dir=job_dir)
+               job_dir=job_dir,
+               num_parallel=num_parallel)
 
     cmd = f"cd {job_dir} && bash job.sh && rm *fchk"
     p = bash_command(cmd)
@@ -184,7 +196,8 @@ def bhhlyp_6_31gs_sf_tddft_engrad_qchem(nxyz,
                                         details,
                                         charge,
                                         surf,
-                                        job_dir):
+                                        job_dir,
+                                        num_parallel):
 
     jobspec = init_jobspec(nxyz=nxyz[0],
                            details=details,
@@ -200,7 +213,8 @@ def bhhlyp_6_31gs_sf_tddft_engrad_qchem(nxyz,
 
     p = run_job(config_name=config_name,
                 jobspec=jobspec,
-                job_dir=grad_dir)
+                job_dir=grad_dir,
+                num_parallel=num_parallel)
 
     return p
 
@@ -214,7 +228,8 @@ def bhhlyp_6_31gs_sf_tddft_nacv_qchem(nxyz,
                                       details,
                                       charge,
                                       num_states,
-                                      job_dir):
+                                      job_dir,
+                                      num_parallel):
 
     singlet_path = get_singlet_path(job_dir)
     exists = False
@@ -236,7 +251,8 @@ def bhhlyp_6_31gs_sf_tddft_nacv_qchem(nxyz,
 
     p = run_job(config_name=config_name,
                 jobspec=jobspec,
-                job_dir=nacv_dir)
+                job_dir=nacv_dir,
+                num_parallel=num_parallel)
 
     return p
 
@@ -254,12 +270,16 @@ def run_sf(job_dir,
 
     procs = []
     proc_names = []
+
+    num_parallel = 2 if calc_nacv else 1
+
     if grad_config == 'bhhlyp_6-31gs_sf_tddft_engrad_qchem':
         p = bhhlyp_6_31gs_sf_tddft_engrad_qchem(nxyz=nxyz,
                                                 details=grad_details,
                                                 charge=charge,
                                                 surf=surf,
-                                                job_dir=job_dir)
+                                                job_dir=job_dir,
+                                                num_parallel=num_parallel)
 
         procs.append(p)
         proc_names.append("Q-Chem engrad")
@@ -273,7 +293,8 @@ def run_sf(job_dir,
                                                   details=nacv_details,
                                                   charge=charge,
                                                   num_states=num_states,
-                                                  job_dir=job_dir)
+                                                  job_dir=job_dir,
+                                                  num_parallel=num_parallel)
 
             procs.append(p)
             proc_names.append("Q-Chem NACV")
@@ -341,7 +362,7 @@ def parse_sf(job_dir,
     grad_dics = parse_sf_grads(job_dir=grad_dir)
     if calc_nacv:
         nacv_dic = parse_sf_nacv(job_dir=nacv_dir,
-                             conifg_name=nacv_config)
+                                 conifg_name=nacv_config)
     else:
         nacv_dic = {}
 
