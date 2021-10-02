@@ -166,19 +166,16 @@ class AbTully(NeuralTully):
         else:
             os.makedirs(job_dir)
 
-        props = ab_results(nxyz=self.nxyz,
-                           charge=self.charge,
-                           num_states=self.num_states,
-                           surf=self.surfs[0],
-                           job_dir=job_dir,
-                           grad_config=self.grad_config,
-                           nacv_config=self.nacv_config,
-                           grad_details=self.grad_details,
-                           nacv_details=self.nacv_details)
-
+        self.props = ab_results(nxyz=self.nxyz,
+                                charge=self.charge,
+                                num_states=self.num_states,
+                                surf=self.surfs[0],
+                                job_dir=job_dir,
+                                grad_config=self.grad_config,
+                                nacv_config=self.nacv_config,
+                                grad_details=self.grad_details,
+                                nacv_details=self.nacv_details)
         self.correct_phase(old_force_nacv=old_force_nacv)
-
-        self.props = props
         self.step_num += 1
 
     def get_vel(self):
