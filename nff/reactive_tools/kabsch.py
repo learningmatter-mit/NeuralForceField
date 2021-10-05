@@ -32,9 +32,12 @@ def kabsch(rxn,
            reactantgeom_raw,
            rid,
            pid):
-
-    settings = ac.settings()
-    settings.parse_settings('settings.cfg')
+    
+    try:
+        settings = ac.settings()
+        settings.parse_settings('settings.cfg')
+    except NameError:
+        pass
     logger = Logger(VERSION, YEAR)
 
     dt = np.dtype([('RXN_IDX', 'int'),

@@ -6,7 +6,6 @@ Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/s
 import os
 import numpy as np
 import torch
-import sys
 import copy
 import pickle
 from tqdm import tqdm
@@ -31,12 +30,12 @@ class Trainer:
        model (torch.Module): model to be trained.
        loss_fn (callable): training loss function.
        optimizer (torch.optim.optimizer.Optimizer): training optimizer.
-       train_loader (torch.utils.data.DataLoader): data loader for 
+       train_loader (torch.utils.data.DataLoader): data loader for
          training set.
-       validation_loader (torch.utils.data.DataLoader): data loader for 
+       validation_loader (torch.utils.data.DataLoader): data loader for
          validation set.
        checkpoints_to_keep (int, optional): number of saved checkpoints.
-       checkpoint_interval (int, optional): intervals after which checkpoints 
+       checkpoint_interval (int, optional): intervals after which checkpoints
          is saved.
        hooks (list, optional): hooks to customize training process.
        loss_is_normalized (bool, optional): if True, the loss per data point will be
@@ -60,7 +59,7 @@ class Trainer:
        metric_objective (str, optional): if metric_as_loss is specified, metric_objective indicates
             whether the goal is to maximize or minimize `metric_as_loss`.
        epoch_cutoff (int, optional): cut off an epoch after `epoch_cutoff` batches.
-            This is useful if you want to validate the model more often than after 
+            This is useful if you want to validate the model more often than after
             going through all data points once.
    """
 
@@ -149,12 +148,12 @@ class Trainer:
     def tqdm_enum(self, iter):
         i = 0
         if self.base:
-            for y in tqdm(iter):
-                yield i, y
+            for y_val in tqdm(iter):
+                yield i, y_val
                 i += 1
         else:
-            for y in iter:
-                yield i, y
+            for y_val in iter:
+                yield i, y_val
                 i += 1
 
     def to(self, device):
@@ -178,7 +177,7 @@ class Trainer:
     def get_best_model(self):
         try:
             return torch.load(self.best_model)
-        except EOFError:
+        except (EOFError, RuntimeError):
             # if we had tried to save a model and the
             # pickling failed (e.g. dimenet), then
             # load the best state_dict instead
@@ -198,15 +197,6 @@ class Trainer:
 
         return model(batch, **self.model_kwargs)
 
-    def call_model(self, batch, train):
-
-        if (self.torch_parallel and self.parallel) and not train:
-            model = copy.deepcopy(self._model.module)
-        else:
-            model = self._model
-
-        return model(batch, **self.model_kwargs)
-
     @property
     def state_dict(self):
         state_dict = {
@@ -214,7 +204,7 @@ class Trainer:
             "step": self.step,
             "best_loss": self.best_loss,
             "optimizer": self.optimizer.state_dict(),
-            "hooks": [h.state_dict for h in self.hooks],
+            "hooks": [hook.state_dict for hook in self.hooks],
         }
         if self.torch_parallel:
             state_dict["model"] = self._model.module.state_dict()
@@ -230,8 +220,10 @@ class Trainer:
         self.optimizer.load_state_dict(state_dict["optimizer"])
         self._load_model_state_dict(state_dict["model"])
 
-        for h, s in zip(self.hooks, self.state_dict["hooks"]):
-            h.state_dict = s
+        for hook, state in zip(self.hooks, state_dict["hooks"]):
+            hook.state_dict = state
+            if hasattr(getattr(hook, "scheduler", None), "optimizer"):
+                hook.scheduler.optimizer = self.optimizer
 
     def store_checkpoint(self):
         chkpt = os.path.join(
@@ -263,7 +255,8 @@ class Trainer:
         self.state_dict = torch.load(chkpt, map_location='cpu')
 
     def loss_backward(self, loss):
-        loss.backward()
+        if hasattr(loss, "backward"):
+            loss.backward()
         self.back_count += 1
         self.batch_stop = self.back_count == self.max_batch_iters
 
@@ -330,6 +323,39 @@ class Trainer:
         if not self.grad_is_nan():
             self.optimizer.step()
 
+    def call_and_loss(self,
+                      batch,
+                      device,
+                      calc_loss):
+
+        use_device = device
+        mini_loss = None
+
+        while True:
+            try:
+                batch = batch_to(batch, use_device)
+                if use_device != device:
+                    self.to(use_device)
+                results = self.call_model(batch, train=True)
+                if calc_loss:
+                    mini_loss = self.get_loss(batch, results)
+                    self.loss_backward(mini_loss)
+
+                if use_device != device:
+                    self.to(device)
+                break
+
+            except RuntimeError as err:
+                if 'CUDA out of memory' in str(err):
+                    print(("CUDA out of memory. Doing this batch "
+                           "on cpu."))
+                    use_device = "cpu"
+                    torch.cuda.empty_cache()
+                else:
+                    raise err
+
+        return batch, results, mini_loss, use_device
+
     def train(self, device, n_epochs=MAX_EPOCHS):
         """Train the model for the given number of epochs on a specified
         device.
@@ -347,12 +373,11 @@ class Trainer:
         loss = torch.tensor(0.0).to(device)
         num_batches = 0
         self.optimizer.zero_grad()
-        self.save_as_best()
 
-        for h in self.hooks:
-            h.on_train_begin(self)
-            if hasattr(h, "mini_batches"):
-                h.mini_batches = self.mini_batches
+        for hook in self.hooks:
+            hook.on_train_begin(self)
+            if hasattr(hook, "mini_batches"):
+                hook.mini_batches = self.mini_batches
 
         try:
             for _ in range(n_epochs):
@@ -360,22 +385,21 @@ class Trainer:
                 self._model.train()
                 self.epoch += 1
 
-                for h in self.hooks:
-                    h.on_epoch_begin(self)
+                for hook in self.hooks:
+                    hook.on_epoch_begin(self)
 
                 if self._stop:
                     break
 
                 for j, batch in self.tqdm_enum(self.train_loader):
+                    for hook in self.hooks:
+                        hook.on_batch_begin(self, batch)
 
-                    batch = batch_to(batch, device)
+                    batch, results, mini_loss, _ = self.call_and_loss(
+                        batch=batch,
+                        device=device,
+                        calc_loss=True)
 
-                    for h in self.hooks:
-                        h.on_batch_begin(self, batch)
-
-                    results = self.call_model(batch, train=True)
-                    mini_loss = self.get_loss(batch, results)
-                    self.loss_backward(mini_loss)
                     if not torch.isnan(mini_loss):
                         loss += mini_loss.cpu().detach().to(device)
 
@@ -393,8 +417,8 @@ class Trainer:
                         self.optim_step(batch_num=eff_batches,
                                         device=device)
 
-                        for h in self.hooks:
-                            h.on_batch_end(self, batch, results, loss)
+                        for hook in self.hooks:
+                            hook.on_batch_end(self, batch, results, loss)
 
                         # reset loss and the optimizer grad
 
@@ -424,21 +448,21 @@ class Trainer:
                 if (self.epoch % self.validation_interval == 0 or self._stop):
                     self.validate(device)
 
-                for h in self.hooks:
-                    h.on_epoch_end(self)
+                for hook in self.hooks:
+                    hook.on_epoch_end(self)
 
             # Training Ends
             # run hooks & store checkpoint
 
-            for h in self.hooks:
-                h.on_train_ends(self)
+            for hook in self.hooks:
+                hook.on_train_ends(self)
 
             if self.base:
                 self.store_checkpoint()
 
         except Exception as e:
-            for h in self.hooks:
-                h.on_train_failed(self)
+            for hook in self.hooks:
+                hook.on_train_failed(self)
 
             raise e
 
@@ -446,7 +470,7 @@ class Trainer:
         """
         Get the folders inside the model folder that contain information
         about the other parallel training processes.
-        Args: 
+        Args:
             None
         Returns:
             par_folders (list): paths to the folders of all parallel
@@ -485,10 +509,10 @@ class Trainer:
 
         info_file = os.path.join(
             self_folder, "val_epoch_{}".format(self.epoch))
-        with open(info_file, "w") as f:
+        with open(info_file, "w") as f_open:
             loss_float = val_loss.item()
             string = f"{loss_float},{n_val}"
-            f.write(string)
+            f_open.write(string)
 
     def load_val_loss(self):
         """
@@ -518,8 +542,8 @@ class Trainer:
                     folder, "val_epoch_{}".format(self.epoch))
                 # try opening the file and getting the value
                 try:
-                    with open(val_file, "r") as f:
-                        text = f.read()
+                    with open(val_file, "r") as f_open:
+                        text = f_open.read()
                     val_loss = float(text.split(",")[0])
                     num_mols = int(text.split(",")[1])
 
@@ -580,15 +604,16 @@ class Trainer:
 
         self._model.eval()
 
-        for h in self.hooks:
-            h.on_validation_begin(self)
+        for hook in self.hooks:
+            hook.on_validation_begin(self)
 
         val_loss = 0.0
         n_val = 0
 
         for val_batch in self.validation_loader:
 
-            val_batch = batch_to(val_batch, device)
+            for hook in self.hooks:
+                hook.on_validation_batch_begin(self)
 
             # append batch_size
             if self.mol_loss_norm:
@@ -598,25 +623,23 @@ class Trainer:
                 vsize = val_batch['nxyz'].size(0)
 
             n_val += vsize
+            val_batch, results, _, use_device = self.call_and_loss(
+                batch=val_batch,
+                device=device,
+                calc_loss=False)
 
-            for h in self.hooks:
-                h.on_validation_batch_begin(self)
-
-            results = self.call_model(val_batch, train=False)
             # detach from the graph
-            results = batch_to(batch_detach(results), device)
+            results = batch_to(batch_detach(results), use_device)
 
             val_batch_loss = self.loss_fn(
                 val_batch, results).data.cpu().numpy()
 
             if self.loss_is_normalized or self.mol_loss_norm:
                 val_loss += val_batch_loss * vsize
-
             else:
                 val_loss += val_batch_loss
-
-            for h in self.hooks:
-                h.on_validation_batch_end(self, val_batch, results)
+            for hook in self.hooks:
+                hook.on_validation_batch_end(self, val_batch, results)
 
         if test:
             return
@@ -632,14 +655,14 @@ class Trainer:
             self.save_val_loss(val_loss, n_val)
             val_loss = self.load_val_loss()
 
-        for h in self.hooks:
+        for hook in self.hooks:
             # delay this until after we know what the real
             # val loss is (e.g. if it's from a metric)
-            if isinstance(h, ReduceLROnPlateauHook):
+            if isinstance(hook, ReduceLROnPlateauHook):
                 continue
 
-            h.on_validation_end(self, val_loss)
-            metric_dic = getattr(h, "metric_dic", None)
+            hook.on_validation_end(self, val_loss)
+            metric_dic = getattr(hook, "metric_dic", None)
             if metric_dic is None:
                 continue
             if self.metric_as_loss in metric_dic:
@@ -647,10 +670,10 @@ class Trainer:
                 if self.metric_objective.lower() == "maximize":
                     val_loss *= -1
 
-        for h in self.hooks:
-            if not isinstance(h, ReduceLROnPlateauHook):
+        for hook in self.hooks:
+            if not isinstance(hook, ReduceLROnPlateauHook):
                 continue
-            h.on_validation_end(self, val_loss)
+            hook.on_validation_end(self, val_loss)
 
         if self.best_loss > val_loss:
             self.best_loss = val_loss

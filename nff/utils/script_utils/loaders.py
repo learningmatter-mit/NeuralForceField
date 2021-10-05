@@ -2,6 +2,7 @@ import torch
 import nff.data
 
 from torch.utils.data import DataLoader
+from torch.utils.data.sampler import RandomSampler
 from nff.data.loader import collate_dicts
 
 
@@ -39,7 +40,8 @@ def get_loaders(args, logging=None):
             train,
             batch_size=args.batch_size,
             num_workers=args.workers,
-            collate_fn=collate_dicts
+            collate_fn=collate_dicts,
+            sampler=RandomSampler(train)
         )
         val_loader = DataLoader(
             val,

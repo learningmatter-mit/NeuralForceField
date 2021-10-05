@@ -17,9 +17,10 @@ from nff.data.parallel import (featurize_parallel, NUM_PROCS,
 from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
 from nff.data.features import add_morgan as external_morgan
 from nff.data.features import featurize_rdkit as external_rdkit
-from nff.data.graphs import (get_bond_idx, reconstruct_atoms, get_neighbor_list, generate_subgraphs,
-                             DISTANCETHRESHOLDICT_Z, get_angle_list, add_ji_kj,
-                             make_dset_directed)
+from nff.data.graphs import (get_bond_idx, reconstruct_atoms,
+                             get_neighbor_list,  generate_subgraphs,
+                             DISTANCETHRESHOLDICT_Z, get_angle_list,
+                             add_ji_kj, make_dset_directed)
 
 
 class Dataset(TorchDataset):
@@ -29,7 +30,7 @@ class Dataset(TorchDataset):
         props (list of dicts): list of dictionaries containing all properties of the system.
             Keys are the name of the property and values are the properties. Each value
             is given by `props[idx][key]`. The only mandatory key is 'nxyz'. If inputting
-            energies, forces or hessians of different electronic states, the quantities 
+            energies, forces or hessians of different electronic states, the quantities
             should be distinguished with a "_n" suffix, where n = 0, 1, 2, ...
             Whatever name is given to the energy of state n, the corresponding force name
             must be the exact same name, but with "energy" replaced by "force".
@@ -60,17 +61,21 @@ class Dataset(TorchDataset):
     def __init__(self,
                  props,
                  units='kcal/mol',
-                 check_props=True):
+                 check_props=True,
+                 do_copy=True):
         """Constructor for Dataset class.
 
         Args:
             props (dictionary of lists): dictionary containing the
-                properties of the system. Each key has a list, and 
+                properties of the system. Each key has a list, and
                 all lists have the same length.
             units (str): units of the system.
         """
         if check_props:
-            self.props = self._check_dictionary(deepcopy(props))
+            if do_copy:
+                self.props = self._check_dictionary(deepcopy(props))
+            else:
+                self.props = self._check_dictionary(props)
         else:
             self.props = props
         self.units = units
@@ -164,14 +169,18 @@ class Dataset(TorchDataset):
                 props.update({key: to_tensor(val)})
 
             else:
-                assert len(val) == n_geoms, \
-                    'length of {} is not compatible with {} geometries'.format(
-                        key, n_geoms)
+                assert len(val) == n_geoms, (f'length of {key} is not '
+                                             f'compatible with {n_geoms} '
+                                             'geometries')
                 props[key] = to_tensor(val)
 
         return props
 
-    def generate_neighbor_list(self, cutoff, undirected=True):
+    def generate_neighbor_list(self,
+                               cutoff,
+                               undirected=True,
+                               key='nbr_list',
+                               offset_key='offsets'):
         """Generates a neighbor list for each one of the atoms in the dataset.
             By default, does not consider periodic boundary conditions.
 
@@ -183,26 +192,34 @@ class Dataset(TorchDataset):
             TYPE: Description
         """
         if 'lattice' not in self.props:
-            self.props['nbr_list'] = [
+            self.props[key] = [
                 get_neighbor_list(nxyz[:, 1:4], cutoff, undirected)
                 for nxyz in self.props['nxyz']
             ]
-            self.props['offsets'] = [
+            self.props[offset_key] = [
                 torch.sparse.FloatTensor(nbrlist.shape[0], 3)
-                for nbrlist in self.props['nbr_list']
+                for nbrlist in self.props[key]
             ]
         else:
-            self._get_periodic_neighbor_list(cutoff, undirected)
-            return self.props['nbr_list'], self.props['offsets']
+            self._get_periodic_neighbor_list(cutoff=cutoff,
+                                             undirected=undirected,
+                                             offset_key=offset_key,
+                                             nbr_key=key)
+            return self.props[key], self.props[offset_key]
 
-        return self.props['nbr_list']
+        return self.props[key]
+
+    # def make_nbr_to_mol(self):
+    #     nbr_to_mol = []
+    #     for nbrs in self.props['nbr_list']:
+    #         nbrs_to_mol.append(torch.zeros(len(nbrs)))
 
     def make_all_directed(self):
         make_dset_directed(self)
 
     def generate_angle_list(self):
-
         self.make_all_directed()
+
         angles, nbrs = get_angle_list(self.props['nbr_list'])
         self.props['nbr_list'] = nbrs
         self.props['angle_list'] = angles
@@ -224,7 +241,12 @@ class Dataset(TorchDataset):
         add_kj_ji_parallel(self,
                            num_procs=num_procs)
 
-    def _get_periodic_neighbor_list(self, cutoff, undirected=False):
+    def _get_periodic_neighbor_list(self,
+                                    cutoff,
+                                    undirected=False,
+                                    offset_key='offsets',
+                                    nbr_key='nbr_list'):
+
         from nff.io.ase import AtomsBatch
 
         nbrlist = []
@@ -235,14 +257,15 @@ class Dataset(TorchDataset):
                 positions=nxyz[:, 1:],
                 cell=lattice,
                 pbc=True,
-                cutoff=cutoff
+                cutoff=cutoff,
+                directed=(not undirected)
             )
             nbrs, offs = atoms.update_nbr_list()
             nbrlist.append(nbrs)
             offsets.append(offs)
 
-        self.props['nbr_list'] = nbrlist
-        self.props['offsets'] = offsets
+        self.props[nbr_key] = nbrlist
+        self.props[offset_key] = offsets
         return
 
     def generate_bond_idx(self, num_procs=1):
@@ -462,13 +485,10 @@ class Dataset(TorchDataset):
     def gen_bond_prior(self, cutoff, bond_len_dict=None):
         from nff.io.ase import AtomsBatch
 
-        from nff.io.ase import AtomsBatch
-
         if not self.props:
             raise TypeError("the dataset has no data yet")
 
         bond_dict = {}
-        bond_count_dict = {}
         mol_idx_dict = {}
 
         #---------This part can be simplified---------#
@@ -476,11 +496,13 @@ class Dataset(TorchDataset):
             z = self.props['nxyz'][i][:, 0]
             xyz = self.props['nxyz'][i][:, 1:4]
 
-            # generate arguments for ase Atoms boject
+            # generate arguments for ase Atoms object
+            cell = self.props['cell'][i] if 'cell' in self.props.keys(
+            ) else None
             ase_param = {"numbers": z,
                          "positions": xyz,
                          "pbc": True,
-                         "cell": self.props['cell'][i] if 'cell' in self.props.keys() else None}
+                         "cell": cell}
 
             atoms = Atoms(**ase_param)
             sys_name = self.props['smiles'][i]
@@ -525,11 +547,13 @@ class Dataset(TorchDataset):
             all_bond_len.append(torch.Tensor(bond_len_list).reshape(-1, 1))
 
             # update offsets
+            cell = self.props['cell'][i] if 'cell' in self.props.keys(
+            ) else None,
             ase_param = {"numbers": z,
                          "positions": xyz,
                          "pbc": True,
                          "cutoff": cutoff,
-                         "cell": self.props['cell'][i] if 'cell' in self.props.keys() else None,
+                         "cell": cell,
                          "nbr_torch": False}
 
             # the coordinates have been unwrapped and try to results offsets
@@ -706,7 +730,19 @@ def concatenate_dict(*dicts):
     assert all([type(d) == dict for d in dicts]), \
         'all arguments have to be dictionaries'
 
-    keys = set(sum([list(d.keys()) for d in dicts], []))
+    # Old method
+    # keys = set(sum([list(d.keys()) for d in dicts], []))
+
+    # New method
+    keys = set()
+    for dic in dicts:
+        for key in dic.keys():
+            if key not in keys:
+                keys.add(key)
+
+    # While less pretty, the new method is MUCH faster. For example,
+    # for a dataset of size 600,000, the old method literally
+    # takes hours, while the new method takes 250 ms
 
     def is_list_of_lists(value):
         if isinstance(value, list):
@@ -765,10 +801,9 @@ def concatenate_dict(*dicts):
         # flatten list of values
         values = []
         for num_values, d in zip(values_per_dict, dicts):
-            val = d.get(
-                key,
-                [None] * num_values if num_values > 1 else None
-            )
+            val = d.get(key,
+                        ([None] * num_values if num_values > 1 else None)
+                        )
             values += flatten_val(val)
         joint_dict[key] = values
 

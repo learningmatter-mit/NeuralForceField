@@ -1,0 +1,380 @@
+{
+    "coords": [
+        {
+            "element": "C",
+            "x": -3.470561,
+            "y": 2.276912,
+            "z": -0.939635
+        },
+        {
+            "element": "C",
+            "x": -2.533,
+            "y": 1.174919,
+            "z": -0.532205
+        },
+        {
+            "element": "C",
+            "x": -2.500861,
+            "y": -0.026234,
+            "z": -1.232472
+        },
+        {
+            "element": "C",
+            "x": -1.673769,
+            "y": -1.069097,
+            "z": -0.852273
+        },
+        {
+            "element": "C",
+            "x": -1.668018,
+            "y": -2.372501,
+            "z": -1.599079
+        },
+        {
+            "element": "C",
+            "x": -0.816595,
+            "y": -0.878691,
+            "z": 0.236076
+        },
+        {
+            "element": "N",
+            "x": -0.070482,
+            "y": -2.020076,
+            "z": 0.666351
+        },
+        {
+            "element": "N",
+            "x": 1.159212,
+            "y": -2.077234,
+            "z": 0.684868
+        },
+        {
+            "element": "C",
+            "x": 2.016666,
+            "y": -1.05778,
+            "z": 0.174913
+        },
+        {
+            "element": "C",
+            "x": 1.834705,
+            "y": -0.402798,
+            "z": -1.039309
+        },
+        {
+            "element": "C",
+            "x": 2.798071,
+            "y": 0.485086,
+            "z": -1.488064
+        },
+        {
+            "element": "C",
+            "x": 3.932784,
+            "y": 0.736047,
+            "z": -0.731129
+        },
+        {
+            "element": "C",
+            "x": 4.12056,
+            "y": 0.070313,
+            "z": 0.471185
+        },
+        {
+            "element": "C",
+            "x": 3.178295,
+            "y": -0.843104,
+            "z": 0.909221
+        },
+        {
+            "element": "C",
+            "x": -0.844354,
+            "y": 0.298069,
+            "z": 0.983702
+        },
+        {
+            "element": "C",
+            "x": -0.000377,
+            "y": 0.488643,
+            "z": 2.212823
+        },
+        {
+            "element": "C",
+            "x": -1.709301,
+            "y": 1.307377,
+            "z": 0.573979
+        },
+        {
+            "element": "H",
+            "x": -3.50608,
+            "y": 2.387679,
+            "z": -2.020764
+        },
+        {
+            "element": "H",
+            "x": -3.168682,
+            "y": 3.2302,
+            "z": -0.51503
+        },
+        {
+            "element": "H",
+            "x": -4.486556,
+            "y": 2.075147,
+            "z": -0.602421
+        },
+        {
+            "element": "H",
+            "x": -3.146771,
+            "y": -0.159486,
+            "z": -2.087469
+        },
+        {
+            "element": "H",
+            "x": -0.739653,
+            "y": -2.520618,
+            "z": -2.149819
+        },
+        {
+            "element": "H",
+            "x": -2.485693,
+            "y": -2.41287,
+            "z": -2.312194
+        },
+        {
+            "element": "H",
+            "x": -1.760404,
+            "y": -3.210894,
+            "z": -0.913181
+        },
+        {
+            "element": "H",
+            "x": 0.959896,
+            "y": -0.592452,
+            "z": -1.634382
+        },
+        {
+            "element": "H",
+            "x": 2.658717,
+            "y": 0.984353,
+            "z": -2.433068
+        },
+        {
+            "element": "H",
+            "x": 4.673671,
+            "y": 1.434528,
+            "z": -1.084348
+        },
+        {
+            "element": "H",
+            "x": 5.008509,
+            "y": 0.246742,
+            "z": 1.055951
+        },
+        {
+            "element": "H",
+            "x": 3.322298,
+            "y": -1.400002,
+            "z": 1.820081
+        },
+        {
+            "element": "H",
+            "x": 0.076936,
+            "y": -0.427884,
+            "z": 2.791387
+        },
+        {
+            "element": "H",
+            "x": -0.432013,
+            "y": 1.253997,
+            "z": 2.850906
+        },
+        {
+            "element": "H",
+            "x": 1.011671,
+            "y": 0.79908,
+            "z": 1.961519
+        },
+        {
+            "element": "H",
+            "x": -1.738921,
+            "y": 2.222326,
+            "z": 1.146379
+        }
+    ],
+    "worker_name": "neuralzn",
+    "job_key": 53957510,
+    "uuid": "dc4cfd47-766f-49d6-9a75-87abaa10dea7",
+    "priority": 4,
+    "inchikey": "WXDVPHQQUSLGIL-HEFFKOSUNA-N",
+    "smiles": "CC(C)(C)c1cc(C(C)(C)C)c(/N=N/c2c(C(C)(C)C)cc(C(C)(C)C)cc2C(C)(C)C)c(C(C)(C)C)c1",
+    "multiplicity": 1,
+    "charge": 0,
+    "details": {
+        "lr": [
+            0.0001,
+            1e-05
+        ],
+        "qy": true,
+        "nff": "/home/gridsan/saxelrod/repo/nff/master/NeuralForceField",
+        "gres": 1,
+        "htvs": "/home/gridsan/saxelrod/repo/htvs/master/htvs",
+        "nnid": 1302,
+        "seed": 0,
+        "skip": 20,
+        "conda": "/home/gridsan/saxelrod/miniconda3",
+        "n_rbf": 20,
+        "steps": 125000,
+        "T_init": 450,
+        "cutoff": 5.0,
+        "device": 0,
+        "version": null,
+        "add_nacv": true,
+        "feat_dim": 128,
+        "lr_decay": 0.5,
+        "max_time": 30240,
+        "nodename": null,
+        "num_conv": 5,
+        "pool_dic": {
+            "d0": {
+                "name": "sum",
+                "param": {}
+            },
+            "d1": {
+                "name": "sum",
+                "param": {}
+            },
+            "lam": {
+                "name": "attention",
+                "param": {
+                    "att_act": "swish",
+                    "out_dim": 1,
+                    "feat_dim": 128,
+                    "prob_func": "softmax",
+                    "mol_fp_act": "swish",
+                    "num_out_layers": 2
+                }
+            },
+            "d_00": {
+                "name": "sum",
+                "param": {}
+            },
+            "d_01": {
+                "name": "sum",
+                "param": {}
+            },
+            "d_02": {
+                "name": "sum",
+                "param": {}
+            },
+            "d_11": {
+                "name": "sum",
+                "param": {}
+            },
+            "d_12": {
+                "name": "sum",
+                "param": {}
+            },
+            "d_22": {
+                "name": "sum",
+                "param": {}
+            }
+        },
+        "priority": 4,
+        "software": null,
+        "exclusive": false,
+        "grad_keys": [
+            "energy_0_grad",
+            "energy_1_grad"
+        ],
+        "md_config": "neuralzn",
+        "scheduler": true,
+        "time_step": 0.5,
+        "torch_par": false,
+        "use_slurm": true,
+        "activation": "swish",
+        "batch_size": 60,
+        "max_epochs": 5000,
+        "model_type": "PainnDiabat",
+        "needs_nbrs": true,
+        "partitions": [
+            "normal"
+        ],
+        "weightpath": "/home/saxelrod/supercloud/models/switches",
+        "diabat_keys": [
+            [
+                "d_00",
+                "d_01",
+                "d_02"
+            ],
+            [
+                "d_01",
+                "d_11",
+                "d_12"
+            ],
+            [
+                "d_02",
+                "d_12",
+                "d_22"
+            ]
+        ],
+        "learnable_k": true,
+        "lr_patience": 10,
+        "max_samples": 2500,
+        "max_species": 400,
+        "only_ground": false,
+        "output_keys": [
+            "energy_0",
+            "energy_1"
+        ],
+        "conv_dropout": 0.0,
+        "method_names": [
+            "sf_tddft_bhhlyp"
+        ],
+        "mini_batches": 1,
+        "needs_angles": false,
+        "ground_params": {
+            "ttime": 50,
+            "logfile": "ground.log",
+            "max_time": 500,
+            "savefile": "ground.trj",
+            "timestep": 0.5,
+            "equil_time": 100,
+            "thermostat": "nosehoover",
+            "loginterval": 10,
+            "temperature": 300
+        },
+        "hops_and_last": true,
+        "mol_loss_norm": false,
+        "reset_trainer": false,
+        "cross_talk_dic": null,
+        "save_frequency": 100,
+        "num_ionic_steps": null,
+        "readout_dropout": 0.0,
+        "skip_connection": {
+            "d0": true,
+            "d1": true,
+            "lam": false,
+            "d_00": false,
+            "d_01": false,
+            "d_02": false,
+            "d_11": false,
+            "d_12": false,
+            "d_22": false
+        },
+        "tully_params": {
+            "log_file": "trj.log",
+            "num_trj": 50,
+            "max_time": 5000,
+            "out_file": "trj.csv",
+            "dt": 0.5,
+            "elec_substeps": 25,
+            "num_states": 2,
+            "max_gap_hop": null,
+            "save_period": 30,
+            "initial_surf": 1,
+            "initial_time": 0.0,
+            "cutoff": 5.0,
+            "batch_size": 10
+        }
+    },
+    "project_name": "switches",
+    "parent_class": "Geom"
+}

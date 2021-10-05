@@ -49,6 +49,7 @@ __pycache__
 *.txt
 *.mpg
 *.traj
+*.trj
 
 # directory 
 log/

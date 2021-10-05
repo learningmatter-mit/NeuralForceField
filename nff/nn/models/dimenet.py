@@ -1,14 +1,14 @@
 import numpy as np
 import torch
 from torch import nn
-import torch.nn.functional as F
 import copy
 
 from nff.nn.modules.dimenet import (EmbeddingBlock, InteractionBlock,
                                     OutputBlock)
+from nff.nn.modules.schnet import sum_and_grad
+from nff.nn.modules.diabat import DiabaticReadout
 from nff.nn.layers import DimeNetRadialBasis as RadialBasis
 from nff.nn.layers import DimeNetSphericalBasis as SphericalBasis
-from nff.nn.graphop import batch_and_sum
 from nff.utils.scatter import compute_grad
 
 
@@ -72,7 +72,7 @@ class DimeNet(nn.Module):
         """
 
         To instantiate the model, provide a dictionary with the required
-        keys. 
+        keys.
         Args:
             modelparams (dict): parameters for model
         Returns:
@@ -249,6 +249,65 @@ class DimeNet(nn.Module):
         """
 
         out, xyz = self.atomwise(batch, xyz)
+        results = sum_and_grad(batch=batch,
+                               xyz=xyz,
+                               atomwise_output=out,
+                               grad_keys=self.grad_keys)
+        return results
+
+
+class DimeNetDiabat(DimeNet):
+
+    def __init__(self, modelparams):
+        """
+        `diabat_keys` has the shape of a 2x2 matrix
+        """
+
+        energy_keys = modelparams["output_keys"]
+        diabat_keys = modelparams["diabat_keys"]
+        new_out_keys = list(set(np.array(diabat_keys).reshape(-1)
+                                .tolist()))
+
+        new_modelparams = copy.deepcopy(modelparams)
+        new_modelparams.update({"output_keys": new_out_keys})
+        super().__init__(new_modelparams)
+
+        self.diabatic_readout = DiabaticReadout(
+            diabat_keys=diabat_keys,
+            grad_keys=modelparams["grad_keys"],
+            energy_keys=energy_keys)
+
+    def forward(self,
+                batch,
+                xyz=None,
+                add_nacv=False,
+                add_grad=True,
+                add_gap=True,
+                extra_grads=None):
+
+        output, xyz = self.atomwise(batch, xyz)
+        results = self.diabatic_readout(batch=batch,
+                                        output=output,
+                                        xyz=xyz,
+                                        add_nacv=add_nacv,
+                                        add_grad=add_grad,
+                                        add_gap=add_gap,
+                                        extra_grads=extra_grads)
+
+        return results
+
+
+class DimeNetDiabatDelta(DimeNetDiabat):
+
+    def __init__(self, modelparams):
+        super().__init__(modelparams)
+
+    def forward(self,
+                batch,
+                xyz=None,
+                add_nacv=False):
+
+        out, xyz = self.atomwise(batch, xyz)
         N = batch["num_atoms"].detach().cpu().tolist()
         results = {}
 
@@ -257,6 +316,38 @@ class DimeNet(nn.Module):
             split_val = torch.split(val, N)
             # sum the results for each molecule
             results[key] = torch.stack([i.sum() for i in split_val])
+
+        diag_diabat_keys = np.diag(np.array(self.diabat_keys))
+        diabat_0 = diag_diabat_keys[0]
+
+        for key in diag_diabat_keys[1:]:
+            results[key] += results[diabat_0]
+
+        results = self.add_diag(results, N, xyz, add_nacv=add_nacv)
+        results = self.add_grad(results, xyz)
+        results = self.add_gap(results)
+
+        return results
+
+
+class DimeNetDelta(DimeNet):
+
+    def __init__(self, modelparams):
+        super().__init__(modelparams)
+
+    def forward(self, batch, xyz=None):
+        out, xyz = self.atomwise(batch, xyz)
+        N = batch["num_atoms"].detach().cpu().tolist()
+        results = {}
+
+        for key, val in out.items():
+            # split the outputs into those of each molecule
+            split_val = torch.split(val, N)
+            # sum the results for each molecule
+            results[key] = torch.stack([i.sum() for i in split_val])
+
+        for key in self.out_keys[1:]:
+            results[key] += results[self.out_keys[0]]
 
         # compute gradients
 

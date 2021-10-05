@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 
 from nff.io.ase import NeuralFF, AtomsBatch
 from nff.reactive_tools.utils import *
@@ -15,15 +16,15 @@ def neural_neb_ase(reactantxyzfile, productxyzfile, nff_dir,
     
     #reactant and products as ase Atoms
     initial = AtomsBatch(xyz_to_ase_atoms(reactantxyzfile),
-                         cutoff=5.5, nbr_torch=True, directed=True)
+                         cutoff=5.5, directed=True)
     
     final = AtomsBatch(xyz_to_ase_atoms(productxyzfile),
-                       cutoff=5.5, nbr_torch=True, directed=True)
+                       cutoff=5.5, directed=True)
 
     
     # Make a band consisting of n_images:
     images = [initial]
-    images += [initial.copy() for i in range(n_images)]
+    images += [copy.deepcopy(initial) for i in range(n_images)]
     images += [final]
     neb = SingleCalculatorNEB(images, k=0.02, climb=isclimb)
     neb.method = 'improvedtangent'

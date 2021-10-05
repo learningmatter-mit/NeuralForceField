@@ -6,7 +6,7 @@ import copy
 
 from torch.nn import ModuleDict, Sequential
 from nff.nn.activations import shifted_softplus
-from nff.nn.layers import Dense
+from nff.nn.layers import Dense, Diagonalize
 from nff.utils.scatter import scatter_add
 
 
@@ -19,7 +19,8 @@ layer_types = {
     "sigmoid": torch.nn.Sigmoid,
     "Dropout": torch.nn.Dropout,
     "LeakyReLU": torch.nn.LeakyReLU,
-    "ELU": torch.nn.ELU
+    "ELU": torch.nn.ELU,
+    "Diagonalize": Diagonalize
 }
 
 
@@ -81,7 +82,11 @@ def get_default_readout(n_atom_basis):
     return default_readout
 
 
-def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
+def torch_nbr_list(atomsobject,
+                   cutoff,
+                   device='cuda:0',
+                   directed=True,
+                   requires_large_offsets=True):
     """Pytorch implementations of nbr_list for minimum image convention, the offsets are only limited to 0, 1, -1:
     it means that no pair interactions is allowed for more than 1 periodic box length. It is so much faster than
     neighbor_list algorithm in ase.
@@ -92,24 +97,36 @@ def torch_nbr_list(atomsobject, cutoff, device='cuda:0', directed=True):
         atomsobject (TYPE): Description
         cutoff (float): cutoff for
         device (str, optional): Description
+        requires_large_offsets: to get offsets beyond -1,0,1
 
     Returns:
         i, j, cutoff: just like ase.neighborlist.neighbor_list
     """
-    xyz = torch.Tensor(atomsobject.get_positions(wrap=True)).to(device)
+    xyz = torch.Tensor(atomsobject.get_positions(wrap=False)).to(device)
     dis_mat = xyz[None, :, :] - xyz[:, None, :]
 
     if any(atomsobject.pbc):
-        cell_dim = torch.Tensor(atomsobject.get_cell()).diag().to(device)
-
-        offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + \
-            dis_mat.lt(-0.5 * cell_dim).to(torch.float)
-        dis_mat = dis_mat + offsets * cell_dim
+        if np.count_nonzero(atomsobject.cell.T-np.diag(np.diagonal(atomsobject.cell.T)))!=0:
+            M,N=dis_mat.shape[0],dis_mat.shape[1]
+            f=torch.linalg.solve(torch.Tensor(atomsobject.cell.T),(dis_mat.view(-1,3).T)).T
+            g=f-torch.floor(f+0.5)
+            dis_mat=torch.matmul(g,torch.Tensor(atomsobject.cell))
+            dis_mat=dis_mat.view(M,N,3)
+            offsets=-torch.floor(f+0.5).view(M,N,3)
+        else:
+            cell_dim = torch.Tensor(atomsobject.get_cell()).diag().to(device)
+            if requires_large_offsets:
+               shift = torch.round(torch.divide(dis_mat,cell_dim))
+               offsets = -shift
+            else:
+               offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + \
+               dis_mat.lt(-0.5 * cell_dim).to(torch.float)
+            dis_mat=dis_mat+offsets*cell_dim
 
     dis_sq = dis_mat.pow(2).sum(-1)
     mask = (dis_sq < cutoff ** 2) & (dis_sq != 0)
 
-    nbr_list = mask.nonzero()
+    nbr_list = mask.nonzero(as_tuple=False)
     if not directed:
         nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
@@ -334,7 +351,6 @@ def chemprop_msg_to_node(h,
     # get the indices of h to add for each node
     good_idx = node_nbr_idx[mask]
 
-
     h_to_add = h[good_idx]
 
     # add together
@@ -353,7 +369,7 @@ def remove_bias(layers):
             layers (list): list of dictionaries of the form {"name": "...",
                     "param": {...}}
     Returns:
-            new_layers (list): same idea as `layers`, but with "param" of 
+            new_layers (list): same idea as `layers`, but with "param" of
                     linear layers updated to contain {"bias": False}.
 
     """
@@ -364,3 +380,24 @@ def remove_bias(layers):
     return new_layers
 
 
+def single_spec_nbrs(dset,
+                     cutoff,
+                     device,
+                     directed=True):
+
+    xyz = torch.stack(dset.props['nxyz'])[:, :, 1:]
+    dist_mat = ((xyz[:, :, None, :] - xyz[:, None, :, :])
+                .to(device).norm(dim=-1))
+    nbr_mask = (dist_mat <= cutoff) * (dist_mat > 0)
+    nbrs = nbr_mask.nonzero(as_tuple=False)
+
+    if not directed:
+        nbrs = nbrs[nbrs[:, 2] > nbrs[:, 1]]
+
+    split_nbrs = []
+    num_mols = xyz.shape[0]
+    for i in range(num_mols):
+        match_nbrs = (nbrs[:, 0] == i)
+        split_nbrs.append(nbrs[match_nbrs][:, 1:])
+
+    return split_nbrs

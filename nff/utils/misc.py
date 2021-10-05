@@ -1,3 +1,4 @@
+import argparse
 import sys
 from tqdm import tqdm
 import json
@@ -470,3 +471,60 @@ def cat_props(props):
             new_props[key] = val
 
     return new_props
+
+
+def kron(a, b):
+    ein = torch.einsum("ab,cd-> acbd", a, b)
+    out = ein.view(a.size(0) * b.size(0),
+                   a.size(1) * b.size(1))
+
+    return out
+
+
+def load_defaults(direc,
+                  arg_path):
+    """
+    Load default arguments from a JSON file
+    """
+
+    args_path = os.path.join(direc, arg_path)
+    with open(args_path, 'r') as f:
+        default_args = json.load(f)
+
+    return default_args
+
+
+def parse_args_from_json(arg_path,
+                         direc):
+
+    default_args = load_defaults(arg_path=arg_path,
+                                 direc=direc)
+    description = default_args['description']
+
+    parser = argparse.ArgumentParser(description=description)
+    default_args.pop('description')
+
+    required = parser.add_argument_group(('required arguments (either in '
+                                          'the command line or the config '
+                                          'file)'))
+    optional = parser.add_argument_group('optional arguments')
+
+    for name, info in default_args.items():
+        keys = ['default', 'choices', 'nargs']
+        kwargs = {key: info[key] for key in keys
+                  if key in info}
+
+        # Required arguments get put in one group and optional ones in another
+        # so that they're separated in `--help` . We don't actually set
+        # required=True for required ones, though, because they can be given in
+        # the config file instead of the command line
+
+        group = required if info.get('required', False) else optional
+        group.add_argument(f'--{name}',
+                            type=eval(info['type']),
+                            help=info['help'],
+                            **kwargs)
+
+    args = parser.parse_args()
+
+    return args

@@ -4,6 +4,7 @@ import torch
 from ase import Atoms
 from tqdm import tqdm
 
+from nff.utils.misc import tqdm_enum
 
 DISTANCETHRESHOLDICT_SYMBOL = {
     ("H", "H"): 1.00,
@@ -125,7 +126,7 @@ def get_neighbor_list(xyz, cutoff=5, undirected=True):
     # neighbor list
     mask = (dist <= cutoff)
     mask[np.diag_indices(n)] = 0
-    nbr_list = mask.nonzero()
+    nbr_list = mask.nonzero(as_tuple=False)
 
     if undirected:
         nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
@@ -445,7 +446,7 @@ def m_idx_of_angles(angle_list,
     mask *= (repeated_nbr == reshaped_angle)
 
     # get the indices where everything is true
-    idx = mask.nonzero()[:, 1]
+    idx = mask.nonzero(as_tuple=False)[:, 1]
 
     return idx
 
@@ -475,7 +476,8 @@ def add_ji_kj(angle_lists, nbr_lists):
 
     ji_idx_list = []
     kj_idx_list = []
-    for angle_list, nbr_list in zip(angle_lists, nbr_lists):
+    for i, nbr_list in tqdm_enum(nbr_lists):
+        angle_list = angle_lists[i]
         ji_idx = m_idx_of_angles(angle_list=angle_list,
                                  nbr_list=nbr_list,
                                  angle_start=1,
@@ -549,7 +551,7 @@ def batch_angle_idx(nbrs):
     mask = ((nbrs[:, 1] == nbrs[:, 0, None])
             * (nbrs[:, 0] != nbrs[:, 1, None]))
     ji_idx = all_idx[mask]
-    kj_idx = mask.nonzero()[:, 0]
+    kj_idx = mask.nonzero(as_tuple=False)[:, 0]
 
     return ji_idx, kj_idx
 
@@ -587,7 +589,8 @@ def full_angle_idx(batch):
         ji_idx, kj_idx = batch_angle_idx(nbrs)
 
         # map to these indices
-        map_indices = conf_mask.nonzero().reshape(-1)
+        map_indices = (conf_mask.nonzero(as_tuple=False)
+                       .reshape(-1))
         all_ji_idx.append(map_indices[ji_idx])
         all_kj_idx.append(map_indices[kj_idx])
 
@@ -606,7 +609,6 @@ def kj_ji_to_dset(dataset, track):
     Returns:
         dataset (nff.data.Dataset): updated dataset
     """
-
 
     all_ji_idx = []
     all_kj_idx = []

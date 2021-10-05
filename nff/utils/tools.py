@@ -10,12 +10,10 @@ import numpy as np
 import torch
 
 from torch.nn import ModuleDict, Sequential
-from nff.nn.activations import shifted_softplus, Swish
+from nff.nn.activations import (shifted_softplus, Swish,
+                                LearnableSwish)
 from nff.nn.layers import Dense
 
-import numpy as np
-import torch
-import torch.nn.functional as F
 
 __all__ = [
     "set_random_seed",
@@ -34,7 +32,9 @@ layer_types = {
     "Dropout": torch.nn.Dropout,
     "LeakyReLU": torch.nn.LeakyReLU,
     "ELU":  torch.nn.ELU,
-    "swish": Swish
+    "swish": Swish,
+    "learnable_swish": LearnableSwish,
+    "softplus": torch.nn.Softplus
 }
 
 
@@ -157,4 +157,13 @@ def make_directed(nbr_list):
     new_nbrs = torch.cat([nbr_list, nbr_list.flip(1)], dim=0)
     return new_nbrs, directed
 
+def make_undirected(nbr_list):
+    gtr_ij = (nbr_list[:, 0] > nbr_list[:, 1]).any().item()
+    gtr_ji = (nbr_list[:, 1] > nbr_list[:, 0]).any().item()
+    directed = gtr_ij and gtr_ji
 
+    if not directed:
+        return nbr_list, directed
+    nbrs = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
+    
+    return nbrs, directed

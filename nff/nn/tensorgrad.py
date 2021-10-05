@@ -2,13 +2,11 @@
 """
 import numpy as np
 import copy
+import inspect
 
 import torch
 from torch.autograd import grad
-from torch.autograd.gradcheck import zero_gradients
 import torch.nn.functional as F
-
-from nff.nn.graphop import batch_and_sum
 
 
 def compute_jacobian(inputs, output, device):
@@ -23,6 +21,9 @@ def compute_jacobian(inputs, output, device):
     Returns:
         torch.Tensor: size (N_in, N_in, N_out)
     """
+
+    # from torch.autograd.gradcheck import zero_gradients
+
     assert inputs.requires_grad
 
     num_classes = output.size()[1]
@@ -33,7 +34,9 @@ def compute_jacobian(inputs, output, device):
         jacobian = jacobian.to(device)
 
     for i in range(num_classes):
-        zero_gradients(inputs)
+        # zero_gradients(inputs)
+        inputs.grad = None
+        
         grad_output.zero_()
         grad_output[:, i] = 1
         output.backward(grad_output, retain_graph=True)
@@ -42,7 +45,9 @@ def compute_jacobian(inputs, output, device):
     return torch.transpose(jacobian, dim0=0, dim1=1)
 
 
-def compute_grad(inputs, output):
+def compute_grad(inputs,
+                 output,
+                 allow_unused=False):
     '''
     Args:
         inputs (torch.Tensor): size (N_in, )
@@ -57,7 +62,8 @@ def compute_grad(inputs, output):
                       inputs,
                       grad_outputs=output.data.new(output.shape).fill_(1),
                       create_graph=True,
-                      retain_graph=True)
+                      retain_graph=True,
+                      allow_unused=allow_unused)
 
     return gradspred
 
@@ -117,6 +123,7 @@ def adj_nbrs_and_z(batch, xyz, max_dim, stacked):
         # add dummy atomic numbers for these new nan's
         new_z = torch.cat([new_z[:dim],
                            torch.Tensor([float("nan")]).to(new_z.device),
+                           # torch.Tensor([float("1")]).to(new_z.device),
                            new_z[dim:]])
 
     # change the neighbor list in the batch
@@ -159,13 +166,13 @@ def pad(batch):
                            for i, num_pad in
                            zip(reshaped, num_pads)])
 
-    # Get the stacked `xyz` by applying a mask to 
+    # Get the stacked `xyz` by applying a mask to
     # remove the atomic numbers in the nxyz. We need
     # a stacked `xyz` so that we can compute Hessians
-    # of geometries' energies only with respect to 
+    # of geometries' energies only with respect to
     # that geometry's coordinates, without needing
-    # gradients with respect to other geometries' 
-    # coordinates, too. 
+    # gradients with respect to other geometries'
+    # coordinates, too.
 
     num_batch = stacked.shape[0]
     mask = torch.ones_like(stacked).reshape(-1, 4)
@@ -206,6 +213,8 @@ def schnet_batched_hessians(batch,
                             device=0,
                             energy_keys=["energy"]):
 
+    from nff.nn.graphop import batch_and_sum
+
     stack_xyz, xyz, batch = pad(batch)
     r, N, xyz = model.convolve(batch, xyz)
     r = model.atomwisereadout(r)
@@ -232,3 +241,89 @@ def schnet_batched_hessians(batch,
     batch["num_atoms"] = batch["real_num_atoms"]
 
     return hess_dic
+
+
+def results_from_stack(batch,
+                       model=None,
+                       forward=None,
+                       **kwargs):
+
+    batch['nxyz'] = batch['nxyz'].detach()
+    stack_xyz, xyz, batch = pad(batch)
+
+    # Make sure the model takes `xyz` as an input
+    # Just running this with a model that doesn't
+    # take `xyz` might not give an error, because
+    # it might take **kwargs as input and never use
+    # `xyz`
+
+    if model is not None:
+        forward = model.forward
+
+    info = inspect.getargspec(forward)
+    if 'xyz' not in info.args:
+        raise Exception(("Model does not take xyz as input. "
+                         "Please modify the model so that it can take "
+                         "an external xyz."))
+    results = forward(batch=batch,
+                      xyz=xyz,
+                      **kwargs)
+
+    return xyz, stack_xyz, results
+
+
+def hess_from_results(results,
+                      xyz,
+                      stack_xyz,
+                      keys,
+                      batch,
+                      device):
+
+    hess_dic = {}
+    N = batch['real_num_atoms']
+
+    for key in keys:
+        output = results[key]
+        hess = hess_from_pad(stacked=stack_xyz,
+                             output=output,
+                             device=device,
+                             N=N)
+        hess_dic[key + "_hess"] = hess
+
+    # change these keys back to their original values
+
+    batch.pop("nbr_list")
+    batch.pop("nxyz")
+    batch.pop("num_atoms")
+
+    batch["nbr_list"] = batch["real_nbrs"]
+    batch["nxyz"] = batch["real_nxyz"]
+    batch["num_atoms"] = batch["real_num_atoms"]
+
+    results.update(**hess_dic)
+
+    return results
+
+
+def general_batched_hessian(batch,
+                            keys,
+                            device,
+                            model=None,
+                            forward=None,
+                            **kwargs):
+
+    # doesn't seem to work for painn, at least with non-locality
+
+    assert any([i is not None for i in [model, forward]])
+    xyz, stack_xyz, results = results_from_stack(batch=batch,
+                                                 model=model,
+                                                 forward=forward,
+                                                 **kwargs)
+    results = hess_from_results(results=results,
+                                xyz=xyz,
+                                stack_xyz=stack_xyz,
+                                keys=keys,
+                                batch=batch,
+                                device=device)
+
+    return results
