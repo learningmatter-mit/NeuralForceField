@@ -1,5 +1,6 @@
 from ase.vibrations import Vibrations
 from ase.units import Bohr, mol, kcal
+from ase import Atoms
 
 import numpy as np
 

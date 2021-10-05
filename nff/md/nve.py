@@ -38,16 +38,21 @@ class Dynamics:
         # todo: structure optimization before starting
 
         # intialize system momentum
-        MaxwellBoltzmannDistribution(
-            self.atomsbatch, self.mdparam['T_init'] * units.kB)
+        MaxwellBoltzmannDistribution(self.atomsbatch,
+                                     self.mdparam['T_init'] * units.kB)
         Stationary(self.atomsbatch)  # zero linear momentum
         ZeroRotation(self.atomsbatch)
 
         # set thermostats
         integrator = self.mdparam['thermostat']
-
-        self.integrator = integrator(
-            self.atomsbatch, **self.mdparam['thermostat_params'], **self.mdparam)
+        if integrator == VelocityVerlet:
+            dt = self.mdparam['thermostat_params']['timestep']
+            self.integrator = integrator(self.atomsbatch,
+                                         timestep=dt)
+        else:
+            self.integrator = integrator(self.atomsbatch,
+                                         **self.mdparam['thermostat_params'],
+                                         **self.mdparam)
 
         # attach trajectory dump
         self.traj = Trajectory(

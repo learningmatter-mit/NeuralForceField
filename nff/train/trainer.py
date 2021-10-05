@@ -177,7 +177,7 @@ class Trainer:
     def get_best_model(self):
         try:
             return torch.load(self.best_model)
-        except EOFError:
+        except (EOFError, RuntimeError):
             # if we had tried to save a model and the
             # pickling failed (e.g. dimenet), then
             # load the best state_dict instead
