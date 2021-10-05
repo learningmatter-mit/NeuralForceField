@@ -4,7 +4,7 @@ The Neural Force Field (NFF) code is an API based on SchNet [1-4], DimeNet [5], 
 
 This code repository is developed in the Learning Matter Lab (led by prof. Rafael Gomez-Bombarelli) at MIT.
 
-## Installation from source
+## Conda environment
 
 We highly recommend creating a `conda` environment to run the code. To do that, use the following commands:
 
@@ -24,6 +24,8 @@ To ensure that the `nff` environment is accessible through Jupyter, add the the 
 ```bash
 python -m ipykernel install --user --name nff --display-name "Python [conda env:nff"]
 ```
+
+## Installation
 
 If you would like to install NFF as a package, you can do so by running
 
