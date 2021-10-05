@@ -58,7 +58,7 @@ NFF also contains modules that predict properties from 3D geometries of conforme
 ### Usage with Jupyter Notebooks and other scripts
 
 #### Force field
-A series of tutorials illustrating how `nff` can be used in conjunction with Jupyter Notebooks or other scripts is provided in the `tutorials/` folder. It also covers how to integrate a pre-trained model with an ASE calculator, how to perform molecular dynamics in the ground state and the excited state, and how to train different model types like DimeNet and PaiNN.
+A series of tutorials illustrating how `nff` can be used in conjunction with Jupyter Notebooks or other scripts is provided in the `tutorials/` folder. It also covers how to integrate a pre-trained model with an ASE calculator, how to perform ground state molecular dynamics (MD) and excited state non-adiabatic MD, and how to train different model types like DimeNet and PaiNN.
 
 #### Property predictor
 While `scripts/cp3d/README.md` explains in depth how to use the scripts, the notebook `07_cp3d.ipynb` goes into some detail about what happens behind the scenes. In this notebook you'll see how the datasets get made and what the models look like.
