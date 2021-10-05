@@ -792,6 +792,116 @@ class NeuralMetadynamics(NeuralFF):
         f_bias = self.get_bias(atoms)
         self.results['forces'] += f_bias
 
+<<<<<<< HEAD
         if add_steps:
             for i, step in enumerate(self.steps_from_old):
                 self.steps_from_old[i] = step + 1
+=======
+
+class EnsembleNFF(Calculator):
+    """Produces an ensemble of NFF calculators to predict the discrepancy between
+        the properties"""
+    implemented_properties = ['energy', 'forces']
+
+    def __init__(
+        self,
+        models: list,
+        device='cpu',
+        **kwargs
+    ):
+        """Creates a NeuralFF calculator.nff/io/ase.py
+
+        Args:
+            model (TYPE): Description
+            device (str): device on which the calculations will be performed 
+            **kwargs: Description
+            model (one of nff.nn.models)
+        """
+
+        Calculator.__init__(self, **kwargs)
+        self.models = models
+        for m in self.models:
+            m.eval()
+        self.device = device
+        self.to(device)
+
+    def to(self, device):
+        self.device = device
+        for m in self.models:
+            m.to(device)
+
+    def calculate(
+        self,
+        atoms=None,
+        properties=['energy', 'forces'],
+        system_changes=all_changes,
+    ):
+        """Calculates the desired properties for the given AtomsBatch.
+
+        Args:
+            atoms (AtomsBatch): custom Atoms subclass that contains implementation
+                of neighbor lists, batching and so on. Avoids the use of the Dataset
+                to calculate using the models created.
+            properties (list of str): 'energy', 'forces' or both
+            system_changes (default from ase)
+        """
+
+        Calculator.calculate(self, atoms, properties, system_changes)
+
+        # run model
+        #atomsbatch = AtomsBatch(atoms)
+        # batch_to(atomsbatch.get_batch(), self.device)
+        batch = batch_to(atoms.get_batch(), self.device)
+
+        # add keys so that the readout function can calculate these properties
+        batch['energy'] = []
+        if 'forces' in properties:
+            batch['energy_grad'] = []
+
+        energies = []
+        gradients = []
+        for model in self.models:
+            prediction = model(batch)
+
+            # change energy and force to numpy array
+            energies.append(
+                prediction['energy']
+                .detach()
+                .cpu()
+                .numpy()
+                * (1 / const.EV_TO_KCAL_MOL)
+            )
+            gradients.append(
+                prediction['energy_grad']
+                .detach()
+                .cpu()
+                .numpy()
+                * (1 / const.EV_TO_KCAL_MOL)
+            )
+
+        energies = np.stack(energies)
+        gradients = np.stack(gradients)
+
+        self.results = {
+            'energy': energies.mean(0).reshape(-1),
+            'energy_std': energies.std(0).reshape(-1),
+        }
+
+        if 'forces' in properties:
+            self.results['forces'] = -gradients.mean(0).reshape(-1, 3)
+            self.results['forces_std'] = gradients.std(0).reshape(-1, 3)
+
+        atoms.results = self.results.copy()
+
+    @classmethod
+    def from_files(
+        cls,
+        model_paths: list,
+        device='cuda',
+        **kwargs
+    ):
+        models = [
+            load_model(path)
+            for path in model_paths
+        ]
+        return cls(models, device, **kwargs)
