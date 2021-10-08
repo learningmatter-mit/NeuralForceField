@@ -190,10 +190,8 @@ def run_job(config_name,
                job_dir=job_dir,
                num_parallel=num_parallel)
 
-    start_dir = os.getcwd()
-    os.chdir(job_dir)
-    p = bash_command("bash job.sh") #  && rm *fchk")
-    os.chdir(start_dir)
+    cmd = f"cd {job_dir} && bash job.sh && cd - && rm *fchk"
+    p = bash_command(cmd)
 
     return p
 
@@ -311,9 +309,9 @@ def run_sf(job_dir,
 
     for i, p in enumerate(procs):
         exit_code = p.wait()
-        if exit_code != 0:
-            msg = f"{proc_names[i]} returned an error"
-            raise Exception(msg)
+        # if exit_code != 0:
+        #     msg = f"{proc_names[i]} returned an error"
+        #     raise Exception(msg)
 
 
 def parse_sf_grads(job_dir):
@@ -515,6 +513,9 @@ def get_results(nxyz,
     else:
         raise NotImplementedError
 
+    import pdb
+    pdb.set_trace()
+    
     results = parse(job_dir=job_dir,
                     grad_config=grad_config,
                     nacv_config=nacv_config,
