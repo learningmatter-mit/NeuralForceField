@@ -309,9 +309,9 @@ def run_sf(job_dir,
 
     for i, p in enumerate(procs):
         exit_code = p.wait()
-        # if exit_code != 0:
-        #     msg = f"{proc_names[i]} returned an error"
-        #     raise Exception(msg)
+        if exit_code != 0:
+            msg = f"{proc_names[i]} returned an error"
+            raise Exception(msg)
 
 
 def parse_sf_grads(job_dir):
