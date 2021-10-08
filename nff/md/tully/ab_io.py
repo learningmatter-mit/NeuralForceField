@@ -190,8 +190,10 @@ def run_job(config_name,
                job_dir=job_dir,
                num_parallel=num_parallel)
 
-    cmd = f"cd {job_dir} && bash job.sh && rm *fchk"
-    p = bash_command(cmd)
+    start_dir = os.getcwd()
+    os.chdir(job_dir)
+    p = bash_command("bash job.sh") #  && rm *fchk")
+    os.chdir(start_dir)
 
     return p
 
@@ -215,6 +217,7 @@ def bhhlyp_6_31gs_sf_tddft_engrad_qchem(nxyz,
     if not os.path.isdir(grad_dir):
         os.makedirs(grad_dir)
 
+    # copy job_info.json
     p = run_job(config_name=config_name,
                 jobspec=jobspec,
                 job_dir=grad_dir,
