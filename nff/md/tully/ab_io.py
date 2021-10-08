@@ -190,7 +190,7 @@ def run_job(config_name,
                job_dir=job_dir,
                num_parallel=num_parallel)
 
-    cmd = f"cd {job_dir} && bash job.sh && cd - && rm *fchk"
+    cmd = f"cd {job_dir} && bash job.sh && rm *fchk"
     p = bash_command(cmd)
 
     return p
@@ -513,9 +513,6 @@ def get_results(nxyz,
     else:
         raise NotImplementedError
 
-    import pdb
-    pdb.set_trace()
-    
     results = parse(job_dir=job_dir,
                     grad_config=grad_config,
                     nacv_config=nacv_config,
