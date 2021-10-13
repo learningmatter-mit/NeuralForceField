@@ -792,11 +792,9 @@ class NeuralMetadynamics(NeuralFF):
         f_bias = self.get_bias(atoms)
         self.results['forces'] += f_bias
 
-<<<<<<< HEAD
         if add_steps:
             for i, step in enumerate(self.steps_from_old):
                 self.steps_from_old[i] = step + 1
-=======
 
 class EnsembleNFF(Calculator):
     """Produces an ensemble of NFF calculators to predict the discrepancy between
