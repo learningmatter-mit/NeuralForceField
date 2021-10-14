@@ -215,6 +215,7 @@ def bhhlyp_6_31gs_sf_tddft_engrad_qchem(nxyz,
     if not os.path.isdir(grad_dir):
         os.makedirs(grad_dir)
 
+    # copy job_info.json
     p = run_job(config_name=config_name,
                 jobspec=jobspec,
                 job_dir=grad_dir,
