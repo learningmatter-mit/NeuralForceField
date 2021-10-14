@@ -229,7 +229,7 @@ class AbTully(NeuralTully):
         self.props[key] = props[key]
 
     def run(self):
-        steps = math.ceil((self.max_time - self.dt) / self.dt)
+        steps = math.ceil((self.max_time - self.t) / self.dt)
         if self.step_num == 0:
             self.update_props()
 
