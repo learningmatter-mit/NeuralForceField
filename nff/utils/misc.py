@@ -57,6 +57,15 @@ def tqdm_enum(iter):
         yield i, y
         i += 1
 
+def add_json_args(args, config_flag="config_file"):
+    config_path = getattr(args, config_flag, None)
+    if config_path is not None:
+        with open(config_path, "r") as f:
+            config_args = json.load(f)
+        for key, val in config_args.items():
+            if hasattr(args, key):
+                setattr(args, key, val)
+    return args
 
 def parse_args(parser, config_flag="config_file"):
     """
@@ -76,13 +85,7 @@ def parse_args(parser, config_flag="config_file"):
     # arguments from that file and apply the results
     # to `args`
 
-    config_path = getattr(args, config_flag, None)
-    if config_path is not None:
-        with open(config_path, "r") as f:
-            config_args = json.load(f)
-        for key, val in config_args.items():
-            if hasattr(args, key):
-                setattr(args, key, val)
+    args = add_json_args(args, config_flag=config_flag)
     return args
 
 
