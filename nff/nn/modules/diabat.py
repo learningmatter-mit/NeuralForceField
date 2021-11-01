@@ -299,7 +299,9 @@ class DiabaticReadout(nn.Module):
 
         return results
 
-    def add_gap(self, results):
+    def add_gap(self, 
+        results,
+        add_grad):
 
         # diabatic gap
 
@@ -320,6 +322,10 @@ class DiabaticReadout(nn.Module):
                 lower_key = self.energy_keys[i]
                 gap = results[upper_key] - results[lower_key]
                 results.update({f"{upper_key}_{lower_key}_delta": gap})
+
+                if add_grad:
+                    gap_grad = results[upper_key + "_grad"] - results[lower_key + "_grad"]
+                    results.update({f"{upper_key}_{lower_key}_delta_grad": gap_grad})
 
         return results
 
@@ -513,7 +519,7 @@ class DiabaticReadout(nn.Module):
                                          u=u)
 
         if add_gap:
-            results = self.add_gap(results)
+            results = self.add_gap(results, add_grad=add_grad)
 
         if self.training:
             results = self.add_stochastic(results)

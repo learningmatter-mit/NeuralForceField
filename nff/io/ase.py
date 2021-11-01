@@ -475,8 +475,11 @@ class NeuralFF(Calculator):
         batch[self.en_key] = []
         batch[grad_key] = []
 
+        kwargs = {}
         requires_stress = "stress" in self.properties
-        prediction = self.model(batch, requires_stress=requires_stress)
+        if requires_stress:
+            kwargs["requires_stress"] = True
+        prediction = self.model(batch, **kwargs)
 
         # change energy and force to numpy array
 
