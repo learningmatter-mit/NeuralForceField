@@ -7,6 +7,7 @@ import os
 import random
 import numpy as np
 import torch
+from ase.build.rotate import rotation_matrix_from_points
 from sklearn.metrics import (roc_auc_score, auc, precision_recall_curve,
                              r2_score, accuracy_score, log_loss)
 
