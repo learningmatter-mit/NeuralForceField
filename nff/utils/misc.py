@@ -560,5 +560,5 @@ def align_and_return(target, atoms):
 
     atoms.set_positions(np.dot(p, R.T) + c0)
 
-    return R, c0
+    return R, c0, c
 
