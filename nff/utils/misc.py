@@ -536,3 +536,29 @@ def parse_args_from_json(arg_path,
     args = parser.parse_args()
 
     return args
+
+def align_and_return(target, atoms):
+    """
+
+    Taken from `ase.build.rotate.minimize_rotation_and_translation`.
+    Same as their code, but returns the displacement and the rotation
+    matrix.
+
+    """
+
+    p = atoms.get_positions()
+    p0 = target.get_positions()
+
+    # centeroids to origin
+    c = np.mean(p, axis=0)
+    p -= c
+    c0 = np.mean(p0, axis=0)
+    p0 -= c0
+
+    # Compute rotation matrix
+    R = rotation_matrix_from_points(p.T, p0.T)
+
+    atoms.set_positions(np.dot(p, R.T) + c0)
+
+    return R, c0
+
