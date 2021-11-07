@@ -39,6 +39,9 @@ KCAL_TO_AU = {
 KB_EV = 0.0000861731
 KB_AU = 3.166815e-6
 EV_TO_AU = 1 / 27.2114
+INV_CM_TO_HZ = 2.99792458 * 1e10
+SECONDS_TO_AU = 1 / (2.4188843265857 * 10 ** (-17))
+INV_CM_TO_AU = INV_CM_TO_HZ / SECONDS_TO_AU
 
 # Coulomb's constant, in (kcal/mol) * (A / e^2),
 # where A is Angstroms and e is the electron charge
@@ -91,7 +94,7 @@ FS_TO_ASE = 0.098
 ASE_TO_FS = 1 / FS_TO_ASE
 
 # Masses
-AMU_TO_AU = 1.67262192369e-27 / (9.1093837015e-31)
+AMU_TO_AU = 1.6726219e-27 / (9.10938356e-31)
 
 # Weird units used by Gaussian
 CM_TO_J = 1.98630e-23
