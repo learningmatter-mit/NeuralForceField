@@ -39,9 +39,7 @@ KCAL_TO_AU = {
 KB_EV = 0.0000861731
 KB_AU = 3.166815e-6
 EV_TO_AU = 1 / 27.2114
-INV_CM_TO_HZ = 2.99792458 * 1e10
-SECONDS_TO_AU = 1 / (2.4188843265857 * 10 ** (-17))
-INV_CM_TO_AU = INV_CM_TO_HZ / SECONDS_TO_AU
+INV_CM_TO_AU = 4.5564e-6
 
 # Coulomb's constant, in (kcal/mol) * (A / e^2),
 # where A is Angstroms and e is the electron charge
