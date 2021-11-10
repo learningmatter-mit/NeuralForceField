@@ -1,0 +1,29 @@
+name: nff
+channels:
+ - conda-forge
+ - anaconda
+ - defaults
+ - pytorch
+ - rdkit
+ - openbabel
+dependencies:
+ - python==3.7.10 
+ - scikit-learn==0.24.1 
+ - pytorch=1.9.0 
+ - cudatoolkit=10.2 
+ - ase==3.21.1 
+ - pandas==1.2.2 
+ - pymatgen==2021.2.16 
+ - sympy==1.7.1 
+ - rdkit==2020.09.4 
+ - hyperopt==0.2.5 
+ - jq==1.6 
+ - openbabel==3.1.1
+ - pip
+ - pip:
+   - sigopt==7.3.0  
+   - e3fp==1.2.3 
+   - ipykernel==5.5.0 
+   - performer-pytorch==1.0.11 
+   - nglview==3.0.1
+

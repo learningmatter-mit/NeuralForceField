@@ -1,3 +1,14 @@
+Metadata-Version: 2.1
+Name: nff
+Version: 1.0.0
+Summary: Neural Force Field based on SchNet
+Home-page: https://github.mit.edu/MLMat/NeuralForceField
+Author: Wujie Wang, Daniel Schwalbe-Koda
+License: MIT
+Platform: UNKNOWN
+Requires-Python: >=3.5
+License-File: LICENSE
+
 # Neural Force Field
 
 The Neural Force Field (NFF) code is an API based on SchNet [1-4], DimeNet [5], PaiNN [6] and DANN [7]. It provides an interface to train and evaluate neural networks for force fields. It can also be used as a property predictor that uses both 3D geometries and 2D graph information [8].
@@ -10,16 +21,10 @@ We highly recommend creating a `conda` environment to run the code. To do that, 
 
 ```bash
 conda upgrade conda
-conda env create -f environment.yaml
-```
-
-or install packages manually with
-
-```bash
 conda create -n nff python=3.7.10 scikit-learn==0.24.1 pytorch=1.9.0 cudatoolkit=10.2 ase==3.21.1 pandas==1.2.2 pymatgen==2021.2.16 sympy==1.7.1 rdkit==2020.09.4 hyperopt==0.2.5 jq==1.6 openbabel==3.1.1 -c pytorch -c conda-forge -c rdkit -c openbabel
 ```
 
-and install the remaining pip requirements:
+Next install remaining pip requirements:
 
 ```bash
 conda activate nff
@@ -106,4 +111,6 @@ J. Chem. Theory Comput. **15**(1), 448-455 (2019). [10.1021/acs.jctc.8b00908](ht
 * [8] S. Axelrod and R. Gomez-Bombarelli. *Molecular machine learning with conformer ensembles.* arXiv preprint (2020). [arXiv:2012.08452](https://arxiv.org/abs/2012.08452?fbclid=IwAR2KlinGWeEHTR99m8x9nu2caURqIg04nQkimqzYRcTIqFq6qgv6_RgmVzo).
 
 * [9] D. Schwalbe-Koda, A.R. Tan, and R. Gomez-Bombarelli. *Differentiable sampling of molecular geometries with uncertainty-based adversarial attacks.* Nat. Commun. **12**, 5104 (2021). [URL](https://doi.org/10.1038/s41467-021-25342-8).
+
+
 
