@@ -7,12 +7,13 @@ import numpy as np
 
 from nff.data import Dataset
 
-def get_md17_dataset(molecule):
+def get_md17_dataset(molecule, cutoff=5.0):
     """Download a dataset from MD17 and prepare in NFF format.
     
     Args:
         molecule (str): One of aspirin, benzene, ethanol, malonaldehyde, naphthalene, 
             salicylic, toluene, uracil, paracetamol, azobenzene
+        cutoff (float): cutoff (Angstrom) for neighbor list construction.
     
     Returns:
         dataset (Dataset): NFF dataset.
@@ -66,5 +67,8 @@ def get_md17_dataset(molecule):
 
     # MD17 energies are in [kcal/mol] and forces are in [kcal/mol/angstrom]
     dataset = Dataset(props.copy(), units='kcal/mol')
+
+    # generate neighborlist
+    dataset.generate_neighbor_list(cutoff=cutoff)
 
     return dataset
