@@ -45,7 +45,7 @@ class AtomsBatch(Atoms):
     def __init__(
         self,
         *args,
-        props={},
+        props=None,
         cutoff=DEFAULT_CUTOFF,
         directed=DEFAULT_DIRECTED,
         requires_large_offsets=False,
@@ -70,6 +70,9 @@ class AtomsBatch(Atoms):
         # import pdb
         # pdb.set_trace()
 
+        if props is None:
+            props = {}
+            
         self.props = props
         self.nbr_list = props.get('nbr_list', None)
         self.offsets = props.get('offsets', None)
