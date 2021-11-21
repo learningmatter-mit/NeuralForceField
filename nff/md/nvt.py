@@ -3,6 +3,7 @@ import numpy as np
 import copy
 import math
 
+from tqdm import tqdm
 from ase.optimize.optimize import Dynamics
 from ase.md.md import MolecularDynamics
 from ase import units
@@ -73,7 +74,7 @@ class NoseHoover(MolecularDynamics):
         # get current acceleration and velocity:
         accel = (self.atoms.get_forces() /
                  self.atoms.get_masses().reshape(-1, 1))
-
+        
         vel = self.atoms.get_velocities()
 
         # make full step in position
@@ -120,7 +121,7 @@ class NoseHoover(MolecularDynamics):
         #self.max_steps = 0
         self.atoms.update_nbr_list()
 
-        for _ in range(epochs):
+        for _ in tqdm(range(epochs)):
             self.max_steps += steps_per_epoch
             Dynamics.run(self)
             self.atoms.update_nbr_list()
