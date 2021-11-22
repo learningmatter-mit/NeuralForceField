@@ -333,11 +333,13 @@ def general_batched_hessian(batch,
 
 def hess_from_atoms(atoms):
     """
-    Use ASE atoms to get the Hessian in Ha / Bohr^2.
+    Use an ASE AtomsBatch to get the Hessian in Ha / Bohr^2.
     Can then be used with `neuralnet.vib.vib_analy`
     to get frequencies etc.
 
-    Note that the atoms must have an NFF calculator.
+    Note that the AtomsBatch must have an NFF calculator.
+
+
     """
 
     from nff.data import Dataset
