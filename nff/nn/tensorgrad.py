@@ -7,6 +7,7 @@ import inspect
 import torch
 from torch.autograd import grad
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
 
 
 def compute_jacobian(inputs, output, device):
@@ -36,7 +37,7 @@ def compute_jacobian(inputs, output, device):
     for i in range(num_classes):
         # zero_gradients(inputs)
         inputs.grad = None
-        
+
         grad_output.zero_()
         grad_output[:, i] = 1
         output.backward(grad_output, retain_graph=True)
@@ -319,6 +320,7 @@ def general_batched_hessian(batch,
                                                  model=model,
                                                  forward=forward,
                                                  **kwargs)
+
     results = hess_from_results(results=results,
                                 xyz=xyz,
                                 stack_xyz=stack_xyz,
@@ -327,3 +329,53 @@ def general_batched_hessian(batch,
                                 device=device)
 
     return results
+
+
+def hess_from_atoms(atoms):
+    """
+    Use ASE atoms to get the Hessian in Ha / Bohr^2.
+    Can then be used with `neuralnet.vib.vib_analy`
+    to get frequencies etc.
+
+    Note that the atoms must have an NFF calculator.
+    """
+
+    from nff.data import Dataset
+    from nff.data import collate_dicts
+    from nff.train import batch_to
+    from nff.utils import constants as const
+
+    # make the batch
+    cutoff = atoms.cutoff
+    directed = atoms.directed
+    device = atoms.device
+
+    xyz = atoms.get_positions()
+    n = atoms.get_atomic_numbers().reshape(-1, 1)
+    nxyz = np.concatenate([n, xyz], axis=-1)
+    dset = Dataset(props={"nxyz": [nxyz]})
+    dset.generate_neighbor_list(cutoff,
+                                undirected=(not directed))
+
+    loader = DataLoader(dset, collate_fn=collate_dicts)
+    batch = next(iter(loader))
+
+    model = atoms.calc.model.to(device)
+    batch = batch_to(batch, device)
+
+    # get the results
+    key = getattr(atoms.calc, "en_key", "energy")
+    results = general_batched_hessian(batch=batch,
+                                      keys=[key],
+                                      device=device,
+                                      model=model)
+
+    hess_key = key + "_hess"
+    hessian = torch.stack(results[hess_key])
+    hessian = hessian.reshape(*hessian.shape[1:])
+
+    hessian = (hessian.detach().cpu().numpy() *
+               const.KCAL_TO_AU['energy'] *
+               const.BOHR_RADIUS ** 2)
+
+    return hessian
