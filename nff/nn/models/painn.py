@@ -366,7 +366,8 @@ class PainnDiabat(Painn):
                 add_gap=True,
                 add_u=False,
                 inference=False,
-                do_nan=True):
+                do_nan=True,
+                en_keys_for_grad=None):
 
         # for backwards compatability
         self.grad_keys = []
@@ -376,7 +377,8 @@ class PainnDiabat(Painn):
             self.output_keys = list(set(np.array(diabat_keys)
                                         .reshape(-1)
                                         .tolist()))
-        if hasattr(self, "add_nacv"):
+
+        if hasattr(self, "add_nacv") and not inference:
             add_nacv = self.add_nacv
 
         diabat_results, xyz = self.run(batch=batch,
@@ -389,7 +391,8 @@ class PainnDiabat(Painn):
                                         add_gap=add_gap,
                                         add_u=add_u,
                                         inference=inference,
-                                        do_nan=do_nan)
+                                        do_nan=do_nan,
+                                        en_keys_for_grad=en_keys_for_grad)
 
         return results
 

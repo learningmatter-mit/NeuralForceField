@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from torch.nn import Sequential
+import copy
 
 from nff.nn.layers import StochasticIncrease
 from nff.utils.scatter import compute_grad
@@ -286,9 +287,16 @@ class DiabaticReadout(nn.Module):
     def add_adiabat_grads(self,
                           xyz,
                           results,
-                          inference):
+                          inference,
+                          en_keys_for_grad):
 
-        for key in self.energy_keys:
+        if en_keys_for_grad is None:
+            en_keys_for_grad = copy.deepcopy(self.energy_keys)
+
+        en_str = ", ".join(en_keys_for_grad)
+        print(f"Adding gradients for {en_str}")
+
+        for key in en_keys_for_grad:
             val = results[key]
             grad = compute_grad(inputs=xyz,
                                 output=val,
@@ -460,7 +468,8 @@ class DiabaticReadout(nn.Module):
                 add_gap=True,
                 add_u=False,
                 inference=False,
-                do_nan=True):
+                do_nan=True,
+                en_keys_for_grad=None):
 
         if not hasattr(self, "delta"):
             self.delta = False
@@ -494,6 +503,7 @@ class DiabaticReadout(nn.Module):
             results["U"] = u
 
         if add_grad and add_nacv:
+            print("Adding all gradients and NACV")
             results = self.add_all_grads(xyz=xyz,
                                          results=results,
                                          num_atoms=num_atoms,
@@ -502,7 +512,8 @@ class DiabaticReadout(nn.Module):
         elif add_grad:
             results = self.add_adiabat_grads(xyz=xyz,
                                              results=results,
-                                             inference=inference)
+                                             inference=inference,
+                                             en_keys_for_grad=en_keys_for_grad)
 
         # add back any nan's that were originally set to zeros
         # to avoid an error in diagonalization

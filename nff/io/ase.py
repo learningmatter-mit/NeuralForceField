@@ -72,7 +72,7 @@ class AtomsBatch(Atoms):
 
         if props is None:
             props = {}
-            
+
         self.props = props
         self.nbr_list = props.get('nbr_list', None)
         self.offsets = props.get('offsets', None)
@@ -418,6 +418,7 @@ class NeuralFF(Calculator):
         device='cpu',
         en_key='energy',
         properties=['energy', 'forces'],
+        model_kwargs=None,
         **kwargs
     ):
         """Creates a NeuralFF calculator.nff/io/ase.py
@@ -437,6 +438,7 @@ class NeuralFF(Calculator):
         self.to(device)
         self.en_key = en_key
         self.properties = properties
+        self.model_kwargs = model_kwargs
 
     def to(self, device):
         self.device = device
@@ -456,8 +458,6 @@ class NeuralFF(Calculator):
                 to calculate using the models created.
             system_changes (default from ase)
         """
-
-
 
         if not any([isinstance(self.model, i) for i in UNDIRECTED]):
             check_directed(self.model, atoms)
@@ -482,6 +482,9 @@ class NeuralFF(Calculator):
         requires_stress = "stress" in self.properties
         if requires_stress:
             kwargs["requires_stress"] = True
+        if getattr(self, "model_kwargs", None) is not None:
+            kwargs.update(self.model_kwargs)
+
         prediction = self.model(batch, **kwargs)
 
         # change energy and force to numpy array
