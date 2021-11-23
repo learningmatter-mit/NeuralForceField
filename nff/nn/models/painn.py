@@ -361,7 +361,7 @@ class PainnDiabat(Painn):
     def forward(self,
                 batch,
                 xyz=None,
-                add_nacv=False,
+                add_nacv=True,
                 add_grad=True,
                 add_gap=True,
                 add_u=False,
