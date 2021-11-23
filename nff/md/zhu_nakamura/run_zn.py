@@ -14,6 +14,7 @@ from rdkit import Chem
 
 from nff.io.ase_ax import NeuralFF, AtomsBatch
 from nff.md.zhu_nakamura.dynamics import CombinedZhuNakamura
+from nff.md.tully.dynamics import MODEL_KWARGS
 from nff.data import Dataset
 
 DEFAULT_PARAMS_FILE = "job_info.json"
@@ -120,12 +121,9 @@ def make_trj(all_params,
         params=all_params,
         model_type=model_type,
         needs_angles=needs_angles,
-        dataset_props=batched_props
+        dataset_props=batched_props,
+        model_kwargs=MODEL_KWARGS
     )
-
-    # don't calculate nacv - unecessary for ZN and requires
-    # N(N+1)/2 gradients for N states instead of N
-    nff_ase.model.add_nacv = False
 
     # get the cutoff and skin
 

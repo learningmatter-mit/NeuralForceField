@@ -332,8 +332,16 @@ class DiabaticReadout(nn.Module):
                 results.update({f"{upper_key}_{lower_key}_delta": gap})
 
                 if add_grad:
-                    gap_grad = results[upper_key + "_grad"] - results[lower_key + "_grad"]
-                    results.update({f"{upper_key}_{lower_key}_delta_grad": gap_grad})
+                    upper_grad_key = upper_key + "_grad"
+                    lower_grad_key = lower_key + "_grad"
+
+                    grad_keys = [upper_grad_key, lower_grad_key]
+                    if not all([i in results for i in grad_keys]):
+                        continue
+
+                    gap_grad = results[upper_grad_key] - results[lower_grad_key]
+                    results.update({f"{upper_key}_{lower_key}_delta_grad": 
+                        gap_grad})
 
         return results
 

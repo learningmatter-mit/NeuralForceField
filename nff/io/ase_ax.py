@@ -152,7 +152,8 @@ class AtomsBatch(Atoms):
 
         else:
             edge_from, edge_to, offsets = torch_nbr_list(self,
-                                                         (self.cutoff + self.cutoff_skin),
+                                                         (self.cutoff +
+                                                          self.cutoff_skin),
                                                          self.device,
                                                          directed=(not self.undirected))
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
@@ -205,6 +206,7 @@ class NeuralFF(Calculator):
         conversion='ev',
         dataset_props=None,
         needs_angles=False,
+        model_kwargs=None,
         **kwargs
     ):
         """Creates a NeuralFF calculator.nff/io/ase.py
@@ -226,6 +228,7 @@ class NeuralFF(Calculator):
         self.conversion = conversion
         self.dataset_props = dataset_props
         self.needs_angles = needs_angles
+        self.model_kwargs = model_kwargs
 
         # don't compute any gradients that aren't needed in the
         # output keys
@@ -276,7 +279,11 @@ class NeuralFF(Calculator):
             if 'forces' in properties:
                 batch[key + "_grad"] = []
 
-        prediction = self.model(batch)
+        kwargs = {}
+        if getattr(self, "model_kwargs", None) is not None:
+            kwargs.update(self.model_kwargs)
+
+        prediction = self.model(batch, **kwargs)
 
         # if you're outputting more than one key (e.g. for excited states), initialize the corresponding
         # results to an empty list

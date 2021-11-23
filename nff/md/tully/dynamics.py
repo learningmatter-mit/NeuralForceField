@@ -36,7 +36,6 @@ from nff.md.tully.step import (try_hop,
 
 from nff.md.nvt_ax import NoseHoover, NoseHooverChain
 
-
 METHOD_DIC = {
     "nosehoover": NoseHoover,
     "nosehooverchain": NoseHooverChain
@@ -46,6 +45,11 @@ DECOHERENCE_DIC = {"truhlar": truhlar_decoherence}
 
 TULLY_LOG_FILE = 'tully.log'
 TULLY_SAVE_FILE = 'tully.pickle'
+
+MODEL_KWARGS = {"add_nacv": False,
+                "add_grad": True,
+                "inference": True,
+                "en_keys_for_grad": ["energy_0"]}
 
 
 class NeuralTully:
@@ -810,6 +814,7 @@ class CombinedNeuralTully:
         ground_params = all_params['ground_params']
         atomsbatch = get_atoms(all_params=all_params,
                                ground_params=ground_params)
+        atomsbatch.calc.model_kwargs = MODEL_KWARGS
 
         tully_params = all_params['tully_params']
         if 'weightpath' in all_params:
