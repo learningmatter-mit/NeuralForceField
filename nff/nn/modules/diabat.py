@@ -293,8 +293,7 @@ class DiabaticReadout(nn.Module):
         if en_keys_for_grad is None:
             en_keys_for_grad = copy.deepcopy(self.energy_keys)
 
-        en_str = ", ".join(en_keys_for_grad)
-        print(f"Adding gradients for {en_str}")
+
 
         for key in en_keys_for_grad:
             val = results[key]
@@ -307,9 +306,9 @@ class DiabaticReadout(nn.Module):
 
         return results
 
-    def add_gap(self, 
-        results,
-        add_grad):
+    def add_gap(self,
+                results,
+                add_grad):
 
         # diabatic gap
 
@@ -339,9 +338,10 @@ class DiabaticReadout(nn.Module):
                     if not all([i in results for i in grad_keys]):
                         continue
 
-                    gap_grad = results[upper_grad_key] - results[lower_grad_key]
-                    results.update({f"{upper_key}_{lower_key}_delta_grad": 
-                        gap_grad})
+                    gap_grad = results[upper_grad_key] - \
+                        results[lower_grad_key]
+                    results.update({f"{upper_key}_{lower_key}_delta_grad":
+                                    gap_grad})
 
         return results
 
@@ -511,7 +511,6 @@ class DiabaticReadout(nn.Module):
             results["U"] = u
 
         if add_grad and add_nacv:
-            print("Adding all gradients and NACV")
             results = self.add_all_grads(xyz=xyz,
                                          results=results,
                                          num_atoms=num_atoms,
