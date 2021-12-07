@@ -32,7 +32,8 @@ import numpy as np
 import networkx as nx
 
 from rdkit import Chem
-from rdkit.Chem import AllChem, rdmolops
+from rdkit.Chem import AllChem, rdmolops, GetPeriodicTable
+
 
 global __ATOM_LIST__
 __ATOM_LIST__ = \
@@ -86,9 +87,26 @@ atomic_valence_electrons[35] = 7
 atomic_valence_electrons[53] = 7
 atomic_valence_electrons[83] = 5
 
+
+PERIODICTABLE = GetPeriodicTable()
+
+
+for i in range(100):
+    dics = [atomic_valence, atomic_valence_electrons]
+    if all([i in dic for dic in dics]):
+        continue
+
+    valence_list = [j for j in PERIODICTABLE.GetValenceList(i)]
+    valence_num = PERIODICTABLE.GetNOuterElecs(i)
+
+    atomic_valence[i] = valence_list
+    atomic_valence_electrons[i] = valence_num
+
+
 DEFAULT_SAVE = "mol.pickle"
 # give up after 2 minutes
 MAX_TIME = 120
+
 
 class TimeoutError(Exception):
     pass

@@ -519,9 +519,11 @@ def parse_args_from_json(arg_path,
     optional = parser.add_argument_group('optional arguments')
 
     for name, info in default_args.items():
-        keys = ['default', 'choices', 'nargs']
+        keys = ['default', 'choices', 'nargs', 'action']
         kwargs = {key: info[key] for key in keys
                   if key in info}
+        if 'type' in info:
+            kwargs.update({"type": eval(info['type'])})
 
         # Required arguments get put in one group and optional ones in another
         # so that they're separated in `--help` . We don't actually set
@@ -530,7 +532,6 @@ def parse_args_from_json(arg_path,
 
         group = required if info.get('required', False) else optional
         group.add_argument(f'--{name}',
-                            type=eval(info['type']),
                             help=info['help'],
                             **kwargs)
 
