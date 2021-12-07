@@ -54,40 +54,8 @@ global atomic_valence
 global atomic_valence_electrons
 
 atomic_valence = defaultdict(list)
-atomic_valence[1] = [1]
-# give Boron three bonds
-atomic_valence[5] = [3]
-atomic_valence[6] = [4]
-atomic_valence[7] = [3, 4]
-atomic_valence[8] = [2, 1]
-atomic_valence[9] = [1]
-atomic_valence[14] = [4]
-atomic_valence[15] = [5, 3]  # [5,4,3]
-atomic_valence[16] = [6, 3, 2]  # [6,4,2]
-atomic_valence[17] = [1]
-atomic_valence[32] = [4]
-atomic_valence[35] = [1]
-atomic_valence[53] = [1]
-# treat bismuth like phosphorus
-atomic_valence[83] = [5, 3]
 
 atomic_valence_electrons = {}
-atomic_valence_electrons[1] = 1
-atomic_valence_electrons[5] = 3
-atomic_valence_electrons[6] = 4
-atomic_valence_electrons[7] = 5
-atomic_valence_electrons[8] = 6
-atomic_valence_electrons[9] = 7
-atomic_valence_electrons[14] = 4
-atomic_valence_electrons[15] = 5
-atomic_valence_electrons[16] = 6
-atomic_valence_electrons[17] = 7
-atomic_valence_electrons[32] = 4
-atomic_valence_electrons[35] = 7
-atomic_valence_electrons[53] = 7
-atomic_valence_electrons[83] = 5
-
-
 PERIODICTABLE = GetPeriodicTable()
 
 
