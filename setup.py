@@ -20,6 +20,7 @@ setup(
         "scripts/nff_train.py",
     ],
     python_requires=">=3.5",
+    include_package_data=True,
     install_requires=[
 #        "pytorch>=1.4.0",
 #        "numpy",
