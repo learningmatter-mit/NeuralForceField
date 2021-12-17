@@ -49,6 +49,8 @@ This is useful if you'll be modifying the NFF code, because modifications in the
 #### Force field
 A series of tutorials illustrating how `nff` can be used in conjunction with Jupyter Notebooks or other scripts is provided in the `tutorials/` folder. It also covers how to integrate a pre-trained model with an ASE calculator, how to perform ground state molecular dynamics (MD) and excited state non-adiabatic MD, and how to train different model types like DimeNet and PaiNN.
 
+All tutorials used pre-saved datasets for training. These datasets are saved as NFF dataset objects. To see how to make your own NFF dataset and save it, see [this tutorial](https://github.com/learningmatter-mit/NeuralForceField/blob/master/tutorials/data/create_dataset_from_file.ipynb) in `tutorials/data`
+
 #### Property predictor
 While `scripts/cp3d/README.md` explains in depth how to use the scripts, the notebook `07_cp3d.ipynb` goes into some detail about what happens behind the scenes. In this notebook you'll see how the datasets get made and what the models look like.
 
