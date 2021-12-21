@@ -1,0 +1,11 @@
+{
+  "base_config_path": "/home/saxelrod/Repo/projects/master/NeuralForceField/scripts/cp3d/chemprop/config/uvvis/base_config.json",
+  "hyp_config_path": "/home/saxelrod/Repo/projects/master/NeuralForceField/scripts/cp3d/chemprop/config/uvvis/base_hyp_config.json",
+  "use_hyperopt": true,
+  "rerun_hyperopt": false,
+  "metric": "mae",
+  "train_folder": "/home/saxelrod/Repo/projects/master/NeuralForceField/tutorials/data/uvvis_cp3d/chemprop/mean_aggr",
+  "cp_folder": "/home/saxelrod/Repo/projects/chemprop/chemprop",
+  "seed": 0,
+  "max_hyp_specs": null
+}

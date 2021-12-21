@@ -13,6 +13,7 @@ REINDEX_KEYS = ["nbr_list", "bonded_nbr_list"]
 NBR_IDX_KEYS = ["kj_idx", "ji_idx", "bond_idx"]
 PER_CONF_KEYS = ["energy"]
 
+
 def assert_ordered(batch):
     """
     Make sure the conformers are ordered by weight.
@@ -206,6 +207,7 @@ def update_weights(batch, batch_dic):
         new_weights /= new_weights.sum()
     return new_weights
 
+
 def update_nbr_idx_keys(dset, batch, i, old_nbrs, num_confs):
     """
     When trimming a dataset to a certain number of conformers,
@@ -222,13 +224,13 @@ def update_nbr_idx_keys(dset, batch, i, old_nbrs, num_confs):
     Returns:
         None
     """
-    
+
     # make a mask for the neighbor list indices that are being kept
 
     mol_size = batch['mol_size']
     for j in range(num_confs):
         mask = (old_nbrs[:, 0] < (j + 1) * mol_size
-                    ) * (old_nbrs[:, 0] >= j * mol_size)
+                ) * (old_nbrs[:, 0] >= j * mol_size)
         if j == 0:
             total_mask = copy.deepcopy(mask)
         else:
@@ -245,6 +247,7 @@ def update_nbr_idx_keys(dset, batch, i, old_nbrs, num_confs):
         keep_idx = total_mask[batch[key]]
         dset.props[key][i] = batch[key][keep_idx]
 
+
 def update_per_conf(dataset, i, old_num_atoms, new_n_confs):
     mol_size = dataset.props["mol_size"][i]
     for key in PER_CONF_KEYS:
@@ -252,6 +255,7 @@ def update_per_conf(dataset, i, old_num_atoms, new_n_confs):
             continue
         val = dataset.props[key][i]
         dataset.props[key][i] = val[:new_n_confs]
+
 
 def update_dset(batch, batch_dic, dataset, i):
     """
@@ -303,9 +307,9 @@ def update_dset(batch, batch_dic, dataset, i):
     update_per_conf(dataset, i, old_num_atoms, batch_dic["real_num_confs"])
 
     # update anything that depends on the indexing of the nbr list
-    update_nbr_idx_keys(dset=dataset, 
-                        batch=batch, 
-                        i=i, 
+    update_nbr_idx_keys(dset=dataset,
+                        batch=batch,
+                        i=i,
                         old_nbrs=nbr_list,
                         num_confs=batch_dic["real_num_confs"])
 
