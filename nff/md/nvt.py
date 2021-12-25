@@ -276,8 +276,6 @@ class NoseHooverMetadynamics(NoseHoover):
         steps_until_add = copy.deepcopy(steps_between_add)
 
         self.atoms.update_nbr_list()
-        # Grimme says include initial structure in bias list
-        self.atoms.calc.append_atoms(copy.deepcopy(self.atoms))
 
         for _ in tqdm(range(epochs)):
             self.max_steps += steps_per_epoch

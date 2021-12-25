@@ -671,9 +671,24 @@ class NeuralMetadynamics(NeuralFF):
         self.old_atoms = old_atoms if (old_atoms is not None) else []
         self.steps_from_old = []
 
-    def make_dsets(self, atoms, bias_atoms):
-        props_0 = {"nxyz": [torch.Tensor(atoms.get_nxyz()[bias_atoms, :])]}
-        props_1 = {"nxyz": [torch.Tensor(old_atoms.get_nxyz()[bias_atoms, :])
+        # only apply the bias to certain atoms
+        self.exclude_atoms = self.pushing_params.get("exclude_atoms",
+                                                     torch.LongTensor([]))
+
+    def get_keep_idx(self, atoms):
+        # correct for atoms not in the biasing potential
+
+        keep_idx = torch.LongTensor([i for i in range(len(atoms))
+                                     if i not in self.exclude_atoms])
+        return keep_idx
+
+    def make_dsets(self,
+                   atoms):
+
+        keep_idx = self.get_keep_idx(atoms)
+        props_0 = {"nxyz": [torch.Tensor(atoms.get_nxyz())
+                            [keep_idx, :]]}
+        props_1 = {"nxyz": [torch.Tensor(old_atoms.get_nxyz())[keep_idx, :]
                             for old_atoms in self.old_atoms]}
 
         dset_0 = Dataset(props_0)
@@ -691,23 +706,18 @@ class NeuralMetadynamics(NeuralFF):
 
         kappa = self.pushing_params["kappa"]
         steps_from_old = torch.Tensor(self.steps_from_old)
-        f_damp = (2 / (1 + torch.exp(-kappa * steps_from_old))
-                  - 1)
+        f_damp = (2 / (1 + torch.exp(-kappa * steps_from_old)) -
+                  1)
 
         # given in mHartree / atom in CREST paper
-        k_i = ((self.pushing_params['k_i'] / 1000
-                * units.Hartree * num_atoms))
+        k_i = ((self.pushing_params['k_i'] / 1000 *
+                units.Hartree * num_atoms))
 
         # given in Bohr^(-2) in CREST paper
-        alpha_i = ((self.pushing_params['alpha_i']
-                    / units.Bohr ** 2))
+        alpha_i = ((self.pushing_params['alpha_i'] /
+                    units.Bohr ** 2))
 
-        # only apply the bias to certain atoms
-        bias_atoms = self.pushing_params.get("bias_atoms")
-        if bias_atoms is None:
-            bias_atoms = torch.arange(num_atoms)
-
-        dsets = self.make_dsets(atoms, bias_atoms)
+        dsets = self.make_dsets(atoms)
 
         return k_i, alpha_i, dsets, f_damp
 
@@ -716,7 +726,8 @@ class NeuralMetadynamics(NeuralFF):
                            R_mat,
                            v_bias,
                            delta_i,
-                           alpha_i):
+                           alpha_i,
+                           atoms):
 
         ref_nxyz_lst = dsets[1].props['nxyz']
         num_refs = len(ref_nxyz_lst)
@@ -732,7 +743,11 @@ class NeuralMetadynamics(NeuralFF):
 
         rotated_ref = torch.einsum('nij,nkj->nki', R_mat, ref_xyz)
 
-        rmsd_grad = (current_xyz - rotated_ref) / (num_atoms * delta_i)
+        rmsd_grad = torch.zeros(rotated_ref.shape[0], len(atoms), 3)
+        keep_idx = self.get_keep_idx(atoms)
+        rmsd_grad[:, keep_idx] = ((current_xyz - rotated_ref) /
+                                  (num_atoms * delta_i))
+
         v_grad = (v_bias * (-2 * alpha_i * delta_i) * rmsd_grad).sum(0)
         force = -v_grad
 
@@ -747,13 +762,13 @@ class NeuralMetadynamics(NeuralFF):
             delta_i, R_mat = compute_distances(dataset=dsets[0],
                                                device=self.device,
                                                dataset_1=dsets[1])
+
         except Execption as e:
             print(e)
             import pdb
             pdb.post_mortem()
 
         # compute bias potential
-
         v_bias = (f_damp * k_i *
                   torch.exp(-alpha_i * delta_i ** 2)).sum()
 
@@ -761,7 +776,8 @@ class NeuralMetadynamics(NeuralFF):
                                          R_mat=R_mat,
                                          v_bias=v_bias,
                                          delta_i=delta_i,
-                                         alpha_i=alpha_i)
+                                         alpha_i=alpha_i,
+                                         atoms=atoms)
 
         return f_bias.numpy()
 
