@@ -248,6 +248,18 @@ class NoseHooverMetadynamics(NoseHoover):
         self.geom_add_time = geom_add_time * units.fs
         self.max_steps = 0
 
+    def increase_h_mass(self):
+        nums = self.atoms.get_atomic_numbers()
+        masses = self.atoms.get_masses()
+        masses[nums == 1] = 2.0
+        self.atoms.set_masses(masses)
+
+    def decrease_h_mass(self):
+        nums = self.atoms.get_atomic_numbers()
+        masses = self.atoms.get_masses()
+        masses[nums == 1] = 1.008
+        self.atoms.set_masses(masses)
+
     def run(self, steps=None):
         if steps is None:
             steps = self.num_steps
@@ -264,10 +276,17 @@ class NoseHooverMetadynamics(NoseHoover):
         steps_until_add = copy.deepcopy(steps_between_add)
 
         self.atoms.update_nbr_list()
+        # Grimme says include initial structure in bias list
+        self.atoms.calc.append_atoms(copy.deepcopy(self.atoms))
 
         for _ in tqdm(range(epochs)):
             self.max_steps += steps_per_epoch
+            # set hydrogen mass to 2 AMU (deuterium, following Grimme's mTD approach)
+            self.increase_h_mass()
             Dynamics.run(self)
+            # reset the masses
+            self.decrease_h_mass()
+
             self.atoms.update_nbr_list()
 
             if self.nsteps >= steps_until_add:

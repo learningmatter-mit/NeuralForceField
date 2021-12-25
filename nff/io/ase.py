@@ -753,6 +753,7 @@ class NeuralMetadynamics(NeuralFF):
             pdb.post_mortem()
 
         # compute bias potential
+
         v_bias = (f_damp * k_i *
                   torch.exp(-alpha_i * delta_i ** 2)).sum()
 
