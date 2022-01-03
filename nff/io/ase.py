@@ -737,7 +737,7 @@ class NeuralMetadynamics(NeuralFF):
         current_nxyz_lst = dsets[1].props['nxyz']
         num_atoms = current_nxyz_lst[0].shape[0]
 
-        delta_i = delta_i.reshape(-1, 1, 1)
+        delta_i = delta_i.reshape(-1, 1, 1) + 1e-15
         R_mat = R_mat.reshape(-1, 3, 3)
 
         ref_xyz = torch.stack(ref_nxyz_lst)[:, :, 1:]
