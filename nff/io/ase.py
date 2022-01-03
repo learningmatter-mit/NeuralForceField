@@ -732,9 +732,9 @@ class NeuralMetadynamics(NeuralFF):
                            atoms,
                            p_grads):
 
-        ref_nxyz_lst = dsets[1].props['nxyz']
+        ref_nxyz_lst = dsets[0].props['nxyz']
         num_refs = len(ref_nxyz_lst)
-        current_nxyz_lst = dsets[0].props['nxyz']
+        current_nxyz_lst = dsets[1].props['nxyz']
         num_atoms = current_nxyz_lst[0].shape[0]
 
         delta_i = delta_i.reshape(-1, 1, 1)
@@ -744,17 +744,24 @@ class NeuralMetadynamics(NeuralFF):
         current_xyz = (torch.stack(current_nxyz_lst * num_refs)
                        [:, :, 1:])
 
-        rmsd_grad = torch.zeros(ref_xyz.shape[0], len(atoms), 3)
+        num_atoms = len(atoms)
+        rmsd_grad = torch.zeros(ref_xyz.shape[0], num_atoms, 3)
         keep_idx = self.get_keep_idx(atoms)
 
         # is this right? This assumes we say that we go from (current_xyz - past)
         # to (R.current_xyz - past), and so we only need grad(R.current_xyz). I think
         # this is the way it's set up based on how we choose dset_0 and dset_1 in
         # `compute_distances`, but need to check
-        
-        rmsd_grad[:, keep_idx] = torch.stack(p_grads)
 
-        v_grad = (v_bias * (-2 * alpha_i * delta_i) * rmsd_grad).sum(0)
+        rot_current = torch.einsum('kij,klj->kli', R_mat, current_xyz)
+        delta_atomwise = (rot_current - ref_xyz)
+
+        rmsd_grad[:, keep_idx] = ((1 / (delta_i * num_atoms)) *
+                                  delta_atomwise * torch.stack(p_grads))
+
+        v_grads = (v_bias * (-2 * alpha_i * delta_i) * rmsd_grad)
+        v_grad = v_grads.sum(0)
+
         force = -v_grad
 
         return force
@@ -764,19 +771,10 @@ class NeuralMetadynamics(NeuralFF):
             return np.zeros((len(atoms), 3))
 
         k_i, alpha_i, dsets, f_damp = self.rmsd_prelims(atoms)
-        try:
-            import pdb
-            pdb.set_trace()
-
-            delta_i, R_mat, p_grads = compute_distances(dataset=dsets[0],
-                                                        device=self.device,
-                                                        dataset_1=dsets[1],
-                                                        get_p_grad=True)
-
-        except Execption as e:
-            print(e)
-            import pdb
-            pdb.post_mortem()
+        delta_i, R_mat, p_grads = compute_distances(dataset=dsets[0],
+                                                    device=self.device,
+                                                    dataset_1=dsets[1],
+                                                    get_p_grad=True)
 
         # compute bias potential
         v_bias = (f_damp * k_i *
@@ -833,6 +831,7 @@ class NeuralMetadynamics(NeuralFF):
 
         f_bias = self.get_bias(atoms)
         self.results['forces'] += f_bias
+        self.results['f_bias'] = f_bias
 
         if add_steps:
             for i, step in enumerate(self.steps_from_old):
