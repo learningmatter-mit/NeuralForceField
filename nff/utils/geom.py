@@ -5,6 +5,7 @@ Tools for analyzing and comparing geometries
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from nff.utils.scatter import compute_grad
 
 
 BATCH_SIZE = 3000
@@ -103,9 +104,13 @@ def rotation_matrix_from_points(m0, m1):
     return r_with_nan
 
 
-def minimize_rotation_and_translation(targ_nxyz, this_nxyz):
+def minimize_rotation_and_translation(targ_nxyz,
+                                      this_nxyz,
+                                      get_p_grad=False):
 
     p = this_nxyz[:, :, 1:]
+    if get_p_grad:
+        p.requires_grad = True
     p0 = targ_nxyz[:, :, 1:]
 
     c = p.mean(1).reshape(-1, 1, 3)
@@ -122,19 +127,25 @@ def minimize_rotation_and_translation(targ_nxyz, this_nxyz):
 
     new_p = torch.einsum("ijk,ilk->ijl", p_repeat, R)
 
-    return new_p, p0, R
+    if get_p_grad:
+        p_grad = compute_grad(inputs=p,
+                              output=new_p).detach()
+        p = p.detach()
+    else:
+        p_grad = None
+
+    return new_p, p0, R, p_grad
 
 
-def compute_rmsd(targ_nxyz, this_nxyz):
+def compute_rmsd(targ_nxyz,
+                 this_nxyz):
 
     targ_nxyz = torch.Tensor(targ_nxyz).reshape(1, -1, 4)
     this_nxyz = torch.Tensor(this_nxyz).reshape(1, -1, 4)
 
-    (new_atom, new_targ, _
-     ) = minimize_rotation_and_translation(
-        targ_nxyz=targ_nxyz,
-        this_nxyz=this_nxyz)
-    xyz_0 = new_atom
+    out = minimize_rotation_and_translation(targ_nxyz=targ_nxyz,
+                                            this_nxyz=this_nxyz)
+    xyz_0, new_targ, _, _ = out
 
     num_mols_1 = targ_nxyz.shape[0]
     num_mols_0 = this_nxyz.shape[0]
@@ -150,14 +161,15 @@ def compute_rmsd(targ_nxyz, this_nxyz):
     return distances
 
 
-def compute_distance(targ_nxyz, atom_nxyz):
+def compute_distance(targ_nxyz,
+                     atom_nxyz,
+                     get_p_grad=False):
 
-    (new_atom, new_targ, R
-     ) = minimize_rotation_and_translation(
-        targ_nxyz=targ_nxyz,
-        this_nxyz=atom_nxyz)
+    out = minimize_rotation_and_translation(targ_nxyz=targ_nxyz,
+                                            this_nxyz=atom_nxyz,
+                                            get_p_grad=get_p_grad)
 
-    xyz_0 = new_atom
+    xyz_0, new_targ, R, p_grad = out
 
     num_mols_1 = targ_nxyz.shape[0]
     num_mols_0 = atom_nxyz.shape[0]
@@ -170,13 +182,17 @@ def compute_distance(targ_nxyz, atom_nxyz):
                  0.5).reshape(num_mols_0, num_mols_1).cpu()
     R = R.cpu()
 
-    return distances, R
+    if get_p_grad:
+        return distances, R
+    else:
+        return distances, R, p_grad
 
 
 def compute_distances(dataset,
                       device,
                       batch_size=BATCH_SIZE,
-                      dataset_1=None):
+                      dataset_1=None,
+                      get_p_grad=False):
     """
     Compute distances between different configurations for one molecule.
     """
@@ -185,7 +201,7 @@ def compute_distances(dataset,
 
     if dataset_1 is None:
         dataset_1 = dataset
-        
+
     distance_mat = torch.zeros((len(dataset), len(dataset_1)))
     R_mat = torch.zeros((*distance_mat.shape, 3, 3))
 
@@ -193,12 +209,13 @@ def compute_distances(dataset,
                           batch_size=batch_size,
                           collate_fn=collate_dicts)
 
-
     loader_1 = DataLoader(dataset_1,
                           batch_size=batch_size,
                           collate_fn=collate_dicts)
 
     i_start = 0
+    p_grads = []
+
     for batch_0 in loader_0:
 
         j_start = 0
@@ -207,14 +224,21 @@ def compute_distances(dataset,
             num_mols_0 = len(batch_0["num_atoms"])
             num_mols_1 = len(batch_1["num_atoms"])
 
-            targ_nxyz = batch_0["nxyz"].reshape(
-                num_mols_0, -1, 4).to(device)
-            atom_nxyz = batch_1["nxyz"].reshape(
-                num_mols_1, -1, 4).to(device)
+            targ_nxyz = (batch_0["nxyz"]
+                         .reshape(num_mols_0, -1, 4).to(device))
+            atom_nxyz = (batch_1["nxyz"]
+                         .reshape(num_mols_1, -1, 4).to(device))
 
-            distances, R = compute_distance(
-                targ_nxyz=targ_nxyz,
-                atom_nxyz=atom_nxyz)
+            out = compute_distance(targ_nxyz=targ_nxyz,
+                                   atom_nxyz=atom_nxyz,
+                                   get_p_grad=get_p_grad)
+            if get_p_grad:
+                distances, R, p_grad = out
+                num_atoms = batch_1["num_atoms"].tolist()
+                split_grads = list(torch.split(p_grad, num_atoms))
+                p_grads += split_grads
+            else:
+                distances, R = out
 
             distances = distances.transpose(0, 1)
 
@@ -235,4 +259,7 @@ def compute_distances(dataset,
 
         i_start += num_mols_0
 
-    return distance_mat, R_mat
+    if get_p_grad:
+        return distance_mat, R_mat, p_grads
+    else:
+        return distance_mat, R_mat

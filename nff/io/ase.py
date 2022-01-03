@@ -686,9 +686,11 @@ class NeuralMetadynamics(NeuralFF):
                    atoms):
 
         keep_idx = self.get_keep_idx(atoms)
-        props_0 = {"nxyz": [torch.Tensor(atoms.get_nxyz())
+        # put the current atoms as the second dataset because that's the one
+        # that gets its positions rotated and its gradient computed
+        props_1 = {"nxyz": [torch.Tensor(atoms.get_nxyz())
                             [keep_idx, :]]}
-        props_1 = {"nxyz": [torch.Tensor(old_atoms.get_nxyz())[keep_idx, :]
+        props_0 = {"nxyz": [torch.Tensor(old_atoms.get_nxyz())[keep_idx, :]
                             for old_atoms in self.old_atoms]}
 
         dset_0 = Dataset(props_0)
@@ -727,7 +729,8 @@ class NeuralMetadynamics(NeuralFF):
                            v_bias,
                            delta_i,
                            alpha_i,
-                           atoms):
+                           atoms,
+                           p_grads):
 
         ref_nxyz_lst = dsets[1].props['nxyz']
         num_refs = len(ref_nxyz_lst)
@@ -741,12 +744,15 @@ class NeuralMetadynamics(NeuralFF):
         current_xyz = (torch.stack(current_nxyz_lst * num_refs)
                        [:, :, 1:])
 
-        rotated_ref = torch.einsum('nij,nkj->nki', R_mat, ref_xyz)
-
-        rmsd_grad = torch.zeros(rotated_ref.shape[0], len(atoms), 3)
+        rmsd_grad = torch.zeros(ref_xyz.shape[0], len(atoms), 3)
         keep_idx = self.get_keep_idx(atoms)
-        rmsd_grad[:, keep_idx] = ((current_xyz - rotated_ref) /
-                                  (num_atoms * delta_i))
+
+        # is this right? This assumes we say that we go from (current_xyz - past)
+        # to (R.current_xyz - past), and so we only need grad(R.current_xyz). I think
+        # this is the way it's set up based on how we choose dset_0 and dset_1 in
+        # `compute_distances`, but need to check
+        
+        rmsd_grad[:, keep_idx] = torch.stack(p_grads)
 
         v_grad = (v_bias * (-2 * alpha_i * delta_i) * rmsd_grad).sum(0)
         force = -v_grad
@@ -759,9 +765,13 @@ class NeuralMetadynamics(NeuralFF):
 
         k_i, alpha_i, dsets, f_damp = self.rmsd_prelims(atoms)
         try:
-            delta_i, R_mat = compute_distances(dataset=dsets[0],
-                                               device=self.device,
-                                               dataset_1=dsets[1])
+            import pdb
+            pdb.set_trace()
+
+            delta_i, R_mat, p_grads = compute_distances(dataset=dsets[0],
+                                                        device=self.device,
+                                                        dataset_1=dsets[1],
+                                                        get_p_grad=True)
 
         except Execption as e:
             print(e)
@@ -777,7 +787,8 @@ class NeuralMetadynamics(NeuralFF):
                                          v_bias=v_bias,
                                          delta_i=delta_i,
                                          alpha_i=alpha_i,
-                                         atoms=atoms)
+                                         atoms=atoms,
+                                         p_grads=p_grads)
 
         return f_bias.numpy()
 
