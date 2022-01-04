@@ -263,13 +263,12 @@ class NoseHooverMetadynamics(NoseHoover):
         self.atoms.set_masses(masses)
 
     def append_atoms(self):
-        # create new atoms so we don't copy the model on the calculator of the atoms
+        # Create new atoms so we don't copy the model on the calculator of the atoms
+        # No need to set other attributes equal to those of `self.atoms`, since (1)
+        # it's unnecessary, and (2) it leads to `new_atoms` being updated every time
+        # `self.atoms` is (not sure why)
         new_atoms = AtomsBatch(numbers=self.atoms.get_atomic_numbers(),
                                positions=self.atoms.get_positions())
-        for key, val in self.atoms.__dict__.items():
-            if 'calc' in key.lower() or key.startswith("_"):
-                continue
-            setattr(new_atoms, key, val)
 
         self.atoms.calc.append_atoms(new_atoms)
 

@@ -68,9 +68,6 @@ class AtomsBatch(Atoms):
         """
         super().__init__(*args, **kwargs)
 
-        # import pdb
-        # pdb.set_trace()
-
         if props is None:
             props = {}
 
@@ -789,6 +786,7 @@ class NeuralMetadynamics(NeuralFF):
         # logger
 
         f_bias = self.get_bias(atoms)
+
         self.results['forces'] += f_bias
         self.results['f_bias'] = f_bias
 
