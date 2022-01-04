@@ -726,9 +726,10 @@ class NeuralMetadynamics(NeuralFF):
         return k_i, alpha_i, dsets, f_damp
 
     def compute_rmsd_force(self,
-                           v_bias):
+                           v_bias,
+                           p):
 
-        v_grad = compute_grad(inputs=self.p,
+        v_grad = compute_grad(inputs=p,
                               output=v_bias).sum(0)
 
         force = -v_grad
@@ -744,7 +745,6 @@ class NeuralMetadynamics(NeuralFF):
                                                      device=self.device,
                                                      dataset_1=dsets[1],
                                                      store_grad=True)
-        self.p = xyz_list[0]
 
         # compute bias potential - keep separate for each different reference
         # structure for now
@@ -752,7 +752,8 @@ class NeuralMetadynamics(NeuralFF):
         v_bias = (f_damp * k_i *
                   torch.exp(-alpha_i * delta_i.reshape(-1) ** 2)).sum()
 
-        f_bias = self.compute_rmsd_force(v_bias=v_bias)
+        f_bias = self.compute_rmsd_force(v_bias=v_bias,
+                                         p=xyz_list[0])
 
         return f_bias.detach().numpy()
 
