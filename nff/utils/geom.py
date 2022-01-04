@@ -32,7 +32,9 @@ def quaternion_to_matrix(q):
     return R_q
 
 
-def rotation_matrix_from_points(m0, m1):
+def rotation_matrix_from_points(m0,
+                                m1,
+                                store_grad=False):
 
     v0 = torch.clone(m0)[:, None, :, :]
     v1 = torch.clone(m1)
@@ -67,7 +69,15 @@ def rotation_matrix_from_points(m0, m1):
 
     # Use numpy on cpu instead
 
-    # w, V = torch.symeig(f, eigenvectors=True)
+    if store_grad:
+        w, V = torch.symeig(f, eigenvectors=True)
+        arg = w.argmax(dim=1)
+        idx = list(range(len(arg)))
+        q = V[idx, :, arg]
+
+        R = quaternion_to_matrix(q)
+
+        return R
 
     f_np = f.detach().cpu().numpy()
     nan_idx = np.isnan(f_np).any(-1).any(-1)
@@ -106,41 +116,29 @@ def rotation_matrix_from_points(m0, m1):
 
 def minimize_rotation_and_translation(targ_nxyz,
                                       this_nxyz,
-                                      get_p_grad=False):
+                                      store_grad=False):
 
-    p = this_nxyz[:, :, 1:]
-    if get_p_grad:
-        p.requires_grad = True
+    base_p = this_nxyz[:, :, 1:]
+    if store_grad:
+        base_p.requires_grad = True
     p0 = targ_nxyz[:, :, 1:]
 
-    c = p.mean(1).reshape(-1, 1, 3)
-    p = p - c
+    c = base_p.mean(1).reshape(-1, 1, 3)
+    p = base_p - c
 
     c0 = p0.mean(1).reshape(-1, 1, 3)
     p0 -= c0
 
     R = rotation_matrix_from_points(p.transpose(1, 2),
-                                    p0.transpose(1, 2))
+                                    p0.transpose(1, 2),
+                                    store_grad=store_grad)
 
     num_repeats = targ_nxyz.shape[0]
     p_repeat = torch.repeat_interleave(p, num_repeats, dim=0)
 
     new_p = torch.einsum("ijk,ilk->ijl", p_repeat, R)
 
-    if get_p_grad:
-
-        p_grads = []
-        for this_new in new_p:
-
-            p_grad = compute_grad(inputs=p,
-                                  output=this_new).detach()
-            p_grads.append(p_grad.reshape(-1, 3))
-
-        p = p.detach()
-    else:
-        p_grads = None
-
-    return new_p, p0, R, p_grads
+    return new_p, p0, R
 
 
 def compute_rmsd(targ_nxyz,
@@ -169,13 +167,13 @@ def compute_rmsd(targ_nxyz,
 
 def compute_distance(targ_nxyz,
                      atom_nxyz,
-                     get_p_grad=False):
+                     store_grad=False):
 
     out = minimize_rotation_and_translation(targ_nxyz=targ_nxyz,
                                             this_nxyz=atom_nxyz,
-                                            get_p_grad=get_p_grad)
+                                            store_grad=store_grad)
 
-    xyz_0, new_targ, R, p_grad = out
+    xyz_0, new_targ, R = out
 
     num_mols_1 = targ_nxyz.shape[0]
     num_mols_0 = atom_nxyz.shape[0]
@@ -188,17 +186,17 @@ def compute_distance(targ_nxyz,
                  0.5).reshape(num_mols_0, num_mols_1).cpu()
     R = R.cpu()
 
-    if get_p_grad:
-        return distances, R, p_grad
+    if store_grad:
+        return distances, R, xyz_0
     else:
-        return distances, R
+        return distances.detach(), R
 
 
 def compute_distances(dataset,
                       device,
                       batch_size=BATCH_SIZE,
                       dataset_1=None,
-                      get_p_grad=False):
+                      store_grad=False):
     """
     Compute distances between different configurations for one molecule.
     """
@@ -220,7 +218,7 @@ def compute_distances(dataset,
                           collate_fn=collate_dicts)
 
     i_start = 0
-    p_grads = []
+    xyz_list = []
 
     for batch_0 in loader_0:
 
@@ -237,11 +235,12 @@ def compute_distances(dataset,
 
             out = compute_distance(targ_nxyz=targ_nxyz,
                                    atom_nxyz=atom_nxyz,
-                                   get_p_grad=get_p_grad)
-            if get_p_grad:
-                distances, R, this_p_grad = out
+                                   store_grad=store_grad)
+            if store_grad:
+                distances, R, xyz_0 = out
                 num_atoms = batch_1["num_atoms"].tolist()
-                p_grads += this_p_grad
+                xyz_list.append(xyz_0)
+
             else:
                 distances, R = out
 
@@ -255,7 +254,7 @@ def compute_distances(dataset,
             all_indices[:, 1] += j_start
 
             distance_mat[all_indices[:, 0],
-                         all_indices[:, 1]] = distances.detach().reshape(-1)
+                         all_indices[:, 1]] = distances.reshape(-1)
 
             R_mat[all_indices[:, 0],
                   all_indices[:, 1]] = R.detach()
@@ -264,7 +263,7 @@ def compute_distances(dataset,
 
         i_start += num_mols_0
 
-    if get_p_grad:
-        return distance_mat, R_mat, p_grads
+    if store_grad:
+        return distance_mat, R_mat, xyz_list
     else:
         return distance_mat, R_mat

@@ -13,6 +13,7 @@ from nff.utils.cuda import batch_to
 from nff.data.sparse import sparsify_array
 from nff.train.builders.model import load_model
 from nff.utils.geom import compute_distances
+from nff.utils.scatter import compute_grad
 from nff.data import Dataset
 from nff.nn.graphop import split_and_sum
 
@@ -244,7 +245,7 @@ class AtomsBatch(Atoms):
 
 class BulkPhaseMaterials(Atoms):
     """Class to deal with the Neural Force Field and batch molecules together
-    in a box for handling boxphase. 
+    in a box for handling boxphase.
     """
 
     def __init__(
@@ -425,7 +426,7 @@ class NeuralFF(Calculator):
 
         Args:
             model (TYPE): Description
-            device (str): device on which the calculations will be performed 
+            device (str): device on which the calculations will be performed
             properties (list of str): 'energy', 'forces' or both and also stress for only schnet and painn
             **kwargs: Description
             model (one of nff.nn.models)
@@ -469,7 +470,7 @@ class NeuralFF(Calculator):
         Calculator.calculate(self, atoms, self.properties, system_changes)
 
         # run model
-        #atomsbatch = AtomsBatch(atoms)
+        # atomsbatch = AtomsBatch(atoms)
         # batch_to(atomsbatch.get_batch(), self.device)
         batch = batch_to(atoms.get_batch(), self.device)
 
@@ -535,7 +536,7 @@ class EnsembleNFF(Calculator):
 
         Args:
             model (TYPE): Description
-            device (str): device on which the calculations will be performed 
+            device (str): device on which the calculations will be performed
             **kwargs: Description
             model (one of nff.nn.models)
         """
@@ -575,7 +576,7 @@ class EnsembleNFF(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # run model
-        #atomsbatch = AtomsBatch(atoms)
+        # atomsbatch = AtomsBatch(atoms)
         # batch_to(atomsbatch.get_batch(), self.device)
         batch = batch_to(atoms.get_batch(), self.device)
 
@@ -651,6 +652,7 @@ class NeuralOptimizer:
 
 
 class NeuralMetadynamics(NeuralFF):
+
     def __init__(self,
                  model,
                  pushing_params,
@@ -724,43 +726,10 @@ class NeuralMetadynamics(NeuralFF):
         return k_i, alpha_i, dsets, f_damp
 
     def compute_rmsd_force(self,
-                           dsets,
-                           R_mat,
-                           v_bias,
-                           delta_i,
-                           alpha_i,
-                           atoms,
-                           p_grads):
+                           v_bias):
 
-        ref_nxyz_lst = dsets[0].props['nxyz']
-        num_refs = len(ref_nxyz_lst)
-        current_nxyz_lst = dsets[1].props['nxyz']
-        num_atoms = current_nxyz_lst[0].shape[0]
-
-        delta_i = delta_i.reshape(-1, 1, 1) + 1e-15
-        R_mat = R_mat.reshape(-1, 3, 3)
-
-        ref_xyz = torch.stack(ref_nxyz_lst)[:, :, 1:]
-        current_xyz = (torch.stack(current_nxyz_lst * num_refs)
-                       [:, :, 1:])
-
-        num_atoms = len(atoms)
-        rmsd_grad = torch.zeros(ref_xyz.shape[0], num_atoms, 3)
-        keep_idx = self.get_keep_idx(atoms)
-
-        # is this right? This assumes we say that we go from (current_xyz - past)
-        # to (R.current_xyz - past), and so we only need grad(R.current_xyz). I think
-        # this is the way it's set up based on how we choose dset_0 and dset_1 in
-        # `compute_distances`, but need to check
-
-        rot_current = torch.einsum('kij,klj->kli', R_mat, current_xyz)
-        delta_atomwise = (rot_current - ref_xyz)
-
-        rmsd_grad[:, keep_idx] = ((1 / (delta_i * num_atoms)) *
-                                  delta_atomwise * torch.stack(p_grads))
-
-        v_grads = (v_bias * (-2 * alpha_i * delta_i) * rmsd_grad)
-        v_grad = v_grads.sum(0)
+        v_grad = compute_grad(inputs=self.p,
+                              output=v_bias).sum(0)
 
         force = -v_grad
 
@@ -771,24 +740,21 @@ class NeuralMetadynamics(NeuralFF):
             return np.zeros((len(atoms), 3))
 
         k_i, alpha_i, dsets, f_damp = self.rmsd_prelims(atoms)
-        delta_i, R_mat, p_grads = compute_distances(dataset=dsets[0],
-                                                    device=self.device,
-                                                    dataset_1=dsets[1],
-                                                    get_p_grad=True)
+        delta_i, R_mat, xyz_list = compute_distances(dataset=dsets[0],
+                                                     device=self.device,
+                                                     dataset_1=dsets[1],
+                                                     store_grad=True)
+        self.p = xyz_list[0]
 
-        # compute bias potential
+        # compute bias potential - keep separate for each different reference
+        # structure for now
+
         v_bias = (f_damp * k_i *
-                  torch.exp(-alpha_i * delta_i ** 2)).sum()
+                  torch.exp(-alpha_i * delta_i.reshape(-1) ** 2)).sum()
 
-        f_bias = self.compute_rmsd_force(dsets=dsets,
-                                         R_mat=R_mat,
-                                         v_bias=v_bias,
-                                         delta_i=delta_i,
-                                         alpha_i=alpha_i,
-                                         atoms=atoms,
-                                         p_grads=p_grads)
+        f_bias = self.compute_rmsd_force(v_bias=v_bias)
 
-        return f_bias.numpy()
+        return f_bias.detach().numpy()
 
     def get_bias(self, atoms):
         bias_type = self.pushing_params['bias_type']
