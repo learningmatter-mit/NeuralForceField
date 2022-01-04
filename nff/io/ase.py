@@ -741,10 +741,10 @@ class NeuralMetadynamics(NeuralFF):
             return np.zeros((len(atoms), 3))
 
         k_i, alpha_i, dsets, f_damp = self.rmsd_prelims(atoms)
-        delta_i, R_mat, xyz_list = compute_distances(dataset=dsets[0],
-                                                     device=self.device,
-                                                     dataset_1=dsets[1],
-                                                     store_grad=True)
+        delta_i, _, xyz_list = compute_distances(dataset=dsets[0],
+                                                 device=self.device,
+                                                 dataset_1=dsets[1],
+                                                 store_grad=True)
 
         # compute bias potential - keep separate for each different reference
         # structure for now
