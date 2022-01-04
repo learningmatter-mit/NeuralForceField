@@ -738,10 +738,8 @@ class NeuralMetadynamics(NeuralFF):
         v_bias = (f_damp * k_i *
                   torch.exp(-alpha_i * delta_i.reshape(-1) ** 2)).sum()
 
-        v_grad = compute_grad(inputs=xyz_list[0],
-                              output=v_bias).sum(0)
-
-        f_bias = -v_grad
+        f_bias = -compute_grad(inputs=xyz_list[0],
+                               output=v_bias).sum(0)
 
         return f_bias.detach().numpy()
 
