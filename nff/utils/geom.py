@@ -138,7 +138,7 @@ def minimize_rotation_and_translation(targ_nxyz,
 
     new_p = torch.einsum("ijk,ilk->ijl", p_repeat, R)
 
-    return new_p, p0, R
+    return new_p, p0, R, base_p
 
 
 def compute_rmsd(targ_nxyz,
@@ -173,7 +173,7 @@ def compute_distance(targ_nxyz,
                                             this_nxyz=atom_nxyz,
                                             store_grad=store_grad)
 
-    xyz_0, new_targ, R = out
+    xyz_0, new_targ, R, base_p = out
 
     num_mols_1 = targ_nxyz.shape[0]
     num_mols_0 = atom_nxyz.shape[0]
@@ -187,7 +187,7 @@ def compute_distance(targ_nxyz,
     R = R.cpu()
 
     if store_grad:
-        return distances, R, xyz_0
+        return distances, R, base_p
     else:
         return distances.detach(), R
 
