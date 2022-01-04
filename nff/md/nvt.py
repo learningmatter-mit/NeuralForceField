@@ -10,6 +10,8 @@ from ase import units
 from ase.md.velocitydistribution import (MaxwellBoltzmannDistribution,
                                          Stationary, ZeroRotation)
 
+from nff.io.ase import AtomsBatch
+
 
 class NoseHoover(MolecularDynamics):
     def __init__(self,
@@ -260,6 +262,17 @@ class NoseHooverMetadynamics(NoseHoover):
         masses[nums == 1] = 1.008
         self.atoms.set_masses(masses)
 
+    def append_atoms(self):
+        # create new atoms so we don't copy the model on the calculator of the atoms
+        new_atoms = AtomsBatch(numbers=self.atoms.get_atomic_numbers(),
+                               positions=self.atoms.get_positions())
+        for key, val in self.atoms.__dict__.items():
+            if 'calc' in key.lower() or key.startswith("_"):
+                continue
+            setattr(new_atoms, key, val)
+
+        self.atoms.calc.append_atoms(new_atoms)
+
     def run(self, steps=None):
         if steps is None:
             steps = self.num_steps
@@ -272,10 +285,12 @@ class NoseHooverMetadynamics(NoseHoover):
         # self.max_steps = 0
 
         # number of steps until we add a new geom
+
         steps_between_add = int(self.geom_add_time / self.dt)
         steps_until_add = copy.deepcopy(steps_between_add)
 
         self.atoms.update_nbr_list()
+        self.append_atoms()
 
         for _ in tqdm(range(epochs)):
             self.max_steps += steps_per_epoch
@@ -288,8 +303,7 @@ class NoseHooverMetadynamics(NoseHoover):
             self.atoms.update_nbr_list()
 
             if self.nsteps >= steps_until_add:
-                # I think there's some sort of energy limit right?
-                self.atoms.calc.append_atoms(copy.deepcopy(self.atoms))
+                self.append_atoms()
                 steps_until_add += steps_between_add
 
 

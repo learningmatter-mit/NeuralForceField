@@ -36,8 +36,9 @@ def rotation_matrix_from_points(m0,
                                 m1,
                                 store_grad=False):
 
-    v0 = torch.clone(m0)[:, None, :, :]
-    v1 = torch.clone(m1)
+    v0 = m0[:, None, :, :]
+    # don't have to clone this because we don't modify its actual value below
+    v1 = m1
 
     out_0 = (v0 * v1).sum(-1).reshape(-1, 3)
     R11 = out_0[:, 0]

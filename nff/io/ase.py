@@ -741,7 +741,13 @@ class NeuralMetadynamics(NeuralFF):
         f_bias = -compute_grad(inputs=xyz_list[0],
                                output=v_bias).sum(0)
 
-        return f_bias.detach().numpy()
+        keep_idx = self.get_keep_idx(atoms)
+        final_f_bias = torch.zeros(len(atoms), 3)
+        final_f_bias[keep_idx] = f_bias.detach().cpu()
+        nan_idx = torch.bitwise_not(torch.isfinite(final_f_bias))
+        final_f_bias[nan_idx] = 0
+
+        return final_f_bias.numpy()
 
     def get_bias(self, atoms):
         bias_type = self.pushing_params['bias_type']
