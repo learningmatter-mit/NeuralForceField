@@ -264,7 +264,8 @@ class Painn(nn.Module):
                 batch,
                 xyz=None,
                 requires_stress=False,
-                inference=False):
+                inference=False,
+                **kwargs):
         """
         Call the model
         Args:
