@@ -100,6 +100,12 @@ def mse_operation(targ, pred):
     return diff
 
 
+def mae_operation(targ, pred):
+    targ = targ.to(torch.float)
+    diff = abs(targ - pred)
+    return diff
+
+
 def cross_entropy(targ, pred):
     """
     Take the cross-entropy between predicted and target.
@@ -258,6 +264,24 @@ def build_mse_loss(loss_coef,
 
     loss_fn = build_general_loss(loss_coef=loss_coef,
                                  operation=mse_operation,
+                                 correspondence_keys=correspondence_keys,
+                                 cutoff=cutoff)
+    return loss_fn
+
+
+def build_mae_loss(loss_coef,
+                   correspondence_keys=None,
+                   cutoff=None):
+    """
+    Build MSE loss from loss_coef.
+    Args:
+        loss_coef, correspondence_keys: see `build_general_loss`.
+    Returns:
+        loss_fn (function): loss function
+    """
+
+    loss_fn = build_general_loss(loss_coef=loss_coef,
+                                 operation=mae_operation,
                                  correspondence_keys=correspondence_keys,
                                  cutoff=cutoff)
     return loss_fn
