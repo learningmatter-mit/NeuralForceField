@@ -661,6 +661,7 @@ def build_trans_dip_loss(loss_dict):
 def name_to_func(name):
     dic = {
         "mse": build_mse_loss,
+        "mae": build_mae_loss,
         "cross_entropy": build_cross_entropy_loss,
         "logits_cross_entropy": build_logits_cross_entropy_loss,
         "zhu": build_zhu_loss,
