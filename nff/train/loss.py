@@ -682,7 +682,7 @@ def get_all_losses(multi_loss_dict):
         build_fn = name_to_func(key)
 
         # for backwards compatability
-        if key in ["mse", "mae"]:
+        if key in ["mse", "mae", "rmse"]:
             loss_coef = {sub_dic["params"]["key"]:
                          sub_dic["coef"] for sub_dic in loss_list}
             cutoff = {}
