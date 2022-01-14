@@ -42,6 +42,11 @@ def parse_add_ons(modelparams):
 
 
 class SpookyNet(nn.Module):
+    """
+    Simon's version of SpookyNet before the source code was released, which doesn't
+    work properly
+    """
+
     def __init__(self,
                  modelparams):
 
