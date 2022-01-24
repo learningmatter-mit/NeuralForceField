@@ -699,7 +699,7 @@ def xyz2mol(atoms, coordinates,
             charge=0,
             allow_charged_fragments=True,
             use_graph=True,
-            use_huckel=False,
+            use_huckel=True,
             embed_chiral=True):
     """
     Generate a rdkit molobj from atoms, coordinates and a total_charge.
@@ -719,6 +719,8 @@ def xyz2mol(atoms, coordinates,
         mol - rdkit molobj
 
     """
+
+    assert use_huckel, "Running without Huckel can lead to random position rearrangements"
 
     # Get atom connectivity (AC) matrix, list of atomic numbers, molecular charge,
     # and mol object with no connectivity information
