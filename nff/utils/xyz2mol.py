@@ -33,6 +33,7 @@ import networkx as nx
 
 from rdkit import Chem
 from rdkit.Chem import AllChem, rdmolops, GetPeriodicTable
+from rdkit.Chem.rdchem import EditableMol
 
 
 global __ATOM_LIST__
@@ -245,6 +246,7 @@ def clean_charges(mol):
     """
 
     Chem.SanitizeMol(mol)
+
     # rxn_smarts = ['[N+:1]=[*:2]-[C-:3]>>[N+0:1]-[*:2]=[C-0:3]',
     #              '[N+:1]=[*:2]-[O-:3]>>[N+0:1]-[*:2]=[O-0:3]',
     #              '[N+:1]=[*:2]-[*:3]=[*:4]-[O-:5]>>[N+0:1]-[*:2]=[*:3]-[*:4]=[O-0:5]',
@@ -694,8 +696,73 @@ def chiral_stereo_check(mol):
     return
 
 
+def check_mol(mol,
+              coordinates):
+
+    conf = mol.GetConformers()[0]
+    new_coords = conf.GetPositions()
+    old_coords = np.array(coordinates)
+
+    delta = np.linalg.norm(new_coords - old_coords)
+    if delta < 1e-2:
+        return mol
+
+    # sometimes the positions of the atoms get rearranged for some reason
+
+    new_pos = mol.GetConformers()[0].GetPositions()
+
+    dist = np.linalg.norm(new_pos.reshape(1, *new_pos.shape) -
+                          old_coords.reshape(old_coords.shape[0],
+                                             1,
+                                             old_coords.shape[1]),
+                          axis=-1)
+
+    new_idx = dist.argmin(-1).tolist()
+    rev_idx = dist.argmin(0).tolist()
+
+    ed_mol = EditableMol(Chem.MolFromSmiles(''))
+
+    for i, idx in enumerate(new_idx):
+        atom = mol.GetAtoms()[idx]
+        ed_mol.AddAtom(atom)
+
+    all_old_bond_idx = []
+    all_old_bond_types = []
+
+    for i, atom in enumerate(mol.GetAtoms()):
+
+        bonds = atom.GetBonds()
+        old_bond_idx = [[i.GetBeginAtomIdx(), i.GetEndAtomIdx()]
+                        for i in bonds]
+        bond_types = [i.GetBondType() for i in bonds]
+
+        use_idx = [j for j, idx in enumerate(old_bond_idx)
+                   if idx not in all_old_bond_idx]
+
+        all_old_bond_idx += [old_bond_idx[j] for j in use_idx]
+        all_old_bond_types += [bond_types[j] for j in use_idx]
+
+    for bond_idx, bond_type in zip(all_old_bond_idx, all_old_bond_types):
+        new_bond_idx = [rev_idx[bond_idx[0]],
+                        rev_idx[bond_idx[1]]]
+
+        ed_mol.AddBond(new_bond_idx[0], new_bond_idx[1], bond_type)
+
+    new_mol = ed_mol.GetMol()
+
+    # add the conformer
+
+    conformer = Chem.Conformer(len(coordinates))
+    for i, xyz in enumerate(coordinates):
+        conformer.SetAtomPosition(i, xyz)
+    new_mol.AddConformer(conformer)
+
+    return new_mol
+
+
 @timeout(seconds=MAX_TIME)
-def xyz2mol(atoms, coordinates,
+def xyz2mol(atoms,
+            coordinates,
             charge=0,
             allow_charged_fragments=True,
             use_graph=True,
@@ -720,8 +787,6 @@ def xyz2mol(atoms, coordinates,
 
     """
 
-    assert use_huckel, "Running without Huckel can lead to random position rearrangements"
-
     # Get atom connectivity (AC) matrix, list of atomic numbers, molecular charge,
     # and mol object with no connectivity information
     AC, mol = xyz2AC(atoms, coordinates, charge, use_huckel=use_huckel)
@@ -735,6 +800,9 @@ def xyz2mol(atoms, coordinates,
     # Check for stereocenters and chiral centers
     if embed_chiral:
         chiral_stereo_check(new_mol)
+
+    new_mol = check_mol(mol=new_mol,
+                        coordinates=coordinates)
 
     return new_mol
 
