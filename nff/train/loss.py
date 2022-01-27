@@ -292,8 +292,8 @@ def build_mae_loss(loss_coef,
 
 
 def build_rmse_loss(loss_coef,
-                   correspondence_keys=None,
-                   cutoff=None):
+                    correspondence_keys=None,
+                    cutoff=None):
     """
     Build MSE loss from loss_coef.
     Args:
@@ -307,8 +307,6 @@ def build_rmse_loss(loss_coef,
                                  correspondence_keys=correspondence_keys,
                                  cutoff=cutoff)
     return loss_fn
-
-
 
 
 def build_cross_entropy_loss(loss_coef, correspondence_keys=None):
@@ -582,7 +580,10 @@ def build_nacv_loss(loss_dict):
 
     params = loss_dict["params"]
     key = params["key"]
+    loss_type = params.get("loss_type", "mse")
+
     coef = loss_dict["coef"]
+
     take_abs = params.get("abs", False)
     take_max = params.get("max", False)
 
@@ -613,7 +614,13 @@ def build_nacv_loss(loss_dict):
             targ = targ[idx]
             pred = pred[idx]
 
-        diff = mse_operation(targ, pred)
+        if loss_type == "mse":
+            diff = mse_operation(targ, pred)
+        elif loss_type == "mae":
+            diff = mae_operation(targ, pred)
+        else:
+            raise NotImplementedError
+
         loss = coef * torch.mean(diff)
 
         return loss
