@@ -744,7 +744,7 @@ class NeuralMetadynamics(NeuralFF):
         nan_idx = torch.bitwise_not(torch.isfinite(final_f_bias))
         final_f_bias[nan_idx] = 0
 
-        return final_f_bias.numpy()
+        return final_f_bias.numpy(), v_bias.numpy()
 
     def get_bias(self, atoms):
         bias_type = self.pushing_params['bias_type']
@@ -759,7 +759,7 @@ class NeuralMetadynamics(NeuralFF):
         self.old_atoms.append(atoms)
         self.steps_from_old.append(0)
 
-        max_ref = self.pushing_params.get("max_ref")
+        max_ref = self.pushing_params.get("max_ref", 10)
         if max_ref is None:
             max_ref = float('inf')
 
@@ -780,12 +780,9 @@ class NeuralMetadynamics(NeuralFF):
                           properties=properties,
                           system_changes=system_changes)
 
-        # Add metadynamics forces
-        # Leave the energy as it is because we don't need
-        # and it's better to see the real NFF energy in the
-        # logger
+        # Add metadynamics energy and forces
 
-        f_bias = self.get_bias(atoms)
+        f_bias, _ = self.get_bias(atoms)
 
         self.results['forces'] += f_bias
         self.results['f_bias'] = f_bias
@@ -793,3 +790,50 @@ class NeuralMetadynamics(NeuralFF):
         if add_steps:
             for i, step in enumerate(self.steps_from_old):
                 self.steps_from_old[i] = step + 1
+
+
+class NeuralGAMD(NeuralFF):
+    """
+    NeuralFF for Gaussian-accelerated molecular dynamics (GAMD)
+    """
+
+    def __init__(self,
+                 model,
+                 k_0,
+                 V_min,
+                 V_max,
+                 device=0,
+                 en_key='energy',
+                 directed=DEFAULT_DIRECTED,
+                 **kwargs):
+
+        NeuralFF.__init__(self,
+                          model=model,
+                          device=device,
+                          en_key=en_key,
+                          directed=DEFAULT_DIRECTED,
+                          **kwargs)
+        self.V_min = V_min
+        self.V_max = V_max
+
+        self.k_0 = k_0
+        self.k = self.k_0 / (self.V_max - self.V_min)
+
+    def calculate(self,
+                  atoms,
+                  properties=['energy', 'forces'],
+                  system_changes=all_changes):
+
+        if not any([isinstance(self.model, i) for i in UNDIRECTED]):
+            check_directed(self.model, atoms)
+
+        super().calculate(atoms=atoms,
+                          properties=properties,
+                          system_changes=system_changes)
+
+        old_en = self.results['energy']
+        if old_en < self.V_max:
+            old_forces = self.results['forces']
+            f_bias = -self.k * (self.V_max - old_en) * old_forces
+
+            self.results['forces'] += f_bias

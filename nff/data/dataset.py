@@ -635,6 +635,12 @@ def convert_nan(x):
                 new_x.append(torch.Tensor([y]))
             elif isinstance(y, torch.Tensor):
                 new_x.append(y.float())
+            elif isinstance(y, list):
+                new_x.append(torch.Tensor(y))
+            else:
+                msg = ("Don't know how to convert sub-components of type "
+                       f"{type(x)} when components might contain nan")
+                raise Exception(msg)
         else:
             # otherwise they can be kept as is
             new_x.append(y)

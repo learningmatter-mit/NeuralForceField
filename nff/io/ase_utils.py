@@ -1,6 +1,11 @@
 import torch
 import numpy as np
-from ase.constraints import FixInternals
+from sympy import symbols, lambdify, diff
+from sympy.functions.elementary.trigonometric import acos as arccos
+
+
+from ase.constraints import (FixInternals, FixConstraint, ints2string)
+from ase.geometry import get_dihedrals_derivatives, get_angles_derivatives
 
 
 def get_distances_derivatives(v0,
@@ -413,3 +418,229 @@ class TorchShakeBonds(FixInternals):
 
         def __repr__(self):
             return 'FixDihedral({}, {})'.format(self.targetvalue, *self.indices)
+
+
+# def hook_angle_forces():
+#     k = symbols('k')
+#     angle_0 = symbols('angle_0')
+#     x1, y1, z1 = symbols('x1 y1 z1')
+#     x2, y2, z2 = symbols('x2 y2 z2')
+#     x3, y3, z3 = symbols('x3 y3 z3')
+
+#     r0 = [x1, y1, z1]
+#     r1 = [x2, y2, z2]
+#     r2 = [x3, y3, z3]
+
+#     r01 = [i - j for i, j in zip(r1, r0)]
+#     r12 = [i - j for i, j in zip(r1, r2)]
+#     dot = sum([i * j for i, j in zip(r01, r12)])
+#     norm_0 = sum([i ** 2 for i in r01]) ** 0.5
+#     norm_1 = sum([i ** 2 for i in r12]) ** 0.5
+
+#     norm_dot = dot / (norm_0 * norm_1)
+#     angle = arccos(norm_dot) * 180 / np.pi
+#     en = 1 / 2 * k * (angle - angle_0) ** 2
+
+#     all_vars = symbols('x1 y1 z1 x2 y2 z2 x3 y3 z3')
+#     inputs = symbols('angle_0 k x1 y1 z1 x2 y2 z2 x3 y3 z3')
+
+#     force_fns = []
+#     angle_fns = []
+#     en_fns = []
+
+#     for var in all_vars:
+#         force_fn = lambdify(inputs, -diff(en, var), 'numpy')
+#         force_fns.append(force_fn)
+
+#     angle_fn = lambdify(inputs, angle, 'numpy')
+
+#     en_fn = lambdify(inputs, en, 'numpy')
+
+#     return force_fns, angle_fn, en_fn
+
+
+# def get_angle_forces(atoms,
+#                      idx,
+#                      k,
+#                      angle_0,
+#                      force_fns,
+#                      en_fn,
+#                      angle_fn):
+
+#     forces = np.zeros_like(atoms.get_positions())
+
+#     pos = atoms.get_positions()
+#     r1 = pos[idx[0]]
+#     r2 = pos[idx[1]]
+#     r3 = pos[idx[2]]
+
+#     inp = {"x1": r1[0],
+#            "x2": r2[0],
+#            "x3": r3[0],
+#            "y1": r1[1],
+#            "y2": r2[1],
+#            "y3": r3[1],
+#            "z1": r1[2],
+#            "z2": r2[2],
+#            "z3": r3[2],
+#            "k": k,
+#            "angle_0": angle_0}
+
+#     these_forces = np.array([func(**inp) for func in force_fns]
+#                             ).reshape(-1, 3)
+#     forces[idx] = these_forces
+
+#     ens = en_fn(**inp)
+#     angles = angle_fn(**inp)
+
+#     return forces, ens, angles
+
+
+def get_dihed_derivs(atoms,
+                     idx):
+
+    pos = atoms.get_positions()
+
+    a0s = pos[idx[:, 0]]
+    a1s = pos[idx[:, 1]]
+    a2s = pos[idx[:, 2]]
+    a3s = pos[idx[:, 3]]
+
+    # vectors 0->1, 1->2, 2->3
+    v0 = a1s - a0s
+    v1 = a2s - a1s
+    v2 = a3s - a2s
+
+    derivs = get_dihedrals_derivatives(v0, v1, v2,
+                                       cell=atoms.cell,
+                                       pbc=atoms.pbc)
+
+    return derivs
+
+
+def get_dihed_forces(atoms,
+                     idx,
+                     k,
+                     dihed_0):
+
+    dihed_derivs = get_dihed_derivs(atoms=atoms,
+                                    idx=idx)
+    diheds = atoms.get_dihedrals(idx)
+
+    const = k.reshape(-1, 1, 1)
+    forces = -const * (diheds - dihed_0).reshape(-1, 1, 1) * dihed_derivs
+    total_forces = np.zeros_like(atoms.get_positions())
+
+    for these_idx, these_forces in zip(idx, forces):
+        total_forces[these_idx] += these_forces
+
+    return total_forces
+
+
+def get_angle_derivs(atoms,
+                     idx):
+
+    pos = atoms.get_positions()
+
+    a1s = pos[idx[:, 0]]
+    a2s = pos[idx[:, 1]]
+    a3s = pos[idx[:, 2]]
+
+    v12 = a1s - a2s
+    v32 = a3s - a2s
+
+    derivs = get_angles_derivatives(v12, v32,
+                                    cell=atoms.cell,
+                                    pbc=atoms.pbc)
+
+    return derivs
+
+
+def get_angle_forces(atoms,
+                     idx,
+                     k,
+                     angle_0):
+
+    angle_derivs = get_angle_derivs(atoms=atoms,
+                                    idx=idx)
+    angles = atoms.get_angles(idx)
+
+    const = k.reshape(-1, 1, 1)
+
+    forces = -const * (angles - angle_0).reshape(-1, 1, 1) * angle_derivs
+    total_forces = np.zeros_like(atoms.get_positions())
+
+    for these_idx, these_forces in zip(idx, forces):
+        total_forces[these_idx] += these_forces
+
+    return total_forces
+
+
+class ConstrainAngles(FixConstraint):
+
+    def __init__(self,
+                 idx,
+                 atoms,
+                 force_consts):
+
+        self.idx = np.asarray(idx)
+        self.targ_angles = atoms.get_angles(self.idx)
+
+        if (isinstance(force_consts, float) or isinstance(force_consts, int)):
+            self.force_consts = np.array([float(force_consts)] * len(self.idx))
+        else:
+            assert len(force_consts) == len(self.idx)
+            self.force_consts = force_consts
+
+    def get_removed_dof(self, atoms):
+        # no degrees of freedom are being fixed, they're just being constrained.
+        # So return 0 just like in the Hookean class
+        return 0
+
+    def adjust_positions(self, atoms, new):
+        return
+
+    def adjust_forces(self, atoms, forces):
+        new_forces = get_angle_forces(atoms=atoms,
+                                      idx=self.idx,
+                                      k=self.force_consts,
+                                      angle_0=self.targ_angles)
+
+        forces += new_forces
+
+        return new_forces, forces
+
+
+class ConstrainDihedrals(FixConstraint):
+
+    def __init__(self,
+                 idx,
+                 atoms,
+                 force_consts):
+
+        self.idx = np.asarray(idx)
+        self.targ_diheds = atoms.get_dihedrals(self.idx)
+
+        if (isinstance(force_consts, float) or isinstance(force_consts, int)):
+            self.force_consts = np.array([float(force_consts)] * len(self.idx))
+        else:
+            assert len(force_consts) == len(self.idx)
+            self.force_consts = force_consts
+
+    def get_removed_dof(self, atoms):
+        # no degrees of freedom are being fixed, they're just being constrained
+        # So return 0 just like in the Hookean class
+        return 0
+
+    def adjust_positions(self, atoms, new):
+        return
+
+    def adjust_forces(self, atoms, forces):
+        new_forces = get_dihed_forces(atoms=atoms,
+                                      idx=self.idx,
+                                      k=self.force_consts,
+                                      dihed_0=self.targ_diheds)
+
+        forces += new_forces
+
+        return new_forces, forces

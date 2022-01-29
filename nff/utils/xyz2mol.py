@@ -766,7 +766,7 @@ def xyz2mol(atoms,
             charge=0,
             allow_charged_fragments=True,
             use_graph=True,
-            use_huckel=True,
+            use_huckel=False,
             embed_chiral=True):
     """
     Generate a rdkit molobj from atoms, coordinates and a total_charge.
