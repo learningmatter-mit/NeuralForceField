@@ -300,7 +300,7 @@ class GraphAttention(MessagePassingModule):
 
         message = (
             r[a[:, 0]] * a_ij[:, None],
-            r[a[:, 1]] * a_ij[:, None],
+            r[a[:, 1]] * a_ji[:, None],
             r * a_ii[:, None],
         )
 
