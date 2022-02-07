@@ -1,6 +1,6 @@
 import numpy as np
 
-from ase.constraints import (FixConstraint)
+from ase.constraints import FixConstraint
 from ase.geometry import get_dihedrals_derivatives, get_angles_derivatives
 
 
