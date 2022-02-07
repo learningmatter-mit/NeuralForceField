@@ -68,8 +68,35 @@ class NoseHoover(MolecularDynamics):
             maxwell_temp = 2 * self.T
 
         MaxwellBoltzmannDistribution(self.atoms, maxwell_temp)
+        self.remove_constrained_vel(atoms)
         Stationary(self.atoms)
         ZeroRotation(self.atoms)
+
+    def remove_constrained_vel(self, atoms):
+        """
+        Set the initial velocity to zero for any constrained or fixed atoms
+        """
+
+        constraints = atoms.constraints
+
+        fixed_idx = []
+        for constraint in constraints:
+            has_keys = False
+            keys = ['idx', 'indices', 'index']
+            for key in keys:
+                if hasattr(constraint, key):
+                    val = np.array(getattr(constraint, key)
+                                   ).reshape(-1).tolist()
+                    fixed_idx += val
+                    has_keys = True
+            if not has_keys:
+                print(("WARNING: velocity not set to zero for any atoms in constraint "
+                       "%s; do not know how to find its fixed indices." % constraint))
+
+        fixed_idx = np.array(list(set(fixed_idx)))
+        vel = self.atoms.get_velocities()
+        vel[fixed_idx] = 0
+        self.atoms.set_velocities(vel)
 
     def step(self):
 
