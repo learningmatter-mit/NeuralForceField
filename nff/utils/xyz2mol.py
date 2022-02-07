@@ -73,8 +73,8 @@ for i in range(100):
 
 
 DEFAULT_SAVE = "mol.pickle"
-# give up after 2 minutes
-MAX_TIME = 120
+# give up after 10 minutes
+MAX_TIME = 600
 
 
 class TimeoutError(Exception):
