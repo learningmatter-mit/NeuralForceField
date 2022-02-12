@@ -82,9 +82,10 @@ class Dynamics:
             # calculate number of steps remaining
             self.steps = ( int(self.mdparam['steps']) 
                 - ( int(self.mdparam['save_frequency']) * 
-                len(Trajectory(self.mdparam['traj_filename'])[-1]) ) )
+                len(Trajectory(self.mdparam['traj_filename'])) ) )
             print(self.steps)
 
+            self.atomsbatch.set_cell(new_atoms.get_cell())
             self.atomsbatch.set_positions(new_atoms.get_positions())
             self.atomsbatch.set_velocities(new_atoms.get_velocities())
 
@@ -92,7 +93,7 @@ class Dynamics:
             self.traj = Trajectory(
                 self.mdparam['traj_filename'], 'a', self.atomsbatch)
             self.integrator.attach(
-                self.traj.write, interval=self.mdparam['save_frequency'], mode='a')
+                self.traj.write, interval=self.mdparam['save_frequency'])
 
             # attach log file
             requires_stress = 'stress' in self.atomsbatch.calc.properties
