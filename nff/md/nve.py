@@ -1,4 +1,5 @@
 import numpy as np
+import os
 
 from ase import units
 from ase.md.velocitydistribution import (MaxwellBoltzmannDistribution,
@@ -69,6 +70,42 @@ class Dynamics:
                                               mode='a'),
                                interval=self.mdparam['save_frequency'])
 
+    def check_restart(self):
+
+        if os.path.exists(self.mdparam['traj_filename']):
+            new_atoms = Trajectory(self.mdparam['traj_filename'])[-1]
+
+            # calculate number of steps remaining
+            steps = ( int(self.mdparam['steps']) 
+                - ( int(self.mdparam['save_frequency']) * 
+                len(Trajectory(self.mdparam['traj_filename'])[-1]) ) )
+            print(steps)
+
+            self.atomsbatch.set_positions(new_atoms.get_positions())
+            self.atomsbatch.set_velocities(new_atoms.get_velocities())
+
+            # attach trajectory dump
+            self.traj = Trajectory(
+                self.mdparam['traj_filename'], 'a', self.atomsbatch)
+            self.integrator.attach(
+                self.traj.write, interval=self.mdparam['save_frequency'])
+
+            # attach log file
+            requires_stress = 'stress' in self.atomsbatch.calc.properties
+            self.integrator.attach(NeuralMDLogger(self.integrator,
+                                                self.atomsbatch,
+                                                self.mdparam['thermo_filename'],
+                                                stress=requires_stress,
+                                                mode='a'),
+                                interval=self.mdparam['save_frequency'])     
+
+            return steps
+
+        else:
+
+            return
+
+
     def setup_restart(self, restart_param):
         """If you want to restart a simulations with predfined mdparams but 
         longer you need to provide a dictionary like the following:
@@ -124,7 +161,10 @@ class Dynamics:
 
     def run(self):
 
-        epochs = int(self.mdparam['steps'] //
+        steps = int(self.mdparam['steps'])
+        self.check_restart()
+
+        epochs = int(steps //
                      self.mdparam['nbr_list_update_freq'])
         # In case it had neighbors that didn't include the cutoff skin,
         # for example, it's good to update the neighbor list here
