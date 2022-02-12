@@ -79,24 +79,28 @@ class NoseHoover(MolecularDynamics):
 
         constraints = atoms.constraints
 
-        fixed_idx = []
-        for constraint in constraints:
-            has_keys = False
-            keys = ['idx', 'indices', 'index']
-            for key in keys:
-                if hasattr(constraint, key):
-                    val = np.array(getattr(constraint, key)
-                                   ).reshape(-1).tolist()
-                    fixed_idx += val
-                    has_keys = True
-            if not has_keys:
-                print(("WARNING: velocity not set to zero for any atoms in constraint "
-                       "%s; do not know how to find its fixed indices." % constraint))
+        if constraints is not None:
+            fixed_idx = []
+            for constraint in constraints:
+                has_keys = False
+                keys = ['idx', 'indices', 'index']
+                for key in keys:
+                    if hasattr(constraint, key):
+                        val = np.array(getattr(constraint, key)
+                                    ).reshape(-1).tolist()
+                        fixed_idx += val
+                        has_keys = True
+                if not has_keys:
+                    print(("WARNING: velocity not set to zero for any atoms in constraint "
+                        "%s; do not know how to find its fixed indices." % constraint))
 
-        fixed_idx = np.array(list(set(fixed_idx)))
-        vel = self.atoms.get_velocities()
-        vel[fixed_idx] = 0
-        self.atoms.set_velocities(vel)
+            fixed_idx = np.array(list(set(fixed_idx)))
+            vel = self.atoms.get_velocities()
+            vel[fixed_idx] = 0
+            self.atoms.set_velocities(vel)
+
+        else:
+            pass
 
     def step(self):
 
