@@ -20,7 +20,7 @@ DEFAULTNVEPARAMS = {
     'steps': 3000,
     'save_frequency': 10,
     'thermo_filename': './thermo.log',
-    'traj_filename': './atom.traj',
+    'traj_filename': './atoms.traj',
     'skip': 0
 }
 
