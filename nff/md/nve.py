@@ -55,38 +55,13 @@ class Dynamics:
                                          **self.mdparam['thermostat_params'],
                                          **self.mdparam)
 
-        # attach trajectory dump
-        self.traj = Trajectory(
-            self.mdparam['traj_filename'], 'w', self.atomsbatch)
-        self.integrator.attach(
-            self.traj.write, interval=self.mdparam['save_frequency'])
+        self.steps = int(self.mdparam['steps'])
+        self.check_restart()
 
-        # attach log file
-        requires_stress = 'stress' in self.atomsbatch.calc.properties
-        self.integrator.attach(NeuralMDLogger(self.integrator,
-                                              self.atomsbatch,
-                                              self.mdparam['thermo_filename'],
-                                              stress=requires_stress,
-                                              mode='a'),
-                               interval=self.mdparam['save_frequency'])
-
-    def check_restart(self):
-
-        if os.path.exists(self.mdparam['traj_filename']):
-            new_atoms = Trajectory(self.mdparam['traj_filename'])[-1]
-
-            # calculate number of steps remaining
-            steps = ( int(self.mdparam['steps']) 
-                - ( int(self.mdparam['save_frequency']) * 
-                len(Trajectory(self.mdparam['traj_filename'])[-1]) ) )
-            print(steps)
-
-            self.atomsbatch.set_positions(new_atoms.get_positions())
-            self.atomsbatch.set_velocities(new_atoms.get_velocities())
-
+        if self.steps == int(self.mdparam['steps']):
             # attach trajectory dump
             self.traj = Trajectory(
-                self.mdparam['traj_filename'], 'a', self.atomsbatch)
+                self.mdparam['traj_filename'], 'w', self.atomsbatch)
             self.integrator.attach(
                 self.traj.write, interval=self.mdparam['save_frequency'])
 
@@ -97,9 +72,38 @@ class Dynamics:
                                                 self.mdparam['thermo_filename'],
                                                 stress=requires_stress,
                                                 mode='a'),
+                                interval=self.mdparam['save_frequency'])
+
+    def check_restart(self):
+
+        if os.path.exists(self.mdparam['traj_filename']):
+            new_atoms = Trajectory(self.mdparam['traj_filename'])[-1]
+
+            # calculate number of steps remaining
+            self.steps = ( int(self.mdparam['steps']) 
+                - ( int(self.mdparam['save_frequency']) * 
+                len(Trajectory(self.mdparam['traj_filename'])[-1]) ) )
+            print(self.steps)
+
+            self.atomsbatch.set_positions(new_atoms.get_positions())
+            self.atomsbatch.set_velocities(new_atoms.get_velocities())
+
+            # attach trajectory dump
+            self.traj = Trajectory(
+                self.mdparam['traj_filename'], 'a', self.atomsbatch)
+            self.integrator.attach(
+                self.traj.write, interval=self.mdparam['save_frequency'], mode='a')
+
+            # attach log file
+            requires_stress = 'stress' in self.atomsbatch.calc.properties
+            self.integrator.attach(NeuralMDLogger(self.integrator,
+                                                self.atomsbatch,
+                                                self.mdparam['thermo_filename'],
+                                                stress=requires_stress,
+                                                mode='a'),
                                 interval=self.mdparam['save_frequency'])     
 
-            return steps
+            return self.steps
 
         else:
 
@@ -161,10 +165,7 @@ class Dynamics:
 
     def run(self):
 
-        steps = int(self.mdparam['steps'])
-        self.check_restart()
-
-        epochs = int(steps //
+        epochs = int(self.steps //
                      self.mdparam['nbr_list_update_freq'])
         # In case it had neighbors that didn't include the cutoff skin,
         # for example, it's good to update the neighbor list here
