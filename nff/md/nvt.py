@@ -79,7 +79,7 @@ class NoseHoover(MolecularDynamics):
 
         constraints = atoms.constraints
 
-        if constraints is not None:
+        if constraints:
             fixed_idx = []
             for constraint in constraints:
                 has_keys = False
