@@ -1,0 +1,14 @@
+{
+  "summary_path": "/home/saxelrod/Repo/projects/master/NeuralForceField/tutorials/data/uvvis_cp3d/summary.json",
+  "dataset_folder": "/home/saxelrod/Repo/projects/master/NeuralForceField/tutorials/data/uvvis_cp3d",
+  "pickle_folder": "/home/saxelrod/Repo/projects/master/NeuralForceField/tutorials/data/uvvis_cp3d",
+  "num_threads": 1,
+  "csv_folder": "/home/saxelrod/Repo/projects/master/NeuralForceField/tutorials/data/uvvis_cp3d",
+  "parallel_feat_threads": 1,
+  "strict_conformers": false,
+  "slurm_parallel": false,
+  "nbrlist_cutoff": 5.0,
+  "extra_features": [],
+  "max_confs": 1,
+  "add_directed_idx": true
+}

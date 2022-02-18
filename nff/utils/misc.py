@@ -7,6 +7,7 @@ import os
 import random
 import numpy as np
 import torch
+from ase.build.rotate import rotation_matrix_from_points
 from sklearn.metrics import (roc_auc_score, auc, precision_recall_curve,
                              r2_score, accuracy_score, log_loss)
 
@@ -58,6 +59,20 @@ def tqdm_enum(iter):
         i += 1
 
 
+def add_json_args(args, config_flag="config_file"):
+    config_path = getattr(args, config_flag, None)
+    if config_path is not None:
+        with open(config_path, "r") as f:
+            config_args = json.load(f)
+        if 'details' in config_args:
+            config_args.update(config_args['details'])
+            config_args.pop('details')
+        for key, val in config_args.items():
+            if hasattr(args, key):
+                setattr(args, key, val)
+    return args
+
+
 def parse_args(parser, config_flag="config_file"):
     """
     Parse arguments.
@@ -76,13 +91,7 @@ def parse_args(parser, config_flag="config_file"):
     # arguments from that file and apply the results
     # to `args`
 
-    config_path = getattr(args, config_flag, None)
-    if config_path is not None:
-        with open(config_path, "r") as f:
-            config_args = json.load(f)
-        for key, val in config_args.items():
-            if hasattr(args, key):
-                setattr(args, key, val)
+    args = add_json_args(args, config_flag=config_flag)
     return args
 
 
@@ -510,9 +519,11 @@ def parse_args_from_json(arg_path,
     optional = parser.add_argument_group('optional arguments')
 
     for name, info in default_args.items():
-        keys = ['default', 'choices', 'nargs']
+        keys = ['default', 'choices', 'nargs', 'action']
         kwargs = {key: info[key] for key in keys
                   if key in info}
+        if 'type' in info:
+            kwargs.update({"type": eval(info['type'])})
 
         # Required arguments get put in one group and optional ones in another
         # so that they're separated in `--help` . We don't actually set
@@ -521,10 +532,35 @@ def parse_args_from_json(arg_path,
 
         group = required if info.get('required', False) else optional
         group.add_argument(f'--{name}',
-                            type=eval(info['type']),
                             help=info['help'],
                             **kwargs)
 
     args = parser.parse_args()
 
     return args
+
+def align_and_return(target, atoms):
+    """
+
+    Taken from `ase.build.rotate.minimize_rotation_and_translation`.
+    Same as their code, but returns the displacement and the rotation
+    matrix.
+
+    """
+
+    p = atoms.get_positions()
+    p0 = target.get_positions()
+
+    # centeroids to origin
+    c = np.mean(p, axis=0)
+    p -= c
+    c0 = np.mean(p0, axis=0)
+    p0 -= c0
+
+    # Compute rotation matrix
+    R = rotation_matrix_from_points(p.T, p0.T)
+
+    atoms.set_positions(np.dot(p, R.T) + c0)
+
+    return R, c0, c
+

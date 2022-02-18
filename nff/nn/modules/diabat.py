@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from torch.nn import Sequential
+import copy
 
 from nff.nn.layers import StochasticIncrease
 from nff.utils.scatter import compute_grad
@@ -286,9 +287,13 @@ class DiabaticReadout(nn.Module):
     def add_adiabat_grads(self,
                           xyz,
                           results,
-                          inference):
+                          inference,
+                          en_keys_for_grad):
 
-        for key in self.energy_keys:
+        if en_keys_for_grad is None:
+            en_keys_for_grad = copy.deepcopy(self.energy_keys)
+
+        for key in en_keys_for_grad:
             val = results[key]
             grad = compute_grad(inputs=xyz,
                                 output=val,
@@ -299,7 +304,9 @@ class DiabaticReadout(nn.Module):
 
         return results
 
-    def add_gap(self, results):
+    def add_gap(self,
+                results,
+                add_grad):
 
         # diabatic gap
 
@@ -320,6 +327,19 @@ class DiabaticReadout(nn.Module):
                 lower_key = self.energy_keys[i]
                 gap = results[upper_key] - results[lower_key]
                 results.update({f"{upper_key}_{lower_key}_delta": gap})
+
+                if add_grad:
+                    upper_grad_key = upper_key + "_grad"
+                    lower_grad_key = lower_key + "_grad"
+
+                    grad_keys = [upper_grad_key, lower_grad_key]
+                    if not all([i in results for i in grad_keys]):
+                        continue
+
+                    gap_grad = results[upper_grad_key] - \
+                        results[lower_grad_key]
+                    results.update({f"{upper_key}_{lower_key}_delta_grad":
+                                    gap_grad})
 
         return results
 
@@ -454,7 +474,8 @@ class DiabaticReadout(nn.Module):
                 add_gap=True,
                 add_u=False,
                 inference=False,
-                do_nan=True):
+                do_nan=True,
+                en_keys_for_grad=None):
 
         if not hasattr(self, "delta"):
             self.delta = False
@@ -496,7 +517,8 @@ class DiabaticReadout(nn.Module):
         elif add_grad:
             results = self.add_adiabat_grads(xyz=xyz,
                                              results=results,
-                                             inference=inference)
+                                             inference=inference,
+                                             en_keys_for_grad=en_keys_for_grad)
 
         # add back any nan's that were originally set to zeros
         # to avoid an error in diagonalization
@@ -513,7 +535,7 @@ class DiabaticReadout(nn.Module):
                                          u=u)
 
         if add_gap:
-            results = self.add_gap(results)
+            results = self.add_gap(results, add_grad=add_grad)
 
         if self.training:
             results = self.add_stochastic(results)

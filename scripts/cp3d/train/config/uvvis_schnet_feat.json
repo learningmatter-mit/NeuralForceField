@@ -1,0 +1,84 @@
+{
+    "model_params": {
+        "activation": "swish",
+        "base_keys": [
+            "peakwavs_max"
+        ],
+        "boltzmann_dict": {
+            "type": "multiply"
+        },
+        "classifier": false,
+        "cutoff": 5.0,
+        "dropout_rate": 0.0,
+        "ext_feat_types": [],
+        "extra_features": [],
+        "gauss_embed": true,
+        "grad_keys": [],
+        "model_type": "SchNetFeatures",
+        "mol_basis": 300,
+        "mol_fp_layers": [],
+        "n_atom_basis": 133,
+        "n_atom_hidden": 300,
+        "n_bond_features": 26,
+        "n_bond_hidden": 300,
+        "n_convolutions": 3,
+        "n_filters": 64,
+        "n_gaussians": 10,
+        "readoutdict": {
+            "peakwavs_max": [
+                {
+                    "name": "linear",
+                    "param": {
+                        "in_features": 300,
+                        "out_features": 150
+                    }
+                },
+                {
+                    "name": "swish",
+                    "param": {}
+                },
+                {
+                    "name": "linear",
+                    "param": {
+                        "in_features": 150,
+                        "out_features": 1
+                    }
+                }
+            ]
+        },
+        "same_filters": true,
+        "trainable_gauss": false,
+        "use_mpnn": true
+    },
+    
+    "device": 1,
+    "train_params": {
+        "batch_size": 1,
+        "checkpoints_to_keep": 3,
+        "del_grad_interval": 3,
+        "log_every_n_epochs": 1,
+        "loss": "mse",
+        "loss_coef": {
+            "peakwavs_max": 1
+        },
+        "lr": 0.0001,
+        "lr_decay": 0.5,
+        "lr_min": 1e-06,
+        "lr_patience": 10,
+        "max_epochs": 30,
+        "metric_as_loss": null,
+        "metric_objective": "minimize",
+        "metrics": [
+            "MeanAbsoluteError"
+        ],
+        "mini_batches": 10,
+        "model_kwargs": {},
+        "model_name": "schnet_feat",
+        "mol_loss_norm": false,
+        "seed": 0,
+        "torch_par": false,
+        "use_slurm": false,
+        "weightpath": "/home/saxelrod/Repo/projects/master/NeuralForceField/tutorials/data/uvvis_cp3d",
+        "pool_type": "mean"
+    }
+}

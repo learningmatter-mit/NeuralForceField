@@ -3,8 +3,11 @@ import torch
 from nff.io.ase import NeuralFF, AtomsBatch
 from nff.reactive_tools.utils import (neural_hessian_ase, neural_energy_ase,
                                       neural_force_ase)
+from nff.utils.constants import EV_TO_AU, BOHR_RADIUS
 
 from ase import Atoms
+from neuralnet.vib import hessian_and_modes
+from ase.units import Bohr, mol, kcal
 
 CONVG_LINE = "Optimization converged!"
 
@@ -29,6 +32,22 @@ def powell_update(hessian_old,
     return powell_hessian.detach()
 
 
+def get_hessian(atoms,
+                device):
+
+    mode_results = hessian_and_modes(atoms)
+
+    # use the full Hessian, not the one with
+    # translation and rotation projected out
+
+    # hessian = mode_results["hess_proj"]
+    hessian = mode_results["hessianmatrix"]
+    hessian = torch.Tensor(hessian).to(device)
+    hessian /= (EV_TO_AU * BOHR_RADIUS ** 2)
+
+    return hessian
+
+
 def eigvec_following(ev_atoms,
                      step,
                      maxstepsize,
@@ -43,7 +62,8 @@ def eigvec_following(ev_atoms,
                            ).reshape(1, -1, Ndim).to(device)
 
     if(method == 'NR' or step == 0):
-        hessian = torch.Tensor(neural_hessian_ase(ev_atoms)).to(device)
+        hessian = get_hessian(atoms=ev_atoms,
+                              device=device)
 
     neural_energy_ase(ev_atoms)
     neural_gradient = -1 * torch.Tensor(neural_force_ase(ev_atoms)).to(device)

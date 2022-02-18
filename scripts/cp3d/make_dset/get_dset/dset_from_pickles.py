@@ -795,12 +795,13 @@ def make_big_dataset(spec_dics,
                    "weights": torch.Tensor(spec_dic["weights"]
                                            ).reshape(-1, 1) / sum(
                        spec_dic["weights"]),
-                   "degeneracy": torch.Tensor(spec_dic["degeneracy"]
-                                              ).reshape(-1, 1),
-                   "energy": torch.Tensor(spec_dic["energy"]
-                                          ).reshape(-1, 1),
                    "num_atoms": [len(nxyz)]}
-
+        if "energy" in spec_dic:
+            new_dic.update({"energy": torch.Tensor(spec_dic["energy"]
+                            ).reshape(-1, 1)})
+        if "degeneracy" in spec_dic:
+            new_dic.update({"degeneracy": torch.Tensor(spec_dic["degeneracy"]
+                            ).reshape(-1, 1)})
         new_dic.update(
             {
                 key: val[:1] for key, val in dataset.props.items()

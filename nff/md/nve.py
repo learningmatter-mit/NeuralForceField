@@ -1,4 +1,5 @@
 import numpy as np
+import os
 
 from ase import units
 from ase.md.velocitydistribution import (MaxwellBoltzmannDistribution,
@@ -19,7 +20,7 @@ DEFAULTNVEPARAMS = {
     'steps': 3000,
     'save_frequency': 10,
     'thermo_filename': './thermo.log',
-    'traj_filename': './atom.traj',
+    'traj_filename': './atoms.traj',
     'skip': 0
 }
 
@@ -38,31 +39,77 @@ class Dynamics:
         # todo: structure optimization before starting
 
         # intialize system momentum
-        MaxwellBoltzmannDistribution(
-            self.atomsbatch, self.mdparam['T_init'] * units.kB)
+        MaxwellBoltzmannDistribution(self.atomsbatch,
+                                     self.mdparam['T_init'] * units.kB)
         Stationary(self.atomsbatch)  # zero linear momentum
         ZeroRotation(self.atomsbatch)
 
         # set thermostats
         integrator = self.mdparam['thermostat']
+        if integrator == VelocityVerlet:
+            dt = self.mdparam['thermostat_params']['timestep']
+            self.integrator = integrator(self.atomsbatch,
+                                         timestep=dt)
+        else:
+            self.integrator = integrator(self.atomsbatch,
+                                         **self.mdparam['thermostat_params'],
+                                         **self.mdparam)
 
-        self.integrator = integrator(
-            self.atomsbatch, **self.mdparam['thermostat_params'], **self.mdparam)
+        self.steps = int(self.mdparam['steps'])
+        self.check_restart()
 
-        # attach trajectory dump
-        self.traj = Trajectory(
-            self.mdparam['traj_filename'], 'w', self.atomsbatch)
-        self.integrator.attach(
-            self.traj.write, interval=self.mdparam['save_frequency'])
+        if self.steps == int(self.mdparam['steps']):
+            # attach trajectory dump
+            self.traj = Trajectory(
+                self.mdparam['traj_filename'], 'w', self.atomsbatch)
+            self.integrator.attach(
+                self.traj.write, interval=self.mdparam['save_frequency'])
 
-        # attach log file
-        requires_stress = 'stress' in self.atomsbatch.calc.properties
-        self.integrator.attach(NeuralMDLogger(self.integrator,
-                                              self.atomsbatch,
-                                              self.mdparam['thermo_filename'],
-                                              stress=requires_stress,
-                                              mode='a'),
-                               interval=self.mdparam['save_frequency'])
+            # attach log file
+            requires_stress = 'stress' in self.atomsbatch.calc.properties
+            self.integrator.attach(NeuralMDLogger(self.integrator,
+                                                self.atomsbatch,
+                                                self.mdparam['thermo_filename'],
+                                                stress=requires_stress,
+                                                mode='a'),
+                                interval=self.mdparam['save_frequency'])
+
+    def check_restart(self):
+
+        if os.path.exists(self.mdparam['traj_filename']):
+            new_atoms = Trajectory(self.mdparam['traj_filename'])[-1]
+
+            # calculate number of steps remaining
+            self.steps = ( int(self.mdparam['steps']) 
+                - ( int(self.mdparam['save_frequency']) * 
+                len(Trajectory(self.mdparam['traj_filename'])) ) )
+            print(self.steps)
+
+            self.atomsbatch.set_cell(new_atoms.get_cell())
+            self.atomsbatch.set_positions(new_atoms.get_positions())
+            self.atomsbatch.set_velocities(new_atoms.get_velocities())
+
+            # attach trajectory dump
+            self.traj = Trajectory(
+                self.mdparam['traj_filename'], 'a', self.atomsbatch)
+            self.integrator.attach(
+                self.traj.write, interval=self.mdparam['save_frequency'])
+
+            # attach log file
+            requires_stress = 'stress' in self.atomsbatch.calc.properties
+            self.integrator.attach(NeuralMDLogger(self.integrator,
+                                                self.atomsbatch,
+                                                self.mdparam['thermo_filename'],
+                                                stress=requires_stress,
+                                                mode='a'),
+                                interval=self.mdparam['save_frequency'])     
+
+            return self.steps
+
+        else:
+
+            return
+
 
     def setup_restart(self, restart_param):
         """If you want to restart a simulations with predfined mdparams but 
@@ -119,7 +166,7 @@ class Dynamics:
 
     def run(self):
 
-        epochs = int(self.mdparam['steps'] //
+        epochs = int(self.steps //
                      self.mdparam['nbr_list_update_freq'])
         # In case it had neighbors that didn't include the cutoff skin,
         # for example, it's good to update the neighbor list here

@@ -20,7 +20,8 @@ layer_types = {
     "Dropout": torch.nn.Dropout,
     "LeakyReLU": torch.nn.LeakyReLU,
     "ELU": torch.nn.ELU,
-    "Diagonalize": Diagonalize
+    "Diagonalize": Diagonalize,
+    "swish": torch.nn.SiLU
 }
 
 

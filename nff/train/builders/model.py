@@ -1,5 +1,5 @@
 """Helper functions to create models, functions and other classes
-	while checking for the validity of hyperparameters.
+    while checking for the validity of hyperparameters.
 """
 import os
 import json
@@ -14,7 +14,7 @@ from nff.nn.models.dimenet import DimeNet, DimeNetDiabat, DimeNetDiabatDelta, Di
 from nff.nn.models.painn import Painn, PainnDiabat, PainnTransformer, PainnAdiabat
 from nff.nn.models.spooky_painn import SpookyPainn, SpookyPainnDiabat
 from nff.nn.models.torchmd_net import TorchMDNet
-from nff.nn.models.spooky import SpookyNet
+from nff.nn.models.spooky import SpookyNet, RealSpookyNet
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -289,6 +289,37 @@ PARAMS_TYPE = {"SchNet":
                    "output_keys": list,
                    "grad_keys": list,
                    "diabat_keys": list
+               },
+
+               "RealSpookyNet": {
+                   "activation": str,
+                   "num_features": int,
+                   "num_basis_functions": int,
+                   "num_modules": int,
+                   "num_residual_electron": int,
+                   "num_residual_pre": int,
+                   "num_residual_post": int,
+                   "num_residual_pre_local_x": int,
+                   "num_residual_pre_local_s": int,
+                   "num_residual_pre_local_p": int,
+                   "num_residual_pre_local_d": int,
+                   "num_residual_post": int,
+
+                   "num_residual_output": int,
+                   "basis_functions": str,
+                   "exp_weighting": bool,
+                   "cutoff": float,
+                   "lr_cutoff": float,
+                   "use_zbl_repulsion": bool,
+                   "use_electrostatics": bool,
+                   "use_d4_dispersion": bool,
+                   "use_irreps": bool,
+                   "use_nonlinear_embedding": bool,
+                   "compute_d4_atomic": bool,
+                   "module_keep_prob": float,
+                   "load_from": str,
+                   "Zmax": int,
+                   "zero_init": bool
                }
 
                }
@@ -312,7 +343,8 @@ MODEL_DICT = {
     "TorchMDNet": TorchMDNet,
     "SpookyNet": SpookyNet,
     "SpookyPainn": SpookyPainn,
-    "SpookyPainnDiabat": SpookyPainnDiabat
+    "SpookyPainnDiabat": SpookyPainnDiabat,
+    "RealSpookyNet": RealSpookyNet
 
 }
 
@@ -330,6 +362,8 @@ def check_parameters(params_type, params):
             params (dict)
     """
     for key, val in params.items():
+        if val is None:
+            continue
         if key in params_type and not isinstance(val, params_type[key]):
             raise ParameterError("%s is not %s" % (str(key), params_type[key]))
 

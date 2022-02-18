@@ -13,6 +13,7 @@ from nff.utils.cuda import batch_to
 from nff.data.sparse import sparsify_array
 from nff.train.builders.model import load_model
 from nff.utils.geom import compute_distances
+from nff.utils.scatter import compute_grad
 from nff.data import Dataset
 from nff.nn.graphop import split_and_sum
 
@@ -45,7 +46,7 @@ class AtomsBatch(Atoms):
     def __init__(
         self,
         *args,
-        props={},
+        props=None,
         cutoff=DEFAULT_CUTOFF,
         directed=DEFAULT_DIRECTED,
         requires_large_offsets=False,
@@ -67,8 +68,8 @@ class AtomsBatch(Atoms):
         """
         super().__init__(*args, **kwargs)
 
-        # import pdb
-        # pdb.set_trace()
+        if props is None:
+            props = {}
 
         self.props = props
         self.nbr_list = props.get('nbr_list', None)
@@ -241,7 +242,7 @@ class AtomsBatch(Atoms):
 
 class BulkPhaseMaterials(Atoms):
     """Class to deal with the Neural Force Field and batch molecules together
-    in a box for handling boxphase. 
+    in a box for handling boxphase.
     """
 
     def __init__(
@@ -415,13 +416,14 @@ class NeuralFF(Calculator):
         device='cpu',
         en_key='energy',
         properties=['energy', 'forces'],
+        model_kwargs=None,
         **kwargs
     ):
         """Creates a NeuralFF calculator.nff/io/ase.py
 
         Args:
             model (TYPE): Description
-            device (str): device on which the calculations will be performed 
+            device (str): device on which the calculations will be performed
             properties (list of str): 'energy', 'forces' or both and also stress for only schnet and painn
             **kwargs: Description
             model (one of nff.nn.models)
@@ -434,6 +436,7 @@ class NeuralFF(Calculator):
         self.to(device)
         self.en_key = en_key
         self.properties = properties
+        self.model_kwargs = model_kwargs
 
     def to(self, device):
         self.device = device
@@ -454,8 +457,6 @@ class NeuralFF(Calculator):
             system_changes (default from ase)
         """
 
-
-
         if not any([isinstance(self.model, i) for i in UNDIRECTED]):
             check_directed(self.model, atoms)
 
@@ -466,7 +467,7 @@ class NeuralFF(Calculator):
         Calculator.calculate(self, atoms, self.properties, system_changes)
 
         # run model
-        #atomsbatch = AtomsBatch(atoms)
+        # atomsbatch = AtomsBatch(atoms)
         # batch_to(atomsbatch.get_batch(), self.device)
         batch = batch_to(atoms.get_batch(), self.device)
 
@@ -475,8 +476,14 @@ class NeuralFF(Calculator):
         batch[self.en_key] = []
         batch[grad_key] = []
 
+        kwargs = {}
         requires_stress = "stress" in self.properties
-        prediction = self.model(batch, requires_stress=requires_stress)
+        if requires_stress:
+            kwargs["requires_stress"] = True
+        if getattr(self, "model_kwargs", None) is not None:
+            kwargs.update(self.model_kwargs)
+
+        prediction = self.model(batch, **kwargs)
 
         # change energy and force to numpy array
 
@@ -526,7 +533,7 @@ class EnsembleNFF(Calculator):
 
         Args:
             model (TYPE): Description
-            device (str): device on which the calculations will be performed 
+            device (str): device on which the calculations will be performed
             **kwargs: Description
             model (one of nff.nn.models)
         """
@@ -566,7 +573,7 @@ class EnsembleNFF(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # run model
-        #atomsbatch = AtomsBatch(atoms)
+        # atomsbatch = AtomsBatch(atoms)
         # batch_to(atomsbatch.get_batch(), self.device)
         batch = batch_to(atoms.get_batch(), self.device)
 
@@ -642,6 +649,7 @@ class NeuralOptimizer:
 
 
 class NeuralMetadynamics(NeuralFF):
+
     def __init__(self,
                  model,
                  pushing_params,
@@ -662,9 +670,26 @@ class NeuralMetadynamics(NeuralFF):
         self.old_atoms = old_atoms if (old_atoms is not None) else []
         self.steps_from_old = []
 
-    def make_dsets(self, atoms, bias_atoms):
-        props_0 = {"nxyz": [torch.Tensor(atoms.get_nxyz()[bias_atoms, :])]}
-        props_1 = {"nxyz": [torch.Tensor(old_atoms.get_nxyz()[bias_atoms, :])
+        # only apply the bias to certain atoms
+        self.exclude_atoms = self.pushing_params.get("exclude_atoms",
+                                                     torch.LongTensor([]))
+
+    def get_keep_idx(self, atoms):
+        # correct for atoms not in the biasing potential
+
+        keep_idx = torch.LongTensor([i for i in range(len(atoms))
+                                     if i not in self.exclude_atoms])
+        return keep_idx
+
+    def make_dsets(self,
+                   atoms):
+
+        keep_idx = self.get_keep_idx(atoms)
+        # put the current atoms as the second dataset because that's the one
+        # that gets its positions rotated and its gradient computed
+        props_1 = {"nxyz": [torch.Tensor(atoms.get_nxyz())
+                            [keep_idx, :]]}
+        props_0 = {"nxyz": [torch.Tensor(old_atoms.get_nxyz())[keep_idx, :]
                             for old_atoms in self.old_atoms]}
 
         dset_0 = Dataset(props_0)
@@ -682,73 +707,44 @@ class NeuralMetadynamics(NeuralFF):
 
         kappa = self.pushing_params["kappa"]
         steps_from_old = torch.Tensor(self.steps_from_old)
-        f_damp = (2 / (1 + torch.exp(-kappa * steps_from_old))
-                  - 1)
+        f_damp = (2 / (1 + torch.exp(-kappa * steps_from_old)) -
+                  1)
 
         # given in mHartree / atom in CREST paper
-        k_i = ((self.pushing_params['k_i'] / 1000
-                * units.Hartree * num_atoms))
+        k_i = ((self.pushing_params['k_i'] / 1000 *
+                units.Hartree * num_atoms))
 
         # given in Bohr^(-2) in CREST paper
-        alpha_i = ((self.pushing_params['alpha_i']
-                    / units.Bohr ** 2))
+        alpha_i = ((self.pushing_params['alpha_i'] /
+                    units.Bohr ** 2))
 
-        # only apply the bias to certain atoms
-        bias_atoms = self.pushing_params.get("bias_atoms")
-        if bias_atoms is None:
-            bias_atoms = torch.arange(num_atoms)
-
-        dsets = self.make_dsets(atoms, bias_atoms)
+        dsets = self.make_dsets(atoms)
 
         return k_i, alpha_i, dsets, f_damp
-
-    def compute_rmsd_force(self,
-                           dsets,
-                           R_mat,
-                           v_bias,
-                           delta_i,
-                           alpha_i):
-
-        ref_nxyz_lst = dsets[1].props['nxyz']
-        num_refs = len(ref_nxyz_lst)
-        current_nxyz_lst = dsets[0].props['nxyz']
-        num_atoms = current_nxyz_lst[0].shape[0]
-
-        delta_i = delta_i.reshape(-1, 1, 1)
-        R_mat = R_mat.reshape(-1, 3, 3)
-
-        ref_xyz = torch.stack(ref_nxyz_lst)[:, :, 1:]
-        current_xyz = (torch.stack(current_nxyz_lst * num_refs)
-                       [:, :, 1:])
-
-        rotated_ref = torch.einsum('nij,nkj->nki', R_mat, ref_xyz)
-
-        rmsd_grad = (current_xyz - rotated_ref) / (num_atoms * delta_i)
-        v_grad = (v_bias * (-2 * alpha_i * delta_i) * rmsd_grad).sum(0)
-        force = -v_grad
-
-        return force
 
     def rmsd_push(self, atoms):
         if not self.old_atoms:
             return np.zeros((len(atoms), 3))
 
         k_i, alpha_i, dsets, f_damp = self.rmsd_prelims(atoms)
-        delta_i, R_mat = compute_distances(dataset=dsets[0],
-                                           device=self.device,
-                                           dataset_1=dsets[1])
+        delta_i, _, xyz_list = compute_distances(dataset=dsets[0],
+                                                 device=self.device,
+                                                 dataset_1=dsets[1],
+                                                 store_grad=True)
 
-        # compute bias potential
         v_bias = (f_damp * k_i *
-                  torch.exp(-alpha_i * delta_i ** 2)).sum()
+                  torch.exp(-alpha_i * delta_i.reshape(-1) ** 2)).sum()
 
-        f_bias = self.compute_rmsd_force(dsets=dsets,
-                                         R_mat=R_mat,
-                                         v_bias=v_bias,
-                                         delta_i=delta_i,
-                                         alpha_i=alpha_i)
+        f_bias = -compute_grad(inputs=xyz_list[0],
+                               output=v_bias).sum(0)
 
-        return f_bias.numpy()
+        keep_idx = self.get_keep_idx(atoms)
+        final_f_bias = torch.zeros(len(atoms), 3)
+        final_f_bias[keep_idx] = f_bias.detach().cpu()
+        nan_idx = torch.bitwise_not(torch.isfinite(final_f_bias))
+        final_f_bias[nan_idx] = 0
+
+        return final_f_bias.numpy(), v_bias.numpy()
 
     def get_bias(self, atoms):
         bias_type = self.pushing_params['bias_type']
@@ -763,7 +759,7 @@ class NeuralMetadynamics(NeuralFF):
         self.old_atoms.append(atoms)
         self.steps_from_old.append(0)
 
-        max_ref = self.pushing_params.get("max_ref")
+        max_ref = self.pushing_params.get("max_ref", 10)
         if max_ref is None:
             max_ref = float('inf')
 
@@ -784,14 +780,60 @@ class NeuralMetadynamics(NeuralFF):
                           properties=properties,
                           system_changes=system_changes)
 
-        # Add metadynamics forces
-        # Leave the energy as it is because we don't need
-        # and it's better to see the real NFF energy in the
-        # logger
+        # Add metadynamics energy and forces
 
-        f_bias = self.get_bias(atoms)
+        f_bias, _ = self.get_bias(atoms)
+
         self.results['forces'] += f_bias
+        self.results['f_bias'] = f_bias
 
         if add_steps:
             for i, step in enumerate(self.steps_from_old):
                 self.steps_from_old[i] = step + 1
+
+
+class NeuralGAMD(NeuralFF):
+    """
+    NeuralFF for Gaussian-accelerated molecular dynamics (GAMD)
+    """
+
+    def __init__(self,
+                 model,
+                 k_0,
+                 V_min,
+                 V_max,
+                 device=0,
+                 en_key='energy',
+                 directed=DEFAULT_DIRECTED,
+                 **kwargs):
+
+        NeuralFF.__init__(self,
+                          model=model,
+                          device=device,
+                          en_key=en_key,
+                          directed=DEFAULT_DIRECTED,
+                          **kwargs)
+        self.V_min = V_min
+        self.V_max = V_max
+
+        self.k_0 = k_0
+        self.k = self.k_0 / (self.V_max - self.V_min)
+
+    def calculate(self,
+                  atoms,
+                  properties=['energy', 'forces'],
+                  system_changes=all_changes):
+
+        if not any([isinstance(self.model, i) for i in UNDIRECTED]):
+            check_directed(self.model, atoms)
+
+        super().calculate(atoms=atoms,
+                          properties=properties,
+                          system_changes=system_changes)
+
+        old_en = self.results['energy']
+        if old_en < self.V_max:
+            old_forces = self.results['forces']
+            f_bias = -self.k * (self.V_max - old_en) * old_forces
+
+            self.results['forces'] += f_bias
