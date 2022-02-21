@@ -93,6 +93,9 @@ class NoseHoover(MolecularDynamics):
                 print(("WARNING: velocity not set to zero for any atoms in constraint "
                        "%s; do not know how to find its fixed indices." % constraint))
 
+        if not fixed_idx:
+            return
+            
         fixed_idx = np.array(list(set(fixed_idx)))
         vel = self.atoms.get_velocities()
         vel[fixed_idx] = 0
