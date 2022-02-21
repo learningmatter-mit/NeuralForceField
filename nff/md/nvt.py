@@ -78,7 +78,6 @@ class NoseHoover(MolecularDynamics):
         """
 
         constraints = atoms.constraints
-
         fixed_idx = []
         for constraint in constraints:
             has_keys = False
@@ -95,7 +94,7 @@ class NoseHoover(MolecularDynamics):
 
         if not fixed_idx:
             return
-            
+
         fixed_idx = np.array(list(set(fixed_idx)))
         vel = self.atoms.get_velocities()
         vel[fixed_idx] = 0
