@@ -130,10 +130,27 @@ KCAL_TO_AU = {
 }
 
 
-with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                       "elec_config.json"), "r") as f:
-    ELEC_CONFIG = json.load(f)
-    ELEC_CONFIG = {int(key): val for key, val in ELEC_CONFIG.items()}
+
+ELEC_CONFIG = {"1": [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+ "6": [2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+ "7": [2, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+ "8": [2, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+ "9": [2, 2, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+ "11": [2, 2, 6, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+ "14": [2, 2, 6, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+ "16": [2, 2, 6, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+ "17": [2, 2, 5, 2, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+ "86": [2, 2, 6, 2, 6, 2, 10, 6, 2, 10, 6, 2, 14, 10, 6, 2, 6, 10, 4]
+}
+
+ELEC_CONFIG = {int(key): val for key, val in ELEC_CONFIG.items()}
+
+
+# with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+#                        "elec_config.json"), "r") as f:
+#     ELEC_CONFIG = json.load(f)
+#     ELEC_CONFIG = {int(key): val for key, val in ELEC_CONFIG.items()}
+
 
 
 def convert_units(props, conversion_dict):
