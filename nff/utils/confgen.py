@@ -300,7 +300,7 @@ class ConformerGenerator(object):
                             rms = align_rmsd(f"{key}_Conf_{str(i + 1)}",
                                              f"{key}_Conf_{str(j + 1)}",
                                              path)
-                        except ValueError:
+                        except (ValueError, subprocess.TimeoutExpired):
                             continue
                     else:
                         continue
@@ -331,7 +331,7 @@ class ConformerGenerator(object):
                                 i_key = f"{key}_Conf_{str(i + 1)}"
                                 inv_key = f"{key}_Conf_{str(j + 1)}_inv"
                                 rmsinv = align_rmsd(i_key, inv_key)
-                            except ValueError:
+                            except (ValueError, subprocess.TimeoutExpired):
                                 continue
                         else:
                             continue
