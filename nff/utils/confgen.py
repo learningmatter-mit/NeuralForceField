@@ -74,7 +74,7 @@ def align_rmsd(file1, file2, path, smarts=None):
                                   shell=False,
                                   universal_newlines=False,
                                   timeout=DEFAULT_GEOM_COMPARE_TIMEOUT)
-    rmsd = ret.decode('utf-8').split()[-4]
+    rmsd = ret.decode('utf-8').split()[-1]
     return float(rmsd)
 
 
