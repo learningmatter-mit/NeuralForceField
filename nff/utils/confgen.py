@@ -290,7 +290,8 @@ class ConformerGenerator(object):
                                      key + "_Conf_" + str(j + 1),
                                      str(molecule),
                                      path=path)
-                except (subprocess.CalledProcessError, ValueError) as e:
+                except (subprocess.CalledProcessError, ValueError,
+                        subprocess.TimeoutExpired) as e:
                     if fallback_to_align:
                         output.write(
                             'obfit failed, falling back to obabel --align')
@@ -320,7 +321,8 @@ class ConformerGenerator(object):
                         file1 = key + "_Conf_" + str(i + 1)
                         file2 = key + "_Conf_" + str(j + 1) + "_inv"
                         rmsinv = obfit_rmsd(file1, file2, str(molecule))
-                    except (subprocess.CalledProcessError, ValueError) as e:
+                    except (subprocess.CalledProcessError, ValueError,
+                            subprocess.TimeoutExpired) as e:
                         if fallback_to_align:
                             output.write(
                                 'obfit failed, falling back to obabel --align')
