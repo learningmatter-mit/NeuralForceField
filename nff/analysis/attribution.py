@@ -6,6 +6,8 @@ from nff.io.ase import AtomsBatch
 from nff.utils.scatter import compute_grad
 from nff.utils.cuda import batch_to
 
+from tqdm import tqdm
+
 
 class Attribution:
 
@@ -27,7 +29,6 @@ class Attribution:
         batch['nxyz'].requires_grad=True
         xyz=batch['nxyz'][:,1:]
 
-        # why this??? xyz is contained in the batch
         results = [
                         m(batch,xyz=xyz)
                     for m in self.ensemble.models
@@ -57,20 +58,24 @@ class Attribution:
         cutoff: float,
         requires_large_offsets: bool,
         skip:int = 0, 
-        step:int = 1
+        step:int = 1,
+        progress_bar=True,
     )->list:
         attributions = []
-        for i in range(skip,len(traj),step):
-            # create atoms batch object
-            atoms = AtomsBatch(
-                positions=traj[i].get_positions(wrap=True),
-                cell=traj[i].cell,
-                pbc=traj[i].pbc,
-                numbers=traj[i].numbers,props={},
-                directed=directed,
-                cutoff=cutoff,
-                requires_large_offsets=requires_large_offsets,
-                device=self.device,
-            )
-            attributions.append(self(atoms))
+        with tqdm(range(skip,len(traj),step),disable=True if progress_bar == False else False) as pbar:#, postfix={"fbest":"?",}) as pbar:
+            
+            #for i in range(skip,len(traj),step):
+            for i in pbar:
+                # create atoms batch object
+                atoms = AtomsBatch(
+                    positions=traj[i].get_positions(wrap=True),
+                    cell=traj[i].cell,
+                    pbc=traj[i].pbc,
+                    numbers=traj[i].numbers,props={},
+                    directed=directed,
+                    cutoff=cutoff,
+                    requires_large_offsets=requires_large_offsets,
+                    device=self.device,
+                )
+                attributions.append(self(atoms))
         return attributions
