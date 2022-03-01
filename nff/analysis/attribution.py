@@ -21,10 +21,6 @@ class Attribution:
     def __call__(self, atoms: AtomsBatch):
         atoms.calc = self.ensemble
         atoms.update_nbr_list()
-        try:
-            atoms.update_mol_nbrs_list()
-        except:
-            pass
         batch = batch_to(atoms.get_batch(), self.device)
         batch['nxyz'].requires_grad=True
         xyz=batch['nxyz'][:,1:]
