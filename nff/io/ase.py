@@ -724,7 +724,7 @@ class NeuralMetadynamics(NeuralFF):
 
     def rmsd_push(self, atoms):
         if not self.old_atoms:
-            return np.zeros((len(atoms), 3))
+            return np.zeros((len(atoms), 3)), 0.0
 
         k_i, alpha_i, dsets, f_damp = self.rmsd_prelims(atoms)
         delta_i, _, xyz_list = compute_distances(dataset=dsets[0],
@@ -744,7 +744,7 @@ class NeuralMetadynamics(NeuralFF):
         nan_idx = torch.bitwise_not(torch.isfinite(final_f_bias))
         final_f_bias[nan_idx] = 0
 
-        return final_f_bias.numpy(), v_bias.numpy()
+        return final_f_bias.detach().numpy(), v_bias.detach().numpy()
 
     def get_bias(self, atoms):
         bias_type = self.pushing_params['bias_type']
