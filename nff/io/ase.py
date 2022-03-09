@@ -728,13 +728,17 @@ class NeuralMetadynamics(NeuralFF):
 
         k_i, alpha_i, dsets, f_damp = self.rmsd_prelims(atoms)
         delta_i, _, xyz_list = compute_distances(dataset=dsets[0],
-                                                 device=self.device,
+                                                 # do this on CPU - it's a small RMSD
+                                                 # and gradient calculation, so the
+                                                 # dominant time is data transfer to GPU.
+                                                 # Testing it out confirms that you get a
+                                                 # big slowdown from doing it on GPU
+                                                 device='cpu',
                                                  dataset_1=dsets[1],
                                                  store_grad=True)
 
-        v_bias = (f_damp * k_i *
-                  torch.exp(-alpha_i * delta_i.reshape(-1) ** 2)).sum()
-
+        v_bias = (f_damp * k_i * torch.exp(-alpha_i * delta_i.reshape(-1) ** 2)
+                  ).sum()
         f_bias = -compute_grad(inputs=xyz_list[0],
                                output=v_bias).sum(0)
 
@@ -759,9 +763,9 @@ class NeuralMetadynamics(NeuralFF):
         self.old_atoms.append(atoms)
         self.steps_from_old.append(0)
 
-        max_ref = self.pushing_params.get("max_ref", 10)
+        max_ref = self.pushing_params.get("max_ref_structures")
         if max_ref is None:
-            max_ref = float('inf')
+            max_ref = 10
 
         if len(self.old_atoms) >= max_ref:
             self.old_atoms = self.old_atoms[-max_ref:]
