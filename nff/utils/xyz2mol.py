@@ -14,8 +14,15 @@ Modifications by dskoda
 
 import copy
 import itertools
+import pickle
+from functools import wraps
+import errno
+import os
+import signal
 from typing import List
 
+from rdkit.Chem import AllChem, rdmolops, GetPeriodicTable
+from rdkit.Chem.rdchem import EditableMol
 from rdkit.Chem import rdmolops
 try:
     from rdkit.Chem import rdEHTTools  # requires RDKit 2019.9.1 or later
@@ -49,34 +56,74 @@ global atomic_valence
 global atomic_valence_electrons
 
 atomic_valence = defaultdict(list)
-atomic_valence[1] = [1]
-atomic_valence[5] = [3, 4]
-atomic_valence[6] = [4]
-atomic_valence[7] = [3, 4]
-atomic_valence[8] = [2, 1, 3]
-atomic_valence[9] = [1]
-atomic_valence[14] = [4]
-atomic_valence[15] = [5, 3]  # [5,4,3]
-atomic_valence[16] = [6, 3, 2]  # [6,4,2]
-atomic_valence[17] = [1]
-atomic_valence[32] = [4]
-atomic_valence[35] = [1]
-atomic_valence[53] = [1]
-
 atomic_valence_electrons = {}
-atomic_valence_electrons[1] = 1
-atomic_valence_electrons[5] = 3
-atomic_valence_electrons[6] = 4
-atomic_valence_electrons[7] = 5
-atomic_valence_electrons[8] = 6
-atomic_valence_electrons[9] = 7
-atomic_valence_electrons[14] = 4
-atomic_valence_electrons[15] = 5
-atomic_valence_electrons[16] = 6
-atomic_valence_electrons[17] = 7
-atomic_valence_electrons[32] = 4
-atomic_valence_electrons[35] = 7
-atomic_valence_electrons[53] = 7
+
+
+PERIODICTABLE = GetPeriodicTable()
+
+
+for i in range(100):
+    dics = [atomic_valence, atomic_valence_electrons]
+    if all([i in dic for dic in dics]):
+        continue
+
+    valence_list = [j for j in PERIODICTABLE.GetValenceList(i)]
+    valence_num = PERIODICTABLE.GetNOuterElecs(i)
+
+    atomic_valence[i] = valence_list
+    atomic_valence_electrons[i] = valence_num
+
+
+DEFAULT_SAVE = "mol.pickle"
+# give up after 10 minutes
+MAX_TIME = 600
+
+
+class TimeoutError(Exception):
+    pass
+
+
+def timeout(seconds, error_message=os.strerror(errno.ETIME)):
+    def decorator(func):
+        def _handle_timeout(signum, frame):
+            raise TimeoutError(error_message)
+
+        def wrapper(*args, **kwargs):
+            signal.signal(signal.SIGALRM, _handle_timeout)
+            signal.alarm(seconds)
+
+            try:
+                result = func(*args, **kwargs)
+            finally:
+                signal.alarm(0)
+            return result
+
+        return wraps(func)(wrapper)
+
+    return decorator
+
+class TimeoutError(Exception):
+    pass
+
+
+def timeout(seconds, error_message=os.strerror(errno.ETIME)):
+    def decorator(func):
+        def _handle_timeout(signum, frame):
+            raise TimeoutError(error_message)
+
+        def wrapper(*args, **kwargs):
+            signal.signal(signal.SIGALRM, _handle_timeout)
+            signal.alarm(seconds)
+
+            try:
+                result = func(*args, **kwargs)
+            finally:
+                signal.alarm(0)
+            return result
+
+        return wraps(func)(wrapper)
+
+    return decorator
 
 
 def str_atom(atom):
@@ -749,6 +796,7 @@ def check_mol(mol,
     return new_mol
 
 
+@timeout(seconds=MAX_TIME)
 def xyz2mol(
     atoms: List[int],
     coordinates: List[List[float]],
