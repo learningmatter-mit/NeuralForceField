@@ -9,16 +9,12 @@ Implementation by Jan H. Jensen, based on the paper
     Bull. Korean Chem. Soc. 2015, Vol. 36, 1769-1777
     DOI: 10.1002/bkcs.10334
 
+Modifications by dskoda
 """
 
 import copy
 import itertools
-import pickle
-from functools import wraps
-import errno
-import os
-import signal
-
+from typing import List
 
 from rdkit.Chem import rdmolops
 try:
@@ -32,9 +28,7 @@ import numpy as np
 import networkx as nx
 
 from rdkit import Chem
-from rdkit.Chem import AllChem, rdmolops, GetPeriodicTable
-from rdkit.Chem.rdchem import EditableMol
-
+from rdkit.Chem import AllChem, rdmolops
 
 global __ATOM_LIST__
 __ATOM_LIST__ = \
@@ -55,50 +49,34 @@ global atomic_valence
 global atomic_valence_electrons
 
 atomic_valence = defaultdict(list)
+atomic_valence[1] = [1]
+atomic_valence[5] = [3, 4]
+atomic_valence[6] = [4]
+atomic_valence[7] = [3, 4]
+atomic_valence[8] = [2, 1, 3]
+atomic_valence[9] = [1]
+atomic_valence[14] = [4]
+atomic_valence[15] = [5, 3]  # [5,4,3]
+atomic_valence[16] = [6, 3, 2]  # [6,4,2]
+atomic_valence[17] = [1]
+atomic_valence[32] = [4]
+atomic_valence[35] = [1]
+atomic_valence[53] = [1]
 
 atomic_valence_electrons = {}
-PERIODICTABLE = GetPeriodicTable()
-
-
-for i in range(100):
-    dics = [atomic_valence, atomic_valence_electrons]
-    if all([i in dic for dic in dics]):
-        continue
-
-    valence_list = [j for j in PERIODICTABLE.GetValenceList(i)]
-    valence_num = PERIODICTABLE.GetNOuterElecs(i)
-
-    atomic_valence[i] = valence_list
-    atomic_valence_electrons[i] = valence_num
-
-
-DEFAULT_SAVE = "mol.pickle"
-# give up after 10 minutes
-MAX_TIME = 600
-
-
-class TimeoutError(Exception):
-    pass
-
-
-def timeout(seconds, error_message=os.strerror(errno.ETIME)):
-    def decorator(func):
-        def _handle_timeout(signum, frame):
-            raise TimeoutError(error_message)
-
-        def wrapper(*args, **kwargs):
-            signal.signal(signal.SIGALRM, _handle_timeout)
-            signal.alarm(seconds)
-
-            try:
-                result = func(*args, **kwargs)
-            finally:
-                signal.alarm(0)
-            return result
-
-        return wraps(func)(wrapper)
-
-    return decorator
+atomic_valence_electrons[1] = 1
+atomic_valence_electrons[5] = 3
+atomic_valence_electrons[6] = 4
+atomic_valence_electrons[7] = 5
+atomic_valence_electrons[8] = 6
+atomic_valence_electrons[9] = 7
+atomic_valence_electrons[14] = 4
+atomic_valence_electrons[15] = 5
+atomic_valence_electrons[16] = 6
+atomic_valence_electrons[17] = 7
+atomic_valence_electrons[32] = 4
+atomic_valence_electrons[35] = 7
+atomic_valence_electrons[53] = 7
 
 
 def str_atom(atom):
@@ -115,7 +93,7 @@ def int_atom(atom):
     convert str atom to integer atom
     """
     global __ATOM_LIST__
-    print(atom)
+    # print(atom)
     atom = atom.lower()
     return __ATOM_LIST__.index(atom) + 1
 
@@ -163,29 +141,8 @@ def valences_not_too_large(BO, valences):
     return True
 
 
-def BO_is_OK(BO, AC, charge, DU, atomic_valence_electrons, atoms, valances,
-             allow_charged_fragments=True):
-    """
-    Sanity of bond-orders
-
-    args:
-        BO -
-        AC -
-        charge -
-        DU - 
-
-
-    optional
-        allow_charges_fragments - 
-
-
-    returns:
-        boolean - true of molecule is OK, false if not
-    """
-
-    if not valences_not_too_large(BO, valances):
-        return False
-
+def charge_is_OK(BO, AC, charge, DU, atomic_valence_electrons, atoms, valences,
+                 allow_charged_fragments=True):
     # total charge
     Q = 0
 
@@ -211,11 +168,37 @@ def BO_is_OK(BO, AC, charge, DU, atomic_valence_electrons, atoms, valances,
             if q != 0:
                 q_list.append(q)
 
-    check_sum = (BO - AC).sum() == sum(DU)
-    check_charge = charge == Q
-    # check_len = len(q_list) <= abs(charge)
+    return (charge == Q)
 
-    if check_sum and check_charge:
+
+def BO_is_OK(BO, AC, charge, DU, atomic_valence_electrons, atoms, valences,
+             allow_charged_fragments=True):
+    """
+    Sanity of bond-orders
+
+    args:
+        BO -
+        AC -
+        charge -
+        DU - 
+
+
+    optional
+        allow_charges_fragments - 
+
+
+    returns:
+        boolean - true of molecule is OK, false if not
+    """
+
+    if not valences_not_too_large(BO, valences):
+        return False
+
+    check_sum = (BO - AC).sum() == sum(DU)
+    check_charge = charge_is_OK(BO, AC, charge, DU, atomic_valence_electrons, atoms, valences,
+                                allow_charged_fragments)
+
+    if check_charge and check_sum:
         return True
 
     return False
@@ -246,7 +229,6 @@ def clean_charges(mol):
     """
 
     Chem.SanitizeMol(mol)
-
     # rxn_smarts = ['[N+:1]=[*:2]-[C-:3]>>[N+0:1]-[*:2]=[C-0:3]',
     #              '[N+:1]=[*:2]-[O-:3]>>[N+0:1]-[*:2]=[O-0:3]',
     #              '[N+:1]=[*:2]-[*:3]=[*:4]-[O-:5]>>[N+0:1]-[*:2]=[*:3]-[*:4]=[O-0:5]',
@@ -451,8 +433,12 @@ def AC2BO(AC, atoms, charge, allow_charged_fragments=True, use_graph=True):
     # make a list of valences, e.g. for CO: [[4],[2,1]]
     valences_list_of_lists = []
     AC_valence = list(AC.sum(axis=1))
-    for atomicNum in atoms:
-        valences_list_of_lists.append(atomic_valence[atomicNum])
+
+    for atomicNum, valence in zip(atoms, AC_valence):
+        # valence can't be smaller than number of neighbourgs
+        possible_valence = [
+            x for x in atomic_valence[atomicNum] if x >= valence]
+        valences_list_of_lists.append(possible_valence)
 
     # convert [[4],[2,1]] to [[4,2],[4,1]]
     valences_list = itertools.product(*valences_list_of_lists)
@@ -481,13 +467,16 @@ def AC2BO(AC, atoms, charge, allow_charged_fragments=True, use_graph=True):
             status = BO_is_OK(BO, AC, charge, DU_from_AC,
                               atomic_valence_electrons, atoms, valences,
                               allow_charged_fragments=allow_charged_fragments)
+            charge_OK = charge_is_OK(BO, AC, charge, DU_from_AC, atomic_valence_electrons, atoms, valences,
+                                     allow_charged_fragments=allow_charged_fragments)
 
             if status:
                 return BO, atomic_valence_electrons
-
-            elif BO.sum() >= best_BO.sum() and valences_not_too_large(BO, valences):
+            elif BO.sum() >= best_BO.sum() and valences_not_too_large(BO, valences) and charge_OK:
                 best_BO = BO.copy()
 
+    if not charge_OK:
+        print("Warning: SMILES charge doesn't match input charge")
     return best_BO, atomic_valence_electrons
 
 
@@ -760,14 +749,15 @@ def check_mol(mol,
     return new_mol
 
 
-@timeout(seconds=MAX_TIME)
-def xyz2mol(atoms,
-            coordinates,
-            charge=0,
-            allow_charged_fragments=True,
-            use_graph=True,
-            use_huckel=False,
-            embed_chiral=True):
+def xyz2mol(
+    atoms: List[int],
+    coordinates: List[List[float]],
+    charge: int = 0,
+    allow_charged_fragments: bool = True,
+    use_graph: bool = True,
+    use_huckel: bool = False,
+    embed_chiral: bool = True
+):
     """
     Generate a rdkit molobj from atoms, coordinates and a total_charge.
 
@@ -800,7 +790,6 @@ def xyz2mol(atoms,
     # Check for stereocenters and chiral centers
     if embed_chiral:
         chiral_stereo_check(new_mol)
-
     new_mol = check_mol(mol=new_mol,
                         coordinates=coordinates)
 
@@ -845,10 +834,6 @@ if __name__ == "__main__":
                         metavar="int",
                         type=int,
                         help="Total charge of the system")
-    parser.add_argument('--save_name',
-                        type=str,
-                        default=DEFAULT_SAVE,
-                        help='Save name for RDKit mol')
 
     args = parser.parse_args()
 
@@ -897,7 +882,3 @@ if __name__ == "__main__":
         m = Chem.MolFromSmiles(smiles)
         smiles = Chem.MolToSmiles(m, isomericSmiles=isomeric_smiles)
         print(smiles)
-
-    save_name = args.save_name
-    with open(save_name, 'wb') as f:
-        pickle.dump(mol, f)
