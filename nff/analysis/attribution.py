@@ -1,5 +1,7 @@
 import torch
 from ase.io import Trajectory
+from ase import Atoms
+import numpy as np
 
 from nff.io.ase import EnsembleNFF
 from nff.io.ase import AtomsBatch
@@ -30,10 +32,21 @@ class Attribution:
                     for m in self.ensemble.models
                 ]
 
+        # we also return energies just to get it running in chemiscope
+        # have to further think about it 
+        energy = torch.cat([r['energy']
+                    for r in results
+                ]).mean()
+
+        energy_std = torch.cat([r['energy']
+                    for r in results
+                ]).std()
+
         forces = torch.stack([
                     r['energy_grad']
                     for r in results
                 ], dim=-1)
+
         
         # calculate gradient of the standard deviation of the forces per atom 
         # wrt the coordinates, first var is to get the variance per atom coordination (x, y, z)
@@ -46,7 +59,7 @@ class Attribution:
         # which is the actual attribution
         Z1=abs(Z3).mean(-1)
 
-        return Z1.detach().cpu().numpy()
+        return Z1.detach().cpu().numpy(), energy.detach().cpu().numpy(), energy_std.detach().cpu().numpy(), forces.detach().cpu().numpy().mean(-1), forces.detach().cpu().numpy().std(-1)
 
     def calc_attribution_trajectory(self, 
         traj: Trajectory, 
@@ -55,9 +68,15 @@ class Attribution:
         requires_large_offsets: bool,
         skip:int = 0, 
         step:int = 1,
-        progress_bar=True,
+        progress_bar:bool = True,
+        to_chemiscope:bool = False,
     )->list:
         attributions = []
+        atoms_list = []
+        energies = []
+        energy_stds = []
+        grads = []
+        grad_stds = []
         with tqdm(range(skip,len(traj),step),disable=True if progress_bar == False else False) as pbar:#, postfix={"fbest":"?",}) as pbar:
             
             #for i in range(skip,len(traj),step):
@@ -73,5 +92,47 @@ class Attribution:
                     requires_large_offsets=requires_large_offsets,
                     device=self.device,
                 )
-                attributions.append(self(atoms))
-        return attributions
+                attribution, energy, energy_std, grad, grad_std = self(atoms)
+                if to_chemiscope: 
+                    atoms_list.append(Atoms(
+                        positions = atoms.positions,
+                        numbers = atoms.numbers,
+                        cell = atoms.cell,
+                        pbc = atoms.pbc
+                    ))
+                    attributions.append(attribution)
+                    energies.append(energy)
+                    energy_stds.append(energy_std)
+                    grads.append(grad)
+                    grad_stds.append(grad_std)
+
+        if to_chemiscope:
+            properties = {
+                "attribution": {
+                    "target": "atom",
+                    "values": np.concatenate(attributions),
+                },
+                "energy": {
+                    "target": "structure",
+                    "values": np.array(energies),
+                    "units": "eV",
+                },
+                "energy_std": {
+                    "target": "structure",
+                    "values": np.array(energy_stds),
+                    "units": "eV",
+                },
+                "energy_grad": {
+                    "target": "atom",
+                    "values": np.concatenate(grads),
+                    "units": "eV/A",
+                },
+                "energy_grad_std": {
+                    "target": "atom",
+                    "values": np.concatenate(grad_stds),
+                    "units": "eV/A",
+                },
+            }
+            return atoms_list, properties
+        else:
+            return attributions
