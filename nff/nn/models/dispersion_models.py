@@ -12,26 +12,16 @@ from nff.utils import constants as const
 class PainnDispersion(nn.Module):
 
     def __init__(self,
-                 functional,
-                 disp_type,
-                 painn_model=None,
-                 model_path=None):
+                 params):
 
         # import here to avoid circular imports
         from nff.train import load_model
 
         super().__init__()
 
-        self.functional = functional
-        self.disp_type = disp_type
-
-        msg = "Need to either provide a PaiNN model or provide a path to the model!"
-        assert (painn_model is not None) or (model_path is not None), msg
-
-        if painn_model is not None:
-            self.painn_model = painn_model
-        else:
-            self.painn_model = load_model(model_path)
+        self.functional = params["functional"]
+        self.disp_type = params["disp_type"]
+        self.painn_model = load_model(params["model_path"])
 
     def get_dispersion(self,
                        batch,

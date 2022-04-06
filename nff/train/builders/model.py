@@ -326,7 +326,8 @@ PARAMS_TYPE = {"SchNet":
                "PainnDispersion":
                {
                    "functional": str,
-                   "disp_type": str
+                   "disp_type": str,
+                   "model_path": str
                },
 
 
