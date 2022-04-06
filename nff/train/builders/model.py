@@ -11,8 +11,8 @@ from nff.nn.models.conformers import WeightedConformers
 from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import ChemProp3D, OnlyBondUpdateCP3D
 from nff.nn.models.dimenet import DimeNet, DimeNetDiabat, DimeNetDiabatDelta, DimeNetDelta
-from nff.nn.models.painn import (Painn, PainnDiabat, PainnTransformer, PainnAdiabat)
-from nff.nn.models.dispersion_models import PainnDispersion
+from nff.nn.models.painn import (
+    Painn, PainnDiabat, PainnTransformer, PainnAdiabat)
 from nff.nn.models.spooky_painn import SpookyPainn, SpookyPainnDiabat
 from nff.nn.models.torchmd_net import TorchMDNet
 from nff.nn.models.spooky import SpookyNet, RealSpookyNet
@@ -323,12 +323,7 @@ PARAMS_TYPE = {"SchNet":
                    "zero_init": bool
                },
 
-               "PainnDispersion":
-               {
-                   "functional": str,
-                   "disp_type": str,
-                   "model_path": str
-               },
+
 
 
                }
@@ -353,8 +348,7 @@ MODEL_DICT = {
     "SpookyNet": SpookyNet,
     "SpookyPainn": SpookyPainn,
     "SpookyPainnDiabat": SpookyPainnDiabat,
-    "RealSpookyNet": RealSpookyNet,
-    "PainnDispersion": PainnDispersion
+    "RealSpookyNet": RealSpookyNet
 
 }
 

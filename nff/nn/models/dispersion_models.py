@@ -12,16 +12,15 @@ from nff.utils import constants as const
 class PainnDispersion(nn.Module):
 
     def __init__(self,
-                 params):
-
-        # import here to avoid circular imports
-        from nff.train import load_model
+                 functional,
+                 disp_type,
+                 painn_model):
 
         super().__init__()
 
-        self.functional = params["functional"]
-        self.disp_type = params["disp_type"]
-        self.painn_model = load_model(params["model_path"])
+        self.functional = functional
+        self.disp_type = disp_type
+        self.painn_model = painn_model
 
     def get_dispersion(self,
                        batch,
