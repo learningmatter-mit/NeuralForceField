@@ -489,8 +489,10 @@ class NeuralFF(Calculator):
 
         energy = (prediction[self.en_key].detach()
                   .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
-        energy_grad = (prediction[grad_key].detach()
-                       .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
+
+        if grad_key in prediction:
+            energy_grad = (prediction[grad_key].detach()
+                           .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
 
         self.results = {
             'energy': energy.reshape(-1)
