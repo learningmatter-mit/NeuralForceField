@@ -7,6 +7,7 @@ from torch import nn
 from nff.nn.models.painn import add_stress
 from nff.utils.scatter import compute_grad
 from nff.utils import constants as const
+from nff.utils.dispersion import get_dispersion as base_dispersion
 
 
 class PainnDispersion(nn.Module):
@@ -25,11 +26,6 @@ class PainnDispersion(nn.Module):
     def get_dispersion(self,
                        batch,
                        xyz):
-
-        # do the import here so that we don't have to load all the D3 parameters
-        # if we import this model class without initiating the model
-
-        from nff.utils.dispersion import get_dispersion as base_dispersion
 
         e_disp = base_dispersion(batch=batch,
                                  xyz=xyz,
