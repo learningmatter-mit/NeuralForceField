@@ -8,20 +8,31 @@ from nff.nn.models.painn import add_stress
 from nff.utils.scatter import compute_grad
 from nff.utils import constants as const
 from nff.utils.dispersion import get_dispersion as base_dispersion
+from nff.nn.models.painn import Painn
 
 
 class PainnDispersion(nn.Module):
 
     def __init__(self,
-                 functional,
-                 disp_type,
-                 painn_model):
+                 modelparams,
+                 painn_model=None):
+        """
+        `modelparams` has the same keys as in a regular PaiNN model, plus
+        the required keys "functional" and "disp_type" for the added dispersion.
+
+        You can also supply an existing PaiNN model instead of instantiating it from
+        `modelparams`.
+        """
 
         super().__init__()
 
-        self.functional = functional
-        self.disp_type = disp_type
-        self.painn_model = painn_model
+        self.functional = modelparams["functional"]
+        self.disp_type = modelparams["disp_type"]
+
+        if painn_model is not None:
+            self.painn_model = painn_model
+        else:
+            self.painn_model = Painn(modelparams=modelparams)
 
     def get_dispersion(self,
                        batch,
