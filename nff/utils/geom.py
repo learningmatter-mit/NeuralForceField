@@ -197,12 +197,14 @@ def compute_distances(dataset,
                       device,
                       batch_size=BATCH_SIZE,
                       dataset_1=None,
-                      store_grad=False):
+                      store_grad=False,
+                      collate_dicts=None):
     """
     Compute distances between different configurations for one molecule.
     """
 
-    from nff.data import collate_dicts
+    if collate_dicts is None:
+        from nff.data import collate_dicts
 
     if dataset_1 is None:
         dataset_1 = dataset

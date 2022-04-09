@@ -22,6 +22,8 @@ from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import OnlyBondUpdateCP3D
 
+from nff.data import collate_dicts
+
 DEFAULT_CUTOFF = 5.0
 DEFAULT_DIRECTED = False
 DEFAULT_SKIN = 1.0
@@ -729,20 +731,37 @@ class NeuralMetadynamics(NeuralFF):
             return np.zeros((len(atoms), 3)), 0.0
 
         k_i, alpha_i, dsets, f_damp = self.rmsd_prelims(atoms)
+
+        with open("log", "w") as f:
+            f.write("Computing distances...")
         delta_i, _, xyz_list = compute_distances(dataset=dsets[0],
                                                  # do this on CPU - it's a small RMSD
                                                  # and gradient calculation, so the
                                                  # dominant time is data transfer to GPU.
                                                  # Testing it out confirms that you get a
                                                  # big slowdown from doing it on GPU
+
                                                  device='cpu',
+                                                 # device=self.device,
+
                                                  dataset_1=dsets[1],
-                                                 store_grad=True)
+                                                 store_grad=True,
+                                                 collate_dicts=collate_dicts)
+
+        with open("log", "w") as f:
+            f.write("Finished computing distances")
 
         v_bias = (f_damp * k_i * torch.exp(-alpha_i * delta_i.reshape(-1) ** 2)
                   ).sum()
+
+        with open("log", "w") as f:
+            f.write("Computing gradient...")
+
         f_bias = -compute_grad(inputs=xyz_list[0],
                                output=v_bias).sum(0)
+
+        with open("log", "w") as f:
+            f.write("Finished computing gradient")
 
         keep_idx = self.get_keep_idx(atoms)
         final_f_bias = torch.zeros(len(atoms), 3)
