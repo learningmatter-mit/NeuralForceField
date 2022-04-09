@@ -23,8 +23,6 @@ from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import OnlyBondUpdateCP3D
 
 from nff.data import collate_dicts
-from torch import multiprocessing
-
 
 DEFAULT_CUTOFF = 5.0
 DEFAULT_DIRECTED = False
