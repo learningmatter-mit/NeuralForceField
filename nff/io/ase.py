@@ -783,7 +783,12 @@ class NeuralMetadynamics(NeuralFF):
                 # dominant time is data transfer to GPU.
                 # Testing it out confirms that you get a
                 # big slowdown from doing it on GPU
+
+
                 device='cpu',
+                # device=self.device,
+
+
                 dataset_1=dsets[1],
                 store_grad=True,
                 collate_dicts=collate_dicts)
