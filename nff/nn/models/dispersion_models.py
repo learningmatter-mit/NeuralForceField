@@ -77,7 +77,12 @@ class PainnDispersion(nn.Module):
         for key in self.painn_model.pool_dic.keys():
             # add dispersion energy
 
-            all_results[key] = all_results[key] + e_disp
+            if inference:
+                add_e = e_disp.detach().cpu()
+            else:
+                add_e = e_disp
+                
+            all_results[key] = all_results[key] + add_e
 
             # add gradient
             grad_key = "%s_grad" % key
@@ -85,6 +90,9 @@ class PainnDispersion(nn.Module):
                 if disp_grad is None:
                     disp_grad = compute_grad(inputs=xyz,
                                              output=e_disp)
+                    if inference:
+                        disp_grad = disp_grad.detach().cpu()
+
                 all_results[grad_key] = all_results[grad_key] + disp_grad
 
         # Normal painn stuff, part 2
