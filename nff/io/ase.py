@@ -892,9 +892,6 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
 
             f_bias = -compute_grad(inputs=xyz_list[0],
                                    output=v_bias).sum(0).detach().cpu()
-
-            # f_bias = torch.zeros_like(xyz_list[0]).sum(0).detach().cpu()
-
             v_bias = v_bias.detach().cpu()
 
             v_biases.append(v_bias.reshape(-1))
