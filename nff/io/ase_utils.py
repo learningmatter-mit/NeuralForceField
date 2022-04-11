@@ -1,7 +1,10 @@
 import numpy as np
+import torch
+import time
 
 from ase.constraints import FixConstraint
 from ase.geometry import get_dihedrals_derivatives, get_angles_derivatives
+from ase.optimize import BFGS
 
 
 def get_dihed_derivs(atoms,
@@ -179,3 +182,260 @@ class ConstrainDihedrals(FixConstraint):
         forces += new_forces
 
         return new_forces, forces
+
+
+def split(array, num_atoms):
+    shape = [-1]
+    total_atoms = num_atoms.sum()
+    if not all([i == total_atoms for i in np.array(array).shape]):
+        shape = [-1, 3]
+    split_array = [np.array(i) for i in torch.split(torch.Tensor(np.array(array))
+                                                    .reshape(*shape), num_atoms.tolist())]
+    return split_array
+
+
+class BatchedBFGS(BFGS):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.num_atoms = self.atoms.num_atoms.numpy().astype('int')
+
+        self.split_h0()
+
+    def determine_step(self, dr, steplengths, f):
+
+        # scale steps of different batches separately
+
+        steplength_by_batch = split(array=steplengths,
+                                    num_atoms=self.num_atoms)
+        dr_by_batch = split(dr, self.num_atoms)
+        maxsteplengths = [np.max(i) for i in steplength_by_batch]
+
+        for i, this_max in enumerate(maxsteplengths):
+            if this_max >= self.maxstep:
+                scale = self.maxstep / this_max
+                dr_by_batch[i] *= scale
+
+        # don't update any batch that has f <= self.fmax
+
+        f_by_batch = split(array=f,
+                           num_atoms=self.num_atoms)
+        for i, this_f in enumerate(f_by_batch):
+            this_f_max = ((this_f ** 2).sum(axis=1) ** 0.5).max()
+            if this_f_max < self.fmax:
+                dr_by_batch[i] *= 0
+
+        dr = np.concatenate(dr_by_batch)
+
+        return dr
+
+    # def step(self, f=None):
+    #     atoms = self.atoms
+
+    #     if f is None:
+    #         f = atoms.get_forces()
+
+    #     r = atoms.get_positions()
+    #     f = f.reshape(-1)
+    #     self.update(r.flat, f, self.r0, self.f0)
+    #     omega, V = np.linalg.eigh(self.H)
+
+    #     dr = np.dot(V, np.dot(f, V) / np.fabs(omega)).reshape((-1, 3))
+    #     steplengths = (dr**2).sum(1)**0.5
+    #     dr = self.determine_step(dr, steplengths, f)
+    #     atoms.set_positions(r + dr)
+    #     self.r0 = r.flat.copy()
+    #     self.f0 = f.copy()
+    #     self.dump((self.H, self.r0, self.f0, self.maxstep))
+
+    # def update(self, r, f, r0, f0):
+
+    #     # copied from original, but with modification for test of np.abs(dr).max()
+    #     if self.H is None:
+    #         self.H = self.H0
+    #         return
+
+    #     split_f = split(f, self.num_atoms)
+    #     split_f0 = split(f0, self.num_atoms)
+    #     split_r = split(r, self.num_atoms)
+    #     split_r0 = split(r0, self.num_atoms)
+
+    #     counter = 0
+    #     for i, this_r in enumerate(split_r):
+
+    #         start = counter
+    #         delta = 3 * self.num_atoms[i]
+    #         stop = start + delta
+
+    #         this_r0 = split_r0[i]
+    #         this_f = split_f[i]
+    #         this_f0 = split_f0[i]
+    #         this_dr = (this_r - this_r0).reshape(-1)
+
+    #         if np.abs(this_dr).max() < 1e-7:
+    #             counter += delta
+    #             continue
+
+    #         df = (this_f - this_f0).reshape(-1)
+    #         a = np.dot(this_dr, df)
+    #         dg = np.dot(self.H[start:stop, start:stop], this_dr)
+    #         b = np.dot(this_dr, dg)
+
+    #         self.H[start:stop, start:stop] -= (np.outer(df, df) /
+    #                                            a + np.outer(dg, dg) / b)
+
+    #         counter += delta
+
+    def step(self, f=None):
+        atoms = self.atoms
+
+        if f is None:
+            f = atoms.get_forces()
+
+        r = atoms.get_positions()
+        f = f.reshape(-1)
+        self.update(r.flat, f, self.r0, self.f0)
+
+        drs = []
+        start = 0
+
+        for i, H in enumerate(self.H):
+
+            num_atoms = self.num_atoms[i]
+            delta = num_atoms * 3
+            stop = start + delta
+
+            # This doesn't work for some reason
+
+            # this_f = f[start: stop]
+
+            # this_f_max = ((this_f ** 2).reshape(-1, 3).sum(axis=1) ** 0.5).max()
+
+            # if this_f_max < self.fmax:
+            #     drs.append(np.zeros((num_atoms, 3)))
+            #     continue
+
+            omega, V = np.linalg.eigh(H)
+            this_dr = np.dot(V, np.dot(f[start: stop], V) /
+                             np.fabs(omega)).reshape((-1, 3))
+            drs.append(this_dr)
+
+            start += delta
+
+        dr = np.concatenate(drs)
+        steplengths = (dr**2).sum(1)**0.5
+        dr = self.determine_step(dr, steplengths, f)
+        atoms.set_positions(r + dr)
+        self.r0 = r.flat.copy()
+        self.f0 = f.copy()
+        self.dump((self.H, self.r0, self.f0, self.maxstep))
+
+    def split_h0(self):
+
+        new_h = []
+        counter = 0
+        for num in self.num_atoms:
+            start = counter
+            delta = 3 * num
+            stop = start + delta
+
+            new_h.append(self.H0[start: stop, start: stop])
+
+            counter += delta
+
+        self.H0 = new_h
+
+    def update(self, r, f, r0, f0):
+
+        # copied from original, but with modification for test of np.abs(dr).max()
+        if self.H is None:
+            self.H = self.H0
+            return
+
+        split_f = split(f, self.num_atoms)
+        split_f0 = split(f0, self.num_atoms)
+        split_r = split(r, self.num_atoms)
+        split_r0 = split(r0, self.num_atoms)
+
+        for i, this_r in enumerate(split_r):
+
+            this_r0 = split_r0[i]
+            this_f = split_f[i]
+            this_f0 = split_f0[i]
+            this_dr = (this_r - this_r0).reshape(-1)
+
+            if np.abs(this_dr).max() < 1e-7:
+                continue
+
+            df = (this_f - this_f0).reshape(-1)
+            a = np.dot(this_dr, df)
+            dg = np.dot(self.H[i], this_dr)
+            b = np.dot(this_dr, dg)
+
+            self.H[i] -= (np.outer(df, df) /
+                          a + np.outer(dg, dg) / b)
+
+        # super().update(r, f, r0, f0)
+        # # set coupling terms between batches to 0
+
+        # new_hess = np.zeros_like(self.H)
+        # counter = 0
+        # for i, num in enumerate(self.num_atoms):
+        #     start = counter
+        #     delta = 3 * num
+        #     stop = start + delta
+
+        #     block = self.H[start: stop, start: stop]
+        #     new_hess[start: stop, start: stop] = block
+        #     counter += delta
+
+        # self.H = new_hess
+
+    def log(self, forces=None):
+        if forces is None:
+            forces = self.atoms.get_forces()
+        fmax = [np.sqrt((i ** 2).sum(axis=1).max())
+                for i in split(forces, self.num_atoms)]
+
+        e = self.atoms.get_potential_energy(
+            force_consistent=self.force_consistent
+        )
+
+        t = time.localtime()
+
+        if self.logfile is not None:
+            name = self.__class__.__name__
+            num_batches = len(self.num_atoms)
+
+            if self.nsteps == 0:
+
+                args = [" " * len(name), "Step", "Time"]
+                args += ["Energy %d" % (i + 1) for i in range(num_batches)]
+                args += ["fmax %d" % (i + 1) for i in range(num_batches)]
+                args = tuple(args)
+
+                msg = "%s  %4s %8s "
+                msg += "%15s " * num_batches
+                msg += "%14s  " * num_batches
+                msg += "\n"
+
+                msg = msg % args
+                self.logfile.write(msg)
+
+            ast = ''
+            args = [name, self.nsteps, t[3], t[4], t[5]]
+            args += e.tolist()
+            args += [ast]
+            args += fmax
+
+            args = tuple(args)
+
+            msg = "%s:  %3d %02d:%02d:%02d "
+            msg += "%15.6f " * num_batches
+            msg = msg[:-1] + "%1s "
+            msg += "%15.6f " * num_batches
+            msg += "\n"
+
+            msg = msg % args
+            self.logfile.write(msg)
+            self.logfile.flush()
