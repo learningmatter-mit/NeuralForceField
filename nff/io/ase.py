@@ -42,31 +42,31 @@ def check_directed(model, atoms):
 
 class AtomsBatch(Atoms):
     """Class to deal with the Neural Force Field and batch several
-                                                                    Atoms objects.
+       Atoms objects.
     """
 
     def __init__(
-        self,
-        *args,
-        props=None,
-        cutoff=DEFAULT_CUTOFF,
-        directed=DEFAULT_DIRECTED,
-        requires_large_offsets=False,
-        cutoff_skin=DEFAULT_SKIN,
-        device=0,
-        **kwargs
+            self,
+            *args,
+            props=None,
+            cutoff=DEFAULT_CUTOFF,
+            directed=DEFAULT_DIRECTED,
+            requires_large_offsets=False,
+            cutoff_skin=DEFAULT_SKIN,
+            device=0,
+            **kwargs
     ):
         """
 
         Args:
-                                                                        *args: Description
-                                                                        nbr_list (None, optional): Description
-                                                                        pbc_index (None, optional): Description
-                                                                        cutoff (TYPE, optional): Description
-                                                                        cutoff_skin (float): extra distance added to cutoff
-                                                                                                                                        to ensure we don't miss neighbors between nbr
-                                                                                                                                        list updates.
-                                                                        **kwargs: Description
+            *args: Description
+            nbr_list (None, optional): Description
+            pbc_index (None, optional): Description
+            cutoff (TYPE, optional): Description
+            cutoff_skin (float): extra distance added to cutoff
+                            to ensure we don't miss neighbors between nbr
+                            list updates.
+            **kwargs: Description
         """
         super().__init__(*args, **kwargs)
 
@@ -88,10 +88,10 @@ class AtomsBatch(Atoms):
 
     def get_nxyz(self):
         """Gets the atomic number and the positions of the atoms
-                                                                        inside the unit cell of the system.
+           inside the unit cell of the system.
         Returns:
-                                                                        nxyz (np.array): atomic numbers + cartesian coordinates
-                                                                                                                                        of the atoms.
+            nxyz (np.array): atomic numbers + cartesian coordinates
+                             of the atoms.
         """
         nxyz = np.concatenate([
             self.get_atomic_numbers().reshape(-1, 1),
@@ -102,10 +102,10 @@ class AtomsBatch(Atoms):
 
     def get_batch(self):
         """Uses the properties of Atoms to create a batch
-                                                                        to be sent to the model.
-        Returns:
-                                                                        batch (dict): batch with the keys 'nxyz',
-                                                                                                                                        'num_atoms', 'nbr_list' and 'offsets'
+           to be sent to the model.
+           Returns:
+              batch (dict): batch with the keys 'nxyz',
+                            'num_atoms', 'nbr_list' and 'offsets'
         """
 
         if self.nbr_list is None or self.offsets is None:
@@ -145,15 +145,16 @@ class AtomsBatch(Atoms):
 
     def update_nbr_list(self):
         """Update neighbor list and the periodic reindexing
-                                                                        for the given Atoms object.
+           for the given Atoms object.
 
-        Args:
-                                                                        cutoff (float): maximum cutoff for which atoms are
-                                                                                                                                        considered interacting.
-        Returns:
-                                                                        nbr_list (torch.LongTensor)
-                                                                        offsets (torch.Tensor)
-                                                                        nxyz (torch.Tensor)
+           Args:
+           cutoff(float): maximum cutoff for which atoms are
+                                          considered interacting.
+           Returns:
+           nbr_list(torch.LongTensor)
+           offsets(torch.Tensor)
+           nxyz(torch.Tensor)
+
         """
 
         Atoms_list = self.get_list_atoms()
@@ -248,23 +249,23 @@ class BulkPhaseMaterials(Atoms):
     """
 
     def __init__(
-        self,
-        *args,
-        props={},
-        cutoff=DEFAULT_CUTOFF,
-        nbr_torch=False,
-        device='cpu',
-        directed=DEFAULT_DIRECTED,
-        **kwargs
+            self,
+            *args,
+            props={},
+            cutoff=DEFAULT_CUTOFF,
+            nbr_torch=False,
+            device='cpu',
+            directed=DEFAULT_DIRECTED,
+            **kwargs
     ):
         """
 
         Args:
-                                                                        *args: Description
-                                                                        nbr_list (None, optional): Description
-                                                                        pbc_index (None, optional): Description
-                                                                        cutoff (TYPE, optional): Description
-                                                                        **kwargs: Description
+        *args: Description
+        nbr_list (None, optional): Description
+        pbc_index (None, optional): Description
+        cutoff (TYPE, optional): Description
+        **kwargs: Description
         """
         super().__init__(*args, **kwargs)
 
@@ -279,11 +280,10 @@ class BulkPhaseMaterials(Atoms):
 
     def get_nxyz(self):
         """Gets the atomic number and the positions of the atoms
-                                                                        inside the unit cell of the system.
-
+           inside the unit cell of the system.
         Returns:
-                                                                        nxyz (np.array): atomic numbers + cartesian coordinates
-                                                                                                                                        of the atoms.
+                nxyz (np.array): atomic numbers + cartesian coordinates
+                                                 of the atoms.
         """
         nxyz = np.concatenate([
             self.get_atomic_numbers().reshape(-1, 1),
@@ -294,11 +294,11 @@ class BulkPhaseMaterials(Atoms):
 
     def get_batch(self):
         """Uses the properties of Atoms to create a batch
-                                                                        to be sent to the model.
+           to be sent to the model.
 
         Returns:
-                                                                        batch (dict): batch with the keys 'nxyz',
-                                                                                                                                        'num_atoms', 'nbr_list' and 'offsets'
+           batch (dict): batch with the keys 'nxyz',
+           'num_atoms', 'nbr_list' and 'offsets'
         """
 
         if self.nbr_list is None or self.offsets is None:
@@ -316,17 +316,18 @@ class BulkPhaseMaterials(Atoms):
 
     def update_system_nbr_list(self, cutoff, exclude_atoms_nbr_list=True):
         """Update undirected neighbor list and the periodic reindexing
-                                                                        for the given Atoms object.ß
+           for the given Atoms object.
 
-        Args:
-                                                                        cutoff (float): maximum cutoff for which atoms are
-                                                                                                                                        considered interacting.
+           Args:
+           cutoff (float): maximum cutoff for which atoms are
+           considered interacting.
 
-        Returns:
-                                                                        nbr_list (torch.LongTensor)
-                                                                        offsets (torch.Tensor)
-                                                                        nxyz (torch.Tensor)
+           Returns:
+           nbr_list (torch.LongTensor)
+           offsets (torch.Tensor)
+                nxyz (torch.Tensor)
         """
+
         if self.nbr_torch:
             edge_from, edge_to, offsets = torch_nbr_list(
                 self, self.cutoff, device=self.device)
@@ -413,22 +414,23 @@ class NeuralFF(Calculator):
     implemented_properties = ['energy', 'forces', 'stress']
 
     def __init__(
-        self,
-        model,
-        device='cpu',
-        en_key='energy',
-        properties=['energy', 'forces'],
-        model_kwargs=None,
-        **kwargs
+            self,
+            model,
+            device='cpu',
+            en_key='energy',
+            properties=['energy', 'forces'],
+            model_kwargs=None,
+            **kwargs
     ):
         """Creates a NeuralFF calculator.nff/io/ase.py
 
         Args:
-                                                                        model (TYPE): Description
-                                                                        device (str): device on which the calculations will be performed
-                                                                        properties (list of str): 'energy', 'forces' or both and also stress for only schnet and painn
-                                                                        **kwargs: Description
-                                                                        model (one of nff.nn.models)
+        model (TYPE): Description
+        device (str): device on which the calculations will be performed
+        properties (list of str): 'energy', 'forces' or both and also stress for only
+        schnet  and painn
+        **kwargs: Description
+        model (one of nff.nn.models)
         """
 
         Calculator.__init__(self, **kwargs)
@@ -445,18 +447,18 @@ class NeuralFF(Calculator):
         self.model.to(device)
 
     def calculate(
-        self,
-        atoms=None,
-        properties=['energy', 'forces'],
-        system_changes=all_changes,
+            self,
+            atoms=None,
+            properties=['energy', 'forces'],
+            system_changes=all_changes,
     ):
         """Calculates the desired properties for the given AtomsBatch.
 
         Args:
-                                                                        atoms (AtomsBatch): custom Atoms subclass that contains implementation
-                                                                                                                                        of neighbor lists, batching and so on. Avoids the use of the Dataset
-                                                                                                                                        to calculate using the models created.
-                                                                        system_changes (default from ase)
+        atoms (AtomsBatch): custom Atoms subclass that contains implementation
+            of neighbor lists, batching and so on. Avoids the use of the Dataset
+            to calculate using the models created.
+        system_changes (default from ase)
         """
 
         if not any([isinstance(self.model, i) for i in UNDIRECTED]):
@@ -509,10 +511,10 @@ class NeuralFF(Calculator):
 
     @classmethod
     def from_file(
-        cls,
-        model_path,
-        device='cuda',
-        **kwargs
+            cls,
+            model_path,
+            device='cuda',
+            **kwargs
     ):
 
         model = load_model(model_path)
@@ -524,22 +526,23 @@ class NeuralFF(Calculator):
 
 class EnsembleNFF(Calculator):
     """Produces an ensemble of NFF calculators to predict the
-                                                                    discrepancy between the properties"""
+       discrepancy between the properties"""
     implemented_properties = ['energy', 'forces']
 
     def __init__(
-        self,
-        models: list,
-        device='cpu',
-        **kwargs
+            self,
+            models: list,
+            device='cpu',
+            **kwargs
     ):
         """Creates a NeuralFF calculator.nff/io/ase.py
 
         Args:
-                                                                        model (TYPE): Description
-                                                                        device (str): device on which the calculations will be performed
-                                                                        **kwargs: Description
-                                                                        model (one of nff.nn.models)
+        model(TYPE): Description
+        device(str): device on which the calculations will be performed
+        **kwargs: Description
+        model(one of nff.nn.models)
+
         """
 
         Calculator.__init__(self, **kwargs)
@@ -555,19 +558,19 @@ class EnsembleNFF(Calculator):
             m.to(device)
 
     def calculate(
-        self,
-        atoms=None,
-        properties=['energy', 'forces'],
-        system_changes=all_changes,
+            self,
+            atoms=None,
+            properties=['energy', 'forces'],
+            system_changes=all_changes,
     ):
         """Calculates the desired properties for the given AtomsBatch.
 
         Args:
-                                                                        atoms (AtomsBatch): custom Atoms subclass that contains implementation
-                                                                                                                                        of neighbor lists, batching and so on. Avoids the use of the Dataset
-                                                                                                                                        to calculate using the models created.
-                                                                        properties (list of str): 'energy', 'forces' or both
-                                                                        system_changes (default from ase)
+        atoms (AtomsBatch): custom Atoms subclass that contains implementation
+            of neighbor lists, batching and so on. Avoids the use of the Dataset
+            to calculate using the models created.
+        properties (list of str): 'energy', 'forces' or both
+        system_changes (default from ase)
         """
 
         for model in self.models:
@@ -594,9 +597,9 @@ class EnsembleNFF(Calculator):
             # change energy and force to numpy array
             energies.append(
                 prediction['energy']
-                .detach()
-                .cpu()
-                .numpy()
+                    .detach()
+                    .cpu()
+                    .numpy()
                 * (1 / const.EV_TO_KCAL_MOL)
             )
             gradients.append(
@@ -623,10 +626,10 @@ class EnsembleNFF(Calculator):
 
     @classmethod
     def from_files(
-        cls,
-        model_paths: list,
-        device='cuda',
-        **kwargs
+            cls,
+            model_paths: list,
+            device='cuda',
+            **kwargs
     ):
         models = [
             load_model(path)
@@ -637,9 +640,9 @@ class EnsembleNFF(Calculator):
 
 class NeuralOptimizer:
     def __init__(
-        self,
-        optimizer,
-        nbrlist_update_freq=5
+            self,
+            optimizer,
+            nbrlist_update_freq=5
     ):
         self.optimizer = optimizer
         self.update_freq = nbrlist_update_freq
@@ -696,8 +699,8 @@ class NeuralMetadynamics(NeuralFF):
         props_0 = {"nxyz": [torch.Tensor(old_atoms.get_nxyz())[keep_idx, :]
                             for old_atoms in self.old_atoms]}
 
-        dset_0 = Dataset(props_0)
-        dset_1 = Dataset(props_1)
+        dset_0 = Dataset(props_0, do_copy=False)
+        dset_1 = Dataset(props_1, do_copy=False)
 
         return dset_0, dset_1
 
@@ -852,8 +855,8 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
             props_1 = {"nxyz": use_nxyz}
             props_0 = {"nxyz": use_old_nxyz}
 
-            dset_0 = Dataset(props_0)
-            dset_1 = Dataset(props_1)
+            dset_0 = Dataset(props_0, do_copy=False)
+            dset_1 = Dataset(props_1, do_copy=False)
 
             dset_0s.append(dset_0)
             dset_1s.append(dset_1)
@@ -893,7 +896,7 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
 
             v_bias = (f_damp * k_i[j] * torch.exp(-alpha_i * delta_i.reshape(-1) ** 2)
                       ).sum()
-            
+
             f_bias = -compute_grad(inputs=xyz_list[0],
                                    output=v_bias).sum(0).detach().cpu()
 
