@@ -229,63 +229,6 @@ class BatchedBFGS(BFGS):
 
         return dr
 
-    # def step(self, f=None):
-    #     atoms = self.atoms
-
-    #     if f is None:
-    #         f = atoms.get_forces()
-
-    #     r = atoms.get_positions()
-    #     f = f.reshape(-1)
-    #     self.update(r.flat, f, self.r0, self.f0)
-    #     omega, V = np.linalg.eigh(self.H)
-
-    #     dr = np.dot(V, np.dot(f, V) / np.fabs(omega)).reshape((-1, 3))
-    #     steplengths = (dr**2).sum(1)**0.5
-    #     dr = self.determine_step(dr, steplengths, f)
-    #     atoms.set_positions(r + dr)
-    #     self.r0 = r.flat.copy()
-    #     self.f0 = f.copy()
-    #     self.dump((self.H, self.r0, self.f0, self.maxstep))
-
-    # def update(self, r, f, r0, f0):
-
-    #     # copied from original, but with modification for test of np.abs(dr).max()
-    #     if self.H is None:
-    #         self.H = self.H0
-    #         return
-
-    #     split_f = split(f, self.num_atoms)
-    #     split_f0 = split(f0, self.num_atoms)
-    #     split_r = split(r, self.num_atoms)
-    #     split_r0 = split(r0, self.num_atoms)
-
-    #     counter = 0
-    #     for i, this_r in enumerate(split_r):
-
-    #         start = counter
-    #         delta = 3 * self.num_atoms[i]
-    #         stop = start + delta
-
-    #         this_r0 = split_r0[i]
-    #         this_f = split_f[i]
-    #         this_f0 = split_f0[i]
-    #         this_dr = (this_r - this_r0).reshape(-1)
-
-    #         if np.abs(this_dr).max() < 1e-7:
-    #             counter += delta
-    #             continue
-
-    #         df = (this_f - this_f0).reshape(-1)
-    #         a = np.dot(this_dr, df)
-    #         dg = np.dot(self.H[start:stop, start:stop], this_dr)
-    #         b = np.dot(this_dr, dg)
-
-    #         self.H[start:stop, start:stop] -= (np.outer(df, df) /
-    #                                            a + np.outer(dg, dg) / b)
-
-    #         counter += delta
-
     def step(self, f=None):
         atoms = self.atoms
 
@@ -304,16 +247,6 @@ class BatchedBFGS(BFGS):
             num_atoms = self.num_atoms[i]
             delta = num_atoms * 3
             stop = start + delta
-
-            # This doesn't work for some reason
-
-            # this_f = f[start: stop]
-
-            # this_f_max = ((this_f ** 2).reshape(-1, 3).sum(axis=1) ** 0.5).max()
-
-            # if this_f_max < self.fmax:
-            #     drs.append(np.zeros((num_atoms, 3)))
-            #     continue
 
             omega, V = np.linalg.eigh(H)
             this_dr = np.dot(V, np.dot(f[start: stop], V) /
@@ -374,22 +307,6 @@ class BatchedBFGS(BFGS):
 
             self.H[i] -= (np.outer(df, df) /
                           a + np.outer(dg, dg) / b)
-
-        # super().update(r, f, r0, f0)
-        # # set coupling terms between batches to 0
-
-        # new_hess = np.zeros_like(self.H)
-        # counter = 0
-        # for i, num in enumerate(self.num_atoms):
-        #     start = counter
-        #     delta = 3 * num
-        #     stop = start + delta
-
-        #     block = self.H[start: stop, start: stop]
-        #     new_hess[start: stop, start: stop] = block
-        #     counter += delta
-
-        # self.H = new_hess
 
     def log(self, forces=None):
         if forces is None:
