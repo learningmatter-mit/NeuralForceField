@@ -736,9 +736,6 @@ class NeuralMetadynamics(NeuralFF):
 
         k_i, alpha_i, dsets, f_damp = self.rmsd_prelims(atoms)
 
-        dsets[0].save('regular_dset_0.pth.tar')
-        dsets[1].save('regular_dset_1.pth.tar')
-
         delta_i, _, xyz_list = compute_distances(
             dataset=dsets[0],
             # do this on CPU - it's a small RMSD
@@ -883,10 +880,6 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
         for j, dset_0 in enumerate(dset0s):
 
             dset_1 = dset1s[j]
-
-            dset_0.save('batch_dset_0.pth.tar')
-            dset_1.save('batch_dset_1.pth.tar')
-
             delta_i, _, xyz_list = compute_distances(
                 dataset=dset_0,
                 device='cpu',
