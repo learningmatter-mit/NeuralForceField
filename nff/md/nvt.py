@@ -6,6 +6,7 @@ import math
 from tqdm import tqdm
 from ase.optimize.optimize import Dynamics
 from ase.md.md import MolecularDynamics
+from ase.md.logger import MDLogger
 from ase import units
 from ase.md.velocitydistribution import (MaxwellBoltzmannDistribution,
                                          Stationary, ZeroRotation)
@@ -278,7 +279,7 @@ class NoseHooverMetadynamics(NoseHoover):
                             logfile=logfile,
                             loginterval=loginterval,
                             max_steps=max_steps,
-                            ** kwargs)
+                            **kwargs)
 
         self.geom_add_time = geom_add_time * units.fs
         self.max_steps = 0
@@ -419,13 +420,15 @@ class BatchNoseHoover(MolecularDynamics):
     def step(self):
 
         # get current acceleration and velocity
-        accel = (self.atoms.get_forces()
-                 / self.atoms.get_masses().reshape(-1, 1))
+        accel = (self.atoms.get_forces() /
+                 self.atoms.get_masses().reshape(-1, 1))
         vel = self.atoms.get_velocities()
 
-        visc = (accel - (self.zeta[:, None, None]
-                         * vel.reshape(self.n_sys, -1, 3))
-                .reshape(-1, 3))
+        split_idx = np.cumsum(self.Natom)
+        vel_split = np.split(vel, split_idx)
+        zeta_vel = np.concatenate([z * v for z, v in
+                                   zip(self.zeta, vel_split)])
+        visc = accel - zeta_vel
 
         # make full step in position
         x = self.atoms.get_positions() + vel * self.dt + \
@@ -445,17 +448,21 @@ class BatchNoseHoover(MolecularDynamics):
 
         # make a half step in self.zeta
         self.zeta = self.zeta + 0.5 * self.dt * \
-            (1/self.Q) * (KE_0 - self.targeEkin)
+            (1 / self.Q) * (KE_0 - self.targeEkin)
 
         # make another halfstep in self.zeta
-        self.zeta = (self.zeta + 0.5 * self.dt * (1 / self.Q)
-                     * (self.atoms.get_batch_kinetic_energy()
-                        - self.targeEkin))
+        self.zeta = (self.zeta + 0.5 * self.dt * (1 / self.Q) *
+                     (self.atoms.get_batch_kinetic_energy() -
+                      self.targeEkin))
 
         # make another half step in velocity
-        scal = (1 + 0.5 * self.dt * self.zeta[:, None, None])
-        vel = np.divide((self.atoms.get_velocities()
-                         + 0.5 * self.dt * accel).reshape(self.n_sys, -1, 3), scal)
+        scal = (1 + 0.5 * self.dt * self.zeta)
+
+        vel = self.atoms.get_velocities()
+        split_idx = np.cumsum(self.Natom)
+        vel_split = np.split(vel, split_idx)
+        vel = np.concatenate([v / s for v, s in zip(vel_split, scal)])
+
         self.atoms.set_velocities(vel.reshape(-1, 3))
 
         return f
@@ -470,10 +477,108 @@ class BatchNoseHoover(MolecularDynamics):
         steps_per_epoch = int(steps / epochs)
         # maximum number of steps starts at `steps_per_epoch`
         # and increments after every nbr list update
-        #self.max_steps = 0
+
         self.atoms.update_nbr_list()
 
         for _ in range(epochs):
             self.max_steps += steps_per_epoch
             Dynamics.run(self)
             self.atoms.update_nbr_list()
+
+
+class BatchMDLogger(MDLogger):
+    def __init__(self,
+                 *args,
+                 **kwargs):
+
+        kwargs['header'] = False
+        MDLogger.__init__(self,
+                          *args,
+                          **kwargs)
+
+        if self.dyn is not None:
+            self.hdr = "%-9s " % ("Time[ps]",)
+            self.fmt = "%-10.4f "
+        else:
+            self.hdr = ""
+            self.fmt = ""
+
+        num_atoms = self.atoms.num_atoms
+
+        for i in range(len(num_atoms)):
+            if i != 0:
+                self.hdr += " "
+            self.hdr += "    %12s    %6s" % ("Epot{num} [eV]", "T{num} [K]")
+            self.hdr = self.hdr.format(num=(i + 1))
+
+        digits = 4
+        for _ in range(len(num_atoms)):
+            self.fmt += 1 * ("%%12.%df " % (digits,)) + " %9.1f"
+            self.fmt += "  "
+
+        self.fmt += "\n"
+
+        self.logfile.write(self.hdr + "\n")
+
+    def __call__(self):
+        if self.dyn is not None:
+            t = self.dyn.get_time() / (1000 * units.fs)
+            dat = (t,)
+        else:
+            dat = ()
+
+        ekin = self.atoms.get_batch_kinetic_energy()
+        epot = self.atoms.get_potential_energy()
+        temp = ekin / (0.5 * (3.0 * self.atoms.num_atoms - 6) *
+                       units.kB)
+
+        for i, this_ek in enumerate(ekin):
+            this_epot = epot[i]
+            this_temp = float(temp[i])
+            dat += (this_epot, this_temp)
+
+        self.logfile.write(self.fmt % dat)
+        self.logfile.flush()
+
+
+class BatchNoseHooverMetadynamics(BatchNoseHoover,
+                                  NoseHooverMetadynamics):
+    def __init__(self,
+                 atomsbatch,
+                 timestep,
+                 temperature,
+                 ttime,
+                 geom_add_time,
+                 max_steps=None,
+                 trajectory="mtd.trj",
+                 logfile="mtd.log",
+                 loginterval=1,
+                 **kwargs):
+
+        if "maxwell_temp" in kwargs:
+            kwargs["T_init"] = kwargs["maxwell_temp"]
+
+        BatchNoseHoover.__init__(self,
+                                 atoms=atomsbatch,
+                                 timestep=timestep,
+                                 temperature=temperature,
+                                 ttime=ttime,
+                                 trajectory=trajectory,
+                                 logfile=None,
+                                 loginterval=loginterval,
+                                 max_steps=max_steps,
+                                 **kwargs)
+
+        self.geom_add_time = geom_add_time * units.fs
+        self.max_steps = 0
+
+        # where did we do the temperature reduction?
+
+        if logfile:
+            logger = self.closelater(BatchMDLogger(dyn=self,
+                                                   atoms=atomsbatch,
+                                                   logfile=logfile))
+            self.attach(logger, loginterval)
+
+    def run(self, steps=None):
+        NoseHooverMetadynamics.run(self, steps)
