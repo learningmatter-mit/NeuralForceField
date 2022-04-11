@@ -140,6 +140,15 @@ class ConstrainAngles(FixConstraint):
 
         return new_forces, forces
 
+    def __str__(self):
+        return repr(self)
+
+    def __repr__(self):
+        idx_str = str(self.idx)
+        val_str = str(np.degrees(self.targ_angles))
+
+        return 'Constrain angles (indices=%s, values (deg.)=%s)' % (idx_str, val_str)
+
 
 class ConstrainDihedrals(FixConstraint):
 
@@ -183,14 +192,25 @@ class ConstrainDihedrals(FixConstraint):
 
         return new_forces, forces
 
+    def __str__(self):
+        return repr(self)
+
+    def __repr__(self):
+        idx_str = str(self.idx)
+        val_str = str(np.degrees(self.targ_diheds))
+
+        return 'Constrain dihedrals (indices=%s, values (deg.)=%s)' % (idx_str, val_str)
+
 
 def split(array, num_atoms):
     shape = [-1]
     total_atoms = num_atoms.sum()
     if not all([i == total_atoms for i in np.array(array).shape]):
         shape = [-1, 3]
-    split_array = [np.array(i) for i in torch.split(torch.Tensor(np.array(array))
-                                                    .reshape(*shape), num_atoms.tolist())]
+
+    split_idx = np.cumsum(num_atoms)
+    split_array = np.split(np.array(array).reshape(*shape), split_idx)[:-1]
+
     return split_array
 
 
