@@ -1,9 +1,6 @@
 import os
 import numpy as np
 import torch
-from joblib import Parallel, delayed
-from torch import multiprocessing as mp
-# import multiprocessing as mp
 
 from ase import Atoms
 from ase.neighborlist import neighbor_list
