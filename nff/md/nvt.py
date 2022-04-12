@@ -533,8 +533,7 @@ class BatchMDLogger(MDLogger):
 
         ekin = self.atoms.get_batch_kinetic_energy()
         epot = self.atoms.get_potential_energy()
-        temp = ekin / (0.5 * (3.0 * self.atoms.num_atoms) *
-                       units.kB)
+        temp = self.atoms.get_batch_T()
 
         for i, this_ek in enumerate(ekin):
             this_epot = epot[i]
