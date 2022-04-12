@@ -329,7 +329,9 @@ class NoseHooverMetadynamics(NoseHoover):
             self.max_steps += steps_per_epoch
             # set hydrogen mass to 2 AMU (deuterium, following Grimme's mTD approach)
             self.increase_h_mass()
+
             Dynamics.run(self)
+
             # reset the masses
             self.decrease_h_mass()
 
@@ -406,6 +408,7 @@ class BatchNoseHoover(MolecularDynamics):
         # split AtomsBatch into separate Atoms objects
         for atoms in self.atoms.get_list_atoms():
             # set MaxwellBoltzmannDistribution for each Atoms objects separately
+
             MaxwellBoltzmannDistribution(atoms,
                                          temperature_K=T_init)
             Stationary(atoms)  # zero linear momentum
@@ -530,7 +533,7 @@ class BatchMDLogger(MDLogger):
 
         ekin = self.atoms.get_batch_kinetic_energy()
         epot = self.atoms.get_potential_energy()
-        temp = ekin / (0.5 * (3.0 * self.atoms.num_atoms - 6) *
+        temp = ekin / (0.5 * (3.0 * self.atoms.num_atoms) *
                        units.kB)
 
         for i, this_ek in enumerate(ekin):
@@ -573,12 +576,10 @@ class BatchNoseHooverMetadynamics(BatchNoseHoover,
         self.geom_add_time = geom_add_time * units.fs
         self.max_steps = 0
 
-        # where did we do the temperature reduction?
-
         if logfile:
-            logger = self.closelater(BatchMDLogger(dyn=self,
-                                                   atoms=atomsbatch,
-                                                   logfile=logfile))
+            logger = BatchMDLogger(dyn=self,
+                                   atoms=atomsbatch,
+                                   logfile=logfile)
             self.attach(logger, loginterval)
 
     def run(self, steps=None):

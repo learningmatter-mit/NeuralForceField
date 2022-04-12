@@ -132,14 +132,22 @@ class AtomsBatch(Atoms):
 
         positions = list(positions.split(mol_split_idx))
         Z = list(Z.split(mol_split_idx))
+        masses = list(torch.Tensor(self.get_masses())
+                      .split(mol_split_idx))
 
         Atoms_list = []
 
         for i, molecule_xyz in enumerate(positions):
-            Atoms_list.append(Atoms(Z[i].tolist(),
-                                    molecule_xyz.numpy(),
-                                    cell=self.cell,
-                                    pbc=self.pbc))
+            atoms = Atoms(Z[i].tolist(),
+                          molecule_xyz.numpy(),
+                          cell=self.cell,
+                          pbc=self.pbc)
+
+            # in case you artificially changed the masses
+            # of any of the atoms
+            atoms.set_masses(masses[i])
+
+            Atoms_list.append(atoms)
 
         return Atoms_list
 
