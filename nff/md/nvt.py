@@ -372,7 +372,7 @@ class BatchNoseHoover(MolecularDynamics):
 
         # Q is chosen to be 6 N kT
         self.dt = timestep * units.fs
-        self.Natom = atoms.get_number_of_atoms()
+        self.Natom = len(atoms)
         self.T = temperature * units.kB
 
         # no rotation or translation, so target kinetic energy

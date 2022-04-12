@@ -351,13 +351,13 @@ class BulkPhaseMaterials(Atoms):
                 nbr_list = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
 
         if exclude_atoms_nbr_list:
-            offsets_mat = torch.zeros(self.get_number_of_atoms(),
-                                      self.get_number_of_atoms(), 3)
-            nbr_list_mat = (torch.zeros(self.get_number_of_atoms(),
-                                        self.get_number_of_atoms())
+            offsets_mat = torch.zeros(len(self),
+                                      len(self), 3)
+            nbr_list_mat = (torch.zeros(len(self),
+                                        len(self))
                             .to(torch.long))
-            atom_nbr_list_mat = (torch.zeros(self.get_number_of_atoms(),
-                                             self.get_number_of_atoms())
+            atom_nbr_list_mat = (torch.zeros(len(self),
+                                             len(self))
                                  .to(torch.long))
 
             offsets_mat[nbr_list[:, 0], nbr_list[:, 1]] = offsets
