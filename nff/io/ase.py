@@ -895,16 +895,11 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
                      alpha_i,
                      f_damp):
 
-        v_biases = (f_damp.reshape(-1, 1) * k_i *
-                    torch.exp(-alpha_i * rmsd ** 2))
-
-        v_bias = v_biases.sum()
+        v_bias = (f_damp.reshape(-1, 1) * k_i *
+                  torch.exp(-alpha_i * rmsd ** 2)).sum()
 
         f_bias = -compute_grad(inputs=ref_xyz,
                                output=v_bias)
-
-        f_bias_0 = -compute_grad(inputs=ref_xyz,
-                                 output=v_biases[0, 1])
 
         output = [v_bias.reshape(-1).detach().cpu(),
                   f_bias.detach().cpu()]
