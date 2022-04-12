@@ -828,6 +828,9 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
                                     directed=directed,
                                     **kwargs)
 
+        # import pdb
+        # pdb.set_trace()
+
     def make_dsets(self,
                    atoms):
 
@@ -861,8 +864,6 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
         return dset_0s, dset_1s
 
     def rmsd_push(self, atoms):
-
-        # return np.zeros((len(atoms), 3)), np.zeros(len(atoms.num_atoms))
 
         if not self.old_atoms:
             return np.zeros((len(atoms), 3)), np.zeros(len(atoms.num_atoms))

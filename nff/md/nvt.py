@@ -460,7 +460,8 @@ class BatchNoseHoover(MolecularDynamics):
 
         vel = self.atoms.get_velocities()
         split_idx = np.cumsum(self.Natom)
-        vel_split = np.split(vel, split_idx)
+        vel_split = np.split(vel + 0.5 * self.dt * accel, split_idx)
+
         vel = np.concatenate([v / s for v, s in zip(vel_split, scal)])
 
         self.atoms.set_velocities(vel.reshape(-1, 3))
