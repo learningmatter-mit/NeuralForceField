@@ -751,6 +751,7 @@ class NeuralMetadynamics(NeuralFF):
 
         v_bias = (f_damp * k_i * torch.exp(-alpha_i * delta_i.reshape(-1) ** 2)
                   ).sum()
+
         f_bias = -compute_grad(inputs=xyz_list[0],
                                output=v_bias).sum(0)
 
@@ -894,10 +895,16 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
                      alpha_i,
                      f_damp):
 
-        v_bias = (f_damp.reshape(-1, 1) * k_i *
-                  torch.exp(-alpha_i * rmsd ** 2)).sum()
+        v_biases = (f_damp.reshape(-1, 1) * k_i *
+                    torch.exp(-alpha_i * rmsd ** 2))
+
+        v_bias = v_biases.sum()
+
         f_bias = -compute_grad(inputs=ref_xyz,
                                output=v_bias)
+
+        f_bias_0 = -compute_grad(inputs=ref_xyz,
+                                 output=v_biases[0, 1])
 
         output = [v_bias.reshape(-1).detach().cpu(),
                   f_bias.detach().cpu()]
@@ -910,6 +917,7 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
             return np.zeros((len(atoms), 3)), np.zeros(len(atoms.num_atoms))
 
         k_i, alpha_i, f_damp = self.rmsd_prelims(atoms)
+
         ref_nxyz, query_nxyz, keep_idx = self.make_nxyz(atoms=atoms)
         mol_idx = self.get_mol_idx(atoms=atoms,
                                    keep_idx=keep_idx)

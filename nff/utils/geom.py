@@ -71,7 +71,7 @@ def rotation_matrix_from_points(m0,
     # Use numpy on cpu instead
 
     if store_grad:
-        w, V = torch.symeig(f, eigenvectors=True)
+        w, V = torch.linalg.eigh(f)
         arg = w.argmax(dim=1)
         idx = list(range(len(arg)))
         q = V[idx, :, arg]
@@ -158,6 +158,7 @@ def compute_rmsd(targ_nxyz,
     xyz_1 = new_targ.repeat(num_mols_0, 1, 1)
 
     delta_sq = (xyz_0 - xyz_1) ** 2
+
     num_atoms = delta_sq.shape[1]
     distances = (((delta_sq.sum((1, 2)) / num_atoms) ** 0.5)
                  .reshape(num_mols_0, num_mols_1)
@@ -182,6 +183,7 @@ def compute_distance(targ_nxyz,
     xyz_1 = new_targ.repeat(num_mols_0, 1, 1)
 
     delta_sq = (xyz_0 - xyz_1) ** 2
+
     num_atoms = delta_sq.shape[1]
     distances = ((delta_sq.sum((1, 2)) / num_atoms) **
                  0.5).reshape(num_mols_0, num_mols_1).cpu()
@@ -210,7 +212,7 @@ def compute_distances(dataset,
         dataset_1 = dataset
 
     distance_mat = torch.zeros((len(dataset), len(dataset_1)))
-    shape = distance_mat.shape.tolist()
+    shape = list(distance_mat.shape)
     shape += [3, 3]
     R_mat = torch.zeros(tuple(shape))
 
@@ -418,9 +420,9 @@ def batch_minimize_rot_trans(ref_nxyz,
                                  num_atoms_tensor=num_atoms_tensor,
                                  store_grad=store_grad)
 
-    query_center_rot = torch.einsum('...jk,...k->...j', r, query_centered)
+    query_center_rot = torch.einsum('...kj,...k->...j', r, query_centered)
 
-    return ref_xyz, ref_centered, query_center_rot
+    return ref_xyz, ref_centered, query_center_rot, r
 
 
 def batch_compute_distance(ref_nxyz,
@@ -434,12 +436,13 @@ def batch_compute_distance(ref_nxyz,
                                    mol_idx=mol_idx,
                                    num_atoms_tensor=num_atoms_tensor,
                                    store_grad=store_grad)
-    ref_xyz, ref_centered, query_center_rot = out
+    ref_xyz, ref_centered, query_center_rot, r = out
     delta_sq = (ref_centered - query_center_rot) ** 2
     delta_sq_sum = scatter_add(src=delta_sq,
                                index=mol_idx,
                                dim=1,
                                dim_size=mol_idx.max() + 1).sum(-1)
+
     delta_sq_mean = delta_sq_sum / num_atoms_tensor.reshape(1, -1)
     rmsd = delta_sq_mean ** 0.5
 
