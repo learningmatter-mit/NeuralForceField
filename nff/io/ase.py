@@ -1,6 +1,9 @@
 import os
 import numpy as np
 import torch
+from joblib import Parallel, delayed
+from torch import multiprocessing as mp
+# import multiprocessing as mp
 
 from ase import Atoms
 from ase.neighborlist import neighbor_list
@@ -12,7 +15,7 @@ from nff.nn.utils import torch_nbr_list
 from nff.utils.cuda import batch_to
 from nff.data.sparse import sparsify_array
 from nff.train.builders.model import load_model
-from nff.utils.geom import compute_distances
+from nff.utils.geom import compute_distances, batch_compute_distance
 from nff.utils.scatter import compute_grad
 from nff.data import Dataset
 from nff.nn.graphop import split_and_sum
@@ -222,9 +225,9 @@ class AtomsBatch(Atoms):
 
     def get_batch_T(self):
 
-        T = (self.get_batch_kinetic_energy()
-             / (1.5 * units.kB * self.props['num_atoms']
-                .detach().cpu().numpy()))
+        T = (self.get_batch_kinetic_energy() /
+             (1.5 * units.kB * self.props['num_atoms']
+              .detach().cpu().numpy()))
         return T
 
     def batch_properties():
@@ -828,86 +831,116 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
                                     directed=directed,
                                     **kwargs)
 
-        # import pdb
-        # pdb.set_trace()
+    def rmsd_prelims(self, atoms):
 
-    def make_dsets(self,
-                   atoms):
+        # f_damp is the turn-on on timescale, measured in
+        # number of steps. From https://pubs.acs.org/doi/pdf/
+        # 10.1021/acs.jctc.9b00143
 
-        dset_0s = []
-        dset_1s = []
+        kappa = self.pushing_params["kappa"]
+        steps_from_old = torch.Tensor(self.steps_from_old)
+        f_damp = (2 / (1 + torch.exp(-kappa * steps_from_old)) -
+                  1)
 
-        all_idx = torch.arange(len(atoms))
-        all_idx[self.exclude_atoms] = -1
+        # k_i depends on the number of atoms so must be done by batch
+        # given in mHartree / atom in CREST paper
 
-        split_idx = list(torch.split(all_idx,
-                                     atoms.num_atoms.tolist()))
-        nxyz = atoms.get_nxyz()
-        old_nxyz_list = [old_atoms.get_nxyz() for old_atoms in self.old_atoms]
+        k_i = ((self.pushing_params['k_i'] / 1000 *
+                units.Hartree * atoms.num_atoms))
 
-        for these_idx in split_idx:
-            use_idx = these_idx[these_idx != -1]
+        # given in Bohr^(-2) in CREST paper
+        alpha_i = ((self.pushing_params['alpha_i'] /
+                    units.Bohr ** 2))
 
-            use_nxyz = [torch.Tensor(nxyz[use_idx, :])]
-            use_old_nxyz = [torch.Tensor(old_nxyz[use_idx, :])
-                            for old_nxyz in old_nxyz_list]
+        return k_i, alpha_i, f_damp
 
-            props_1 = {"nxyz": use_nxyz}
-            props_0 = {"nxyz": use_old_nxyz}
+    def make_nxyz(self,
+                  atoms):
 
-            dset_0 = Dataset(props_0, do_copy=False)
-            dset_1 = Dataset(props_1, do_copy=False)
+        keep_idx = self.get_keep_idx(atoms)
+        ref_nxyz = torch.Tensor(atoms.get_nxyz())[keep_idx, :]
+        query_nxyz = torch.stack([torch.Tensor(old_atoms.get_nxyz())[keep_idx, :]
+                                  for old_atoms in self.old_atoms])
 
-            dset_0s.append(dset_0)
-            dset_1s.append(dset_1)
+        return ref_nxyz, query_nxyz, keep_idx
 
-        return dset_0s, dset_1s
+    def get_mol_idx(self,
+                    atoms,
+                    keep_idx):
+
+        num_atoms = atoms.num_atoms
+        counter = 0
+
+        mol_idx = []
+
+        for i, num in enumerate(num_atoms):
+            mol_idx.append(torch.ones(num).long() * i)
+            counter += num
+
+        mol_idx = torch.cat(mol_idx)[keep_idx]
+
+        return mol_idx
+
+    def get_num_atoms_tensor(self,
+                             mol_idx,
+                             atoms):
+
+        num_atoms = torch.LongTensor([(mol_idx == i).nonzero().shape[0]
+                                      for i in range(len(atoms.num_atoms))])
+
+        return num_atoms
+
+    def get_v_f_bias(self,
+                     rmsd,
+                     ref_xyz,
+                     k_i,
+                     alpha_i,
+                     f_damp):
+
+        v_bias = (f_damp.reshape(-1, 1) * k_i *
+                  torch.exp(-alpha_i * rmsd ** 2)).sum()
+        f_bias = -compute_grad(inputs=ref_xyz,
+                               output=v_bias)
+
+        output = [v_bias.reshape(-1).detach().cpu(),
+                  f_bias.detach().cpu()]
+
+        return output
 
     def rmsd_push(self, atoms):
 
         if not self.old_atoms:
             return np.zeros((len(atoms), 3)), np.zeros(len(atoms.num_atoms))
 
-        _, alpha_i, dsets, f_damp = self.rmsd_prelims(atoms)
-        # k_i depends on the number of atoms so must be done by batch
-        k_i = ((self.pushing_params['k_i'] / 1000 *
-                units.Hartree * atoms.num_atoms))
+        k_i, alpha_i, f_damp = self.rmsd_prelims(atoms)
+        ref_nxyz, query_nxyz, keep_idx = self.make_nxyz(atoms=atoms)
+        mol_idx = self.get_mol_idx(atoms=atoms,
+                                   keep_idx=keep_idx)
+        num_atoms_tensor = self.get_num_atoms_tensor(mol_idx=mol_idx,
+                                                     atoms=atoms)
 
-        f_biases = []
-        v_biases = []
+        # note - everything is done on CPU, which is much faster than GPU. E.g. for
+        # 30 molecules in a batch, each around 70 atoms, it's 4 times faster to do
+        # this on CPU than GPU
 
-        dset0s, dset1s = dsets
+        rmsd, ref_xyz = batch_compute_distance(ref_nxyz=ref_nxyz,
+                                               query_nxyz=query_nxyz,
+                                               mol_idx=mol_idx,
+                                               num_atoms_tensor=num_atoms_tensor,
+                                               store_grad=True)
 
-        for j, dset_0 in enumerate(dset0s):
+        v_bias, f_bias = self.get_v_f_bias(rmsd=rmsd,
+                                           ref_xyz=ref_xyz,
+                                           k_i=k_i,
+                                           alpha_i=alpha_i,
+                                           f_damp=f_damp)
 
-            dset_1 = dset1s[j]
-            delta_i, _, xyz_list = compute_distances(
-                dataset=dset_0,
-                device='cpu',
-                dataset_1=dset_1,
-                store_grad=True,
-                collate_dicts=collate_dicts)
-
-            v_bias = (f_damp * k_i[j] * torch.exp(-alpha_i * delta_i.reshape(-1) ** 2)
-                      ).sum()
-
-            f_bias = -compute_grad(inputs=xyz_list[0],
-                                   output=v_bias).sum(0).detach().cpu()
-            v_bias = v_bias.detach().cpu()
-
-            v_biases.append(v_bias.reshape(-1))
-            f_biases.append(f_bias)
-
-        v_biases = torch.cat(v_biases)
-        f_biases = torch.cat(f_biases)
-
-        keep_idx = self.get_keep_idx(atoms)
         final_f_bias = torch.zeros(len(atoms), 3)
-        final_f_bias[keep_idx] = f_biases
+        final_f_bias[keep_idx] = f_bias
         nan_idx = torch.bitwise_not(torch.isfinite(final_f_bias))
         final_f_bias[nan_idx] = 0
 
-        return final_f_bias.numpy(), v_biases.numpy()
+        return final_f_bias.numpy(), v_bias.numpy()
 
 
 class NeuralGAMD(NeuralFF):
