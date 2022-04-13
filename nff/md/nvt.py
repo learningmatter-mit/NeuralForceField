@@ -406,6 +406,7 @@ class BatchNoseHoover(MolecularDynamics):
         # intialize system momentum
         momenta = []
         # split AtomsBatch into separate Atoms objects
+
         for atoms in self.atoms.get_list_atoms():
             # set MaxwellBoltzmannDistribution for each Atoms objects separately
 
