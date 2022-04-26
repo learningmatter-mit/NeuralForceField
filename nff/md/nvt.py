@@ -559,8 +559,12 @@ class BatchNoseHooverMetadynamics(BatchNoseHoover,
                  loginterval=1,
                  **kwargs):
 
-        if "maxwell_temp" in kwargs:
+        # follow Nose-Hoover here and default to 2 * T
+
+        if kwargs.get("maxwell_temp") is not None:
             kwargs["T_init"] = kwargs["maxwell_temp"]
+        else:
+            kwargs["T_init"] = 2 * temperature
 
         BatchNoseHoover.__init__(self,
                                  atoms=atomsbatch,
