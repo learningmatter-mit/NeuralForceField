@@ -1,6 +1,10 @@
-"""Helper functions to create models, functions and other classes
-    while checking for the validity of hyperparameters.
 """
+Helper functions to create models, functions and other classes
+while checking for the validity of hyperparameters.
+"""
+from nff.nn.models.spooky import SpookyNet, RealSpookyNet
+from nff.nn.models.torchmd_net import TorchMDNet
+from nff.nn.models.spooky_painn import SpookyPainn, SpookyPainnDiabat
 import os
 import json
 import numpy as np
@@ -11,10 +15,9 @@ from nff.nn.models.conformers import WeightedConformers
 from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import ChemProp3D, OnlyBondUpdateCP3D
 from nff.nn.models.dimenet import DimeNet, DimeNetDiabat, DimeNetDiabatDelta, DimeNetDelta
-from nff.nn.models.painn import Painn, PainnDiabat, PainnTransformer, PainnAdiabat
-from nff.nn.models.spooky_painn import SpookyPainn, SpookyPainnDiabat
-from nff.nn.models.torchmd_net import TorchMDNet
-from nff.nn.models.spooky import SpookyNet, RealSpookyNet
+from nff.nn.models.painn import (Painn, PainnDiabat, PainnTransformer,
+                                 PainnAdiabat)
+from nff.nn.models.dispersion_models import PainnDispersion
 
 PARAMS_TYPE = {"SchNet":
                {
@@ -320,7 +323,24 @@ PARAMS_TYPE = {"SchNet":
                    "load_from": str,
                    "Zmax": int,
                    "zero_init": bool
-               }
+               },
+
+               "PainnDispersion":
+               {
+                   "functional": str,
+                   "disp_type": str,
+                   "feat_dim": int,
+                   "activation": str,
+                   "n_rbf": int,
+                   "cutoff": float,
+                   "num_conv": int,
+                   "output_keys": list,
+                   "grad_keys": list,
+                   "excl_vol": bool,
+                   "V_ex_power": int,
+                   "V_ex_sigma": float
+               },
+
 
                }
 
@@ -344,7 +364,8 @@ MODEL_DICT = {
     "SpookyNet": SpookyNet,
     "SpookyPainn": SpookyPainn,
     "SpookyPainnDiabat": SpookyPainnDiabat,
-    "RealSpookyNet": RealSpookyNet
+    "RealSpookyNet": RealSpookyNet,
+    "PainnDispersion": PainnDispersion
 
 }
 

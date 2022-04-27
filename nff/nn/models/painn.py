@@ -1,7 +1,6 @@
 from torch import nn
 import numpy as np
 import copy
-from nff.train import batch_detach
 from nff.utils.tools import make_directed
 from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
                                   EmbeddingBlock, ReadoutBlock,
@@ -20,6 +19,7 @@ POOL_DIC = {"sum": SumPool,
 
 
 class Painn(nn.Module):
+
     def __init__(self,
                  modelparams):
         """
@@ -188,6 +188,9 @@ class Painn(nn.Module):
              atomwise_out,
              xyz,
              inference=False):
+
+        # import here to avoid circular imports
+        from nff.train import batch_detach
 
         if not hasattr(self, "output_keys"):
             self.output_keys = list(self.readout_blocks[0]

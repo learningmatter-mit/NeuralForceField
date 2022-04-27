@@ -18,7 +18,7 @@ from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
 from nff.data.features import add_morgan as external_morgan
 from nff.data.features import featurize_rdkit as external_rdkit
 from nff.data.graphs import (get_bond_idx, reconstruct_atoms,
-                             get_neighbor_list,  generate_subgraphs,
+                             get_neighbor_list, generate_subgraphs,
                              DISTANCETHRESHOLDICT_Z, get_angle_list,
                              add_ji_kj, make_dset_directed)
 
@@ -27,7 +27,11 @@ class Dataset(TorchDataset):
     """Dataset to deal with NFF calculations.
 
     Attributes:
-        props (list of dicts): list of dictionaries containing all properties of the system.
+        props (dict of lists): dictionary, where each key is the name of a property and
+            each value is a list. The element of each list is the properties of a single
+            geometry, whose coordinates are given by
+            `nxyz`.
+
             Keys are the name of the property and values are the properties. Each value
             is given by `props[idx][key]`. The only mandatory key is 'nxyz'. If inputting
             energies, forces or hessians of different electronic states, the quantities
@@ -38,16 +42,19 @@ class Dataset(TorchDataset):
             Example:
 
                 props = {
-                    'nxyz': [np.array([[1, 0, 0, 0], [1, 1.1, 0, 0]]), np.array([[1, 3, 0, 0], [1, 1.1, 5, 0]])],
+                    'nxyz': [np.array([[1, 0, 0, 0], [1, 1.1, 0, 0]]),
+                             np.array([[1, 3, 0, 0], [1, 1.1, 5, 0]])],
                     'energy_0': [1, 1.2],
-                    'energy_0_grad': [np.array([[0, 0, 0], [0.1, 0.2, 0.3]]), np.array([[0, 0, 0], [0.1, 0.2, 0.3]])],
+                    'energy_0_grad': [np.array([[0, 0, 0], [0.1, 0.2, 0.3]]),
+                                      np.array([[0, 0, 0], [0.1, 0.2, 0.3]])],
                     'energy_1': [1.5, 1.5],
-                    'energy_1_grad': [np.array([[0, 0, 1], [0.1, 0.5, 0.8]]), np.array([[0, 0, 1], [0.1, 0.5, 0.8]])],
+                    'energy_1_grad': [np.array([[0, 0, 1], [0.1, 0.5, 0.8]]),
+                                      np.array([[0, 0, 1], [0.1, 0.5, 0.8]])],
                     'dipole_2': [3, None]
                 }
 
-            Periodic boundary conditions must be specified through the 'offset' key in props.
-                Once the neighborlist is created, distances between
+            Periodic boundary conditions must be specified through the 'offset' key in
+                props. Once the neighborlist is created, distances between
                 atoms are computed by subtracting their xyz coordinates
                 and adding to the offset vector. This ensures images
                 of atoms outside of the unit cell have different
