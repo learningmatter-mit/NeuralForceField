@@ -224,7 +224,7 @@ class BatchedBFGS(BFGS):
         self.num_atoms = self.atoms.num_atoms.numpy().astype('int')
 
         self.split_h0()
-        self.eigval_update_period = kwargs.get("eigval_update_period", 1)
+        self.eigval_update_period = kwargs.get("eigval_update_period", 3)
         self.counter = 0
         self.eigvecs = None
         self.eigvals = None
