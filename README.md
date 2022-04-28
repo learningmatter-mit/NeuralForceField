@@ -16,7 +16,7 @@ conda env create -f environment.yaml
 or install packages manually with
 
 ```bash
-conda create -n nff python=3.7.10 scikit-learn==0.24.1 pytorch=1.9.0 cudatoolkit=10.2 ase==3.21.1 pandas==1.2.2 pymatgen==2021.2.16 sympy==1.7.1 rdkit==2020.09.4 hyperopt==0.2.5 jq==1.6 openbabel==3.1.1 -c pytorch -c conda-forge -c rdkit -c openbabel
+conda create -n nff python=3.7.10 scikit-learn==0.24.1 pytorch=1.9.0 cudatoolkit=10.2 ase==3.22.1 pandas==1.2.2 pymatgen==2021.2.16 sympy==1.7.1 rdkit==2020.09.4 hyperopt==0.2.5 jq==1.6 openbabel==3.1.1 -c pytorch -c conda-forge -c rdkit -c openbabel
 ```
 
 and install the remaining pip requirements:
