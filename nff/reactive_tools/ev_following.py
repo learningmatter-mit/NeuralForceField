@@ -111,7 +111,7 @@ def eigvec_following(ev_atoms,
                   ).reshape(-1, len(old_xyz[0]), Ndim)
 
     step_size = h.norm()
-    
+
     if(step_size <= maxstepsize):
         new_xyz = old_xyz + h
     else:
@@ -183,12 +183,12 @@ def ev_run(ev_atoms,
         print("RMS: {}, MAX: {}".format(
             grad.pow(2).sqrt().mean(), grad.pow(2).sqrt().max()))
 
+        positions = xyz.reshape(-1, 3).cpu().numpy()
+        ev_atoms.set_positions(positions)
+
         if grad.pow(2).sqrt().max() < convergence:
             print(CONVG_LINE)
             break
-
-        positions = xyz.reshape(-1, 3).cpu().numpy()
-        ev_atoms.set_positions(positions)
 
     output = xyz, grad, xyz_all, rmslist, maxlist
     return output
