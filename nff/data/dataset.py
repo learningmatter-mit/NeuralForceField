@@ -261,6 +261,7 @@ class Dataset(TorchDataset):
         for nxyz, lattice in zip(self.props['nxyz'], self.props['lattice']):
             atoms = AtomsBatch(
                 nxyz[:, 0].long(),
+                props={'num_atoms': torch.LongTensor([len(nxyz[:,0])])},
                 positions=nxyz[:, 1:],
                 cell=lattice,
                 pbc=True,
