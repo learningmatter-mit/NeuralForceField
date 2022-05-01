@@ -183,12 +183,17 @@ def ev_run(ev_atoms,
         print("RMS: {}, MAX: {}".format(
             grad.pow(2).sqrt().mean(), grad.pow(2).sqrt().max()))
 
-        positions = xyz.reshape(-1, 3).cpu().numpy()
-        ev_atoms.set_positions(positions)
-
         if grad.pow(2).sqrt().max() < convergence:
             print(CONVG_LINE)
             break
 
+        positions = xyz.reshape(-1, 3).cpu().numpy()
+        ev_atoms.set_positions(positions)
+
+    # so that we're returning the xyz that has gradient `grad`, not whatever
+    # the xyz of the next step would be
+    xyz = torch.Tensor(ev_atoms.get_positions()).reshape(1, -1, 3)
+
     output = xyz, grad, xyz_all, rmslist, maxlist
+
     return output
