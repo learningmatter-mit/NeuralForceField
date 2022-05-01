@@ -216,18 +216,11 @@ def split(array, num_atoms):
 
 class BatchedBFGS(BFGS):
 
-    def __init__(self,
-                 *args,
-                 **kwargs):
-
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_atoms = self.atoms.num_atoms.numpy().astype('int')
 
         self.split_h0()
-        self.eigval_update_period = kwargs.get("eigval_update_period", 3)
-        self.counter = 0
-        self.eigvecs = None
-        self.eigvals = None
 
     def determine_step(self, dr, steplengths, f):
 
@@ -256,26 +249,6 @@ class BatchedBFGS(BFGS):
 
         return dr
 
-    def needs_update(self):
-        return (self.counter) % self.eigval_update_period == 0
-
-    def get_eigs(self,
-                 H,
-                 idx):
-
-        needs_update = self.needs_update()
-
-        use_old = all([self.eigvecs is not None,
-                       self.eigvals is not None,
-                       not needs_update])
-
-        if use_old:
-            return self.eigvals[idx], self.eigvecs[idx]
-
-        else:
-            omega, V = np.linalg.eigh(H)
-            return omega, V
-
     def step(self, f=None):
         atoms = self.atoms
 
@@ -289,29 +262,18 @@ class BatchedBFGS(BFGS):
         drs = []
         start = 0
 
-        eigvecs = []
-        eigvals = []
-
         for i, H in enumerate(self.H):
 
             num_atoms = self.num_atoms[i]
             delta = num_atoms * 3
             stop = start + delta
 
-            omega, V = self.get_eigs(H=H,
-                                     idx=i)
-
+            omega, V = np.linalg.eigh(H)
             this_dr = np.dot(V, np.dot(f[start: stop], V) /
                              np.fabs(omega)).reshape((-1, 3))
             drs.append(this_dr)
 
             start += delta
-
-            eigvecs.append(V)
-            eigvals.append(omega)
-
-        self.eigvecs = eigvecs
-        self.eigvals = eigvals
 
         dr = np.concatenate(drs)
         steplengths = (dr**2).sum(1)**0.5
@@ -320,8 +282,6 @@ class BatchedBFGS(BFGS):
         self.r0 = r.flat.copy()
         self.f0 = f.copy()
         self.dump((self.H, self.r0, self.f0, self.maxstep))
-
-        self.counter += 1
 
     def split_h0(self):
 
@@ -344,9 +304,6 @@ class BatchedBFGS(BFGS):
         if self.H is None:
             self.H = self.H0
             return
-
-        # if not self.needs_update():
-        #     return
 
         split_f = split(f, self.num_atoms)
         split_f0 = split(f0, self.num_atoms)
