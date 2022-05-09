@@ -1,0 +1,21 @@
+{
+
+  "summary_path": "/home/saxelrod/Repo/projects/master/NeuralForceField/tutorials/data/uvvis_cp3d/summary.json",
+  "csv_folder": "/home/saxelrod/Repo/projects/master/NeuralForceField/tutorials/data/uvvis_cp3d",
+  "cp_folder": "/home/saxelrod/Repo/projects/chemprop/chemprop",
+  "props": ["peakwavs_max"],
+  "split_sizes": [
+    0.8,
+    0.1,
+    0.1
+  ],
+ "split_type": "scaffold_balanced",
+ "max_specs": null,
+ "max_atoms": null,
+ "dataset_type": "regression",
+ "seed": 0
+}
+
+
+
+

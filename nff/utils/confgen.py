@@ -74,7 +74,7 @@ def align_rmsd(file1, file2, path, smarts=None):
                                   shell=False,
                                   universal_newlines=False,
                                   timeout=DEFAULT_GEOM_COMPARE_TIMEOUT)
-    rmsd = ret.decode('utf-8').split()[-4]
+    rmsd = ret.decode('utf-8').split()[-1]
     return float(rmsd)
 
 
@@ -290,7 +290,8 @@ class ConformerGenerator(object):
                                      key + "_Conf_" + str(j + 1),
                                      str(molecule),
                                      path=path)
-                except (subprocess.CalledProcessError, ValueError) as e:
+                except (subprocess.CalledProcessError, ValueError,
+                        subprocess.TimeoutExpired) as e:
                     if fallback_to_align:
                         output.write(
                             'obfit failed, falling back to obabel --align')
@@ -299,7 +300,7 @@ class ConformerGenerator(object):
                             rms = align_rmsd(f"{key}_Conf_{str(i + 1)}",
                                              f"{key}_Conf_{str(j + 1)}",
                                              path)
-                        except ValueError:
+                        except (ValueError, subprocess.TimeoutExpired):
                             continue
                     else:
                         continue
@@ -320,7 +321,8 @@ class ConformerGenerator(object):
                         file1 = key + "_Conf_" + str(i + 1)
                         file2 = key + "_Conf_" + str(j + 1) + "_inv"
                         rmsinv = obfit_rmsd(file1, file2, str(molecule))
-                    except (subprocess.CalledProcessError, ValueError) as e:
+                    except (subprocess.CalledProcessError, ValueError,
+                            subprocess.TimeoutExpired) as e:
                         if fallback_to_align:
                             output.write(
                                 'obfit failed, falling back to obabel --align')
@@ -329,7 +331,7 @@ class ConformerGenerator(object):
                                 i_key = f"{key}_Conf_{str(i + 1)}"
                                 inv_key = f"{key}_Conf_{str(j + 1)}_inv"
                                 rmsinv = align_rmsd(i_key, inv_key)
-                            except ValueError:
+                            except (ValueError, subprocess.TimeoutExpired):
                                 continue
                         else:
                             continue

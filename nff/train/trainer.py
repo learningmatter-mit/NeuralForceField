@@ -295,6 +295,7 @@ class Trainer:
         return loss
 
     def optim_step(self, batch_num, device):
+
         if self.parallel and not self.torch_parallel:
             self.optimizer = update_optim(optimizer=self.optimizer,
                                           loss_size=self.nloss,

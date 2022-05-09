@@ -20,7 +20,8 @@ layer_types = {
     "Dropout": torch.nn.Dropout,
     "LeakyReLU": torch.nn.LeakyReLU,
     "ELU": torch.nn.ELU,
-    "Diagonalize": Diagonalize
+    "Diagonalize": Diagonalize,
+    "swish": torch.nn.SiLU
 }
 
 
@@ -108,9 +109,9 @@ def torch_nbr_list(atomsobject,
     if any(atomsobject.pbc):
         if np.count_nonzero(atomsobject.cell.T-np.diag(np.diagonal(atomsobject.cell.T)))!=0:
             M,N=dis_mat.shape[0],dis_mat.shape[1]
-            f=torch.linalg.solve(torch.Tensor(atomsobject.cell.T),(dis_mat.view(-1,3).T)).T
+            f=torch.linalg.solve(torch.Tensor(atomsobject.cell.T).to(device),(dis_mat.view(-1,3).T)).T
             g=f-torch.floor(f+0.5)
-            dis_mat=torch.matmul(g,torch.Tensor(atomsobject.cell))
+            dis_mat=torch.matmul(g,torch.Tensor(atomsobject.cell).to(device))
             dis_mat=dis_mat.view(M,N,3)
             offsets=-torch.floor(f+0.5).view(M,N,3)
         else:

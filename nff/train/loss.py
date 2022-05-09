@@ -100,6 +100,16 @@ def mse_operation(targ, pred):
     return diff
 
 
+def rms_operation(targ, pred):
+    return mse_operation(targ, pred) ** 0.5
+
+
+def mae_operation(targ, pred):
+    targ = targ.to(torch.float)
+    diff = abs(targ - pred)
+    return diff
+
+
 def cross_entropy(targ, pred):
     """
     Take the cross-entropy between predicted and target.
@@ -263,27 +273,39 @@ def build_mse_loss(loss_coef,
     return loss_fn
 
 
-def build_rmse_loss(loss_coef):
-    def loss_fn(ground_truth,
-                results):
-        loss = 0.0
-        for key, coef in loss_coef.items():
-            targ = ground_truth[key]
-            pred = results[key].view(targ.shape)
+def build_mae_loss(loss_coef,
+                   correspondence_keys=None,
+                   cutoff=None):
+    """
+    Build MSE loss from loss_coef.
+    Args:
+        loss_coef, correspondence_keys: see `build_general_loss`.
+    Returns:
+        loss_fn (function): loss function
+    """
 
-            # select only properties which are given
-            valid_idx = torch.bitwise_not(torch.isnan(targ))
-            targ = targ[valid_idx]
-            pred = pred[valid_idx]
+    loss_fn = build_general_loss(loss_coef=loss_coef,
+                                 operation=mae_operation,
+                                 correspondence_keys=correspondence_keys,
+                                 cutoff=cutoff)
+    return loss_fn
 
-            # import pdb
-            # pdb.set_trace()
-            if len(targ) != 0:
-                diff = mse_operation(targ=targ, pred=pred)
-                err_sq = coef * torch.mean(diff) ** 0.5
-                loss += err_sq
 
-        return loss
+def build_rmse_loss(loss_coef,
+                    correspondence_keys=None,
+                    cutoff=None):
+    """
+    Build MSE loss from loss_coef.
+    Args:
+        loss_coef, correspondence_keys: see `build_general_loss`.
+    Returns:
+        loss_fn (function): loss function
+    """
+
+    loss_fn = build_general_loss(loss_coef=loss_coef,
+                                 operation=rms_operation,
+                                 correspondence_keys=correspondence_keys,
+                                 cutoff=cutoff)
     return loss_fn
 
 
@@ -558,7 +580,10 @@ def build_nacv_loss(loss_dict):
 
     params = loss_dict["params"]
     key = params["key"]
+    loss_type = params.get("loss_type", "mse")
+
     coef = loss_dict["coef"]
+
     take_abs = params.get("abs", False)
     take_max = params.get("max", False)
 
@@ -589,7 +614,13 @@ def build_nacv_loss(loss_dict):
             targ = targ[idx]
             pred = pred[idx]
 
-        diff = mse_operation(targ, pred)
+        if loss_type == "mse":
+            diff = mse_operation(targ, pred)
+        elif loss_type == "mae":
+            diff = mae_operation(targ, pred)
+        else:
+            raise NotImplementedError
+
         loss = coef * torch.mean(diff)
 
         return loss
@@ -637,6 +668,8 @@ def build_trans_dip_loss(loss_dict):
 def name_to_func(name):
     dic = {
         "mse": build_mse_loss,
+        "mae": build_mae_loss,
+        "rmse": build_rmse_loss,
         "cross_entropy": build_cross_entropy_loss,
         "logits_cross_entropy": build_logits_cross_entropy_loss,
         "zhu": build_zhu_loss,
@@ -656,7 +689,7 @@ def get_all_losses(multi_loss_dict):
         build_fn = name_to_func(key)
 
         # for backwards compatability
-        if key == "mse":
+        if key in ["mse", "mae", "rmse"]:
             loss_coef = {sub_dic["params"]["key"]:
                          sub_dic["coef"] for sub_dic in loss_list}
             cutoff = {}

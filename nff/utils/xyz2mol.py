@@ -22,7 +22,7 @@ import signal
 
 from rdkit.Chem import rdmolops
 try:
-    from rdkit.Chem import rdEHTTools #requires RDKit 2019.9.1 or later
+    from rdkit.Chem import rdEHTTools  # requires RDKit 2019.9.1 or later
 except ImportError:
     rdEHTTools = None
 
@@ -32,7 +32,9 @@ import numpy as np
 import networkx as nx
 
 from rdkit import Chem
-from rdkit.Chem import AllChem, rdmolops
+from rdkit.Chem import AllChem, rdmolops, GetPeriodicTable
+from rdkit.Chem.rdchem import EditableMol
+
 
 global __ATOM_LIST__
 __ATOM_LIST__ = \
@@ -53,45 +55,31 @@ global atomic_valence
 global atomic_valence_electrons
 
 atomic_valence = defaultdict(list)
-atomic_valence[1] = [1]
-# give Boron three bonds
-atomic_valence[5] = [3]
-atomic_valence[6] = [4]
-atomic_valence[7] = [3,4]
-atomic_valence[8] = [2,1]
-atomic_valence[9] = [1]
-atomic_valence[14] = [4]
-atomic_valence[15] = [5,3] #[5,4,3]
-atomic_valence[16] = [6,3,2] #[6,4,2]
-atomic_valence[17] = [1]
-atomic_valence[32] = [4]
-atomic_valence[35] = [1]
-atomic_valence[53] = [1]
-# treat bismuth like phosphorus
-atomic_valence[83] = [5, 3] 
 
 atomic_valence_electrons = {}
-atomic_valence_electrons[1] = 1
-atomic_valence_electrons[5] = 3
-atomic_valence_electrons[6] = 4
-atomic_valence_electrons[7] = 5
-atomic_valence_electrons[8] = 6
-atomic_valence_electrons[9] = 7
-atomic_valence_electrons[14] = 4
-atomic_valence_electrons[15] = 5
-atomic_valence_electrons[16] = 6
-atomic_valence_electrons[17] = 7
-atomic_valence_electrons[32] = 4
-atomic_valence_electrons[35] = 7
-atomic_valence_electrons[53] = 7
-atomic_valence_electrons[83] = 5
+PERIODICTABLE = GetPeriodicTable()
+
+
+for i in range(100):
+    dics = [atomic_valence, atomic_valence_electrons]
+    if all([i in dic for dic in dics]):
+        continue
+
+    valence_list = [j for j in PERIODICTABLE.GetValenceList(i)]
+    valence_num = PERIODICTABLE.GetNOuterElecs(i)
+
+    atomic_valence[i] = valence_list
+    atomic_valence_electrons[i] = valence_num
+
 
 DEFAULT_SAVE = "mol.pickle"
-# give up after 20 minutes
-MAX_TIME = 1200
+# give up after 10 minutes
+MAX_TIME = 600
+
 
 class TimeoutError(Exception):
     pass
+
 
 def timeout(seconds, error_message=os.strerror(errno.ETIME)):
     def decorator(func):
@@ -101,6 +89,7 @@ def timeout(seconds, error_message=os.strerror(errno.ETIME)):
         def wrapper(*args, **kwargs):
             signal.signal(signal.SIGALRM, _handle_timeout)
             signal.alarm(seconds)
+
             try:
                 result = func(*args, **kwargs)
             finally:
@@ -175,7 +164,7 @@ def valences_not_too_large(BO, valences):
 
 
 def BO_is_OK(BO, AC, charge, DU, atomic_valence_electrons, atoms, valances,
-    allow_charged_fragments=True):
+             allow_charged_fragments=True):
     """
     Sanity of bond-orders
 
@@ -207,7 +196,8 @@ def BO_is_OK(BO, AC, charge, DU, atomic_valence_electrons, atoms, valances,
 
         BO_valences = list(BO.sum(axis=1))
         for i, atom in enumerate(atoms):
-            q = get_atomic_charge(atom, atomic_valence_electrons[atom], BO_valences[i])
+            q = get_atomic_charge(
+                atom, atomic_valence_electrons[atom], BO_valences[i])
             Q += q
             if atom == 6:
                 number_of_single_bonds_to_C = list(BO[i, :]).count(1)
@@ -256,7 +246,8 @@ def clean_charges(mol):
     """
 
     Chem.SanitizeMol(mol)
-    #rxn_smarts = ['[N+:1]=[*:2]-[C-:3]>>[N+0:1]-[*:2]=[C-0:3]',
+
+    # rxn_smarts = ['[N+:1]=[*:2]-[C-:3]>>[N+0:1]-[*:2]=[C-0:3]',
     #              '[N+:1]=[*:2]-[O-:3]>>[N+0:1]-[*:2]=[O-0:3]',
     #              '[N+:1]=[*:2]-[*:3]=[*:4]-[O-:5]>>[N+0:1]-[*:2]=[*:3]-[*:4]=[O-0:5]',
     #              '[#8:1]=[#6:2]([!-:6])[*:3]=[*:4][#6-:5]>>[*-:1][*:2]([*:6])=[*:3][*:4]=[*+0:5]',
@@ -268,7 +259,7 @@ def clean_charges(mol):
                   '[#6,#7:1]1=[#6,#7:2][#6,#7:3](=[#6,#7:4])[#6,#7:5]=[#6,#7:6][CX3-,NX3-:7]1>>'
                   '[#6,#7:1]1=[#6,#7:2][#6,#7:3]([#6-,#7-:4])=[#6,#7:5][#6,#7:6]=[-0,-0:7]1']
 
-    fragments = Chem.GetMolFrags(mol,asMols=True,sanitizeFrags=False)
+    fragments = Chem.GetMolFrags(mol, asMols=True, sanitizeFrags=False)
 
     for i, fragment in enumerate(fragments):
         for smarts in rxn_smarts:
@@ -314,7 +305,8 @@ def BO2mol(mol, BO_matrix, atoms, atomic_valence_electrons,
     BO_valences = list(BO_matrix.sum(axis=1))
 
     if (l != l2):
-        raise RuntimeError('sizes of adjMat ({0:d}) and Atoms {1:d} differ'.format(l, l2))
+        raise RuntimeError(
+            'sizes of adjMat ({0:d}) and Atoms {1:d} differ'.format(l, l2))
 
     rwMol = Chem.RWMol(mol)
 
@@ -343,7 +335,8 @@ def BO2mol(mol, BO_matrix, atoms, atomic_valence_electrons,
             BO_matrix,
             mol_charge)
     else:
-        mol = set_atomic_radicals(mol, atoms, atomic_valence_electrons, BO_valences)
+        mol = set_atomic_radicals(
+            mol, atoms, atomic_valence_electrons, BO_valences)
 
     return mol
 
@@ -355,7 +348,8 @@ def set_atomic_charges(mol, atoms, atomic_valence_electrons,
     q = 0
     for i, atom in enumerate(atoms):
         a = mol.GetAtomWithIdx(i)
-        charge = get_atomic_charge(atom, atomic_valence_electrons[atom], BO_valences[i])
+        charge = get_atomic_charge(
+            atom, atomic_valence_electrons[atom], BO_valences[i])
         q += charge
         if atom == 6:
             number_of_single_bonds_to_C = list(BO_matrix[i, :]).count(1)
@@ -472,8 +466,8 @@ def AC2BO(AC, atoms, charge, allow_charged_fragments=True, use_graph=True):
         check_len = (len(UA) == 0)
         if check_len:
             check_bo = BO_is_OK(AC, AC, charge, DU_from_AC,
-                atomic_valence_electrons, atoms, valences,
-                allow_charged_fragments=allow_charged_fragments)
+                                atomic_valence_electrons, atoms, valences,
+                                allow_charged_fragments=allow_charged_fragments)
         else:
             check_bo = None
 
@@ -482,10 +476,11 @@ def AC2BO(AC, atoms, charge, allow_charged_fragments=True, use_graph=True):
 
         UA_pairs_list = get_UA_pairs(UA, AC, use_graph=use_graph)
         for UA_pairs in UA_pairs_list:
-            BO = get_BO(AC, UA, DU_from_AC, valences, UA_pairs, use_graph=use_graph)
+            BO = get_BO(AC, UA, DU_from_AC, valences,
+                        UA_pairs, use_graph=use_graph)
             status = BO_is_OK(BO, AC, charge, DU_from_AC,
-                        atomic_valence_electrons, atoms, valences,
-                        allow_charged_fragments=allow_charged_fragments)
+                              atomic_valence_electrons, atoms, valences,
+                              allow_charged_fragments=allow_charged_fragments)
 
             if status:
                 return BO, atomic_valence_electrons
@@ -643,7 +638,7 @@ def get_AC(mol, covalent_factor=1.3):
     return AC
 
 
-def xyz2AC_huckel(atomicNumList,xyz,charge):
+def xyz2AC_huckel(atomicNumList, xyz, charge):
     """
 
     args
@@ -660,25 +655,27 @@ def xyz2AC_huckel(atomicNumList,xyz,charge):
 
     conf = Chem.Conformer(mol.GetNumAtoms())
     for i in range(mol.GetNumAtoms()):
-        conf.SetAtomPosition(i,(xyz[i][0],xyz[i][1],xyz[i][2]))
+        conf.SetAtomPosition(i, (xyz[i][0], xyz[i][1], xyz[i][2]))
     mol.AddConformer(conf)
 
     num_atoms = len(atomicNumList)
-    AC = np.zeros((num_atoms,num_atoms)).astype(int)
+    AC = np.zeros((num_atoms, num_atoms)).astype(int)
 
     mol_huckel = Chem.Mol(mol)
-    mol_huckel.GetAtomWithIdx(0).SetFormalCharge(charge) #mol charge arbitrarily added to 1st atom    
+    # mol charge arbitrarily added to 1st atom
+    mol_huckel.GetAtomWithIdx(0).SetFormalCharge(charge)
 
-    passed,result = rdEHTTools.RunMol(mol_huckel)
+    passed, result = rdEHTTools.RunMol(mol_huckel)
     opop = result.GetReducedOverlapPopulationMatrix()
     tri = np.zeros((num_atoms, num_atoms))
-    tri[np.tril(np.ones((num_atoms, num_atoms), dtype=bool))] = opop #lower triangular to square matrix
+    tri[np.tril(np.ones((num_atoms, num_atoms), dtype=bool))
+        ] = opop  # lower triangular to square matrix
     for i in range(num_atoms):
-        for j in range(i+1,num_atoms):
-            pair_pop = abs(tri[j,i])   
-            if pair_pop >= 0.15: #arbitry cutoff for bond. May need adjustment
-                AC[i,j] = 1
-                AC[j,i] = 1
+        for j in range(i+1, num_atoms):
+            pair_pop = abs(tri[j, i])
+            if pair_pop >= 0.15:  # arbitry cutoff for bond. May need adjustment
+                AC[i, j] = 1
+                AC[j, i] = 1
 
     return AC, mol
 
@@ -698,13 +695,79 @@ def chiral_stereo_check(mol):
 
     return
 
+
+def check_mol(mol,
+              coordinates):
+
+    conf = mol.GetConformers()[0]
+    new_coords = conf.GetPositions()
+    old_coords = np.array(coordinates)
+
+    delta = np.linalg.norm(new_coords - old_coords)
+    if delta < 1e-2:
+        return mol
+
+    # sometimes the positions of the atoms get rearranged for some reason
+
+    new_pos = mol.GetConformers()[0].GetPositions()
+
+    dist = np.linalg.norm(new_pos.reshape(1, *new_pos.shape) -
+                          old_coords.reshape(old_coords.shape[0],
+                                             1,
+                                             old_coords.shape[1]),
+                          axis=-1)
+
+    new_idx = dist.argmin(-1).tolist()
+    rev_idx = dist.argmin(0).tolist()
+
+    ed_mol = EditableMol(Chem.MolFromSmiles(''))
+
+    for i, idx in enumerate(new_idx):
+        atom = mol.GetAtoms()[idx]
+        ed_mol.AddAtom(atom)
+
+    all_old_bond_idx = []
+    all_old_bond_types = []
+
+    for i, atom in enumerate(mol.GetAtoms()):
+
+        bonds = atom.GetBonds()
+        old_bond_idx = [[i.GetBeginAtomIdx(), i.GetEndAtomIdx()]
+                        for i in bonds]
+        bond_types = [i.GetBondType() for i in bonds]
+
+        use_idx = [j for j, idx in enumerate(old_bond_idx)
+                   if idx not in all_old_bond_idx]
+
+        all_old_bond_idx += [old_bond_idx[j] for j in use_idx]
+        all_old_bond_types += [bond_types[j] for j in use_idx]
+
+    for bond_idx, bond_type in zip(all_old_bond_idx, all_old_bond_types):
+        new_bond_idx = [rev_idx[bond_idx[0]],
+                        rev_idx[bond_idx[1]]]
+
+        ed_mol.AddBond(new_bond_idx[0], new_bond_idx[1], bond_type)
+
+    new_mol = ed_mol.GetMol()
+
+    # add the conformer
+
+    conformer = Chem.Conformer(len(coordinates))
+    for i, xyz in enumerate(coordinates):
+        conformer.SetAtomPosition(i, xyz)
+    new_mol.AddConformer(conformer)
+
+    return new_mol
+
+
 @timeout(seconds=MAX_TIME)
-def xyz2mol(atoms, coordinates,
-    charge=0,
-    allow_charged_fragments=True,
-    use_graph=True,
-    use_huckel=False,
-    embed_chiral=True):
+def xyz2mol(atoms,
+            coordinates,
+            charge=0,
+            allow_charged_fragments=True,
+            use_graph=True,
+            use_huckel=False,
+            embed_chiral=True):
     """
     Generate a rdkit molobj from atoms, coordinates and a total_charge.
 
@@ -731,18 +794,20 @@ def xyz2mol(atoms, coordinates,
     # Convert AC to bond order matrix and add connectivity and charge info to
     # mol object
     new_mol = AC2mol(mol, AC, atoms, charge,
-        allow_charged_fragments=allow_charged_fragments,
-        use_graph=use_graph)
+                     allow_charged_fragments=allow_charged_fragments,
+                     use_graph=use_graph)
 
     # Check for stereocenters and chiral centers
     if embed_chiral:
         chiral_stereo_check(new_mol)
 
+    new_mol = check_mol(mol=new_mol,
+                        coordinates=coordinates)
+
     return new_mol
 
 
 def main():
-
 
     return
 
@@ -754,36 +819,36 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(usage='%(prog)s [options] molecule.xyz')
     parser.add_argument('structure', metavar='structure', type=str)
     parser.add_argument('-s', '--sdf',
-        action="store_true",
-        help="Dump sdf file")
+                        action="store_true",
+                        help="Dump sdf file")
     parser.add_argument('--ignore-chiral',
-        action="store_true",
-        help="Ignore chiral centers")
+                        action="store_true",
+                        help="Ignore chiral centers")
     parser.add_argument('--no-charged-fragments',
-        action="store_true",
-        help="Allow radicals to be made")
+                        action="store_true",
+                        help="Allow radicals to be made")
     parser.add_argument('--no-graph',
-        action="store_true",
-        help="Run xyz2mol without networkx dependencies")
+                        action="store_true",
+                        help="Run xyz2mol without networkx dependencies")
 
     # huckel uses extended Huckel bond orders to locate bonds (requires RDKit 2019.9.1 or later)
     # otherwise van der Waals radii are used
     parser.add_argument('--use-huckel',
-        action="store_true",
-        help="Use Huckel method for atom connectivity")
+                        action="store_true",
+                        help="Use Huckel method for atom connectivity")
     parser.add_argument('-o', '--output-format',
-        action="store",
-        type=str,
-        help="Output format [smiles,sdf] (default=sdf)")
+                        action="store",
+                        type=str,
+                        help="Output format [smiles,sdf] (default=sdf)")
     parser.add_argument('-c', '--charge',
-        action="store",
-        metavar="int",
-        type=int,
-        help="Total charge of the system")
+                        action="store",
+                        metavar="int",
+                        type=int,
+                        help="Total charge of the system")
     parser.add_argument('--save_name',
-        type=str,
-        default=DEFAULT_SAVE,
-        help='Save name for RDKit mol')
+                        type=str,
+                        default=DEFAULT_SAVE,
+                        help='Save name for RDKit mol')
 
     args = parser.parse_args()
 
@@ -814,11 +879,11 @@ if __name__ == "__main__":
 
     # Get the molobj
     mol = xyz2mol(atoms, xyz_coordinates,
-        charge=charge,
-        use_graph=quick,
-        allow_charged_fragments=charged_fragments,
-        embed_chiral=embed_chiral,
-        use_huckel=use_huckel)
+                  charge=charge,
+                  use_graph=quick,
+                  allow_charged_fragments=charged_fragments,
+                  embed_chiral=embed_chiral,
+                  use_huckel=use_huckel)
 
     # Print output
     if args.output_format == "sdf":

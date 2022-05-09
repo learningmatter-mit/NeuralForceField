@@ -136,6 +136,11 @@ class WeightedConformers(nn.Module):
         # whether to embed fingerprints or just use external features
         self.use_mpnn = modelparams.get("use_mpnn", True)
 
+        # How to aggregate the node features when making the molecular
+        # fingerprint
+
+        self.pool_type = modelparams.get("pool_type", "sum")
+
     def make_boltz_nn(self, boltzmann_dict):
         """
         Make the section of the network that creates weights for each
@@ -409,10 +414,19 @@ class WeightedConformers(nn.Module):
         N = [mol_size] * num_confs
         conf_fps = []
 
+        if getattr(self, "pool_type", None) is None:
+            self.pool_type = "sum"
+
         # split the atomic fingerprints up by conformer
         for atomic_fps in torch.split(smiles_fp, N):
             # sum them and then convert to molecular fp
-            summed_atomic_fps = atomic_fps.sum(dim=0)
+            if self.pool_type == 'sum':
+                summed_atomic_fps = atomic_fps.sum(dim=0)
+            elif self.pool_type == 'mean':
+                summed_atomic_fps = atomic_fps.mean(dim=0)
+            else:
+                raise NotImplementedError
+
             # put them through the network to convert summed
             # atomic fps to a molecular fp
             mol_fp = self.mol_fp_nn(summed_atomic_fps)
@@ -429,7 +443,8 @@ class WeightedConformers(nn.Module):
 
         return conf_fps
 
-    def post_process(self, batch,
+    def post_process(self,
+                     batch,
                      r,
                      xyz,
                      **kwargs):
@@ -446,7 +461,7 @@ class WeightedConformers(nn.Module):
 
         mol_sizes = batch["mol_size"].reshape(-1).tolist()
         N = batch["num_atoms"].reshape(-1).tolist()
-        num_confs = (torch.tensor(N) / torch.tensor(mol_sizes)).tolist()
+        num_confs = (torch.tensor(N) / torch.tensor(mol_sizes)).long().tolist()
         # split the fingerprints by species
         fps_by_smiles = torch.split(r, N)
         # get extra 3D fingerprints
@@ -513,7 +528,10 @@ class WeightedConformers(nn.Module):
 
         return outputs
 
-    def make_embeddings(self, batch, xyz=None, **kwargs):
+    def make_embeddings(self,
+                        batch,
+                        xyz=None,
+                        **kwargs):
         """
         Make all conformer fingerprints.
         Args:
@@ -536,7 +554,8 @@ class WeightedConformers(nn.Module):
                                    **kwargs)
             outputs = self.post_process(batch=batch,
                                         r=r,
-                                        xyz=xyz, **kwargs)
+                                        xyz=xyz,
+                                        **kwargs)
 
         # otherwise just use the non-learnable features
         else:

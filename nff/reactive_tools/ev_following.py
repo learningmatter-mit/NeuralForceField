@@ -110,10 +110,12 @@ def eigvec_following(ev_atoms,
     h = torch.add(h_p, torch.sum(h_n, dim=0)
                   ).reshape(-1, len(old_xyz[0]), Ndim)
 
-    if(torch.max(h) <= maxstepsize):
+    step_size = h.norm()
+
+    if(step_size <= maxstepsize):
         new_xyz = old_xyz + h
     else:
-        new_xyz = old_xyz + (h / (torch.max(h) / maxstepsize))
+        new_xyz = old_xyz + (h / (step_size / maxstepsize))
 
     output = (new_xyz.detach(), grad.detach(),
               hessian.detach(), h.reshape(-1).detach())
@@ -137,7 +139,7 @@ def get_calc_kwargs(calc_kwargs,
 
 def ev_run(ev_atoms,
            nff_dir=None,
-           maxstepsize=0.005,
+           maxstepsize=0.15,
            maxstep=1000,
            convergence=0.03,
            device=None,
@@ -188,5 +190,10 @@ def ev_run(ev_atoms,
         positions = xyz.reshape(-1, 3).cpu().numpy()
         ev_atoms.set_positions(positions)
 
+    # so that we're returning the xyz that has gradient `grad`, not whatever
+    # the xyz of the next step would be
+    xyz = torch.Tensor(ev_atoms.get_positions()).reshape(1, -1, 3)
+
     output = xyz, grad, xyz_all, rmslist, maxlist
+
     return output

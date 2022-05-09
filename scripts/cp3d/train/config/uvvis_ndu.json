@@ -1,0 +1,112 @@
+{
+    "model_params": {
+        "activation": "swish",
+        "base_keys": [
+            "peakwavs_max"
+        ],
+        "boltzmann_dict": {
+            "type": "multiply"
+        },
+        "classifier": false,
+        "cp_dropout": 0.0,
+        "cutoff": 5.0,
+        "dropout_rate": 0.0,
+        "ext_feat_types": [],
+        "extra_features": [],
+        "gauss_embed": true,
+        "grad_keys": [],
+        "input_layers": [
+            {
+                "name": "linear",
+                "param": {
+                    "in_features": 159,
+                    "out_features": 300
+                }
+            },
+            {
+                "name": "swish",
+                "param": {}
+            }
+        ],
+        "model_type": "OnlyBondUpdateCP3D",
+        "mol_basis": 300,
+        "mol_fp_layers": [],
+        "n_atom_basis": 133,
+        "n_bond_features": 26,
+        "n_bond_hidden": 300,
+        "n_convolutions": 2,
+        "n_filters": 64,
+        "n_gaussians": 10,
+        "output_layers": [
+            {
+                "name": "linear",
+                "param": {
+                    "in_features": 497,
+                    "out_features": 300
+                }
+            },
+            {
+                "name": "swish",
+                "param": {}
+            }
+        ],
+        "readoutdict": {
+            "peakwavs_max": [
+                {
+                    "name": "linear",
+                    "param": {
+                        "in_features": 300,
+                        "out_features": 150
+                    }
+                },
+                {
+                    "name": "swish",
+                    "param": {}
+                },
+                {
+                    "name": "linear",
+                    "param": {
+                        "in_features": 150,
+                        "out_features": 1
+                    }
+                }
+            ]
+        },
+        "same_filters": true,
+        "schnet_dropout": 0.0,
+        "trainable_gauss": false,
+        "use_mpnn": true
+    },
+    "device": 1,
+    "train_params": {
+        "batch_size": 1,
+        "checkpoints_to_keep": 3,
+        "del_grad_interval": 3,
+        "log_every_n_epochs": 1,
+        "loss": "mse",
+        "loss_coef": {
+            "peakwavs_max": 1
+        },
+        "lr": 1e-4,
+        "lr_decay": 0.5,
+        "lr_min": 1e-06,
+        "lr_patience": 10,
+        "max_epochs": 500,
+        "metrics": [
+            "MeanAbsoluteError"
+        ],
+        "mini_batches": 10,
+        "model_kwargs": {
+            "sub_batch_size": 1
+        },
+        "model_name": "ndu",
+        "mol_loss_norm": false,
+        "seed": 0,
+        "torch_par": false,
+        "use_slurm": false,
+        "weightpath": "/home/saxelrod/Repo/projects/master/NeuralForceField/tutorials/data/uvvis_cp3d",
+        "metric_as_loss": null,
+        "metric_objective": "minimize",
+        "pool_type": "mean"
+    }
+}
