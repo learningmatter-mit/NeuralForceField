@@ -287,7 +287,7 @@ class NoseHooverMetadynamics(NoseHoover):
     def increase_h_mass(self):
         nums = self.atoms.get_atomic_numbers()
         masses = self.atoms.get_masses()
-        masses[nums == 1] = 2.0
+        masses[nums == 1] = 4.0
         self.atoms.set_masses(masses)
 
     def decrease_h_mass(self):
