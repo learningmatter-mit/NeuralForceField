@@ -49,6 +49,9 @@ def get_rij(xyz,
     # to catch atoms that become neighbors between nbr
     # list updates)
     dist = (r_ij.detach() ** 2).sum(-1) ** 0.5
+ 
+    if type(cutoff)==torch.Tensor:
+        dist = dist.to(cutoff.device)
     use_nbrs = (dist <= cutoff)
 
     r_ij = r_ij[use_nbrs]
