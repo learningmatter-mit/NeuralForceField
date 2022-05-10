@@ -4,7 +4,7 @@ import time
 
 from ase.constraints import FixConstraint
 from ase.geometry import get_dihedrals_derivatives, get_angles_derivatives
-from ase.optimize import BFGS
+from ase.optimize import BFGS, LBFGS
 
 
 def get_dihed_derivs(atoms,
@@ -110,8 +110,8 @@ def get_bond_forces(atoms,
               atoms.get_positions()[idx[:, 1]])
     bond_lens = np.linalg.norm(deltas, axis=-1)
 
-    forces_0 = 2 * k.reshape(-1, 1) * deltas * ((-length_0 + bond_lens) /
-                                                bond_lens).reshape(-1, 1)
+    forces_0 = -2 * k.reshape(-1, 1) * deltas * ((-length_0 + bond_lens) /
+                                                 bond_lens).reshape(-1, 1)
     forces_1 = -forces_0
 
     total_forces = np.zeros_like(atoms.get_positions())
@@ -268,7 +268,7 @@ class ConstrainBonds(FixConstraint):
 
     def __repr__(self):
         idx_str = str(self.idx)
-        val_str = str(np.degrees(self.targ_angles))
+        val_str = str(self.targ_lengths)
 
         return 'Constrain bonds (indices=%s, values=%s)' % (idx_str, val_str)
 
@@ -290,6 +290,7 @@ class BatchedBFGS(BFGS):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_atoms = self.atoms.num_atoms.numpy().astype('int')
+        self.save = kwargs.get("save", False)
 
         self.split_h0()
 
@@ -352,7 +353,10 @@ class BatchedBFGS(BFGS):
         atoms.set_positions(r + dr)
         self.r0 = r.flat.copy()
         self.f0 = f.copy()
-        self.dump((self.H, self.r0, self.f0, self.maxstep))
+
+        # takes up a lot of unnecessary time when doing batched opt
+        if self.save:
+            self.dump((self.H, self.r0, self.f0, self.maxstep))
 
     def split_h0(self):
 
@@ -447,3 +451,173 @@ class BatchedBFGS(BFGS):
             msg = msg % args
             self.logfile.write(msg)
             self.logfile.flush()
+
+
+class BatchedLBFGS(LBFGS):
+    """
+    The Hessian is not diagonalized in LBFGS, so each step is faster than in BFGS.
+    The diagonalizations happen in serial for batched BFGS, which can make them
+    a bottleneck. Avoiding diagonalizations is therefore helpful when doing batched
+    optimization.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.num_atoms = self.atoms.num_atoms.numpy().astype('int')
+
+    def initialize(self):
+        """Initialize everything so no checks have to be done in step"""
+        self.iteration = 0
+        self.s = []
+        self.y = []
+        # Store also rho, to avoid calculating the dot product again and
+        # again.
+        self.rho = []
+
+        self.r0 = None
+        self.f0 = None
+        self.e0 = None
+        self.task = 'START'
+        self.load_restart = False
+
+    def read(self):
+        """Load saved arrays to reconstruct the Hessian"""
+        self.iteration, self.s, self.y, self.rho, \
+            self.r0, self.f0, self.e0, self.task = self.load()
+        self.load_restart = True
+
+    def step(self, f=None):
+        """Take a single step
+
+        Use the given forces, update the history and calculate the next step --
+        then take it"""
+
+        if f is None:
+            f = self.atoms.get_forces()
+
+        r = self.atoms.get_positions()
+
+        self.update(r, f, self.r0, self.f0)
+
+        s = self.s
+        y = self.y
+        rho = self.rho
+        h0 = self.H0
+
+        loopmax = np.min([self.memory, self.iteration])
+        a = np.empty((loopmax,), dtype=np.float64)
+
+        # ## The algorithm itself:
+        q = -f.reshape(-1)
+        for i in range(loopmax - 1, -1, -1):
+            a[i] = rho[i] * np.dot(s[i], q)
+            q -= a[i] * y[i]
+        z = h0 * q
+
+        for i in range(loopmax):
+            b = rho[i] * np.dot(y[i], z)
+            z += s[i] * (a[i] - b)
+
+        self.p = - z.reshape((-1, 3))
+        # ##
+
+        g = -f
+        if self.use_line_search is True:
+            e = self.func(r)
+            self.line_search(r, g, e)
+            dr = (self.alpha_k * self.p).reshape(len(self.atoms), -1)
+        else:
+            self.force_calls += 1
+            self.function_calls += 1
+            dr = self.determine_step(self.p) * self.damping
+        self.atoms.set_positions(r + dr)
+
+        self.iteration += 1
+        self.r0 = r
+        self.f0 = -g
+
+        if self.save:
+            self.dump((self.iteration, self.s, self.y,
+                       self.rho, self.r0, self.f0, self.e0, self.task))
+
+    def determine_step(self, dr):
+        """Determine step to take according to maxstep
+
+        Normalize all steps as the largest step. This way
+        we still move along the eigendirection.
+        """
+        steplengths = (dr**2).sum(1)**0.5
+        longest_step = np.max(steplengths)
+        if longest_step >= self.maxstep:
+            dr *= self.maxstep / longest_step
+
+        return dr
+
+    def update(self, r, f, r0, f0):
+        """Update everything that is kept in memory
+
+        This function is mostly here to allow for replay_trajectory.
+        """
+        if self.iteration > 0:
+            s0 = r.reshape(-1) - r0.reshape(-1)
+            self.s.append(s0)
+
+            # We use the gradient which is minus the force!
+            y0 = f0.reshape(-1) - f.reshape(-1)
+            self.y.append(y0)
+
+            rho0 = 1.0 / np.dot(y0, s0)
+            self.rho.append(rho0)
+
+        if self.iteration > self.memory:
+            self.s.pop(0)
+            self.y.pop(0)
+            self.rho.pop(0)
+
+    def replay_trajectory(self, traj):
+        """Initialize history from old trajectory."""
+        if isinstance(traj, str):
+            from ase.io.trajectory import Trajectory
+            traj = Trajectory(traj, 'r')
+        r0 = None
+        f0 = None
+        # The last element is not added, as we get that for free when taking
+        # the first qn-step after the replay
+        for i in range(0, len(traj) - 1):
+            r = traj[i].get_positions()
+            f = traj[i].get_forces()
+            self.update(r, f, r0, f0)
+            r0 = r.copy()
+            f0 = f.copy()
+            self.iteration += 1
+        self.r0 = r0
+        self.f0 = f0
+
+    def func(self, x):
+        """Objective function for use of the optimizers"""
+        self.atoms.set_positions(x.reshape(-1, 3))
+        self.function_calls += 1
+        return self.atoms.get_potential_energy(
+            force_consistent=self.force_consistent)
+
+    def fprime(self, x):
+        """Gradient of the objective function for use of the optimizers"""
+        self.atoms.set_positions(x.reshape(-1, 3))
+        self.force_calls += 1
+        # Remember that forces are minus the gradient!
+        return - self.atoms.get_forces().reshape(-1)
+
+    def line_search(self, r, g, e):
+        self.p = self.p.ravel()
+        p_size = np.sqrt((self.p**2).sum())
+        if p_size <= np.sqrt(len(self.atoms) * 1e-10):
+            self.p /= (p_size / np.sqrt(len(self.atoms) * 1e-10))
+        g = g.ravel()
+        r = r.ravel()
+        ls = LineSearch()
+        self.alpha_k, e, self.e0, self.no_update = \
+            ls._line_search(self.func, self.fprime, r, self.p, g, e, self.e0,
+                            maxstep=self.maxstep, c1=.23,
+                            c2=.46, stpmax=50.)
+        if self.alpha_k is None:
+            raise RuntimeError('LineSearch failed!')
