@@ -469,7 +469,6 @@ class BatchedLBFGS(LBFGS):
         self.num_atoms = self.atoms.num_atoms.numpy().astype('int')
         self.mol_idx = self.make_mol_idx()
         self.save = kwargs.get("save", False)
-        self.memory = kwargs.get("memory", 1000)
 
     def make_mol_idx(self):
         mol_idx = []
