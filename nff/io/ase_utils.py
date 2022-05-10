@@ -6,6 +6,8 @@ from ase.constraints import FixConstraint
 from ase.geometry import get_dihedrals_derivatives, get_angles_derivatives
 from ase.optimize import BFGS, LBFGS
 
+from nff.utils.scatter import scatter_add
+
 
 def get_dihed_derivs(atoms,
                      idx):
@@ -406,6 +408,7 @@ class BatchedBFGS(BFGS):
     def log(self, forces=None):
         if forces is None:
             forces = self.atoms.get_forces()
+
         fmax = [np.sqrt((i ** 2).sum(axis=1).max())
                 for i in split(forces, self.num_atoms)]
 
@@ -464,27 +467,17 @@ class BatchedLBFGS(LBFGS):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_atoms = self.atoms.num_atoms.numpy().astype('int')
+        self.mol_idx = self.make_mol_idx()
+        self.save = kwargs.get("save", False)
+        self.memory = kwargs.get("memory", 1000)
 
-    def initialize(self):
-        """Initialize everything so no checks have to be done in step"""
-        self.iteration = 0
-        self.s = []
-        self.y = []
-        # Store also rho, to avoid calculating the dot product again and
-        # again.
-        self.rho = []
+    def make_mol_idx(self):
+        mol_idx = []
+        for i, num_atoms in enumerate(self.num_atoms):
+            mol_idx += [i] * int(num_atoms) * 3
+        mol_idx = torch.LongTensor(mol_idx)
 
-        self.r0 = None
-        self.f0 = None
-        self.e0 = None
-        self.task = 'START'
-        self.load_restart = False
-
-    def read(self):
-        """Load saved arrays to reconstruct the Hessian"""
-        self.iteration, self.s, self.y, self.rho, \
-            self.r0, self.f0, self.e0, self.task = self.load()
-        self.load_restart = True
+        return mol_idx
 
     def step(self, f=None):
         """Take a single step
@@ -499,37 +492,66 @@ class BatchedLBFGS(LBFGS):
 
         self.update(r, f, self.r0, self.f0)
 
-        s = self.s
-        y = self.y
-        rho = self.rho
+        s = np.array(self.s)
+        y = np.array(self.y)
+        rho = np.array(self.rho)
+
+        # just a scalar
         h0 = self.H0
 
+        # 0, 1, 2, ...
         loopmax = np.min([self.memory, self.iteration])
-        a = np.empty((loopmax,), dtype=np.float64)
+        a = np.empty((loopmax, self.num_atoms.shape[0]), dtype=np.float64)
 
-        # ## The algorithm itself:
+        # The algorithm itself:
+
         q = -f.reshape(-1)
+
+        # we can vectorize each step across different molecules in the batch using
+        # scatter add
+
         for i in range(loopmax - 1, -1, -1):
-            a[i] = rho[i] * np.dot(s[i], q)
-            q -= a[i] * y[i]
+            dot = scatter_add(src=torch.Tensor(s[i] * q),
+                              index=self.mol_idx,
+                              dim=0,
+                              dim_size=int(self.mol_idx.max() + 1)).numpy()
+
+            a[i] = rho[i] * dot
+            prod = np.concatenate([this_a * this_y.reshape(-1) for this_a, this_y in
+                                   zip(a[i], split(y[i], self.num_atoms))])
+
+            q -= prod
+
         z = h0 * q
 
         for i in range(loopmax):
-            b = rho[i] * np.dot(y[i], z)
-            z += s[i] * (a[i] - b)
+            dot = scatter_add(src=torch.Tensor(y[i] * z),
+                              index=self.mol_idx,
+                              dim=0,
+                              dim_size=int(self.mol_idx.max() + 1)).numpy()
+
+            b = rho[i] * dot
+
+            delta = a[i] - b
+            prod = np.concatenate([this_delta * this_s.reshape(-1) for
+                                   this_delta, this_s in
+                                   zip(delta, split(s[i], self.num_atoms))])
+
+            z += prod
 
         self.p = - z.reshape((-1, 3))
-        # ##
 
         g = -f
-        if self.use_line_search is True:
-            e = self.func(r)
-            self.line_search(r, g, e)
-            dr = (self.alpha_k * self.p).reshape(len(self.atoms), -1)
+        if self.use_line_search:
+            raise NotImplementedError("Not yet implemented wdith line search")
         else:
             self.force_calls += 1
             self.function_calls += 1
-            dr = self.determine_step(self.p) * self.damping
+            steplengths = (self.p ** 2).sum(1) ** 0.5
+            dr = self.determine_step(dr=self.p,
+                                     steplengths=steplengths,
+                                     f=f) * self.damping
+
         self.atoms.set_positions(r + dr)
 
         self.iteration += 1
@@ -540,23 +562,15 @@ class BatchedLBFGS(LBFGS):
             self.dump((self.iteration, self.s, self.y,
                        self.rho, self.r0, self.f0, self.e0, self.task))
 
-    def determine_step(self, dr):
-        """Determine step to take according to maxstep
-
-        Normalize all steps as the largest step. This way
-        we still move along the eigendirection.
-        """
-        steplengths = (dr**2).sum(1)**0.5
-        longest_step = np.max(steplengths)
-        if longest_step >= self.maxstep:
-            dr *= self.maxstep / longest_step
-
-        return dr
+    def determine_step(self, dr, steplengths, f):
+        return BatchedBFGS.determine_step(self=self,
+                                          dr=dr,
+                                          steplengths=steplengths,
+                                          f=f)
 
     def update(self, r, f, r0, f0):
-        """Update everything that is kept in memory
-
-        This function is mostly here to allow for replay_trajectory.
+        """
+        Update everything that is kept in memory
         """
         if self.iteration > 0:
             s0 = r.reshape(-1) - r0.reshape(-1)
@@ -566,7 +580,17 @@ class BatchedLBFGS(LBFGS):
             y0 = f0.reshape(-1) - f.reshape(-1)
             self.y.append(y0)
 
-            rho0 = 1.0 / np.dot(y0, s0)
+            split_y0 = split(y0, self.num_atoms)
+            split_s0 = split(s0, self.num_atoms)
+
+            dot = np.array([(i.reshape(-1) * j.reshape(-1)).sum()
+                            for i, j in zip(split_y0, split_s0)])
+            # for anything that's converged and hence not updated
+            # (so y0 and s0 are both 0)
+            dot[dot == 0] = 1e-13
+
+            rho0 = 1.0 / dot
+
             self.rho.append(rho0)
 
         if self.iteration > self.memory:
@@ -574,50 +598,5 @@ class BatchedLBFGS(LBFGS):
             self.y.pop(0)
             self.rho.pop(0)
 
-    def replay_trajectory(self, traj):
-        """Initialize history from old trajectory."""
-        if isinstance(traj, str):
-            from ase.io.trajectory import Trajectory
-            traj = Trajectory(traj, 'r')
-        r0 = None
-        f0 = None
-        # The last element is not added, as we get that for free when taking
-        # the first qn-step after the replay
-        for i in range(0, len(traj) - 1):
-            r = traj[i].get_positions()
-            f = traj[i].get_forces()
-            self.update(r, f, r0, f0)
-            r0 = r.copy()
-            f0 = f.copy()
-            self.iteration += 1
-        self.r0 = r0
-        self.f0 = f0
-
-    def func(self, x):
-        """Objective function for use of the optimizers"""
-        self.atoms.set_positions(x.reshape(-1, 3))
-        self.function_calls += 1
-        return self.atoms.get_potential_energy(
-            force_consistent=self.force_consistent)
-
-    def fprime(self, x):
-        """Gradient of the objective function for use of the optimizers"""
-        self.atoms.set_positions(x.reshape(-1, 3))
-        self.force_calls += 1
-        # Remember that forces are minus the gradient!
-        return - self.atoms.get_forces().reshape(-1)
-
-    def line_search(self, r, g, e):
-        self.p = self.p.ravel()
-        p_size = np.sqrt((self.p**2).sum())
-        if p_size <= np.sqrt(len(self.atoms) * 1e-10):
-            self.p /= (p_size / np.sqrt(len(self.atoms) * 1e-10))
-        g = g.ravel()
-        r = r.ravel()
-        ls = LineSearch()
-        self.alpha_k, e, self.e0, self.no_update = \
-            ls._line_search(self.func, self.fprime, r, self.p, g, e, self.e0,
-                            maxstep=self.maxstep, c1=.23,
-                            c2=.46, stpmax=50.)
-        if self.alpha_k is None:
-            raise RuntimeError('LineSearch failed!')
+    def log(self, forces=None):
+        return BatchedBFGS.log(self, forces)
