@@ -290,6 +290,7 @@ class BatchedBFGS(BFGS):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_atoms = self.atoms.num_atoms.numpy().astype('int')
+        self.save = kwargs.get("save", False)
 
         self.split_h0()
 
@@ -352,7 +353,10 @@ class BatchedBFGS(BFGS):
         atoms.set_positions(r + dr)
         self.r0 = r.flat.copy()
         self.f0 = f.copy()
-        self.dump((self.H, self.r0, self.f0, self.maxstep))
+
+        # takes up a lot of unnecessary time when doing batched opt
+        if self.save:
+            self.dump((self.H, self.r0, self.f0, self.maxstep))
 
     def split_h0(self):
 
