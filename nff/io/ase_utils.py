@@ -101,6 +101,26 @@ def get_angle_forces(atoms,
     return total_forces
 
 
+def get_bond_forces(atoms,
+                    idx,
+                    k,
+                    length_0):
+
+    deltas = (atoms.get_positions()[idx[:, 0]] -
+              atoms.get_positions()[idx[:, 1]])
+    bond_lens = np.linalg.norm(deltas, axis=-1)
+
+    forces_0 = 2 * k.reshape(-1, 1) * deltas * ((-length_0 + bond_lens) /
+                                                bond_lens).reshape(-1, 1)
+    forces_1 = -forces_0
+
+    total_forces = np.zeros_like(atoms.get_positions())
+    total_forces[idx[:, 0]] += forces_0
+    total_forces[idx[:, 1]] += forces_1
+
+    return total_forces
+
+
 class ConstrainAngles(FixConstraint):
 
     def __init__(self,
@@ -200,6 +220,57 @@ class ConstrainDihedrals(FixConstraint):
         val_str = str(np.degrees(self.targ_diheds))
 
         return 'Constrain dihedrals (indices=%s, values (deg.)=%s)' % (idx_str, val_str)
+
+
+class ConstrainBonds(FixConstraint):
+
+    def __init__(self,
+                 idx,
+                 atoms,
+                 force_consts,
+                 targ_lengths=None):
+
+        self.idx = np.asarray(idx)
+
+        if targ_lengths is not None:
+            self.targ_lengths = np.array(targ_lengths).reshape(-1)
+        else:
+            deltas = (atoms.get_positions()[idx[:, 0]] -
+                      atoms.get_positions()[idx[:, 1]])
+            self.targ_lengths = np.linalg.norm(deltas, axis=-1)
+
+        if (isinstance(force_consts, float) or isinstance(force_consts, int)):
+            self.force_consts = np.array([float(force_consts)] * len(self.idx))
+        else:
+            assert len(force_consts) == len(self.idx)
+            self.force_consts = force_consts
+
+    def get_removed_dof(self, atoms):
+        # no degrees of freedom are being fixed, they're just being constrained.
+        # So return 0 just like in the Hookean class
+        return 0
+
+    def adjust_positions(self, atoms, new):
+        return
+
+    def adjust_forces(self, atoms, forces):
+        new_forces = get_bond_forces(atoms=atoms,
+                                     idx=self.idx,
+                                     k=self.force_consts,
+                                     length_0=self.targ_lengths)
+
+        forces += new_forces
+
+        return new_forces, forces
+
+    def __str__(self):
+        return repr(self)
+
+    def __repr__(self):
+        idx_str = str(self.idx)
+        val_str = str(np.degrees(self.targ_angles))
+
+        return 'Constrain bonds (indices=%s, values=%s)' % (idx_str, val_str)
 
 
 def split(array, num_atoms):
