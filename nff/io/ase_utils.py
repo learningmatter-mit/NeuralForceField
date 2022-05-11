@@ -596,11 +596,11 @@ class BatchedLBFGS(LBFGS):
             y0 = f0.reshape(-1) - f.reshape(-1)
             self.y.append(y0)
 
-            split_y0 = split(y0, self.num_atoms)
-            split_s0 = split(s0, self.num_atoms)
+            dot = scatter_add(src=torch.Tensor(y0 * s0),
+                              index=self.mol_idx,
+                              dim=0,
+                              dim_size=int(self.mol_idx.max() + 1)).numpy()
 
-            dot = np.array([(i.reshape(-1) * j.reshape(-1)).sum()
-                            for i, j in zip(split_y0, split_s0)])
             # for anything that's converged and hence not updated
             # (so y0 and s0 are both 0)
             dot[dot == 0] = 1e-13
