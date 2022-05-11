@@ -486,6 +486,7 @@ class BatchedLBFGS(LBFGS):
         self.num_atoms = self.atoms.num_atoms.numpy().astype('int')
         self.mol_idx = self.make_mol_idx()
         self.save = kwargs.get("save", False)
+        self.memory = kwargs.get("memory", 30)
 
     def make_mol_idx(self):
         mol_idx = []
@@ -530,9 +531,7 @@ class BatchedLBFGS(LBFGS):
                               dim_size=int(self.mol_idx.max() + 1)).numpy()
 
             a[i] = rho[i] * dot
-            prod = np.concatenate([this_a * this_y.reshape(-1) for this_a, this_y in
-                                   zip(a[i], split(y[i], self.num_atoms))])
-
+            prod = np.repeat(a[i], self.num_atoms * 3) * y[i]
             q -= prod
 
         z = h0 * q
@@ -544,12 +543,8 @@ class BatchedLBFGS(LBFGS):
                               dim_size=int(self.mol_idx.max() + 1)).numpy()
 
             b = rho[i] * dot
-
             delta = a[i] - b
-            prod = np.concatenate([this_delta * this_s.reshape(-1) for
-                                   this_delta, this_s in
-                                   zip(delta, split(s[i], self.num_atoms))])
-
+            prod = np.repeat(delta, self.num_atoms * 3) * s[i]
             z += prod
 
         self.p = - z.reshape((-1, 3))

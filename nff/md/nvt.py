@@ -427,11 +427,7 @@ class BatchNoseHoover(MolecularDynamics):
         accel = (self.atoms.get_forces() /
                  self.atoms.get_masses().reshape(-1, 1))
         vel = self.atoms.get_velocities()
-
-        split_idx = np.cumsum(self.Natom)
-        vel_split = np.split(vel, split_idx)
-        zeta_vel = np.concatenate([z * v for z, v in
-                                   zip(self.zeta, vel_split)])
+        zeta_vel = np.repeat(self.zeta, 3 * self.Natom).reshape(-1, 3) * vel
         visc = accel - zeta_vel
 
         # make full step in position
@@ -463,10 +459,8 @@ class BatchNoseHoover(MolecularDynamics):
         scal = (1 + 0.5 * self.dt * self.zeta)
 
         vel = self.atoms.get_velocities()
-        split_idx = np.cumsum(self.Natom)
-        vel_split = np.split(vel + 0.5 * self.dt * accel, split_idx)
-
-        vel = np.concatenate([v / s for v, s in zip(vel_split, scal)])
+        vel = ((vel + 0.5 * self.dt * accel) /
+               np.repeat(scal, 3 * self.Natom).reshape(-1, 3))
 
         self.atoms.set_velocities(vel.reshape(-1, 3))
 
