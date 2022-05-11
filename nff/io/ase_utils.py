@@ -615,9 +615,8 @@ class BatchedLBFGS(LBFGS):
             self.rho.pop(0)
 
     def converged(self,
-                  forces=None)
-
-    return BatchedBFGS.converged(self, forces)
+                  forces=None):
+        return BatchedBFGS.converged(self, forces)
 
     def log(self, forces=None):
         return BatchedBFGS.log(self, forces)
