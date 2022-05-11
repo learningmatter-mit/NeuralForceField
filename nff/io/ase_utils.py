@@ -329,11 +329,6 @@ class BatchedBFGS(BFGS):
         if f is None:
             f = atoms.get_forces()
 
-        # set nan forces to 0 so we don't waste lots of steps waiting for that
-        # molecule to converge
-
-        f[np.bitwise_not(np.isfinite(f))] = 0
-
         r = atoms.get_positions()
         f = f.reshape(-1)
         self.update(r.flat, f, self.r0, self.f0)
@@ -410,6 +405,23 @@ class BatchedBFGS(BFGS):
             self.H[i] -= (np.outer(df, df) /
                           a + np.outer(dg, dg) / b)
 
+    def converged(self,
+                  forces=None):
+
+        if forces is None:
+            forces = self.atoms.get_forces()
+
+        # set nans to zero because they'll never converge anyway, so might as well
+        # stop the opt when everything else is converged
+
+        forces[np.bitwise_not(np.isfinite(forces))] = 0
+
+        if hasattr(self.atoms, "get_curvature"):
+            return (forces ** 2).sum(
+                axis=1
+            ).max() < self.fmax ** 2 and self.atoms.get_curvature() < 0.0
+        return (forces ** 2).sum(axis=1).max() < self.fmax ** 2
+
     def log(self, forces=None):
         if forces is None:
             forces = self.atoms.get_forces()
@@ -483,8 +495,7 @@ class BatchedLBFGS(LBFGS):
 
         return mol_idx
 
-    def step(self,
-             f=None):
+    def step(self, f=None):
         """Take a single step
 
         Use the given forces, update the history and calculate the next step --
@@ -492,11 +503,6 @@ class BatchedLBFGS(LBFGS):
 
         if f is None:
             f = self.atoms.get_forces()
-
-        # set nan forces to 0 so we don't waste lots of steps waiting for that
-        # molecule to converge
-
-        f[np.bitwise_not(np.isfinite(f))] = 0
 
         r = self.atoms.get_positions()
 
@@ -607,6 +613,11 @@ class BatchedLBFGS(LBFGS):
             self.s.pop(0)
             self.y.pop(0)
             self.rho.pop(0)
+
+    def converged(self,
+                  forces=None)
+
+    return BatchedBFGS.log(self, forces)
 
     def log(self, forces=None):
         return BatchedBFGS.log(self, forces)
