@@ -495,11 +495,14 @@ class BatchedLBFGS(LBFGS):
 
         return mol_idx
 
-    def step(self, f=None):
-        """Take a single step
+    def step(self,
+             f=None):
+        """
+        Take a single step
 
         Use the given forces, update the history and calculate the next step --
-        then take it"""
+        then take it
+        """
 
         if f is None:
             f = self.atoms.get_forces()
@@ -512,19 +515,13 @@ class BatchedLBFGS(LBFGS):
         y = np.array(self.y)
         rho = np.array(self.rho)
 
-        # just a scalar
         h0 = self.H0
-
-        # 0, 1, 2, ...
         loopmax = np.min([self.memory, self.iteration])
         a = np.empty((loopmax, self.num_atoms.shape[0]), dtype=np.float64)
 
         # The algorithm itself:
 
         q = -f.reshape(-1)
-
-        # we can vectorize each step across different molecules in the batch using
-        # scatter add
 
         for i in range(loopmax - 1, -1, -1):
             dot = scatter_add(src=torch.Tensor(s[i] * q),
