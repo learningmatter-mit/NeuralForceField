@@ -41,7 +41,9 @@ class PainnDispersion(nn.Module):
         e_disp = base_dispersion(batch=batch,
                                  xyz=xyz,
                                  disp_type=self.disp_type,
-                                 functional=self.functional)
+                                 functional=self.functional,
+                                 nbrs=batch['mol_nbrs'],
+                                 mol_idx=batch["mol_idx"])
 
         # convert to kcal / mol
         e_disp = e_disp * const.HARTREE_TO_KCAL_MOL
@@ -81,7 +83,7 @@ class PainnDispersion(nn.Module):
                 add_e = e_disp.detach().cpu()
             else:
                 add_e = e_disp
-                
+
             all_results[key] = all_results[key] + add_e
 
             # add gradient

@@ -85,6 +85,44 @@ class AtomsBatch(Atoms):
         self.cutoff_skin = cutoff_skin
         self.device = device
         self.requires_large_offsets = requires_large_offsets
+        self.mol_nbrs, self.mol_idx = self.get_mol_nbrs()
+
+    def get_mol_nbrs(self):
+        """
+        Dense directed neighbor list for each molecule, in case that's needed
+        in the model calculation
+        """
+
+        # Not yet implemented for PBC
+        if self.offsets is not None and (self.offsets != 0).any():
+            return None, None
+
+        counter = 0
+        nbrs = []
+
+        for atoms in self.get_list_atoms():
+            nxyz = np.concatenate([
+                atoms.get_atomic_numbers().reshape(-1, 1),
+                atoms.get_positions().reshape(-1, 3)
+            ], axis=1)
+
+            n = nxyz.shape[0]
+            idx = torch.arange(n)
+            x, y = torch.meshgrid(idx, idx)
+
+            # undirected neighbor list
+            these_nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)], dim=1)
+            these_nbrs = these_nbrs[these_nbrs[:, 0] != these_nbrs[:, 1]]
+
+            nbrs.append(these_nbrs + counter)
+            counter += n
+
+        nbrs = torch.cat(nbrs)
+        mol_idx = torch.cat([torch.zeros(num) + i
+                             for i, num in enumerate(self.num_atoms)]
+                            ).long()
+
+        return nbrs, mol_idx
 
     def get_nxyz(self):
         """Gets the atomic number and the positions of the atoms
@@ -117,6 +155,12 @@ class AtomsBatch(Atoms):
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
         if self.props.get('num_atoms') is None:
             self.props['num_atoms'] = torch.LongTensor([len(self)])
+
+        if self.mol_nbrs is not None:
+            self.props['mol_nbrs'] = self.mol_nbrs
+
+        if self.mol_idx is not None:
+            self.props['mol_idx'] = self.mol_idx
 
         return self.props
 

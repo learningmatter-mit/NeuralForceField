@@ -41,7 +41,9 @@ with open(func_path, "r") as f:
 
 
 def get_nbrs(batch,
-             xyz):
+             xyz,
+             nbrs=None,
+             mol_idx=None):
     """
     Get the undirected neighbor list connecting every atom to its neighbor within
     a given geometry, but not to itself or to atoms in other geometries.
@@ -51,27 +53,33 @@ def get_nbrs(batch,
     if not isinstance(num_atoms, list):
         num_atoms = num_atoms.tolist()
 
-    nxyz_list = torch.split(batch['nxyz'], num_atoms)
-    counter = 0
-    nbrs = []
+    if nbrs is None:
 
-    for nxyz in nxyz_list:
-        n = nxyz.shape[0]
-        idx = torch.arange(n)
-        x, y = torch.meshgrid(idx, idx)
+        nxyz_list = torch.split(batch['nxyz'], num_atoms)
+        counter = 0
 
-        # undirected neighbor list
-        these_nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)], dim=1)
-        these_nbrs = these_nbrs[these_nbrs[:, 0] != these_nbrs[:, 1]]
+        nbrs = []
 
-        nbrs.append(these_nbrs + counter)
-        counter += n
+        for nxyz in nxyz_list:
+            n = nxyz.shape[0]
+            idx = torch.arange(n)
+            x, y = torch.meshgrid(idx, idx)
 
-    nbrs = torch.cat(nbrs).to(xyz.device)
+            # undirected neighbor list
+            these_nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)], dim=1)
+            these_nbrs = these_nbrs[these_nbrs[:, 0] != these_nbrs[:, 1]]
+
+            nbrs.append(these_nbrs + counter)
+            counter += n
+
+        nbrs = torch.cat(nbrs).to(xyz.device)
+
     z = batch['nxyz'][:, 0].long().to(xyz.device)
-    mol_idx = torch.cat([torch.zeros(num) + i
-                         for i, num in enumerate(num_atoms)]
-                        ).long().to(xyz.device)
+
+    if mol_idx is None:
+        mol_idx = torch.cat([torch.zeros(num) + i
+                             for i, num in enumerate(num_atoms)]
+                            ).long().to(xyz.device)
 
     return nbrs, mol_idx, z
 
@@ -113,30 +121,23 @@ def get_c6(z,
     cn_a_i = cn[nbrs[:, 0]]
     cn_b_j = cn[nbrs[:, 1]]
 
-    # max number of reference structures
-    max_ref = c6ab_ref.shape[2]
+    c6_ab_ref_ij = c6ab_ref[:, :, :, 0]
+    cn_a = c6ab_ref[:, :, :, 1]
+    cn_b = c6ab_ref[:, :, :, 2]
 
-    w = 0
-    z_term = 0
+    r = ((cn_a - cn_a_i.reshape(-1, 1, 1)) ** 2 +
+         (cn_b - cn_b_j.reshape(-1, 1, 1)) ** 2)
+    l_ij = torch.zeros_like(r)
 
-    for i in range(max_ref):
-        for j in range(max_ref):
-            c6_ab_ref_ij = c6ab_ref[:, i, j, 0]
-            cn_a = c6ab_ref[:, i, j, 1]
-            cn_b = c6ab_ref[:, i, j, 2]
+    # exclude any info that doesn't exist for this (i, j) combination --
+    # signified in the tables by c6_ab_ref = -1
 
-            r = (cn_a - cn_a_i) ** 2 + (cn_b - cn_b_j) ** 2
-            l_ij = torch.zeros_like(r)
+    valid_idx = torch.bitwise_and(torch.bitwise_and(cn_a >= 0, cn_b >= 0),
+                                  c6_ab_ref_ij >= 0)
+    l_ij[valid_idx] = torch.exp(-k3 * r[valid_idx])
 
-            # exclude any info that doesn't exist for this (i, j) combination --
-            # signified in the tables by c6_ab_ref = -1
-            valid_idx = torch.bitwise_and(torch.bitwise_and(cn_a >= 0, cn_b >= 0),
-                                          c6_ab_ref_ij >= 0)
-            l_ij[valid_idx] = torch.exp(-k3 * r[valid_idx])
-
-            w += l_ij
-            z_term += (c6_ab_ref_ij * l_ij)
-
+    w = l_ij.sum((1, 2))
+    z_term = (c6_ab_ref_ij * l_ij).sum((1, 2))
     c6 = z_term / w
 
     return c6
@@ -210,13 +211,18 @@ def get_dispersion(batch,
                    c6_ref=C6_REF,
                    r_cov=R_COV,
                    r2r4=R2R4,
-                   func_params=FUNC_PARAMS):
+                   func_params=FUNC_PARAMS,
+                   nbrs=None,
+                   mol_idx=None):
 
     params = get_func_info(functional=functional,
                            disp_type=disp_type,
                            func_params=func_params)
 
-    nbrs, mol_idx, z = get_nbrs(batch=batch, xyz=xyz)
+    nbrs, mol_idx, z = get_nbrs(batch=batch,
+                                xyz=xyz,
+                                nbrs=nbrs,
+                                mol_idx=mol_idx)
     cn, r_ab = get_coordination(xyz=xyz,
                                 z=z,
                                 nbrs=nbrs,
