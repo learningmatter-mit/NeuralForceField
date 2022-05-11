@@ -42,8 +42,8 @@ class PainnDispersion(nn.Module):
                                  xyz=xyz,
                                  disp_type=self.disp_type,
                                  functional=self.functional,
-                                 nbrs=batch['mol_nbrs'],
-                                 mol_idx=batch["mol_idx"])
+                                 nbrs=batch.get('mol_nbrs'),
+                                 mol_idx=batch.get("mol_idx"))
 
         # convert to kcal / mol
         e_disp = e_disp * const.HARTREE_TO_KCAL_MOL
