@@ -329,6 +329,11 @@ class BatchedBFGS(BFGS):
         if f is None:
             f = atoms.get_forces()
 
+        # set nan forces to 0 so we don't waste lots of steps waiting for that
+        # molecule to converge
+
+        f[np.bitwise_not(np.isfinite(f))] = 0
+
         r = atoms.get_positions()
         f = f.reshape(-1)
         self.update(r.flat, f, self.r0, self.f0)
@@ -478,7 +483,8 @@ class BatchedLBFGS(LBFGS):
 
         return mol_idx
 
-    def step(self, f=None):
+    def step(self,
+             f=None):
         """Take a single step
 
         Use the given forces, update the history and calculate the next step --
@@ -486,6 +492,11 @@ class BatchedLBFGS(LBFGS):
 
         if f is None:
             f = self.atoms.get_forces()
+
+        # set nan forces to 0 so we don't waste lots of steps waiting for that
+        # molecule to converge
+
+        f[np.bitwise_not(np.isfinite(f))] = 0
 
         r = self.atoms.get_positions()
 
