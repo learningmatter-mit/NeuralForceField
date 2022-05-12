@@ -45,7 +45,7 @@ def get_nbrs(batch,
              nbrs=None,
              mol_idx=None):
     """
-    Get the undirected neighbor list connecting every atom to its neighbor within
+    Get the directed neighbor list connecting every atom to its neighbor within
     a given geometry, but not to itself or to atoms in other geometries.
     """
 
@@ -65,7 +65,7 @@ def get_nbrs(batch,
             idx = torch.arange(n)
             x, y = torch.meshgrid(idx, idx)
 
-            # undirected neighbor list
+            # directed neighbor list
             these_nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)], dim=1)
             these_nbrs = these_nbrs[these_nbrs[:, 0] != these_nbrs[:, 1]]
 
@@ -121,9 +121,9 @@ def get_c6(z,
     cn_a_i = cn[nbrs[:, 0]]
     cn_b_j = cn[nbrs[:, 1]]
 
-    c6_ab_ref_ij = c6ab_ref[:, :, :, 0]
-    cn_a = c6ab_ref[:, :, :, 1]
-    cn_b = c6ab_ref[:, :, :, 2]
+    c6_ab_ref_ij = c6ab_ref[..., 0]
+    cn_a = c6ab_ref[..., 1]
+    cn_b = c6ab_ref[..., 2]
 
     r = ((cn_a - cn_a_i.reshape(-1, 1, 1)) ** 2 +
          (cn_b - cn_b_j.reshape(-1, 1, 1)) ** 2)
