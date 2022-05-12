@@ -734,12 +734,18 @@ class NeuralMetadynamics(NeuralFF):
         # only apply the bias to certain atoms
         self.exclude_atoms = torch.LongTensor(self.pushing_params
                                               .get("exclude_atoms", []))
+        self.keep_idx = None
 
     def get_keep_idx(self, atoms):
         # correct for atoms not in the biasing potential
 
+        if self.keep_idx is not None:
+            assert len(self.keep_idx) + len(self.exclude_atoms) == len(atoms)
+            return self.keep_idx
+
         keep_idx = torch.LongTensor([i for i in range(len(atoms))
                                      if i not in self.exclude_atoms])
+        self.keep_idx = keep_idx
         return keep_idx
 
     def make_dsets(self,
@@ -883,6 +889,9 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
                                     directed=directed,
                                     **kwargs)
 
+        self.query_nxyz = None
+        self.mol_idx = None
+
     def rmsd_prelims(self, atoms):
 
         # f_damp is the turn-on on timescale, measured in
@@ -906,19 +915,36 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
 
         return k_i, alpha_i, f_damp
 
+    def get_query_nxyz(self, keep_idx):
+        if self.query_nxyz is not None:
+            return self.query_nxyz
+
+        query_nxyz = torch.stack([torch.Tensor(old_atoms.get_nxyz())[keep_idx, :]
+                                  for old_atoms in self.old_atoms])
+        self.query_nxyz = query_nxyz
+
+        return query_nxyz
+
+    def append_atoms(self, atoms):
+        super().append_atoms(atoms)
+        self.query_nxyz = None
+
     def make_nxyz(self,
                   atoms):
 
         keep_idx = self.get_keep_idx(atoms)
         ref_nxyz = torch.Tensor(atoms.get_nxyz())[keep_idx, :]
-        query_nxyz = torch.stack([torch.Tensor(old_atoms.get_nxyz())[keep_idx, :]
-                                  for old_atoms in self.old_atoms])
+        query_nxyz = self.get_query_nxyz(keep_idx)
 
         return ref_nxyz, query_nxyz, keep_idx
 
     def get_mol_idx(self,
                     atoms,
                     keep_idx):
+
+        if self.mol_idx is not None:
+            assert self.mol_idx.max() + 1 == len(atoms.num_atoms)
+            return self.mol_idx
 
         num_atoms = atoms.num_atoms
         counter = 0
@@ -930,6 +956,7 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
             counter += num
 
         mol_idx = torch.cat(mol_idx)[keep_idx]
+        self.mol_idx = mol_idx
 
         return mol_idx
 
