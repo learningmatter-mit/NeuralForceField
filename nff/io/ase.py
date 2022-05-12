@@ -915,14 +915,6 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
 
     def get_query_nxyz(self, keep_idx):
         if self.query_nxyz is not None:
-
-            ##############
-            # query_nxyz = torch.stack([torch.Tensor(old_atoms.get_nxyz())[keep_idx, :]
-            #                           for old_atoms in self.old_atoms])
-
-            # assert (query_nxyz == self.query_nxyz).all()
-            ##############
-
             return self.query_nxyz
 
         query_nxyz = torch.stack([torch.Tensor(old_atoms.get_nxyz())[keep_idx, :]
@@ -950,23 +942,6 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
 
         if self.mol_idx is not None:
             assert self.mol_idx.max() + 1 == len(atoms.num_atoms)
-
-            # ###########
-            # num_atoms = atoms.num_atoms
-            # counter = 0
-
-            # mol_idx = []
-
-            # for i, num in enumerate(num_atoms):
-            #     mol_idx.append(torch.ones(num).long() * i)
-            #     counter += num
-
-            # mol_idx = torch.cat(mol_idx)[keep_idx]
-
-            # assert (self.mol_idx == mol_idx).all()
-
-            # ###########
-
             return self.mol_idx
 
         num_atoms = atoms.num_atoms
