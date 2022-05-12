@@ -113,6 +113,8 @@ class AtomsBatch(Atoms):
 
         self.props['nbr_list'] = self.nbr_list
         self.props['offsets'] = self.offsets
+        if self.pbc.any():
+            self.props['cell'] = self.cell
 
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
         if self.props.get('num_atoms') is None:
@@ -525,7 +527,7 @@ class NeuralFF(Calculator):
             **kwargs
     ):
 
-        model = load_model(model_path)
+        model = load_model(model_path, **kwargs)
         out = cls(model=model,
                   device=device,
                   **kwargs)
