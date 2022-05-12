@@ -4,7 +4,9 @@ import time
 
 from ase.constraints import FixConstraint
 from ase.geometry import get_dihedrals_derivatives, get_angles_derivatives
-from ase.optimize import BFGS
+from ase.optimize import BFGS, LBFGS
+
+from nff.utils.scatter import scatter_add
 
 
 def get_dihed_derivs(atoms,
@@ -97,6 +99,26 @@ def get_angle_forces(atoms,
 
     for these_idx, these_forces in zip(idx, forces):
         total_forces[these_idx] += these_forces
+
+    return total_forces
+
+
+def get_bond_forces(atoms,
+                    idx,
+                    k,
+                    length_0):
+
+    deltas = (atoms.get_positions()[idx[:, 0]] -
+              atoms.get_positions()[idx[:, 1]])
+    bond_lens = np.linalg.norm(deltas, axis=-1)
+
+    forces_0 = -2 * k.reshape(-1, 1) * deltas * ((-length_0 + bond_lens) /
+                                                 bond_lens).reshape(-1, 1)
+    forces_1 = -forces_0
+
+    total_forces = np.zeros_like(atoms.get_positions())
+    total_forces[idx[:, 0]] += forces_0
+    total_forces[idx[:, 1]] += forces_1
 
     return total_forces
 
@@ -202,6 +224,57 @@ class ConstrainDihedrals(FixConstraint):
         return 'Constrain dihedrals (indices=%s, values (deg.)=%s)' % (idx_str, val_str)
 
 
+class ConstrainBonds(FixConstraint):
+
+    def __init__(self,
+                 idx,
+                 atoms,
+                 force_consts,
+                 targ_lengths=None):
+
+        self.idx = np.asarray(idx)
+
+        if targ_lengths is not None:
+            self.targ_lengths = np.array(targ_lengths).reshape(-1)
+        else:
+            deltas = (atoms.get_positions()[idx[:, 0]] -
+                      atoms.get_positions()[idx[:, 1]])
+            self.targ_lengths = np.linalg.norm(deltas, axis=-1)
+
+        if (isinstance(force_consts, float) or isinstance(force_consts, int)):
+            self.force_consts = np.array([float(force_consts)] * len(self.idx))
+        else:
+            assert len(force_consts) == len(self.idx)
+            self.force_consts = force_consts
+
+    def get_removed_dof(self, atoms):
+        # no degrees of freedom are being fixed, they're just being constrained.
+        # So return 0 just like in the Hookean class
+        return 0
+
+    def adjust_positions(self, atoms, new):
+        return
+
+    def adjust_forces(self, atoms, forces):
+        new_forces = get_bond_forces(atoms=atoms,
+                                     idx=self.idx,
+                                     k=self.force_consts,
+                                     length_0=self.targ_lengths)
+
+        forces += new_forces
+
+        return new_forces, forces
+
+    def __str__(self):
+        return repr(self)
+
+    def __repr__(self):
+        idx_str = str(self.idx)
+        val_str = str(self.targ_lengths)
+
+        return 'Constrain bonds (indices=%s, values=%s)' % (idx_str, val_str)
+
+
 def split(array, num_atoms):
     shape = [-1]
     total_atoms = num_atoms.sum()
@@ -216,18 +289,12 @@ def split(array, num_atoms):
 
 class BatchedBFGS(BFGS):
 
-    def __init__(self,
-                 *args,
-                 **kwargs):
-
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_atoms = self.atoms.num_atoms.numpy().astype('int')
+        self.save = kwargs.get("save", False)
 
         self.split_h0()
-        self.eigval_update_period = kwargs.get("eigval_update_period", 3)
-        self.counter = 0
-        self.eigvecs = None
-        self.eigvals = None
 
     def determine_step(self, dr, steplengths, f):
 
@@ -256,26 +323,6 @@ class BatchedBFGS(BFGS):
 
         return dr
 
-    def needs_update(self):
-        return (self.counter) % self.eigval_update_period == 0
-
-    def get_eigs(self,
-                 H,
-                 idx):
-
-        needs_update = self.needs_update()
-
-        use_old = all([self.eigvecs is not None,
-                       self.eigvals is not None,
-                       not needs_update])
-
-        if use_old:
-            return self.eigvals[idx], self.eigvecs[idx]
-
-        else:
-            omega, V = np.linalg.eigh(H)
-            return omega, V
-
     def step(self, f=None):
         atoms = self.atoms
 
@@ -289,29 +336,18 @@ class BatchedBFGS(BFGS):
         drs = []
         start = 0
 
-        eigvecs = []
-        eigvals = []
-
         for i, H in enumerate(self.H):
 
             num_atoms = self.num_atoms[i]
             delta = num_atoms * 3
             stop = start + delta
 
-            omega, V = self.get_eigs(H=H,
-                                     idx=i)
-
+            omega, V = np.linalg.eigh(H)
             this_dr = np.dot(V, np.dot(f[start: stop], V) /
                              np.fabs(omega)).reshape((-1, 3))
             drs.append(this_dr)
 
             start += delta
-
-            eigvecs.append(V)
-            eigvals.append(omega)
-
-        self.eigvecs = eigvecs
-        self.eigvals = eigvals
 
         dr = np.concatenate(drs)
         steplengths = (dr**2).sum(1)**0.5
@@ -319,9 +355,10 @@ class BatchedBFGS(BFGS):
         atoms.set_positions(r + dr)
         self.r0 = r.flat.copy()
         self.f0 = f.copy()
-        self.dump((self.H, self.r0, self.f0, self.maxstep))
 
-        self.counter += 1
+        # takes up a lot of unnecessary time when doing batched opt
+        if self.save:
+            self.dump((self.H, self.r0, self.f0, self.maxstep))
 
     def split_h0(self):
 
@@ -344,9 +381,6 @@ class BatchedBFGS(BFGS):
         if self.H is None:
             self.H = self.H0
             return
-
-        # if not self.needs_update():
-        #     return
 
         split_f = split(f, self.num_atoms)
         split_f0 = split(f0, self.num_atoms)
@@ -371,9 +405,27 @@ class BatchedBFGS(BFGS):
             self.H[i] -= (np.outer(df, df) /
                           a + np.outer(dg, dg) / b)
 
+    def converged(self,
+                  forces=None):
+
+        if forces is None:
+            forces = self.atoms.get_forces()
+
+        # set nans to zero because they'll never converge anyway, so might as well
+        # stop the opt when everything else is converged
+
+        forces[np.bitwise_not(np.isfinite(forces))] = 0
+
+        if hasattr(self.atoms, "get_curvature"):
+            return (forces ** 2).sum(
+                axis=1
+            ).max() < self.fmax ** 2 and self.atoms.get_curvature() < 0.0
+        return (forces ** 2).sum(axis=1).max() < self.fmax ** 2
+
     def log(self, forces=None):
         if forces is None:
             forces = self.atoms.get_forces()
+
         fmax = [np.sqrt((i ** 2).sum(axis=1).max())
                 for i in split(forces, self.num_atoms)]
 
@@ -419,3 +471,144 @@ class BatchedBFGS(BFGS):
             msg = msg % args
             self.logfile.write(msg)
             self.logfile.flush()
+
+
+class BatchedLBFGS(LBFGS):
+    """
+    The Hessian is not diagonalized in LBFGS, so each step is faster than in BFGS.
+    The diagonalizations happen in serial for batched BFGS, which can make them
+    a bottleneck. Avoiding diagonalizations is therefore helpful when doing batched
+    optimization.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.num_atoms = self.atoms.num_atoms.numpy().astype('int')
+        self.mol_idx = self.make_mol_idx()
+        self.save = kwargs.get("save", False)
+        self.memory = kwargs.get("memory", 30)
+
+    def make_mol_idx(self):
+        mol_idx = []
+        for i, num_atoms in enumerate(self.num_atoms):
+            mol_idx += [i] * int(num_atoms) * 3
+        mol_idx = torch.LongTensor(mol_idx)
+
+        return mol_idx
+
+    def step(self,
+             f=None):
+        """
+        Take a single step
+
+        Use the given forces, update the history and calculate the next step --
+        then take it
+        """
+
+        if f is None:
+            f = self.atoms.get_forces()
+
+        r = self.atoms.get_positions()
+
+        self.update(r, f, self.r0, self.f0)
+
+        s = np.array(self.s)
+        y = np.array(self.y)
+        rho = np.array(self.rho)
+
+        h0 = self.H0
+        loopmax = np.min([self.memory, self.iteration])
+        a = np.empty((loopmax, self.num_atoms.shape[0]), dtype=np.float64)
+
+        # The algorithm itself:
+
+        q = -f.reshape(-1)
+
+        for i in range(loopmax - 1, -1, -1):
+            dot = scatter_add(src=torch.Tensor(s[i] * q),
+                              index=self.mol_idx,
+                              dim=0,
+                              dim_size=int(self.mol_idx.max() + 1)).numpy()
+
+            a[i] = rho[i] * dot
+            prod = np.repeat(a[i], self.num_atoms * 3) * y[i]
+            q -= prod
+
+        z = h0 * q
+
+        for i in range(loopmax):
+            dot = scatter_add(src=torch.Tensor(y[i] * z),
+                              index=self.mol_idx,
+                              dim=0,
+                              dim_size=int(self.mol_idx.max() + 1)).numpy()
+
+            b = rho[i] * dot
+            delta = a[i] - b
+            prod = np.repeat(delta, self.num_atoms * 3) * s[i]
+            z += prod
+
+        self.p = - z.reshape((-1, 3))
+
+        g = -f
+        if self.use_line_search:
+            raise NotImplementedError("Not yet implemented wdith line search")
+        else:
+            self.force_calls += 1
+            self.function_calls += 1
+            steplengths = (self.p ** 2).sum(1) ** 0.5
+            dr = self.determine_step(dr=self.p,
+                                     steplengths=steplengths,
+                                     f=f) * self.damping
+
+        self.atoms.set_positions(r + dr)
+
+        self.iteration += 1
+        self.r0 = r
+        self.f0 = -g
+
+        if self.save:
+            self.dump((self.iteration, self.s, self.y,
+                       self.rho, self.r0, self.f0, self.e0, self.task))
+
+    def determine_step(self, dr, steplengths, f):
+        return BatchedBFGS.determine_step(self=self,
+                                          dr=dr,
+                                          steplengths=steplengths,
+                                          f=f)
+
+    def update(self, r, f, r0, f0):
+        """
+        Update everything that is kept in memory
+        """
+        if self.iteration > 0:
+            s0 = r.reshape(-1) - r0.reshape(-1)
+            self.s.append(s0)
+
+            # We use the gradient which is minus the force!
+            y0 = f0.reshape(-1) - f.reshape(-1)
+            self.y.append(y0)
+
+            dot = scatter_add(src=torch.Tensor(y0 * s0),
+                              index=self.mol_idx,
+                              dim=0,
+                              dim_size=int(self.mol_idx.max() + 1)).numpy()
+
+            # for anything that's converged and hence not updated
+            # (so y0 and s0 are both 0)
+            dot[dot == 0] = 1e-13
+
+            rho0 = 1.0 / dot
+
+            self.rho.append(rho0)
+
+        if self.iteration > self.memory:
+            self.s.pop(0)
+            self.y.pop(0)
+            self.rho.pop(0)
+
+    def converged(self,
+                  forces=None):
+        return BatchedBFGS.converged(self, forces)
+
+    def log(self, forces=None):
+        return BatchedBFGS.log(self, forces)

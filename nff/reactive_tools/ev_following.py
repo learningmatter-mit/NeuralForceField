@@ -111,7 +111,7 @@ def eigvec_following(ev_atoms,
                   ).reshape(-1, len(old_xyz[0]), Ndim)
 
     step_size = h.norm()
-    
+
     if(step_size <= maxstepsize):
         new_xyz = old_xyz + h
     else:
@@ -190,5 +190,10 @@ def ev_run(ev_atoms,
         positions = xyz.reshape(-1, 3).cpu().numpy()
         ev_atoms.set_positions(positions)
 
+    # so that we're returning the xyz that has gradient `grad`, not whatever
+    # the xyz of the next step would be
+    xyz = torch.Tensor(ev_atoms.get_positions()).reshape(1, -1, 3)
+
     output = xyz, grad, xyz_all, rmslist, maxlist
+
     return output
