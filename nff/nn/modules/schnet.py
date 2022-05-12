@@ -1125,11 +1125,18 @@ def sum_and_grad(batch,
     for key, val in atomwise_output.items():
         if key not in out_keys:
             continue
-        # split the outputs into those of each molecule
-        split_val = torch.split(val, N)
-        # sum or avg the results for each molecule
-        attr = "mean" if mean else "sum"
-        results[key] = torch.stack([getattr(i, attr)() for i in split_val])
+
+        mol_idx = torch.arange(len(N)).repeat_interleave(
+            torch.LongTensor(N)).to(val.device)
+
+        pooled_result = scatter_add(val.reshape(-1),
+                                    mol_idx,
+                                    dim_size=mol_idx.max() + 1)
+
+        if mean:
+            pooled_result = pooled_result / torch.Tensor(N).to(val.device)
+
+        results[key] = pooled_result
 
     # compute gradients
 
