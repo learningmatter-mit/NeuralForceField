@@ -200,7 +200,6 @@ class AtomsBatch(Atoms):
     def update_nbr_list(self):
         """Update neighbor list and the periodic reindexing
            for the given Atoms object.
-
            Args:
            cutoff(float): maximum cutoff for which atoms are
                                           considered interacting.
@@ -208,7 +207,6 @@ class AtomsBatch(Atoms):
            nbr_list(torch.LongTensor)
            offsets(torch.Tensor)
            nxyz(torch.Tensor)
-
         """
 
         Atoms_list = self.get_list_atoms()
@@ -223,9 +221,13 @@ class AtomsBatch(Atoms):
                 device=self.device,
                 directed=self.directed,
                 requires_large_offsets=self.requires_large_offsets)
+            
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            these_offsets = sparsify_array(offsets.dot(self.get_cell()))
-
+            if any(atoms.pbc):
+                these_offsets = sparsify_array(offsets)
+            else:
+                these_offsets = sparsify_array(offsets.dot(self.get_cell()))
+            
             # non-periodic
             if isinstance(these_offsets, int):
                 these_offsets = torch.Tensor(offsets)
