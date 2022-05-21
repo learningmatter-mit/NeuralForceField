@@ -154,62 +154,76 @@ def torch_nbr_list(atomsobject,
         i, j, cutoff: just like ase.neighborlist.neighbor_list
     """
     
-    xyz = torch.Tensor(atomsobject.get_positions(wrap=True)).to(device=device)
+    xyz = torch.Tensor(atomsobject.get_positions(wrap=False)).to(device)
 
     if any(atomsobject.pbc):
-        cell = atomsobject.cell
+        # check if sufficiently large to run the "fast" nbr_list function
+        # otherwise, default to the "robust" nbr_list function for small cells
+        if np.all(2*cutoff < atomsobject.cell.cellpar()[:3]):
+            # "fast" nbr_list function for small cells (pbc)
+            if np.count_nonzero(atomsobject.cell.T-np.diag(np.diagonal(atomsobject.cell.T)))!=0:
+                dis_mat = xyz[None, :, :] - xyz[:, None, :]
+                M,N=dis_mat.shape[0],dis_mat.shape[1]
+                f=torch.linalg.solve(torch.Tensor(atomsobject.cell.T).to(device),(dis_mat.view(-1,3).T)).T
+                g=f-torch.floor(f+0.5)
+                dis_mat=torch.matmul(g,torch.Tensor(atomsobject.cell).to(device))
+                dis_mat=dis_mat.view(M,N,3)
+                offsets=-torch.floor(f+0.5).view(M,N,3)
+            else:
+                dis_mat = xyz[None, :, :] - xyz[:, None, :]
+                cell_dim = torch.Tensor(atomsobject.get_cell()).diag().to(device)
+                if requires_large_offsets:
+                    shift = torch.round(torch.divide(dis_mat,cell_dim))
+                    offsets = -shift
+                else:
+                    offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + \
+                    dis_mat.lt(-0.5 * cell_dim).to(torch.float)
+                    dis_mat=dis_mat+offsets*cell_dim
 
-        # estimate getting close to the cutoff with supercell expansion
-        a_mul = int(np.ceil( cutoff / np.linalg.norm(cell[0]) ))+1
-        b_mul = int(np.ceil( cutoff / np.linalg.norm(cell[1]) ))+1
-        c_mul = int(np.ceil( cutoff / np.linalg.norm(cell[2]) ))+1
-        supercell_matrix = np.array([[a_mul, 0, 0], [0, b_mul, 0], [0, 0, c_mul]])
-        supercell = clean_matrix(supercell_matrix @ cell)
+            dis_sq = dis_mat.pow(2).sum(-1)
+            mask = (dis_sq < cutoff ** 2) & (dis_sq != 0)
+            nbr_list = mask.nonzero(as_tuple=False)
+            offsets = offsets[nbr_list[:, 0], nbr_list[:, 1], :].detach().to("cpu").numpy()
 
-        # cartesian lattice points
-        lattice_points_frac = lattice_points_in_supercell(supercell_matrix)
-        lattice_points = np.dot(lattice_points_frac, supercell)
-        
-        # need to get all negative lattice translation vectors but remove duplicate 0 vector
-        zero_idx = np.where(np.all(lattice_points.__eq__(np.array([0,0,0])), axis=1))[0][0]
-        lattice_points = np.concatenate([lattice_points[zero_idx:, :], lattice_points[:zero_idx, :]])
+        else:
+            # "robust" nbr_list function for all cells (pbc)
+            cell = atomsobject.cell
+            # estimate getting close to the cutoff with supercell expansion
+            a_mul = int(np.ceil( cutoff / np.linalg.norm(cell[0]) ))+1
+            b_mul = int(np.ceil( cutoff / np.linalg.norm(cell[1]) ))+1
+            c_mul = int(np.ceil( cutoff / np.linalg.norm(cell[2]) ))+1
+            supercell_matrix = np.array([[a_mul, 0, 0], [0, b_mul, 0], [0, 0, c_mul]])
+            supercell = clean_matrix(supercell_matrix @ cell)
 
-        N = len(lattice_points)
-        # perform lattice translation vectors on positions
-        lattice_points_T = torch.tile(torch.from_numpy(lattice_points), 
-                                        (len(xyz), ) + (1, ) * (len(lattice_points.shape) - 1) 
-                                        ).to(device=device)
-        xyz_T = torch.repeat_interleave(xyz, N, dim=0)
-        xyz_T = xyz_T + lattice_points_T
+            # cartesian lattice points
+            lattice_points_frac = lattice_points_in_supercell(supercell_matrix)
+            lattice_points = np.dot(lattice_points_frac, supercell)
+            # need to get all negative lattice translation vectors but remove duplicate 0 vector
+            zero_idx = np.where(np.all(lattice_points.__eq__(np.array([0,0,0])), axis=1))[0][0]
+            lattice_points = np.concatenate([lattice_points[zero_idx:, :], lattice_points[:zero_idx, :]])
 
-        # get valid indices within the cutoff
-        num = xyz.shape[0]
-        idx = torch.arange(num)
-        x, y = torch.meshgrid(idx, idx)
-        nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)], dim=1).to(device=device)
-        lattice_points = torch.tile(torch.from_numpy(lattice_points),
-                                        (len(nbrs), ) + (1, ) * (len(lattice_points.shape) - 1) 
-                                        ).to(device=device)
-
-        nbrs_T = torch.repeat_interleave(nbrs, N, dim=0)
-        # ensure that A != B when T=0
-        # since first index in lattice_points corresponds to T=0
-        # get the idxs on which to apply the mask
-        idxs_to_apply = torch.tensor([True]*len(nbrs_T)).to(device=device)
-        idxs_to_apply[::N] = False
-        # get the mask that we want to apply
-        mask = (nbrs_T[:,0] != nbrs_T[:,1]).to(device=device)
-        # do a joint boolean operation to get the mask
-        mask_applied = torch.logical_or(idxs_to_apply, mask)
-        nbrs_T = nbrs_T[mask_applied]
-        lattice_points = lattice_points[mask_applied]
-            
-        # r_ab with all lattice translation vectors
-        r_ab_T = (( (xyz[nbrs_T[:, 0]] - xyz[nbrs_T[:, 1]]) + lattice_points)
-                .pow(2).sum(1).sqrt()).to(device=device)
-        
-        nbr_list = nbrs_T[r_ab_T < cutoff]
-        offsets = lattice_points[r_ab_T < cutoff]
+            N = len(lattice_points)
+            # perform lattice translation vectors on positions
+            lattice_points_T = torch.tile(torch.from_numpy(lattice_points), 
+                                            (len(xyz), ) + (1, ) * (len(lattice_points.shape) - 1) 
+                                            ).to(device)
+            xyz_T = torch.repeat_interleave(xyz.view(-1,1,3), N, dim=1)
+            xyz_T = xyz_T + lattice_points_T.view(xyz_T.shape)
+            diss=xyz_T[None,:,None,:,:]-xyz_T[:,None,:,None,:]
+            diss=diss[:,:,0,:,:]
+            dis_sq = diss.pow(2).sum(-1)
+            mask = (dis_sq < cutoff ** 2) & (dis_sq != 0)
+            nbr_list = mask.nonzero(as_tuple=False)[:,:2]
+            offsets=(lattice_points_T.view(xyz_T.shape)
+                        [mask.nonzero(as_tuple=False)[:,1],mask.nonzero(as_tuple=False)[:,2]])
+            # get offsets in original integer multiple form
+            ones = np.ones_like(cell)
+            # cell_inv = torch.from_numpy(np.divide(ones, cell, out=np.zeros_like(ones), where=cell!=0)).to(device)
+            # offsets = torch.matmul(offsets, cell_inv).int()
+            # for some reason torch is incredibly slow for this^
+            cell_inv = np.divide(ones, cell, out=np.zeros_like(ones), where=cell!=0)
+            offsets = offsets.detach().to("cpu").numpy()
+            offsets = offsets.dot(cell_inv).astype(int)
 
     else:
         dis_mat = xyz[None, :, :] - xyz[:, None, :]        
@@ -224,7 +238,7 @@ def torch_nbr_list(atomsobject,
     ), nbr_list[:, 1].detach().to("cpu").numpy()
 
     if any(atomsobject.pbc):
-        offsets = offsets.detach().to("cpu").numpy()
+        offsets = offsets
     else:
         offsets = np.zeros((nbr_list.shape[0], 3))
 

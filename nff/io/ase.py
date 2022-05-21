@@ -221,12 +221,9 @@ class AtomsBatch(Atoms):
                 device=self.device,
                 directed=self.directed,
                 requires_large_offsets=self.requires_large_offsets)
-            
+
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
-            if any(atoms.pbc):
-                these_offsets = sparsify_array(offsets)
-            else:
-                these_offsets = sparsify_array(offsets.dot(self.get_cell()))
+            these_offsets = sparsify_array(offsets.dot(self.get_cell()))
             
             # non-periodic
             if isinstance(these_offsets, int):
