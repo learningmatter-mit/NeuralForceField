@@ -158,27 +158,20 @@ def torch_nbr_list(atomsobject,
 
     if any(atomsobject.pbc):
         # check if sufficiently large to run the "fast" nbr_list function
+        # also check if orthorhombic
         # otherwise, default to the "robust" nbr_list function for small cells
-        if np.all(2*cutoff < atomsobject.cell.cellpar()[:3]):
+        if ( np.all(2*cutoff < atomsobject.cell.cellpar()[:3]) and 
+            not np.count_nonzero(atomsobject.cell.T-np.diag(np.diagonal(atomsobject.cell.T)))!=0 ):
             # "fast" nbr_list function for small cells (pbc)
-            if np.count_nonzero(atomsobject.cell.T-np.diag(np.diagonal(atomsobject.cell.T)))!=0:
-                dis_mat = xyz[None, :, :] - xyz[:, None, :]
-                M,N=dis_mat.shape[0],dis_mat.shape[1]
-                f=torch.linalg.solve(torch.Tensor(atomsobject.cell.T).to(device),(dis_mat.view(-1,3).T)).T
-                g=f-torch.floor(f+0.5)
-                dis_mat=torch.matmul(g,torch.Tensor(atomsobject.cell).to(device))
-                dis_mat=dis_mat.view(M,N,3)
-                offsets=-torch.floor(f+0.5).view(M,N,3)
+            dis_mat = xyz[None, :, :] - xyz[:, None, :]
+            cell_dim = torch.Tensor(atomsobject.get_cell()).diag().to(device)
+            if requires_large_offsets:
+                shift = torch.round(torch.divide(dis_mat,cell_dim))
+                offsets = -shift
             else:
-                dis_mat = xyz[None, :, :] - xyz[:, None, :]
-                cell_dim = torch.Tensor(atomsobject.get_cell()).diag().to(device)
-                if requires_large_offsets:
-                    shift = torch.round(torch.divide(dis_mat,cell_dim))
-                    offsets = -shift
-                else:
-                    offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + \
-                    dis_mat.lt(-0.5 * cell_dim).to(torch.float)
-                    dis_mat=dis_mat+offsets*cell_dim
+                offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + \
+                dis_mat.lt(-0.5 * cell_dim).to(torch.float)
+                dis_mat=dis_mat+offsets*cell_dim
 
             dis_sq = dis_mat.pow(2).sum(-1)
             mask = (dis_sq < cutoff ** 2) & (dis_sq != 0)
@@ -217,13 +210,9 @@ def torch_nbr_list(atomsobject,
             offsets=(lattice_points_T.view(xyz_T.shape)
                         [mask.nonzero(as_tuple=False)[:,1],mask.nonzero(as_tuple=False)[:,2]])
             # get offsets in original integer multiple form
-            ones = np.ones_like(cell)
-            # cell_inv = torch.from_numpy(np.divide(ones, cell, out=np.zeros_like(ones), where=cell!=0)).to(device)
-            # offsets = torch.matmul(offsets, cell_inv).int()
-            # for some reason torch is incredibly slow for this^
-            cell_inv = np.divide(ones, cell, out=np.zeros_like(ones), where=cell!=0)
+            cell = np.broadcast_to(cell.T, (offsets.shape[0],cell.shape[0],cell.shape[1]))
             offsets = offsets.detach().to("cpu").numpy()
-            offsets = offsets.dot(cell_inv).astype(int)
+            offsets = np.linalg.solve(cell, offsets).astype(int)
 
     else:
         dis_mat = xyz[None, :, :] - xyz[:, None, :]        
