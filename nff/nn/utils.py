@@ -154,8 +154,6 @@ def torch_nbr_list(atomsobject,
         i, j, cutoff: just like ase.neighborlist.neighbor_list
     """
     
-    xyz = torch.Tensor(atomsobject.get_positions(wrap=False)).to(device)
-
     if any(atomsobject.pbc):
         # check if sufficiently large to run the "fast" nbr_list function
         # also check if orthorhombic
@@ -163,6 +161,7 @@ def torch_nbr_list(atomsobject,
         if ( np.all(2*cutoff < atomsobject.cell.cellpar()[:3]) and 
             not np.count_nonzero(atomsobject.cell.T-np.diag(np.diagonal(atomsobject.cell.T)))!=0 ):
             # "fast" nbr_list function for small cells (pbc)
+            xyz = torch.Tensor(atomsobject.get_positions(wrap=False)).to(device)
             dis_mat = xyz[None, :, :] - xyz[:, None, :]
             cell_dim = torch.Tensor(atomsobject.get_cell()).diag().to(device)
             if requires_large_offsets:
@@ -180,8 +179,19 @@ def torch_nbr_list(atomsobject,
 
         else:
             # "robust" nbr_list function for all cells (pbc)
+            xyz = torch.Tensor(atomsobject.get_positions(wrap=True)).to(device)
+
+            # since we are not wrapping
+            # retrieve the shift vectors that would be equivalent to wrapping
+            positions = atomsobject.get_positions(wrap=True)
+            unwrapped_positions = atomsobject.get_positions(wrap=False)
+            shift = positions - unwrapped_positions
             cell = atomsobject.cell
+            cell = np.broadcast_to(cell.T, (shift.shape[0],cell.shape[0],cell.shape[1]))
+            shift = np.linalg.solve(cell, shift).astype(int)
+
             # estimate getting close to the cutoff with supercell expansion
+            cell = atomsobject.cell
             a_mul = int(np.ceil( cutoff / np.linalg.norm(cell[0]) ))+1
             b_mul = int(np.ceil( cutoff / np.linalg.norm(cell[1]) ))+1
             c_mul = int(np.ceil( cutoff / np.linalg.norm(cell[2]) ))+1
@@ -209,12 +219,25 @@ def torch_nbr_list(atomsobject,
             nbr_list = mask.nonzero(as_tuple=False)[:,:2]
             offsets=(lattice_points_T.view(xyz_T.shape)
                         [mask.nonzero(as_tuple=False)[:,1],mask.nonzero(as_tuple=False)[:,2]])
+
             # get offsets in original integer multiple form
             cell = np.broadcast_to(cell.T, (offsets.shape[0],cell.shape[0],cell.shape[1]))
             offsets = offsets.detach().to("cpu").numpy()
             offsets = np.linalg.solve(cell, offsets).astype(int)
 
+            # add shift to offsets with the right indices according to pairwise nbr_list
+            offsets = torch.from_numpy(offsets).int().to(device)
+            shift = torch.from_numpy(shift).int().to(device)
+            
+            # index shifts by atom but then apply shifts to pairwise interactions
+            # get shifts for each atom i and j that would be equivalent to wrapping
+            # convention is j - i for get_rij with NNs
+            shift_i = -shift[nbr_list[:,0]]
+            shift_j = shift[nbr_list[:,1]]
+            offsets = (shift_i + shift_j + offsets).detach().to("cpu").numpy()
+
     else:
+        xyz = torch.Tensor(atomsobject.get_positions(wrap=False)).to(device)
         dis_mat = xyz[None, :, :] - xyz[:, None, :]        
         dis_sq = dis_mat.pow(2).sum(-1)
         mask = (dis_sq < cutoff ** 2) & (dis_sq != 0)
