@@ -85,6 +85,44 @@ class AtomsBatch(Atoms):
         self.cutoff_skin = cutoff_skin
         self.device = device
         self.requires_large_offsets = requires_large_offsets
+        self.mol_nbrs, self.mol_idx = self.get_mol_nbrs()
+
+    def get_mol_nbrs(self):
+        """
+        Dense directed neighbor list for each molecule, in case that's needed
+        in the model calculation
+        """
+
+        # Not yet implemented for PBC
+        if self.offsets is not None and (self.offsets != 0).any():
+            return None, None
+
+        counter = 0
+        nbrs = []
+
+        for atoms in self.get_list_atoms():
+            nxyz = np.concatenate([
+                atoms.get_atomic_numbers().reshape(-1, 1),
+                atoms.get_positions().reshape(-1, 3)
+            ], axis=1)
+
+            n = nxyz.shape[0]
+            idx = torch.arange(n)
+            x, y = torch.meshgrid(idx, idx)
+
+            # undirected neighbor list
+            these_nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)], dim=1)
+            these_nbrs = these_nbrs[these_nbrs[:, 0] != these_nbrs[:, 1]]
+
+            nbrs.append(these_nbrs + counter)
+            counter += n
+
+        nbrs = torch.cat(nbrs)
+        mol_idx = torch.cat([torch.zeros(num) + i
+                             for i, num in enumerate(self.num_atoms)]
+                            ).long()
+
+        return nbrs, mol_idx
 
     def get_nxyz(self):
         """Gets the atomic number and the positions of the atoms
@@ -113,10 +151,18 @@ class AtomsBatch(Atoms):
 
         self.props['nbr_list'] = self.nbr_list
         self.props['offsets'] = self.offsets
+        if self.pbc.any():
+            self.props['cell'] = self.cell
 
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
         if self.props.get('num_atoms') is None:
             self.props['num_atoms'] = torch.LongTensor([len(self)])
+
+        if self.mol_nbrs is not None:
+            self.props['mol_nbrs'] = self.mol_nbrs
+
+        if self.mol_idx is not None:
+            self.props['mol_idx'] = self.mol_idx
 
         return self.props
 
@@ -154,7 +200,6 @@ class AtomsBatch(Atoms):
     def update_nbr_list(self):
         """Update neighbor list and the periodic reindexing
            for the given Atoms object.
-
            Args:
            cutoff(float): maximum cutoff for which atoms are
                                           considered interacting.
@@ -162,7 +207,6 @@ class AtomsBatch(Atoms):
            nbr_list(torch.LongTensor)
            offsets(torch.Tensor)
            nxyz(torch.Tensor)
-
         """
 
         Atoms_list = self.get_list_atoms()
@@ -177,9 +221,10 @@ class AtomsBatch(Atoms):
                 device=self.device,
                 directed=self.directed,
                 requires_large_offsets=self.requires_large_offsets)
+
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
             these_offsets = sparsify_array(offsets.dot(self.get_cell()))
-
+            
             # non-periodic
             if isinstance(these_offsets, int):
                 these_offsets = torch.Tensor(offsets)
@@ -525,7 +570,7 @@ class NeuralFF(Calculator):
             **kwargs
     ):
 
-        model = load_model(model_path)
+        model = load_model(model_path, **kwargs)
         out = cls(model=model,
                   device=device,
                   **kwargs)
@@ -688,12 +733,18 @@ class NeuralMetadynamics(NeuralFF):
         # only apply the bias to certain atoms
         self.exclude_atoms = torch.LongTensor(self.pushing_params
                                               .get("exclude_atoms", []))
+        self.keep_idx = None
 
     def get_keep_idx(self, atoms):
         # correct for atoms not in the biasing potential
 
+        if self.keep_idx is not None:
+            assert len(self.keep_idx) + len(self.exclude_atoms) == len(atoms)
+            return self.keep_idx
+
         keep_idx = torch.LongTensor([i for i in range(len(atoms))
                                      if i not in self.exclude_atoms])
+        self.keep_idx = keep_idx
         return keep_idx
 
     def make_dsets(self,
@@ -837,6 +888,9 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
                                     directed=directed,
                                     **kwargs)
 
+        self.query_nxyz = None
+        self.mol_idx = None
+
     def rmsd_prelims(self, atoms):
 
         # f_damp is the turn-on on timescale, measured in
@@ -860,19 +914,36 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
 
         return k_i, alpha_i, f_damp
 
+    def get_query_nxyz(self, keep_idx):
+        if self.query_nxyz is not None:
+            return self.query_nxyz
+
+        query_nxyz = torch.stack([torch.Tensor(old_atoms.get_nxyz())[keep_idx, :]
+                                  for old_atoms in self.old_atoms])
+        self.query_nxyz = query_nxyz
+
+        return query_nxyz
+
+    def append_atoms(self, atoms):
+        super().append_atoms(atoms)
+        self.query_nxyz = None
+
     def make_nxyz(self,
                   atoms):
 
         keep_idx = self.get_keep_idx(atoms)
         ref_nxyz = torch.Tensor(atoms.get_nxyz())[keep_idx, :]
-        query_nxyz = torch.stack([torch.Tensor(old_atoms.get_nxyz())[keep_idx, :]
-                                  for old_atoms in self.old_atoms])
+        query_nxyz = self.get_query_nxyz(keep_idx)
 
         return ref_nxyz, query_nxyz, keep_idx
 
     def get_mol_idx(self,
                     atoms,
                     keep_idx):
+
+        if self.mol_idx is not None:
+            assert self.mol_idx.max() + 1 == len(atoms.num_atoms)
+            return self.mol_idx
 
         num_atoms = atoms.num_atoms
         counter = 0
@@ -884,6 +955,7 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
             counter += num
 
         mol_idx = torch.cat(mol_idx)[keep_idx]
+        self.mol_idx = mol_idx
 
         return mol_idx
 
