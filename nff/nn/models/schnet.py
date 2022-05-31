@@ -172,8 +172,8 @@ class SchNet(nn.Module):
 
         dist = (r_ij).pow(2).sum(1).sqrt()
         potential = ((dist.reciprocal() * self.sigma).pow(self.power))
-        
-        return scatter_add(potential,nbr_list[:, 0], dim_size=xyz.shape[0])[:, None]
+
+        return scatter_add(potential, nbr_list[:, 0], dim_size=xyz.shape[0])[:, None]
 
     def forward(self,
                 batch,
@@ -194,7 +194,7 @@ class SchNet(nn.Module):
         r = self.atomwisereadout(r)
 
         if getattr(self, "excl_vol", None):
-            # Excluded Volume interactions 
+            # Excluded Volume interactions
             r_ex = self.V_ex(r_ij, a, xyz)
             r['energy'] += r_ex
 

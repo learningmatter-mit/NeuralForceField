@@ -2,12 +2,16 @@ import torch
 from torch import nn
 from nff.utils.scatter import compute_grad
 from nff.utils.tools import make_directed
+from nff.utils import constants as const
 from nff.nn.modules.spooky import (DEFAULT_DROPOUT, DEFAULT_ACTIVATION,
                                    DEFAULT_MAX_Z, DEFAULT_RES_LAYERS,
                                    CombinedEmbedding, InteractionBlock,
                                    AtomwiseReadout, Electrostatics,
                                    NuclearRepulsion, get_dipole)
 from nff.nn.modules.schnet import get_rij, get_offsets
+
+
+from nff.nn.models.spooky_net_source.spookynet import SpookyNet as SourceSpooky
 
 
 def default(val, def_val):
@@ -38,6 +42,11 @@ def parse_add_ons(modelparams):
 
 
 class SpookyNet(nn.Module):
+    """
+    Simon's version of SpookyNet before the source code was released, which doesn't
+    work properly
+    """
+
     def __init__(self,
                  modelparams):
 
@@ -231,3 +240,102 @@ class SpookyNet(nn.Module):
             print(e)
             import pdb
             pdb.post_mortem()
+
+
+class RealSpookyNet(SourceSpooky):
+    """
+    Wrapper around the real source code for SpookyNet, so we can use it in NFF
+    """
+
+    def __init__(self,
+                 params):
+
+        super().__init__(**params)
+
+        self.int_dtype = torch.long
+        self.float_dtype = torch.float32
+
+        self.to(self.float_dtype)
+        self.output_key = params["output_key"]
+        self.dip_key = params["dip_key"]
+        self.charge_key = params["charge_key"]
+
+    def get_full_nbrs(self,
+                      batch):
+
+        idx_i = batch['mol_nbrs'][:, 0]
+        idx_j = batch['mol_nbrs'][:, 1]
+
+        return idx_i, idx_j
+
+    def get_regular_nbrs(self, batch):
+        nbrs = batch['nbr_list']
+        idx_i = nbrs[:, 0]
+        idx_j = nbrs[:, 1]
+
+        return idx_i, idx_j
+
+    @property
+    def device(self):
+        return self.device
+
+    @device.setter
+    def device(self, val):
+        self.to(val)
+
+    def forward(self, batch):
+        full_nbrs = any([self.use_d4_dispersion,
+                         self.use_electrostatics])
+
+        if full_nbrs:
+            idx_i, idx_j = self.get_full_nbrs(batch)
+            cell_offsets = batch.get('mol_offsets')
+        else:
+            idx_i, idx_j = self.get_regular_nbrs(batch)
+            cell_offsets = batch.get('offsets')
+
+        nxyz = batch['nxyz']
+        xyz = nxyz[:, 1:].to(self.float_dtype)
+        xyz.requires_grad = True
+        device = xyz.device
+
+        Z = nxyz[:, 0].to(self.int_dtype)
+
+        num_atoms = batch['num_atoms']
+        num_batch = len(num_atoms)
+        batch_seg = torch.cat([torch.ones(int(num_atoms)) * i for i, num_atoms in
+                               enumerate(num_atoms)]).to(self.int_dtype
+                                                         ).to(device)
+
+        out = super().forward(Z=Z,
+                              Q=batch['charge'].to(self.float_dtype),
+                              S=batch['spin'].to(self.float_dtype),
+                              R=xyz,
+                              idx_i=idx_i,
+                              idx_j=idx_j,
+                              num_batch=num_batch,
+                              batch_seg=batch_seg,
+                              cell=batch.get('cell'),
+                              cell_offsets=cell_offsets)
+
+        energy, forces, dipole, f, ea, qa, ea_rep, ea_ele, ea_vdw, pa, c6 = out
+
+        grad_key = f"{self.output_key}_grad"
+
+        results = {
+            # energy in kcal/mol in NFF datasets
+            self.output_key: energy * const.EV_TO_KCAL_MOL,
+            # forces in kcal/mol/A in NFF datasets
+            grad_key: -forces * const.EV_TO_KCAL_MOL,
+            # dipole already given in eA in NFF datasets
+            self.dip_key: dipole,
+            "atom_features": f,
+            "atomic_energies": ea * const.EV_TO_KCAL_MOL,
+            self.charge_key: qa,
+            "atomic_zbl": ea_rep * const.EV_TO_KCAL_MOL,
+            "atom_vwd": ea_vdw * const.EV_TO_KCAL_MOL,
+            "polarizabilities": pa,
+            "c6": c6
+        }
+
+        return results

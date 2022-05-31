@@ -16,7 +16,8 @@ source activate nff
 
 # CONFIG="config/cov_2_3cl_test.json"
 # CONFIG="config/cov_2_3cl_avg.json"
-CONFIG="config/cov_2_gen_avg.json"
+# CONFIG="config/cov_2_gen_avg.json"
+CONFIG="config/uvvis.json"
 
 # change to your nff directory
 export NFFDIR="$HOME/Repo/projects/master/NeuralForceField"

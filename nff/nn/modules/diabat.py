@@ -293,8 +293,6 @@ class DiabaticReadout(nn.Module):
         if en_keys_for_grad is None:
             en_keys_for_grad = copy.deepcopy(self.energy_keys)
 
-
-
         for key in en_keys_for_grad:
             val = results[key]
             grad = compute_grad(inputs=xyz,
