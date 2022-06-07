@@ -1,4 +1,4 @@
-import os
+import os, sys
 import numpy as np
 import torch
 
@@ -23,6 +23,9 @@ from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import OnlyBondUpdateCP3D
 
 from nff.data import collate_dicts
+
+from torch.autograd import grad
+from nff.md.cv import *
 
 DEFAULT_CUTOFF = 5.0
 DEFAULT_DIRECTED = False
@@ -1068,3 +1071,254 @@ class NeuralGAMD(NeuralFF):
             f_bias = -self.k * (self.V_max - old_en) * old_forces
 
             self.results['forces'] += f_bias
+
+
+class HarmonicRestraint:
+    """Class to apply a harmonic restraint on a MD simulations
+    Params
+    ------
+    cvdic (dict): Dictionary contains the information to define the collective variables
+                  and the harmonic restraint.
+    max_steps (int): maximum number of steps of the MD simulation
+    device: device
+    """
+    def __init__(self, cvdic, max_steps, device="cpu"):
+        self.cvs = [] # list of collective variables (CV) objects
+        self.kappas = []  # list of constant values for every CV
+        self.eq_values = [] # list equilibrium values for every CV
+        self.steps = []  # list of lists with the steps of the MD simulation
+        self.setup_contraint(cvdic, max_steps, device)
+    
+    def setup_contraint(self, cvdic, max_steps, device):
+        """ Initializes the collectiva variables objects
+        Args:
+            cvdic (dict): Dictionary contains the information to define the collective variables
+                          and the harmonic restraint.
+            max_steps (int): maximum number of steps of the MD simulation
+            device: device
+        """
+        for cvname, val in cvdic.items():
+            if val["type"].lower() == "proj_vec_plane":
+                mol_inds = [i-1 for i in val["mol"]]  # caution check type
+                ring_inds = [i-1 for i in val["ring"]]
+                cv = ProjVectorPlane(mol_inds, ring_inds)
+            elif val["type"].lower() == "proj_vec_ref":
+                mol_inds = [i-1 for i in val["mol"]]
+                reference = [i-1 for i in val['reference']]
+                vector = [i-1 for i in val["vector"]]
+                cv = ProjVectorCentroid(vector, mol_inds, reference, device=device) # z components
+            elif val["type"].lower() == "proj_ortho_vectors_plane":
+                mol_inds = [i-1 for i in val["mol"]]  # caution check type
+                ring_inds = [i-1 for i in val["ring"]]
+                cv = ProjOrthoVectorsPlane(mol_inds, ring_inds) # z components
+            else:
+                print("Bad CV type")
+                sys.exit(1)
+
+            self.cvs.append(cv)
+            steps, kappas, eq_values = self.create_time_dependec_arrays(val["restraint"], max_steps)
+            self.kappas.append(kappas)
+            self.steps.append(steps)
+            self.eq_values.append(eq_values)
+
+    def create_time_dependec_arrays(self, restraint_list, max_steps):
+        """creates lists of steps, kappas and equilibrium values that will be used along 
+        the simulation to determine the value of kappa and equilibrium CV at each step
+
+        Args:
+            restraint_list (list of dicts): contains dictionaries with the desired values of 
+                                            kappa and CV at arbitrary step in the simulation
+            max_steps (int): maximum number of steps of the simulation
+
+        Returns:
+            list: all steps e.g [1,2,3 .. max_steps]
+            list: all kappas for every step, e.g [0.5, 0.5, 0.51, .. ] same size of steps 
+            list: all equilibrium values for every step, e.g. [1,1,1,3,3,3, ...], same size of steps 
+        """
+        steps = []
+        kappas = []
+        eq_vals = []
+        # in case the restraint does not start at 0
+        templist = list(range(0, restraint_list[0]['step']))
+        steps += templist
+        kappas += [0 for _ in templist]
+        eq_vals += [0 for _ in templist]
+        
+        for n, rd in enumerate(restraint_list[1:]):
+            # rd and n are out of phase by 1, when n = 0, rd points to index 1
+            templist = list(range(restraint_list[n]['step'], rd['step']))
+            steps += templist
+            kappas += [restraint_list[n]['kappa'] for _ in templist]
+            dcv = rd['eq_val'] - restraint_list[n]['eq_val']
+            cvstep = dcv/len(templist) # get step increase
+            eq_vals += [restraint_list[n]['eq_val'] + cvstep * tind for tind, _ in enumerate(templist)] 
+
+        # in case the last step is lesser than the max_step
+        templist = list(range(restraint_list[-1]['step'], max_steps))
+        steps += templist
+        kappas += [restraint_list[-1]['kappa'] for _ in templist]
+        eq_vals += [restraint_list[-1]['eq_val'] for _ in templist]
+
+        return steps, kappas, eq_vals
+        
+    def get_energy(self, positions, step):
+        """ Calculates the retraint energy of an arbritrary state of the system 
+
+        Args:
+            positions (torch.tensor): atomic positions
+            step (int): current step
+
+        Returns:
+            float: energy
+        """
+        tot_energy = 0
+        for n, cv in enumerate(self.cvs):
+            kappa = self.kappas[n][step]
+            eq_val = self.eq_values[n][step]
+            cv_value = cv.get_value(positions)
+            energy = 0.5 * kappa * (cv_value - eq_val) * (cv_value - eq_val)
+            tot_energy += energy
+        return tot_energy
+
+    def get_bias(self, positions, step):
+        """ Calculates the bias energy and force
+
+        Args:
+            positions (torch.tensor): atomic positions
+            step (int): current step
+
+        Returns:
+            float: forces
+            float: energy
+        """
+        energy = self.get_energy(positions, step)
+        forces = grad(energy, positions)[0]
+        return forces, energy
+
+
+class NeuralRestraint(Calculator):
+    """ASE calculator to run Neural restraint MD simulations"""
+
+    implemented_properties = ['energy', 'forces', 'stress']
+
+    def __init__(
+        self,
+        model,
+        device='cpu',
+        en_key='energy',
+        properties=['energy', 'forces'],
+        cv = {},
+        max_steps = 0,
+        **kwargs
+    ):
+        """Creates a NeuralFF calculator.nff/io/ase.py
+
+        Args:
+            model (TYPE): Description
+            device (str): device on which the calculations will be performed 
+            properties (list of str): 'energy', 'forces' or both and also stress for only schnet and painn
+            **kwargs: Description
+            model (one of nff.nn.models)
+        """
+
+        Calculator.__init__(self, **kwargs)
+        self.model = model
+        self.model.eval()
+        self.device = device
+        self.to(device)
+        self.en_key = en_key
+        self.step = -1
+        self.max_steps = max_steps
+        self.properties = properties
+        self.hr = HarmonicRestraint(cv, max_steps, device)
+
+    def to(self, device):
+        self.device = device
+        self.model.to(device)
+
+    def calculate(
+        self,
+        atoms=None,
+        properties=['energy', 'forces'],
+        system_changes=all_changes,
+    ):
+        """Calculates the desired properties for the given AtomsBatch.
+
+        Args:
+            atoms (AtomsBatch): custom Atoms subclass that contains implementation
+                of neighbor lists, batching and so on. Avoids the use of the Dataset
+                to calculate using the models created.
+            system_changes (default from ase)
+        """
+
+        # print("calculating ...")
+        self.step += 1
+        # print("step ", self.step, self.step*0.0005)
+        if not any([isinstance(self.model, i) for i in UNDIRECTED]):
+            check_directed(self.model, atoms)
+
+        # for backwards compatability
+        if getattr(self, "properties", None) is None:
+            self.properties = properties
+
+        Calculator.calculate(self, atoms, self.properties, system_changes)
+
+        # run model
+        batch = batch_to(atoms.get_batch(), self.device)
+
+        # add keys so that the readout function can calculate these properties
+        grad_key = self.en_key + "_grad"
+        batch[self.en_key] = []
+        batch[grad_key] = []
+
+        kwargs = {}
+        requires_stress = "stress" in self.properties
+        if requires_stress:
+            kwargs["requires_stress"] = True
+        prediction = self.model(batch, **kwargs)
+
+        # change energy and force to kcal/mol       
+        energy = (prediction[self.en_key] * (1 / const.EV_TO_KCAL_MOL))
+        energy_grad = (prediction[grad_key] * (1 / const.EV_TO_KCAL_MOL))
+        
+        # bias ------------------
+        bias_forces, bias_energy = self.hr.get_bias(torch.tensor(atoms.get_positions(), requires_grad=True, device=self.device), self.step)
+        energy_grad += bias_forces
+
+        # change energy and force to numpy array
+        energy_grad = energy_grad.detach().cpu().numpy()
+        energy = energy.detach().cpu().numpy()
+        
+        self.results = {
+            'energy': energy.reshape(-1)
+        }
+
+        if 'forces' in self.properties:
+            self.results['forces'] = -energy_grad.reshape(-1, 3)
+        if requires_stress:
+            stress = (prediction['stress_volume'].detach()
+                      .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
+            self.results['stress'] = stress * (1 / atoms.get_volume())
+            
+        with open("colvar", "a") as f:
+            f.write("{} ".format(self.step*0.5))
+            # ARREGLAR, SI YA ESTA CALCULADO PARA QUE RECALCULAR LA CVS
+            for cv in self.hr.cvs:
+                curr_cv_val = float(cv.get_value(torch.tensor(atoms.get_positions(), device=self.device)))
+                f.write(" {:.6f} ".format(curr_cv_val))
+            f.write("{:.6f} \n".format(float(bias_energy)))
+            
+    @classmethod
+    def from_file(
+        cls,
+        model_path,
+        device='cuda',
+        **kwargs
+    ):
+
+        model = load_model(model_path)
+        out = cls(model=model,
+                  device=device,
+                  **kwargs)
+        return out
+
