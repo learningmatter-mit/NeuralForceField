@@ -1078,7 +1078,7 @@ class ProjVectorCentroid:
     Collective variable class. Projection of a position vector onto a reference vector
     Atomic indices are used to determine the coordiantes of the vectors.
     Params
-    ------
+    ------ 
     vector: list of int
        List of the indices of atoms that define the vector on which the position vector is projected
     indices: list if int
