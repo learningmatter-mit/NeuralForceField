@@ -188,7 +188,7 @@ def torch_nbr_list(atomsobject,
             shift = positions - unwrapped_positions
             cell = atomsobject.cell
             cell = np.broadcast_to(cell.T, (shift.shape[0],cell.shape[0],cell.shape[1]))
-            shift = np.linalg.solve(cell, shift).astype(int)
+            shift = np.linalg.solve(cell, shift).round().astype(int)
 
             # estimate getting close to the cutoff with supercell expansion
             cell = atomsobject.cell
@@ -228,11 +228,11 @@ def torch_nbr_list(atomsobject,
             # add shift to offsets with the right indices according to pairwise nbr_list
             offsets = torch.from_numpy(offsets).int().to(device)
             shift = torch.from_numpy(shift).int().to(device)
-            
+
             # index shifts by atom but then apply shifts to pairwise interactions
             # get shifts for each atom i and j that would be equivalent to wrapping
             # convention is j - i for get_rij with NNs
-            shift_i = -shift[nbr_list[:,0]]
+            shift_i = shift[nbr_list[:,0]]
             shift_j = shift[nbr_list[:,1]]
             offsets = (shift_i + shift_j + offsets).detach().to("cpu").numpy()
 
