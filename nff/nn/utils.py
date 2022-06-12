@@ -223,7 +223,7 @@ def torch_nbr_list(atomsobject,
             # get offsets in original integer multiple form
             cell = np.broadcast_to(cell.T, (offsets.shape[0],cell.shape[0],cell.shape[1]))
             offsets = offsets.detach().to("cpu").numpy()
-            offsets = np.linalg.solve(cell, offsets).astype(int)
+            offsets = np.linalg.solve(cell, offsets).round().astype(int)
 
             # add shift to offsets with the right indices according to pairwise nbr_list
             offsets = torch.from_numpy(offsets).int().to(device)
