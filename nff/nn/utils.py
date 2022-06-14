@@ -234,7 +234,7 @@ def torch_nbr_list(atomsobject,
             # convention is j - i for get_rij with NNs
             shift_i = shift[nbr_list[:,0]]
             shift_j = shift[nbr_list[:,1]]
-            offsets = (shift_i + shift_j + offsets).detach().to("cpu").numpy()
+            offsets = (shift_j - shift_i + offsets).detach().to("cpu").numpy()
 
     else:
         xyz = torch.Tensor(atomsobject.get_positions(wrap=False)).to(device)
