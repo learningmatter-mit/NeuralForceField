@@ -157,10 +157,10 @@ def torch_nbr_list(atomsobject,
     if any(atomsobject.pbc):
         # check if sufficiently large to run the "fast" nbr_list function
         # also check if orthorhombic
-        # otherwise, default to the "robust" nbr_list function for small cells
+        # otherwise, default to the "robust" nbr_list function below for small cells
         if ( np.all(2*cutoff < atomsobject.cell.cellpar()[:3]) and 
             not np.count_nonzero(atomsobject.cell.T-np.diag(np.diagonal(atomsobject.cell.T)))!=0 ):
-            # "fast" nbr_list function for small cells (pbc)
+            # "fast" nbr_list function for large cells (pbc)
             xyz = torch.Tensor(atomsobject.get_positions(wrap=False)).to(device)
             dis_mat = xyz[None, :, :] - xyz[:, None, :]
             cell_dim = torch.Tensor(atomsobject.get_cell()).diag().to(device)
@@ -220,7 +220,7 @@ def torch_nbr_list(atomsobject,
             offsets=(lattice_points_T.view(xyz_T.shape)
                         [mask.nonzero(as_tuple=False)[:,1],mask.nonzero(as_tuple=False)[:,2]])
 
-            # get offsets in original integer multiple form
+            # get offsets as original integer multiples of lattice vectors
             cell = np.broadcast_to(cell.T, (offsets.shape[0],cell.shape[0],cell.shape[1]))
             offsets = offsets.detach().to("cpu").numpy()
             offsets = np.linalg.solve(cell, offsets).round().astype(int)
