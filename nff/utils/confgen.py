@@ -31,6 +31,8 @@ MAX_CONFS = 10000
 AU_TO_KCAL = 627.509
 KB_KCAL = 0.001985875
 
+INCHI_OPTIONS = " -RecMet  -FixedH "
+
 
 def write_xyz(coords, filename, comment):
     '''
@@ -144,7 +146,8 @@ class ConformerGenerator(object):
         return self.initial_confs
 
     def minimise(self,
-                 output=None):
+                 output=None,
+                 minimize=True):
         '''
         Minimises conformers using a force field
         '''
@@ -152,8 +155,9 @@ class ConformerGenerator(object):
         if "\\" in self.smiles or "/" in self.smiles:
             output.write(("WARNING: Smiles string contains slashes, "
                           "which specify cis/trans stereochemistry.\n"))
-            output.write(("Force-field minimization may change the "
-                          "stereochemistry.\n"))
+            output.write(("Bypassing force-field minimization to avoid generating "
+                          "incorrect isomer.\n"))
+            minimize = False
 
         if self.forcefield != "mmff" and self.forcefield != "uff":
             raise ValueError("Unrecognised force field")
@@ -166,8 +170,10 @@ class ConformerGenerator(object):
                     output.write("MMFF not available, using UFF\n")
                     potential = UFFGetMoleculeForceField(self.mol, confId=i)
                     assert potential is not None
-                output.write(f"Minimising conformer number {i}\n")
-                potential.Minimize()
+
+                if minimize:
+                    output.write(f"Minimising conformer number {i}\n")
+                    potential.Minimize()
                 mmff_energy = potential.CalcEnergy()
                 self.conf_energies.append((i, mmff_energy))
 
@@ -175,7 +181,8 @@ class ConformerGenerator(object):
             for i in range(0, len(self.initial_confs)):
                 potential = UFFGetMoleculeForceField(self.mol, confId=i)
                 assert potential is not None
-                potential.Minimize()
+                if minimize:
+                    potential.Minimize()
                 uff_energy = potential.CalcEnergy()
                 self.conf_energies.append((i, uff_energy))
         self.conf_energies = sorted(self.conf_energies, key=lambda tup: tup[1])
@@ -457,7 +464,7 @@ def write_clusters(output,
 def run_obabel(inchikey,
                idx):
     try:
-        cmd = ["obabel", f"{inchikey}_Conf_{(idx+1)}.xyz" "-osmi"]
+        cmd = ["obabel", f"{inchikey}_Conf_{(idx+1)}.xyz", "-osmi"]
     except UnboundLocalError as err:
         print(f"Did not produce any geometries for {inchikey} {err}")
         raise
@@ -480,7 +487,7 @@ def summarize(output,
 
     recluster_time = time.time()
 
-    output.write(socket.gethostname()+"\n")
+    output.write(socket.gethostname() + "\n")
     output.write('gen time  {0:1f}  sec\n'.format(
         gen_time - start_time))
     output.write('min time  {0:1f}  sec\n'.format(min_time - gen_time))
@@ -699,7 +706,8 @@ def one_species_confs(molecule,
                                           output=output)
 
         cluster_time = time.time()
-        inchikey = inchi.MolToInchiKey(get_mol(molecule))
+        inchikey = inchi.MolToInchiKey(get_mol(molecule),
+                                       options=INCHI_OPTIONS)
 
         for i, conformer in enumerate(clustered_confs):
             write_clusters(output=output,
@@ -838,6 +846,7 @@ def confs_and_save(config_path):
                                                   conf_dic=conf_dic,
                                                   smiles=smiles,
                                                   save_dir=save_dir)
+
         with open(pickle_path, "wb") as f_open:
             pickle.dump(conf_dic, f_open)
 
