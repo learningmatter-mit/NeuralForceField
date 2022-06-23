@@ -18,23 +18,12 @@ from nff.utils.scatter import compute_grad
 from nff.data import Dataset
 from nff.nn.graphop import split_and_sum
 
-from nff.io.ase import NeuralFF
-
-from nff.nn.models.schnet import SchNet, SchNetDiabat
-from nff.nn.models.hybridgraph import HybridGraphConv
-from nff.nn.models.schnet_features import SchNetFeatures
-from nff.nn.models.cp3d import OnlyBondUpdateCP3D
-
+from nff.io.ase import NeuralFF, AtomsBatch
 from nff.data import collate_dicts
+from nff.md.colvars import ColVar as CV
 
-DEFAULT_CUTOFF = 5.0
 DEFAULT_DIRECTED = False
-DEFAULT_SKIN = 1.0
-UNDIRECTED = [SchNet,
-              SchNetDiabat,
-              HybridGraphConv,
-              SchNetFeatures,
-              OnlyBondUpdateCP3D]
+
 
 
 class BiasBase(NeuralFF):
@@ -46,6 +35,12 @@ class BiasBase(NeuralFF):
             [["cv_type", [atom_indices], np.array([minimum, maximum]), bin_width], [possible second dimension]]
         confinement_k: force constant for confinement of system to the range of interest in CV space
     """
+    
+    implemented_properties = ['energy', 'forces', 'stress',
+                              'energy_unbiased', 'forces_unbiased', 
+                              'cv_vals', 'cv_invmass', 
+                              'grad_length', 'cv_grad_lengths', 
+                              'cv_dot_PES']
     
     def __init__(self,
                  model,
@@ -105,6 +100,9 @@ class BiasBase(NeuralFF):
                 
             if 'mass' in cv.keys():
                 self.ext_masses[ii] = cv['mass']
+                
+            if 'type' not in cv.keys():
+                self.cv_defs[ii]['type'] = 'not_angle'
                 
         # initialize extended system at target temp of MD simulation
         for i in range(self.num_cv):
@@ -181,18 +179,18 @@ class BiasBase(NeuralFF):
         for i in range(self.ncoords):
             # harmonic coupling of extended coordinate to reaction coordinate
 
-            dxi = self.diff(self.ext_coords[i], xi[i], self.cv_defs[i]['definition']['type'])
+            dxi = self.diff(self.ext_coords[i], xi[i], self.cv_defs[i]['type'])
             self.ext_forces[i] = self.ext_k[i] * dxi
             bias_grad += self.ext_k[i] * dxi * grad_xi[i]
             bias_ener += 0.5 * self.ext_k[i] * dxi**2
 
             # harmonic walls for confinement to range of interest
             if self.ext_coords[i] > (self.ranges[i][1] - self.margin[i]):
-                r = diff(self.ranges[i][1] - self.margin[i], self.ext_coords[i], self.cv_defs[i]['definition']['type'])
+                r = diff(self.ranges[i][1] - self.margin[i], self.ext_coords[i], self.cv_defs[i]['type'])
                 self.ext_forces[i] -= self.conf_k[i] * r
 
             elif self.ext_coords[i] < (self.ranges[i][0] + self.margin[i]):
-                r = diff(self.ranges[i][0] + self.margin[i], self.ext_coords[i], self.cv_defs[i]['definition']['type'])
+                r = diff(self.ranges[i][0] + self.margin[i], self.ext_coords[i], self.cv_defs[i]['type'])
                 self.ext_forces[i] -= self.conf_k[i] * r
          
         self._update_bias()
@@ -257,28 +255,30 @@ class BiasBase(NeuralFF):
             raise PropertyNotPresent(grad_key)
         
         energy = copy.deepcopy(model_energy)
-        grad = copy.deepcopy(model_grad)
+        grad   = copy.deepcopy(model_grad)
         
         masses = atoms.get_masses()
-        M_inv = 1. / np.diag(np.array([masses, masses, masses]).flatten())
+        M_inv  = 1. / np.diag(np.array([masses, masses, masses]).flatten())
         print(self.M_inv)
         
         cvs = np.zeros(shape=(self.num_cv,))
-        cv_grads = np.zeros(shape=(self.num_cv, atoms.get_positions().shape))
+        cv_grads     = np.zeros(shape=(self.num_cv, 
+                                   atoms.get_positions().shape[0], 
+                                   atoms.get_positions().shape[1]))
         cv_grad_lens = np.zeros(shape=(self.num_cv,))
-        cv_invmass = np.zeros(shape=(self.num_cv,))
-        cv_dot_PES = np.zeros(shape=(self.num_cv,))
+        cv_invmass   = np.zeros(shape=(self.num_cv,))
+        cv_dot_PES   = np.zeros(shape=(self.num_cv,))
         for ii, cv_def in enumerate(self.cv_defs):
-            xi, xi_grad = self.the_cv[ii](batch)
-            cvs[ii] = xi
-            cv_grads[ii] = xi_grad
+            xi, xi_grad      = self.the_cv[ii](atoms)
+            cvs[ii]          = xi
+            cv_grads[ii]     = xi_grad
             cv_grad_lens[ii] = np.linalg.norm(xi_grad.flatten())
-            cv_invmass[ii] = np.matmul(xi_grad.flatten(), np.matmul(M_inv, xi_grad.flatten()))
-            cv_dot_PES[ii] = np.dot(xi_grad.flatten(), model_grad.flatten())
+            cv_invmass[ii]   = np.matmul(xi_grad.flatten(), np.matmul(M_inv, xi_grad.flatten()))
+            cv_dot_PES[ii]   = np.dot(xi_grad.flatten(), model_grad.flatten())
             
         bias_ener, bias_grad = self.step_bias(xi, xi_grad)
         energy += bias_ener
-        grad += bias_grad
+        grad   += bias_grad
             
 
         self.results = {
