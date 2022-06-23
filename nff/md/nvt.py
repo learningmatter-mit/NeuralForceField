@@ -337,7 +337,7 @@ class Langevin(MolecularDynamics):
                  atoms,
                  timestep: float,
                  temperature: float,
-                 friction_per_ps: float = 1.0
+                 friction_per_ps: float = 1.0,
                  maxwell_temp: float = None,
                  trajectory=None,
                  logfile=None,
@@ -365,8 +365,8 @@ class Langevin(MolecularDynamics):
         self.T  = temperature 
         
         self.friction  = friction_per_ps * 1.0e-3 / units.fs
-        self.rand_push = np.sqrt(self.T * self.friction * self.dt * units.kB / 2.0e0) / 
-                                np.sqrt(self.atom.get_masses().reshape(-1,1))
+        self.rand_push = (np.sqrt(self.T * self.friction * self.dt * units.kB / 2.0e0) / 
+                            np.sqrt(self.atoms.get_masses().reshape(-1,1)))
         self.prefac1   = 2.0 / (2.0 + self.friction * self.dt)
         self.prefac2   = (2.0e0 - self.friction * self.dt) / (2.0e0 + self.friction * self.dt)
 
@@ -383,9 +383,9 @@ class Langevin(MolecularDynamics):
             maxwell_temp = self.T
 
         MaxwellBoltzmannDistribution(self.atoms, temperature_K=maxwell_temp)
-        self.remove_constrained_vel(atoms)
         Stationary(self.atoms)
         ZeroRotation(self.atoms)
+        self.remove_constrained_vel(atoms)
 
     def remove_constrained_vel(self, atoms):
         """
@@ -418,9 +418,10 @@ class Langevin(MolecularDynamics):
     def step(self):
         
         vel    = self.atoms.get_velocities()
-        masses = self.atom.get_masses().reshape(-1,1)
+        masses = self.atoms.get_masses().reshape(-1,1)
         
-        self.rand_gauss = np.random.randn(self.atoms.get_positions().shape)
+        self.rand_gauss = np.random.randn(self.atoms.get_positions().shape[0],
+                                          self.atoms.get_positions().shape[1]) 
 
         vel +=  self.rand_push * self.rand_gauss
         vel += 0.5e0 * self.dt * self.atoms.get_forces() / masses

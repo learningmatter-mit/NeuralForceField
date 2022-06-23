@@ -40,10 +40,10 @@ class Dynamics:
 
         # intialize system momentum
         MaxwellBoltzmannDistribution(self.atomsbatch,
-                                     self.mdparam['T_init'] * units.kB)
+                                     temperature_K = self.mdparam['T_init'])
         Stationary(self.atomsbatch)  # zero linear momentum
         ZeroRotation(self.atomsbatch)
-
+        
         # set thermostats
         integrator = self.mdparam['thermostat']
         if integrator == VelocityVerlet:
@@ -54,10 +54,10 @@ class Dynamics:
             self.integrator = integrator(self.atomsbatch,
                                          **self.mdparam['thermostat_params'],
                                          **self.mdparam)
-
+        
         self.steps = int(self.mdparam['steps'])
         self.check_restart()
-
+        
         if self.steps == int(self.mdparam['steps']):
             # attach trajectory dump
             self.traj = Trajectory(
@@ -73,7 +73,7 @@ class Dynamics:
                                                 stress=requires_stress,
                                                 mode='a'),
                                 interval=self.mdparam['save_frequency'])
-
+        
     def check_restart(self):
 
         if os.path.exists(self.mdparam['traj_filename']):
@@ -83,7 +83,6 @@ class Dynamics:
             self.steps = ( int(self.mdparam['steps']) 
                 - ( int(self.mdparam['save_frequency']) * 
                 len(Trajectory(self.mdparam['traj_filename'])) ) )
-            print(self.steps)
 
             self.atomsbatch.set_cell(new_atoms.get_cell())
             self.atomsbatch.set_positions(new_atoms.get_positions())

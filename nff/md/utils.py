@@ -20,7 +20,7 @@ class NeuralMDLogger(MDLogger):
         if verbose:
             print(self.hdr)
 
-        self.natoms = self.atoms.get_number_of_atoms()
+        self.natoms = len(self.atoms)
 
     def __call__(self):
         epot = self.atoms.get_potential_energy()
