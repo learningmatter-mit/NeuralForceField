@@ -811,7 +811,8 @@ def add_to_summary(summary_dic,
                    conf_dic,
                    smiles,
                    save_dir):
-    inchikey = inchi.MolToInchiKey(get_mol(smiles))
+    inchikey = inchi.MolToInchiKey(get_mol(smiles),
+                                   options=INCHI_OPTIONS)
     pickle_path = os.path.join(os.path.abspath(save_dir), f"{inchikey}.pickle")
     summary_dic[smiles] = {key: val for key, val in
                            conf_dic.items() if key != "conformers"}
