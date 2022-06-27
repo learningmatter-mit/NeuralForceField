@@ -10,15 +10,72 @@ from nff.utils.scatter import compute_grad
 
 """
 
-class ColVar(torn.nn.module):
+class ColVar(torch.nn.Module):
     """collective variable class
         
        computes cv and its Cartesian gradient
     """
     
     def __init__(self, info_dict: dict):
-        super(Colvar, self).__init__()
+        """initialization of many class variables to avoid recurrent assignment
+        with every forward call
+        Args:
+            info_dict (dict): dictionary that contains all the definitions of the CV
+        """
+        super(ColVar, self).__init__()
         self.info_dict=info_dict
+        
+        if 'name' not in info_dict.keys():
+            raise TypeError("CV definition is missing the key \"name\"!")
+        
+        if self.info_dict['name'] == 'distance':
+            self.idx_1 = self.info_dict['index_list'][0]
+            self.idx_2 = self.info_dict['index_list'][1]
+            
+        elif self.info_dict['name'] == 'angle':
+            self.idx_1 = self.info_dict['index_list'][0]
+            self.idx_2 = self.info_dict['index_list'][1]
+            self.idx_3 = self.info_dict['index_list'][2]
+            
+        elif self.info_dict['name'] == 'dihedral':
+            self.idx_1 = self.info_dict['index_list'][0]
+            self.idx_2 = self.info_dict['index_list'][1]
+            self.idx_3 = self.info_dict['index_list'][2]
+            self.idx_4 = self.info_dict['index_list'][3]
+            
+        elif self.info_dict['name'] == 'Sp':
+            self.Oacid   = torch.tensor(self.info_dict['x'])
+            self.Owater  = torch.tensor(self.info_dict['y'])
+            self.H       = torch.tensor(self.info_dict['z'])
+            self.Box     = torch.tensor(self.info_dict.get('box',None))
+            self.O       = torch.cat((Oacid,Owater))
+            self.do      = self.info_dict['dcv1']
+            self.d       = self.info_dict['dcv2']
+            self.ro      = self.info_dict['acidhyd']
+            self.r1      = self.info_dict['waterhyd']
+            
+        elif self.info_dict['name'] == 'Sd':
+            self.Oacid   = torch.tensor(self.info_dict['x'])
+            self.Owater  = torch.tensor(self.info_dict['y'])
+            self.H       = torch.tensor(self.info_dict['z'])
+            self.Box     = torch.tensor(self.info_dict.get('box',None))
+            self.O       = torch.cat((Oacid,Owater))
+            self.do      = self.info_dict['dcv1']
+            self.d       = self.info_dict['dcv2']
+            self.ro      = self.info_dict['acidhyd']
+            self.r1      = self.info_dict['waterhyd']
+            
+        elif self.info_dict['name'] == 'adjecencey_matrix':   
+            self.model        = self.info_dict['model']
+            self.device       = self.info_dict['device']
+            self.bond_length  = self.info_dict['bond_length']
+            self.cell         = self.info_dict.get('box',None)
+            self.atom_numbers = torch.tensor(self.info_dict['atom_numbers'])
+            self.target       = self.info_dict['target']
+            self.model        = self.model.to(self.device)
+            self.model.eval()
+        else:
+            raise NotImplementedError(f"The CV {self.info_dict['name']} is not implemented!")
         
     def _get_com(self, indices: Union[int, list]) -> torch.tensor:
         """get center of mass (com) of group of atoms
@@ -56,8 +113,8 @@ class ColVar(torn.nn.module):
                 "CV ERROR: Invalid number of centers in definition of distance!"
             )
 
-        p1 = self._get_com(self.info_dict['index_list'][0])
-        p2 = self._get_com(self.info_dict['index_list'][1])
+        p1 = self._get_com(self.idx_1)
+        p2 = self._get_com(self.idx_2)
 
         # get distance
         r12 = p2 - p1
@@ -79,9 +136,9 @@ class ColVar(torn.nn.module):
                 "CV ERROR: Invalid number of centers in definition of angle!"
             )
 
-        p1 = self._get_com(self.info_dict['index_list'][0])
-        p2 = self._get_com(self.info_dict['index_list'][1])
-        p3 = self._get_com(self.info_dict['index_list'][2])
+        p1 = self._get_com(self.idx_1)
+        p2 = self._get_com(self.idx_2)
+        p3 = self._get_com(self.idx_3)
 
         # get angle
         q12 = p1 - p2
@@ -114,10 +171,10 @@ class ColVar(torn.nn.module):
                 "CV ERROR: Invalid number of centers in definition of dihedral!"
             )
 
-        p1 = self._get_com(self.info_dict['index_list'][0])
-        p2 = self._get_com(self.info_dict['index_list'][1])
-        p3 = self._get_com(self.info_dict['index_list'][2])
-        p4 = self._get_com(self.info_dict['index_list'][3])
+        p1 = self._get_com(self.idx_1)
+        p2 = self._get_com(self.idx_2)
+        p3 = self._get_com(self.idx_3)
+        p4 = self._get_com(self.idx_4)
 
         # get dihedral
         q12 = p2 - p1
@@ -136,21 +193,14 @@ class ColVar(torn.nn.module):
     def adjacency_matrix_cv(self):
         """Docstring
         """
-        model        = self.info_dict['model']
-        device       = self.info_dict['device']
-        bond_length  = self.info_dict['bond_length']
-        cell         = self.info_dict.get('box',None)
-        atom_numbers = torch.tensor(self.info_dict['atom_numbers'])
-        model        = model.to(device)
-        model.eval()
         edges, atomslist, Natoms, adjacency_matrix = get_adjacency_matrix(self.xyz, 
-                                                                          atom_numbers, 
-                                                                          bond_length, 
-                                                                          cell=cell,
-                                                                          device=device)
-        target = self.info_dict['target']
-        pred   = model(atomslist, edges, Natoms, adjacency_matrix)[0]
-        rmsd   = (pred-target).norm()
+                                                                          self.atom_numbers, 
+                                                                          self.bond_length, 
+                                                                          cell=self.cell,
+                                                                          device=self.device)
+        
+        pred   = self.model(atomslist, edges, Natoms, adjacency_matrix)[0]
+        rmsd   = (pred-self.target).norm()
         cv     = rmsd.to('cpu').view(-1,1)
         
         return cv
@@ -158,15 +208,7 @@ class ColVar(torn.nn.module):
     def deproton1(self, xyz):
         """Docstring
         """
-        Oacid   = torch.tensor(self.info_dict['x'])
-        Owater  = torch.tensor(self.info_dict['y'])
-        H       = torch.tensor(self.info_dict['z'])
-        Box     = torch.tensor(self.info_dict.get('box',None))
-        O       = torch.cat((Oacid,Owater))
-        do      = self.info_dict['dcv1']
-        d       = self.info_dict['dcv2']
-        ro      = self.info_dict['acidhyd']
-        r1      = self.info_dict['waterhyd']
+        
         dis_mat = self.xyz[None, :, :] - self.xyz[:, None, :]
         
         if Box is not None:
@@ -176,13 +218,13 @@ class ColVar(torn.nn.module):
             dis_mat  = dis_mat+offsets*cell_dim
             
         dis_sq = torch.linalg.norm(dis_mat, dim=-1)
-        dis    = dis_sq[O,:][:,H]
+        dis    = dis_sq[self.O,:][:,self.H]
 
-        dis1      = dis_sq[Oacid,:][:,Owater]
-        cvmatrix  = torch.exp(-do*dis)
+        dis1      = dis_sq[self.Oacid,:][:,self.Owater]
+        cvmatrix  = torch.exp(-self.do * dis)
         cvmatrix  = cvmatrix / cvmatrix.sum(0)
-        cvmatrixw = cvmatrix[Oacid.shape[0]:].sum(-1) - r1
-        cvmatrix  = cvmatrix[:Oacid.shape[0]].sum(-1) - ro
+        cvmatrixw = cvmatrix[self.Oacid.shape[0]:].sum(-1) - self.r1
+        cvmatrix  = cvmatrix[:self.Oacid.shape[0]].sum(-1) - self.ro
         cv1       = 2 * cvmatrix.sum() + cvmatrixw.sum()
         
         return cv2
@@ -190,15 +232,7 @@ class ColVar(torn.nn.module):
     def deproton2(self):
         """Docstring
         """
-        Oacid   = torch.tensor(self.info_dict['x'])
-        Owater  = torch.tensor(self.info_dict['y'])
-        H       = torch.tensor(self.info_dict['z'])
-        Box     = torch.tensor(self.info_dict.get('box',None))
-        O       = torch.cat((Oacid,Owater))
-        do      = self.info_dict['dcv1']
-        d       = self.info_dict['dcv2']
-        ro      = self.info_dict['acidhyd']
-        r1      = self.info_dict['waterhyd']
+        
         dis_mat = self.xyz[None, :, :] - self.xyz[:, None, :]
         
         if Box is not None:
@@ -208,21 +242,20 @@ class ColVar(torn.nn.module):
             dis_mat  = dis_mat + offsets * cell_dim
             
         dis_sq    = torch.linalg.norm(dis_mat,dim=-1)
-        dis       = dis_sq[O,:][:,H]
-        dis1      = dis_sq[Oacid,:][:,Owater]
-        cvmatrix  = torch.exp(-do*dis)
+        dis       = dis_sq[self.O,:][:,self.H]
+        dis1      = dis_sq[self.Oacid,:][:,self.Owater]
+        cvmatrix  = torch.exp(-self.do * dis)
         cvmatrix  = cvmatrix / cvmatrix.sum(0)
-        cvmatrixx = torch.exp(-d*dis)
+        cvmatrixx = torch.exp(-self.d * dis)
         cvmatrixx = cvmatrixx / cvmatrixx.sum(0)
-        cvmatrixw = cvmatrixx[Oacid.shape[0]:].sum(-1) - r1
-        cvmatrix  = cvmatrixx[:Oacid.shape[0]].sum(-1) - ro
+        cvmatrixw = cvmatrixx[self.Oacid.shape[0]:].sum(-1) - self.r1
+        cvmatrix  = cvmatrixx[:self.Oacid.shape[0]].sum(-1) - self.ro
         cvmatrix1 = torch.cat((cvmatrix,cvmatrixw))
         cvmatrix2 = torch.matmul(cvmatrix.view(1,-1).t(),cvmatrixw.view(1,-1))
         cvmatrix2 = -cvmatrix2 * dis1
         cv2       = cvmatrix2.sum()
         
         return cv2
-    
     
     def forward(self, atoms):
         """switch function to call the right CV-func
