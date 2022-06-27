@@ -165,7 +165,7 @@ def get_nbrs(batch,
         for nxyz in nxyz_list:
             n = nxyz.shape[0]
             idx = torch.arange(n)
-            x, y = torch.meshgrid(idx, idx)
+            x, y = torch.meshgrid(idx, idx, indexing='xy')
 
             # directed neighbor list
             these_nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)], dim=1)
