@@ -4,7 +4,8 @@ import copy
 
 from ase import units
 from ase.md import MDLogger
-
+from ase.utils import IOContext
+import weakref
 
 import nff.utils.constants as const
 
@@ -40,6 +41,95 @@ class NeuralMDLogger(MDLogger):
         dat += (epot+ekin, epot, ekin, temp)
         if self.stress:
             dat += tuple(self.atoms.get_stress() / units.GPa)
+        self.logfile.write(self.fmt % dat)
+        self.logfile.flush()
+
+        if self.verbose:
+            print(self.fmt % dat)
+            
+class BiasedNeuralMDLogger(IOContext):
+    """Additional Class for logging biased molecular dynamics simulations.
+
+    Parameters:
+    dyn:           The dynamics.  Only a weak reference is kept.
+
+    atoms:         The atoms.
+    
+    header:        Whether to print the header into the logfile.
+
+    logfile:       File name or open file, "-" meaning standard output.
+
+    mode="a":      How the file is opened if logfile is a filename.
+    """
+    def __init__(self,
+                 dyn, 
+                 atoms, 
+                 logfile, 
+                 header=True, 
+                 peratom=False,
+                 mode="a"):
+
+        if hasattr(dyn, "get_time"):
+            self.dyn = weakref.proxy(dyn)
+        else:
+            self.dyn = None
+            
+        self.atoms  = atoms
+        self.num_cv = dyn.num_cv
+        
+        self.logfile = self.openfile(logfile, 
+                                     comm=world, 
+                                     mode=mode)
+        
+        if self.dyn is not None:
+            self.hdr = "%-9s " % ("Time[ps]",)
+            self.fmt = "%-10.4f "
+        else:
+            raise ValueError("A dynamics object has to be attached to the logger!")
+            
+        self.hdr += "%17s %17s %12s" % ("Epot_biased[eV]", 
+                                   "Epot_nobias[eV]",
+                                  "AbsGradPot")
+        self.fmt += "%17.5f %17.5f %12.4f"
+            
+        for i in range(self.num_cv):
+            self.hdr += "%12s %12s %12s %16" % ("CV", "Lambda",
+                                                "AbsGradCV", "GradCV_GradPot")
+            self.fmt += "%12.4f %12.4f %12.4f %16.4f"
+            
+        self.fmt += "\n"
+        if header:
+            self.logfile.write(self.hdr + "\n")
+        
+        
+        self.verbose = verbose
+        if verbose:
+            print(self.hdr)
+
+    
+    def __del__(self):
+        self.close()
+        
+    def __call__(self):
+        epot = self.atoms.get_potential_energy()
+        epot_nobias = self.atoms.get_property("energy_unbiased")
+         = self.atoms.get_property("grad_length")
+            
+        if self.dyn is not None:
+            t = self.dyn.get_time() / (1000*units.fs)
+            dat = (t,)
+        else:
+            dat = ()
+        dat += (epot, epot_nobias, absGradPot)
+        
+        cv_vals    = self.atoms.get_property("cv_vals")
+        ext_pos    = self.atoms.get_property("ext_pos")
+        absGradCV  = self.atoms.get_property("cv_grad_lengths")
+        CVdotPot   = self.atoms.get_property("cv_dot_PES")
+        
+        for i in range(self.num_cv):
+            dat += (cv_vals[i], ext_pos[i], absGradCV[i], CVdotPot[i])
+
         self.logfile.write(self.fmt % dat)
         self.logfile.flush()
 

@@ -205,7 +205,7 @@ class ColVar(torch.nn.Module):
         
         return cv
     
-    def deproton1(self, xyz):
+    def deproton1(self):
         """Docstring
         """
         
