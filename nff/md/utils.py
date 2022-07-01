@@ -6,6 +6,7 @@ from ase import units
 from ase.md import MDLogger
 from ase.utils import IOContext
 import weakref
+from ase.parallel import world
 
 import nff.utils.constants as const
 
@@ -67,6 +68,7 @@ class BiasedNeuralMDLogger(IOContext):
                  logfile, 
                  header=True, 
                  peratom=False,
+                 verbose=False,
                  mode="a"):
 
         if hasattr(dyn, "get_time"):
@@ -75,14 +77,14 @@ class BiasedNeuralMDLogger(IOContext):
             self.dyn = None
             
         self.atoms  = atoms
-        self.num_cv = dyn.num_cv
+        self.num_cv = atoms.calc.num_cv
         
         self.logfile = self.openfile(logfile, 
                                      comm=world, 
                                      mode=mode)
         
         if self.dyn is not None:
-            self.hdr = "%-9s " % ("Time[ps]",)
+            self.hdr = "%-10s " % ("Time[ps]",)
             self.fmt = "%-10.4f "
         else:
             raise ValueError("A dynamics object has to be attached to the logger!")
@@ -93,9 +95,9 @@ class BiasedNeuralMDLogger(IOContext):
         self.fmt += "%17.5f %17.5f %12.4f"
             
         for i in range(self.num_cv):
-            self.hdr += "%12s %12s %12s %16" % ("CV", "Lambda",
+            self.hdr += "%12s %12s %12s %12s %16s" % ("CV", "Lambda", "inv_m_cv",
                                                 "AbsGradCV", "GradCV_GradPot")
-            self.fmt += "%12.4f %12.4f %12.4f %16.4f"
+            self.fmt += "%12.4f %12.4f %12.4f %12.4f %16.4f"
             
         self.fmt += "\n"
         if header:
@@ -112,8 +114,8 @@ class BiasedNeuralMDLogger(IOContext):
         
     def __call__(self):
         epot = self.atoms.get_potential_energy()
-        epot_nobias = self.atoms.get_property("energy_unbiased")
-         = self.atoms.get_property("grad_length")
+        epot_nobias = self.atoms.calc.get_property("energy_unbiased")
+        absGradPot = self.atoms.calc.get_property("grad_length")
             
         if self.dyn is not None:
             t = self.dyn.get_time() / (1000*units.fs)
@@ -122,13 +124,14 @@ class BiasedNeuralMDLogger(IOContext):
             dat = ()
         dat += (epot, epot_nobias, absGradPot)
         
-        cv_vals    = self.atoms.get_property("cv_vals")
-        ext_pos    = self.atoms.get_property("ext_pos")
-        absGradCV  = self.atoms.get_property("cv_grad_lengths")
-        CVdotPot   = self.atoms.get_property("cv_dot_PES")
+        cv_vals    = self.atoms.calc.get_property("cv_vals")
+        ext_pos    = self.atoms.calc.get_property("ext_pos")
+        cv_invmass = self.atoms.calc.get_property("cv_invmass")
+        absGradCV  = self.atoms.calc.get_property("cv_grad_lengths")
+        CVdotPot   = self.atoms.calc.get_property("cv_dot_PES")
         
         for i in range(self.num_cv):
-            dat += (cv_vals[i], ext_pos[i], absGradCV[i], CVdotPot[i])
+            dat += (cv_vals[i], ext_pos[i], cv_invmass[i], absGradCV[i], CVdotPot[i])
 
         self.logfile.write(self.fmt % dat)
         self.logfile.flush()
