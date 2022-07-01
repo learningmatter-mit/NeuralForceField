@@ -51,7 +51,7 @@ class BiasBase(NeuralFF):
     
     implemented_properties = ['energy', 'forces', 'stress',
                               'energy_unbiased', 'forces_unbiased', 
-                              'cv_vals', 'cv_invmass', 
+                              'cv_vals', 'ext_pos', 'cv_invmass', 
                               'grad_length', 'cv_grad_lengths', 
                               'cv_dot_PES']
     
@@ -120,10 +120,6 @@ class BiasBase(NeuralFF):
         for i in range(self.num_cv):
             self.ext_momenta[i] = np.random.randn() * np.sqrt(
                                     self.equil_temp * self.ext_masses[i])
-        
-#         ttt = (np.power(self.ext_momenta, 2) / self.ext_masses).sum()
-#         ttt /= self.num_cv
-#         self.ext_momenta *= np.sqrt(self.equil_temp / ttt)
             
         
     def _update_bias(self):
@@ -187,8 +183,7 @@ class BiasBase(NeuralFF):
         
         for i in range(self.num_cv):
             # harmonic coupling of extended coordinate to reaction coordinate
-
-            dxi = self.diff(self.ext_coords[i], xi[i], self.cv_defs[i]['type'])
+            dxi = self.diff(xi[i], self.ext_coords[i], self.cv_defs[i]['type'])
             self.ext_forces[i] = self.ext_k[i] * dxi
             bias_grad += self.ext_k[i] * dxi * grad_xi[i]
             bias_ener += 0.5 * self.ext_k[i] * dxi**2
