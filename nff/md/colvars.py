@@ -1,4 +1,5 @@
 from typing import Union, Tuple
+import itertools as itertools
 import numpy as np
 import torch
 
@@ -17,6 +18,16 @@ class ColVar(torch.nn.Module):
        computes cv and its Cartesian gradient
     """
     
+    implemented_cvs = ['distance', 'angle', 'dihedral',
+                       'coordination_number', 'coordination',
+                       'minimal_distance',
+                       'projecting_centroidvec', 
+                       'projecting_veconplane',
+                       'projecting_veconplanenormal',
+                       'Sp', 'Sd',
+                       'adjecencey_matrix'
+                      ]
+    
     def __init__(self, info_dict: dict):
         """initialization of many class variables to avoid recurrent assignment
         with every forward call
@@ -31,22 +42,10 @@ class ColVar(torch.nn.Module):
         if 'name' not in info_dict.keys():
             raise TypeError("CV definition is missing the key \"name\"!")
         
-        if self.info_dict['name'] == 'distance':
-            self.idx_1 = self.info_dict['index_list'][0]
-            self.idx_2 = self.info_dict['index_list'][1]
-            
-        elif self.info_dict['name'] == 'angle':
-            self.idx_1 = self.info_dict['index_list'][0]
-            self.idx_2 = self.info_dict['index_list'][1]
-            self.idx_3 = self.info_dict['index_list'][2]
-            
-        elif self.info_dict['name'] == 'dihedral':
-            self.idx_1 = self.info_dict['index_list'][0]
-            self.idx_2 = self.info_dict['index_list'][1]
-            self.idx_3 = self.info_dict['index_list'][2]
-            self.idx_4 = self.info_dict['index_list'][3]
-            
-        elif self.info_dict['name'] == 'Sp':
+        if self.info_dict['name'] not in self.implemented_cvs:
+            raise NotImplementedError(f"The CV {self.info_dict['name']} is not implemented!")
+                   
+        if self.info_dict['name'] == 'Sp':
             self.Oacid   = torch.tensor(self.info_dict['x'])
             self.Owater  = torch.tensor(self.info_dict['y'])
             self.H       = torch.tensor(self.info_dict['z'])
@@ -91,8 +90,7 @@ class ColVar(torch.nn.Module):
             self.mol_inds   = torch.LongTensor(self.info_dict['mol_inds']) 
             self.ring_inds = torch.LongTensor(self.info_dict['ring_inds'])
             
-        else:
-            raise NotImplementedError(f"The CV {self.info_dict['name']} is not implemented!")
+            
         
     def _get_com(self, indices: Union[int, list]) -> torch.tensor:
         """get center of mass (com) of group of atoms
@@ -116,22 +114,22 @@ class ColVar(torch.nn.Module):
 
         return com
     
-    def distance(self) -> torch.tensor:
+    def distance(self,
+                index_list: list[Union[int, list]]) -> torch.tensor:
         """distance between two mass centers in range(0, inf)
-        Params:
-            self.info_dict['index_list']
+        Args:
                 distance beteen atoms: [ind0, ind1]
                 distance between mass centers: [[ind00, ind01, ...], [ind10, ind11, ...]]
         Returns:
             cv (torch.tensor): computed distance
         """
-        if len(self.info_dict['index_list']) != 2:
+        if len(index_list) != 2:
             raise ValueError(
                 "CV ERROR: Invalid number of centers in definition of distance!"
             )
 
-        p1 = self._get_com(self.idx_1)
-        p2 = self._get_com(self.idx_2)
+        p1 = self._get_com(index_list[0])
+        p2 = self._get_com(index_list[1])
 
         # get distance
         r12 = p2 - p1
@@ -139,23 +137,24 @@ class ColVar(torch.nn.Module):
 
         return cv
     
-    def angle(self) -> torch.tensor:
+    def angle(self,
+             index_list: list[Union[int, list]]) -> torch.tensor:
         """get angle between three mass centers in range(-pi,pi)
-        Params:
-            self.info_dict['index_list']
+        Args:
+            index_list
                 angle between two atoms: [ind0, ind1, ind3]
                 angle between centers of mass: [[ind00, ind01, ...], [ind10, ind11, ...], [ind20, ind21, ...]]
         Returns:
             cv (torch.tensor): computed angle
         """
-        if len(self.info_dict['index_list']) != 3:
+        if len(index_list) != 3:
             raise ValueError(
                 "CV ERROR: Invalid number of centers in definition of angle!"
             )
 
-        p1 = self._get_com(self.idx_1)
-        p2 = self._get_com(self.idx_2)
-        p3 = self._get_com(self.idx_3)
+        p1 = self._get_com(index_list[0])
+        p2 = self._get_com(index_list[1])
+        p3 = self._get_com(index_list[2])
 
         # get angle
         q12 = p1 - p2
@@ -171,7 +170,8 @@ class ColVar(torch.nn.Module):
 
         return cv
         
-    def dihedral(self) -> torch.tensor:
+    def dihedral(self,
+                index_list: list[Union[int, list]]) -> torch.tensor:
         """torsion angle between four mass centers in range(-pi,pi)
         Params:
             self.info_dict['index_list']
@@ -183,15 +183,15 @@ class ColVar(torch.nn.Module):
         Returns:
             cv (float): computed torsional angle
         """
-        if len(self.info_dict['index_list']) != 4:
+        if len(index_list) != 4:
             raise ValueError(
                 "CV ERROR: Invalid number of centers in definition of dihedral!"
             )
 
-        p1 = self._get_com(self.idx_1)
-        p2 = self._get_com(self.idx_2)
-        p3 = self._get_com(self.idx_3)
-        p4 = self._get_com(self.idx_4)
+        p1 = self._get_com(index_list[0])
+        p2 = self._get_com(index_list[1])
+        p3 = self._get_com(index_list[2])
+        p4 = self._get_com(index_list[3])
 
         # get dihedral
         q12 = p2 - p1
@@ -206,6 +206,69 @@ class ColVar(torch.nn.Module):
         cv = torch.atan2(torch.dot(torch.cross(q23_u, n1), n2), torch.dot(n1, n2))
         
         return cv
+    
+    def coordination_number(self,
+                            index_list: list[int],
+                            switch_distance: float) -> torch.tensor:
+        """coordination number between two atoms in range(0, 1)
+        Args:
+                distance between atoms: [ind00, ind01]
+                switch_distance: value at which the switching function is 0.5
+        Returns:
+            cv (torch.tensor): computed distance
+        """
+        if len(index_list) != 2:
+            raise ValueError(
+                "CV ERROR: Invalid number of atom in definition of coordination_number!"
+            )
+
+        scaled_distance = self.distance(index_list) / switch_distance
+
+        cv = (1. - scaled_distance.pow(6)) / ((1. - scaled_distance.pow(12)))
+
+        return cv
+    
+    def coordination(self,
+                     index_list: list[list[int]], 
+                     switch_distance: float) -> torch.tensor:
+        """sum of coordination numbers between two sets of atoms in range(0, 1)
+        Args:
+                distance between atoms: [[ind00, ind01, ...], [ind10, ind11, ...]]
+                switch_distance: value at which the switching function is 0.5
+        Returns:
+            cv (torch.tensor): computed distance
+        """
+        if len(index_list) != 2:
+            raise ValueError(
+                "CV ERROR: Invalid number of atom lists in definition of coordination_number!"
+            )
+
+        cv = torch.tensor(0.0)
+            
+        for idx1, idx2 in itertools.product(index_list[0], index_list[1]):
+            cv = cv + self.coordination_number([idx1, idx2], switch_distance)
+                
+        return cv
+    
+    def minimal_distance(self,
+                     index_list: list[list[int]]) -> torch.tensor:
+        """minimal distance between two sets of atoms
+        Args:
+                distance between atoms: [[ind00, ind01, ...], [ind10, ind11, ...]]
+        Returns:
+            cv (torch.tensor): computed distance
+        """
+        if len(index_list) != 2:
+            raise ValueError(
+                "CV ERROR: Invalid number of atom lists in definition of minimal_distance!"
+            )
+
+        distances = torch.zeros(len(index_list[0]) * len(index_list[1]))
+            
+        for ii, (idx1, idx2) in enumerate(itertools.product(index_list[0], index_list[1])):
+            distances[ii] = self.distance([idx1, idx2])
+                
+        return distances.min()
         
     def projecting_centroidvec(self):
         """
@@ -399,19 +462,35 @@ class ColVar(torch.nn.Module):
         self.atoms = atoms
         
         if   self.info_dict['name'] == 'distance':
-            cv = self.distance()
+            cv = self.distance(self.info_dict['index_list'])
+            
         elif self.info_dict['name'] == 'angle':
-            cv = self.angle()
+            cv = self.angle(self.info_dict['index_list'])
+            
         elif self.info_dict['name'] == 'dihedral':
-            cv = self.dihedral()
+            cv = self.dihedral(self.info_dict['index_list'])
+            
+        elif self.info_dict['name'] == 'coordination_number':
+            cv = self.coordination_number(self.info_dict['index_list'], self.info_dict['switching_dist'])
+            
+        elif self.info_dict['name'] == 'coordination':
+            cv = self.coordination(self.info_dict['index_list'], self.info_dict['switching_dist'])
+            
+        elif self.info_dict['name'] == 'minimal_distance':
+            cv = self.minimal_distance(self.info_dict['index_list'])
+            
         elif self.info_dict['name'] == 'projecting_centroidvec':
             cv = self.projecting_centroidvec()    
+            
         elif self.info_dict['name'] == 'projecting_veconplane':
             cv = self.projecting_veconplane()      
+            
         elif self.info_dict['name'] == 'projecting_veconplanenormal':
             cv = self.projecting_veconplanenormal()     
+            
         elif self.info_dict['name'] == 'Sp':
             cv = self.deproton1()
+            
         elif self.info_dict['name'] == 'Sd':
             cv = self.deproton2()
         
