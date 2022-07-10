@@ -77,7 +77,7 @@ def eigvec_following(ev_atoms,
         matrix_n[i][Ndim * len(old_xyz[0]) - 1] = F[i + 1]
         matrix_n[Ndim * len(old_xyz[0]) - 1][i] = F[i + 1]
 
-   lambda_n = torch.symeig(matrix_n, eigenvectors=False)[0][0]
+    lambda_n = torch.symeig(matrix_n, eigenvectors=False)[0][0]
 
     lambda_n = lambda_n.new_full(
         (Ndim * len(old_xyz[0]) - 1,), lambda_n.item()).to(device)
