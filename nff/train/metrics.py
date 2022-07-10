@@ -130,6 +130,11 @@ class MeanAbsoluteError(Metric):
     @staticmethod
     def loss_fn(y, yp):
 
+        # select only properties which are given
+        valid_idx = torch.bitwise_not(torch.isnan(y))
+        y = y[valid_idx]
+        yp = yp[valid_idx]
+
         y = y.to(torch.float)
         diff = y - yp.view(y.shape)
 

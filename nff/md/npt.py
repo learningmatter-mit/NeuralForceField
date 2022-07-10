@@ -2,6 +2,7 @@ import os
 import numpy as np
 import copy
 import math
+from tqdm import tqdm
 from ase.md.md import MolecularDynamics
 from ase.optimize.optimize import Dynamics
 from ase.md.npt import NPT
@@ -12,14 +13,24 @@ from ase.md.velocitydistribution import (MaxwellBoltzmannDistribution,
 
 class NoseHoovernpt(NPT):
     def __init__(self, atoms,
-                 timestep, temperature=None, externalstress=None,
-                 ttime=None, pfactor=None,
-                 temperature_K=None,
-                 mask=None, trajectory=None, logfile=None, loginterval=1,
-                 nbr_update_period=20,append_trajectory=False):
+                 timestep,
+                 temperature=None,
+                 externalstress=None,
+                 ttime=None,
+                 T_init=None,
+                 pfactor=None,
+                 mask=None,
+                 trajectory=None,
+                 logfile=None,
+                 loginterval=1,
+                 nbr_update_period=20,
+                 append_trajectory=False,
+                 **kwargs):
 
         if os.path.isfile(str(trajectory)):
             os.remove(trajectory)
+
+        print(externalstress)
 
         NPT.__init__(self,atoms=atoms,
                      timestep=timestep * units.fs,
@@ -37,10 +48,22 @@ class NoseHoovernpt(NPT):
         # convert units
         self.nbr_update_period = nbr_update_period
         self.max_steps=0
+
+        self.T = temperature * units.kB
+
+        # initial Maxwell-Boltmann temperature for atoms
+        if T_init is not None:
+            # convert units
+            T_init = T_init * units.kB
+        else:
+            T_init = 2 * self.T
+
         MaxwellBoltzmannDistribution(self.atoms, temperature*units.kB)
         Stationary(self.atoms)
         ZeroRotation(self.atoms)
         self.initialize()
+
+
     def run(self, steps=None):
 
         if steps is None:
@@ -54,10 +77,13 @@ class NoseHoovernpt(NPT):
         #self.max_steps = 0
         self.atoms.update_nbr_list()
 
-        for _ in range(epochs):
+        for _ in tqdm(range(epochs)):
             self.max_steps += steps_per_epoch
             Dynamics.run(self)
             self.atoms.update_nbr_list()
+
+
+            
 class NoseHooverNPT(MolecularDynamics):
     def __init__(self,
                  atoms,

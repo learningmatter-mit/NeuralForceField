@@ -39,6 +39,7 @@ KCAL_TO_AU = {
 KB_EV = 0.0000861731
 KB_AU = 3.166815e-6
 EV_TO_AU = 1 / 27.2114
+INV_CM_TO_AU = 4.5564e-6
 
 # Coulomb's constant, in (kcal/mol) * (A / e^2),
 # where A is Angstroms and e is the electron charge
@@ -91,7 +92,7 @@ FS_TO_ASE = 0.098
 ASE_TO_FS = 1 / FS_TO_ASE
 
 # Masses
-AMU_TO_AU = 1.67262192369e-27 / (9.1093837015e-31)
+AMU_TO_AU = 1.6726219e-27 / (9.10938356e-31)
 
 # Weird units used by Gaussian
 CM_TO_J = 1.98630e-23
@@ -130,7 +131,6 @@ KCAL_TO_AU = {
 }
 
 
-
 ELEC_CONFIG = {"1": [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
  "6": [2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
  "7": [2, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -150,7 +150,6 @@ ELEC_CONFIG = {int(key): val for key, val in ELEC_CONFIG.items()}
 #                        "elec_config.json"), "r") as f:
 #     ELEC_CONFIG = json.load(f)
 #     ELEC_CONFIG = {int(key): val for key, val in ELEC_CONFIG.items()}
-
 
 
 def convert_units(props, conversion_dict):

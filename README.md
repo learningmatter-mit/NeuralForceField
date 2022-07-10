@@ -6,18 +6,11 @@ This code repository is developed in the Learning Matter Lab (led by prof. Rafae
 
 ## Conda environment
 
-We highly recommend creating a `conda` environment to run the code. To do that, use the following commands:
+We highly recommend creating a `conda` environment to run the code. To do that, use the following command to create the `nff` conda environment:
 
 ```bash
 conda upgrade conda
-conda create -n nff python=3.7.10 scikit-learn==0.24.1 pytorch=1.9.0 cudatoolkit=10.2 ase==3.21.1 pandas==1.2.2 pymatgen==2021.2.16 sympy==1.7.1 rdkit==2020.09.4 hyperopt==0.2.5 jq==1.6 openbabel==3.1.1 -c pytorch -c conda-forge -c rdkit -c openbabel
-```
-
-Next install remaining pip requirements:
-
-```bash
-conda activate nff
-pip install sigopt==7.3.0  e3fp==1.2.3 ipykernel==5.5.0 performer-pytorch==1.0.11 nglview==3.0.1
+conda env create -f environment.yml
 ```
 
 To ensure that the `nff` environment is accessible through Jupyter, add the the `nff` display name:

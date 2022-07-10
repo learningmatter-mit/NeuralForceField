@@ -142,9 +142,7 @@ class SchNet(nn.Module):
 
         if xyz is None:
             xyz = batch["nxyz"][:, 1:4]
-
-            # this logic is required for adversarial attacks
-            if not xyz.requires_grad and xyz.grad_fn is None:
+            if xyz.requires_grad == False:
                 xyz.requires_grad = True
 
         r = batch["nxyz"][:, 0]
@@ -174,8 +172,8 @@ class SchNet(nn.Module):
 
         dist = (r_ij).pow(2).sum(1).sqrt()
         potential = ((dist.reciprocal() * self.sigma).pow(self.power))
-        
-        return scatter_add(potential,nbr_list[:, 0], dim_size=xyz.shape[0])[:, None]
+
+        return scatter_add(potential, nbr_list[:, 0], dim_size=xyz.shape[0])[:, None]
 
     def forward(self,
                 batch,
@@ -196,7 +194,7 @@ class SchNet(nn.Module):
         r = self.atomwisereadout(r)
 
         if getattr(self, "excl_vol", None):
-            # Excluded Volume interactions 
+            # Excluded Volume interactions
             r_ex = self.V_ex(r_ij, a, xyz)
             r['energy'] += r_ex
 

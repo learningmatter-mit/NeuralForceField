@@ -7,6 +7,7 @@ import inspect
 import torch
 from torch.autograd import grad
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
 
 
 def compute_jacobian(inputs, output, device):
@@ -36,7 +37,7 @@ def compute_jacobian(inputs, output, device):
     for i in range(num_classes):
         # zero_gradients(inputs)
         inputs.grad = None
-        
+
         grad_output.zero_()
         grad_output[:, i] = 1
         output.backward(grad_output, retain_graph=True)
@@ -103,6 +104,27 @@ def get_schnet_hessians(batch, model, device=0):
     energy = model.atomwisereadout.readout["energy"](r).sum()
     hess = compute_hess(inputs=xyz_reshape, output=energy, device=device)
 
+    return hess
+
+def get_painn_hessians(batch, model, device=0):
+    """Get Hessians from painn models. Hessian is returned in kcal/mol/A**2.
+    Use this method for painn models instead of hess from atoms. Tested both with 
+    molecular data (water) and periodic structures (quartz).
+
+    Args:
+        batch (dict): batch of data
+        model (TYPE): Description
+        device (int, optional): Description
+    """
+    N_atom = batch['nxyz'].shape[0]
+    xyz_reshape = batch["nxyz"][:, 1:].reshape(1, N_atom * 3)
+    xyz_reshape.requires_grad = True
+    xyz_input = xyz_reshape.reshape(N_atom, 3)
+
+    results = model(batch,xyz=xyz_input)
+    energy = results["energy"]
+
+    hess=compute_hess(xyz_reshape, energy, device=device)
     return hess
 
 
@@ -319,6 +341,7 @@ def general_batched_hessian(batch,
                                                  model=model,
                                                  forward=forward,
                                                  **kwargs)
+
     results = hess_from_results(results=results,
                                 xyz=xyz,
                                 stack_xyz=stack_xyz,
@@ -327,3 +350,55 @@ def general_batched_hessian(batch,
                                 device=device)
 
     return results
+
+
+def hess_from_atoms(atoms):
+    """
+    Use an ASE AtomsBatch to get the Hessian in Ha / Bohr^2.
+    Can then be used with `neuralnet.vib.vib_analy`
+    to get frequencies etc.
+
+    Note that the AtomsBatch must have an NFF calculator.
+
+
+    """
+
+    from nff.data import Dataset
+    from nff.data import collate_dicts
+    from nff.train import batch_to
+    from nff.utils import constants as const
+
+    # make the batch
+    cutoff = atoms.cutoff
+    directed = atoms.directed
+    device = atoms.device
+
+    xyz = atoms.get_positions()
+    n = atoms.get_atomic_numbers().reshape(-1, 1)
+    nxyz = np.concatenate([n, xyz], axis=-1)
+    dset = Dataset(props={"nxyz": [nxyz]})
+    dset.generate_neighbor_list(cutoff,
+                                undirected=(not directed))
+
+    loader = DataLoader(dset, collate_fn=collate_dicts)
+    batch = next(iter(loader))
+
+    model = atoms.calc.model.to(device)
+    batch = batch_to(batch, device)
+
+    # get the results
+    key = getattr(atoms.calc, "en_key", "energy")
+    results = general_batched_hessian(batch=batch,
+                                      keys=[key],
+                                      device=device,
+                                      model=model)
+
+    hess_key = key + "_hess"
+    hessian = torch.stack(results[hess_key])
+    hessian = hessian.reshape(*hessian.shape[1:])
+
+    hessian = (hessian.detach().cpu().numpy() *
+               const.KCAL_TO_AU['energy'] *
+               const.BOHR_RADIUS ** 2)
+
+    return hessian
