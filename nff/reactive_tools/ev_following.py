@@ -54,10 +54,12 @@ def eigvec_following(ev_atoms,
 
     # eigenvectors are stored in a transposed form
     eigenvalues, eigvecs = torch.linalg.eig(hessian)
+    eigenvalues = torch.real(eigenvalues)
+    eigvecs = torch.real(eigvecs)
 
     # Ordering eigenvalues and eigenvectors in ascending order
-    idx = eigenvalues[:, 0].argsort()
-    eigenvalues = eigenvalues[idx][:, 0]
+    idx = eigenvalues.argsort()
+    eigenvalues = eigenvalues[idx]
     # print(eigenvalues)
 
     eigvecs = eigvecs[:, idx]
@@ -67,8 +69,7 @@ def eigvec_following(ev_atoms,
     F = torch.mv(eigvecs_t, grad).reshape(-1, 1)
 
     matrix_p = torch.Tensor([[eigenvalues[0], F[0]], [F[0], 0]])
-
-    lambda_p = torch.eigvalsh(matrix_p)[0][1]
+    lambda_p = torch.linalg.eigvalsh(matrix_p)[1]
 
     matrix_n = torch.zeros(Ndim * len(old_xyz[0]),
                            Ndim * len(old_xyz[0]))
