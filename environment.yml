@@ -81,6 +81,7 @@ dependencies:
   - jmespath=0.10.0=pyh9f0ad1d_0
   - joblib=1.1.0=pyhd8ed1ab_0
   - jpeg=9e=h166bdaf_1
+  - jq=1.6=h36c2ea0_1000
   - jsoncpp=1.9.5=h4bd325d_1
   - jupyter_client=7.3.1=pyhd8ed1ab_0
   - jupyter_core=4.10.0=py39hf3d152e_0
@@ -203,7 +204,7 @@ dependencies:
   - pyyaml=6.0=py39hb9d737c_4
   - pyzmq=23.0.0=py39headdf64_0
   - rdkit=2020.09.1=py39h54e287e_0
-  - readline=8.1=h46c0cb4_0
+  - readline=8.1.2=h0f457ee_0
   - requests=2.27.1=pyhd8ed1ab_0
   - ruamel.yaml=0.17.21=py39hb9d737c_1
   - ruamel.yaml.clib=0.2.6=py39hb9d737c_1
@@ -280,7 +281,6 @@ dependencies:
     - ipykernel==6.15.1
     - ipython-genutils==0.2.0
     - ipywidgets==7.7.0
-    - jq==1.2.2
     - jsonschema==4.5.1
     - jupyter==1.0.0
     - jupyter-console==6.4.3
