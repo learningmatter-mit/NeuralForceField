@@ -53,7 +53,7 @@ def eigvec_following(ev_atoms,
         hessian = powell_update(hessian_old, h_old, gradient_old, grad)
 
     # eigenvectors are stored in a transposed form
-    eigenvalues, eigvecs = torch.linalg.eig(hessian, eigenvectors=True)
+    eigenvalues, eigvecs = torch.linalg.eig(hessian)
 
     # Ordering eigenvalues and eigenvectors in ascending order
     idx = eigenvalues[:, 0].argsort()
