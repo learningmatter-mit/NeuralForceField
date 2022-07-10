@@ -53,11 +53,13 @@ def eigvec_following(ev_atoms,
         hessian = powell_update(hessian_old, h_old, gradient_old, grad)
 
     # eigenvectors are stored in a transposed form
-    eigenvalues, eigvecs = torch.eig(hessian, eigenvectors=True)
+    eigenvalues, eigvecs = torch.linalg.eig(hessian)
+    eigenvalues = torch.real(eigenvalues)
+    eigvecs = torch.real(eigvecs)
 
     # Ordering eigenvalues and eigenvectors in ascending order
-    idx = eigenvalues[:, 0].argsort()
-    eigenvalues = eigenvalues[idx][:, 0]
+    idx = eigenvalues.argsort()
+    eigenvalues = eigenvalues[idx]
     # print(eigenvalues)
 
     eigvecs = eigvecs[:, idx]
@@ -67,7 +69,7 @@ def eigvec_following(ev_atoms,
     F = torch.mv(eigvecs_t, grad).reshape(-1, 1)
 
     matrix_p = torch.Tensor([[eigenvalues[0], F[0]], [F[0], 0]])
-    lambda_p = torch.symeig(matrix_p, eigenvectors=False)[0][1]
+    lambda_p = torch.linalg.eigvalsh(matrix_p)[1]
 
     matrix_n = torch.zeros(Ndim * len(old_xyz[0]),
                            Ndim * len(old_xyz[0]))
@@ -77,7 +79,7 @@ def eigvec_following(ev_atoms,
         matrix_n[i][Ndim * len(old_xyz[0]) - 1] = F[i + 1]
         matrix_n[Ndim * len(old_xyz[0]) - 1][i] = F[i + 1]
 
-    lambda_n = torch.symeig(matrix_n, eigenvectors=False)[0][0]
+    lambda_n = torch.linalg.eigvalsh(matrix_n)[0]
 
     lambda_n = lambda_n.new_full(
         (Ndim * len(old_xyz[0]) - 1,), lambda_n.item()).to(device)
