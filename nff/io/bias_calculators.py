@@ -2,6 +2,7 @@ import os
 import numpy as np
 import torch
 from typing import Union, Tuple
+import copy
 
 from ase import Atoms
 from ase.neighborlist import neighbor_list
@@ -18,11 +19,23 @@ from nff.utils.scatter import compute_grad
 from nff.data import Dataset
 from nff.nn.graphop import split_and_sum
 
-from nff.io.ase import NeuralFF, AtomsBatch
+from nff.io.ase import NeuralFF, AtomsBatch, check_directed
 from nff.data import collate_dicts
 from nff.md.colvars import ColVar as CV
 
+from nff.nn.models.schnet import SchNet, SchNetDiabat
+from nff.nn.models.hybridgraph import HybridGraphConv
+from nff.nn.models.schnet_features import SchNetFeatures
+from nff.nn.models.cp3d import OnlyBondUpdateCP3D
+
+DEFAULT_CUTOFF = 5.0
 DEFAULT_DIRECTED = False
+DEFAULT_SKIN = 1.0
+UNDIRECTED = [SchNet,
+              SchNetDiabat,
+              HybridGraphConv,
+              SchNetFeatures,
+              OnlyBondUpdateCP3D]
 
 
 
@@ -38,7 +51,7 @@ class BiasBase(NeuralFF):
     
     implemented_properties = ['energy', 'forces', 'stress',
                               'energy_unbiased', 'forces_unbiased', 
-                              'cv_vals', 'cv_invmass', 
+                              'cv_vals', 'ext_pos', 'cv_invmass', 
                               'grad_length', 'cv_grad_lengths', 
                               'cv_dot_PES']
     
@@ -55,8 +68,7 @@ class BiasBase(NeuralFF):
                           model=model,
                           device=device,
                           en_key=en_key,
-                          directed=DEFAULT_DIRECTED,
-                          funcvparams=None,
+                          directed=directed,
                           **kwargs)
         
         self.cv_defs = cv_defs
@@ -67,15 +79,15 @@ class BiasBase(NeuralFF):
         
         self.equil_temp = equil_temp
         
-        self.ext_coords  = np.zeros(shape=(self.num_cv,))
-        self.ext_masses  = np.zeros(shape=(self.num_cv,))
-        self.ext_forces  = np.zeros(shape=(self.num_cv,))
-        self.ext_momenta = np.zeros(shape=(self.num_cv,))
+        self.ext_coords  = np.zeros(shape=(self.num_cv,1))
+        self.ext_masses  = np.zeros(shape=(self.num_cv,1))
+        self.ext_forces  = np.zeros(shape=(self.num_cv,1))
+        self.ext_momenta = np.zeros(shape=(self.num_cv,1))
         self.ext_k = np.zeros(shape=(self.num_cv,))
         
         self.ranges  = np.zeros(shape=(self.num_cv,2))
-        self.margins = np.zeros(shape=(self.num_cv,))
-        self.conf_k  = np.zeros(shape=(self.num_cv,))
+        self.margins = np.zeros(shape=(self.num_cv,1))
+        self.conf_k  = np.zeros(shape=(self.num_cv,1))
         
         for ii, cv in enumerate(self.cv_defs):
             if 'range' in cv.keys():
@@ -92,7 +104,7 @@ class BiasBase(NeuralFF):
                 
             if 'ext_k' in cv.keys():
                 self.ext_k[ii] = cv['ext_k']
-            elif 'ext_sigma' in cv.keys()
+            elif 'ext_sigma' in cv.keys():
                 self.ext_k[ii] = (units.kB * self.equil_temp) / (
                                   cv['ext_sigma'] * cv['ext_sigma'])
             else:
@@ -106,22 +118,16 @@ class BiasBase(NeuralFF):
                 
         # initialize extended system at target temp of MD simulation
         for i in range(self.num_cv):
-            self.ext_momenta[i] = random.gauss(0.0, 1.0) * np.sqrt(
-                                    self.equil_temp * self.ext_mass[i])
-        ttt = (np.power(self.ext_momenta, 2) / self.ext_mass).sum()
-        ttt /= self.num_cv
-        self.ext_momenta *= np.sqrt(self.equil_temp / ttt)
+            self.ext_momenta[i] = np.random.randn() * np.sqrt(
+                                    self.equil_temp * self.ext_masses[i])
             
         
-    @abstractmethod
     def _update_bias(self):
         pass
     
-    @abstractmethod
     def _propagate_ext(self):
         pass
     
-    @abstractmethod
     def _up_extmom(self):
         pass
     
@@ -155,7 +161,6 @@ class BiasBase(NeuralFF):
 
         return diff
     
-    @abstractmethod
     def step_bias(self, 
                  xi: np.ndarray,
                  grad_xi: np.ndarray,
@@ -173,30 +178,29 @@ class BiasBase(NeuralFF):
         
         self._propagate_ext()
         
-        bias_grad = np.zeros_like(self.atoms.get_positions())
+        bias_grad = np.zeros_like(grad_xi[0])
         bias_ener = 0.0        
         
-        for i in range(self.ncoords):
+        for i in range(self.num_cv):
             # harmonic coupling of extended coordinate to reaction coordinate
-
-            dxi = self.diff(self.ext_coords[i], xi[i], self.cv_defs[i]['type'])
+            dxi = self.diff(xi[i], self.ext_coords[i], self.cv_defs[i]['type'])
             self.ext_forces[i] = self.ext_k[i] * dxi
             bias_grad += self.ext_k[i] * dxi * grad_xi[i]
             bias_ener += 0.5 * self.ext_k[i] * dxi**2
 
             # harmonic walls for confinement to range of interest
-            if self.ext_coords[i] > (self.ranges[i][1] - self.margin[i]):
+            if self.ext_coords[i] > (self.ranges[i][1] - self.margins[i]):
                 r = diff(self.ranges[i][1] - self.margin[i], self.ext_coords[i], self.cv_defs[i]['type'])
                 self.ext_forces[i] -= self.conf_k[i] * r
 
-            elif self.ext_coords[i] < (self.ranges[i][0] + self.margin[i]):
+            elif self.ext_coords[i] < (self.ranges[i][0] + self.margins[i]):
                 r = diff(self.ranges[i][0] + self.margin[i], self.ext_coords[i], self.cv_defs[i]['type'])
                 self.ext_forces[i] -= self.conf_k[i] * r
          
         self._update_bias()
         self._up_extmom()                
                 
-        return bias_ener, bias_force
+        return bias_ener, bias_grad
 
     
     def calculate(
@@ -257,26 +261,25 @@ class BiasBase(NeuralFF):
         energy = copy.deepcopy(model_energy)
         grad   = copy.deepcopy(model_grad)
         
-        masses = atoms.get_masses()
-        M_inv  = 1. / np.diag(np.array([masses, masses, masses]).flatten())
-        print(self.M_inv)
+        inv_masses = 1. / atoms.get_masses()
+        M_inv  = np.diag(np.repeat(inv_masses, 3).flatten())
         
-        cvs = np.zeros(shape=(self.num_cv,))
+        cvs = np.zeros(shape=(self.num_cv,1))
         cv_grads     = np.zeros(shape=(self.num_cv, 
                                    atoms.get_positions().shape[0], 
                                    atoms.get_positions().shape[1]))
-        cv_grad_lens = np.zeros(shape=(self.num_cv,))
-        cv_invmass   = np.zeros(shape=(self.num_cv,))
-        cv_dot_PES   = np.zeros(shape=(self.num_cv,))
+        cv_grad_lens = np.zeros(shape=(self.num_cv,1))
+        cv_invmass   = np.zeros(shape=(self.num_cv,1))
+        cv_dot_PES   = np.zeros(shape=(self.num_cv,1))
         for ii, cv_def in enumerate(self.cv_defs):
             xi, xi_grad      = self.the_cv[ii](atoms)
             cvs[ii]          = xi
             cv_grads[ii]     = xi_grad
-            cv_grad_lens[ii] = np.linalg.norm(xi_grad.flatten())
+            cv_grad_lens[ii] = np.linalg.norm(xi_grad)
             cv_invmass[ii]   = np.matmul(xi_grad.flatten(), np.matmul(M_inv, xi_grad.flatten()))
             cv_dot_PES[ii]   = np.dot(xi_grad.flatten(), model_grad.flatten())
             
-        bias_ener, bias_grad = self.step_bias(xi, xi_grad)
+        bias_ener, bias_grad = self.step_bias(cvs, cv_grads)
         energy += bias_ener
         grad   += bias_grad
             
@@ -288,7 +291,7 @@ class BiasBase(NeuralFF):
             'forces_unbiased': -model_grad.reshape(-1, 3),
             'grad_length': np.linalg.norm(model_grad),
             'cv_vals': cvs,
-            'cv_grad_lengths': cv_grads,
+            'cv_grad_lengths': cv_grad_lens,
             'cv_invmass': cv_invmass,
             'cv_dot_PES': cv_dot_PES,
             'ext_pos': self.ext_coords,
