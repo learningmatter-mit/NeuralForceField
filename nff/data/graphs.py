@@ -116,7 +116,8 @@ def get_neighbor_list(xyz, cutoff=5, undirected=True):
             indices of connected atoms.
     """
 
-    xyz = torch.Tensor(xyz)
+    if torch.is_tensor(xyz) == False:
+        xyz = torch.Tensor(xyz)
     n = xyz.size(0)
 
     # calculating distances
