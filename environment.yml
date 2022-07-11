@@ -310,4 +310,3 @@ dependencies:
     - tinycss2==1.1.1
     - webencodings==0.5.1
     - widgetsnbextension==3.6.0
-prefix: /home/saxelrod/miniconda3/envs/barriers_old
