@@ -3,10 +3,28 @@ import torch
 from nff.io.ase import NeuralFF, AtomsBatch
 from nff.reactive_tools.utils import (neural_hessian_ase, neural_energy_ase,
                                       neural_force_ase)
-
+from nff.utils.constants import EV_TO_AU, BOHR_RADIUS
+from barriers.utils.vib import hessian_and_modes
+from ase.units import Bohr, mol, kcal
 from ase import Atoms
 
 CONVG_LINE = "Optimization converged!"
+
+
+def get_hessian(atoms,
+                device):
+
+    mode_results = hessian_and_modes(atoms)
+
+    # use the full Hessian, not the one with
+    # translation and rotation projected out
+
+    # hessian = mode_results["hess_proj"]
+    hessian = mode_results["hessianmatrix"]
+    hessian = torch.Tensor(hessian).to(device)
+    hessian /= (EV_TO_AU * BOHR_RADIUS ** 2)
+
+    return hessian
 
 
 def powell_update(hessian_old,
@@ -43,7 +61,8 @@ def eigvec_following(ev_atoms,
                            ).reshape(1, -1, Ndim).to(device)
 
     if(method == 'NR' or step == 0):
-        hessian = torch.Tensor(neural_hessian_ase(ev_atoms)).to(device)
+        hessian = get_hessian(atoms=ev_atoms,
+                              device=device)
 
     neural_energy_ase(ev_atoms)
     neural_gradient = -1 * torch.Tensor(neural_force_ase(ev_atoms)).to(device)
@@ -89,10 +108,11 @@ def eigvec_following(ev_atoms,
     h = torch.add(h_p, torch.sum(h_n, dim=0)
                   ).reshape(-1, len(old_xyz[0]), Ndim)
 
-    if(torch.max(h) <= maxstepsize):
+    step_size = h.norm()
+    if step_size <= maxstepsize:
         new_xyz = old_xyz + h
     else:
-        new_xyz = old_xyz + (h / (torch.max(h) / maxstepsize))
+        new_xyz = old_xyz + (h / (step_size / maxstepsize))
 
     output = (new_xyz.detach(), grad.detach(),
               hessian.detach(), h.reshape(-1).detach())
@@ -116,7 +136,7 @@ def get_calc_kwargs(calc_kwargs,
 
 def ev_run(ev_atoms,
            nff_dir=None,
-           maxstepsize=0.005,
+           maxstepsize=0.15,
            maxstep=1000,
            convergence=0.03,
            device=None,
@@ -167,5 +187,10 @@ def ev_run(ev_atoms,
         positions = xyz.reshape(-1, 3).cpu().numpy()
         ev_atoms.set_positions(positions)
 
+    # so that we're returning the xyz that has gradient `grad`, not whatever
+    # the xyz of the next step would be
+    xyz = torch.Tensor(ev_atoms.get_positions()).reshape(1, -1, 3)
+
     output = xyz, grad, xyz_all, rmslist, maxlist
+
     return output
