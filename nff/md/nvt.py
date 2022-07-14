@@ -2,6 +2,7 @@ import os
 import numpy as np
 import copy
 import math
+import pickle
 
 from tqdm import tqdm
 from ase.optimize.optimize import Dynamics
@@ -168,8 +169,8 @@ class NoseHooverChain(NoseHoover):
                  atoms,
                  timestep,
                  temperature,
-                 ttime,
-                 num_chains,
+                 ttime = 20.0,
+                 num_chains = 5,
                  maxwell_temp=None,
                  trajectory=None,
                  logfile=None,
@@ -178,6 +179,17 @@ class NoseHooverChain(NoseHoover):
                  nbr_update_period=20,
                  append_trajectory=True,
                  **kwargs):
+        
+        """Docstring
+           Args: 
+               ttime (float): factor to be multiplied with time step to 
+                              give the evolution time of the bath, 
+                              default is now 20 (7/14/22)
+               num_chains (int): number of coupled extended DoFs, 
+                                 it's known that two chains are not enough
+                                 default is now 5 (7/14/22)
+        
+        """
 
         NoseHoover.__init__(self,
                             atoms=atoms,
@@ -194,8 +206,8 @@ class NoseHooverChain(NoseHoover):
                             **kwargs)
 
         self.N_dof = 3.0 * self.Natom - 6
-        q_0 = self.N_dof * self.T * self.ttime**2
-        q_n = self.T * self.ttime**2
+        q_0 = self.N_dof * self.T * (self.ttime * self.dt)**2
+        q_n = self.T * (self.ttime * self.dt)**2
 
         self.Q = 2 * np.array([q_0, *([q_n] * (num_chains-1))])
         self.p_zeta = np.array([0.0]*num_chains)
@@ -462,6 +474,13 @@ class Langevin(MolecularDynamics):
             self.atoms.update_nbr_list()
             Stationary(self.atoms)
             ZeroRotation(self.atoms)
+        
+        with open('random_state.pickle', 'wb') as f:
+            pickle.dump(np.random.get_state(), f)
+            
+        # load random state for restart as
+        #with open('random_state.pickle', 'rb') as f:
+        #     state = pickle.load(f)
 
 
 class BatchLangevin(MolecularDynamics):
