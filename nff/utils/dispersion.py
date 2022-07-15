@@ -13,9 +13,11 @@ import torch
 import json
 
 from nff.utils import constants as const
+from nff.nn.utils import lattice_points_in_supercell, clean_matrix
 from nff.utils.scatter import scatter_add
-from ase.build.supercells import lattice_points_in_supercell, clean_matrix
 
+from ase import Atoms
+from ase.calculators.dftd3 import DFTD3
 
 base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         'table_data')
@@ -43,7 +45,9 @@ with open(func_path, "r") as f:
 
 def get_periodic_nbrs(batch,
                       xyz,
-                      r_cut=95):
+                      r_cut=95,
+                      nbrs_info=None,
+                      mol_idx=None):
     """
     Get the neighbor list connecting every atom to its neighbor within
     a given geometry, but not to itself or to atoms in other geometries.
@@ -51,59 +55,122 @@ def get_periodic_nbrs(batch,
     lattice translation vectors.
     """
 
-    cell = batch['cell']
+    device = xyz.device
 
-    # cutoff specified by r_cut in Bohr (a.u.)
-    # estimate getting close to the cutoff with supercell expansion
-    a_mul = int(np.ceil( (r_cut*const.BOHR_RADIUS) / np.linalg.norm(cell[0]) ))
-    b_mul = int(np.ceil( (r_cut*const.BOHR_RADIUS) / np.linalg.norm(cell[1]) ))
-    c_mul = int(np.ceil( (r_cut*const.BOHR_RADIUS) / np.linalg.norm(cell[2]) ))
-    supercell_matrix = np.array([[a_mul, 0, 0], [0, b_mul, 0], [0, 0, c_mul]])
-    supercell = clean_matrix(supercell_matrix @ cell)
+    num_atoms = batch['num_atoms']
+    if not isinstance(num_atoms, list):
+        num_atoms = num_atoms.tolist()
 
-    # cartesian lattice points
-    lattice_points_frac = lattice_points_in_supercell(supercell_matrix)
-    lattice_points = np.dot(lattice_points_frac, supercell)
-    # need to get all negative lattice translation vectors
-    # but remove duplicate 0 vector
-    lattice_points = np.concatenate((lattice_points,(lattice_points*-1)[1:]))
+    if nbrs_info is None:
 
-    z = batch['nxyz'][:, 0].long().to(xyz.device)
-    N = len(lattice_points)
-    # perform lattice translations on positions
-    lattice_points_T = (torch.tile(torch.from_numpy(lattice_points), 
-                        (len(xyz), ) + (1, ) * (len(lattice_points.shape) - 1) )
-                        / const.BOHR_RADIUS).to(xyz.device)
-    xyz_T = ((torch.repeat_interleave(xyz, N, dim=0) / const.BOHR_RADIUS)
-                                            .to(xyz.device))
-    xyz_T = xyz_T + lattice_points_T
+        nxyz_list = torch.split(batch['nxyz'], num_atoms)
+        counter = 0
 
-    # get valid indices within the cutoff
-    num = xyz.shape[0]
-    idx = torch.arange(num)
-    x, y = torch.meshgrid(idx, idx)
-    nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)], dim=1).to(xyz.device)
-    lattice_points = (torch.tile(torch.from_numpy(lattice_points).to(xyz.device),
-                    (len(nbrs), ) + (1, ) * (len(lattice_points.shape) - 1) ))
+        nbrs = []
+        nbrs_T = []
+        nbrs = []
+        z = []
+        N = []
+        lattice_points = []
+        mask_applied = []
+        xyz = []
+        xyz_T = []
+        num_atoms = []
+        for idx, nxyz in enumerate(nxyz_list):
 
-    # convert everything from Angstroms to Bohr
-    xyz = xyz / const.BOHR_RADIUS   # convert to Bohr
-    lattice_points = lattice_points / const.BOHR_RADIUS # convert to Bohr
+            _xyz = nxyz[:,1:]
+            # only works if the cell for all the crystals in the batch are the same
+            cell = batch['cell']
 
-    nbrs_T = torch.repeat_interleave(nbrs, N, dim=0).to(xyz.device)
-    # ensure that A != B when T=0
-    # since first index in lattice_points corresponds to T=0
-    # get the idxs on which to apply the mask
-    idxs_to_apply = torch.tensor([True]*len(nbrs_T)).to(xyz.device)
-    idxs_to_apply[::N] = False
-    # get the mask that we want to apply
-    mask = nbrs_T[:,0] != nbrs_T[:,1]
-    # do a joint boolean operation to get the mask
-    mask_applied = torch.logical_or(idxs_to_apply, mask)
-    nbrs_T = nbrs_T[mask_applied]
-    lattice_points = lattice_points[mask_applied]
+            # cutoff specified by r_cut in Bohr (a.u.)
+            # estimate getting close to the cutoff with supercell expansion
+            a_mul = int(np.ceil( (r_cut*const.BOHR_RADIUS) / np.linalg.norm(cell[0]) ))
+            b_mul = int(np.ceil( (r_cut*const.BOHR_RADIUS) / np.linalg.norm(cell[1]) ))
+            c_mul = int(np.ceil( (r_cut*const.BOHR_RADIUS) / np.linalg.norm(cell[2]) ))
+            supercell_matrix = np.array([[a_mul, 0, 0], [0, b_mul, 0], [0, 0, c_mul]])
+            supercell = clean_matrix(supercell_matrix @ cell)
 
-    return nbrs_T, nbrs, z, xyz_T, xyz, N, lattice_points, mask_applied, r_cut
+            # cartesian lattice points
+            lattice_points_frac = lattice_points_in_supercell(supercell_matrix)
+            _lattice_points = np.dot(lattice_points_frac, supercell)
+
+            # need to get all negative lattice translation vectors
+            # but remove duplicate 0 vector
+            zero_idx = np.where(np.all(_lattice_points.__eq__(np.array([0,0,0])), axis=1))[0][0]
+            _lattice_points = np.concatenate([_lattice_points[zero_idx:, :], _lattice_points[:zero_idx, :]])
+
+            _z = nxyz[:,0].long().to(device)
+            _N = len(_lattice_points)
+            # perform lattice translations on positions
+            lattice_points_T = (torch.tile(torch.from_numpy(_lattice_points), 
+                                (len(_xyz), ) + (1, ) * (len(_lattice_points.shape) - 1) )
+                                / const.BOHR_RADIUS).to(device)
+            _xyz_T = ((torch.repeat_interleave(_xyz, _N, dim=0) / const.BOHR_RADIUS)
+                                                    .to(device))
+            _xyz_T = _xyz_T + lattice_points_T
+
+            # get valid indices within the cutoff
+            num = _xyz.shape[0]
+            idx = torch.arange(num)
+            x, y = torch.meshgrid(idx, idx)
+            _nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)], dim=1).to(device)
+            _lattice_points = (torch.tile(torch.from_numpy(_lattice_points).to(device),
+                            (len(_nbrs), ) + (1, ) * (len(_lattice_points.shape) - 1) ))
+
+            # convert everything from Angstroms to Bohr
+            _xyz = _xyz / const.BOHR_RADIUS   # convert to Bohr
+            _lattice_points = _lattice_points / const.BOHR_RADIUS # convert to Bohr
+
+            _nbrs_T = torch.repeat_interleave(_nbrs, _N, dim=0).to(device)
+            # ensure that A != B when T=0
+            # since first index in _lattice_points corresponds to T=0
+            # get the idxs on which to apply the mask
+            idxs_to_apply = torch.tensor([True]*len(_nbrs_T)).to(device)
+            idxs_to_apply[::_N] = False
+            # get the mask that we want to apply
+            mask = _nbrs_T[:,0] != _nbrs_T[:,1]
+            # do a joint boolean operation to get the mask
+            _mask_applied = torch.logical_or(idxs_to_apply, mask)
+            _nbrs_T = _nbrs_T[_mask_applied]
+            _lattice_points = _lattice_points[_mask_applied]
+
+            nbrs_T.append(_nbrs_T)
+            nbrs.append(_nbrs)
+            z.append(_z)
+            N.append(_N)
+            lattice_points.append(_lattice_points)
+            mask_applied.append(_mask_applied)
+            xyz_T.append(_xyz_T)
+            xyz.append(_xyz)
+
+            num_atoms.append(len(_xyz))
+
+    else:
+        nxyz_list = torch.split(batch['nxyz'], num_atoms)
+
+        nbrs_T, nbrs, z, _, _, N, lattice_points, mask_applied = nbrs_info
+
+        xyz_T = []
+        num_atoms = []
+        for nxyz, _N, _lattice_points in zip(nxyz_list, N, lattice_points):
+            _xyz = nxyz[:,1:]
+            _xyz_T = ((torch.repeat_interleave(_xyz, _N, dim=0) / const.BOHR_RADIUS)
+                                                    .to(device))
+            _lattice_points_T = (torch.tile(torch.from_numpy(_lattice_points), 
+                                (len(_xyz), ) + (1, ) * (len(_lattice_points.shape) - 1) )
+                                / const.BOHR_RADIUS).to(device)
+            _xyz_T = _xyz_T + _lattice_points_T
+            
+            xyz_T.append(_xyz_T)
+
+            num_atoms.append(len(_xyz))
+
+    if mol_idx is None:
+        mol_idx = torch.cat([torch.zeros(num) + i
+                             for i, num in enumerate(num_atoms)]
+                            ).long().to(_xyz.device)
+
+    return nbrs_T, nbrs, z, xyz_T, xyz, N, lattice_points, mask_applied, r_cut, mol_idx
 
 
 def get_periodic_coordination(xyz,
@@ -324,19 +391,84 @@ def get_dispersion(batch,
                            func_params=func_params)
 
     periodic = (batch.get('cell',None) is not None)
+    device = xyz.device
 
     if periodic:
         (nbrs_T, nbrs, z, xyz_T, xyz, N,
-        lattice_points, mask_applied, r_cut) = get_periodic_nbrs(batch=batch,
-                                                                    xyz=xyz)
+        lattice_points, mask_applied, r_cut, mol_idx) = get_periodic_nbrs(batch=batch,
+                                                                          xyz=xyz,
+                                                                          nbrs_info=nbrs,
+                                                                          mol_idx=mol_idx)
 
-        r_ab_T, cn = get_periodic_coordination(xyz=xyz,
-                                               z=z,
-                                               nbrs_T=nbrs_T,
-                                               lattice_points=lattice_points,
-                                               r_cov=r_cov,
-                                               k1=params["k1"],
-                                               k2=params["k2"])
+        r_ab_T = []
+        c6 = []
+        c8 = []
+        filtered_nbrs_T = []
+        for _nbrs_T, _nbrs, _z, _xyz, _N, _lattice_points, _mask_applied in zip(nbrs_T, nbrs, z, xyz, N, lattice_points, mask_applied):
+
+            _r_ab_T, cn = get_periodic_coordination(xyz=_xyz,
+                                                    z=_z,
+                                                    nbrs_T=_nbrs_T,
+                                                    lattice_points=_lattice_points,
+                                                    r_cov=r_cov,
+                                                    k1=params["k1"],
+                                                    k2=params["k2"])
+
+            _c6 = get_c6(z=_z,
+                        cn=cn,
+                        nbrs=_nbrs,
+                        c6_ref=c6_ref,
+                        k3=params["k3"])
+
+            _c8 = get_c8(z=_z,
+                        nbrs=_nbrs,
+                        c6=_c6,
+                        r2r4=r2r4)
+
+            # get original pairwise interactions from within unit cell
+            # change shape of all tensors to account for the fake expansion
+            _c6 = torch.repeat_interleave(_c6, _N, dim=0)
+            _c8 = torch.repeat_interleave(_c8, _N, dim=0)
+
+            # find within the cutoff r_cut for pairwise interactions
+            _c6 = _c6[_mask_applied]
+            _c8 = _c8[_mask_applied]
+            _c6 = _c6[_r_ab_T < r_cut]
+            _c8 = _c8[_r_ab_T < r_cut]
+            _nbrs_T = _nbrs_T[_r_ab_T < r_cut]
+            _r_ab_T = _r_ab_T[_r_ab_T < r_cut]
+
+            r_ab_T.append(_r_ab_T)
+            c6.append(_c6)
+            c8.append(_c8)
+            filtered_nbrs_T.append(_nbrs_T)
+
+        r_ab_T = torch.cat(r_ab_T)
+        c6 = torch.cat(c6)
+        c8 = torch.cat(c8)
+
+        mask_applied = torch.cat(mask_applied).to(device)
+            
+        count = 0
+        counter = []
+        for _xyz in xyz:
+            counter.append(count)
+            count+=len(_xyz)
+
+        filtered_nbrs_T = [_nbrs_T+count for _nbrs_T, count in zip(filtered_nbrs_T, counter)]
+        nbrs_T = torch.cat(filtered_nbrs_T).to(device)
+        xyz = torch.cat(xyz).to(device)
+
+        e_disp=disp_from_data(r_ab=r_ab_T,
+                              c6=c6,
+                              c8=c8,
+                              s6=params["s6"],
+                              s8=params["s8"],
+                              a1=params["a1"],
+                              a2=params["a2"],
+                              xyz=xyz,
+                              nbrs=nbrs_T,
+                              mol_idx=mol_idx)
 
     else:
         nbrs, mol_idx, z = get_nbrs(batch=batch,
@@ -350,48 +482,17 @@ def get_dispersion(batch,
                                     k1=params["k1"],
                                     k2=params["k2"])
 
-    c6 = get_c6(z=z,
-                cn=cn,
-                nbrs=nbrs,
-                c6_ref=c6_ref,
-                k3=params["k3"])
+        c6 = get_c6(z=z,
+                    cn=cn,
+                    nbrs=nbrs,
+                    c6_ref=c6_ref,
+                    k3=params["k3"])
 
-    c8 = get_c8(z=z,
-                nbrs=nbrs,
-                c6=c6,
-                r2r4=r2r4)
+        c8 = get_c8(z=z,
+                    nbrs=nbrs,
+                    c6=c6,
+                    r2r4=r2r4)
 
-    if periodic:
-        # get original pairwise interactions from within unit cell
-        # change shape of all tensors to account for the fake expansion
-        c6 = torch.repeat_interleave(c6, N, dim=0)
-        c8 = torch.repeat_interleave(c8, N, dim=0)
-
-        # find within the cutoff r_cut for pairwise interactions
-        c6 = c6[mask_applied]
-        c8 = c8[mask_applied]
-        c6 = c6[r_ab_T < r_cut]
-        c8 = c8[r_ab_T < r_cut]
-        nbrs_T = nbrs_T[r_ab_T < r_cut]
-        r_ab_T = r_ab_T[r_ab_T < r_cut]
-
-        num_atoms = torch.LongTensor([len(xyz_T)])
-        mol_idx = torch.cat([torch.zeros(num) + i
-                                for i, num in enumerate(num_atoms)]
-                                ).long().to(xyz.device)
-
-        e_disp=disp_from_data(r_ab=r_ab_T,
-                              c6=c6,
-                              c8=c8,
-                              s6=params["s6"],
-                              s8=params["s8"],
-                              a1=params["a1"],
-                              a2=params["a2"],
-                              xyz=xyz_T,
-                              nbrs=nbrs_T,
-                              mol_idx=mol_idx)
-
-    else:
         e_disp = disp_from_data(r_ab=r_ab,
                                 c6=c6,
                                 c8=c8,
@@ -401,6 +502,16 @@ def get_dispersion(batch,
                                 a2=params["a2"],
                                 xyz=xyz,
                                 nbrs=nbrs,
-                                mol_idx=mol_idx)
+                                mol_idx=mol_idx)        
+
+    return e_disp
+
+
+def grimme_dispersion(batch, xyz, disp_type, functional):
+    
+    d3 = DFTD3(xc='pbe',damping='bj',grad=True)
+    atoms = Atoms(cell=batch.get('cell',None), numbers=batch['nxyz'][:, 0].detach().cpu().numpy(), positions=xyz.detach().cpu().numpy(), pbc=True)
+    atoms.calc = d3
+    e_disp = atoms.get_potential_energy()
 
     return e_disp

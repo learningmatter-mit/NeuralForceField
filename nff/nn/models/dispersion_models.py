@@ -8,7 +8,9 @@ from nff.nn.models.painn import add_stress
 from nff.utils.scatter import compute_grad
 from nff.utils import constants as const
 from nff.utils.dispersion import get_dispersion as base_dispersion
+from nff.utils.dispersion import grimme_dispersion
 from nff.nn.models.painn import Painn
+import time
 
 
 class PainnDispersion(nn.Module):
@@ -38,12 +40,25 @@ class PainnDispersion(nn.Module):
                        batch,
                        xyz):
 
+        start = time.time()
         e_disp = base_dispersion(batch=batch,
                                  xyz=xyz,
                                  disp_type=self.disp_type,
                                  functional=self.functional,
                                  nbrs=batch.get('mol_nbrs'),
                                  mol_idx=batch.get("mol_idx"))
+        end = time.time()
+        print(e_disp)
+        print(end-start)
+
+        start = time.time()
+        e_disp = grimme_dispersion(batch=batch,
+                                   xyz=xyz,
+                                   disp_type=self.disp_type,
+                                   functional=self.functional)
+        end = time.time()
+        print(e_disp)
+        print(end-start)
 
         # convert to kcal / mol
         e_disp = e_disp * const.HARTREE_TO_KCAL_MOL
@@ -92,6 +107,7 @@ class PainnDispersion(nn.Module):
                 if disp_grad is None:
                     disp_grad = compute_grad(inputs=xyz,
                                              output=e_disp)
+                    # print(disp_grad)
                     if inference:
                         disp_grad = disp_grad.detach().cpu()
 
