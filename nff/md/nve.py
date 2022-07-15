@@ -35,12 +35,19 @@ class Dynamics:
         # initialize the atoms batch system
         self.atomsbatch = atomsbatch
         self.mdparam = mdparam
+        self.steps = int(self.mdparam['steps'])
+        self.check_restart()
+
+        if self.steps != int(self.mdparam['steps']):
+            # this is a restart
+            self.atomsbatch.set_positions(self.restart_atoms.get_positions())
+            self.atomsbatch.set_cell(self.restart_atoms.get_cell())
 
         # todo: structure optimization before starting
 
         # intialize system momentum
         MaxwellBoltzmannDistribution(self.atomsbatch,
-                                     self.mdparam['T_init'] * units.kB)
+                                     temperature_K = self.mdparam['T_init'])
         Stationary(self.atomsbatch)  # zero linear momentum
         ZeroRotation(self.atomsbatch)
 
@@ -54,9 +61,6 @@ class Dynamics:
             self.integrator = integrator(self.atomsbatch,
                                          **self.mdparam['thermostat_params'],
                                          **self.mdparam)
-
-        self.steps = int(self.mdparam['steps'])
-        self.check_restart()
 
         if self.steps == int(self.mdparam['steps']):
             # attach trajectory dump
@@ -74,20 +78,9 @@ class Dynamics:
                                                 mode='a'),
                                 interval=self.mdparam['save_frequency'])
 
-    def check_restart(self):
-
-        if os.path.exists(self.mdparam['traj_filename']):
-            new_atoms = Trajectory(self.mdparam['traj_filename'])[-1]
-
-            # calculate number of steps remaining
-            self.steps = ( int(self.mdparam['steps']) 
-                - ( int(self.mdparam['save_frequency']) * 
-                len(Trajectory(self.mdparam['traj_filename'])) ) )
-            print(self.steps)
-
-            self.atomsbatch.set_cell(new_atoms.get_cell())
-            self.atomsbatch.set_positions(new_atoms.get_positions())
-            self.atomsbatch.set_velocities(new_atoms.get_velocities())
+        else:
+            # this is a restart
+            self.atomsbatch.set_velocities(self.restart_atoms.get_velocities())
 
             # attach trajectory dump
             self.traj = Trajectory(
@@ -102,9 +95,20 @@ class Dynamics:
                                                 self.mdparam['thermo_filename'],
                                                 stress=requires_stress,
                                                 mode='a'),
-                                interval=self.mdparam['save_frequency'])     
+                                interval=self.mdparam['save_frequency'])
 
-            return self.steps
+    def check_restart(self):
+
+        if os.path.exists(self.mdparam['traj_filename']):
+            # this is a restart
+            self.restart_atoms = Trajectory(self.mdparam['traj_filename'])[-1]
+
+            # calculate number of steps remaining
+            self.steps = ( int(self.mdparam['steps']) 
+                - ( int(self.mdparam['save_frequency']) * 
+                len(Trajectory(self.mdparam['traj_filename'])) ) )
+
+            return
 
         else:
 
