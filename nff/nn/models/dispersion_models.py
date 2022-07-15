@@ -51,15 +51,6 @@ class PainnDispersion(nn.Module):
         print(e_disp)
         print(end-start)
 
-        start = time.time()
-        e_disp = grimme_dispersion(batch=batch,
-                                   xyz=xyz,
-                                   disp_type=self.disp_type,
-                                   functional=self.functional)
-        end = time.time()
-        print(e_disp)
-        print(end-start)
-
         # convert to kcal / mol
         e_disp = e_disp * const.HARTREE_TO_KCAL_MOL
 

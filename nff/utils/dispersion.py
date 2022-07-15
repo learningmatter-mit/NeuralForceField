@@ -505,13 +505,3 @@ def get_dispersion(batch,
                                 mol_idx=mol_idx)        
 
     return e_disp
-
-
-def grimme_dispersion(batch, xyz, disp_type, functional):
-    
-    d3 = DFTD3(xc='pbe',damping='bj',grad=True)
-    atoms = Atoms(cell=batch.get('cell',None), numbers=batch['nxyz'][:, 0].detach().cpu().numpy(), positions=xyz.detach().cpu().numpy(), pbc=True)
-    atoms.calc = d3
-    e_disp = atoms.get_potential_energy()
-
-    return e_disp
