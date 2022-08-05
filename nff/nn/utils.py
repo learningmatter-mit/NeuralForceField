@@ -153,6 +153,9 @@ def torch_nbr_list(atomsobject,
     Returns:
         i, j, cutoff: just like ase.neighborlist.neighbor_list
     """
+
+
+    device = 2
     
     if any(atomsobject.pbc):
         # check if sufficiently large to run the "fast" nbr_list function
