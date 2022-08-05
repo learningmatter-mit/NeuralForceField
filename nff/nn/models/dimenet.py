@@ -256,7 +256,7 @@ class DimeNet(nn.Module):
             if offsets.is_sparse:
                 periodic = (offsets.coalesce().indices().shape[1] != 0)
             else:
-                periodic = bool(offsets.to_dense().abs().max() != 0)
+                periodic = bool(offsets.abs().max() != 0)
         else:
             raise Exception("Don't know how to interpret offsets of type {}"
                             .format(type(offsets)))
