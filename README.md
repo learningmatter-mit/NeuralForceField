@@ -1,6 +1,6 @@
 # Neural Force Field
 
-The Neural Force Field (NFF) code is an API based on SchNet [1-4], DimeNet [5], PaiNN [6,7] and DANN [8]. It provides an interface to train and evaluate neural networks for force fields. It can also be used as a property predictor that uses both 3D geometries and 2D graph information [9].
+The Neural Force Field (NFF) code is an API based on SchNet [1-4], DimeNet [5], PaiNN [6-7] and DANN [8]. It provides an interface to train and evaluate neural networks for force fields. It can also be used as a property predictor that uses both 3D geometries and 2D graph information [9].
 
 This code repository is developed in the Learning Matter Lab (led by prof. Rafael Gomez-Bombarelli) at MIT.
 
