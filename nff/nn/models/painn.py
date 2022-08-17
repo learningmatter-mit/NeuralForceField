@@ -187,6 +187,8 @@ class Painn(nn.Module):
              batch,
              atomwise_out,
              xyz,
+             r_ij,
+             nbrs,
              inference=False):
 
         # import here to avoid circular imports
@@ -203,11 +205,14 @@ class Painn(nn.Module):
         all_results = {}
 
         for key, pool_obj in self.pool_dic.items():
-
             grad_key = f"{key}_grad"
             grad_keys = [grad_key] if (grad_key in self.grad_keys) else []
+            if 'stress' in self.grad_keys and not 'stress' in all_results:
+                grad_keys.append("stress")
             results = pool_obj(batch=batch,
                                xyz=xyz,
+                               r_ij=r_ij,
+                               nbrs=nbrs,
                                atomwise_output=atomwise_out,
                                grad_keys=grad_keys,
                                out_keys=[key])
@@ -215,7 +220,7 @@ class Painn(nn.Module):
             if inference:
                 results = batch_detach(results)
             all_results.update(results)
-
+            
         return all_results, xyz
 
     def add_delta(self, all_results):
@@ -239,7 +244,7 @@ class Painn(nn.Module):
             batch,
             xyz=None,
             requires_stress=False,
-            inference=False):
+            inference=False):   
 
         atomwise_out, xyz, r_ij, nbrs = self.atomwise(batch=batch,
                                                       xyz=xyz)
@@ -252,15 +257,19 @@ class Painn(nn.Module):
         all_results, xyz = self.pool(batch=batch,
                                      atomwise_out=atomwise_out,
                                      xyz=xyz,
+                                     r_ij=r_ij,
+                                     nbrs=nbrs,
                                      inference=inference)
 
-        if getattr(self, "compute_delta", False):
-            all_results = self.add_delta(all_results)
         if requires_stress:
             all_results = add_stress(batch=batch,
                                      all_results=all_results,
                                      nbrs=nbrs,
                                      r_ij=r_ij)
+        
+        if getattr(self, "compute_delta", False):
+            all_results = self.add_delta(all_results)
+        
         return all_results, xyz
 
     def forward(self,
