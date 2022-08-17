@@ -1,5 +1,6 @@
 
 import torch
+import numpy as np
 import torch.nn as nn
 from torch.nn import Sequential, Linear, ReLU, LeakyReLU, ModuleDict
 from torch.nn import Softmax
@@ -68,9 +69,11 @@ def add_stress(batch,
     For crystals need to divide by lattice volume. 
     r_ij considers offsets which is different for molecules and crystals.
     """
-
+    # print(r_ij.size())
     Z = compute_grad(output=all_results['energy'],
                      inputs=r_ij)
+    # print('actual virial shape')
+    # print(Z.size())
     if batch['num_atoms'].shape[0] == 1:
         all_results['stress_volume'] = torch.matmul(Z.t(), r_ij)
     else:
@@ -1112,10 +1115,16 @@ class ChemPropInit(nn.Module):
 
 def sum_and_grad(batch,
                  xyz,
+                 r_ij,
+                 nbrs,
                  atomwise_output,
                  grad_keys,
                  out_keys=None,
                  mean=False):
+
+    # print(batch)
+    # import pdb
+    # pdb.set_trace()
 
     N = batch["num_atoms"].detach().cpu().tolist()
     results = {}
@@ -1140,11 +1149,83 @@ def sum_and_grad(batch,
 
     # compute gradients
 
+    # print(results.keys())
+    # print(results)
+
     for key in grad_keys:
-        output = results[key.replace("_grad", "")]
-        grad = compute_grad(output=output,
-                            inputs=xyz)
+        
+        # pooling has already been done to add to total props for each system
+        # but batch still contains multiple systems, so need to be careful to do things in batched fashion
+
+        # print('here 1')
+        # print(grad_keys)
+        # print(results)
+        if key == 'stress':
+            # print('here 2')
+            # print(results.keys())
+            # print(results)
+            output = results['energy']
+            # print('stress output size')
+            # print(output.size())
+            # print(output)
+            # print(output.requires_grad)
+            grad_ = compute_grad(output=output,
+                                 inputs=r_ij)
+            # print(batch.keys())           
+            # print(nbrs.size())
+            # print(nbrs)
+            # print(grad_.size())
+            allstress = []
+            for i in range(batch['nxyz'].shape[0]):
+                # print(torch.where(nbrs[:,0] == i))
+                # print(grad_.size())
+                # print(r_ij.size())
+                # print(i)
+                # print(r_ij[torch.where(nbrs[:, 0] == i)])
+                allstress.append(
+                    torch.matmul(
+                        grad_[torch.where(nbrs[:, 0] == i)].t(),
+                        r_ij[torch.where(nbrs[:, 0] == i)]
+                    )
+                )
+            # print('here')
+            # print(allstress[0].size())
+            allstress = torch.stack(allstress)
+            # print('here 2')
+            # print(allstress.size())
+            split_val = torch.split(allstress, N)
+            grad_ = torch.stack([i.sum(0) for i in split_val])
+            
+            # print(grad_.size())
+            # print(batch.keys())
+            # cell = torch.stack(torch.split(batch['lattice'], 3, dim=0))
+            if 'cell' in batch.keys():
+                cell = torch.stack(torch.split(batch['cell'], 3, dim=0))
+            elif 'lattice' in batch.keys():
+                cell = torch.stack(torch.split(batch['lattice'], 3, dim=0))
+            volume = (torch.Tensor(np.abs(np.linalg.det(cell.cpu().numpy())))
+                                                        .to(grad_.get_device()))
+            # print((1/volume).size())
+            # print(grad_.size())
+
+            grad = grad_*(1/volume[:,None,None])
+            # print(grad.size())
+            grad = torch.flatten(grad, start_dim=0, end_dim=1)
+            # print(grad.size())
+
+            # import pdb
+            # pdb.set_trace()
+
+        else:
+            output = results[key.replace("_grad", "")]
+            # print('energy grad output size')
+            # print(output.size())
+            grad = compute_grad(output=output,
+                                inputs=xyz)
+            # print(grad.size())
+
         results[key] = grad
+    # print(results)
 
     return results
 
@@ -1156,11 +1237,15 @@ class SumPool(nn.Module):
     def forward(self,
                 batch,
                 xyz,
+                r_ij,
+                nbrs,
                 atomwise_output,
                 grad_keys,
                 out_keys=None):
         results = sum_and_grad(batch=batch,
                                xyz=xyz,
+                               r_ij=r_ij,
+                               nbrs=nbrs,
                                atomwise_output=atomwise_output,
                                grad_keys=grad_keys,
                                out_keys=out_keys)
