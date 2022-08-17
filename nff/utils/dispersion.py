@@ -16,9 +16,6 @@ from nff.utils import constants as const
 from nff.nn.utils import lattice_points_in_supercell, clean_matrix
 from nff.utils.scatter import scatter_add
 
-from ase import Atoms
-from ase.calculators.dftd3 import DFTD3
-
 base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         'table_data')
 c6_ref_path = os.path.join(base_dir, 'c6ab.npy')
@@ -64,7 +61,7 @@ def get_periodic_nbrs(batch,
     if nbrs_info is None:
 
         nxyz_list = torch.split(batch['nxyz'], num_atoms)
-        counter = 0
+        xyzs = torch.split(xyz, num_atoms)
 
         nbrs = []
         nbrs_T = []
@@ -73,21 +70,27 @@ def get_periodic_nbrs(batch,
         N = []
         lattice_points = []
         mask_applied = []
-        xyz = []
+        _xyzs = []
         xyz_T = []
         num_atoms = []
-        for idx, nxyz in enumerate(nxyz_list):
-
-            _xyz = nxyz[:,1:]
-            # only works if the cell for all the crystals in the batch are the same
-            cell = batch['cell']
+        for _xyz, nxyz in zip(xyzs, nxyz_list):
+            # only works if the cell for all crystals in batch are the same
+            cell = batch['cell'].cpu().numpy()
 
             # cutoff specified by r_cut in Bohr (a.u.)
             # estimate getting close to the cutoff with supercell expansion
-            a_mul = int(np.ceil( (r_cut*const.BOHR_RADIUS) / np.linalg.norm(cell[0]) ))
-            b_mul = int(np.ceil( (r_cut*const.BOHR_RADIUS) / np.linalg.norm(cell[1]) ))
-            c_mul = int(np.ceil( (r_cut*const.BOHR_RADIUS) / np.linalg.norm(cell[2]) ))
-            supercell_matrix = np.array([[a_mul, 0, 0], [0, b_mul, 0], [0, 0, c_mul]])
+            a_mul = int(np.ceil(
+                        (r_cut*const.BOHR_RADIUS) / np.linalg.norm(cell[0])
+                                ))
+            b_mul = int(np.ceil(
+                        (r_cut*const.BOHR_RADIUS) / np.linalg.norm(cell[1])
+                                ))
+            c_mul = int(np.ceil(
+                        (r_cut*const.BOHR_RADIUS) / np.linalg.norm(cell[2])
+                                ))
+            supercell_matrix = np.array([[a_mul, 0, 0],
+                                         [0, b_mul, 0],
+                                         [0, 0, c_mul]])
             supercell = clean_matrix(supercell_matrix @ cell)
 
             # cartesian lattice points
@@ -96,30 +99,40 @@ def get_periodic_nbrs(batch,
 
             # need to get all negative lattice translation vectors
             # but remove duplicate 0 vector
-            zero_idx = np.where(np.all(_lattice_points.__eq__(np.array([0,0,0])), axis=1))[0][0]
-            _lattice_points = np.concatenate([_lattice_points[zero_idx:, :], _lattice_points[:zero_idx, :]])
+            zero_idx = np.where(
+                        np.all(_lattice_points.__eq__(np.array([0,0,0])),
+                                                                        axis=1)
+                                )[0][0]
+            _lattice_points = np.concatenate([_lattice_points[zero_idx:, :],
+                                              _lattice_points[:zero_idx, :]])
 
             _z = nxyz[:,0].long().to(device)
             _N = len(_lattice_points)
             # perform lattice translations on positions
-            lattice_points_T = (torch.tile(torch.from_numpy(_lattice_points), 
-                                (len(_xyz), ) + (1, ) * (len(_lattice_points.shape) - 1) )
-                                / const.BOHR_RADIUS).to(device)
-            _xyz_T = ((torch.repeat_interleave(_xyz, _N, dim=0) / const.BOHR_RADIUS)
-                                                    .to(device))
+            lattice_points_T = (torch.tile(
+                                        torch.from_numpy(_lattice_points), 
+                                    ( (len(_xyz),) + 
+                                      (1,)*(len(_lattice_points.shape)-1) )
+                                           ) / const.BOHR_RADIUS).to(device)
+            _xyz_T = ((torch.repeat_interleave(_xyz, _N, dim=0)
+                                            / const.BOHR_RADIUS).to(device))
             _xyz_T = _xyz_T + lattice_points_T
 
             # get valid indices within the cutoff
             num = _xyz.shape[0]
             idx = torch.arange(num)
-            x, y = torch.meshgrid(idx, idx)
-            _nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)], dim=1).to(device)
-            _lattice_points = (torch.tile(torch.from_numpy(_lattice_points).to(device),
-                            (len(_nbrs), ) + (1, ) * (len(_lattice_points.shape) - 1) ))
+            x, y = torch.meshgrid(idx, idx, indexing='xy')
+            _nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)], 
+                                                            dim=1).to(device)
+            _lattice_points = (torch.tile(
+                                    torch.from_numpy(_lattice_points).to(device),
+                                ( (len(_nbrs),) + 
+                                  (1,)*(len(_lattice_points.shape)-1) )
+                                         ) )
 
             # convert everything from Angstroms to Bohr
-            _xyz = _xyz / const.BOHR_RADIUS   # convert to Bohr
-            _lattice_points = _lattice_points / const.BOHR_RADIUS # convert to Bohr
+            _xyz = _xyz / const.BOHR_RADIUS
+            _lattice_points = _lattice_points / const.BOHR_RADIUS
 
             _nbrs_T = torch.repeat_interleave(_nbrs, _N, dim=0).to(device)
             # ensure that A != B when T=0
@@ -141,28 +154,20 @@ def get_periodic_nbrs(batch,
             lattice_points.append(_lattice_points)
             mask_applied.append(_mask_applied)
             xyz_T.append(_xyz_T)
-            xyz.append(_xyz)
+            _xyzs.append(_xyz)
 
             num_atoms.append(len(_xyz))
 
     else:
         nxyz_list = torch.split(batch['nxyz'], num_atoms)
+        xyzs = torch.split(xyz, num_atoms)
+        nbrs_T, nbrs, z, N, lattice_points, mask_applied = nbrs_info
 
-        nbrs_T, nbrs, z, _, _, N, lattice_points, mask_applied = nbrs_info
-
-        xyz_T = []
+        _xyzs = []
         num_atoms = []
-        for nxyz, _N, _lattice_points in zip(nxyz_list, N, lattice_points):
-            _xyz = nxyz[:,1:]
-            _xyz_T = ((torch.repeat_interleave(_xyz, _N, dim=0) / const.BOHR_RADIUS)
-                                                    .to(device))
-            _lattice_points_T = (torch.tile(torch.from_numpy(_lattice_points), 
-                                (len(_xyz), ) + (1, ) * (len(_lattice_points.shape) - 1) )
-                                / const.BOHR_RADIUS).to(device)
-            _xyz_T = _xyz_T + _lattice_points_T
-            
-            xyz_T.append(_xyz_T)
-
+        for _xyz, nxyz in zip(xyzs, nxyz_list):
+            _xyz = _xyz / const.BOHR_RADIUS   # convert to Bohr
+            _xyzs.append(_xyz)
             num_atoms.append(len(_xyz))
 
     if mol_idx is None:
@@ -170,7 +175,8 @@ def get_periodic_nbrs(batch,
                              for i, num in enumerate(num_atoms)]
                             ).long().to(_xyz.device)
 
-    return nbrs_T, nbrs, z, xyz_T, xyz, N, lattice_points, mask_applied, r_cut, mol_idx
+    return nbrs_T, nbrs, z, _xyzs, N, lattice_points, mask_applied, \
+                                                            r_cut, mol_idx
 
 
 def get_periodic_coordination(xyz,
@@ -185,9 +191,14 @@ def get_periodic_coordination(xyz,
     Get coordination numbers for each atom in periodic system
     """
 
-    # r_ab with all lattice translation vectors
-    r_ab_T = (( (xyz[nbrs_T[:, 0]] - xyz[nbrs_T[:, 1]]) + lattice_points)
-            .pow(2).sum(1).sqrt()).to(xyz.device)
+    # r_ij with all lattice translation vectors
+    # vector btwn pairs of atoms
+    r_ij_T = ( (xyz[nbrs_T[:, 0]] - xyz[nbrs_T[:, 1]])
+                                            + lattice_points ).to(xyz.device)
+
+    # r_ab with all lattice translations
+    # distance (scalar) btwn pairs of atoms
+    r_ab_T = r_ij_T.pow(2).sum(1).sqrt()
 
     # filter out things for coordination number calculation
     # but do not filter out for using r_ab_T for other things
@@ -200,13 +211,13 @@ def get_periodic_coordination(xyz,
     ra_cov_T = r_cov[z[nbrs_T_cn[:, 0]]].to(r_ab_T.device)
     rb_cov_T = r_cov[z[nbrs_T_cn[:, 1]]].to(r_ab_T.device)
     cn_ab_T = ((1 / (1 + torch.exp(
-                            -k1 * (k2 * (ra_cov_T + rb_cov_T) / r_ab_T_cn - 1))))
+                        -k1 * (k2 * (ra_cov_T + rb_cov_T) / r_ab_T_cn - 1))))
                                     .to(r_ab_T.device))
     cn = scatter_add(cn_ab_T,
                     nbrs_T_cn[:, 0],
                     dim_size=xyz.shape[0])
 
-    return r_ab_T, cn
+    return r_ab_T, r_ij_T, cn
 
 
 def get_nbrs(batch,
@@ -394,25 +405,28 @@ def get_dispersion(batch,
     device = xyz.device
 
     if periodic:
-        (nbrs_T, nbrs, z, xyz_T, xyz, N,
-        lattice_points, mask_applied, r_cut, mol_idx) = get_periodic_nbrs(batch=batch,
-                                                                          xyz=xyz,
-                                                                          nbrs_info=nbrs,
-                                                                          mol_idx=mol_idx)
+        (nbrs_T, nbrs, z, _xyzs, N,
+        lattice_points, mask_applied,
+        r_cut, mol_idx) = get_periodic_nbrs(batch=batch,
+                                            xyz=xyz,
+                                            nbrs_info=nbrs,
+                                            mol_idx=mol_idx)
 
-        r_ab_T = []
+        r_ij_T = []
         c6 = []
         c8 = []
         filtered_nbrs_T = []
-        for _nbrs_T, _nbrs, _z, _xyz, _N, _lattice_points, _mask_applied in zip(nbrs_T, nbrs, z, xyz, N, lattice_points, mask_applied):
-
-            _r_ab_T, cn = get_periodic_coordination(xyz=_xyz,
-                                                    z=_z,
-                                                    nbrs_T=_nbrs_T,
-                                                    lattice_points=_lattice_points,
-                                                    r_cov=r_cov,
-                                                    k1=params["k1"],
-                                                    k2=params["k2"])
+        for _nbrs_T, _nbrs, _z, _xyz, _N, _lattice_points, _mask_applied \
+         in zip(nbrs_T, nbrs, z, _xyzs, N, lattice_points, mask_applied):
+            _r_ab_T, _r_ij_T, cn = get_periodic_coordination(
+                                                xyz=_xyz,
+                                                z=_z,
+                                                nbrs_T=_nbrs_T,
+                                                lattice_points=_lattice_points,
+                                                r_cov=r_cov,
+                                                k1=params["k1"],
+                                                k2=params["k2"]
+                                                            )
 
             _c6 = get_c6(z=_z,
                         cn=cn,
@@ -436,14 +450,15 @@ def get_dispersion(batch,
             _c6 = _c6[_r_ab_T < r_cut]
             _c8 = _c8[_r_ab_T < r_cut]
             _nbrs_T = _nbrs_T[_r_ab_T < r_cut]
-            _r_ab_T = _r_ab_T[_r_ab_T < r_cut]
+            _r_ij_T = _r_ij_T[_r_ab_T < r_cut]
 
-            r_ab_T.append(_r_ab_T)
+            r_ij_T.append(_r_ij_T)
             c6.append(_c6)
             c8.append(_c8)
             filtered_nbrs_T.append(_nbrs_T)
 
-        r_ab_T = torch.cat(r_ab_T)
+        r_ij_T = torch.cat(r_ij_T)
+        r_ab_T = r_ij_T.pow(2).sum(1).sqrt()
         c6 = torch.cat(c6)
         c8 = torch.cat(c8)
 
@@ -451,13 +466,14 @@ def get_dispersion(batch,
             
         count = 0
         counter = []
-        for _xyz in xyz:
+        for _xyz in _xyzs:
             counter.append(count)
             count+=len(_xyz)
 
-        filtered_nbrs_T = [_nbrs_T+count for _nbrs_T, count in zip(filtered_nbrs_T, counter)]
+        filtered_nbrs_T = [_nbrs_T+count for _nbrs_T, count
+                                            in zip(filtered_nbrs_T, counter)]
         nbrs_T = torch.cat(filtered_nbrs_T).to(device)
-        xyz = torch.cat(xyz).to(device)
+        xyzs = torch.cat(_xyzs).to(device)
 
         e_disp=disp_from_data(r_ab=r_ab_T,
                               c6=c6,
@@ -466,7 +482,7 @@ def get_dispersion(batch,
                               s8=params["s8"],
                               a1=params["a1"],
                               a2=params["a2"],
-                              xyz=xyz,
+                              xyz=xyzs,
                               nbrs=nbrs_T,
                               mol_idx=mol_idx)
 
@@ -504,4 +520,4 @@ def get_dispersion(batch,
                                 nbrs=nbrs,
                                 mol_idx=mol_idx)        
 
-    return e_disp
+    return e_disp, r_ij_T, nbrs_T
