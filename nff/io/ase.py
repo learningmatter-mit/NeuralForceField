@@ -22,6 +22,7 @@ from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import OnlyBondUpdateCP3D
 
+from nff.utils.dispersion import clean_matrix, lattice_points_in_supercell
 from nff.data import collate_dicts
 
 from torch.autograd import grad
@@ -90,42 +91,152 @@ class AtomsBatch(Atoms):
         self.requires_large_offsets = requires_large_offsets
         self.mol_nbrs, self.mol_idx = self.get_mol_nbrs()
 
-    def get_mol_nbrs(self):
+    def get_mol_nbrs(self, r_cut=95):
         """
         Dense directed neighbor list for each molecule, in case that's needed
         in the model calculation
         """
 
-        # Not yet implemented for PBC
-        if self.offsets is not None and (self.offsets != 0).any():
-            return None, None
+        # periodic systems
+        if np.array([atoms.pbc.any() for atoms in self.get_list_atoms()]).any():
+            nbrs = []
+            nbrs_T = []
+            nbrs = []
+            z = []
+            N = []
+            lattice_points = []
+            mask_applied = []
+            _xyzs = []
+            xyz_T = []
+            num_atoms = []
+            for atoms in self.get_list_atoms():
+                nxyz = np.concatenate([
+                            atoms.get_atomic_numbers().reshape(-1, 1),
+                            atoms.get_positions().reshape(-1, 3)
+                        ], axis=1)
+                _xyz = torch.from_numpy(nxyz[:,1:])
+                # only works if the cell for all crystals in batch are the same
+                cell = atoms.get_cell()
 
-        counter = 0
-        nbrs = []
+                # cutoff specified by r_cut in Bohr (a.u.)
+                # estimate getting close to the cutoff with supercell expansion
+                a_mul = int(np.ceil( 
+                            (r_cut*const.BOHR_RADIUS) / np.linalg.norm(cell[0])
+                                    ))
+                b_mul = int(np.ceil(
+                            (r_cut*const.BOHR_RADIUS) / np.linalg.norm(cell[1])
+                                    ))
+                c_mul = int(np.ceil(
+                            (r_cut*const.BOHR_RADIUS) / np.linalg.norm(cell[2])
+                                    ))
+                supercell_matrix = np.array([[a_mul, 0, 0],
+                                             [0, b_mul, 0],
+                                             [0, 0, c_mul]])
+                supercell = clean_matrix(supercell_matrix @ cell)
 
-        for atoms in self.get_list_atoms():
-            nxyz = np.concatenate([
-                atoms.get_atomic_numbers().reshape(-1, 1),
-                atoms.get_positions().reshape(-1, 3)
-            ], axis=1)
+                # cartesian lattice points
+                lattice_points_frac = lattice_points_in_supercell(supercell_matrix)
+                _lattice_points = np.dot(lattice_points_frac, supercell)
 
-            n = nxyz.shape[0]
-            idx = torch.arange(n)
-            x, y = torch.meshgrid(idx, idx, indexing='xy')
+                # need to get all negative lattice translation vectors
+                # but remove duplicate 0 vector
+                zero_idx = np.where(
+                            np.all(_lattice_points.__eq__(np.array([0,0,0])),
+                                                                        axis=1)
+                                    )[0][0]
+                _lattice_points = np.concatenate(
+                                        [_lattice_points[zero_idx:, :],
+                                         _lattice_points[:zero_idx, :]]
+                                                )
 
-            # undirected neighbor list
-            these_nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)], dim=1)
-            these_nbrs = these_nbrs[these_nbrs[:, 0] != these_nbrs[:, 1]]
+                _z = torch.from_numpy(nxyz[:,0]).long().to(self.device)
+                _N = len(_lattice_points)
+                # perform lattice translations on positions
+                lattice_points_T = (torch.tile(
+                                        torch.from_numpy(_lattice_points), 
+                                    ( (len(_xyz),) + 
+                                        (1,)*(len(_lattice_points.shape)-1) )
+                                            )/ const.BOHR_RADIUS).to(self.device)
+                _xyz_T = ((torch.repeat_interleave(_xyz, _N, dim=0) 
+                                        / const.BOHR_RADIUS).to(self.device))
+                _xyz_T = _xyz_T + lattice_points_T
 
-            nbrs.append(these_nbrs + counter)
-            counter += n
+                # get valid indices within the cutoff
+                num = _xyz.shape[0]
+                idx = torch.arange(num)
+                x, y = torch.meshgrid(idx, idx, indexing='xy')
+                _nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)],
+                                                        dim=1).to(self.device)
+                _lattice_points = (torch.tile(
+                            torch.from_numpy(_lattice_points).to(self.device),
+                                ( (len(_nbrs),) + 
+                                  (1,)*(len(_lattice_points.shape)-1) )
+                                            ))
 
-        nbrs = torch.cat(nbrs)
-        mol_idx = torch.cat([torch.zeros(num) + i
-                             for i, num in enumerate(self.num_atoms)]
-                            ).long()
+                # convert everything from Angstroms to Bohr
+                _xyz = _xyz / const.BOHR_RADIUS
+                _lattice_points = _lattice_points / const.BOHR_RADIUS
 
-        return nbrs, mol_idx
+                _nbrs_T = torch.repeat_interleave(_nbrs, _N, dim=0).to(self.device)
+                # ensure that A != B when T=0
+                # since first index in _lattice_points corresponds to T=0
+                # get the idxs on which to apply the mask
+                idxs_to_apply = torch.tensor([True]*len(_nbrs_T)).to(self.device)
+                idxs_to_apply[::_N] = False
+                # get the mask that we want to apply
+                mask = _nbrs_T[:,0] != _nbrs_T[:,1]
+                # do a joint boolean operation to get the mask
+                _mask_applied = torch.logical_or(idxs_to_apply, mask)
+                _nbrs_T = _nbrs_T[_mask_applied]
+                _lattice_points = _lattice_points[_mask_applied]
+
+                nbrs_T.append(_nbrs_T)
+                nbrs.append(_nbrs)
+                z.append(_z)
+                N.append(_N)
+                lattice_points.append(_lattice_points)
+                mask_applied.append(_mask_applied)
+                xyz_T.append(_xyz_T)
+                _xyzs.append(_xyz)
+
+                num_atoms.append(len(_xyz))
+
+            nbrs_info = (nbrs_T, nbrs, z, N, lattice_points, mask_applied)
+                
+            mol_idx = torch.cat([torch.zeros(num) + i
+                                for i, num in enumerate(num_atoms)]
+                                ).long()    
+
+            return nbrs_info, mol_idx
+
+        # non-periodic systems
+        else:
+            counter = 0
+            nbrs = []
+
+            for atoms in self.get_list_atoms():
+                nxyz = np.concatenate([
+                    atoms.get_atomic_numbers().reshape(-1, 1),
+                    atoms.get_positions().reshape(-1, 3)
+                ], axis=1)
+
+                n = nxyz.shape[0]
+                idx = torch.arange(n)
+                x, y = torch.meshgrid(idx, idx, indexing='xy')
+
+                # undirected neighbor list
+                these_nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)], dim=1)
+                these_nbrs = these_nbrs[these_nbrs[:, 0] != these_nbrs[:, 1]]
+
+                nbrs.append(these_nbrs + counter)
+                counter += n
+
+            nbrs = torch.cat(nbrs)
+            mol_idx = torch.cat([torch.zeros(num) + i
+                                for i, num in enumerate(self.num_atoms)]
+                                ).long()
+
+            return nbrs, mol_idx
 
     def get_nxyz(self):
         """Gets the atomic number and the positions of the atoms
@@ -155,7 +266,7 @@ class AtomsBatch(Atoms):
         self.props['nbr_list'] = self.nbr_list
         self.props['offsets'] = self.offsets
         if self.pbc.any():
-            self.props['cell'] = self.cell
+            self.props['cell'] = torch.Tensor(np.array(self.cell))
 
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
         if self.props.get('num_atoms') is None:
