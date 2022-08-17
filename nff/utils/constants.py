@@ -6,6 +6,8 @@ import math
 import os
 import json
 
+from ase import units
+
 PERIODICTABLE = Chem.GetPeriodicTable()
 
 HARTREE_TO_KCAL_MOL = 627.509
@@ -29,11 +31,13 @@ ATOMIC_MASS = {
 AU_TO_KCAL = {
     'energy': HARTREE_TO_KCAL_MOL,
     '_grad': 1.0 / BOHR_RADIUS,
+    'stress': (units.Hartree * 1/(units.kcal / units.mol) / (units.Bohr**3))
 }
 
 KCAL_TO_AU = {
     'energy': 1.0 / HARTREE_TO_KCAL_MOL,
     '_grad': BOHR_RADIUS,
+    'stress': 1/( (units.Hartree * 1/(units.kcal / units.mol) / (units.Bohr**3)) )
 }
 
 KB_EV = 0.0000861731
@@ -120,15 +124,15 @@ MDYN_PER_A_TO_J_PER_M = DYN_TO_J_PER_M / 1000 / ANGS_TO_M
 KG_TO_AMU = 1 / (1.66e-27)
 HBAR_SI = 6.626e-34 / (2 * math.pi)
 
-AU_TO_KCAL = {
-    'energy': HARTREE_TO_KCAL_MOL,
-    '_grad': 1.0 / BOHR_RADIUS,
-}
+# AU_TO_KCAL = {
+#     'energy': HARTREE_TO_KCAL_MOL,
+#     '_grad': 1.0 / BOHR_RADIUS,
+# }
 
-KCAL_TO_AU = {
-    'energy': 1.0 / HARTREE_TO_KCAL_MOL,
-    '_grad': BOHR_RADIUS,
-}
+# KCAL_TO_AU = {
+#     'energy': 1.0 / HARTREE_TO_KCAL_MOL,
+#     '_grad': BOHR_RADIUS,
+# }
 
 
 ELEC_CONFIG = {"1": [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
