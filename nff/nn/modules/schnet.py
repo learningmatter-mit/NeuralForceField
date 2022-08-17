@@ -50,6 +50,9 @@ def get_rij(xyz,
     # to catch atoms that become neighbors between nbr
     # list updates)
     dist = (r_ij.detach() ** 2).sum(-1) ** 0.5
+
+    if type(cutoff) == torch.Tensor:
+        dist = dist.to(cutoff.device)
     use_nbrs = (dist <= cutoff)
 
     r_ij = r_ij[use_nbrs]
@@ -1130,11 +1133,22 @@ def sum_and_grad(batch,
 
         mol_idx = torch.arange(len(N)).repeat_interleave(
             torch.LongTensor(N)).to(val.device)
+        dim_size = mol_idx.max() + 1
 
-        pooled_result = scatter_add(val.reshape(-1),
+        if val.reshape(-1).shape[0] == mol_idx.shape[0]:
+            use_val = val.reshape(-1)
+
+        # summed atom features
+        elif val.shape[0] == mol_idx.shape[0]:
+            use_val = val.sum(-1)
+
+        else:
+            raise Exception(("Don't know how to handle val shape "
+                             "{} for key {}" .format(val.shape, key)))
+
+        pooled_result = scatter_add(use_val,
                                     mol_idx,
-                                    dim_size=mol_idx.max() + 1)
-
+                                    dim_size=dim_size)
         if mean:
             pooled_result = pooled_result / torch.Tensor(N).to(val.device)
 

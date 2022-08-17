@@ -436,3 +436,87 @@ class PainnAdiabat(Painn):
                                          xyz=xyz)
 
         return results
+
+
+class PainnGapToAbs(nn.Module):
+    """
+    Model for predicting a non-ground state energy, given one model that predicts
+    the ground state energy and one that predicts the gap.
+    """
+
+    def __init__(self,
+                 ground_model,
+                 gap_model,
+                 subtract_gap):
+
+        super(PainnGapToAbs, self).__init__()
+
+        self.ground_model = ground_model
+        self.gap_model = gap_model
+        self.subtract_gap = subtract_gap
+        self.models = [self.ground_model, self.gap_model]
+
+    def get_model_attr(self, model, key):
+        if hasattr(model, "painn_model"):
+            return getattr(model.painn_model, key)
+        return getattr(model, key)
+
+    def set_model_attr(self, model, key, val):
+        if hasattr(model, "painn_model"):
+            sub_model = model.painn_model
+        else:
+            sub_model = model
+
+        setattr(sub_model, key, val)
+
+    def get_grad_keys(self, model):
+        if hasattr(model, "painn_model"):
+            grad_keys = model.painn_model.grad_keys
+        else:
+            grad_keys = model.grad_keys
+        return set(grad_keys)
+
+    @property
+    def grad_keys(self):
+        ground_grads = set(self.get_model_attr(self.ground_model, 'grad_keys'))
+        gap_grads = set(self.get_model_attr(self.gap_model, 'grad_keys'))
+        common_grads = [i for i in ground_grads if i in
+                        gap_grads]
+
+        return common_grads
+
+    @grad_keys.setter
+    def grad_keys(self, value):
+        self.set_model_attr(self.ground_model, 'grad_keys', value)
+        self.set_model_attr(self.gap_model, 'grad_keys', value)
+
+    def forward(self,
+                *args,
+                **kwargs):
+
+        ground_results = self.ground_model(*args, **kwargs)
+        gap_results = self.gap_model(*args, **kwargs)
+
+        common_keys = list(set(list(ground_results.keys()) +
+                               list(gap_results.keys())))
+
+        factor = -1 if self.subtract_gap else 1
+        combined_results = {}
+
+        for key in common_keys:
+            pool_dics = [self.get_model_attr(model, 'pool_dic') for
+                         model in self.models]
+
+            in_pool = all([key in dic for dic in pool_dics])
+            in_grad = all([key in self.get_model_attr(model, 'grad_keys') for
+                           model in self.models])
+
+            common = in_pool or in_grad
+
+            if not common:
+                continue
+
+            val = ground_results[key] + factor * gap_results[key]
+            combined_results[key] = val
+
+        return combined_results

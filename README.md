@@ -1,29 +1,16 @@
 # Neural Force Field
 
-The Neural Force Field (NFF) code is an API based on SchNet [1-4], DimeNet [5], PaiNN [6] and DANN [7]. It provides an interface to train and evaluate neural networks for force fields. It can also be used as a property predictor that uses both 3D geometries and 2D graph information [8].
+The Neural Force Field (NFF) code is an API based on SchNet [1-4], DimeNet [5], PaiNN [6-7] and DANN [8]. It provides an interface to train and evaluate neural networks for force fields. It can also be used as a property predictor that uses both 3D geometries and 2D graph information [9].
 
 This code repository is developed in the Learning Matter Lab (led by prof. Rafael Gomez-Bombarelli) at MIT.
 
 ## Conda environment
 
-We highly recommend creating a `conda` environment to run the code. To do that, use the following commands:
+We highly recommend creating a `conda` environment to run the code. To do that, use the following command to create the `nff` conda environment:
 
 ```bash
 conda upgrade conda
-conda env create -f environment.yaml
-```
-
-or install packages manually with
-
-```bash
-conda create -n nff python=3.7.10 scikit-learn==0.24.1 pytorch=1.9.0 cudatoolkit=10.2 ase==3.22.1 pandas==1.2.2 pymatgen==2021.2.16 sympy==1.7.1 rdkit==2020.09.4 hyperopt==0.2.5 jq==1.6 openbabel==3.1.1 -c pytorch -c conda-forge -c rdkit -c openbabel
-```
-
-and install the remaining pip requirements:
-
-```bash
-conda activate nff
-pip install sigopt==7.3.0  e3fp==1.2.3 ipykernel==5.5.0 performer-pytorch==1.0.11 nglview==3.0.1
+conda env create -f environment.yml
 ```
 
 To ensure that the `nff` environment is accessible through Jupyter, add the the `nff` display name:
@@ -55,6 +42,8 @@ This is useful if you'll be modifying the NFF code, because modifications in the
 #### Force field
 A series of tutorials illustrating how `nff` can be used in conjunction with Jupyter Notebooks or other scripts is provided in the `tutorials/` folder. It also covers how to integrate a pre-trained model with an ASE calculator, how to perform ground state molecular dynamics (MD) and excited state non-adiabatic MD, and how to train different model types like DimeNet and PaiNN.
 
+All tutorials used pre-saved datasets for training. These datasets are saved as NFF dataset objects. To see how to make your own NFF dataset and save it, see [this tutorial](https://github.com/learningmatter-mit/NeuralForceField/blob/master/tutorials/data/create_dataset_from_file.ipynb) in `tutorials/data`
+
 #### Property predictor
 While `scripts/cp3d/README.md` explains in depth how to use the scripts, the notebook `07_cp3d.ipynb` goes into some detail about what happens behind the scenes. In this notebook you'll see how the datasets get made and what the models look like.
 
@@ -76,7 +65,7 @@ A set of pre-trained models can be found in `models`.
 
 ### Adversarial Attacks
 
-NFF allows the usage of NN ensembles to perform uncertainty quantification and adversarial sampling of geometries. The complete tutorials on how to perform such analysis is available at the [Atomistic Adversarial Attacks repository](https://github.com/learningmatter-mit/Atomistic-Adversarial-Attacks), and the theory behind this differentiable sampling strategy is available at [our paper](https://www.nature.com/articles/s41467-021-25342-8) [9].
+NFF allows the usage of NN ensembles to perform uncertainty quantification and adversarial sampling of geometries. The complete tutorials on how to perform such analysis is available at the [Atomistic Adversarial Attacks repository](https://github.com/learningmatter-mit/Atomistic-Adversarial-Attacks), and the theory behind this differentiable sampling strategy is available at [our paper](https://www.nature.com/articles/s41467-021-25342-8) [10].
 
 ## References
 
@@ -101,9 +90,11 @@ J. Chem. Theory Comput. **15**(1), 448-455 (2019). [10.1021/acs.jctc.8b00908](ht
 
 * [6] K. T. Schütt, O. T. Unke, M. Gastegger. *Equivariant message passing for the prediction of tensorial properties and molecular spectra*. arXiv preprint, 2021. [arXiv:2102.03150](https://arxiv.org/pdf/2102.03150.pdf)
 
-* [7] S. Axelrod, E. Shakhnovich, R. Gómez-Bombarelli. *Excited state non-adiabatic dynamics of large photoswitchable molecules using a chemically transferable machine learning potential.* Nat Commun **13**, 3440 (2022). [URL](https://doi.org/10.1038/s41467-022-30999-w).
+* [7] S. Axelrod, E. Shakhnovich, R. Gómez-Bombarelli. *Thermal half-lives of azobenzene derivatives: virtual screening based on intersystem crossing using a machine learning potential.* arXiv preprint (2022). [arXiv:2207.11592](https://arxiv.org/abs/2207.11592).
 
-* [8] S. Axelrod and R. Gomez-Bombarelli. *Molecular machine learning with conformer ensembles.* arXiv preprint (2020). [arXiv:2012.08452](https://arxiv.org/abs/2012.08452?fbclid=IwAR2KlinGWeEHTR99m8x9nu2caURqIg04nQkimqzYRcTIqFq6qgv6_RgmVzo).
+* [8] S. Axelrod, E. Shakhnovich, R. Gómez-Bombarelli. *Excited state non-adiabatic dynamics of large photoswitchable molecules using a chemically transferable machine learning potential.* Nat. Commun. **13**, 3440 (2022). [URL](https://www.nature.com/articles/s41467-022-30999-w)
 
-* [9] D. Schwalbe-Koda, A.R. Tan, and R. Gomez-Bombarelli. *Differentiable sampling of molecular geometries with uncertainty-based adversarial attacks.* Nat. Commun. **12**, 5104 (2021). [URL](https://doi.org/10.1038/s41467-021-25342-8).
+* [9] S. Axelrod and R. Gomez-Bombarelli. *Molecular machine learning with conformer ensembles.* arXiv preprint (2020). [arXiv:2012.08452](https://arxiv.org/abs/2012.08452?fbclid=IwAR2KlinGWeEHTR99m8x9nu2caURqIg04nQkimqzYRcTIqFq6qgv6_RgmVzo).
+
+* [10] D. Schwalbe-Koda, A.R. Tan, and R. Gomez-Bombarelli. *Differentiable sampling of molecular geometries with uncertainty-based adversarial attacks.* Nat. Commun. **12**, 5104 (2021). [URL](https://doi.org/10.1038/s41467-021-25342-8).
 

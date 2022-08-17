@@ -401,12 +401,13 @@ class AtomsBatch(Atoms):
         pass
 
     @classmethod
-    def from_atoms(cls, atoms):
+    def from_atoms(cls, atoms, **kwargs):
         return cls(
             atoms,
             positions=atoms.positions,
             numbers=atoms.numbers,
             props={},
+            **kwargs
         )
 
 

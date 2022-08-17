@@ -142,7 +142,8 @@ class SchNet(nn.Module):
 
         if xyz is None:
             xyz = batch["nxyz"][:, 1:4]
-            xyz.requires_grad = True
+            if xyz.requires_grad == False:
+                xyz.requires_grad = True
 
         r = batch["nxyz"][:, 0]
         N = batch["num_atoms"].reshape(-1).tolist()

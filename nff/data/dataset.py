@@ -225,6 +225,10 @@ class Dataset(TorchDataset):
         make_dset_directed(self)
 
     def generate_angle_list(self):
+
+        if 'lattice' in self.props:
+            raise NotImplementedError("Angles not implemented for PBC.")
+
         self.make_all_directed()
 
         angles, nbrs = get_angle_list(self.props['nbr_list'])
@@ -261,7 +265,7 @@ class Dataset(TorchDataset):
         for nxyz, lattice in zip(self.props['nxyz'], self.props['lattice']):
             atoms = AtomsBatch(
                 nxyz[:, 0].long(),
-                props={'num_atoms': torch.LongTensor([len(nxyz[:,0])])},
+                props={'num_atoms': torch.LongTensor([len(nxyz[:, 0])])},
                 positions=nxyz[:, 1:],
                 cell=lattice,
                 pbc=True,
