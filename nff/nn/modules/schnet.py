@@ -1,5 +1,6 @@
 
 import torch
+import numpy as np
 import torch.nn as nn
 from torch.nn import Sequential, Linear, ReLU, LeakyReLU, ModuleDict
 from torch.nn import Softmax
@@ -49,8 +50,8 @@ def get_rij(xyz,
     # to catch atoms that become neighbors between nbr
     # list updates)
     dist = (r_ij.detach() ** 2).sum(-1) ** 0.5
- 
-    if type(cutoff)==torch.Tensor:
+
+    if type(cutoff) == torch.Tensor:
         dist = dist.to(cutoff.device)
     use_nbrs = (dist <= cutoff)
 
@@ -71,7 +72,6 @@ def add_stress(batch,
     For crystals need to divide by lattice volume. 
     r_ij considers offsets which is different for molecules and crystals.
     """
-
     Z = compute_grad(output=all_results['energy'],
                      inputs=r_ij)
     if batch['num_atoms'].shape[0] == 1:
@@ -1115,6 +1115,8 @@ class ChemPropInit(nn.Module):
 
 def sum_and_grad(batch,
                  xyz,
+                 r_ij,
+                 nbrs,
                  atomwise_output,
                  grad_keys,
                  out_keys=None,
@@ -1131,22 +1133,62 @@ def sum_and_grad(batch,
 
         mol_idx = torch.arange(len(N)).repeat_interleave(
             torch.LongTensor(N)).to(val.device)
+        dim_size = mol_idx.max() + 1
 
-        pooled_result = scatter_add(val.reshape(-1),
+        if val.reshape(-1).shape[0] == mol_idx.shape[0]:
+            use_val = val.reshape(-1)
+
+        # summed atom features
+        elif val.shape[0] == mol_idx.shape[0]:
+            use_val = val.sum(-1)
+
+        else:
+            raise Exception(("Don't know how to handle val shape "
+                             "{} for key {}" .format(val.shape, key)))
+
+        pooled_result = scatter_add(use_val,
                                     mol_idx,
-                                    dim_size=mol_idx.max() + 1)
-
+                                    dim_size=dim_size)
         if mean:
             pooled_result = pooled_result / torch.Tensor(N).to(val.device)
 
         results[key] = pooled_result
 
     # compute gradients
-
     for key in grad_keys:
-        output = results[key.replace("_grad", "")]
-        grad = compute_grad(output=output,
-                            inputs=xyz)
+        
+        # pooling has already been done to add to total props for each system
+        # but batch still contains multiple systems
+        # so need to be careful to do things in batched fashion
+        if key == 'stress':
+            output = results['energy']
+            grad_ = compute_grad(output=output,
+                                 inputs=r_ij)
+            allstress = []
+            for i in range(batch['nxyz'].shape[0]):
+                allstress.append(
+                    torch.matmul(
+                        grad_[torch.where(nbrs[:, 0] == i)].t(),
+                        r_ij[torch.where(nbrs[:, 0] == i)]
+                    )
+                )
+            allstress = torch.stack(allstress)
+            split_val = torch.split(allstress, N)
+            grad_ = torch.stack([i.sum(0) for i in split_val])
+            if 'cell' in batch.keys():
+                cell = torch.stack(torch.split(batch['cell'], 3, dim=0))
+            elif 'lattice' in batch.keys():
+                cell = torch.stack(torch.split(batch['lattice'], 3, dim=0))
+            volume = (torch.Tensor(np.abs(np.linalg.det(cell.cpu().numpy())))
+                                                        .to(grad_.get_device()))
+            grad = grad_*(1/volume[:,None,None])
+            grad = torch.flatten(grad, start_dim=0, end_dim=1)
+
+        else:
+            output = results[key.replace("_grad", "")]
+            grad = compute_grad(output=output,
+                                inputs=xyz)
+
         results[key] = grad
 
     return results
@@ -1159,11 +1201,15 @@ class SumPool(nn.Module):
     def forward(self,
                 batch,
                 xyz,
+                r_ij,
+                nbrs,
                 atomwise_output,
                 grad_keys,
                 out_keys=None):
         results = sum_and_grad(batch=batch,
                                xyz=xyz,
+                               r_ij=r_ij,
+                               nbrs=nbrs,
                                atomwise_output=atomwise_output,
                                grad_keys=grad_keys,
                                out_keys=out_keys)

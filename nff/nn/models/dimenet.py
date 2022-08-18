@@ -248,6 +248,22 @@ class DimeNet(nn.Module):
             results (dict): dictionary of predictions
         """
 
+        offsets = batch.get('offsets')
+        
+        if offsets is None:
+            periodic = False
+        elif isinstance(offsets, torch.Tensor):
+            if offsets.is_sparse:
+                periodic = (offsets.coalesce().indices().shape[1] != 0)
+            else:
+                periodic = bool(offsets.abs().max() != 0)
+        else:
+            raise Exception("Don't know how to interpret offsets of type {}"
+                            .format(type(offsets)))
+
+        if periodic:
+            raise NotImplementedError("DimeNet not implemented for PBC.")
+
         out, xyz = self.atomwise(batch, xyz)
         results = sum_and_grad(batch=batch,
                                xyz=xyz,

@@ -1,6 +1,6 @@
 # Neural Force Field
 
-The Neural Force Field (NFF) code is an API based on SchNet [1-4], DimeNet [5], PaiNN [6] and DANN [7]. It provides an interface to train and evaluate neural networks for force fields. It can also be used as a property predictor that uses both 3D geometries and 2D graph information [8].
+The Neural Force Field (NFF) code is an API based on SchNet [1-4], DimeNet [5], PaiNN [6-7] and DANN [8]. It provides an interface to train and evaluate neural networks for force fields. It can also be used as a property predictor that uses both 3D geometries and 2D graph information [9].
 
 This code repository is developed in the Learning Matter Lab (led by prof. Rafael Gomez-Bombarelli) at MIT.
 
@@ -65,7 +65,7 @@ A set of pre-trained models can be found in `models`.
 
 ### Adversarial Attacks
 
-NFF allows the usage of NN ensembles to perform uncertainty quantification and adversarial sampling of geometries. The complete tutorials on how to perform such analysis is available at the [Atomistic Adversarial Attacks repository](https://github.com/learningmatter-mit/Atomistic-Adversarial-Attacks), and the theory behind this differentiable sampling strategy is available at [our paper](https://www.nature.com/articles/s41467-021-25342-8) [9].
+NFF allows the usage of NN ensembles to perform uncertainty quantification and adversarial sampling of geometries. The complete tutorials on how to perform such analysis is available at the [Atomistic Adversarial Attacks repository](https://github.com/learningmatter-mit/Atomistic-Adversarial-Attacks), and the theory behind this differentiable sampling strategy is available at [our paper](https://www.nature.com/articles/s41467-021-25342-8) [10].
 
 ## References
 
@@ -90,9 +90,11 @@ J. Chem. Theory Comput. **15**(1), 448-455 (2019). [10.1021/acs.jctc.8b00908](ht
 
 * [6] K. T. Schütt, O. T. Unke, M. Gastegger. *Equivariant message passing for the prediction of tensorial properties and molecular spectra*. arXiv preprint, 2021. [arXiv:2102.03150](https://arxiv.org/pdf/2102.03150.pdf)
 
-* [7] S. Axelrod, E. Shakhnovich, R. Gómez-Bombarelli. *Excited state, non-adiabatic dynamics of large photoswitchable molecules using a chemically transferable machine learning potential.* arXiv preprint (2021). [arXiv:2108.04879](https://arxiv.org/pdf/2108.04879.pdf)
+* [7] S. Axelrod, E. Shakhnovich, R. Gómez-Bombarelli. *Thermal half-lives of azobenzene derivatives: virtual screening based on intersystem crossing using a machine learning potential.* arXiv preprint (2022). [arXiv:2207.11592](https://arxiv.org/abs/2207.11592).
 
-* [8] S. Axelrod and R. Gomez-Bombarelli. *Molecular machine learning with conformer ensembles.* arXiv preprint (2020). [arXiv:2012.08452](https://arxiv.org/abs/2012.08452?fbclid=IwAR2KlinGWeEHTR99m8x9nu2caURqIg04nQkimqzYRcTIqFq6qgv6_RgmVzo).
+* [8] S. Axelrod, E. Shakhnovich, R. Gómez-Bombarelli. *Excited state non-adiabatic dynamics of large photoswitchable molecules using a chemically transferable machine learning potential.* Nat. Commun. **13**, 3440 (2022). [URL](https://www.nature.com/articles/s41467-022-30999-w)
 
-* [9] D. Schwalbe-Koda, A.R. Tan, and R. Gomez-Bombarelli. *Differentiable sampling of molecular geometries with uncertainty-based adversarial attacks.* Nat. Commun. **12**, 5104 (2021). [URL](https://doi.org/10.1038/s41467-021-25342-8).
+* [9] S. Axelrod and R. Gomez-Bombarelli. *Molecular machine learning with conformer ensembles.* arXiv preprint (2020). [arXiv:2012.08452](https://arxiv.org/abs/2012.08452?fbclid=IwAR2KlinGWeEHTR99m8x9nu2caURqIg04nQkimqzYRcTIqFq6qgv6_RgmVzo).
+
+* [10] D. Schwalbe-Koda, A.R. Tan, and R. Gomez-Bombarelli. *Differentiable sampling of molecular geometries with uncertainty-based adversarial attacks.* Nat. Commun. **12**, 5104 (2021). [URL](https://doi.org/10.1038/s41467-021-25342-8).
 
