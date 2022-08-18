@@ -63,13 +63,10 @@ class NoseHoover(MolecularDynamics):
         self.nbr_update_period = nbr_update_period
 
         # initial Maxwell-Boltmann temperature for atoms
-        if maxwell_temp is not None:
-            # convert units
-            maxwell_temp = maxwell_temp * units.kB
-        else:
-            maxwell_temp = 2 * self.T
+        if maxwell_temp is None:
+            maxwell_temp = temperature
 
-        MaxwellBoltzmannDistribution(self.atoms, maxwell_temp)
+        MaxwellBoltzmannDistribution(self.atoms, temperature_K=maxwell_temp)
         self.remove_constrained_vel(atoms)
         Stationary(self.atoms)
         ZeroRotation(self.atoms)
@@ -228,7 +225,7 @@ class NoseHooverChain(NoseHoover):
         dpzeta_dt = np.zeros(shape=self.p_zeta.shape)
         dpzeta_dt[0]   = 2 * (current_ke - self.targeEkin) - \
                          self.p_zeta[0]*self.p_zeta[1]/self.Q[1]
-        dpzeta_dt[1:-2]= (np.power(self.p_zeta[:-2], 2) / self.Q[:-2] - self.T) - \
+        dpzeta_dt[1:-1]= (np.power(self.p_zeta[:-2], 2) / self.Q[:-2] - self.T) - \
                           self.p_zeta[1:-1] * self.p_zeta[2:] / self.Q[2:]
         dpzeta_dt[-1]  = np.power(self.p_zeta[-2], 2) / self.Q[-2] - self.T
         
@@ -236,7 +233,7 @@ class NoseHooverChain(NoseHoover):
 
     def step(self):
         
-        accel, dpzeta_dt = get_time_derivatives()
+        accel, dpzeta_dt = self.get_time_derivatives()
         # half step update for velocities and bath
         vel = self.atoms.get_velocities() 
         vel += 0.5 * accel * self.dt
@@ -247,7 +244,7 @@ class NoseHooverChain(NoseHoover):
         new_positions  = self.atoms.get_positions() + vel * self.dt
         self.atoms.set_positions(new_positions)
 
-        accel, dpzeta_dt = get_time_derivatives()
+        accel, dpzeta_dt = self.get_time_derivatives()
         # half step update for velocities and bath
         vel = self.atoms.get_velocities() 
         vel += 0.5 * accel * self.dt
@@ -348,10 +345,10 @@ class Langevin(MolecularDynamics):
                  **kwargs):
 
         # Random Number Generator
-        if random_seed = None:
+        if random_seed == None:
             random_seed = np.random.randint(2147483647)
         if type(random_seed) is int:
-            np.random.seed(radnom_seed)
+            np.random.seed(random_seed)
             print("THE RANDOM NUMBER SEED WAS: %i" % (random_seed))
         else:
             try:
@@ -374,7 +371,6 @@ class Langevin(MolecularDynamics):
 
         # Initialize simulation parameters
         # convert units
-
         self.dt = timestep * units.fs
         self.T  = temperature 
         
@@ -391,9 +387,7 @@ class Langevin(MolecularDynamics):
         self.nbr_update_period = nbr_update_period
 
         # initial Maxwell-Boltmann temperature for atoms
-        if maxwell_temp is not None:
-            maxwell_temp = maxwell_temp
-        else:
+        if maxwell_temp is None:
             maxwell_temp = self.T
 
         MaxwellBoltzmannDistribution(self.atoms, temperature_K=maxwell_temp)
@@ -503,7 +497,7 @@ class BatchLangevin(MolecularDynamics):
             os.remove(trajectory)
             
         # Random Number Generator
-        if random_seed = None:
+        if random_seed == None:
             random_seed = np.random.randint(2147483647)
         if type(random_seed) is int:
             np.random.seed(radnom_seed)
