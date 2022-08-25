@@ -1,28 +1,47 @@
+from tqdm import tqdm
 import numpy as np
 import os
-from torch.utils.data import DataLoader
-from torch.nn.modules.container import ModuleDict
 import copy
 import pickle
 from rdkit import Chem
+import shutil
+from torch.utils.data import DataLoader
+from torch.nn.modules.container import ModuleDict
 
 from ase import optimize, units
 from ase.md.verlet import VelocityVerlet
 from ase.io.trajectory import Trajectory as AseTrajectory
-
+from ase.vibrations import Vibrations
+from ase.units import kg, kB, mol, J, m
+from ase.thermochemistry import IdealGasThermo
 
 from nff.io.ase_ax import NeuralFF, AtomsBatch
 from nff.train import load_model
 from nff.data import collate_dicts, Dataset
 from nff.md import nve
-from neuralnet.utils.vib import get_modes
-
-from tqdm import tqdm
-
-
 from nff.utils.constants import FS_TO_AU, ASE_TO_FS, EV_TO_AU, BOHR_RADIUS
+from nff.utils import constants as const
+from nff.nn.tensorgrad import get_schnet_hessians
+from nff.utils.cuda import batch_to
+from nff.nn.models.schnet import SchNet
+from nff.nn.tensorgrad import hess_from_atoms as analytical_hess
 
-PERIODICTABLE = Chem.GetPeriodicTable()
+PT = Chem.GetPeriodicTable()
+PERIODICTABLE = PT
+
+HA2J = 4.359744E-18
+BOHRS2ANG = 0.529177
+SPEEDOFLIGHT = 2.99792458E8
+AMU2KG = 1.660538782E-27
+
+TEMP = 298.15
+PRESSURE = 101325
+IMAG_CUTOFF = -100  # cm^-1
+ROTOR_CUTOFF = 50  # cm^-1
+CM_TO_EV = 1.2398e-4
+GAS_CONST = 8.3144621 * J / mol
+B_AV = 1e-44 * kg * m ** 2
+
 
 RESTART_FILE = "restart.pickle"
 OPT_KEYS = ["steps", "fmax"]
@@ -38,10 +57,6 @@ ANGS_2_AU = 1.8897259886
 AMU_2_AU = 1822.88985136
 k_B = 1.38064852e-23
 PLANCKS_CONS = 6.62607015e-34
-HA2J = 4.359744E-18
-BOHRS2ANG = 0.529177
-SPEEDOFLIGHT = 2.99792458E8
-AMU2KG = 1.660538782E-27
 
 
 def get_key(iroot, num_states):
@@ -129,7 +144,7 @@ def correct_hessian(restart_file, hessian):
     # set the Hessian with ase units
 
     hess = np.array(hessian) * units.Hartree / (units.Bohr) ** 2
-    restart = (hess, *restart[1:])
+    restart = tuple([hess] + restart[1:])
 
     # save the restart file
 
@@ -171,8 +186,9 @@ def get_loader(model,
     ref_quant_grad = [
         np.zeros(((len(nxyz_list[0])), 3)).tolist()] * len(nxyz_list)
 
-    props = {"nxyz": nxyz_list, **{key: ref_quant for key in base_keys},
-             **{key: ref_quant_grad for key in grad_keys}}
+    props = {"nxyz": nxyz_list}
+    props.update({key: ref_quant for key in base_keys})
+    props.update({key: ref_quant_grad for key in grad_keys})
 
     dataset = Dataset(props.copy())
     dataset.generate_neighbor_list(cutoff)
@@ -528,7 +544,11 @@ def split_convert_xyz(xyz):
 
 def join_xyz(Z, coords):
     """ Joins Z's and coordinates back into xyz """
-    return [[Z[i], *coords[i]] for i in range(len(coords))]
+    out = []
+    for i in range(len(coords)):
+        this_quad = [Z[i]]
+        this_quad += coords[i]
+        out.append(this_quad)
 
 
 def make_wigner_init(init_atoms,
@@ -566,7 +586,7 @@ def make_wigner_init(init_atoms,
         atoms = AtomsBatch(nxyz[:, 0], nxyz[:, 1:])
 
         # conv = EV_TO_AU / (ASE_TO_FS * FS_TO_AU)
-        conv =  1 / BOHR_RADIUS / (ASE_TO_FS * FS_TO_AU)
+        conv = 1 / BOHR_RADIUS / (ASE_TO_FS * FS_TO_AU)
         atoms.set_velocities(np.array(velocity) / conv)
 
         atoms_list.append(atoms)
@@ -597,65 +617,389 @@ def nms_sample(params,
     return atoms_list
 
 
-if __name__ == "__main__":
+def get_modes(model, loader, energy_key, device):
 
-    true = True
-    params = {"htvs": "$HOME/htvs",
-              "T_init": 300.0,
-              "temp": 300,
-              "time_step": 0.5,
-              "integrator": "velocity_verlet",
-              "steps": 2,
-              "save_frequency": 1,
-              "nbr_list_update_freq": 1,
-              "thermo_filename": "./thermo.log",
-              "traj_filename": "./atom.traj",
-              "num_states": 2,
-              "iroot": 0,
-              "opt_max_step": 2000,
-              "fmax": 0.05,
-              # "fmax": 10,
-              "hess_interval": 100000,
-              "num_starting_poses": 1,
-              "method": {"name": "sf_tddft_bhhlyp",
-                         "description": ("GAMESS bhhlyp/6-31G*"
-                                         " spin flip tddft")},
-              "num_save": 1,
-              "nms": true,
-              "classical": true,
-              "weightpath": "/home/saxelrod/models",
-              "nnid": "azo_dimenet_diabat",
-              "networkhyperparams": {
-                  "n_rbf": 6,
-                  "cutoff": 5.0,
-                  "envelope_p": 5,
-                  "n_spher": 7,
-                  "l_spher": 7,
-                  "embed_dim": 128,
-                  "int_dim": 64,
-                  "out_dim": 256,
-                  "basis_emb_dim": 8,
-                  "activation": "swish",
-                  "n_convolutions": 4,
-                  "use_pp": true,
-                  "output_keys": ["energy_0", "energy_1"],
-                  "diabat_keys": [["d0", "lam"], ["lam", "d1"]],
-                  "grad_keys": ["energy_0_grad", "energy_1_grad"]
-              },
-              "model_type": "DimeNetDiabat",
-              "needs_angles": true,
-              "device": "cpu",
-              "nxyz": [[6.0, -3.106523, -0.303932, 1.317003], [6.0, -2.361488, -1.070965, 0.433279], [6.0, -1.500175, -0.466757, -0.466259], [6.0, -1.394372, 0.919597, -0.489914], [7.0, -0.638906, 1.622236, -1.475649], [7.0, 0.53754, 1.376216, -1.741989], [6.0, 1.347532, 0.467035, -0.998026], [6.0, 2.132836, -0.410469, -1.735143], [6.0, 3.015726, -1.257597, -1.087982], [6.0, 3.157147, -1.193886, 0.290324], [6.0, 2.407287, -0.281797, 1.018438], [6.0, 1.497631, 0.545173, 0.382205], [6.0, -2.176213, 1.69203, 0.35984], [6.0, -3.00977, 1.079171, 1.279395], [1.0, -3.769581, -0.781063, 2.019916], [1.0, -2.44819, -2.145275, 0.44532], [1.0, -0.921598, -1.062715, -1.15082], [1.0, 2.038044, -0.418366, -2.808393], [1.0, 3.607298, -1.952544, -1.661382], [1.0, 3.858162, -1.840041, 0.792768], [1.0, 2.528111, -0.214815, 2.087415], [1.0, 0.915297, 1.251752, 0.948046], [1.0, -2.117555, 2.765591, 0.289571], [1.0, -3.598241, 1.681622, 1.952038]]
+    batch = next(iter(loader))
+    batch = batch_to(batch, device)
+    model = model.to(device)
 
-              }
+    if isinstance(model, SchNet):
+        hessian = get_schnet_hessians(batch=batch,
+                                      model=model,
+                                      device=device,
+                                      energy_key=energy_key)[
+            0].cpu().detach().numpy()
+    else:
+        raise NotImplementedError
 
-    try:
-        atoms_list = nms_sample(params=params,
-                                classical=True,
-                                num_samples=10,
-                                kt=25.7 / 1000 / 27.2,
-                                hb=1)
-    except Exception as e:
-        print(e)
-        import pdb
-        pdb.post_mortem()
+    # convert to Ha / bohr^2
+    hessian *= (const.BOHR_RADIUS) ** 2
+    hessian *= const.KCAL_TO_AU['energy']
+
+    force_consts, vib_freqs, eigvec = vib_analy(
+        r=batch["nxyz"][:, 0].cpu().detach().numpy(),
+        xyz=batch["nxyz"][:, 1:].cpu().detach().numpy(),
+        hessian=hessian)
+
+    # from https://gaussian.com/vib/#SECTION00036000000000000000
+    nxyz = batch["nxyz"].cpu().detach().numpy()
+    masses = np.array([PT.GetMostCommonIsotopeMass(int(z))
+                       for z in nxyz[:, 0]])
+    triple_mass = np.concatenate([np.array([item] * 3) for item in masses])
+    red_mass = 1 / np.matmul(eigvec ** 2, 1 / triple_mass)
+
+    # un-mass weight the modes
+    modes = []
+    for vec in eigvec:
+        col = vec / triple_mass ** 0.5
+        col /= np.linalg.norm(col)
+        modes.append(col)
+    modes = np.array(modes)
+
+    out_dic = {"nxyz": nxyz.tolist(),
+               "hess": hessian.tolist(),
+               "modes": modes.tolist(),
+               "red_mass": red_mass.tolist(),
+               "freqs": vib_freqs.tolist()}
+
+    return out_dic
+
+
+def moi_tensor(massvec, expmassvec, xyz):
+    # Center of Mass
+    com = np.sum(expmassvec.reshape(-1, 3) *
+                 xyz.reshape(-1, 3), axis=0
+                 ) / np.sum(massvec)
+
+    # xyz shifted to COM
+    xyz_com = xyz.reshape(-1, 3) - com
+
+    # Compute elements need to calculate MOI tensor
+    mass_xyz_com_sq_sum = np.sum(
+        expmassvec.reshape(-1, 3) * xyz_com ** 2, axis=0)
+
+    mass_xy = np.sum(massvec * xyz_com[:, 0] * xyz_com[:, 1], axis=0)
+    mass_yz = np.sum(massvec * xyz_com[:, 1] * xyz_com[:, 2], axis=0)
+    mass_xz = np.sum(massvec * xyz_com[:, 0] * xyz_com[:, 2], axis=0)
+
+    # MOI tensor
+    moi = np.array([[mass_xyz_com_sq_sum[1] + mass_xyz_com_sq_sum[2], -1 *
+                     mass_xy, -1 * mass_xz],
+                    [-1 * mass_xy, mass_xyz_com_sq_sum[0] +
+                        mass_xyz_com_sq_sum[2], -1 * mass_yz],
+                    [-1 * mass_xz, -1 * mass_yz, mass_xyz_com_sq_sum[0] +
+                     mass_xyz_com_sq_sum[1]]])
+
+    # MOI eigenvectors and eigenvalues
+    moi_eigval, moi_eigvec = np.linalg.eig(moi)
+
+    return xyz_com, moi_eigvec
+
+
+def trans_rot_vec(massvec, xyz_com, moi_eigvec):
+
+    # Mass-weighted translational vectors
+    zero_vec = np.zeros([len(massvec)])
+    sqrtmassvec = np.sqrt(massvec)
+    expsqrtmassvec = np.repeat(sqrtmassvec, 3)
+
+    d1 = np.transpose(np.stack((sqrtmassvec, zero_vec, zero_vec))).reshape(-1)
+    d2 = np.transpose(np.stack((zero_vec, sqrtmassvec, zero_vec))).reshape(-1)
+    d3 = np.transpose(np.stack((zero_vec, zero_vec, sqrtmassvec))).reshape(-1)
+
+    # Mass-weighted rotational vectors
+    big_p = np.matmul(xyz_com, moi_eigvec)
+
+    d4 = (np.repeat(big_p[:, 1], 3).reshape(-1) *
+          np.tile(moi_eigvec[:, 2], len(massvec)).reshape(-1) -
+          np.repeat(big_p[:, 2], 3).reshape(-1) *
+          np.tile(moi_eigvec[:, 1], len(massvec)).reshape(-1)
+          ) * expsqrtmassvec
+
+    d5 = (np.repeat(big_p[:, 2], 3).reshape(-1) *
+          np.tile(moi_eigvec[:, 0], len(massvec)).reshape(-1) -
+          np.repeat(big_p[:, 0], 3).reshape(-1) *
+          np.tile(moi_eigvec[:, 2], len(massvec)).reshape(-1)
+          ) * expsqrtmassvec
+
+    d6 = (np.repeat(big_p[:, 0], 3).reshape(-1) *
+          np.tile(moi_eigvec[:, 1], len(massvec)).reshape(-1) -
+          np.repeat(big_p[:, 1], 3).reshape(-1) *
+          np.tile(moi_eigvec[:, 0], len(massvec)).reshape(-1)
+          ) * expsqrtmassvec
+
+    d1_norm = d1 / np.linalg.norm(d1)
+    d2_norm = d2 / np.linalg.norm(d2)
+    d3_norm = d3 / np.linalg.norm(d3)
+    d4_norm = d4 / np.linalg.norm(d4)
+    d5_norm = d5 / np.linalg.norm(d5)
+    d6_norm = d6 / np.linalg.norm(d6)
+
+    dx_norms = np.stack((d1_norm,
+                         d2_norm,
+                         d3_norm,
+                         d4_norm,
+                         d5_norm,
+                         d6_norm))
+
+    return dx_norms
+
+
+def vib_analy(r, xyz, hessian):
+
+    # r is the proton number of atoms
+    # xyz is the cartesian coordinates in Angstrom
+    # Hessian elements in atomic units (Ha/bohr^2)
+
+    massvec = np.array([PT.GetAtomicWeight(i.item()) * AMU2KG
+                        for i in list(np.array(r.reshape(-1)).astype(int))])
+    expmassvec = np.repeat(massvec, 3)
+    sqrtinvmassvec = np.divide(1.0, np.sqrt(expmassvec))
+    hessian_mwc = np.einsum('i,ij,j->ij', sqrtinvmassvec,
+                            hessian, sqrtinvmassvec)
+    hessian_eigval, hessian_eigvec = np.linalg.eig(hessian_mwc)
+
+    xyz_com, moi_eigvec = moi_tensor(massvec, expmassvec, xyz)
+    dx_norms = trans_rot_vec(massvec, xyz_com, moi_eigvec)
+
+    P = np.identity(3 * len(massvec))
+    for dx_norm in dx_norms:
+        P -= np.outer(dx_norm, dx_norm)
+
+    # Projecting the T and R modes out of the hessian
+    mwhess_proj = np.dot(P.T, hessian_mwc).dot(P)
+    hess_proj = np.einsum('i,ij,j->ij', 1 / sqrtinvmassvec,
+                          mwhess_proj, 1 / sqrtinvmassvec)
+
+    hessian_eigval, hessian_eigvec = np.linalg.eigh(mwhess_proj)
+
+    neg_ele = []
+    for i, eigval in enumerate(hessian_eigval):
+        if eigval < 0:
+            neg_ele.append(i)
+
+    hessian_eigval_abs = np.abs(hessian_eigval)
+
+    pre_vib_freq_cm_1 = np.sqrt(
+        hessian_eigval_abs * HA2J * 10e19) / (SPEEDOFLIGHT * 2 * np.pi *
+                                              BOHRS2ANG * 100)
+
+    vib_freq_cm_1 = pre_vib_freq_cm_1.copy()
+
+    for i in neg_ele:
+        vib_freq_cm_1[i] = -1 * pre_vib_freq_cm_1[i]
+
+    trans_rot_elms = []
+    for i, freq in enumerate(vib_freq_cm_1):
+        # Modes that are less than 1.0 cm-1 are the
+        # translation / rotation modes we just projected
+        # out
+        if np.abs(freq) < 1.0:
+            trans_rot_elms.append(i)
+
+    force_constants_J_m_2 = np.delete(
+        hessian_eigval * HA2J * 1e20 / (BOHRS2ANG ** 2) * AMU2KG,
+        trans_rot_elms)
+
+    proj_vib_freq_cm_1 = np.delete(vib_freq_cm_1, trans_rot_elms)
+    proj_hessian_eigvec = np.delete(hessian_eigvec.T, trans_rot_elms, 0)
+
+    return (force_constants_J_m_2, proj_vib_freq_cm_1, proj_hessian_eigvec,
+            mwhess_proj, hess_proj)
+
+
+def free_rotor_moi(freqs):
+    freq_ev = freqs * CM_TO_EV
+    mu = 1 / (8 * np.pi ** 2 * freq_ev)
+    return mu
+
+
+def eff_moi(mu, b_av):
+    mu_prime = mu * b_av / (mu + b_av)
+    return mu_prime
+
+
+def low_freq_entropy(freqs,
+                     temperature,
+                     b_av=B_AV):
+    mu = free_rotor_moi(freqs)
+    mu_prime = eff_moi(mu, b_av)
+
+    arg = (8 * np.pi ** 3 * mu_prime * kB * temperature)
+    entropy = GAS_CONST * (1 / 2 + np.log(arg ** 0.5))
+
+    return entropy
+
+
+def high_freq_entropy(freqs,
+                      temperature):
+
+    freq_ev = freqs * CM_TO_EV
+    exp_pos = np.exp(freq_ev / (kB * temperature)) - 1
+    exp_neg = 1 - np.exp(-freq_ev / (kB * temperature))
+
+    entropy = GAS_CONST * (
+        freq_ev / (kB * temperature * exp_pos) -
+        np.log(exp_neg)
+    )
+
+    return entropy
+
+
+def mrrho_entropy(freqs,
+                  temperature,
+                  rotor_cutoff,
+                  b_av,
+                  alpha):
+
+    func = 1 / (1 + (rotor_cutoff / freqs) ** alpha)
+    s_r = low_freq_entropy(freqs=freqs,
+                           b_av=b_av,
+                           temperature=temperature)
+    s_v = high_freq_entropy(freqs=freqs,
+                            temperature=temperature)
+
+    new_vib_s = (func * s_v + (1 - func) * s_r).sum()
+    old_vib_s = s_v.sum()
+
+    return old_vib_s, new_vib_s
+
+
+def mrrho_quants(ase_atoms,
+                 freqs,
+                 imag_cutoff=IMAG_CUTOFF,
+                 temperature=TEMP,
+                 pressure=PRESSURE,
+                 rotor_cutoff=ROTOR_CUTOFF,
+                 b_av=B_AV,
+                 alpha=4,
+                 flip_all_but_ts=False):
+
+    potentialenergy = ase_atoms.get_potential_energy()
+
+    if flip_all_but_ts:
+        print(("Flipping all imaginary frequencies except "
+               "the lowest one"))
+        abs_freqs = abs(freqs[1:])
+
+    else:
+        abs_freqs = abs(freqs[freqs > imag_cutoff])
+    ens = abs_freqs * CM_TO_EV
+
+    ideal_gas = IdealGasThermo(vib_energies=ens,
+                               potentialenergy=potentialenergy,
+                               atoms=ase_atoms,
+                               geometry='nonlinear',
+                               symmetrynumber=1,
+                               spin=0)
+
+    # full entropy including rotation, translation etc
+    old_entropy = (ideal_gas.get_entropy(temperature=temperature,
+                                         pressure=pressure).item())
+    enthalpy = (ideal_gas.get_enthalpy(temperature=temperature)
+                .item())
+
+    # correction to vibrational entropy
+    out = mrrho_entropy(freqs=abs_freqs,
+                        temperature=temperature,
+                        rotor_cutoff=rotor_cutoff,
+                        b_av=b_av,
+                        alpha=alpha)
+    old_vib_s, new_vib_s = out
+    final_entropy = old_entropy - old_vib_s + new_vib_s
+
+    free_energy = (enthalpy - temperature * final_entropy)
+
+    return final_entropy, enthalpy, free_energy
+
+
+def convert_modes(atoms,
+                  modes):
+
+    masses = (atoms.get_masses().reshape(-1, 1)
+              .repeat(3, 1)
+              .reshape(1, -1))
+
+    # Multiply by 1 / sqrt(M) to be consistent with the DB
+    vibdisps = modes / (masses ** 0.5)
+    norm = np.linalg.norm(vibdisps, axis=1).reshape(-1, 1)
+
+    # Normalize
+    vibdisps /= norm
+
+    # Re-shape
+
+    num_atoms = len(atoms)
+    vibdisps = vibdisps.reshape(-1, num_atoms, 3)
+
+    return vibdisps
+
+
+def hessian_and_modes(ase_atoms,
+                      imag_cutoff=IMAG_CUTOFF,
+                      rotor_cutoff=ROTOR_CUTOFF,
+                      temperature=TEMP,
+                      pressure=PRESSURE,
+                      flip_all_but_ts=False,
+                      analytical=False):
+
+    # comparison to the analytical Hessian
+    # shows that delta=0.005 is indistinguishable
+    # from the real result, whereas delta=0.05
+    # has up to 20% errors
+
+    # delete the folder `vib` if it exists,
+    # because it might mess up the Hessian
+    # calculation
+
+    if os.path.isdir('vib'):
+        shutil.rmtree('vib')
+
+    if analytical:
+        hessian = analytical_hess(atoms=ase_atoms)
+
+    else:
+        vib = Vibrations(ase_atoms, delta=0.005)
+        vib.run()
+
+        vib_results = vib.get_vibrations()
+        dim = len(ase_atoms)
+        hessian = (vib_results.get_hessian()
+                   .reshape(dim * 3, dim * 3) *
+                   EV_TO_AU *
+                   BOHR_RADIUS ** 2)
+
+        print(vib.get_frequencies()[:20])
+
+    vib_results = vib_analy(r=ase_atoms.get_atomic_numbers(),
+                            xyz=ase_atoms.get_positions(),
+                            hessian=hessian)
+    _, freqs, modes, mwhess_proj, hess_proj = vib_results
+    mwhess_proj *= AMU2KG
+
+    vibdisps = convert_modes(atoms=ase_atoms,
+                             modes=modes)
+
+    mrrho_results = mrrho_quants(ase_atoms=ase_atoms,
+                                 freqs=freqs,
+                                 imag_cutoff=imag_cutoff,
+                                 temperature=temperature,
+                                 pressure=pressure,
+                                 rotor_cutoff=rotor_cutoff,
+                                 flip_all_but_ts=flip_all_but_ts)
+
+    entropy, enthalpy, free_energy = mrrho_results
+
+    imgfreq = len(freqs[freqs < 0])
+    results = {"vibdisps": vibdisps.tolist(),
+               "vibfreqs": freqs.tolist(),
+               "modes": modes,
+               "hessianmatrix": hessian.tolist(),
+               "mwhess_proj": mwhess_proj.tolist(),
+               "hess_proj": hess_proj.tolist(),
+               "imgfreq": imgfreq,
+               "freeenergy": free_energy * EV_TO_AU,
+               "enthalpy": enthalpy * EV_TO_AU,
+               "entropy": entropy * temperature * EV_TO_AU}
+
+    return results

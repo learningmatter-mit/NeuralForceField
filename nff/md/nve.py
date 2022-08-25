@@ -35,7 +35,7 @@ class Dynamics:
         # initialize the atoms batch system
         self.atomsbatch = atomsbatch
         self.mdparam = mdparam
-
+        
         # todo: structure optimization before starting
 
         # intialize system momentum
@@ -57,7 +57,7 @@ class Dynamics:
         
         self.steps = int(self.mdparam['steps'])
         self.check_restart()
-        
+
         if self.steps == int(self.mdparam['steps']):
             # attach trajectory dump
             self.traj = Trajectory(
@@ -73,7 +73,8 @@ class Dynamics:
                                                 stress=requires_stress,
                                                 mode='a'),
                                 interval=self.mdparam['save_frequency'])
-        
+
+
     def check_restart(self):
 
         if os.path.exists(self.mdparam['traj_filename']):

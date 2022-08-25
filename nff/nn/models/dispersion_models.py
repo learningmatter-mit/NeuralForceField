@@ -2,6 +2,8 @@
 Models with added empirical dispersion on top
 """
 
+import torch
+import numpy as np
 from torch import nn
 
 from nff.nn.models.painn import add_stress
@@ -9,7 +11,6 @@ from nff.utils.scatter import compute_grad
 from nff.utils import constants as const
 from nff.utils.dispersion import get_dispersion as base_dispersion
 from nff.nn.models.painn import Painn
-
 
 class PainnDispersion(nn.Module):
 
@@ -37,18 +38,18 @@ class PainnDispersion(nn.Module):
     def get_dispersion(self,
                        batch,
                        xyz):
-
-        e_disp = base_dispersion(batch=batch,
-                                 xyz=xyz,
-                                 disp_type=self.disp_type,
-                                 functional=self.functional,
-                                 nbrs=batch.get('mol_nbrs'),
-                                 mol_idx=batch.get("mol_idx"))
-
+        
+        e_disp, r_ij_T, nbrs_T = base_dispersion(batch=batch,
+                                                 xyz=xyz,
+                                                 disp_type=self.disp_type,
+                                                 functional=self.functional,
+                                                 nbrs=batch.get('mol_nbrs'),
+                                                 mol_idx=batch.get('mol_idx'))
+        
         # convert to kcal / mol
         e_disp = e_disp * const.HARTREE_TO_KCAL_MOL
 
-        return e_disp
+        return e_disp, r_ij_T, nbrs_T
 
     def run(self,
             batch,
@@ -69,16 +70,24 @@ class PainnDispersion(nn.Module):
         all_results, xyz = self.painn_model.pool(batch=batch,
                                                  atomwise_out=atomwise_out,
                                                  xyz=xyz,
+						                         r_ij=r_ij,
+						                         nbrs=nbrs,
                                                  inference=inference)
 
-        # add dispersion and gradient
+        if requires_stress:
+            all_results = add_stress(batch=batch,
+                                     all_results=all_results,
+                                     nbrs=nbrs,
+                                     r_ij=r_ij)
+
+        # add dispersion and gradients associated with it
+
         disp_grad = None
-        e_disp = self.get_dispersion(batch=batch,
-                                     xyz=xyz)
+        e_disp, r_ij_T, nbrs_T = self.get_dispersion(batch=batch,
+                                                     xyz=xyz)
 
         for key in self.painn_model.pool_dic.keys():
             # add dispersion energy
-
             if inference:
                 add_e = e_disp.detach().cpu()
             else:
@@ -86,7 +95,7 @@ class PainnDispersion(nn.Module):
 
             all_results[key] = all_results[key] + add_e
 
-            # add gradient
+            # add gradient for forces
             grad_key = "%s_grad" % key
             if grad_key in self.painn_model.grad_keys:
                 if disp_grad is None:
@@ -97,15 +106,37 @@ class PainnDispersion(nn.Module):
 
                 all_results[grad_key] = all_results[grad_key] + disp_grad
 
+        if requires_stress:
+            # add gradient for stress
+            disp_rij_grad = compute_grad(inputs=r_ij_T,
+                                         output=e_disp)
+
+            if batch['num_atoms'].shape[0] == 1:
+                disp_stress_volume = torch.matmul(disp_rij_grad.t(), r_ij_T)
+            else:
+                allstress = []
+                for j in range(batch['nxyz'].shape[0]):
+                    allstress.append(
+                        torch.matmul(
+                            disp_rij_grad[torch.where(nbrs_T[:, 0] == j)].t(),
+                            r_ij_T[torch.where(nbrs_T[:, 0] == j)]
+                        )
+                    )
+                allstress = torch.stack(allstress)
+                N = batch["num_atoms"].detach().cpu().tolist()
+                split_val = torch.split(allstress, N)
+                disp_stress_volume = torch.stack([i.sum(0)
+                                                    for i in split_val])
+            if inference:
+                disp_stress_volume = disp_stress_volume.detach().cpu()
+            all_results['stress_volume'] = all_results['stress_volume'] + \
+                                                             disp_stress_volume
+
         # Normal painn stuff, part 2
 
         if getattr(self.painn_model, "compute_delta", False):
             all_results = self.painn_model.add_delta(all_results)
-        if requires_stress:
-            all_results = add_stress(batch=batch,
-                                     all_results=all_results,
-                                     nbrs=nbrs,
-                                     r_ij=r_ij)
+
         return all_results, xyz
 
     def forward(self,

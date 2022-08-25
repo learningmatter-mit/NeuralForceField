@@ -79,11 +79,13 @@ class BiasBase(NeuralFF):
         
         self.equil_temp = equil_temp
         
-        self.ext_coords  = np.zeros(shape=(self.num_cv,1))
-        self.ext_masses  = np.zeros(shape=(self.num_cv,1))
-        self.ext_forces  = np.zeros(shape=(self.num_cv,1))
-        self.ext_momenta = np.zeros(shape=(self.num_cv,1))
-        self.ext_k = np.zeros(shape=(self.num_cv,))
+        self.ext_coords   = np.zeros(shape=(self.num_cv,1))
+        self.ext_masses   = np.zeros(shape=(self.num_cv,1))
+        self.ext_forces   = np.zeros(shape=(self.num_cv,1))
+        self.ext_vel      = np.zeros(shape=(self.num_cv,1))
+        self.ext_binwidth = np.zeros(shape=(self.num_cv,1))
+        self.ext_k  = np.zeros(shape=(self.num_cv,))
+        self.ext_dt = 0.0
         
         self.ranges  = np.zeros(shape=(self.num_cv,2))
         self.margins = np.zeros(shape=(self.num_cv,1))
@@ -109,26 +111,21 @@ class BiasBase(NeuralFF):
                                   cv['ext_sigma'] * cv['ext_sigma'])
             else:
                 raise PropertyNotPresent('ext_k/ext_sigma')
-                
-            if 'mass' in cv.keys():
-                self.ext_masses[ii] = cv['mass']
+
                 
             if 'type' not in cv.keys():
                 self.cv_defs[ii]['type'] = 'not_angle'
+            else:
+                self.cv_defs[ii]['type'] = cv['type']
                 
-        # initialize extended system at target temp of MD simulation
-        for i in range(self.num_cv):
-            self.ext_momenta[i] = np.random.randn() * np.sqrt(
-                                    self.equil_temp * self.ext_masses[i])
-            
         
-    def _update_bias(self):
+    def _update_bias(self, xi: np.ndarray):
         pass
     
     def _propagate_ext(self):
         pass
     
-    def _up_extmom(self):
+    def _up_extvel(self):
         pass
     
     def diff(self, 
@@ -190,15 +187,15 @@ class BiasBase(NeuralFF):
 
             # harmonic walls for confinement to range of interest
             if self.ext_coords[i] > (self.ranges[i][1] - self.margins[i]):
-                r = diff(self.ranges[i][1] - self.margin[i], self.ext_coords[i], self.cv_defs[i]['type'])
+                r = self.diff(self.ranges[i][1] - self.margins[i], self.ext_coords[i], self.cv_defs[i]['type'])
                 self.ext_forces[i] -= self.conf_k[i] * r
 
             elif self.ext_coords[i] < (self.ranges[i][0] + self.margins[i]):
-                r = diff(self.ranges[i][0] + self.margin[i], self.ext_coords[i], self.cv_defs[i]['type'])
+                r = self.diff(self.ranges[i][0] + self.margins[i], self.ext_coords[i], self.cv_defs[i]['type'])
                 self.ext_forces[i] -= self.conf_k[i] * r
          
-        self._update_bias()
-        self._up_extmom()                
+        self._update_bias(xi)
+        self._up_extvel()                
                 
         return bias_ener, bias_grad
 
@@ -301,4 +298,211 @@ class BiasBase(NeuralFF):
             stress = (prediction['stress_volume'].detach()
                       .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
             self.results['stress'] = stress * (1 / atoms.get_volume())
+            
+            
+            
+class eABF(BiasBase):
+    """extended-system Adaptive Biasing Force Calculator 
+       class with neural force field
     
+    Args:
+        model: the deural force field model
+        cv_def: lsit of Collective Variable (CV) definitions
+            [["cv_type", [atom_indices], np.array([minimum, maximum]), bin_width], [possible second dimension]]
+        confinement_k: force constant for confinement of system to the range of interest in CV space
+    """
+
+    def __init__(self,
+                 model,
+                 cv_defs: list[dict],
+                 dt: float,
+                 friction_per_ps: float,
+                 equil_temp: float = 300.0,
+                 nfull: int = 100,
+                 device='cpu',
+                 en_key='energy',
+                 directed=DEFAULT_DIRECTED,
+                 **kwargs):
+
+        BiasBase.__init__(self,
+                          cv_defs=cv_defs,
+                          equil_temp=equil_temp,
+                          model=model,
+                          device=device,
+                          en_key=en_key,
+                          directed=directed,
+                          **kwargs)
+
+   
+        self.ext_dt = dt * units.fs
+        self.nfull  = nfull
+                                 
+        for ii, cv in enumerate(self.cv_defs):
+            if 'bin_width' in cv.keys():
+                self.ext_binwidth[ii] = cv['bin_width']
+            elif 'ext_sigma' in cv.keys():
+                self.ext_binwidth[ii] = cv['ext_sigma']
+            else:
+                raise PropertyNotPresent('bin_width')
+                
+            if 'ext_pos' in cv.keys():
+                # set initial position
+                self.ext_coords[ii] = cv['ext_pos']
+            else:
+                raise PropertyNotPresent('ext_pos')
+                
+                            
+            if 'ext_mass' in cv.keys():
+                self.ext_masses[ii] = cv['ext_mass']
+            else:
+                raise PropertyNotPresent('ext_mass')
+                
+        # initialize extended system at target temp of MD simulation
+        for i in range(self.num_cv):
+            self.ext_vel[i] = (np.random.randn() * 
+                               np.sqrt(self.equil_temp * units.kB / 
+                                       self.ext_masses[i]))
+         
+        self.friction  = friction_per_ps * 1.0e-3 / units.fs
+        self.rand_push = np.sqrt(self.equil_temp * self.friction * 
+                                 self.ext_dt * units.kB / (2.0e0 * self.ext_masses))
+        self.prefac1   = 2.0 / (2.0 + self.friction * self.ext_dt)
+        self.prefac2   = ((2.0e0 - self.friction * self.ext_dt) / 
+                          (2.0e0 + self.friction * self.ext_dt))
+            
+
+        # set up all grid accumulators for ABF
+        self.nbins_per_dim = np.array([1 for i in range(self.num_cv)])
+        self.grid = []
+        for i in range(self.num_cv):
+            self.nbins_per_dim[i] = (
+                int(np.ceil(np.abs(self.ranges[i,1] - self.ranges[i,0]) / 
+                            self.ext_binwidth[i]))
+            )
+            self.grid.append(
+                np.linspace(
+                    self.ranges[i, 0] + self.ext_binwidth[i] / 2,
+                    self.ranges[i, 1] - self.ext_binwidth[i] / 2,
+                    self.nbins_per_dim[i],
+                )
+            )
+        self.nbins = np.prod(self.nbins_per_dim)
+
+        # accumulators and conditional averages
+        self.bias = np.zeros(
+            (self.num_cv, *self.nbins_per_dim), dtype=float
+        )
+        self.var_force = np.zeros_like(self.bias)
+        self.m2_force = np.zeros_like(self.bias)
+        
+        self.cv_crit = np.copy(self.bias)
+
+        self.histogram = np.zeros(
+            self.nbins_per_dim, dtype=float
+        )
+        self.ext_hist = np.zeros_like(self.histogram)
+
+        
+                                 
+    def get_index(self, xi: np.ndarray) -> tuple:
+        """get list of bin indices for current position of CVs or extended variables
+        Args:
+            xi (np.ndarray): Current value of collective variable
+        Returns:
+            bin_x (list):
+        """
+        bin_x = np.zeros(shape=xi.shape, dtype=np.int64)
+        for i in range(self.num_cv):
+            bin_x[i] = int(np.floor(np.abs(xi[i] - self.ranges[i,0]) / 
+                                    self.ext_binwidth[i]))
+        return tuple(bin_x.reshape(1, -1)[0])
+            
+            
+    def _update_bias(self,
+                    xi: np.ndarray):
+        if ((self.ext_coords <= self.ranges[:,1]).all() and 
+           (self.ext_coords >= self.ranges[:,0]).all()):
+
+            bink = self.get_index(self.ext_coords)
+            self.ext_hist[bink] += 1
+                                 
+            # linear ramp function
+            ramp = (
+                1.0
+                if self.ext_hist[bink] > self.nfull
+                else self.ext_hist[bink] / self.nfull
+            )
+
+            for i in range(self.num_cv):
+
+                # apply bias force on extended system
+                (
+                    self.bias[i][bink],
+                    self.m2_force[i][bink],
+                    self.var_force[i][bink],
+                ) = welford_var(
+                    self.ext_hist[bink],
+                    self.bias[i][bink],
+                    self.m2_force[i][bink],
+                    self.ext_k[i] * 
+                    self.diff(xi[i], self.ext_coords[i], self.cv_defs[i]['type']),
+                )
+                self.ext_forces -= ramp * self.bias[i][bink] 
+
+        """                        
+        Not sure how this can be dumped/printed to work with the rest
+        # xi-conditioned accumulators for CZAR
+        if (xi <= self.ranges[:,1]).all() and 
+               (xi >= self.ranges[:,0]).all():
+
+            bink = self.get_index(xi)
+            self.histogram[bink] += 1
+
+            for i in range(self.num_cv):
+                dx = diff(self.ext_coords[i], self.grid[i][bink[i]], 
+                          self.cv_defs[i]['type'])
+                self.correction_czar[i][bink] += self.ext_k[i] * dx
+        """
+        
+                                 
+    def _propagate_ext(self):
+
+        self.ext_rand_gauss = np.random.randn(len(self.ext_vel))
+
+        self.ext_vel += self.rand_push * self.ext_rand_gauss
+        self.ext_vel += 0.5e0 * self.ext_dt * self.ext_forces / self.ext_masses
+        self.ext_coords += self.prefac1 * self.ext_dt * self.ext_vel 
+    
+                                 
+    def _up_extvel(self):
+                                 
+        self.ext_vel *= self.prefac2
+        self.ext_vel += self.rand_push * self.ext_rand_gauss                         
+        self.ext_vel += 0.5e0 * self.ext_dt * self.ext_forces / self.ext_masses
+    
+ 
+    
+
+                                 
+def welford_var(
+    count: float, 
+    mean: float, 
+    M2: float, 
+    newValue: float) -> Tuple[float, float, float]:
+    """On-the-fly estimate of sample variance by Welford's online algorithm
+    Args:
+        count: current number of samples (with new one)
+        mean: current mean
+        M2: helper to get variance
+        newValue: new sample
+    Returns:
+        mean: sample mean,
+        M2: sum of powers of differences from the mean
+        var: sample variance
+    """
+    delta = newValue - mean
+    mean += delta / count
+    delta2 = newValue - mean
+    M2 += delta * delta2
+    var = M2 / count if count > 2 else 0.0
+    return mean, M2, var

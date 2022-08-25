@@ -2,6 +2,7 @@ import os
 import numpy as np
 import copy
 import math
+import pickle
 
 from tqdm import tqdm
 from ase.optimize.optimize import Dynamics
@@ -62,13 +63,10 @@ class NoseHoover(MolecularDynamics):
         self.nbr_update_period = nbr_update_period
 
         # initial Maxwell-Boltmann temperature for atoms
-        if maxwell_temp is not None:
-            # convert units
-            maxwell_temp = maxwell_temp * units.kB
-        else:
-            maxwell_temp = 2 * self.T
+        if maxwell_temp is None:
+            maxwell_temp = temperature
 
-        MaxwellBoltzmannDistribution(self.atoms, maxwell_temp)
+        MaxwellBoltzmannDistribution(self.atoms, temperature_K=maxwell_temp)
         self.remove_constrained_vel(atoms)
         Stationary(self.atoms)
         ZeroRotation(self.atoms)
@@ -168,8 +166,8 @@ class NoseHooverChain(NoseHoover):
                  atoms,
                  timestep,
                  temperature,
-                 ttime,
-                 num_chains,
+                 ttime = 20.0,
+                 num_chains = 5,
                  maxwell_temp=None,
                  trajectory=None,
                  logfile=None,
@@ -178,6 +176,17 @@ class NoseHooverChain(NoseHoover):
                  nbr_update_period=20,
                  append_trajectory=True,
                  **kwargs):
+        
+        """Docstring
+           Args: 
+               ttime (float): factor to be multiplied with time step to 
+                              give the evolution time of the bath, 
+                              default is now 20 (7/14/22)
+               num_chains (int): number of coupled extended DoFs, 
+                                 it's known that two chains are not enough
+                                 default is now 5 (7/14/22)
+        
+        """
 
         NoseHoover.__init__(self,
                             atoms=atoms,
@@ -194,67 +203,54 @@ class NoseHooverChain(NoseHoover):
                             **kwargs)
 
         self.N_dof = 3.0 * self.Natom - 6
-        q_0 = self.N_dof * self.T * (self.ttime * self.dt) ** 2
-        q_n = self.T * (self.ttime * self.dt) ** 2
+        q_0 = self.N_dof * self.T * (self.ttime * self.dt)**2
+        q_n = self.T * (self.ttime * self.dt)**2
 
         self.Q = 2 * np.array([q_0, *([q_n] * (num_chains-1))])
         self.p_zeta = np.array([0.0]*num_chains)
 
-    def get_zeta_accel(self):
-
-        p0_dot = 2 * (self.atoms.get_kinetic_energy() - self.targeEkin) - \
-            self.p_zeta[0]*self.p_zeta[1] / self.Q[1]
-        p_middle_dot = self.p_zeta[:-2]**2 / self.Q[:-2] - \
-            self.T - self.p_zeta[1:-1] * self.p_zeta[2:]/self.Q[2:]
-        p_last_dot = self.p_zeta[-2]**2 / self.Q[-2] - self.T
-        p_dot = np.array([p0_dot, *p_middle_dot, p_last_dot])
-
-        return p_dot / self.Q
-
-    def half_step_v_zeta(self):
-
-        v = self.p_zeta / self.Q
-        accel = self.get_zeta_accel()
-        v_half = v + 1/2 * accel * self.dt
-        return v_half
-
-    def half_step_v_system(self):
-
-        v = self.atoms.get_velocities()
-        accel = (self.atoms.get_forces()
-                 / self.atoms.get_masses().reshape(-1, 1))
-        accel -= v * self.p_zeta[0] / self.Q[0]
-        v_half = v + 1/2 * accel * self.dt
-        return v_half
-
-    def full_step_positions(self):
-
-        accel = (self.atoms.get_forces()
-                 / self.atoms.get_masses().reshape(-1, 1))
-        new_positions = (self.atoms.get_positions() +
-                         self.atoms.get_velocities() * self.dt
-                         (accel - self.p_zeta[0] / self.Q[0]) * (self.dt)**2)
-        return new_positions
+    
+    def get_time_derivatives(self):
+        momenta = (self.atoms.get_velocities() * 
+                   self.atoms.get_masses().reshape(-1, 1))
+        forces  = self.atoms.get_forces()
+        coupled_forces = self.p_zeta[0] * momenta / self.Q[0]
+        
+        accel   = ((forces - coupled_forces) / 
+                   self.atoms.get_masses().reshape(-1, 1))
+        
+        
+        current_ke = 0.5 * (np.power(momenta, 2) / 
+                            self.atoms.get_masses().reshape(-1, 1)).sum() 
+        dpzeta_dt = np.zeros(shape=self.p_zeta.shape)
+        dpzeta_dt[0]   = 2 * (current_ke - self.targeEkin) - \
+                         self.p_zeta[0]*self.p_zeta[1]/self.Q[1]
+        dpzeta_dt[1:-1]= (np.power(self.p_zeta[:-2], 2) / self.Q[:-2] - self.T) - \
+                          self.p_zeta[1:-1] * self.p_zeta[2:] / self.Q[2:]
+        dpzeta_dt[-1]  = np.power(self.p_zeta[-2], 2) / self.Q[-2] - self.T
+        
+        return accel, dpzeta_dt
 
     def step(self):
-
-        new_positions = self.full_step_positions()
+        
+        accel, dpzeta_dt = self.get_time_derivatives()
+        # half step update for velocities and bath
+        vel = self.atoms.get_velocities() 
+        vel += 0.5 * accel * self.dt
+        self.atoms.set_velocities(vel)
+        self.p_zeta  += 0.5 * dpzeta_dt * self.dt
+        
+        # full step in coordinates
+        new_positions  = self.atoms.get_positions() + vel * self.dt
         self.atoms.set_positions(new_positions)
 
-        v_half_system = self.half_step_v_system()
-        v_half_zeta = self.half_step_v_zeta()
-
-        self.atoms.set_velocities(v_half_system)
-        self.p_zeta = v_half_zeta * self.Q
-
-        v_full_zeta = self.half_step_v_zeta()
-        accel = (self.atoms.get_forces()
-                 / self.atoms.get_masses().reshape(-1, 1))
-        v_full_system = (v_half_system + 1/2 * accel * self.dt) / \
-            (1 + 0.5 * self.dt * v_full_zeta[0])
-
-        self.atoms.set_velocities(v_full_system)
-        self.p_zeta = v_full_zeta * self.Q
+        accel, dpzeta_dt = self.get_time_derivatives()
+        # half step update for velocities and bath
+        vel = self.atoms.get_velocities() 
+        vel += 0.5 * accel * self.dt
+        self.atoms.set_velocities(vel)
+        self.p_zeta  += 0.5 * dpzeta_dt * self.dt
+        
         
         
 class NoseHooverChainsBiased(NoseHooverChain):
@@ -339,6 +335,7 @@ class Langevin(MolecularDynamics):
                  temperature: float,
                  friction_per_ps: float = 1.0,
                  maxwell_temp: float = None,
+                 random_seed = None,
                  trajectory=None,
                  logfile=None,
                  loginterval=1,
@@ -347,6 +344,20 @@ class Langevin(MolecularDynamics):
                  append_trajectory=True,
                  **kwargs):
 
+        # Random Number Generator
+        if random_seed == None:
+            random_seed = np.random.randint(2147483647)
+        if type(random_seed) is int:
+            np.random.seed(random_seed)
+            print("THE RANDOM NUMBER SEED WAS: %i" % (random_seed))
+        else:
+            try:
+                np.random.set_state(random_seed)
+            except:
+                raise ValueError(
+                    "\tThe provided seed was neither an int nor a state of numpy random"
+                )
+        
         if os.path.isfile(str(trajectory)):
             os.remove(trajectory)
 
@@ -360,7 +371,6 @@ class Langevin(MolecularDynamics):
 
         # Initialize simulation parameters
         # convert units
-
         self.dt = timestep * units.fs
         self.T  = temperature 
         
@@ -377,9 +387,7 @@ class Langevin(MolecularDynamics):
         self.nbr_update_period = nbr_update_period
 
         # initial Maxwell-Boltmann temperature for atoms
-        if maxwell_temp is not None:
-            maxwell_temp = maxwell_temp
-        else:
+        if maxwell_temp is None:
             maxwell_temp = self.T
 
         MaxwellBoltzmannDistribution(self.atoms, temperature_K=maxwell_temp)
@@ -460,6 +468,13 @@ class Langevin(MolecularDynamics):
             self.atoms.update_nbr_list()
             Stationary(self.atoms)
             ZeroRotation(self.atoms)
+        
+        with open('random_state.pickle', 'wb') as f:
+            pickle.dump(np.random.get_state(), f)
+            
+        # load random state for restart as
+        #with open('random_state.pickle', 'rb') as f:
+        #     state = pickle.load(f)
 
 
 class BatchLangevin(MolecularDynamics):
@@ -469,6 +484,7 @@ class BatchLangevin(MolecularDynamics):
                  temperature: float,
                  friction_per_ps: float = 1.0,
                  maxwell_temp: float = None,
+                 random_seed = None,
                  trajectory=None,
                  logfile=None,
                  loginterval=1,
@@ -479,6 +495,20 @@ class BatchLangevin(MolecularDynamics):
 
         if os.path.isfile(str(trajectory)):
             os.remove(trajectory)
+            
+        # Random Number Generator
+        if random_seed == None:
+            random_seed = np.random.randint(2147483647)
+        if type(random_seed) is int:
+            np.random.seed(radnom_seed)
+            print("THE RANDOM NUMBER SEED WAS: %i" % (random_seed))
+        else:
+            try:
+                np.random.set_state(random_seed)
+            except:
+                raise ValueError(
+                    "\tThe provided seed was neither an int nor a state of numpy random"
+                )
 
         MolecularDynamics.__init__(self,
                                    atoms=atoms,

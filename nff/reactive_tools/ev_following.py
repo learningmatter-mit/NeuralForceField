@@ -4,12 +4,27 @@ from nff.io.ase import NeuralFF, AtomsBatch
 from nff.reactive_tools.utils import (neural_hessian_ase, neural_energy_ase,
                                       neural_force_ase)
 from nff.utils.constants import EV_TO_AU, BOHR_RADIUS
-
-from ase import Atoms
-from neuralnet.vib import hessian_and_modes
+from barriers.utils.vib import hessian_and_modes
 from ase.units import Bohr, mol, kcal
+from ase import Atoms
 
 CONVG_LINE = "Optimization converged!"
+
+
+def get_hessian(atoms,
+                device):
+
+    mode_results = hessian_and_modes(atoms)
+
+    # use the full Hessian, not the one with
+    # translation and rotation projected out
+
+    # hessian = mode_results["hess_proj"]
+    hessian = mode_results["hessianmatrix"]
+    hessian = torch.Tensor(hessian).to(device)
+    hessian /= (EV_TO_AU * BOHR_RADIUS ** 2)
+
+    return hessian
 
 
 def powell_update(hessian_old,
@@ -30,22 +45,6 @@ def powell_update(hessian_old,
     powell_hessian = hessian_old + update
 
     return powell_hessian.detach()
-
-
-def get_hessian(atoms,
-                device):
-
-    mode_results = hessian_and_modes(atoms)
-
-    # use the full Hessian, not the one with
-    # translation and rotation projected out
-
-    # hessian = mode_results["hess_proj"]
-    hessian = mode_results["hessianmatrix"]
-    hessian = torch.Tensor(hessian).to(device)
-    hessian /= (EV_TO_AU * BOHR_RADIUS ** 2)
-
-    return hessian
 
 
 def eigvec_following(ev_atoms,
@@ -87,7 +86,6 @@ def eigvec_following(ev_atoms,
     F = torch.mv(eigvecs_t, grad).reshape(-1, 1)
 
     matrix_p = torch.Tensor([[eigenvalues[0], F[0]], [F[0], 0]])
-
     lambda_p = torch.symeig(matrix_p, eigenvectors=False)[0][1]
 
     matrix_n = torch.zeros(Ndim * len(old_xyz[0]),
@@ -111,8 +109,7 @@ def eigvec_following(ev_atoms,
                   ).reshape(-1, len(old_xyz[0]), Ndim)
 
     step_size = h.norm()
-
-    if(step_size <= maxstepsize):
+    if step_size <= maxstepsize:
         new_xyz = old_xyz + h
     else:
         new_xyz = old_xyz + (h / (step_size / maxstepsize))
