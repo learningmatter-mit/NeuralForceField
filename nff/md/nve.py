@@ -49,7 +49,7 @@ class Dynamics:
         if integrator == VelocityVerlet:
             dt = self.mdparam['thermostat_params']['timestep']
             self.integrator = integrator(self.atomsbatch,
-                                         timestep=dt)
+                                         timestep=dt * units.fs)
         else:
             self.integrator = integrator(self.atomsbatch,
                                          **self.mdparam['thermostat_params'],
