@@ -559,7 +559,7 @@ class NeuralFF(Calculator):
         }
 
         if 'forces' in self.properties:
-            self.results['forces'] = -energy_grad.reshape(-1, 3)
+            self.results['forces'] = -prediction['forces'].reshape(-1, 3)
         if requires_stress:
             stress = (prediction['stress_volume'].detach()
                       .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
