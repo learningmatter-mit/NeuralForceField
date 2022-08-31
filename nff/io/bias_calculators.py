@@ -46,7 +46,7 @@ class BiasBase(NeuralFF):
         model: the deural force field model
         cv_def: lsit of Collective Variable (CV) definitions
             [["cv_type", [atom_indices], np.array([minimum, maximum]), bin_width], [possible second dimension]]
-        confinement_k: force constant for confinement of system to the range of interest in CV space
+        equil_temp: float temperature of the simulation (important for extended system dynamics)
     """
     
     implemented_properties = ['energy', 'forces', 'stress',
@@ -127,6 +127,11 @@ class BiasBase(NeuralFF):
     
     def _up_extvel(self):
         pass
+    
+    def _check_boundaries(self, xi: np.ndarray):
+        in_bounds = ((xi <= self.ranges[:,1]).all() and 
+                       (xi >= self.ranges[:,0]).all())
+        return in_bounds
     
     def diff(self, 
              a: Union[np.ndarray, float], 
@@ -306,10 +311,13 @@ class eABF(BiasBase):
        class with neural force field
     
     Args:
-        model: the deural force field model
+        model: the neural force field model
         cv_def: lsit of Collective Variable (CV) definitions
             [["cv_type", [atom_indices], np.array([minimum, maximum]), bin_width], [possible second dimension]]
-        confinement_k: force constant for confinement of system to the range of interest in CV space
+        equil_temp: float temperature of the simulation (important for extended system dynamics)
+        dt: time step of the extended dynamics (has to be equal to that of the real system dyn!)
+        friction_per_ps: friction for the Lagevin dyn of extended system (has to be equal to that of the real system dyn!)
+        nfull: numer of samples need for full application of bias force
     """
 
     def __init__(self,
@@ -419,9 +427,8 @@ class eABF(BiasBase):
             
             
     def _update_bias(self,
-                    xi: np.ndarray):
-        if ((self.ext_coords <= self.ranges[:,1]).all() and 
-           (self.ext_coords >= self.ranges[:,0]).all()):
+                     xi: np.ndarray):
+        if self._check_boundaries(self.ext_coords):
 
             bink = self.get_index(self.ext_coords)
             self.ext_hist[bink] += 1
@@ -447,7 +454,7 @@ class eABF(BiasBase):
                     self.ext_k[i] * 
                     self.diff(xi[i], self.ext_coords[i], self.cv_defs[i]['type']),
                 )
-                self.ext_forces -= ramp * self.bias[i][bink] 
+                self.ext_forces[i] -= ramp * self.bias[i][bink] 
 
         """                        
         Not sure how this can be dumped/printed to work with the rest
@@ -467,8 +474,8 @@ class eABF(BiasBase):
                                  
     def _propagate_ext(self):
 
-        self.ext_rand_gauss = np.random.randn(len(self.ext_vel))
-
+        self.ext_rand_gauss = np.random.randn(len(self.ext_vel),1)
+        
         self.ext_vel += self.rand_push * self.ext_rand_gauss
         self.ext_vel += 0.5e0 * self.ext_dt * self.ext_forces / self.ext_masses
         self.ext_coords += self.prefac1 * self.ext_dt * self.ext_vel 
@@ -479,9 +486,166 @@ class eABF(BiasBase):
         self.ext_vel *= self.prefac2
         self.ext_vel += self.rand_push * self.ext_rand_gauss                         
         self.ext_vel += 0.5e0 * self.ext_dt * self.ext_forces / self.ext_masses
+
+        
+class WTMeABF(eABF):
+    """Well tempered MetaD extended-system Adaptive Biasing Force Calculator 
+       based on eABF class
     
- 
-    
+    Args:
+        model: the neural force field model
+        cv_def: lsit of Collective Variable (CV) definitions
+            [["cv_type", [atom_indices], np.array([minimum, maximum]), bin_width], [possible second dimension]]
+        equil_temp: float temperature of the simulation (important for extended system dynamics)
+        dt: time step of the extended dynamics (has to be equal to that of the real system dyn!)
+        friction_per_ps: friction for the Lagevin dyn of extended system (has to be equal to that of the real system dyn!)
+        nfull: numer of samples need for full application of bias force
+        hill_height: unscaled height of the MetaD Gaussian hills in eV
+        hill_drop_freq: #steps between depositing Gaussians
+        well_tempered_temp: ficticious temperature for the well-tempered scaling
+    """
+
+    def __init__(self,
+                 model,
+                 cv_defs: list[dict],
+                 dt: float,
+                 friction_per_ps: float,
+                 equil_temp: float = 300.0,
+                 nfull: int = 100,
+                 hill_height: float = 0.0,
+                 hill_drop_freq: int = 20,
+                 well_tempered_temp: float = 4000.0,
+                 device='cpu',
+                 en_key='energy',
+                 directed=DEFAULT_DIRECTED,
+                 **kwargs):
+
+        eABF.__init__(self,
+                      cv_defs=cv_defs,
+                      equil_temp=equil_temp,
+                      dt=dt,
+                      friction_per_ps=friction_per_ps,
+                      nfull=nfull,
+                      model=model,
+                      device=device,
+                      en_key=en_key,
+                      directed=directed,
+                      **kwargs)
+
+        self.hill_height        = hill_height
+        self.hill_drop_freq     = hill_drop_freq
+        self.hill_std           = np.zeros(shape=(self.num_cv))
+        self.hill_var           = np.zeros(shape=(self.num_cv))
+        self.well_tempered_temp = well_tempered_temp
+        self.call_count         = 0
+        self.center             = []
+                                 
+        for ii, cv in enumerate(self.cv_defs):
+            if 'hill_std' in cv.keys():
+                self.hill_std[ii] = cv['hill_std']
+                self.hill_var[ii] = cv['hill_std']*cv['hill_std']
+            else:
+                raise PropertyNotPresent('hill_std')
+                
+
+        # set up all grid for MetaD potential
+        self.metapot = np.zeros_like(self.histogram)
+        
+                          
+            
+    def _update_bias(self,
+                     xi: np.ndarray):
+        
+        mtd_forces = self.get_wtm_force(self.ext_coords)
+        self.call_count += 1
+        
+        if self._check_boundaries(self.ext_coords):
+
+            bink = self.get_index(self.ext_coords)
+            self.ext_hist[bink] += 1
+               
+            # linear ramp function
+            ramp = (
+                1.0
+                if self.ext_hist[bink] > self.nfull
+                else self.ext_hist[bink] / self.nfull
+            )
+
+            for i in range(self.num_cv):
+
+                # apply bias force on extended system
+                (
+                    self.bias[i][bink],
+                    self.m2_force[i][bink],
+                    self.var_force[i][bink],
+                ) = welford_var(
+                    self.ext_hist[bink],
+                    self.bias[i][bink],
+                    self.m2_force[i][bink],
+                    self.ext_k[i] * 
+                    self.diff(xi[i], self.ext_coords[i], self.cv_defs[i]['type']),
+                )
+                self.ext_forces[i] -= ramp * self.bias[i][bink] + mtd_forces[i]
+
+                
+    def get_wtm_force(self, xi: np.ndarray) -> np.ndarray:
+        """compute well-tempered metadynamics bias force from superposition of gaussian hills
+        Args:
+            xi: state of collective variable
+        Returns:
+            bias_force: bias force from metadynamics
+        """
+        
+        is_in_bounds = self._check_boundaries(xi)
+        
+        if (self.call_count % self.hill_drop_freq == 0) and is_in_bounds:
+            self.center.append(np.copy(xi.reshape(-1))) 
+            
+        bias_force, _ = self._analytic_wtm_force(xi)
+        
+        return bias_force   
+                             
+    def _analytic_wtm_force(self, xi: np.ndarray) -> Tuple[list, float]:
+        """compute analytic WTM bias force from sum of gaussians hills
+        Args:
+            xi: state of collective variable
+        Returns:
+            bias_force: bias force from metadynamics
+        """
+        local_pot = 0.0
+        bias_force = np.zeros(shape=(self.num_cv))
+
+        # this should never be the case!
+        if len(self.center) == 0:
+            print(" >>> Warning: no metadynamics hills stored")
+            return bias_force
+        
+        ind = np.ma.indices((len(self.center),))[0]
+        ind = np.ma.masked_array(ind)
+        
+        dist_to_centers = []
+        for ii in range(self.num_cv):
+            dist_to_centers.append(self.diff(xi[ii], np.asarray(self.center)[:,ii], self.cv_defs[ii]['type']))
+            
+        dist_to_centers = np.asarray(dist_to_centers)
+        
+        if self.num_cv > 1:
+            ind[(abs(dist_to_centers) > 3 * self.hill_std.reshape(-1,1)).all(axis=0)] = np.ma.masked
+        else:
+            ind[(abs(dist_to_centers) > 3 * self.hill_std.reshape(-1,1)).all(axis=0)] = np.ma.masked
+            
+        # can get slow in long run, so only iterate over significant elements
+        for i in np.nditer(ind.compressed(), flags=["zerosize_ok"]):
+            w = self.hill_height * np.exp(
+                -local_pot / (units.kB * self.well_tempered_temp)
+            )
+            
+            epot = w * np.exp(-np.power(dist_to_centers[:,i]/self.hill_std, 2).sum()  / 2.0)
+            local_pot += epot
+            bias_force -= epot * dist_to_centers[:,i] / self.hill_var
+
+        return bias_force.reshape(-1,1), local_pot
+          
 
                                  
 def welford_var(
