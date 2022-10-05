@@ -550,7 +550,7 @@ class WTMeABF(eABF):
 
         # set up all grid for MetaD potential
         self.metapot = np.zeros_like(self.histogram)
-        
+        self.metaforce = np.zeros_like(self.bias) 
                           
             
     def _update_bias(self,
@@ -600,11 +600,40 @@ class WTMeABF(eABF):
         
         if (self.call_count % self.hill_drop_freq == 0) and is_in_bounds:
             self.center.append(np.copy(xi.reshape(-1))) 
-            
-        bias_force, _ = self._analytic_wtm_force(xi)
+        
+        if is_in_bounds and self.num_cv == 1:
+            bias_force, _ = self._accumulate_wtm_force(xi)
+        else:
+            bias_force, _ = self._analytic_wtm_force(xi)
         
         return bias_force   
-                             
+
+    def _accumulate_wtm_force(self,
+                              xi: np.ndarray) -> Tuple[list, float]:
+        """compute numerical WTM bias force from a grid
+        Right now this works only for 1D CVs
+        Args:
+            xi: state of collective variable
+        Returns:
+            bias_force: bias force from metadynamics
+        """
+
+        bink = self.get_index(xi)
+        if self.call_count % self.hill_drop_freq == 0:
+
+            w = self.hill_height * np.exp(
+                -self.metapot[bink]
+                / (units.kB * self.well_tempered_temp)
+            )
+
+            dx = self.diff(self.grid[0], xi[0], self.cv_defs[0]['type']).reshape(-1,)
+            epot = w * np.exp(-(dx * dx) / (2.0 * self.hill_var[0]))
+            self.metapot += epot
+            self.metaforce[0] -= epot * dx / self.hill_var[0]
+
+        return self.metaforce[:, bink], self.metapot[bink]
+
+
     def _analytic_wtm_force(self, xi: np.ndarray) -> Tuple[list, float]:
         """compute analytic WTM bias force from sum of gaussians hills
         Args:
