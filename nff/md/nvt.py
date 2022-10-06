@@ -475,7 +475,7 @@ class Langevin(MolecularDynamics):
         # load random state for restart as
         #with open('random_state.pickle', 'rb') as f:
         #     state = pickle.load(f)
-
+        
 
 class BatchLangevin(MolecularDynamics):
     def __init__(self,
@@ -660,6 +660,170 @@ class BatchLangevin(MolecularDynamics):
             self.atoms.set_momenta(momenta)
 
 
+class VRescale(MolecularDynamics):
+    """
+        V-Rescale thermostat (default in GROMACS)
+        Extension of the Berendsen thermostat, ensures correct kinetic dristibution through random force
+        Giovanni Bussi, Davide Donadio, and Michele Parrinello "Canonical sampling through velocity rescaling", 
+        Journal of Chemical Physics 126 014101 (2007)
+    """
+    def __init__(self,
+                 atoms,
+                 timestep: float,
+                 temperature: float,
+                 relaxation_const: float = 100.0,
+                 maxwell_temp: float = None,
+                 random_seed = None,
+                 trajectory=None,
+                 logfile=None,
+                 loginterval=1,
+                 max_steps=None,
+                 nbr_update_period=20,
+                 append_trajectory=True,
+                 **kwargs):
+
+        # Random Number Generator
+        if random_seed == None:
+            random_seed = np.random.randint(2147483647)
+        if type(random_seed) is int:
+            np.random.seed(random_seed)
+            print("THE RANDOM NUMBER SEED WAS: %i" % (random_seed))
+        else:
+            try:
+                np.random.set_state(random_seed)
+            except:
+                raise ValueError(
+                    "\tThe provided seed was neither an int nor a state of numpy random"
+                )
+        
+        if os.path.isfile(str(trajectory)):
+            os.remove(trajectory)
+
+        MolecularDynamics.__init__(self,
+                                   atoms=atoms,
+                                   timestep=timestep * units.fs,
+                                   trajectory=trajectory,
+                                   logfile=logfile,
+                                   loginterval=loginterval,
+                                   append_trajectory=append_trajectory)
+
+        # Initialize simulation parameters
+        # convert units
+        self.dt = timestep * units.fs
+        self.T  = temperature 
+        
+        self.free_DoFs = 3.0*len(atoms) - (6. + len(atoms.constraints))
+        self.t_relax  = relaxation_const * units.fs
+        
+
+        self.num_steps = max_steps
+        self.n_steps   = 0
+        self.max_steps = 0
+
+        self.nbr_update_period = nbr_update_period
+
+        # initial Maxwell-Boltmann temperature for atoms
+        if maxwell_temp is None:
+            maxwell_temp = self.T
+
+        MaxwellBoltzmannDistribution(self.atoms, temperature_K=maxwell_temp)
+        Stationary(self.atoms)
+        ZeroRotation(self.atoms)
+        self.remove_constrained_vel(atoms)
+        
+        self.masses = self.atoms.get_masses().reshape(-1,1)
+
+    def remove_constrained_vel(self, atoms):
+        """
+        Set the initial velocity to zero for any constrained or fixed atoms
+        """
+
+        constraints = atoms.constraints
+        fixed_idx = []
+        for constraint in constraints:
+            has_keys = False
+            keys = ['idx', 'indices', 'index']
+            for key in keys:
+                if hasattr(constraint, key):
+                    val = np.array(getattr(constraint, key)
+                                   ).reshape(-1).tolist()
+                    fixed_idx += val
+                    has_keys = True
+            if not has_keys:
+                print(("WARNING: velocity not set to zero for any atoms in constraint "
+                       "%s; do not know how to find its fixed indices." % constraint))
+
+        if not fixed_idx:
+            return
+
+        fixed_idx = np.array(list(set(fixed_idx)))
+        vel = self.atoms.get_velocities()
+        vel[fixed_idx] = 0
+        self.atoms.set_velocities(vel)
+
+    def step(self):
+        
+        # Velocity Verlet
+        vel    = self.atoms.get_velocities()
+        vel += 0.5e0 * self.dt * self.atoms.get_forces() / self.masses
+        
+        self.atoms.set_velocities(vel)
+        self.remove_constrained_vel(self.atoms)
+        
+        vel  = self.atoms.get_velocities()
+        x    = self.atoms.get_positions() + self.dt * vel
+        self.atoms.set_positions(x)
+
+        vel += 0.5e0 * self.dt * self.atoms.get_forces() / self.masses
+        
+        # apply thermostat
+        ekin = 0.5 * np.vdot(vel*self.masses, vel)
+        temp = ekin * 2.0 / (units.kB * self.free_DoFs)
+        
+#         if temp < 1.0e-5:
+#             scale_fac = 1.0
+#         else:
+        factor  = self.T / temp
+        exp1    = np.exp( -self.dt / self.t_relax )
+        rate    = (1.0 - exp1 ) * factor / self.free_DoFs
+
+        noise = np.power(np.random.randn(int(self.free_DoFs)-1), 2).sum()
+
+        rand = np.random.randn(1)
+
+        scale_fac = np.sqrt( exp1 + rate * (noise + np.power(rand, 2))  + 2.0*rand*np.sqrt(exp1*rate) )
+        if (rand + np.sqrt(exp1/rate)) < 0.0: scale_fac *= -1.0
+                
+        vel *= scale_fac
+        
+        self.atoms.set_velocities(vel)
+        self.remove_constrained_vel(self.atoms)
+
+    def run(self, steps=None):
+
+        if steps is None:
+            steps = self.num_steps
+
+        epochs = math.ceil(steps / self.nbr_update_period)
+        # number of steps in between nbr updates
+        steps_per_epoch = int(steps / epochs)
+        # maximum number of steps starts at `steps_per_epoch`
+        # and increments after every nbr list update
+        self.atoms.update_nbr_list()
+
+        for _ in tqdm(range(epochs)):
+            self.max_steps += steps_per_epoch
+            Dynamics.run(self)
+            self.atoms.update_nbr_list()
+            Stationary(self.atoms)
+            ZeroRotation(self.atoms)
+        
+        with open('random_state.pickle', 'wb') as f:
+            pickle.dump(np.random.get_state(), f)
+            
+        # load random state for restart as
+        #with open('random_state.pickle', 'rb') as f:
+        #     state = pickle.load(f)
 
 
 class NoseHooverMetadynamics(NoseHoover):
