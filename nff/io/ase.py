@@ -6,6 +6,7 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 from ase.calculators.calculator import Calculator, all_changes
 from ase import units
+from ase.stress import voigt_6_to_full_3x3_stress, full_3x3_to_voigt_6_stress
 
 import nff.utils.constants as const
 from nff.nn.utils import torch_nbr_list
@@ -88,7 +89,7 @@ class AtomsBatch(Atoms):
         self.cutoff = cutoff
         self.cutoff_skin = cutoff_skin
         self.device = device
-        self.requires_large_offsets = requires_large_offsets
+        self.requires_large_offsets = requires_large_offsets        
         self.mol_nbrs, self.mol_idx = self.get_mol_nbrs()
 
     def get_mol_nbrs(self, r_cut=95):
@@ -652,6 +653,7 @@ class NeuralFF(Calculator):
         requires_stress = "stress" in self.properties
         if requires_stress:
             kwargs["requires_stress"] = True
+        kwargs["grimme_disp"] = False
         if getattr(self, "model_kwargs", None) is not None:
             kwargs.update(self.model_kwargs)
 
@@ -669,13 +671,21 @@ class NeuralFF(Calculator):
         self.results = {
             'energy': energy.reshape(-1)
         }
+        if 'e_disp' in prediction:
+            self.results['energy'] = self.results['energy'] + prediction['e_disp']
 
         if 'forces' in self.properties:
             self.results['forces'] = -energy_grad.reshape(-1, 3)
+            if 'forces_disp' in prediction:
+                self.results['forces'] = self.results['forces'] + prediction['forces_disp']
+
         if requires_stress:
             stress = (prediction['stress_volume'].detach()
                       .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
             self.results['stress'] = stress * (1 / atoms.get_volume())
+            if 'stress_disp' in prediction:
+                self.results['stress'] = self.results['stress'] + prediction['stress_disp']
+            self.results['stress'] = full_3x3_to_voigt_6_stress(self.results['stress'])
 
     @classmethod
     def from_file(
@@ -695,12 +705,14 @@ class NeuralFF(Calculator):
 class EnsembleNFF(Calculator):
     """Produces an ensemble of NFF calculators to predict the
        discrepancy between the properties"""
-    implemented_properties = ['energy', 'forces']
+    implemented_properties = ['energy', 'forces', 'stress']
 
     def __init__(
             self,
             models: list,
             device='cpu',
+            jobdir=None,
+            model_kwargs=None,
             **kwargs
     ):
         """Creates a NeuralFF calculator.nff/io/ase.py
@@ -718,12 +730,37 @@ class EnsembleNFF(Calculator):
         for m in self.models:
             m.eval()
         self.device = device
+        self.jobdir = jobdir
         self.to(device)
+        self.model_kwargs = model_kwargs
 
     def to(self, device):
         self.device = device
         for m in self.models:
             m.to(device)
+
+    def log_ensemble(self,
+                     jobdir,
+                     log_filename,
+                     props
+    ):
+        """For the purposes of logging the std on-the-fly, to help with
+        sampling after calling NFF on geometries with high uncertainty."""
+        
+        log_file = os.path.join(jobdir, log_filename)
+        if os.path.exists(log_file):           
+            log = np.load(log_file)
+        else:
+            log = None
+
+        if log is not None:
+            log = np.concatenate([log, props], axis=0)
+        else:
+            log = props
+
+        np.save(log_filename, log)
+        
+        return
 
     def calculate(
             self,
@@ -747,6 +784,14 @@ class EnsembleNFF(Calculator):
 
         Calculator.calculate(self, atoms, properties, system_changes)
 
+        kwargs = {}
+        requires_stress = "stress" in self.properties
+        if requires_stress:
+            kwargs["requires_stress"] = True
+        kwargs["grimme_disp"] = False
+        if getattr(self, "model_kwargs", None) is not None:
+            kwargs.update(self.model_kwargs)
+
         # run model
         # atomsbatch = AtomsBatch(atoms)
         # batch_to(atomsbatch.get_batch(), self.device)
@@ -759,8 +804,9 @@ class EnsembleNFF(Calculator):
 
         energies = []
         gradients = []
+        stresses = []
         for model in self.models:
-            prediction = model(batch)
+            prediction = model(batch, **kwargs)
 
             # change energy and force to numpy array
             energies.append(
@@ -777,18 +823,46 @@ class EnsembleNFF(Calculator):
                 .numpy()
                 * (1 / const.EV_TO_KCAL_MOL)
             )
+            stresses.append(
+                prediction['stress_volume']
+                .detach()
+                .cpu()
+                .numpy()
+                 * (1 / const.EV_TO_KCAL_MOL)
+                * (1 / atoms.get_volume())
+            )
 
         energies = np.stack(energies)
         gradients = np.stack(gradients)
+        stresses = np.stack(stresses)
 
         self.results = {
             'energy': energies.mean(0).reshape(-1),
             'energy_std': energies.std(0).reshape(-1),
         }
+        if 'e_disp' in prediction:
+            self.results['energy'] = self.results['energy'] + prediction['e_disp']
+        if self.jobdir is not None and system_changes:
+            energy_std = self.results['energy_std'][None]
+            self.log_ensemble(self.jobdir,'energy_nff_ensemble.npy',energies)
 
         if 'forces' in properties:
             self.results['forces'] = -gradients.mean(0).reshape(-1, 3)
             self.results['forces_std'] = gradients.std(0).reshape(-1, 3)
+            if 'forces_disp' in prediction:
+                self.results['forces'] = self.results['forces'] + prediction['forces_disp']
+            if self.jobdir is not None:
+                forces_std = self.results['forces_std'][None,:,:]
+                self.log_ensemble(self.jobdir,'forces_nff_ensemble.npy',-gradients)
+
+        if 'stress' in properties:
+            self.results['stress'] = stresses.mean(0)
+            self.results['stress_std'] = stresses.std(0)
+            if 'stress_disp' in prediction:
+                self.results['stress'] = self.results['stress'] + prediction['stress_disp']
+            if self.jobdir is not None:
+                stress_std = self.results['stress_std'][None,:,:]
+                self.log_ensemble(self.jobdir,'stress_nff_ensemble.npy',stresses)
 
         atoms.results = self.results.copy()
 
