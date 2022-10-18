@@ -6,9 +6,11 @@ from tqdm import tqdm
 from ase.md.md import MolecularDynamics
 from ase.optimize.optimize import Dynamics
 from ase.md.npt import NPT
+from ase.md.nptberendsen import Inhomogeneous_NPTBerendsen
 from ase import units
 from ase.md.velocitydistribution import (MaxwellBoltzmannDistribution,
                                          Stationary, ZeroRotation)
+
 
 
 class NoseHoovernpt(NPT):
@@ -58,10 +60,85 @@ class NoseHoovernpt(NPT):
         else:
             T_init = 2 * self.T
 
-        MaxwellBoltzmannDistribution(self.atoms, temperature*units.kB)
+        MaxwellBoltzmannDistribution(self.atoms, T_init)
         Stationary(self.atoms)
         ZeroRotation(self.atoms)
         self.initialize()
+
+
+    def run(self, steps=None):
+
+        if steps is None:
+            steps = self.num_steps
+
+        epochs = math.ceil(steps / self.nbr_update_period)
+        # number of steps in between nbr updates
+        steps_per_epoch = int(steps / epochs)
+        # maximum number of steps starts at `steps_per_epoch`
+        # and increments after every nbr list update
+        #self.max_steps = 0
+        self.atoms.update_nbr_list()
+
+        for _ in tqdm(range(epochs)):
+            self.max_steps += steps_per_epoch
+            Dynamics.run(self)
+            self.atoms.update_nbr_list()
+
+
+
+class Berendsennpt(Inhomogeneous_NPTBerendsen):
+    def __init__(self, atoms,
+                 timestep,
+                 temperature=None,
+                 taut=0.5e3*units.fs,
+                 taup=1e3*units.fs,
+                 pressure=1,
+                 compressibility=None,
+                 T_init=None,
+                 mask=(1,1,1),
+                 fixcm=True,
+                 trajectory=None,
+                 logfile=None,
+                 loginterval=1,
+                 nbr_update_period=20,
+                 append_trajectory=False,
+                 **kwargs):
+
+        if os.path.isfile(str(trajectory)):
+            os.remove(trajectory)
+
+        Inhomogeneous_NPTBerendsen.__init__(self, atoms=atoms,
+                                            timestep=timestep * units.fs,
+                                            temperature=temperature,
+                                            taut=taut,
+                                            taup=taup,
+                                            pressure=pressure,
+                                            compressibility=compressibility,
+                                            fixcm=fixcm,
+                                            mask=mask,
+                                            trajectory=trajectory,
+                                            logfile=logfile,
+                                            loginterval=loginterval)        
+
+        # Initialize simulation parameters
+        # convert units
+        self.nbr_update_period = nbr_update_period
+        self.max_steps=0
+
+        self.T = temperature * units.kB
+
+        # initial Maxwell-Boltmann temperature for atoms
+        if T_init is not None:
+            # convert units
+            T_init = T_init * units.kB
+        else:
+            T_init = 2 * self.T
+
+        MaxwellBoltzmannDistribution(self.atoms, T_init)
+        Stationary(self.atoms)
+        ZeroRotation(self.atoms)
+
+        print(self.atoms.get_temperature())
 
 
     def run(self, steps=None):

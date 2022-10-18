@@ -16,6 +16,9 @@ from nff.utils import constants as const
 from nff.nn.utils import lattice_points_in_supercell, clean_matrix
 from nff.utils.scatter import scatter_add
 
+from ase import Atoms
+from ase.calculators.dftd3 import DFTD3
+
 base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         'table_data')
 c6_ref_path = os.path.join(base_dir, 'c6ab.npy')
@@ -521,3 +524,17 @@ def get_dispersion(batch,
                                 mol_idx=mol_idx)        
 
     return e_disp, r_ij_T, nbrs_T
+
+
+def grimme_dispersion(batch, xyz, disp_type, functional):
+
+    d3 = DFTD3(xc='pbe', damping='bj', grad=True)
+    atoms = Atoms(cell=batch.get('cell',None).detach().cpu().numpy(),
+                  numbers=batch['nxyz'][:, 0].detach().cpu().numpy(),
+                  positions=xyz.detach().cpu().numpy(), pbc=True)
+    atoms.calc = d3
+    e_disp = atoms.get_potential_energy()
+    stress_disp = atoms.get_stress(voigt=False)
+    forces_disp = atoms.get_forces()
+
+    return e_disp, stress_disp, forces_disp

@@ -6,6 +6,7 @@ from ase.md.velocitydistribution import (MaxwellBoltzmannDistribution,
                                          Stationary,
                                          ZeroRotation)
 from ase.md.verlet import VelocityVerlet
+from nff.md.npt import NoseHoovernpt
 from ase.io import Trajectory
 
 from nff.md.utils import NeuralMDLogger, write_traj
@@ -30,10 +31,15 @@ class Dynamics:
     def __init__(self,
                  atomsbatch,
                  mdparam=DEFAULTNVEPARAMS,
+                 atomsbatch_to_log=None,
                  ):
 
         # initialize the atoms batch system
         self.atomsbatch = atomsbatch
+        if atomsbatch_to_log is None:
+            self.atomsbatch_to_log = atomsbatch
+        else:
+            self.atomsbatch_to_log = atomsbatch_to_log
         self.mdparam = mdparam
         
         # todo: structure optimization before starting
@@ -56,19 +62,19 @@ class Dynamics:
                                          **self.mdparam)
         
         self.steps = int(self.mdparam['steps'])
-        self.check_restart()
+        self.steps = self.check_restart()
 
         if self.steps == int(self.mdparam['steps']):
             # attach trajectory dump
             self.traj = Trajectory(
-                self.mdparam['traj_filename'], 'w', self.atomsbatch)
+                self.mdparam['traj_filename'], 'w', self.atomsbatch_to_log)
             self.integrator.attach(
                 self.traj.write, interval=self.mdparam['save_frequency'])
 
             # attach log file
             requires_stress = 'stress' in self.atomsbatch.calc.properties
             self.integrator.attach(NeuralMDLogger(self.integrator,
-                                                self.atomsbatch,
+                                                self.atomsbatch_to_log,
                                                 self.mdparam['thermo_filename'],
                                                 stress=requires_stress,
                                                 mode='a'),
@@ -91,24 +97,27 @@ class Dynamics:
 
             # attach trajectory dump
             self.traj = Trajectory(
-                self.mdparam['traj_filename'], 'a', self.atomsbatch)
+                self.mdparam['traj_filename'], 'a', self.atomsbatch_to_log)
             self.integrator.attach(
                 self.traj.write, interval=self.mdparam['save_frequency'])
 
             # attach log file
             requires_stress = 'stress' in self.atomsbatch.calc.properties
             self.integrator.attach(NeuralMDLogger(self.integrator,
-                                                self.atomsbatch,
+                                                self.atomsbatch_to_log,
                                                 self.mdparam['thermo_filename'],
                                                 stress=requires_stress,
                                                 mode='a'),
-                                interval=self.mdparam['save_frequency'])     
+                                interval=self.mdparam['save_frequency'])
+            if isinstance(self.integrator, NoseHoovernpt):
+                self.integrator.h = self.integrator._getbox()
+                self.integrator.h_past = self.integrator._getbox()
 
             return self.steps
 
         else:
 
-            return
+            return self.steps
 
 
     def setup_restart(self, restart_param):
