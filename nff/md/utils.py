@@ -89,15 +89,15 @@ class BiasedNeuralMDLogger(IOContext):
         else:
             raise ValueError("A dynamics object has to be attached to the logger!")
             
-        self.hdr += "%17s %17s %12s" % ("Epot_biased[eV]", 
+        self.hdr += "%17s %17s %12s " % ("Epot_biased[eV]", 
                                    "Epot_nobias[eV]",
                                   "AbsGradPot")
-        self.fmt += "%17.5f\t %17.5f\t %12.4f\t"
+        self.fmt += "%17.5f %17.5f %12.4f "
             
         for i in range(self.num_cv):
-            self.hdr += "%12s %12s %12s %12s %16s" % ("CV", "Lambda", "inv_m_cv",
+            self.hdr += "%12s %12s %12s %12s %16s " % ("CV", "Lambda", "inv_m_cv",
                                                 "AbsGradCV", "GradCV_GradPot")
-            self.fmt += "%12.4f\t %12.4f\t %12.4f\t %12.4f\t %16.4f\t"
+            self.fmt += "%12.4f %12.4f %12.4f %12.4f %16.4f "
             
         self.fmt += "\n"
         if header:

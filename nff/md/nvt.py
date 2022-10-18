@@ -252,80 +252,80 @@ class NoseHooverChain(NoseHoover):
         self.p_zeta  += 0.5 * dpzeta_dt * self.dt
         
         
-        
-class NoseHooverChainsBiased(NoseHooverChain):
-    def __init__(self,
-                 atoms,
-                 timestep,
-                 temperature,
-                 ttime,
-                 num_chains,
-                 maxwell_temp=None,
-                 trajectory=None,
-                 logfile=None,
-                 loginterval=1,
-                 max_steps=None,
-                 nbr_update_period=20,
-                 append_trajectory=True,
-                 **kwargs):
+# Does anyone use this?        
+# class NoseHooverChainsBiased(NoseHooverChain):
+#     def __init__(self,
+#                  atoms,
+#                  timestep,
+#                  temperature,
+#                  ttime,
+#                  num_chains,
+#                  maxwell_temp=None,
+#                  trajectory=None,
+#                  logfile=None,
+#                  loginterval=1,
+#                  max_steps=None,
+#                  nbr_update_period=20,
+#                  append_trajectory=True,
+#                  **kwargs):
 
-        NoseHooverChain.__init__(self,
-                            atoms=atoms,
-                            timestep=timestep,
-                            temperature=temperature,
-                            ttime=ttime,
-                            num_chains=num_chains,
-                            maxwell_temp=maxwell_temp,
-                            trajectory=trajectory,
-                            logfile=logfile,
-                            loginterval=loginterval,
-                            max_steps=max_steps,
-                            nbr_update_period=nbr_update_period,
-                            append_trajectory=append_trajectory,
-                            **kwargs)
+#         NoseHooverChain.__init__(self,
+#                             atoms=atoms,
+#                             timestep=timestep,
+#                             temperature=temperature,
+#                             ttime=ttime,
+#                             num_chains=num_chains,
+#                             maxwell_temp=maxwell_temp,
+#                             trajectory=trajectory,
+#                             logfile=logfile,
+#                             loginterval=loginterval,
+#                             max_steps=max_steps,
+#                             nbr_update_period=nbr_update_period,
+#                             append_trajectory=append_trajectory,
+#                             **kwargs)
 
 
-    def update_bias(self):
-        # update the bias function if necessary, e.g., add aconfiguration to MetaD
-        self.atoms.calc.update(self)
+#     def update_bias(self):
+#         # update the bias function if necessary, e.g., add aconfiguration to MetaD
+#         self.atoms.calc.update(self)
 
-    def irun(self):
-        # run the algorithm max_steps reached
-        while self.nsteps < self.max_steps:
+#     def irun(self):
+#         # run the algorithm max_steps reached
+#         while self.nsteps < self.max_steps:
 
-            # compute the next step
-            self.step()
-            self.nsteps += 1
-            self.update_bias()
+#             # compute the next step
+#             self.step()
+#             self.nsteps += 1
+#             self.update_bias()
             
-            # log the step
-            self.log()
-            self.call_observers()
+#             # log the step
+#             self.log()
+#             self.call_observers()
 
         
-    def run(self, steps=None):
-        if steps is None:
-            steps = self.num_steps
+#     def run(self, steps=None):
+#         if steps is None:
+#             steps = self.num_steps
 
-        epochs = math.ceil(steps / self.nbr_update_period)
-        # number of steps in between nbr updates
-        steps_per_epoch = int(steps / epochs)
-        # maximum number of steps starts at `steps_per_epoch`
-        # and increments after every nbr list update
+#         epochs = math.ceil(steps / self.nbr_update_period)
+#         # number of steps in between nbr updates
+#         steps_per_epoch = int(steps / epochs)
+#         # maximum number of steps starts at `steps_per_epoch`
+#         # and increments after every nbr list update
 
-        self.atoms.update_nbr_list()
+#         self.atoms.update_nbr_list()
         
-        # compute initial structure and log the first step
-        if self.nsteps == 0:
-            self.update_bias()
-            self.atoms.get_forces()
-            self.log()
-            self.call_observers()
+#         # compute initial structure and log the first step
+#         if self.nsteps == 0:
+#             self.update_bias()
+#             self.atoms.get_forces()
+#             self.log()
+#             self.call_observers()
             
-        for _ in tqdm(range(epochs)):
-            self.max_steps += steps_per_epoch
-            self.irun()
-            self.atoms.update_nbr_list()
+#         for _ in tqdm(range(epochs)):
+#             self.max_steps += steps_per_epoch
+#             self.irun()
+#             self.atoms.update_nbr_list()
 
             
 class Langevin(MolecularDynamics):
