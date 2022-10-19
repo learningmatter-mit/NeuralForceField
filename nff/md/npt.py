@@ -324,13 +324,13 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
                                    append_trajectory=append_trajectory)
 
         
-        d = 3.0 # this code is for 3D simulations
+        self.d = 3.0 # this code is for 3D simulations
         self.dt = timestep * units.fs
         self.T = temperature * units.kB
         self.Natom = len(atoms)
         
         # no overall rotation or translation
-        self.N_dof = d * self.Natom - 6
+        self.N_dof = self.d * self.Natom - 6
         self.targeEkin = 0.5 * self.N_dof * self.T
 
         self.num_steps = max_steps
@@ -356,11 +356,11 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
         #self.zeta = 0.0 
         self.p_zeta = np.array([0.0]*num_chains)
         # barostat mass and coord
-        self.W     = ((self.N_dof + d) * self.T) * (units.fs / freq_barostat_per_fs)**2
-        self.Wg    = ((self.N_dof + d) * self.T / d) * (units.fs / freq_barostat_per_fs)**2
+        self.W     = ((self.N_dof + self.d) * self.T) * (units.fs / freq_barostat_per_fs)**2
+        self.Wg    = ((self.N_dof + self.d) * self.T / self.d) * (units.fs / freq_barostat_per_fs)**2
         self.eps   = 0.0 
-        self.v_eps = 0.0
-        self.P_ext = external_pressure * units.GPa
+        self.veps = 0.0
+        self.P_ext = external_pressure_GPa * units.GPa
         self.vg    = np.zeros(shape=(3, 3))
 
     def step(self):
@@ -371,32 +371,32 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
         current_ke = self.atoms.get_kinetic_energy()
         vel     = self.atoms.get_velocities()
         V     = self.atoms.get_volume()
-        P_int = -self.atoms.get_stress(include_ideal_gas=True)
+        P_int = -self.atoms.get_stress(include_ideal_gas=True, voigt=False)
         # accelerations
-        F_eps_0 = (d * V * (np.sum(P_int[0:3])/3 - self.P_ext) 
-                   + (2 * d / self.Nf) * current_ke)
+        F_eps_0 = (self.d * V * (np.trace(P_int)/3 - self.P_ext)   # only considering hydrostatic
+                   + (2 * self.d / self.N_dof) * current_ke)
         F_g_0   = (V*(P_int - np.identity(3)*self.P_ext) - 
-                 (V / d)*np.trace(P_int - np.identity(3)*self.P_ext)*np.identity(3))
+                 (V / self.d)*np.trace(P_int - np.identity(3)*self.P_ext)*np.identity(3))
         
         dpzeta_dt = np.zeros(shape=self.p_zeta.shape)
         dpzeta_dt[0]   = (2 * (current_ke - self.targeEkin) 
                           + self.W*(self.veps**2) 
                           + self.Wg*np.trace(np.matmul(self.vg, self.vg.T))
-                          - (d**2) * self.T 
+                          - (self.d**2) * self.T 
                           - self.p_zeta[0]*self.p_zeta[1]/self.Q[1])
         dpzeta_dt[1:-1]= (np.power(self.p_zeta[:-2], 2) / self.Q[:-2] - self.T) - \
                           self.p_zeta[1:-1] * self.p_zeta[2:] / self.Q[2:]
         dpzeta_dt[-1]  = np.power(self.p_zeta[-2], 2) / self.Q[-2] - self.T
         
         delta_eps = (self.veps * self.dt 
-                     + 0.5 * (F_eps / self.W - self.veps * self.p_zeta[0]/self.Q[0]) * self.dt**2
+                     + 0.5 * (F_eps_0 / self.W - self.veps * self.p_zeta[0]/self.Q[0]) * self.dt**2
                     )
         self.eps += delta_eps
-        h_0 = self.atom.get_cell()
+        h_0 = self.atoms.get_cell()
         h_t = h_0 * (np.identity(3) + self.vg*self.dt
-                     + 0.5 * (F_g / self.Wg 
-                              + np.power(self.vg, 2) # not sure whether this is the square or matrix square! 
-                              - self.vg*self.pzeta[0]/self.Q[0])* self.dt**2
+                     + 0.5 * (F_g_0 / self.Wg 
+                              + np.matmul(self.vg.T, self.vg) # not sure whether this is the square or matrix square! 
+                              - self.vg*self.p_zeta[0]/self.Q[0])* self.dt**2
                      )
         
         # half step in time
@@ -405,17 +405,18 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
                        - 2.0 * np.matmul(self.vg, vel.T).T
                        - (2. + self.d / self.N_dof)*vel*self.veps)
         vel_half = np.exp(delta_eps) * np.matmul(
-                          np.matmul(h_t, np.inv(h_0)), (vel + 0.5 * self.dt * coupl_accel).T
+                          np.matmul(h_t, np.linalg.inv(h_0)), (vel + 0.5 * self.dt * coupl_accel).T
                    ).T
         
         # full step in positions
         x = np.exp(delta_eps) * np.matmul(
-                np.matmul(h_t, np.inv(h_0)), (x_0 + (vel + 0.5 * self.dt * coupl_accel) * self.dt).T
+                np.matmul(h_t, np.linalg.inv(h_0)), (x_0 + (vel + 0.5 * self.dt * coupl_accel) * self.dt).T
                 ).T
               
         self.atoms.set_velocities(vel_half)                             
         self.atoms.set_positions(x)    
         self.atoms.set_cell(h_t)
+        print(self.atoms.get_cell())
         
         # half time for all velocities
         self.veps    += 0.5 * self.dt * (F_eps_0/self.W 
@@ -423,7 +424,7 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
         self.vg      += 0.5 * self.dt * (F_g_0/self.Wg 
                                          + np.power(self.vg, 2)
                                          - self.vg*self.p_zeta[0]/self.Q[0])
-        self.vg       = np.matmul(self.vg, np.matmul(h_0, np.inv(h_t)))
+        self.vg       = np.matmul(self.vg, np.matmul(h_0, np.linalg.inv(h_t)))
         self.p_zeta  += 0.5 * self.dt * dpzeta_dt
                    
         # current state
@@ -431,18 +432,18 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
         accel_t      = forces_t / self.atoms.get_masses().reshape(-1, 1)
         current_ke_t = self.atoms.get_kinetic_energy()
         V_t          = self.atoms.get_volume()
-        P_int_t = -self.atoms.get_stress(include_ideal_gas=True)                                  
+        P_int_t = -self.atoms.get_stress(include_ideal_gas=True, voigt=False)
         # accelerations
-        F_eps_t = (d * V * (np.sum(P_int_t[0:3])/3 - self.P_ext) 
-                   + (2 * d / self.Nf) * current_ke_t)
+        F_eps_t = (self.d * V * (np.trace(P_int_t)/3 - self.P_ext) 
+                   + (2 * self.d / self.N_dof) * current_ke_t)
         F_g_t   = (V*(P_int_t - np.identity(3)*self.P_ext) - 
-                 (V / d)*np.trace(P_int_t - np.identity(3)*self.P_ext)*np.identity(3))
+                 (V / self.d)*np.trace(P_int_t - np.identity(3)*self.P_ext)*np.identity(3))
         
         dpzeta_dt = np.zeros(shape=self.p_zeta.shape)
         dpzeta_dt[0]   = (2 * (current_ke_t - self.targeEkin) 
                           + self.W*(self.veps**2) 
                           + self.Wg*np.trace(np.matmul(self.vg, self.vg.T))
-                          - (d**2) * self.T 
+                          - (self.d**2) * self.T 
                           - self.p_zeta[0]*self.p_zeta[1]/self.Q[1])
         dpzeta_dt[1:-1]= (np.power(self.p_zeta[:-2], 2) / self.Q[:-2] - self.T) - \
                           self.p_zeta[1:-1] * self.p_zeta[2:] / self.Q[2:]
@@ -453,9 +454,9 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
                          - vel*self.p_zeta[0]/self.Q[0]
                          - 2.0 * np.matmul(self.vg, vel.T).T
                          - (2. + self.d / self.N_dof)*vel*self.veps)
-        final_vel     = vel_half + 0.5 * self.dt * couple_accel
+        final_vel     = vel_half + 0.5 * self.dt * coupl_accel
         self.vg      += 0.5 * self.dt * (F_g_t/self.Wg 
-                                         + np.power(self.vg, 2)
+                                         + np.matmul(self.vg.T, self.vg)
                                          - self.vg*self.p_zeta[0]/self.Q[0])
         self.veps    += 0.5 * self.dt * (F_eps_t/self.W 
                                          - self.veps*self.p_zeta[0]/self.Q[0])
