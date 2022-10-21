@@ -303,7 +303,11 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
                  append_trajectory: bool = True,
                  **kwargs):
         
-        """Docstring
+        """This is the implementation of flecible NPT from
+           Glenn J. Martyna, Douglas J. Tobias and Michael L. Klein
+           Constant pressure molecular dynamics algorithms
+           J. Chem. Phys. 101, 4177 (1994); https://doi.org/10.1063/1.467468
+
            Args: 
                freq_thermostat_per_fs (float): frequency of the Nose Hoover coupling 
                                                default is 0.01 
@@ -324,14 +328,14 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
                                    append_trajectory=append_trajectory)
 
         
-        self.d = 3.0 # this code is for 3D simulations
+        self.d = 3 # this code is for 3D simulations
         self.dt = timestep * units.fs
         self.T = temperature * units.kB
         self.Natom = len(atoms)
         
         # no overall rotation or translation
         self.N_dof = self.d * self.Natom - 6
-        self.targeEkin = 0.5 * self.N_dof * self.T
+        self.targetEkin = 0.5 * self.N_dof * self.T
 
         self.num_steps = max_steps
         self.n_steps = 0
@@ -352,97 +356,122 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
         q_0 = self.N_dof * self.T * (units.fs / freq_thermostat_per_fs)**2
         q_n = self.T * (units.fs / freq_thermostat_per_fs)**2
         # thermostat mass and coord
-        self.Q = 2 * np.array([q_0, *([q_n] * (num_chains-1))])
+        self.Q = np.array([q_0, *([q_n] * (num_chains-1))])
         #self.zeta = 0.0 
         self.p_zeta = np.array([0.0]*num_chains)
         # barostat mass and coord
         self.W     = ((self.N_dof + self.d) * self.T) * (units.fs / freq_barostat_per_fs)**2
         self.Wg    = ((self.N_dof + self.d) * self.T / self.d) * (units.fs / freq_barostat_per_fs)**2
-        self.eps   = 0.0 
         self.veps = 0.0
         self.P_ext = external_pressure_GPa * units.GPa
         self.vg    = np.zeros(shape=(3, 3))
 
     def step(self):
         # current state
-        x_0     = self.atoms.get_positions(wrap=True)
-        forces  = self.atoms.get_forces()
-        accel   = forces / self.atoms.get_masses().reshape(-1, 1)
-        current_ke = self.atoms.get_kinetic_energy()
+        x       = self.atoms.get_positions(wrap=True)
+        h       = self.atoms.get_cell()
+        V       = self.atoms.get_volume()
+        h0      = h / np.power(V, 1/self.d)
+        F       = self.atoms.get_forces()
+        accel   = F / self.atoms.get_masses().reshape(-1, 1)
+        Ekin    = self.atoms.get_kinetic_energy()
         vel     = self.atoms.get_velocities()
-        V     = self.atoms.get_volume()
-        P_int = -self.atoms.get_stress(include_ideal_gas=True, voigt=False)
+        P_int   = -self.atoms.get_stress(include_ideal_gas=True, voigt=False)
+        #P_int  = 1./V * (np.matmul(self.atoms.get_velocities().T, self.atoms.get_momenta()) + np.matmul(F.T, x))
+        #print(P_int, P_test)
+        P_hyd   = np.trace(P_int)/self.d
+        
         # accelerations
-        F_eps_0 = (self.d * V * (np.trace(P_int)/3 - self.P_ext)   # only considering hydrostatic
-                   + (2 * self.d / self.N_dof) * current_ke)
-        F_g_0   = (V*(P_int - np.identity(3)*self.P_ext) - 
-                 (V / self.d)*np.trace(P_int - np.identity(3)*self.P_ext)*np.identity(3))
+        # (eq D5)
+        F_eps   = (self.d * V * (P_hyd - self.P_ext)   # only considering hydrostatic
+                   + (self.d / self.N_dof) * 2.*Ekin)
+        # (eq D8)
+        #F_g     = (V*(P_int - np.identity(self.d)*self.P_ext) - 
+        #        (V / self.d)*np.trace(P_int - np.identity(self.d)*self.P_ext)*np.identity(self.d))
+        F_g     =  V*(P_int - np.identity(self.d)*P_hyd)
         
         dpzeta_dt = np.zeros(shape=self.p_zeta.shape)
-        dpzeta_dt[0]   = (2 * (current_ke - self.targeEkin) 
+        dpzeta_dt[0]   = (2 * (Ekin - self.targetEkin) 
                           + self.W*(self.veps**2) 
-                          + self.Wg*np.trace(np.matmul(self.vg, self.vg.T))
+                          + self.Wg*np.power(self.vg, 2).sum()  #np.trace(np.matmul(self.vg, self.vg.T))
                           - (self.d**2) * self.T 
-                          - self.p_zeta[0]*self.p_zeta[1]/self.Q[1])
+                          - self.p_zeta[0]*self.p_zeta[1]/self.Q[1]) # coupling to chains
         dpzeta_dt[1:-1]= (np.power(self.p_zeta[:-2], 2) / self.Q[:-2] - self.T) - \
                           self.p_zeta[1:-1] * self.p_zeta[2:] / self.Q[2:]
         dpzeta_dt[-1]  = np.power(self.p_zeta[-2], 2) / self.Q[-2] - self.T
         
+        # (eq D7) e^delta_eps is the extension/contraction of cell
         delta_eps = (self.veps * self.dt 
-                     + 0.5 * (F_eps_0 / self.W - self.veps * self.p_zeta[0]/self.Q[0]) * self.dt**2
+                     + 0.5 * (F_eps / self.W - self.veps * self.p_zeta[0]/self.Q[0]) * self.dt**2
                     )
-        self.eps += delta_eps
-        h_0 = self.atoms.get_cell()
-        h_t = h_0 * (np.identity(3) + self.vg*self.dt
-                     + 0.5 * (F_g_0 / self.Wg 
-                              + np.matmul(self.vg.T, self.vg) # not sure whether this is the square or matrix square! 
+        scale_coords =  np.exp(delta_eps)
+        scale_volume =  np.exp(self.d * delta_eps)
+        h0_t      = np.matmul((np.identity(self.d) + self.vg*self.dt
+                     + 0.5 * (F_g / self.Wg 
+                              + np.power(self.vg, 2) #np.matmul(self.vg, self.vg) # not sure whether this is the square or matrix square! 
                               - self.vg*self.p_zeta[0]/self.Q[0])* self.dt**2
-                     )
+                     ), h0) # not sure if they matrix multiplication or not
+        # eqs (E1, E2)
+        while np.isclose(1.0, np.linalg.det(h0_t), atol=1e8) == False:
+            print(np.linalg.det(h0_t), h0_t)
+            h0_t += h0 * (np.linalg.det(h0_t) - 1.0) / (np.linalg.det(h0_t) * np.trace(np.matmul(
+                                                          np.linalg.inv(h0_t), h0)))
+
+        V_t       = V * scale_volume
+        h_t       = np.power(V_t, 1/self.d) * h0_t
         
-        # half step in time
+        # half time for all velocities
         coupl_accel = (accel 
                        - vel*self.p_zeta[0]/self.Q[0]
                        - 2.0 * np.matmul(self.vg, vel.T).T
                        - (2. + self.d / self.N_dof)*vel*self.veps)
-        vel_half = np.exp(delta_eps) * np.matmul(
-                          np.matmul(h_t, np.linalg.inv(h_0)), (vel + 0.5 * self.dt * coupl_accel).T
-                   ).T
+        vel_half    = scale_coords * np.matmul(
+                          np.matmul(h0_t, np.linalg.inv(h0)), (vel + 0.5 * self.dt * coupl_accel).T
+                          ).T
+        self.veps    += 0.5 * self.dt * (F_eps/self.W 
+                                         - self.veps*self.p_zeta[0]/self.Q[0])
+        self.vg      += 0.5 * self.dt * (F_g/self.Wg 
+                                         + np.power(self.vg, 2) #np.matmul(self.vg, self.vg)
+                                         - self.vg*self.p_zeta[0]/self.Q[0])
+        self.vg       = np.matmul(self.vg, np.matmul(h0, np.linalg.inv(h0_t)))
+        self.p_zeta  += 0.5 * self.dt * dpzeta_dt
         
         # full step in positions
-        x = np.exp(delta_eps) * np.matmul(
-                np.matmul(h_t, np.linalg.inv(h_0)), (x_0 + (vel + 0.5 * self.dt * coupl_accel) * self.dt).T
-                ).T
-              
-        self.atoms.set_velocities(vel_half)                             
-        self.atoms.set_positions(x)    
+        x_t         = scale_coords * np.matmul(
+                            np.matmul(h0_t, np.linalg.inv(h0)), 
+                            (x + (vel + 0.5 * self.dt * coupl_accel) * self.dt).T
+                        ).T
+       
         self.atoms.set_cell(h_t)
-        print(self.atoms.get_cell())
+        self.atoms.set_positions(x_t)    
+        self.atoms.set_velocities(vel_half)                             
+        Stationary(self.atoms)
+        ZeroRotation(self.atoms)
+        # eq (E3, E4), make vg trace less to avoid drifting cell
+        self.vg       = self.vg - (np.trace(self.vg)/self.d) * np.identity(self.d)
         
-        # half time for all velocities
-        self.veps    += 0.5 * self.dt * (F_eps_0/self.W 
-                                         - self.veps*self.p_zeta[0]/self.Q[0])
-        self.vg      += 0.5 * self.dt * (F_g_0/self.Wg 
-                                         + np.power(self.vg, 2)
-                                         - self.vg*self.p_zeta[0]/self.Q[0])
-        self.vg       = np.matmul(self.vg, np.matmul(h_0, np.linalg.inv(h_t)))
-        self.p_zeta  += 0.5 * self.dt * dpzeta_dt
+        #print("-------------")
+        print(f"Pint = {P_hyd}, Pext = {self.P_ext}")
                    
         # current state
-        forces_t     = self.atoms.get_forces()
-        accel_t      = forces_t / self.atoms.get_masses().reshape(-1, 1)
-        current_ke_t = self.atoms.get_kinetic_energy()
-        V_t          = self.atoms.get_volume()
-        P_int_t = -self.atoms.get_stress(include_ideal_gas=True, voigt=False)
+        vel          = self.atoms.get_velocities()
+        F            = self.atoms.get_forces()
+        accel        = F / self.atoms.get_masses().reshape(-1, 1)
+        Ekin         = self.atoms.get_kinetic_energy()
+        V            = self.atoms.get_volume()
+        P_int        = -self.atoms.get_stress(include_ideal_gas=True, voigt=False)
+        P_hyd        = np.trace(P_int)/self.d
         # accelerations
-        F_eps_t = (self.d * V * (np.trace(P_int_t)/3 - self.P_ext) 
-                   + (2 * self.d / self.N_dof) * current_ke_t)
-        F_g_t   = (V*(P_int_t - np.identity(3)*self.P_ext) - 
-                 (V / self.d)*np.trace(P_int_t - np.identity(3)*self.P_ext)*np.identity(3))
+        F_eps   = (self.d * V * (P_hyd - self.P_ext) 
+                   + (2 * self.d / self.N_dof) * Ekin)
+        #F_g_t   = (V*(P_int_t - np.identity(3)*self.P_ext) - 
+        #         (V / self.d)*np.trace(P_int_t - np.identity(3)*self.P_ext)*np.identity(3))
+        F_g     =  V*(P_int - np.identity(self.d)*P_hyd)
         
         dpzeta_dt = np.zeros(shape=self.p_zeta.shape)
-        dpzeta_dt[0]   = (2 * (current_ke_t - self.targeEkin) 
+        dpzeta_dt[0]   = (2 * (Ekin - self.targetEkin) 
                           + self.W*(self.veps**2) 
-                          + self.Wg*np.trace(np.matmul(self.vg, self.vg.T))
+                          + self.Wg*np.power(self.vg, 2).sum() #np.trace(np.matmul(self.vg, self.vg.T))
                           - (self.d**2) * self.T 
                           - self.p_zeta[0]*self.p_zeta[1]/self.Q[1])
         dpzeta_dt[1:-1]= (np.power(self.p_zeta[:-2], 2) / self.Q[:-2] - self.T) - \
@@ -454,16 +483,21 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
                          - vel*self.p_zeta[0]/self.Q[0]
                          - 2.0 * np.matmul(self.vg, vel.T).T
                          - (2. + self.d / self.N_dof)*vel*self.veps)
-        final_vel     = vel_half + 0.5 * self.dt * coupl_accel
-        self.vg      += 0.5 * self.dt * (F_g_t/self.Wg 
-                                         + np.matmul(self.vg.T, self.vg)
+        final_vel     = vel + 0.5 * self.dt * coupl_accel
+        self.vg      += 0.5 * self.dt * (F_g/self.Wg 
+                                         + np.power(self.vg, 2) #np.matmul(self.vg, self.vg)
                                          - self.vg*self.p_zeta[0]/self.Q[0])
-        self.veps    += 0.5 * self.dt * (F_eps_t/self.W 
+        self.veps    += 0.5 * self.dt * (F_eps/self.W 
                                          - self.veps*self.p_zeta[0]/self.Q[0])
         self.p_zeta  += 0.5 * self.dt * dpzeta_dt
-        
+       
         self.atoms.set_velocities(final_vel)
-    
+        Stationary(self.atoms)
+        ZeroRotation(self.atoms)
+        # eq (E3, E4), make vg trace less to avoid drifting cell
+        self.vg       = self.vg - (np.trace(self.vg)/self.d) * np.identity(self.d)
+        print(f"veps = {self.veps}, pzeta[0] = {self.p_zeta[0]}, pzeta[-1] = {self.p_zeta[-1]}")
+
     def run(self, steps=None):
 
         if steps is None:
