@@ -413,9 +413,13 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
                      ), h0) # not sure if they matrix multiplication or not
         # eqs (E1, E2)
         while np.isclose(1.0, np.linalg.det(h0_t), atol=1e8) == False:
-            print(np.linalg.det(h0_t), h0_t)
+            #print(np.linalg.det(h0_t), h0_t)
+            if np.linalg.det(h0_t) is np.nan:
+                print('Failed to enforce det=1 of unit lattice vectors!')
+                exit()
             h0_t += h0 * (np.linalg.det(h0_t) - 1.0) / (np.linalg.det(h0_t) * np.trace(np.matmul(
                                                           np.linalg.inv(h0_t), h0)))
+           
 
         V_t       = V * scale_volume
         h_t       = np.power(V_t, 1/self.d) * h0_t
@@ -451,16 +455,17 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
         self.vg       = self.vg - (np.trace(self.vg)/self.d) * np.identity(self.d)
         
         #print("-------------")
-        print(f"Pint = {P_hyd}, Pext = {self.P_ext}")
+        print(f"veps = {self.veps} , pzeta[0] = {self.p_zeta[0]} , pzeta[-1] = {self.p_zeta[-1]}")
                    
         # current state
-        vel          = self.atoms.get_velocities()
+        vel_half     = self.atoms.get_velocities()
         F            = self.atoms.get_forces()
         accel        = F / self.atoms.get_masses().reshape(-1, 1)
         Ekin         = self.atoms.get_kinetic_energy()
         V            = self.atoms.get_volume()
         P_int        = -self.atoms.get_stress(include_ideal_gas=True, voigt=False)
         P_hyd        = np.trace(P_int)/self.d
+        print(f"Pint = {P_hyd} , Pext = {self.P_ext}")
         # accelerations
         F_eps   = (self.d * V * (P_hyd - self.P_ext) 
                    + (2 * self.d / self.N_dof) * Ekin)
@@ -480,23 +485,70 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
 
         # another half step in all velocities
         coupl_accel   = (accel 
-                         - vel*self.p_zeta[0]/self.Q[0]
+                         - vel_half*self.p_zeta[0]/self.Q[0]
                          - 2.0 * np.matmul(self.vg, vel.T).T
                          - (2. + self.d / self.N_dof)*vel*self.veps)
-        final_vel     = vel + 0.5 * self.dt * coupl_accel
-        self.vg      += 0.5 * self.dt * (F_g/self.Wg 
+        vel_guess     = vel_half + 0.5 * self.dt * coupl_accel
+        vg_guess      = self.vg + 0.5 * self.dt * (F_g/self.Wg 
                                          + np.power(self.vg, 2) #np.matmul(self.vg, self.vg)
                                          - self.vg*self.p_zeta[0]/self.Q[0])
-        self.veps    += 0.5 * self.dt * (F_eps/self.W 
+        veps_guess    = self.veps + 0.5 * self.dt * (F_eps/self.W 
                                          - self.veps*self.p_zeta[0]/self.Q[0])
-        self.p_zeta  += 0.5 * self.dt * dpzeta_dt
-       
-        self.atoms.set_velocities(final_vel)
+        p_zeta_guess  = self.p_zeta + 0.5 * self.dt * dpzeta_dt
+        
+        max_rel_del   = 1.0
+        count = 0
+        while max_rel_del > 1e-2 and count < 100:
+            count += 1
+            if np.isnan(veps_guess).any() or np.isnan(vg_guess).any() or np.isnan(p_zeta_guess).any() or np.isnan(vel_guess).any():
+                print("Some velocities diverged!")
+                exit()
+            old_guess = copy.deepcopy(vel_guess)
+
+            vel_guess = vel_half + (accel 
+                                    - vel_half*p_zeta_guess[0]/self.Q[0]
+                                    - (2. + self.d / self.N_dof)*vel_half*veps_guess
+                                    - 2. * np.matmul(vg_guess, vel_half.T).T) * 0.5 * self.dt / (
+                                         1. + 0.5 * self.dt * (
+                                             p_zeta_guess[0]/self.Q[0] 
+                                             + (2. + self.d / self.N_dof)*veps_guess
+                                             + 2. * np.matmul(vg_guess, vel_half.T).T/vel_half ))
+            self.atoms.set_velocities(vel_guess)
+            Ekin         = self.atoms.get_kinetic_energy()
+            P_int        = -self.atoms.get_stress(include_ideal_gas=True, voigt=False)
+            P_hyd        = np.trace(P_int)/self.d
+            F_eps        = (self.d * V * (P_hyd - self.P_ext)+ (2 * self.d / self.N_dof) * Ekin)
+            F_g          =  V*(P_int - np.identity(self.d)*P_hyd)
+
+            veps_guess   = self.veps + 0.5 * self.dt * (F_eps/self.W
+                            - self.veps*p_zeta_guess[0]/self.Q[0]) / (
+                                    1.0 + 0.5 * self.dt * p_zeta_guess[0]/self.Q[0])
+            vg_guess     = self.vg + 0.5 * self.dt * (F_g/self.Wg
+                                         + self.vg*vg_guess 
+                                         - self.vg*p_zeta_guess[0]/self.Q[0]) / (
+                                    1.0 + 0.5 * self.dt * (p_zeta_guess[0]/self.Q[0] 
+                                         - vg_guess ))
+
+            dpzeta_dt[0] = (2 * (Ekin - self.targetEkin)
+                          + self.W*(veps_guess**2)
+                          + self.Wg*np.power(vg_guess, 2).sum() 
+                          - (self.d**2) * self.T
+                          - self.p_zeta[0]*self.p_zeta[1]/self.Q[1])
+
+            p_zeta_guess = self.p_zeta + 0.5 * self.dt * dpzeta_dt
+
+            max_rel_del  = np.abs((vel_guess - old_guess)/old_guess).max() 
+
+
+        self.veps   = veps_guess
+        self.vg     = vg_guess
+        self.p_zeta = p_zeta_guess
+
+        #self.atoms.set_velocities(vel_guess)
         Stationary(self.atoms)
         ZeroRotation(self.atoms)
         # eq (E3, E4), make vg trace less to avoid drifting cell
         self.vg       = self.vg - (np.trace(self.vg)/self.d) * np.identity(self.d)
-        print(f"veps = {self.veps}, pzeta[0] = {self.p_zeta[0]}, pzeta[-1] = {self.p_zeta[-1]}")
 
     def run(self, steps=None):
 
