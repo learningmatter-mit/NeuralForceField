@@ -404,6 +404,7 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
         delta_eps = (self.veps * self.dt 
                      + 0.5 * (F_eps / self.W - self.veps * self.p_zeta[0]/self.Q[0]) * self.dt**2
                     )
+        #print(f"Delta_eps {delta_eps}")
         scale_coords =  np.exp(delta_eps)
         scale_volume =  np.exp(self.d * delta_eps)
         h0_t      = np.matmul((np.identity(self.d) + self.vg*self.dt
@@ -412,7 +413,7 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
                               - self.vg*self.p_zeta[0]/self.Q[0])* self.dt**2
                      ), h0) # not sure if they matrix multiplication or not
         # eqs (E1, E2)
-        while np.isclose(1.0, np.linalg.det(h0_t), atol=1e8) == False:
+        while np.isclose(1.0, np.linalg.det(h0_t), atol=1e-6) == False:
             #print(np.linalg.det(h0_t), h0_t)
             if np.linalg.det(h0_t) is np.nan:
                 print('Failed to enforce det=1 of unit lattice vectors!')
@@ -455,7 +456,7 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
         self.vg       = self.vg - (np.trace(self.vg)/self.d) * np.identity(self.d)
         
         #print("-------------")
-        print(f"veps = {self.veps} , pzeta[0] = {self.p_zeta[0]} , pzeta[-1] = {self.p_zeta[-1]}")
+        #print(f"veps = {self.veps} , pzeta[0] = {self.p_zeta[0]} , pzeta[-1] = {self.p_zeta[-1]}")
                    
         # current state
         vel_half     = self.atoms.get_velocities()
@@ -465,7 +466,7 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
         V            = self.atoms.get_volume()
         P_int        = -self.atoms.get_stress(include_ideal_gas=True, voigt=False)
         P_hyd        = np.trace(P_int)/self.d
-        print(f"Pint = {P_hyd} , Pext = {self.P_ext}")
+        #print(f"Pint = {P_hyd} , Pext = {self.P_ext}")
         # accelerations
         F_eps   = (self.d * V * (P_hyd - self.P_ext) 
                    + (2 * self.d / self.N_dof) * Ekin)
@@ -498,7 +499,7 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
         
         max_rel_del   = 1.0
         count = 0
-        while max_rel_del > 1e-2 and count < 100:
+        while max_rel_del > 1e-5 and count < 100:
             count += 1
             if np.isnan(veps_guess).any() or np.isnan(vg_guess).any() or np.isnan(p_zeta_guess).any() or np.isnan(vel_guess).any():
                 print("Some velocities diverged!")
@@ -537,8 +538,9 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
 
             p_zeta_guess = self.p_zeta + 0.5 * self.dt * dpzeta_dt
 
-            max_rel_del  = np.abs((vel_guess - old_guess)/old_guess).max() 
-
+            #max_rel_del  = np.abs((vel_guess - old_guess)/old_guess).max() 
+            max_rel_del  = np.abs((vel_guess - old_guess)*np.sqrt(self.atoms.get_masses().reshape(-1, 1))).max() 
+            #print(max_rel_del)
 
         self.veps   = veps_guess
         self.vg     = vg_guess
