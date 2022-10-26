@@ -283,6 +283,230 @@ class NoseHooverNPT(MolecularDynamics):
             Dynamics.run(self)
             self.atoms.update_nbr_list()
 
+
+class NoseHooverChainsNPT_Hydrostatic(MolecularDynamics):
+    def __init__(self,
+                 atoms,
+                 timestep: float,
+                 temperature: float,
+                 external_pressure_GPa: float,
+                 freq_thermostat_per_fs: float = 0.01,
+                 freq_barostat_per_fs: float = 0.0005,
+                 num_chains: int = 10,
+                 maxwell_temp: float = None,
+                 trajectory: str = None,
+                 logfile: str = None,
+                 loginterval: int = 1,
+                 max_steps: int = None,
+                 nbr_update_period: int = 10,
+                 append_trajectory: bool = True,
+                 **kwargs):
+        
+        """This is the implementation of flecible NPT from
+           Glenn J. Martyna, Douglas J. Tobias and Michael L. Klein
+           Constant pressure molecular dynamics algorithms
+           J. Chem. Phys. 101, 4177 (1994); https://doi.org/10.1063/1.467468
+
+           Args: 
+               freq_thermostat_per_fs (float): frequency of the Nose Hoover coupling 
+                                               default is 0.01 
+               freq_barostat_per_fs (float): frequency of the barostat coupling 
+                                             default is 0.0005 
+               num_chains (int): number of coupled extended DoFs, 
+                                 it's known that two chains are not enough
+                                 default is 10
+        
+        """
+        
+        MolecularDynamics.__init__(self,
+                                   atoms=atoms,
+                                   timestep=timestep * units.fs,
+                                   trajectory=trajectory,
+                                   logfile=logfile,
+                                   loginterval=loginterval,
+                                   append_trajectory=append_trajectory)
+
+        
+        self.d = 3 # this code is for 3D simulations
+        self.dt = timestep * units.fs
+        self.T = temperature * units.kB
+        self.Natom = len(atoms)
+        
+        # no overall rotation or translation
+        self.N_dof = self.d * self.Natom - 6
+        self.targetEkin = 0.5 * self.N_dof * self.T
+
+        self.num_steps = max_steps
+        self.n_steps = 0
+        self.max_steps = 0
+
+        self.nbr_update_period = nbr_update_period
+
+        # initial Maxwell-Boltmann temperature for atoms
+        if maxwell_temp is None:
+            maxwell_temp = temperature
+
+        MaxwellBoltzmannDistribution(self.atoms, temperature_K=maxwell_temp)
+        Stationary(self.atoms)
+        ZeroRotation(self.atoms)
+        
+        #############
+        # Barostat and Thermostat parameters
+        q_0 = self.N_dof * self.T * (units.fs / freq_thermostat_per_fs)**2
+        q_n = self.T * (units.fs / freq_thermostat_per_fs)**2
+        # thermostat mass and coord
+        self.Q = np.array([q_0, *([q_n] * (num_chains-1))])
+        self.p_zeta = np.array([0.0]*num_chains)
+        # barostat mass and coord
+        self.W     = ((self.N_dof + self.d) * self.T) * (units.fs / freq_barostat_per_fs)**2
+        self.veps = 0.0
+        self.P_ext = external_pressure_GPa * units.GPa
+
+    def step(self):
+        # current state
+        x       = self.atoms.get_positions(wrap=True)
+        h       = self.atoms.get_cell()
+        V       = self.atoms.get_volume()
+        F       = self.atoms.get_forces()
+        accel   = F / self.atoms.get_masses().reshape(-1, 1)
+        Ekin    = self.atoms.get_kinetic_energy()
+        vel     = self.atoms.get_velocities()
+        P_int   = -self.atoms.get_stress(include_ideal_gas=True, voigt=False)
+        P_hyd   = np.trace(P_int)/self.d
+        
+        # accelerations
+        # (eq D5)
+        F_eps   = (self.d * V * (P_hyd - self.P_ext)   # only considering hydrostatic
+                   + (self.d / self.N_dof) * 2.*Ekin)
+        
+        dpzeta_dt = np.zeros(shape=self.p_zeta.shape)
+        dpzeta_dt[0]   = (2 * (Ekin - self.targetEkin) 
+                          + self.W*(self.veps**2) 
+                          - self.T 
+                          - self.p_zeta[0]*self.p_zeta[1]/self.Q[1]) # coupling to chains
+        dpzeta_dt[1:-1]= (np.power(self.p_zeta[:-2], 2) / self.Q[:-2] - self.T) - \
+                          self.p_zeta[1:-1] * self.p_zeta[2:] / self.Q[2:]
+        dpzeta_dt[-1]  = np.power(self.p_zeta[-2], 2) / self.Q[-2] - self.T
+        
+        # (eq D7) e^delta_eps is the extension/contraction of cell
+        delta_eps = (self.veps * self.dt 
+                     + 0.5 * (F_eps / self.W - self.veps * self.p_zeta[0]/self.Q[0]) * self.dt**2
+                    )
+        scale_coords =  np.exp(delta_eps)
+        scale_volume =  np.exp(self.d * delta_eps)
+
+        V_t       = V * scale_volume
+        h_t       = h * scale_coords
+        
+        # half time for all velocities
+        coupl_accel = (accel 
+                       - vel*self.p_zeta[0]/self.Q[0]
+                       - (2. + self.d / self.N_dof)*vel*self.veps)
+        vel_half    = scale_coords * (vel + 0.5 * self.dt * coupl_accel)
+        self.veps    += 0.5 * self.dt * (F_eps/self.W 
+                                         - self.veps*self.p_zeta[0]/self.Q[0])
+
+        self.p_zeta  += 0.5 * self.dt * dpzeta_dt
+        
+        # full step in positions
+        x_t         = scale_coords * (x + (vel + 0.5 * self.dt * coupl_accel) * self.dt)
+       
+        self.atoms.set_cell(h_t)
+        self.atoms.set_positions(x_t)    
+        self.atoms.set_velocities(vel_half)                             
+        Stationary(self.atoms)
+        ZeroRotation(self.atoms)
+                   
+        # current state
+        vel_half     = self.atoms.get_velocities()
+        F            = self.atoms.get_forces()
+        accel        = F / self.atoms.get_masses().reshape(-1, 1)
+        Ekin         = self.atoms.get_kinetic_energy()
+        V            = self.atoms.get_volume()
+        P_int        = -self.atoms.get_stress(include_ideal_gas=True, voigt=False)
+        P_hyd        = np.trace(P_int)/self.d
+        # accelerations
+        F_eps   = (self.d * V * (P_hyd - self.P_ext) 
+                   + (2 * self.d / self.N_dof) * Ekin)
+        
+        dpzeta_dt = np.zeros(shape=self.p_zeta.shape)
+        dpzeta_dt[0]   = (2 * (Ekin - self.targetEkin) 
+                          + self.W*(self.veps**2) 
+                          - self.T 
+                          - self.p_zeta[0]*self.p_zeta[1]/self.Q[1])
+        dpzeta_dt[1:-1]= (np.power(self.p_zeta[:-2], 2) / self.Q[:-2] - self.T) - \
+                          self.p_zeta[1:-1] * self.p_zeta[2:] / self.Q[2:]
+        dpzeta_dt[-1]  = np.power(self.p_zeta[-2], 2) / self.Q[-2] - self.T
+
+        # another half step in all velocities
+        coupl_accel   = (accel 
+                         - vel_half*self.p_zeta[0]/self.Q[0]
+                         - (2. + self.d / self.N_dof)*vel*self.veps)
+        vel_guess     = vel_half + 0.5 * self.dt * coupl_accel
+        veps_guess    = self.veps + 0.5 * self.dt * (F_eps/self.W 
+                                         - self.veps*self.p_zeta[0]/self.Q[0])
+        p_zeta_guess  = self.p_zeta + 0.5 * self.dt * dpzeta_dt
+        
+        max_rel_del   = 1.0
+        count = 0
+        while max_rel_del > 1e-5 and count < 100:
+            count += 1
+            if np.isnan(veps_guess).any() or np.isnan(p_zeta_guess).any() or np.isnan(vel_guess).any():
+                print("Some velocities diverged!")
+                exit()
+            old_guess = copy.deepcopy(vel_guess)
+
+            vel_guess = vel_half + (accel 
+                                    - vel_half*p_zeta_guess[0]/self.Q[0]
+                                    - (2. + self.d / self.N_dof)*vel_half*veps_guess) * 0.5 * self.dt / (
+                                         1. + 0.5 * self.dt * (
+                                             p_zeta_guess[0]/self.Q[0] 
+                                             + (2. + self.d / self.N_dof)*veps_guess))
+            self.atoms.set_velocities(vel_guess)
+            Ekin         = self.atoms.get_kinetic_energy()
+            P_int        = -self.atoms.get_stress(include_ideal_gas=True, voigt=False)
+            P_hyd        = np.trace(P_int)/self.d
+            F_eps        = (self.d * V * (P_hyd - self.P_ext)+ (2 * self.d / self.N_dof) * Ekin)
+
+            veps_guess   = self.veps + 0.5 * self.dt * (F_eps/self.W
+                            - self.veps*p_zeta_guess[0]/self.Q[0]) / (
+                                    1.0 + 0.5 * self.dt * p_zeta_guess[0]/self.Q[0])
+
+            dpzeta_dt[0] = (2 * (Ekin - self.targetEkin)
+                          + self.W*(veps_guess**2)
+                          - self.T
+                          - self.p_zeta[0]*self.p_zeta[1]/self.Q[1])
+
+            p_zeta_guess = self.p_zeta + 0.5 * self.dt * dpzeta_dt
+
+            #max_rel_del  = np.abs((vel_guess - old_guess)/old_guess).max() 
+            max_rel_del  = np.abs((vel_guess - old_guess)*np.sqrt(self.atoms.get_masses().reshape(-1, 1))).max() 
+            #print(max_rel_del)
+
+        self.veps   = veps_guess
+        self.p_zeta = p_zeta_guess
+
+        #self.atoms.set_velocities(vel_guess)
+        Stationary(self.atoms)
+        ZeroRotation(self.atoms)
+
+    def run(self, steps=None):
+
+        if steps is None:
+            steps = self.num_steps
+
+        epochs = math.ceil(steps / self.nbr_update_period)
+        # number of steps in between nbr updates
+        steps_per_epoch = int(steps / epochs)
+        # maximum number of steps starts at `steps_per_epoch`
+        # and increments after every nbr list update
+        #self.max_steps = 0
+        self.atoms.update_nbr_list()
+
+        for _ in tqdm(range(epochs)):
+            self.max_steps += steps_per_epoch
+            Dynamics.run(self)
+            self.atoms.update_nbr_list()            
         
 
 class NoseHooverChainsNPT_Flexible(MolecularDynamics):
@@ -292,14 +516,14 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
                  temperature: float,
                  external_pressure_GPa: float,
                  freq_thermostat_per_fs: float = 0.01,
-                 freq_barostat_per_fs: float = 0.1,
+                 freq_barostat_per_fs: float = 0.0005,
                  num_chains: int = 10,
                  maxwell_temp: float = None,
                  trajectory: str = None,
                  logfile: str = None,
                  loginterval: int = 1,
                  max_steps: int = None,
-                 nbr_update_period: int = 20,
+                 nbr_update_period: int = 10,
                  append_trajectory: bool = True,
                  **kwargs):
         
