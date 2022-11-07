@@ -353,9 +353,10 @@ class ColVar(torch.nn.Module):
         mol_coors  = self.xyz[self.mol_inds]
         ring_coors = self.xyz[self.ring_inds]
         
-        mol_cm     = mol_coors.mean(axis=0) # mol center
+#         mol_cm     = mol_coors.mean(axis=0) # mol center
+        mol_cm     = self._get_com(self.mol_inds)
         ring_cm    = ring_coors.mean(axis=0) # ring center
-        # ring atoms to center
+        # ring atoms to center, center of geometry!
         ring_coors = ring_coors - ring_cm
 
         r1 = torch.zeros(3, device=ring_coors.device)

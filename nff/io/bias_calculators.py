@@ -117,7 +117,7 @@ class BiasBase(NeuralFF):
                 self.cv_defs[ii]['type'] = 'not_angle'
             else:
                 self.cv_defs[ii]['type'] = cv['type']
-                
+
         
     def _update_bias(self, xi: np.ndarray):
         pass
@@ -191,13 +191,13 @@ class BiasBase(NeuralFF):
             bias_ener += 0.5 * self.ext_k[i] * dxi**2
 
             # harmonic walls for confinement to range of interest
-            if self.ext_coords[i] > (self.ranges[i][1] - self.margins[i]):
-                r = self.diff(self.ranges[i][1] - self.margins[i], self.ext_coords[i], self.cv_defs[i]['type'])
-                self.ext_forces[i] -= self.conf_k[i] * r
+            if self.ext_coords[i] > (self.ranges[i][1] + self.margins[i]):
+                r = self.diff(self.ranges[i][1] + self.margins[i], self.ext_coords[i], self.cv_defs[i]['type'])
+                self.ext_forces[i] += self.conf_k[i] * r
 
-            elif self.ext_coords[i] < (self.ranges[i][0] + self.margins[i]):
-                r = self.diff(self.ranges[i][0] + self.margins[i], self.ext_coords[i], self.cv_defs[i]['type'])
-                self.ext_forces[i] -= self.conf_k[i] * r
+            elif self.ext_coords[i] < (self.ranges[i][0] - self.margins[i]):
+                r = self.diff(self.ranges[i][0] - self.margins[i], self.ext_coords[i], self.cv_defs[i]['type'])
+                self.ext_forces[i] += self.conf_k[i] * r
          
         self._update_bias(xi)
         self._up_extvel()                
