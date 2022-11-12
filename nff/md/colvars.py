@@ -24,6 +24,7 @@ class ColVar(torch.nn.Module):
                        'projecting_centroidvec', 
                        'projecting_veconplane',
                        'projecting_veconplanenormal',
+                       'projection_channelnormal',
                        'Sp', 'Sd',
                        'adjecencey_matrix'
                       ]
@@ -89,6 +90,11 @@ class ColVar(torch.nn.Module):
         elif self.info_dict['name'] == 'projecting_veconplanenormal':
             self.mol_inds   = torch.LongTensor(self.info_dict['mol_inds']) 
             self.ring_inds = torch.LongTensor(self.info_dict['ring_inds'])
+            
+        elif self.info_dict['name'] == 'projection_channelnormal':
+            self.mol_inds = torch.LongTensor(self.info_dict['mol_inds']) 
+            self.g1_inds  = torch.LongTensor(self.info_dict['g1_inds'])
+            self.g2_inds  = torch.LongTensor(self.info_dict['g2_inds'])
             
             
         
@@ -353,8 +359,8 @@ class ColVar(torch.nn.Module):
         mol_coors  = self.xyz[self.mol_inds]
         ring_coors = self.xyz[self.ring_inds]
         
-#         mol_cm     = mol_coors.mean(axis=0) # mol center
-        mol_cm     = self._get_com(self.mol_inds)
+        mol_cm     = mol_coors.mean(axis=0) # mol center
+#         mol_cm     = self._get_com(self.mol_inds)
         ring_cm    = ring_coors.mean(axis=0) # ring center
         # ring atoms to center, center of geometry!
         ring_coors = ring_coors - ring_cm
@@ -379,6 +385,36 @@ class ColVar(torch.nn.Module):
         proj2 = torch.dot(pos_vec, r2)
         cv = proj1 + proj2
         return torch.abs(cv)
+    
+    def projection_channelnormal(self):
+        """
+        Projection of a position vector onto the vector
+        along a channel
+        Atomic indices are used to determine the coordiantes of the vectors.
+        Params
+        ------
+        mol_inds: list of int
+           List of indices of the mol/fragment tracked by the CV
+        g1_inds: list of int
+           List of atomic indices denoting "start" of channel
+        g2_inds: list of int
+           List of atomic indices denoting "end" of channel
+        """
+        
+        mol_coors  = self.xyz[self.mol_inds]
+        g1_coors   = self.xyz[self.g1_inds]
+        g2_coors   = self.xyz[self.g2_inds]
+        
+        mol_cm     = self._get_com(self.mol_inds)
+        center_g1  = g1_coors.mean(axis=0) 
+        center_g2  = g2_coors.mean(axis=0)
+        center     = (center_g1 + center_g2)/2
+
+        normal_vec = (center_g2 - center_g1)/torch.linalg.norm(center_g2 - center_g1)
+        rel_pos    = mol_cm - center
+
+        cv = torch.dot(rel_pos, normal_vec)
+        return cv
         
     def adjacency_matrix_cv(self):
         """Docstring
@@ -487,8 +523,11 @@ class ColVar(torch.nn.Module):
             cv = self.projecting_veconplane()      
             
         elif self.info_dict['name'] == 'projecting_veconplanenormal':
-            cv = self.projecting_veconplanenormal()     
-            
+            cv = self.projecting_veconplanenormal()  
+        
+        elif self.info_dict['name'] == 'projection_channelnormal':
+            cv = self.projection_channelnormal() 
+        
         elif self.info_dict['name'] == 'Sp':
             cv = self.deproton1()
             
