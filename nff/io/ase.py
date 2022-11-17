@@ -89,7 +89,7 @@ class AtomsBatch(Atoms):
         self.cutoff = cutoff
         self.cutoff_skin = cutoff_skin
         self.device = device
-        self.requires_large_offsets = requires_large_offsets        
+        self.requires_large_offsets = requires_large_offsets
         self.mol_nbrs, self.mol_idx = self.get_mol_nbrs()
 
     def get_mol_nbrs(self, r_cut=95):
@@ -121,7 +121,7 @@ class AtomsBatch(Atoms):
 
                 # cutoff specified by r_cut in Bohr (a.u.)
                 # estimate getting close to the cutoff with supercell expansion
-                a_mul = int(np.ceil( 
+                a_mul = int(np.ceil(
                             (r_cut*const.BOHR_RADIUS) / np.linalg.norm(cell[0])
                                     ))
                 b_mul = int(np.ceil(
@@ -154,11 +154,11 @@ class AtomsBatch(Atoms):
                 _N = len(_lattice_points)
                 # perform lattice translations on positions
                 lattice_points_T = (torch.tile(
-                                        torch.from_numpy(_lattice_points), 
-                                    ( (len(_xyz),) + 
+                                        torch.from_numpy(_lattice_points),
+                                    ( (len(_xyz),) +
                                         (1,)*(len(_lattice_points.shape)-1) )
                                             )/ const.BOHR_RADIUS).to(self.device)
-                _xyz_T = ((torch.repeat_interleave(_xyz, _N, dim=0) 
+                _xyz_T = ((torch.repeat_interleave(_xyz, _N, dim=0)
                                         / const.BOHR_RADIUS).to(self.device))
                 _xyz_T = _xyz_T + lattice_points_T
 
@@ -170,7 +170,7 @@ class AtomsBatch(Atoms):
                                                         dim=1).to(self.device)
                 _lattice_points = (torch.tile(
                             torch.from_numpy(_lattice_points).to(self.device),
-                                ( (len(_nbrs),) + 
+                                ( (len(_nbrs),) +
                                   (1,)*(len(_lattice_points.shape)-1) )
                                             ))
 
@@ -203,10 +203,10 @@ class AtomsBatch(Atoms):
                 num_atoms.append(len(_xyz))
 
             nbrs_info = (nbrs_T, nbrs, z, N, lattice_points, mask_applied)
-                
+
             mol_idx = torch.cat([torch.zeros(num) + i
                                 for i, num in enumerate(num_atoms)]
-                                ).long()    
+                                ).long()
 
             return nbrs_info, mol_idx
 
@@ -339,7 +339,7 @@ class AtomsBatch(Atoms):
 
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
             these_offsets = sparsify_array(offsets.dot(self.get_cell()))
-            
+
             # non-periodic
             if isinstance(these_offsets, int):
                 these_offsets = torch.Tensor(offsets)
@@ -712,6 +712,7 @@ class EnsembleNFF(Calculator):
             models: list,
             device='cpu',
             jobdir=None,
+            properties=['energy', 'forces'],
             model_kwargs=None,
             **kwargs
     ):
@@ -732,6 +733,7 @@ class EnsembleNFF(Calculator):
         self.device = device
         self.jobdir = jobdir
         self.to(device)
+        self.properties = properties
         self.model_kwargs = model_kwargs
 
     def to(self, device):
@@ -746,9 +748,9 @@ class EnsembleNFF(Calculator):
     ):
         """For the purposes of logging the std on-the-fly, to help with
         sampling after calling NFF on geometries with high uncertainty."""
-        
+
         log_file = os.path.join(jobdir, log_filename)
-        if os.path.exists(log_file):           
+        if os.path.exists(log_file):
             log = np.load(log_file)
         else:
             log = None
@@ -759,7 +761,7 @@ class EnsembleNFF(Calculator):
             log = props
 
         np.save(log_filename, log)
-        
+
         return
 
     def calculate(
@@ -781,6 +783,9 @@ class EnsembleNFF(Calculator):
         for model in self.models:
             if not any([isinstance(model, i) for i in UNDIRECTED]):
                 check_directed(model, atoms)
+
+        if getattr(self, "properties", None) is None:
+            self.properties = properties
 
         Calculator.calculate(self, atoms, properties, system_changes)
 
@@ -1264,21 +1269,21 @@ class ProjVectorCentroid:
     Collective variable class. Projection of a position vector onto a reference vector
     Atomic indices are used to determine the coordiantes of the vectors.
     Params
-    ------ 
+    ------
     vector: list of int
        List of the indices of atoms that define the vector on which the position vector is projected
     indices: list if int
        List of indices of the mol/fragment
     reference: list of int
        List of atomic indices that are used as reference for the position vector
-       
+
     note: the position vector is calculated in the method get_value
     """
     def __init__(self, vector=[], indices=[], reference=[], device='cpu'):
         self.vector_inds = vector
         self.mol_inds = torch.LongTensor(indices)
         self.reference_inds = reference
-    
+
     def get_value(self, positions):
         vector_pos = positions[self.vector_inds]
         vector = vector_pos[1] - vector_pos[0]
@@ -1287,10 +1292,10 @@ class ProjVectorCentroid:
         reference_pos = positions[self.reference_inds]
         mol_centroid = mol_pos.mean(axis=0) # mol center
         reference_centroid = reference_pos.mean(axis=0) # centroid of the whole structure
-        
+
         # position vector with respect to the structure centroid
-        rel_mol_pos = mol_centroid - reference_centroid 
-        
+        rel_mol_pos = mol_centroid - reference_centroid
+
         # projection
         cv = torch.dot(rel_mol_pos, vector)
         return cv
@@ -1307,7 +1312,7 @@ class ProjVectorPlane:
        List of indices of the mol/fragment tracked by the CV
     ring_inds: list of int
        List of atomic indices of the ring for which the average plane is calculated.
-       
+
     note: the position vector is calculated in the method get_value
     """
     def __init__(self, mol_inds = [], ring_inds = []):
@@ -1315,7 +1320,7 @@ class ProjVectorPlane:
         self.ring_inds = torch.LongTensor(ring_inds) # list of indices
         # both self.mol_coors and self.ring_coors torch tensors with atomic coordinates
         # initiallized as list but will be set to torch tensors with set_positions
-        self.mol_coors = [] 
+        self.mol_coors = []
         self.ring_coors = []
 
     def set_positions(self, positions):
@@ -1370,7 +1375,7 @@ class ProjOrthoVectorsPlane:
        List of indices of the mol/fragment tracked by the CV
     ring_inds: list of int
        List of atomic indices of the ring for which the average plane is calculated.
-       
+
     note: the position vector is calculated in the method get_value
     """
     def __init__(self, mol_inds = [], ring_inds = []):
@@ -1378,7 +1383,7 @@ class ProjOrthoVectorsPlane:
         self.ring_inds = torch.LongTensor(ring_inds) # list of indices
         # both self.mol_coors and self.ring_coors torch tensors with atomic coordinates
         # initiallized as list but will be set to torch tensors with set_positions
-        self.mol_coors = [] 
+        self.mol_coors = []
         self.ring_coors = []
 
     def set_positions(self, positions):
@@ -1441,7 +1446,7 @@ class HarmonicRestraint:
         self.eq_values = [] # list equilibrium values for every CV
         self.steps = []  # list of lists with the steps of the MD simulation
         self.setup_contraint(cvdic, max_steps, device)
-    
+
     def setup_contraint(self, cvdic, max_steps, device):
         """ Initializes the collectiva variables objects
         Args:
@@ -1475,18 +1480,18 @@ class HarmonicRestraint:
             self.eq_values.append(eq_values)
 
     def create_time_dependec_arrays(self, restraint_list, max_steps):
-        """creates lists of steps, kappas and equilibrium values that will be used along 
+        """creates lists of steps, kappas and equilibrium values that will be used along
         the simulation to determine the value of kappa and equilibrium CV at each step
 
         Args:
-            restraint_list (list of dicts): contains dictionaries with the desired values of 
+            restraint_list (list of dicts): contains dictionaries with the desired values of
                                             kappa and CV at arbitrary step in the simulation
             max_steps (int): maximum number of steps of the simulation
 
         Returns:
             list: all steps e.g [1,2,3 .. max_steps]
-            list: all kappas for every step, e.g [0.5, 0.5, 0.51, .. ] same size of steps 
-            list: all equilibrium values for every step, e.g. [1,1,1,3,3,3, ...], same size of steps 
+            list: all kappas for every step, e.g [0.5, 0.5, 0.51, .. ] same size of steps
+            list: all equilibrium values for every step, e.g. [1,1,1,3,3,3, ...], same size of steps
         """
         steps = []
         kappas = []
@@ -1496,7 +1501,7 @@ class HarmonicRestraint:
         steps += templist
         kappas += [0 for _ in templist]
         eq_vals += [0 for _ in templist]
-        
+
         for n, rd in enumerate(restraint_list[1:]):
             # rd and n are out of phase by 1, when n = 0, rd points to index 1
             templist = list(range(restraint_list[n]['step'], rd['step']))
@@ -1504,7 +1509,7 @@ class HarmonicRestraint:
             kappas += [restraint_list[n]['kappa'] for _ in templist]
             dcv = rd['eq_val'] - restraint_list[n]['eq_val']
             cvstep = dcv/len(templist) # get step increase
-            eq_vals += [restraint_list[n]['eq_val'] + cvstep * tind for tind, _ in enumerate(templist)] 
+            eq_vals += [restraint_list[n]['eq_val'] + cvstep * tind for tind, _ in enumerate(templist)]
 
         # in case the last step is lesser than the max_step
         templist = list(range(restraint_list[-1]['step'], max_steps))
@@ -1513,9 +1518,9 @@ class HarmonicRestraint:
         eq_vals += [restraint_list[-1]['eq_val'] for _ in templist]
 
         return steps, kappas, eq_vals
-        
+
     def get_energy(self, positions, step):
-        """ Calculates the retraint energy of an arbritrary state of the system 
+        """ Calculates the retraint energy of an arbritrary state of the system
 
         Args:
             positions (torch.tensor): atomic positions
@@ -1568,7 +1573,7 @@ class NeuralRestraint(Calculator):
 
         Args:
             model (TYPE): Description
-            device (str): device on which the calculations will be performed 
+            device (str): device on which the calculations will be performed
             properties (list of str): 'energy', 'forces' or both and also stress for only schnet and painn
             **kwargs: Description
             model (one of nff.nn.models)
@@ -1630,10 +1635,10 @@ class NeuralRestraint(Calculator):
             kwargs["requires_stress"] = True
         prediction = self.model(batch, **kwargs)
 
-        # change energy and force to kcal/mol       
+        # change energy and force to kcal/mol
         energy = (prediction[self.en_key] * (1 / const.EV_TO_KCAL_MOL))
         energy_grad = (prediction[grad_key] * (1 / const.EV_TO_KCAL_MOL))
-        
+
         # bias ------------------
         bias_forces, bias_energy = self.hr.get_bias(torch.tensor(atoms.get_positions(), requires_grad=True, device=self.device), self.step)
         energy_grad += bias_forces
@@ -1641,7 +1646,7 @@ class NeuralRestraint(Calculator):
         # change energy and force to numpy array
         energy_grad = energy_grad.detach().cpu().numpy()
         energy = energy.detach().cpu().numpy()
-        
+
         self.results = {
             'energy': energy.reshape(-1)
         }
@@ -1652,7 +1657,7 @@ class NeuralRestraint(Calculator):
             stress = (prediction['stress_volume'].detach()
                       .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
             self.results['stress'] = stress * (1 / atoms.get_volume())
-            
+
         with open("colvar", "a") as f:
             f.write("{} ".format(self.step*0.5))
             # ARREGLAR, SI YA ESTA CALCULADO PARA QUE RECALCULAR LA CVS
@@ -1660,7 +1665,7 @@ class NeuralRestraint(Calculator):
                 curr_cv_val = float(cv.get_value(torch.tensor(atoms.get_positions(), device=self.device)))
                 f.write(" {:.6f} ".format(curr_cv_val))
             f.write("{:.6f} \n".format(float(bias_energy)))
-            
+
     @classmethod
     def from_file(
         cls,
