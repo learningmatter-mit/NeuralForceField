@@ -828,18 +828,20 @@ class EnsembleNFF(Calculator):
                 .numpy()
                 * (1 / const.EV_TO_KCAL_MOL)
             )
-            stresses.append(
-                prediction['stress_volume']
-                .detach()
-                .cpu()
-                .numpy()
-                 * (1 / const.EV_TO_KCAL_MOL)
-                * (1 / atoms.get_volume())
-            )
+            if 'stress_volume' in prediction:
+                stresses.append(
+                    prediction['stress_volume']
+                    .detach()
+                    .cpu()
+                    .numpy()
+                     * (1 / const.EV_TO_KCAL_MOL)
+                    * (1 / atoms.get_volume())
+                )
 
         energies = np.stack(energies)
         gradients = np.stack(gradients)
-        stresses = np.stack(stresses)
+        if len(stresses) > 0:
+            stresses = np.stack(stresses)
 
         self.results = {
             'energy': energies.mean(0).reshape(-1),
