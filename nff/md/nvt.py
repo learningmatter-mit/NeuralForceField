@@ -28,10 +28,9 @@ class NoseHoover(MolecularDynamics):
                  max_steps=None,
                  nbr_update_period=20,
                  append_trajectory=True,
-                 remove_old_file=True,
                  **kwargs):
 
-        if os.path.isfile(str(trajectory)) and remove_old_file:
+        if os.path.isfile(str(trajectory)):
             os.remove(trajectory)
 
         MolecularDynamics.__init__(self,

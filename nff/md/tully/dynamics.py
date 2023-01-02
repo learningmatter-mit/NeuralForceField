@@ -767,16 +767,18 @@ class CombinedNeuralTully:
         trj_file = ase_ground_params["trajectory"]
 
         if os.path.isfile(logfile):
-            if not self.reload_ground:
+            if self.reload_ground:
                 shutil.move(logfile, logfile.replace(".log", "_old.log"))
             else:
                 os.remove(logfile)
-        if os.path.isfile(trj_file) and not self.reload_ground:
-            os.remove(trj_file)
+        if os.path.isfile(trj_file):
+            if self.reload_ground:
+                shutil.move(trj_file, trj_file.replace(".trj", "_old.trj"))
+            else:
+                os.remove(trj_file)
 
         method = METHOD_DIC[ase_ground_params["thermostat"]]
-        ground_dynamics = method(atoms, **ase_ground_params,
-                                 remove_old_file=(not self.reload_ground))
+        ground_dynamics = method(atoms, **ase_ground_params)
 
         return ground_dynamics
 
@@ -788,8 +790,10 @@ class CombinedNeuralTully:
         loginterval = self.ground_params.get("loginterval", 1)
 
         if self.ground_dynamics is not None:
-            if self.reload_ground and os.path.isfile(self.ground_savefile):
-                trj = Trajectory(self.ground_savefile)
+            old_trj_file = (str(self.ground_savefile)
+                            .replace(".trj", "_old.trj"))
+            if self.reload_ground and os.path.isfile(old_trj_file):
+                trj = Trajectory(old_trj_file)
                 atoms = next(iter(reversed(trj)))
 
                 steps -= len(trj) * loginterval
