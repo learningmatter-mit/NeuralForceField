@@ -797,7 +797,11 @@ class CombinedNeuralTully:
                 atoms = next(iter(reversed(trj)))
 
                 steps -= len(trj) * loginterval
-                self.ground_dynamics.atoms = atoms
+                # set positions and velocities. Don't overwrite atoms because
+                # then you lose their calculator
+                self.ground_dynamics.atoms.set_positions(atoms.get_positions())
+                self.ground_dynamics.atoms.set_velocities(
+                    atoms.get_velocities())
 
             self.ground_dynamics.run(steps=steps)
 
