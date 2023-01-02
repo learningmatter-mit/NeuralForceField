@@ -17,7 +17,7 @@ import random
 import math
 import argparse
 from functools import partial
-
+import shutil
 
 from ase.io.trajectory import Trajectory
 from ase import Atoms
@@ -767,13 +767,13 @@ class CombinedNeuralTully:
         trj_file = ase_ground_params["trajectory"]
 
         if os.path.isfile(logfile):
-            os.remove(logfile)
-        if os.path.isfile(trj_file):
             if self.reload_ground:
-                return
+                shutil.move(logfile, logfile.replace(".log", "_old.log"))
+            else:
+                os.remove(logfile)
+        if os.path.isfile(trj_file) and not self.reload_ground:
             os.remove(trj_file)
 
-        self.reload_ground = False
         method = METHOD_DIC[ase_ground_params["thermostat"]]
         ground_dynamics = method(atoms, **ase_ground_params)
 
@@ -784,13 +784,20 @@ class CombinedNeuralTully:
                           self.ground_params["timestep"])
         equil_steps = math.ceil(self.ground_params["equil_time"] /
                                 self.ground_params["timestep"])
+        loginterval = self.ground_params.get("loginterval", 1)
 
         if self.ground_dynamics is not None:
+            if self.reload_ground and os.path.isfile(self.ground_savefile):
+                trj = Trajectory(self.ground_savefile)
+                atoms = next(iter(reversed(trj)))
+
+                steps -= len(trj) * loginterval
+                self.ground_dynamics.atoms = atoms
+
             self.ground_dynamics.run(steps=steps)
 
         trj = Trajectory(self.ground_savefile)
 
-        loginterval = self.ground_params.get("loginterval", 1)
         logged_equil = math.ceil(equil_steps / loginterval)
         possible_states = [trj[index] for index in
                            range(logged_equil, len(trj))]
