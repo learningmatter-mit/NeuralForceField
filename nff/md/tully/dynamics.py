@@ -767,7 +767,7 @@ class CombinedNeuralTully:
         trj_file = ase_ground_params["trajectory"]
 
         if os.path.isfile(logfile):
-            if self.reload_ground:
+            if not self.reload_ground:
                 shutil.move(logfile, logfile.replace(".log", "_old.log"))
             else:
                 os.remove(logfile)
@@ -775,7 +775,8 @@ class CombinedNeuralTully:
             os.remove(trj_file)
 
         method = METHOD_DIC[ase_ground_params["thermostat"]]
-        ground_dynamics = method(atoms, **ase_ground_params)
+        ground_dynamics = method(atoms, **ase_ground_params,
+                                 remove_old_file=(not self.reload_ground))
 
         return ground_dynamics
 
