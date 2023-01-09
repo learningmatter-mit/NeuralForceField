@@ -388,10 +388,10 @@ class eABF(BiasBase):
                             self.ext_binwidth[i]))
             )
             self.grid.append(
-                np.linspace(
+                np.arange(
                     self.ranges[i, 0] + self.ext_binwidth[i] / 2,
-                    self.ranges[i, 1] - self.ext_binwidth[i] / 2,
-                    self.nbins_per_dim[i],
+                    self.ranges[i, 1],
+                    self.ext_binwidth[i],
                 )
             )
         self.nbins = np.prod(self.nbins_per_dim)
@@ -641,6 +641,7 @@ class WTMeABF(eABF):
         Returns:
             bias_force: bias force from metadynamics
         """
+
         local_pot = 0.0
         bias_force = np.zeros(shape=(self.num_cv))
 
