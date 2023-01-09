@@ -16,7 +16,7 @@ DEFAULTNVEPARAMS = {
     # thermostat can be NoseHoover, Langevin, NPT, NVT,
     # Thermodynamic Integration...
     'thermostat': VelocityVerlet,
-    'thermostat_params': {'timestep': 0.5 * units.fs},
+    'thermostat_params': {'timestep': 0.5},
     'nbr_list_update_freq': 20,
     'steps': 3000,
     'save_frequency': 10,
@@ -41,7 +41,7 @@ class Dynamics:
         else:
             self.atomsbatch_to_log = atomsbatch_to_log
         self.mdparam = mdparam
-        
+
         # todo: structure optimization before starting
 
         # intialize system momentum
@@ -49,7 +49,7 @@ class Dynamics:
                                      temperature_K = self.mdparam['T_init'])
         Stationary(self.atomsbatch)  # zero linear momentum
         ZeroRotation(self.atomsbatch)
-        
+
         # set thermostats
         integrator = self.mdparam['thermostat']
         if integrator == VelocityVerlet:
@@ -60,7 +60,7 @@ class Dynamics:
             self.integrator = integrator(self.atomsbatch,
                                          **self.mdparam['thermostat_params'],
                                          **self.mdparam)
-        
+
         self.steps = int(self.mdparam['steps'])
         self.steps = self.check_restart()
 
@@ -87,8 +87,8 @@ class Dynamics:
             new_atoms = Trajectory(self.mdparam['traj_filename'])[-1]
 
             # calculate number of steps remaining
-            self.steps = ( int(self.mdparam['steps']) 
-                - ( int(self.mdparam['save_frequency']) * 
+            self.steps = ( int(self.mdparam['steps'])
+                - ( int(self.mdparam['save_frequency']) *
                 len(Trajectory(self.mdparam['traj_filename'])) ) )
 
             self.atomsbatch.set_cell(new_atoms.get_cell())
@@ -121,12 +121,12 @@ class Dynamics:
 
 
     def setup_restart(self, restart_param):
-        """If you want to restart a simulations with predfined mdparams but 
+        """If you want to restart a simulations with predfined mdparams but
         longer you need to provide a dictionary like the following:
 
-         note that the thermo_filename and traj_name should be different 
+         note that the thermo_filename and traj_name should be different
 
-         restart_param = {'atoms_path': md_log_dir + '/atom.traj', 
+         restart_param = {'atoms_path': md_log_dir + '/atom.traj',
                           'thermo_filename':  md_log_dir + '/thermo_restart.log',
                           'traj_filename': md_log_dir + '/atom_restart.traj',
                           'steps': 100

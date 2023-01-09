@@ -124,7 +124,7 @@ def get_periodic_nbrs(batch,
             # get valid indices within the cutoff
             num = _xyz.shape[0]
             idx = torch.arange(num)
-            x, y = torch.meshgrid(idx, idx, indexing='xy')
+            x, y = torch.meshgrid(idx, idx)
             _nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)], 
                                                             dim=1).to(device)
             _lattice_points = (torch.tile(
@@ -246,7 +246,7 @@ def get_nbrs(batch,
         for nxyz in nxyz_list:
             n = nxyz.shape[0]
             idx = torch.arange(n)
-            x, y = torch.meshgrid(idx, idx, indexing='xy')
+            x, y = torch.meshgrid(idx, idx)
 
             # directed neighbor list
             these_nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)], dim=1)
@@ -521,7 +521,9 @@ def get_dispersion(batch,
                                 a2=params["a2"],
                                 xyz=xyz,
                                 nbrs=nbrs,
-                                mol_idx=mol_idx)        
+                                mol_idx=mol_idx)   
+        r_ij_T = None
+        nbrs_T = None
 
     return e_disp, r_ij_T, nbrs_T
 

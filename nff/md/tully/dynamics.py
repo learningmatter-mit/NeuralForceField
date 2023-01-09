@@ -17,7 +17,7 @@ import random
 import math
 import argparse
 from functools import partial
-
+import shutil
 
 from ase.io.trajectory import Trajectory
 from ase import Atoms
@@ -767,13 +767,16 @@ class CombinedNeuralTully:
         trj_file = ase_ground_params["trajectory"]
 
         if os.path.isfile(logfile):
-            os.remove(logfile)
+            if self.reload_ground:
+                shutil.move(logfile, logfile.replace(".log", "_old.log"))
+            else:
+                os.remove(logfile)
         if os.path.isfile(trj_file):
             if self.reload_ground:
-                return
-            os.remove(trj_file)
+                shutil.move(trj_file, trj_file.replace(".trj", "_old.trj"))
+            else:
+                os.remove(trj_file)
 
-        self.reload_ground = False
         method = METHOD_DIC[ase_ground_params["thermostat"]]
         ground_dynamics = method(atoms, **ase_ground_params)
 
@@ -784,13 +787,26 @@ class CombinedNeuralTully:
                           self.ground_params["timestep"])
         equil_steps = math.ceil(self.ground_params["equil_time"] /
                                 self.ground_params["timestep"])
+        loginterval = self.ground_params.get("loginterval", 1)
 
         if self.ground_dynamics is not None:
+            old_trj_file = (str(self.ground_savefile)
+                            .replace(".trj", "_old.trj"))
+            if self.reload_ground and os.path.isfile(old_trj_file):
+                trj = Trajectory(old_trj_file)
+                atoms = next(iter(reversed(trj)))
+
+                steps -= len(trj) * loginterval
+                # set positions and velocities. Don't overwrite atoms because
+                # then you lose their calculator
+                self.ground_dynamics.atoms.set_positions(atoms.get_positions())
+                self.ground_dynamics.atoms.set_velocities(
+                    atoms.get_velocities())
+
             self.ground_dynamics.run(steps=steps)
 
         trj = Trajectory(self.ground_savefile)
 
-        loginterval = self.ground_params.get("loginterval", 1)
         logged_equil = math.ceil(equil_steps / loginterval)
         possible_states = [trj[index] for index in
                            range(logged_equil, len(trj))]
