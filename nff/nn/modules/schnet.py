@@ -61,6 +61,14 @@ def get_rij(xyz,
     return r_ij, nbrs
 
 
+def add_embedding(atomwise_out,
+                  all_results):
+
+    all_results['embedding'] = atomwise_out['features']
+
+    return all_results
+
+
 def add_stress(batch,
                all_results,
                nbrs,
