@@ -20,6 +20,10 @@ setup(
         "scripts/nff_train.py",
     ],
     python_requires=">=3.5",
+    package_data={'nff': ['utils/table_data/c6ab.npy',
+                          'utils/table_data/functional_params.json',
+                          'utils/table_data/r2r4.npy',
+                          'utils/table_data/rcov.npy']},
     include_package_data=True,
     install_requires=[
         # "pytorch>=1.4.0",

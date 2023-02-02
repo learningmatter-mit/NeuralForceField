@@ -465,6 +465,10 @@ class Langevin(MolecularDynamics):
         for _ in tqdm(range(epochs)):
             self.max_steps += steps_per_epoch
             Dynamics.run(self)
+            
+            x = self.atoms.get_positions(wrap=True)
+            self.atoms.set_positions(x)
+            
             self.atoms.update_nbr_list()
             Stationary(self.atoms)
             ZeroRotation(self.atoms)

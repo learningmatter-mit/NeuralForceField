@@ -8,16 +8,67 @@ from ase.utils import IOContext
 import weakref
 from ase.parallel import world
 
+import numpy as np
+
 import nff.utils.constants as const
 
 
 class NeuralMDLogger(MDLogger):
     def __init__(self,
-                 *args,
+                 dyn, 
+                 atoms, 
+                 logfile, 
+                 header=True, 
+                 stress=False, 
+                 peratom=False, 
+                 mode="a",
                  verbose=True,
                  **kwargs):
-        super().__init__(*args, **kwargs)
+        
+        if hasattr(dyn, "get_time"):
+            self.dyn = weakref.proxy(dyn)
+        else:
+            self.dyn = None
+        self.atoms = atoms
+        global_natoms = atoms.get_global_number_of_atoms()
+        self.logfile = self.openfile(logfile, comm=world, mode=mode)
+        self.stress = stress
+        self.peratom = peratom
 
+        if self.dyn is not None:
+            self.hdr = "%-10s " % ("Time[ps]",)
+            self.fmt = "%-10.4f "
+        else:
+            self.hdr = ""
+            self.fmt = ""
+        if self.peratom:
+            self.hdr += "%12s %12s %12s  %6s" % ("Etot/N[eV]", "Epot/N[eV]",
+                                                 "Ekin/N[eV]", "T[K]")
+            self.fmt += "%12.4f %12.4f %12.4f  %6.1f"
+        else:
+            self.hdr += "%12s %12s %12s  %6s" % ("Etot[eV]", "Epot[eV]",
+                                                 "Ekin[eV]", "T[K]")
+            # Choose a sensible number of decimals
+            if global_natoms <= 100:
+                digits = 4
+            elif global_natoms <= 1000:
+                digits = 3
+            elif global_natoms <= 10000:
+                digits = 2
+            else:
+                digits = 1
+            self.fmt += 3 * ("%%12.%df " % (digits,)) + " %6.1f"
+        if self.stress:
+            self.hdr += ('      ---------------------- stress [GPa] '
+                         '------------------------')
+            self.fmt += 6 * " %10.3f"
+            self.hdr += "   %10s" % ("hydP[GPa]")
+            self.fmt += "   %10.7f"
+        
+        self.fmt += "\n"
+        if header:
+            self.logfile.write(self.hdr + "\n")
+        
         self.verbose = verbose
         if verbose:
             print(self.hdr)
@@ -41,12 +92,16 @@ class NeuralMDLogger(MDLogger):
             epot = sum(epot)/len(epot)
         dat += (epot+ekin, epot, ekin, temp)
         if self.stress:
-            dat += tuple(self.atoms.get_stress() / units.GPa)
+            dat   += tuple(self.atoms.get_stress() / units.GPa)
+            P_int  = -self.atoms.get_stress(include_ideal_gas=True, voigt=False)
+            P_hyd  = np.trace(P_int)/len(P_int)
+            dat   += (P_hyd / units.GPa,)
+            
         self.logfile.write(self.fmt % dat)
         self.logfile.flush()
 
         if self.verbose:
-            print(self.fmt % dat)
+            print(self.fmt[:-1] % dat)
 
 
 class NeuralFFLogger(MDLogger):
@@ -110,15 +165,15 @@ class BiasedNeuralMDLogger(IOContext):
         else:
             raise ValueError("A dynamics object has to be attached to the logger!")
             
-        self.hdr += "%17s %17s %12s " % ("Epot_biased[eV]", 
-                                   "Epot_nobias[eV]",
+        self.hdr += "%12s %12s %12s " % ("U0+bias[eV]", 
+                                   "U0[eV]",
                                   "AbsGradPot")
-        self.fmt += "%17.5f %17.5f %12.4f "
+        self.fmt += "%12.5f %12.5f %12.4f "
             
         for i in range(self.num_cv):
-            self.hdr += "%12s %12s %12s %12s %16s " % ("CV", "Lambda", "inv_m_cv",
-                                                "AbsGradCV", "GradCV_GradPot")
-            self.fmt += "%12.4f %12.4f %12.4f %12.4f %16.4f "
+            self.hdr += "%12s %12s %12s %12s %12s " % ("CV", "Lambda", "inv_m_cv",
+                                                "AbsGradCV", "GradCV_GradU")
+            self.fmt += "%12.4f %12.4f %12.4f %12.4f %12.4f "
             
         self.fmt += "\n"
         if header:
@@ -158,7 +213,7 @@ class BiasedNeuralMDLogger(IOContext):
         self.logfile.flush()
 
         if self.verbose:
-            print(self.fmt % dat)
+            print(self.fmt[-1] % dat)
 
 
 def get_energy(atoms):
