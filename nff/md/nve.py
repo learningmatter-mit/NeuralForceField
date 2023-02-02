@@ -9,7 +9,7 @@ from ase.md.verlet import VelocityVerlet
 from nff.md.npt import NoseHoovernpt
 from ase.io import Trajectory
 
-from nff.md.utils import NeuralMDLogger, write_traj
+from nff.md.utils import NeuralMDLogger, NeuralFFLogger, write_traj
 
 DEFAULTNVEPARAMS = {
     'T_init': 120.0,
@@ -79,6 +79,13 @@ class Dynamics:
                                                 stress=requires_stress,
                                                 mode='a'),
                                 interval=self.mdparam['save_frequency'])
+            requires_embedding = 'embedding' in self.atomsbatch.calc.properties
+            if requires_embedding:
+                self.integrator.attach(NeuralFFLogger(self.integrator,
+                                                    self.atomsbatch_to_log,
+                                                    self.mdparam['embedding_filename'],
+                                                    mode='a'),
+                                    interval=self.mdparam['save_frequency'])
 
 
     def check_restart(self):
@@ -109,6 +116,13 @@ class Dynamics:
                                                 stress=requires_stress,
                                                 mode='a'),
                                 interval=self.mdparam['save_frequency'])
+            requires_embedding = 'embedding' in self.atomsbatch.calc.properties
+            if requires_embedding:
+                self.integrator.attach(NeuralFFLogger(self.integrator,
+                                                    self.atomsbatch_to_log,
+                                                    self.mdparam['embedding_filename'],
+                                                    mode='a'),
+                                    interval=self.mdparam['save_frequency'])
             if isinstance(self.integrator, NoseHoovernpt):
                 self.integrator.h = self.integrator._getbox()
                 self.integrator.h_past = self.integrator._getbox()

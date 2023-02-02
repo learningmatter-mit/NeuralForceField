@@ -47,6 +47,27 @@ class NeuralMDLogger(MDLogger):
 
         if self.verbose:
             print(self.fmt % dat)
+
+
+class NeuralFFLogger(MDLogger):
+    def __init__(self,
+                 dyn,
+                 atoms,
+                 logfile,
+                 mode="a",
+                 verbose=True,
+                 **kwargs):
+        # super().__init__(*args, **kwargs)
+
+        self.atoms = atoms
+        self.logfile = logfile
+        self.verbose = verbose
+        self.natoms = len(self.atoms)
+
+    def __call__(self):
+        if "embedding" in self.atoms.calc.properties:
+            self.atoms.calc.log_embedding(self.atoms.calc.jobdir, self.logfile, self.atoms.get_embedding())
+
             
 class BiasedNeuralMDLogger(IOContext):
     """Additional Class for logging biased molecular dynamics simulations.
