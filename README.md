@@ -37,7 +37,7 @@ This is useful if you'll be modifying the NFF code, because modifications in the
 
 ## Usage
 
-For those just getting started, we recommend referring to the [wiki](https://github.mit.edu/MLMat/NeuralForceField/wiki) or advanced users can just jump right in. A Jupyter notebook interface or a command line interface can be used with NFF.
+For those just getting started, we recommend referring to the [wiki](https://github.mit.edu/MLMat/NeuralForceField/wiki) or advanced users can just jump right in. A Jupyter notebook interface or a command line interface can be used with NFF. There is also a high-throughput option for using NFF, where you use HTVS to run simulations or perform calculations with NFF.
 
 ### Jupyter notebooks 
 
@@ -54,7 +54,11 @@ nff_train.py train schnet tutorials/data/dataset.pth.tar $HOME/train_model --dev
 This will use 60% of the dataset for training, 20% for validation and 20% for testing. The training will happen on the device `cuda:0`. Results of training, checkpoints and hyperparameters will be saved on the path `$HOME/train_model`.
 
 #### Property predictor
-NFF also contains modules that predict properties from 3D geometries of conformers. These include the SchNet model, expanded to include multiple conformers, as well as the ChemProp3D (CP3D)  model, which also includes graph information. A series of scripts for these modules can be found in `scripts/cp3d`. An in-depth discussion of how to use these scripts can be found in `scripts/cp3d/README.md`.   
+NFF also contains modules that predict properties from 3D geometries of conformers. These include the SchNet model, expanded to include multiple conformers, as well as the ChemProp3D (CP3D)  model, which also includes graph information. A series of scripts for these modules can be found in `scripts/cp3d`. An in-depth discussion of how to use these scripts can be found in `scripts/cp3d/README.md`. 
+
+### HTVS interface with NFF
+
+Please refer to the [wiki](https://github.mit.edu/MLMat/NeuralForceField/wiki/HTVS-interface-with-NFF) to see how to use NFF through HTVS.
 
 ## Pre-trained models
 A set of pre-trained models can be found in [`models`](https://github.mit.edu/MLMat/NeuralForceField/tree/master/models).
