@@ -41,11 +41,11 @@ For those just getting started, we recommend referring to the [wiki](https://git
 
 A set of pre-trained models can be found in [`models`](https://github.mit.edu/MLMat/NeuralForceField/tree/master/models). To take take an under-the-hood look at the architecture of all the models available with NFF, go to [`nff/nn/models`](https://github.mit.edu/MLMat/NeuralForceField/tree/master/nff/nn/models), and see the underlying modules with supporting functions in [`nff/nn/modules`](https://github.mit.edu/MLMat/NeuralForceField/tree/master/nff/nn/modules).
 
-### Jupyter notebooks 
+### Jupyter notebooks interface
 
 Please refer to the [tutorials](https://github.mit.edu/MLMat/NeuralForceField/tree/master/tutorials) to see how to set up a Jupyter notebook interface with NFF.
 
-### Command line
+### Command-line interface
 
 #### Force field
 The simplest way to use the `nff` package is to use the premade scripts (in the `scripts`) folder. As an example, to train a SchNet model with the default parameters using the example dataset (ethanol geometries) from the command line, run the command
@@ -58,7 +58,7 @@ This will use 60% of the dataset for training, 20% for validation and 20% for te
 #### Property predictor
 NFF also contains modules that predict properties from 3D geometries of conformers. These include the SchNet model, expanded to include multiple conformers, as well as the ChemProp3D (CP3D)  model, which also includes graph information. A series of scripts for these modules can be found in `scripts/cp3d`. An in-depth discussion of how to use these scripts can be found in `scripts/cp3d/README.md`. 
 
-### HTVS interface with NFF
+### HTVS interface
 
 Please refer to the [wiki](https://github.mit.edu/MLMat/NeuralForceField/wiki/HTVS-interface-with-NFF) to see how to use NFF through HTVS.
 
