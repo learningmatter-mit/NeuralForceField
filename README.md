@@ -39,6 +39,8 @@ This is useful if you'll be modifying the NFF code, because modifications in the
 
 For those just getting started, we recommend referring to the [wiki](https://github.mit.edu/MLMat/NeuralForceField/wiki) or advanced users can just jump right in. A Jupyter notebook interface or a command line interface can be used with NFF. There is also a high-throughput option for using NFF, where you use HTVS to run simulations or perform calculations with NFF.
 
+A set of pre-trained models can be found in [`models`](https://github.mit.edu/MLMat/NeuralForceField/tree/master/models). To take take an under-the-hood look at the architecture of all the models available with NFF, go to [`nff/nn/models`](https://github.mit.edu/MLMat/NeuralForceField/tree/master/nff/nn/models), and see the underlying modules with supporting functions in [`nff/nn/modules`](https://github.mit.edu/MLMat/NeuralForceField/tree/master/nff/nn/modules).
+
 ### Jupyter notebooks 
 
 Please refer to the [tutorials](https://github.mit.edu/MLMat/NeuralForceField/tree/master/tutorials) to see how to set up a Jupyter notebook interface with NFF.
@@ -59,12 +61,6 @@ NFF also contains modules that predict properties from 3D geometries of conforme
 ### HTVS interface with NFF
 
 Please refer to the [wiki](https://github.mit.edu/MLMat/NeuralForceField/wiki/HTVS-interface-with-NFF) to see how to use NFF through HTVS.
-
-## Pre-trained models
-A set of pre-trained models can be found in [`models`](https://github.mit.edu/MLMat/NeuralForceField/tree/master/models).
-
-## Available models
-To take take an under-the-hood look at the architecture of all the models available with NFF, go to [`nff/nn/models`](https://github.mit.edu/MLMat/NeuralForceField/tree/master/nff/nn/models), and see the underlying modules with supporting functions in [`nff/nn/modules`](https://github.mit.edu/MLMat/NeuralForceField/tree/master/nff/nn/modules).
 
 
 
