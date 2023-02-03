@@ -37,7 +37,7 @@ This is useful if you'll be modifying the NFF code, because modifications in the
 
 ## Usage
 
-For those just getting started, we recommend referring to the [wiki](https://github.mit.edu/MLMat/NeuralForceField/wiki) or advanced users can just jump right in. A Jupyter notebook interface or a command line interface can be used with NFF. There is also a high-throughput option for using NFF, where you use HTVS to run simulations or perform calculations with NFF.
+For those just getting started, we recommend referring to the [wiki](https://github.mit.edu/MLMat/NeuralForceField/wiki) or advanced users can just jump right in. A Jupyter notebook interface or a command-line interface can be used with NFF. There is also a high-throughput option for using NFF, where you use HTVS to run simulations or perform calculations with NFF.
 
 A set of pre-trained models can be found in [`models`](https://github.mit.edu/MLMat/NeuralForceField/tree/master/models). To take take an under-the-hood look at the architecture of all the models available with NFF, go to [`nff/nn/models`](https://github.mit.edu/MLMat/NeuralForceField/tree/master/nff/nn/models), and see the underlying modules with supporting functions in [`nff/nn/modules`](https://github.mit.edu/MLMat/NeuralForceField/tree/master/nff/nn/modules).
 
