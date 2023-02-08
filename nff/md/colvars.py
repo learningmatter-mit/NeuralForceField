@@ -1,16 +1,15 @@
 from typing import Union, Tuple
 import itertools as itertools
+import os
 import numpy as np
 import torch
 
 from ase import Atoms
 from nff.io.ase import AtomsBatch
 from nff.utils.scatter import compute_grad
+from nff.train import load_model, evaluate
+from nff.utils.cuda import batch_to
 
-""" Todo
-- clean up code for the 
-
-"""
 
 class ColVar(torch.nn.Module):
     """collective variable class
@@ -26,7 +25,8 @@ class ColVar(torch.nn.Module):
                        'projecting_veconplanenormal',
                        'projection_channelnormal',
                        'Sp', 'Sd',
-                       'adjecencey_matrix'
+                       'adjecencey_matrix',
+                       'energy_gap'
                       ]
     
     def __init__(self, info_dict: dict):
@@ -95,6 +95,17 @@ class ColVar(torch.nn.Module):
             self.mol_inds = torch.LongTensor(self.info_dict['mol_inds']) 
             self.g1_inds  = torch.LongTensor(self.info_dict['g1_inds'])
             self.g2_inds  = torch.LongTensor(self.info_dict['g2_inds'])
+            
+        elif self.info_dict['name'] == 'energy_gap':
+            self.device = self.info_dict['device']
+            path        = self.info_dict['path']
+            model_type  = self.info_dict['model_type']
+            self.model  = load_model(path,
+                           model_type=model_type,
+                           device=self.device)
+            self.model  = self.model.to(self.device)
+            self.model.eval()
+
             
             
         
@@ -489,6 +500,31 @@ class ColVar(torch.nn.Module):
         
         return cv2
     
+    
+    def energy_gap(self, enkey1, enkey2) :
+        """get energy gap betweentwo adiabatic PES
+        Args:
+            enkey1 (str): key of one adiabatic PES
+            enkey2 (str): key of the other PES
+                
+        Returns:
+                cv (torch.tensor): computed energy gap 
+        """
+
+        batch    = batch_to(self.atoms.get_batch(), self.device)
+        pred     = self.model(batch, device=self.device)
+        energy_1 = pred[enkey1]
+        energy_2 = pred[enkey2]
+        e_diff   = energy_2 - energy_1
+        
+        cv       = torch.abs(e_diff)
+        cv_grad  = pred[enkey2+'_grad'] - pred[enkey1+'_grad']
+        if e_diff < 0:
+            cv_grad *= -1.0
+            
+        return cv, cv_grad
+
+        
     def forward(self, atoms):
         """switch function to call the right CV-func
         """
@@ -500,43 +536,56 @@ class ColVar(torch.nn.Module):
         
         if   self.info_dict['name'] == 'distance':
             cv = self.distance(self.info_dict['index_list'])
+            cv_grad = compute_grad(inputs=self.xyz, output=cv)
             
         elif self.info_dict['name'] == 'angle':
             cv = self.angle(self.info_dict['index_list'])
+            cv_grad = compute_grad(inputs=self.xyz, output=cv)
             
         elif self.info_dict['name'] == 'dihedral':
             cv = self.dihedral(self.info_dict['index_list'])
+            cv_grad = compute_grad(inputs=self.xyz, output=cv)
             
         elif self.info_dict['name'] == 'coordination_number':
             cv = self.coordination_number(self.info_dict['index_list'], self.info_dict['switching_dist'])
+            cv_grad = compute_grad(inputs=self.xyz, output=cv)
             
         elif self.info_dict['name'] == 'coordination':
             cv = self.coordination(self.info_dict['index_list'], self.info_dict['switching_dist'])
+            cv_grad = compute_grad(inputs=self.xyz, output=cv)
             
         elif self.info_dict['name'] == 'minimal_distance':
             cv = self.minimal_distance(self.info_dict['index_list'])
+            cv_grad = compute_grad(inputs=self.xyz, output=cv)
             
         elif self.info_dict['name'] == 'projecting_centroidvec':
             cv = self.projecting_centroidvec()    
+            cv_grad = compute_grad(inputs=self.xyz, output=cv)
             
         elif self.info_dict['name'] == 'projecting_veconplane':
             cv = self.projecting_veconplane()      
+            cv_grad = compute_grad(inputs=self.xyz, output=cv)
             
         elif self.info_dict['name'] == 'projecting_veconplanenormal':
             cv = self.projecting_veconplanenormal()  
+            cv_grad = compute_grad(inputs=self.xyz, output=cv)
         
         elif self.info_dict['name'] == 'projection_channelnormal':
             cv = self.projection_channelnormal() 
+            cv_grad = compute_grad(inputs=self.xyz, output=cv)
         
         elif self.info_dict['name'] == 'Sp':
             cv = self.deproton1()
+            cv_grad = compute_grad(inputs=self.xyz, output=cv)
             
         elif self.info_dict['name'] == 'Sd':
             cv = self.deproton2()
+            cv_grad = compute_grad(inputs=self.xyz, output=cv)
+            
+        elif self.info_dict['name'] == 'energy_gap':
+            cv, cv_grad = self.energy_gap(self.info_dict['enkey_1'], self.info_dict['enkey_2'])
         
-        cv_grad = compute_grad(inputs=self.xyz, output=cv)
-        
-        return cv.detach().numpy(), cv_grad.detach().numpy()
+        return cv.detach().cpu().numpy(), cv_grad.detach().cpu().numpy()
     
     
     

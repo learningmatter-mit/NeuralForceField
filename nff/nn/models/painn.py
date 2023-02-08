@@ -7,7 +7,7 @@ from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
                                   TransformerMessageBlock,
                                   NbrEmbeddingBlock)
 from nff.nn.modules.schnet import (AttentionPool, SumPool, MolFpPool,
-                                   MeanPool, get_rij, add_stress)
+                                   MeanPool, get_rij, add_embedding, add_stress)
 from nff.nn.modules.diabat import DiabaticReadout, AdiabaticReadout
 from nff.nn.layers import (Diagonalize, ExpNormalBasis)
 from nff.utils.scatter import scatter_add
@@ -243,6 +243,7 @@ class Painn(nn.Module):
     def run(self,
             batch,
             xyz=None,
+            requires_embedding=False,
             requires_stress=False,
             inference=False):   
 
@@ -261,6 +262,10 @@ class Painn(nn.Module):
                                      nbrs=nbrs,
                                      inference=inference)
 
+        if requires_embedding:
+            all_results = add_embedding(atomwise_out=atomwise_out,
+                                        all_results=all_results)
+
         if requires_stress:
             all_results = add_stress(batch=batch,
                                      all_results=all_results,
@@ -269,12 +274,13 @@ class Painn(nn.Module):
         
         if getattr(self, "compute_delta", False):
             all_results = self.add_delta(all_results)
-        
+       
         return all_results, xyz
 
     def forward(self,
                 batch,
                 xyz=None,
+                requires_embedding=False,
                 requires_stress=False,
                 inference=False,
                 **kwargs):
@@ -288,6 +294,7 @@ class Painn(nn.Module):
 
         results, _ = self.run(batch=batch,
                               xyz=xyz,
+                              requires_embedding=requires_embedding,
                               requires_stress=requires_stress,
                               inference=inference)
 
