@@ -4,9 +4,14 @@ from nff.io.ase import NeuralFF, AtomsBatch
 from nff.reactive_tools.utils import (neural_hessian_ase, neural_energy_ase,
                                       neural_force_ase)
 from nff.utils.constants import EV_TO_AU, BOHR_RADIUS
-from barriers.utils.vib import hessian_and_modes
 from ase.units import Bohr, mol, kcal
 from ase import Atoms
+
+try:
+    from barriers.utils.vib import hessian_and_modes
+except ModuleNotFoundError:
+    print("Couldn't import `barriers`. Please clone the following repo and put it in your python path: "
+          "https://github.com/learningmatter-mit/azo_barriers")
 
 CONVG_LINE = "Optimization converged!"
 
