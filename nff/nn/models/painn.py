@@ -253,7 +253,8 @@ class Painn(nn.Module):
         if getattr(self, "excl_vol", None):
             # Excluded Volume interactions
             r_ex = self.V_ex(r_ij, nbrs, xyz)
-            atomwise_out['energy'] += r_ex
+            for key in self.output_keys:
+                atomwise_out[key] += r_ex
 
         all_results, xyz = self.pool(batch=batch,
                                      atomwise_out=atomwise_out,

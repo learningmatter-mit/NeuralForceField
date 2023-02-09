@@ -12,6 +12,7 @@ from nff.utils import constants as const
 from nff.utils.dispersion import get_dispersion as base_dispersion, grimme_dispersion
 from nff.nn.models.painn import Painn
 
+
 class PainnDispersion(nn.Module):
 
     def __init__(self,
@@ -38,7 +39,7 @@ class PainnDispersion(nn.Module):
     def get_dispersion(self,
                        batch,
                        xyz):
-        
+
         e_disp, r_ij_T, nbrs_T = base_dispersion(batch=batch,
                                                  xyz=xyz,
                                                  disp_type=self.disp_type,
@@ -54,7 +55,7 @@ class PainnDispersion(nn.Module):
                               batch,
                               xyz):
 
-        # all units are output in ASE units (eV and Angs)        
+        # all units are output in ASE units (eV and Angs)
         e_disp, stress_disp, forces_disp = grimme_dispersion(batch=batch,
                                                              xyz=xyz,
                                                              disp_type=self.disp_type,
@@ -77,13 +78,14 @@ class PainnDispersion(nn.Module):
         if getattr(self.painn_model, "excl_vol", None):
             # Excluded Volume interactions
             r_ex = self.painn_model.V_ex(r_ij, nbrs, xyz)
-            atomwise_out['energy'] += r_ex
+            for key in self.output_keys:
+                atomwise_out[key] += r_ex
 
         all_results, xyz = self.painn_model.pool(batch=batch,
                                                  atomwise_out=atomwise_out,
                                                  xyz=xyz,
-						                         r_ij=r_ij,
-						                         nbrs=nbrs,
+                                                 r_ij=r_ij,
+                                                 nbrs=nbrs,
                                                  inference=inference)
 
         if requires_stress:
@@ -113,7 +115,7 @@ class PainnDispersion(nn.Module):
                 if grad_key in self.painn_model.grad_keys:
                     if disp_grad is None:
                         disp_grad = compute_grad(inputs=xyz,
-                                                output=e_disp)
+                                                 output=e_disp)
                         if inference:
                             disp_grad = disp_grad.detach().cpu()
 
@@ -144,16 +146,16 @@ class PainnDispersion(nn.Module):
                 N = batch["num_atoms"].detach().cpu().tolist()
                 split_val = torch.split(allstress, N)
                 disp_stress_volume = torch.stack([i.sum(0)
-                                                    for i in split_val])
+                                                  for i in split_val])
             if inference:
                 disp_stress_volume = disp_stress_volume.detach().cpu()
-            
+
             # check numerical stability of disp_grad pytorch calculation
             if disp_stress_volume.isnan().any():
                 grimme_disp = True
             else:
                 all_results['stress_volume'] = all_results['stress_volume'] + \
-                                                             disp_stress_volume
+                    disp_stress_volume
 
         # if there was numerical instability with disp_grad pytorch
         # re-calculate everything with Grimme dispersion instead
