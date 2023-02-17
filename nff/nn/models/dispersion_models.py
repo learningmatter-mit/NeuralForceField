@@ -99,7 +99,7 @@ class PainnDispersion(nn.Module):
 
         disp_grad = None
         fallback_to_grimme = getattr(self, "fallback_to_grimme", True)
-        
+
         if grimme_disp:
             pass
         else:
@@ -123,7 +123,7 @@ class PainnDispersion(nn.Module):
                             disp_grad = disp_grad.detach().cpu()
 
                     # check numerical stability of disp_grad pytorch calculation
-                    if disp_grad.isnan().any() and self.fallback_to_grimme:
+                    if disp_grad.isnan().any() and fallback_to_grimme:
                         grimme_disp = True
                     else:
                         all_results[key] = all_results[key] + add_e
@@ -154,7 +154,7 @@ class PainnDispersion(nn.Module):
                 disp_stress_volume = disp_stress_volume.detach().cpu()
 
             # check numerical stability of disp_grad pytorch calculation
-            if disp_stress_volume.isnan().any() and self.fallback_to_grimme:
+            if disp_stress_volume.isnan().any() and fallback_to_grimme:
                 grimme_disp = True
             else:
                 all_results['stress_volume'] = all_results['stress_volume'] + \
