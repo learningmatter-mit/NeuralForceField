@@ -98,6 +98,8 @@ class PainnDispersion(nn.Module):
         # add dispersion and gradients associated with it
 
         disp_grad = None
+        fallback_to_grimme = getattr(self, "fallback_to_grimme", True)
+        
         if grimme_disp:
             pass
         else:
