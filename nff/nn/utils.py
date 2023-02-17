@@ -165,7 +165,7 @@ def torch_nbr_list(atomsobject,
             xyz = torch.Tensor(
                 atomsobject.get_positions(wrap=False)).to(device)
             dis_mat = xyz[None, :, :] - xyz[:, None, :]
-            cell_dim = torch.Tensor(atomsobject.get_cell()).diag().to(device)
+            cell_dim = torch.Tensor(np.array(atomsobject.get_cell())).diag().to(device)
             if requires_large_offsets:
                 shift = torch.round(torch.divide(dis_mat, cell_dim))
                 offsets = -shift

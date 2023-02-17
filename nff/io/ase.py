@@ -58,6 +58,7 @@ class AtomsBatch(Atoms):
             directed=DEFAULT_DIRECTED,
             requires_large_offsets=False,
             cutoff_skin=DEFAULT_SKIN,
+            dense_nbrs=True,
             device=0,
             **kwargs
     ):
@@ -90,7 +91,10 @@ class AtomsBatch(Atoms):
         self.cutoff_skin = cutoff_skin
         self.device = device
         self.requires_large_offsets = requires_large_offsets
-        self.mol_nbrs, self.mol_idx = self.get_mol_nbrs()
+        if dense_nbrs:
+            self.mol_nbrs, self.mol_idx = self.get_mol_nbrs()
+        else:
+            self.mol_nbrs, self.mol_idx = None, None
 
     def get_mol_nbrs(self, r_cut=95):
         """
@@ -738,7 +742,6 @@ class NeuralFF(Calculator):
             device='cuda',
             **kwargs
     ):
-
         model = load_model(model_path, **kwargs)
         out = cls(model=model,
                   device=device,
