@@ -796,6 +796,8 @@ class EnsembleNFF(Calculator):
         """For the purposes of logging the std on-the-fly, to help with
         sampling after calling NFF on geometries with high uncertainty."""
 
+        props = np.swapaxes(np.expand_dims(props, axis=-1), 0, -1)
+
         log_file = os.path.join(jobdir, log_filename)
         if os.path.exists(log_file):
             log = np.load(log_file)
