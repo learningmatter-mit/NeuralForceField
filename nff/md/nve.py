@@ -9,7 +9,7 @@ from ase.md.verlet import VelocityVerlet
 from nff.md.npt import NoseHoovernpt
 from ase.io import Trajectory
 
-from nff.md.utils import NeuralMDLogger, write_traj
+from nff.md.utils import NeuralMDLogger, NeuralFFLogger, write_traj
 
 DEFAULTNVEPARAMS = {
     'T_init': 120.0,
@@ -17,6 +17,7 @@ DEFAULTNVEPARAMS = {
     # Thermodynamic Integration...
     'thermostat': VelocityVerlet,
     'thermostat_params': {'timestep': 0.5},
+    'stability_check': False,
     'nbr_list_update_freq': 20,
     'steps': 3000,
     'save_frequency': 10,
@@ -79,6 +80,13 @@ class Dynamics:
                                                 stress=requires_stress,
                                                 mode='a'),
                                 interval=self.mdparam['save_frequency'])
+            requires_embedding = 'embedding' in self.atomsbatch.calc.properties
+            if requires_embedding:
+                self.integrator.attach(NeuralFFLogger(self.integrator,
+                                                    self.atomsbatch_to_log,
+                                                    self.mdparam['embedding_filename'],
+                                                    mode='a'),
+                                    interval=self.mdparam['save_frequency'])
 
 
     def check_restart(self):
@@ -109,6 +117,13 @@ class Dynamics:
                                                 stress=requires_stress,
                                                 mode='a'),
                                 interval=self.mdparam['save_frequency'])
+            requires_embedding = 'embedding' in self.atomsbatch.calc.properties
+            if requires_embedding:
+                self.integrator.attach(NeuralFFLogger(self.integrator,
+                                                    self.atomsbatch_to_log,
+                                                    self.mdparam['embedding_filename'],
+                                                    mode='a'),
+                                    interval=self.mdparam['save_frequency'])
             if isinstance(self.integrator, NoseHoovernpt):
                 self.integrator.h = self.integrator._getbox()
                 self.integrator.h_past = self.integrator._getbox()
@@ -181,15 +196,36 @@ class Dynamics:
         # for example, it's good to update the neighbor list here
         self.atomsbatch.update_nbr_list()
 
-        for step in range(epochs):
-            self.integrator.run(self.mdparam['nbr_list_update_freq'])
+        if self.mdparam.get('stability_check',False):
+            for step in range(epochs):
 
-            # # unwrap coordinates if mol_idx is defined
-            # if self.atomsbatch.props.get("mol_idx", None) :
-            #     self.atomsbatch.set_positions(self.atoms.get_positions(wrap=True))
-            #     self.atomsbatch.set_positions(reconstruct_atoms(atoms, self.atomsbatch.props['mol_idx']))
+                T = (self.atomsbatch.get_batch_kinetic_energy()/
+                        (1.5*units.kB*self.atomsbatch.num_atoms))
+                if ((T > (10*self.mdparam['thermostat_params']['temperature']/units.kB)).any()
+                        or (T < 1e-1).any()
+                            and self.mdparam.get('stability_check',False)):
+                    break
 
-            self.atomsbatch.update_nbr_list()
+                self.integrator.run(self.mdparam['nbr_list_update_freq'])
+
+                # # unwrap coordinates if mol_idx is defined
+                # if self.atomsbatch.props.get("mol_idx", None) :
+                #     self.atomsbatch.set_positions(self.atoms.get_positions(wrap=True))
+                #     self.atomsbatch.set_positions(reconstruct_atoms(atoms, self.atomsbatch.props['mol_idx']))
+
+                self.atomsbatch.update_nbr_list()
+
+        else:
+            for step in range(epochs):
+
+                self.integrator.run(self.mdparam['nbr_list_update_freq'])
+
+                # # unwrap coordinates if mol_idx is defined
+                # if self.atomsbatch.props.get("mol_idx", None) :
+                #     self.atomsbatch.set_positions(self.atoms.get_positions(wrap=True))
+                #     self.atomsbatch.set_positions(reconstruct_atoms(atoms, self.atomsbatch.props['mol_idx']))
+
+                self.atomsbatch.update_nbr_list()
 
         self.traj.close()
 

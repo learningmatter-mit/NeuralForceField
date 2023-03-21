@@ -12,6 +12,7 @@ from nff.utils import constants as const
 from nff.utils.dispersion import get_dispersion as base_dispersion, grimme_dispersion
 from nff.nn.models.painn import Painn
 
+
 class PainnDispersion(nn.Module):
 
     def __init__(self,
@@ -29,6 +30,7 @@ class PainnDispersion(nn.Module):
 
         self.functional = modelparams["functional"]
         self.disp_type = modelparams["disp_type"]
+        self.fallback_to_grimme = modelparams.get("fallback_to_grimme", True)
 
         if painn_model is not None:
             self.painn_model = painn_model
@@ -38,7 +40,7 @@ class PainnDispersion(nn.Module):
     def get_dispersion(self,
                        batch,
                        xyz):
-        
+
         e_disp, r_ij_T, nbrs_T = base_dispersion(batch=batch,
                                                  xyz=xyz,
                                                  disp_type=self.disp_type,
@@ -54,7 +56,7 @@ class PainnDispersion(nn.Module):
                               batch,
                               xyz):
 
-        # all units are output in ASE units (eV and Angs)        
+        # all units are output in ASE units (eV and Angs)
         e_disp, stress_disp, forces_disp = grimme_dispersion(batch=batch,
                                                              xyz=xyz,
                                                              disp_type=self.disp_type,
@@ -77,13 +79,14 @@ class PainnDispersion(nn.Module):
         if getattr(self.painn_model, "excl_vol", None):
             # Excluded Volume interactions
             r_ex = self.painn_model.V_ex(r_ij, nbrs, xyz)
-            atomwise_out['energy'] += r_ex
+            for key in self.output_keys:
+                atomwise_out[key] += r_ex
 
         all_results, xyz = self.painn_model.pool(batch=batch,
                                                  atomwise_out=atomwise_out,
                                                  xyz=xyz,
-						                         r_ij=r_ij,
-						                         nbrs=nbrs,
+                                                 r_ij=r_ij,
+                                                 nbrs=nbrs,
                                                  inference=inference)
 
         if requires_stress:
@@ -95,6 +98,8 @@ class PainnDispersion(nn.Module):
         # add dispersion and gradients associated with it
 
         disp_grad = None
+        fallback_to_grimme = getattr(self, "fallback_to_grimme", True)
+
         if grimme_disp:
             pass
         else:
@@ -113,12 +118,12 @@ class PainnDispersion(nn.Module):
                 if grad_key in self.painn_model.grad_keys:
                     if disp_grad is None:
                         disp_grad = compute_grad(inputs=xyz,
-                                                output=e_disp)
+                                                 output=e_disp)
                         if inference:
                             disp_grad = disp_grad.detach().cpu()
 
                     # check numerical stability of disp_grad pytorch calculation
-                    if disp_grad.isnan().any():
+                    if disp_grad.isnan().any() and fallback_to_grimme:
                         grimme_disp = True
                     else:
                         all_results[key] = all_results[key] + add_e
@@ -144,16 +149,16 @@ class PainnDispersion(nn.Module):
                 N = batch["num_atoms"].detach().cpu().tolist()
                 split_val = torch.split(allstress, N)
                 disp_stress_volume = torch.stack([i.sum(0)
-                                                    for i in split_val])
+                                                  for i in split_val])
             if inference:
                 disp_stress_volume = disp_stress_volume.detach().cpu()
-            
+
             # check numerical stability of disp_grad pytorch calculation
-            if disp_stress_volume.isnan().any():
+            if disp_stress_volume.isnan().any() and fallback_to_grimme:
                 grimme_disp = True
             else:
                 all_results['stress_volume'] = all_results['stress_volume'] + \
-                                                             disp_stress_volume
+                    disp_stress_volume
 
         # if there was numerical instability with disp_grad pytorch
         # re-calculate everything with Grimme dispersion instead

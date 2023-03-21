@@ -4,9 +4,9 @@ from nff.io.ase import NeuralFF, AtomsBatch
 from nff.reactive_tools.utils import (neural_hessian_ase, neural_energy_ase,
                                       neural_force_ase)
 from nff.utils.constants import EV_TO_AU, BOHR_RADIUS
-from barriers.utils.vib import hessian_and_modes
 from ase.units import Bohr, mol, kcal
 from ase import Atoms
+from neuralnet.vib import hessian_and_modes
 
 CONVG_LINE = "Optimization converged!"
 

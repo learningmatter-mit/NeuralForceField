@@ -7,7 +7,7 @@ from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
                                   TransformerMessageBlock,
                                   NbrEmbeddingBlock)
 from nff.nn.modules.schnet import (AttentionPool, SumPool, MolFpPool,
-                                   MeanPool, get_rij, add_stress)
+                                   MeanPool, get_rij, add_embedding, add_stress)
 from nff.nn.modules.diabat import DiabaticReadout, AdiabaticReadout
 from nff.nn.layers import (Diagonalize, ExpNormalBasis)
 from nff.utils.scatter import scatter_add
@@ -253,6 +253,7 @@ class Painn(nn.Module):
     def run(self,
             batch,
             xyz=None,
+            requires_embedding=False,
             requires_stress=False,
             inference=False):   
 
@@ -262,7 +263,8 @@ class Painn(nn.Module):
         if getattr(self, "excl_vol", None):
             # Excluded Volume interactions
             r_ex = self.V_ex(r_ij, nbrs, xyz)
-            atomwise_out['energy'] += r_ex
+            for key in self.output_keys:
+                atomwise_out[key] += r_ex
 
         all_results, xyz = self.pool(batch=batch,
                                      atomwise_out=atomwise_out,
@@ -270,6 +272,10 @@ class Painn(nn.Module):
                                      r_ij=r_ij,
                                      nbrs=nbrs,
                                      inference=inference)
+
+        if requires_embedding:
+            all_results = add_embedding(atomwise_out=atomwise_out,
+                                        all_results=all_results)
 
         if requires_stress:
             all_results = add_stress(batch=batch,
@@ -279,12 +285,13 @@ class Painn(nn.Module):
         
         if getattr(self, "compute_delta", False):
             all_results = self.add_delta(all_results)
-        
+       
         return all_results, xyz
 
     def forward(self,
                 batch,
                 xyz=None,
+                requires_embedding=False,
                 requires_stress=False,
                 inference=False,
                 **kwargs):
@@ -298,6 +305,7 @@ class Painn(nn.Module):
 
         results, _ = self.run(batch=batch,
                               xyz=xyz,
+                              requires_embedding=requires_embedding,
                               requires_stress=requires_stress,
                               inference=inference)
 

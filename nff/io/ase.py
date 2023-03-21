@@ -58,6 +58,7 @@ class AtomsBatch(Atoms):
             directed=DEFAULT_DIRECTED,
             requires_large_offsets=False,
             cutoff_skin=DEFAULT_SKIN,
+            dense_nbrs=True,
             device=0,
             **kwargs
     ):
@@ -90,7 +91,10 @@ class AtomsBatch(Atoms):
         self.cutoff_skin = cutoff_skin
         self.device = device
         self.requires_large_offsets = requires_large_offsets
-        self.mol_nbrs, self.mol_idx = self.get_mol_nbrs()
+        if dense_nbrs:
+            self.mol_nbrs, self.mol_idx = self.get_mol_nbrs()
+        else:
+            self.mol_nbrs, self.mol_idx = None, None
 
     def get_mol_nbrs(self, r_cut=95):
         """
@@ -360,6 +364,15 @@ class AtomsBatch(Atoms):
 
         return ensemble_nbr_list, ensemble_offsets_list
 
+    def get_embedding(self):
+        
+        embedding = self._calc.get_embedding(self)
+        mol_split_idx = self.props['num_atoms'].tolist()
+        batch_embedding = torch.stack( torch.Tensor(embedding)
+                                        .split(mol_split_idx) ).numpy()
+        
+        return batch_embedding
+
     def get_batch_energies(self):
 
         if self._calc is None:
@@ -580,12 +593,13 @@ class BulkPhaseMaterials(Atoms):
 class NeuralFF(Calculator):
     """ASE calculator using a pretrained NeuralFF model"""
 
-    implemented_properties = ['energy', 'forces', 'stress']
+    implemented_properties = ['energy', 'forces', 'stress', 'embedding']
 
     def __init__(
             self,
             model,
             device='cpu',
+            jobdir=None,
             en_key='energy',
             properties=['energy', 'forces'],
             model_kwargs=None,
@@ -607,6 +621,7 @@ class NeuralFF(Calculator):
         self.model.eval()
         self.device = device
         self.to(device)
+        self.jobdir = jobdir
         self.en_key = en_key
         self.properties = properties
         self.model_kwargs = model_kwargs
@@ -614,6 +629,29 @@ class NeuralFF(Calculator):
     def to(self, device):
         self.device = device
         self.model.to(device)
+
+    def log_embedding(self,
+                     jobdir,
+                     log_filename,
+                     props
+    ):
+        """For the purposes of logging the NN embedding on-the-fly, to help with
+        sampling after calling NFF on geometries."""
+        
+        log_file = os.path.join(jobdir, log_filename)
+        if os.path.exists(log_file):           
+            log = np.load(log_file)
+        else:
+            log = None
+
+        if log is not None:
+            log = np.append(log, props[None,:,:,:], axis=0)
+        else:
+            log = props[None,:,:,:]
+
+        np.save(log_filename, log)
+        
+        return
 
     def calculate(
             self,
@@ -651,6 +689,9 @@ class NeuralFF(Calculator):
 
         kwargs = {}
         requires_stress = "stress" in self.properties
+        requires_embedding = "embedding" in self.properties
+        if requires_embedding:
+            kwargs["requires_embedding"] = True
         if requires_stress:
             kwargs["requires_stress"] = True
         kwargs["grimme_disp"] = False
@@ -679,6 +720,10 @@ class NeuralFF(Calculator):
             if 'forces_disp' in prediction:
                 self.results['forces'] = self.results['forces'] + prediction['forces_disp']
 
+        if requires_embedding:
+            embedding = prediction['embedding'].detach().cpu().numpy()
+            self.results['embedding'] = embedding
+
         if requires_stress:
             stress = (prediction['stress_volume'].detach()
                       .cpu().numpy() * (1 / const.EV_TO_KCAL_MOL))
@@ -687,6 +732,9 @@ class NeuralFF(Calculator):
                 self.results['stress'] = self.results['stress'] + prediction['stress_disp']
             self.results['stress'] = full_3x3_to_voigt_6_stress(self.results['stress'])
 
+    def get_embedding(self, atoms=None):
+        return self.get_property('embedding', atoms)
+
     @classmethod
     def from_file(
             cls,
@@ -694,7 +742,6 @@ class NeuralFF(Calculator):
             device='cuda',
             **kwargs
     ):
-
         model = load_model(model_path, **kwargs)
         out = cls(model=model,
                   device=device,
@@ -731,8 +778,8 @@ class EnsembleNFF(Calculator):
         for m in self.models:
             m.eval()
         self.device = device
-        self.jobdir = jobdir
         self.to(device)
+        self.jobdir = jobdir
         self.properties = properties
         self.model_kwargs = model_kwargs
 
@@ -748,6 +795,8 @@ class EnsembleNFF(Calculator):
     ):
         """For the purposes of logging the std on-the-fly, to help with
         sampling after calling NFF on geometries with high uncertainty."""
+
+        props = np.swapaxes(np.expand_dims(props, axis=-1), 0, -1)
 
         log_file = os.path.join(jobdir, log_filename)
         if os.path.exists(log_file):
