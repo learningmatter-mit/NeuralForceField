@@ -921,8 +921,14 @@ class BatchedZhuNakamura:
         self.explicit_diabat = zhu_params.get("explicit_diabat",
                                               DEF_EXPLICIT_DIABAT)
         self.max_time = self.zhu_trjs[0].max_time
-        self.energy_keys = [f"energy_{i}" for i in
-                            range(self.zhu_trjs[0].num_states)]
+        if 'en_key_list' not in zhu_params:
+            self.energy_keys = [f"energy_{i}" for i in
+                                range(self.zhu_trjs[0].num_states)]
+        else:
+            self.energy_keys = zhu_params['en_key_list']
+        if len(self.energy_keys) != self.zhu_trjs[0].num_states:
+            raise ValueError
+            
         self.grad_keys = [f"{key}_grad" for key in self.energy_keys]
 
         self.props = self.duplicate_props(props)
