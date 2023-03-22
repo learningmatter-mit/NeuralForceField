@@ -87,7 +87,7 @@ class NeuralMDLogger(MDLogger):
             dat = (t,)
         else:
             dat = ()
-        if not isinstance(epot, float):
+        if not isinstance(epot, float) and not isinstance(epot, np.float32):
             ekin = ekin/len(epot)
             epot = sum(epot)/len(epot)
         dat += (epot+ekin, epot, ekin, temp)
