@@ -497,14 +497,14 @@ def get_dispersion(batch,
         cn, r_ab = get_coordination(xyz=xyz,
                                     z=z,
                                     nbrs=nbrs,
-                                    r_cov=r_cov,
+                                    r_cov=r_cov.to(xyz.device),
                                     k1=params["k1"],
                                     k2=params["k2"])
 
         c6 = get_c6(z=z,
                     cn=cn,
                     nbrs=nbrs,
-                    c6_ref=c6_ref,
+                    c6_ref=c6_ref.to(xyz.device),
                     k3=params["k3"])
 
         c8 = get_c8(z=z,
