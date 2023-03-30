@@ -83,6 +83,8 @@ def make_trj(all_params,
     zhu_params = all_params["zhu_params"]
     batched_params = all_params["batched_params"]
     ground_params = all_params["ground_params"]
+    if 'en_key' not in ground_params:
+        ground_params['en_key'] = 'energy_0'
 
     if "model_path" in all_params:
         weight_path = all_params["model_path"]
@@ -116,7 +118,7 @@ def make_trj(all_params,
     nff_ase = NeuralFF.from_file(
         model_path=weight_path,
         device=device,
-        output_keys=["energy_0"],
+        output_keys=[ground_params['en_key']],
         conversion="ev",
         params=all_params,
         model_type=model_type,

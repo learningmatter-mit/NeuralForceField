@@ -62,6 +62,7 @@ class BiasBase(NeuralFF):
                  device='cpu',
                  en_key='energy',
                  directed=DEFAULT_DIRECTED,
+                 extra_constraints: list[dict] = None,
                  **kwargs):
 
         NeuralFF.__init__(self,
@@ -117,6 +118,33 @@ class BiasBase(NeuralFF):
                 self.cv_defs[ii]['type'] = 'not_angle'
             else:
                 self.cv_defs[ii]['type'] = cv['type']
+        
+        self.constraints = None
+        self.num_const = 0
+        if extra_constraints != None:
+            self.constraints = []
+            for cv in extra_constraints:
+                self.constraints.append({})
+                
+                self.constraints[-1]['func'] = CV(cv["definition"])
+                
+                self.constraints[-1]['pos'] = cv['pos']
+                if 'k' in cv.keys():
+                    self.constraints[-1]['k'] = cv['k']
+                elif 'sigma' in cv.keys():
+                    self.constraints[-1]['k'] = (units.kB * self.equil_temp) / (
+                                                  cv['sigma'] * cv['sigma'])
+                else:
+                    raise PropertyNotPresent('k/sigma')
+                    
+                if 'type' not in cv.keys():
+                    self.constraints[-1]['type'] = 'not_angle'
+                else:
+                    self.constraints[-1]['type'] = cv['type']
+                    
+            self.num_const = len(self.constraints)
+          
+                
 
         
     def _update_bias(self, xi: np.ndarray):
@@ -203,6 +231,34 @@ class BiasBase(NeuralFF):
         self._up_extvel()                
                 
         return bias_ener, bias_grad
+    
+    
+    def harmonic_constraint(self,
+                            xi: np.ndarray,
+                            grad_xi, np.ndarray,
+                           ) -> Tuple[np.ndarray, np.ndarray]:
+        """energy and gradient of additional harmonic constraint
+        
+        Args:
+            xi: current value of constraint "CV"
+            grad_xi: Cartesian gradient of these CVs
+            
+        Returns:
+            constr_ener: constraint energy
+            constr_grad: gradient of the constraint energy
+            
+        """
+        
+        constr_grad = np.zeros_like(grad_xi[0])
+        constr_ener = 0.0        
+        
+        for i in range(self.num_const):
+            dxi = self.diff(xi[i], self.constraints[i]['pos'], self.constraints[i]['type'])
+            constr_ener += self.constraints[i]['k'] * dxi * grad_xi[i]
+            constr_grad += 0.5 * self.constraints[i]['k'] * dxi**2
+            
+        return constr_ener, constr_grad
+        
 
     
     def calculate(
@@ -266,7 +322,7 @@ class BiasBase(NeuralFF):
         inv_masses = 1. / atoms.get_masses()
         M_inv  = np.diag(np.repeat(inv_masses, 3).flatten())
         
-        cvs = np.zeros(shape=(self.num_cv,1))
+        cvs          = np.zeros(shape=(self.num_cv,1))
         cv_grads     = np.zeros(shape=(self.num_cv, 
                                    atoms.get_positions().shape[0], 
                                    atoms.get_positions().shape[1]))
@@ -284,8 +340,20 @@ class BiasBase(NeuralFF):
         bias_ener, bias_grad = self.step_bias(cvs, cv_grads)
         energy += bias_ener
         grad   += bias_grad
+        
+        if self.constraints:
+            consts      = np.zeros(shape=(self.num_const,1))
+            const_grads = np.zeros(shape=(self.num_const, 
+                                       atoms.get_positions().shape[0], 
+                                       atoms.get_positions().shape[1]))
+            for ii, const_dict in enumerate(self.constraints):
+                consts[ii], const_grads[ii] = const_dict['func'](atoms)
             
+            const_ener, const_grad = self.harmonic_constraint(consts, const_grads)
+            energy += const_ener
+            grad   += const_grad
 
+            
         self.results = {
             'energy': energy.reshape(-1),
             'forces': -grad.reshape(-1, 3),
@@ -298,6 +366,9 @@ class BiasBase(NeuralFF):
             'cv_dot_PES': cv_dot_PES,
             'ext_pos': self.ext_coords,
         }
+        
+        if self.constraints:
+            self.results['const_vals'] = consts
 
         if requires_stress:
             stress = (prediction['stress_volume'].detach()
@@ -479,6 +550,14 @@ class eABF(BiasBase):
         self.ext_vel += self.rand_push * self.ext_rand_gauss
         self.ext_vel += 0.5e0 * self.ext_dt * self.ext_forces / self.ext_masses
         self.ext_coords += self.prefac1 * self.ext_dt * self.ext_vel 
+        
+        # wrap to range(-pi,pi) for angle
+        for ii in range(self.num_cv):
+            if self.cv_defs[ii]['type'] == 'angle':
+                if self.ext_coords[ii] > np.pi:
+                    self.ext_coords[ii] -= 2*np.pi
+                elif self.ext_coords[ii] < -np.pi:
+                    self.ext_coords[ii] += 2*np.pi
     
                                  
     def _up_extvel(self):

@@ -413,3 +413,99 @@ class ReadoutBlock(nn.Module):
             results[key] = output
 
         return results
+
+    
+class ReadoutBlock_Vec(nn.Module):
+    def __init__(self,
+                 feat_dim,
+                 # out_dims, # right now we can only get Natomsx3 but what if we just want 1x3?
+                 output_keys,
+                 activation,
+                 dropout,
+                 means=None,
+                 stddevs=None):
+        super().__init__()
+        
+        self.umat_dict = nn.ModuleDict(
+                            {key: Dense(in_features=feat_dim,
+                                           out_features=feat_dim,
+                                           bias=False)
+                             for key in output_keys}
+                        )
+        
+        self.vmat_dict = nn.ModuleDict(
+                            {key: Dense(in_features=feat_dim,
+                                           out_features=feat_dim,
+                                           bias=False)
+                             for key in output_keys}
+                        )
+
+        self.sdense_dict = nn.ModuleDict(
+                            {key: nn.Sequential(Dense(in_features=2*feat_dim,
+                                           out_features=feat_dim,
+                                           bias=True,
+                                           dropout_rate=dropout,
+                                           activation=to_module(activation)),
+                                     Dense(in_features=feat_dim,
+                                           out_features=feat_dim,
+                                           bias=True,
+                                           dropout_rate=dropout))
+                             for key in output_keys}
+                        )
+            
+
+        # figure out how to do the collapsing
+        self.readoutdict = nn.ModuleDict(
+                            {key:
+                                Dense(in_features=feat_dim,
+                                      out_features=1,
+                                      bias=False,
+                                      dropout_rate=dropout,)
+                             for key in output_keys}
+                            )
+
+    def forward(self,
+                s_i,
+                v_i):
+        """
+        Note: no atomwise summation. That's done in the model itself
+        """
+
+        results = {}
+        
+        # v_i = (num_atoms, num_feats, 3)
+        num_feats = v_i.shape[1]
+        
+        # v_i.transpose(1, 2).reshape(-1, v_i.shape[1])
+        # = (num_atoms, 3, num_feats).reshape(-1, num_feats)
+        # = (num_atoms * 3, num_feats)
+        # -> So the same u gets applied to each atom
+        # and for each of the three dimensions, but differently
+        # for the different feature dimensions
+
+        v_tranpose = v_i.transpose(1, 2).reshape(-1, num_feats)
+        
+        for key, readoutdict in self.readoutdict.items():
+
+            u_v = (self.umat_dict[key](v_tranpose).reshape(-1, 3, num_feats)
+                   .transpose(1, 2))
+            v_v = (self.vmat_dict[key](v_tranpose).reshape(-1, 3, num_feats)
+                   .transpose(1, 2))
+            
+            # now reshape it to (num_atoms, 3, num_feats) and transpose
+            # to get (num_atoms, num_feats, 3)
+
+            v_v_norm = norm(v_v)
+            s_stack = torch.cat([s_i, v_v_norm], dim=-1)
+
+            a_vv = self.sdense_dict[key](s_stack).reshape(s_i.shape[0], -1).unsqueeze(-1)
+
+            new_v_i = u_v * a_vv # (num_atoms, num_feats, 3)
+            new_v_i = new_v_i.transpose(1,2) # (num_atoms, 3, num_feats)
+
+            output = readoutdict(new_v_i)
+            results[key] = output
+
+        return results
+        
+

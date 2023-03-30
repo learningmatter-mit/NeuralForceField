@@ -87,7 +87,7 @@ class NeuralMDLogger(MDLogger):
             dat = (t,)
         else:
             dat = ()
-        if not isinstance(epot, float):
+        if not isinstance(epot, float) and not isinstance(epot, np.float32):
             ekin = ekin/len(epot)
             epot = sum(epot)/len(epot)
         dat += (epot+ekin, epot, ekin, temp)
@@ -152,8 +152,9 @@ class BiasedNeuralMDLogger(IOContext):
         else:
             self.dyn = None
             
-        self.atoms  = atoms
-        self.num_cv = atoms.calc.num_cv
+        self.atoms   = atoms
+        self.num_cv  = atoms.calc.num_cv
+        self.n_const = atoms.calc.num_const
         
         self.logfile = self.openfile(logfile, 
                                      comm=world, 
@@ -174,6 +175,10 @@ class BiasedNeuralMDLogger(IOContext):
             self.hdr += "%12s %12s %12s %12s %12s " % ("CV", "Lambda", "inv_m_cv",
                                                 "AbsGradCV", "GradCV_GradU")
             self.fmt += "%12.4f %12.4f %12.4f %12.4f %12.4f "
+            
+        for i in range(self.n_const):
+            self.hdr += "%12s " % ("Const")
+            self.fmt += "%12.5f "
             
         self.fmt += "\n"
         if header:
@@ -205,9 +210,14 @@ class BiasedNeuralMDLogger(IOContext):
         cv_invmass = self.atoms.calc.get_property("cv_invmass")
         absGradCV  = self.atoms.calc.get_property("cv_grad_lengths")
         CVdotPot   = self.atoms.calc.get_property("cv_dot_PES")
+        if self.n_const > 0:
+            consts = self.atoms.calc.get_property('const_vals')
         
         for i in range(self.num_cv):
             dat += (cv_vals[i], ext_pos[i], cv_invmass[i], absGradCV[i], CVdotPot[i])
+            
+        for i in range(self.n_const):
+            dat += (consts[i])
 
         self.logfile.write(self.fmt % dat)
         self.logfile.flush()
