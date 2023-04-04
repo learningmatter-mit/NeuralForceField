@@ -144,6 +144,18 @@ class ConstrainAngles(FixConstraint):
             assert len(force_consts) == len(self.idx)
             self.force_consts = force_consts
 
+        # The derivative of the angle is singular at 180 degrees, so
+        # set the angle to 178 or 182 depending on which side of 180
+        # it's on
+
+        lower_idx = ((abs(np.degrees(self.targ_angles) - 180) < 0.5) *
+                     (np.degrees(self.targ_angles) < 180))
+        upper_idx = ((abs(np.degrees(self.targ_angles) - 180) < 0.5) *
+                     (np.degrees(self.targ_angles) > 180))
+
+        self.targ_angles[lower_idx] = np.radians(179.5)
+        self.targ_angles[upper_idx] = np.radians(180.5)
+
     def get_removed_dof(self, atoms):
         # no degrees of freedom are being fixed, they're just being constrained.
         # So return 0 just like in the Hookean class
