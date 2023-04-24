@@ -217,7 +217,7 @@ class BiasedNeuralMDLogger(IOContext):
             dat += (cv_vals[i], ext_pos[i], cv_invmass[i], absGradCV[i], CVdotPot[i])
             
         for i in range(self.n_const):
-            dat += (consts[i])
+            dat += (consts[i],)
 
         self.logfile.write(self.fmt % dat)
         self.logfile.flush()
