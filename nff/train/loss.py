@@ -3,6 +3,8 @@ from torch.nn import CrossEntropyLoss
 import numpy as np
 from nff.utils import constants as const
 import pdb
+import itertools as itertools
+import copy
 
 __all__ = ["build_mse_loss"]
 
@@ -627,6 +629,98 @@ def build_nacv_loss(loss_dict):
         return loss
 
     return loss_fn
+
+def build_multi_nacv_loss(loss_dict):
+
+    params = loss_dict["params"]
+    keys   = params["keys"]
+    states = params["states"]
+    nstates= len(states)
+    
+    key_to_states = {}
+    for key in keys:
+        state_idxs = []
+        for ii, state in enumerate(states):
+            if state in key:
+                state_idxs.append(ii)
+                
+        key_to_states[key] = copy.deepcopy(state_idxs)
+    
+    loss_type = params.get("loss_type", "mse")
+
+    coefs = loss_dict["coefs"]
+
+    take_max = params.get("max", False)
+    
+    sign_mat = torch.cat(((torch.zeros(size=(2**(nstates-1),1)) + 1).T, 
+                          torch.Tensor(list(itertools.product([1, -1], 
+                                                              repeat=nstates-1))).T))
+    
+    def loss_fn(ground_truth,
+                results,
+                **kwargs):
+
+        num_atoms = ground_truth["num_atoms"].tolist()
+        loss_list = []
+        
+        
+        list_targets = []
+        list_preds   = []
+        for key in keys:
+            targ = ground_truth[key]
+            pred = results[key]
+            targ_list = torch.split(targ, num_atoms)
+            pred_list = torch.split(pred, num_atoms)
+            list_targets.append(targ_list)
+            list_preds.append(pred_list)
+        
+        batch_size = len(pred_list)
+        loss = torch.zeros(size=(1,), 
+                           requires_grad=True,
+                           device = pred_list[0].device)
+        
+        for b_idx in range(batch_size):
+            deltas = torch.zeros(size=(2**(nstates-1),))
+            good_batch = True
+            for ii, key in enumerate(keys):
+                targ_batch = list_targets[ii][b_idx].reshape((num_atoms[b_idx], 3))
+                pred_batch = list_preds[ii][b_idx].reshape((num_atoms[b_idx], 3))
+                if torch.isnan(targ_batch).any():
+                    good_batch = False
+                    break
+                
+                [column1, column2] = key_to_states[key]
+                for permut_idx, (sign1, sign2) in enumerate(zip(sign_mat[column1], sign_mat[column2])):
+                    sign = sign1*sign2
+                    delta = ((targ_batch*sign - pred_batch).abs()
+                                 .mean().item())
+                    deltas[permut_idx] += delta
+            
+            if good_batch:
+                best_permut = torch.argmin(deltas)
+                
+                for ii, key in enumerate(keys):
+                    targ = list_targets[ii][b_idx].reshape((num_atoms[b_idx], 3))
+                    pred = list_preds[ii][b_idx].reshape((num_atoms[b_idx], 3))
+
+                    [column1, column2] = key_to_states[key]
+                    sign1, sign2 = sign_mat[column1, best_permut], sign_mat[column2, best_permut]
+                    pred = pred * (sign1*sign2)
+                    
+                    if loss_type == "mse":
+                        diff = mse_operation(targ, pred)
+                    elif loss_type == "mae":
+                        diff = mae_operation(targ, pred)
+                    else:
+                        raise NotImplementedError
+
+                    coef = coefs[key]
+                    loss = loss + coef * torch.mean(diff)
+            
+        return loss.mean()
+
+    return loss_fn
+
 
 
 def build_trans_dip_loss(loss_dict):
