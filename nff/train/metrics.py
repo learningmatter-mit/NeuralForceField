@@ -131,11 +131,60 @@ class MeanAbsoluteError(Metric):
     def loss_fn(y, yp):
 
         # select only properties which are given
+
+        yp = yp.reshape(*y.shape)
         valid_idx = torch.bitwise_not(torch.isnan(y))
         y = y[valid_idx]
         yp = yp[valid_idx]
 
         y = y.to(torch.float)
+        diff = y - yp.view(y.shape)
+
+        return torch.sum(torch.abs(diff).view(-1)).detach().cpu().data.numpy()
+
+
+class DipoleMeanAbsoluteError(Metric):
+    r"""
+    Metric for mean absolute error. For non-scalar quantities, the mean of all
+    components is taken.
+
+    Args:
+        target (str): name of target property
+        name (str): name used in logging for this metric. If set to `None`,
+            `MAE_[target]` will be used (Default: None)
+    """
+
+    def __init__(
+        self,
+        target,
+        name=None,
+    ):
+        name = "MAE_" + target if name is None else name
+        super().__init__(
+            target=target,
+            name=name,
+        )
+
+    @staticmethod
+    def loss_fn(y, yp):
+
+        # select only properties which are given
+
+        yp = yp.reshape(*y.shape)
+        valid_idx = torch.bitwise_not(torch.isnan(y))
+        y = y[valid_idx].reshape(-1, 3)
+        yp = yp[valid_idx].reshape(-1, 3)
+        y = y.to(torch.float)
+
+        pos_delta = (abs(y - yp)).mean(-1)
+        neg_delta = (abs(y + yp)).mean(-1)
+
+        signs = (torch.ones(pos_delta.shape[0],
+                            dtype=torch.long)
+                 .to(pos_delta.device))
+        signs[neg_delta < pos_delta] = -1
+        y = y * signs.reshape(-1, 1)
+
         diff = y - yp.view(y.shape)
 
         return torch.sum(torch.abs(diff).view(-1)).detach().cpu().data.numpy()

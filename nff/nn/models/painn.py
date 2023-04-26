@@ -11,8 +11,7 @@ from nff.nn.modules.schnet import (AttentionPool, SumPool, MolFpPool,
 from nff.nn.modules.diabat import DiabaticReadout, AdiabaticReadout
 from nff.nn.layers import (Diagonalize, ExpNormalBasis)
 from nff.utils.scatter import scatter_add
-
-import pdb
+import torch
 
 POOL_DIC = {"sum": SumPool,
             "mean": MeanPool,
@@ -223,14 +222,14 @@ class Painn(nn.Module):
                 results = batch_detach(results)
                 print(type(results))
             all_results.update(results)
-            
+
         # transfer those results that don't get pooled
         if inference:
             atomwise_out = batch_detach(atomwise_out)
         for key in atomwise_out.keys():
             if key not in all_results.keys():
                 all_results[key] = atomwise_out[key]
-            
+
         return all_results, xyz
 
     def add_delta(self, all_results):
@@ -255,7 +254,7 @@ class Painn(nn.Module):
             xyz=None,
             requires_embedding=False,
             requires_stress=False,
-            inference=False):   
+            inference=False):
 
         atomwise_out, xyz, r_ij, nbrs = self.atomwise(batch=batch,
                                                       xyz=xyz)
@@ -282,10 +281,10 @@ class Painn(nn.Module):
                                      all_results=all_results,
                                      nbrs=nbrs,
                                      r_ij=r_ij)
-        
+
         if getattr(self, "compute_delta", False):
             all_results = self.add_delta(all_results)
-       
+
         return all_results, xyz
 
     def forward(self,
@@ -539,11 +538,9 @@ class PainnGapToAbs(nn.Module):
 
         return combined_results
 
-    
-    
+
 class Painn_VecOut(Painn):
-    
-    
+
     def __init__(self,
                  modelparams):
         """
@@ -553,34 +550,34 @@ class Painn_VecOut(Painn):
 
 
         """
-        
+
         super().__init__(modelparams)
-        
+
         output_vec_keys = modelparams["output_vec_keys"]
         feat_dim = modelparams["feat_dim"]
         activation = modelparams["activation"]
         readout_dropout = modelparams.get("readout_dropout", 0)
         means = modelparams.get("means")
         stddevs = modelparams.get("stddevs")
-        
+
         self.output_vec_keys = output_vec_keys
         # no skip connection in original paper
         self.skip_vec = modelparams.get("skip_vec_connection",
-                                    {key: False for key
-                                     in self.output_vec_keys})
-        
-        num_vec_readouts = num_conv if any(self.skip.values()) else 1
+                                        {key: False for key
+                                         in self.output_vec_keys})
+
+        num_vec_readouts = (modelparams["num_conv"] if any(self.skip.values())
+                            else 1)
         self.readout_vec_blocks = nn.ModuleList(
             [ReadoutBlock_Vec(feat_dim=feat_dim,
-                          output_keys=output_vec_keys,
-                          activation=activation,
-                          dropout=readout_dropout,
-                          means=means,
-                          stddevs=stddevs)
+                              output_keys=output_vec_keys,
+                              activation=activation,
+                              dropout=readout_dropout,
+                              means=means,
+                              stddevs=stddevs)
              for _ in range(num_vec_readouts)]
         )
 
-    
     def atomwise(self,
                  batch,
                  xyz=None):
@@ -653,7 +650,7 @@ class Painn_VecOut(Painn):
                     continue
                 if not skip:
                     results[key] = new_results[key]
-                    
+
             first_vec_readout = self.readout_vec_blocks[0]
             new_vec_results = first_vec_readout(s_i=s_i, v_i=v_i)
             for key, skip in self.skip_vec.items():
@@ -667,3 +664,56 @@ class Painn_VecOut(Painn):
 
         return results, xyz, r_ij, nbrs
 
+
+class PainnDipole(Painn_VecOut):
+    """
+    Model class that basically does the same thing as Painn_VecOut,
+    but is slightly modified for Simon's applications of dipole
+    moments. Made into a separate class to not interfere with
+    Johannes' work.
+    """
+
+    def __init__(self,
+                 modelparams):
+        """
+        Args:
+            modelparams (dict): dictionary of model parameters
+
+
+
+        """
+
+        super().__init__(modelparams)
+
+        # dictionary of the form {key: True/False} for all keys
+        # that are vector outputs. If True, then the output is
+        # a vector for each atom. If False, then the per-atom
+        # vectors are summed to give a vector per molecule (like
+        # a dipole moment)
+        self.vector_per_atom = modelparams["vector_per_atom"]
+
+    def forward(self,
+                batch,
+                xyz=None,
+                requires_embedding=False,
+                requires_stress=False,
+                inference=False,
+                **kwargs):
+        results = super().forward(batch=batch,
+                                  xyz=xyz,
+                                  requires_embedding=requires_embedding,
+                                  requires_stress=requires_stress,
+                                  inference=inference,
+                                  **kwargs)
+
+        # sum the per-atom vectors for each molecule, if necessary
+        for key in self.output_vec_keys:
+            if self.vector_per_atom[key]:
+                continue
+            val = results[key]
+            split_vals = torch.split(val, batch['num_atoms'].tolist())
+            final_vals = torch.stack([split_val.sum(0).reshape(3)
+                                      for split_val in split_vals])
+            results[key] = final_vals
+
+        return results

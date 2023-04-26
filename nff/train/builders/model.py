@@ -16,7 +16,7 @@ from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import ChemProp3D, OnlyBondUpdateCP3D
 from nff.nn.models.dimenet import DimeNet, DimeNetDiabat, DimeNetDiabatDelta, DimeNetDelta
 from nff.nn.models.painn import (Painn, PainnDiabat, PainnTransformer,
-                                 PainnAdiabat, Painn_VecOut)
+                                 PainnAdiabat, Painn_VecOut, PainnDipole)
 from nff.nn.models.dispersion_models import PainnDispersion
 
 PARAMS_TYPE = {"SchNet":
@@ -245,7 +245,7 @@ PARAMS_TYPE = {"SchNet":
                    "grad_keys": list
 
                },
-               
+
                "Painn_VecOut":
                {
                    "feat_dim": int,
@@ -357,6 +357,21 @@ PARAMS_TYPE = {"SchNet":
                    "V_ex_sigma": float
                },
 
+               "PainnDipole":
+               {
+                   "feat_dim": int,
+                   "activation": str,
+                   "n_rbf": int,
+                   "cutoff": float,
+                   "num_conv": int,
+                   "output_keys": list,
+                   "grad_keys": list,
+                   "excl_vol": bool,
+                   "V_ex_power": int,
+                   "V_ex_sigma": float,
+                   "output_vec_keys": list,
+                   "vector_per_atom": dict,
+               },
 
                }
 
@@ -382,7 +397,8 @@ MODEL_DICT = {
     "SpookyPainnDiabat": SpookyPainnDiabat,
     "RealSpookyNet": RealSpookyNet,
     "PainnDispersion": PainnDispersion,
-    "Painn_VecOut": Painn_VecOut
+    "Painn_VecOut": Painn_VecOut,
+    "PainnDipole": PainnDipole,
 }
 
 
