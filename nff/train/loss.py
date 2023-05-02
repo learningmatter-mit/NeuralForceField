@@ -631,29 +631,30 @@ def build_nacv_loss(loss_dict):
 
     return loss_fn
 
+
 def build_multi_nacv_loss(loss_dict):
 
     params = loss_dict["params"]
-    keys   = params["keys"]
+    keys = params["keys"]
     states = params["states"]
-    nstates= len(states)
-    
+    nstates = len(states)
+
     key_to_states = {}
     for key in keys:
         state_idxs = []
         for ii, state in enumerate(states):
             if state in key:
                 state_idxs.append(ii)
-                
+
         key_to_states[key] = copy.deepcopy(state_idxs)
-    
+
     loss_type = params.get("loss_type", "mse")
     coefs = loss_dict["coefs"]
     
     sign_mat = torch.cat(((torch.zeros(size=(2**(nstates-1),1)) + 1).T, 
                           torch.Tensor(list(itertools.product([1, -1], 
-                                                              repeat=nstates-1))).T))
-    
+                        repeat=nstates-1))).T))
+
     def loss_fn(ground_truth,
                 results,
                 key_to_states=key_to_states,
@@ -662,10 +663,9 @@ def build_multi_nacv_loss(loss_dict):
 
         num_atoms = ground_truth["num_atoms"].tolist()
         loss_list = []
-        
-        
+
         list_targets = []
-        list_preds   = []
+        list_preds = []
         for key in keys:
             targ = ground_truth[key]
             pred = results[key]
@@ -673,45 +673,44 @@ def build_multi_nacv_loss(loss_dict):
             pred_list = torch.split(pred, num_atoms)
             list_targets.append(targ_list)
             list_preds.append(pred_list)
-        
+
         batch_size = len(pred_list)
-        loss = torch.zeros(size=(1,), 
+        loss = torch.zeros(size=(1,),
                            requires_grad=True,
-                           device = pred_list[0].device)
-        
+                           device=pred_list[0].device)
+
         for b_idx in range(batch_size):
             deltas = torch.zeros(size=(2**(nstates-1),))
             good_batch = True
             for ii, key in enumerate(keys):
-                targ_batch = list_targets[ii][b_idx].reshape((num_atoms[b_idx], 3))
-                pred_batch = list_preds[ii][b_idx].reshape((num_atoms[b_idx], 3))
+                targ_batch = list_targets[ii][b_idx].reshape(
+                    (num_atoms[b_idx], 3))
+                pred_batch = list_preds[ii][b_idx].reshape(
+                    (num_atoms[b_idx], 3))
                 if torch.isnan(targ_batch).any():
                     good_batch = False
                     break
-               
-                try:
-                    [column1, column2] = key_to_states[key]
-                except:
-                    print(key_to_states.items())
-                    print(key)
-                    exit()
+
+                [column1, column2] = key_to_states[key]
                 for permut_idx, (sign1, sign2) in enumerate(zip(sign_mat[column1], sign_mat[column2])):
                     sign = sign1*sign2
                     delta = ((targ_batch*sign - pred_batch).abs()
-                                 .mean().item())
+                             .mean().item())
                     deltas[permut_idx] += delta
-            
+
             if good_batch:
                 best_permut = torch.argmin(deltas)
-                
+
                 for ii, key in enumerate(keys):
-                    targ = list_targets[ii][b_idx].reshape((num_atoms[b_idx], 3))
+                    targ = list_targets[ii][b_idx].reshape(
+                        (num_atoms[b_idx], 3))
                     pred = list_preds[ii][b_idx].reshape((num_atoms[b_idx], 3))
 
                     [column1, column2] = key_to_states[key]
-                    sign1, sign2 = sign_mat[column1, best_permut], sign_mat[column2, best_permut]
+                    sign1, sign2 = sign_mat[column1,
+                                            best_permut], sign_mat[column2, best_permut]
                     pred = pred * (sign1*sign2)
-                    
+
                     if loss_type == "mse":
                         diff = mse_operation(targ, pred)
                     elif loss_type == "mae":
@@ -721,11 +720,10 @@ def build_multi_nacv_loss(loss_dict):
 
                     coef = coefs[key]
                     loss = loss + coef * torch.mean(diff)
-            
+
         return loss.mean()
 
     return loss_fn
-
 
 
 def build_trans_dip_loss(loss_dict):
@@ -765,6 +763,43 @@ def build_trans_dip_loss(loss_dict):
     return loss_fn
 
 
+def build_mae_trans_dip_loss(loss_dict):
+
+    params = loss_dict["params"]
+    key = params["key"]
+    coef = loss_dict["coef"]
+
+    def loss_fn(ground_truth,
+                results,
+                **kwargs):
+
+        targ = ground_truth[key].reshape(-1, 3)
+        pred = results[key].reshape(-1, 3)
+
+        pos_delta = (abs(targ - pred)).mean(-1)
+        neg_delta = (abs(targ + pred)).mean(-1)
+
+        signs = (torch.ones(pos_delta.shape[0],
+                            dtype=torch.long)
+                 .to(pos_delta.device))
+        signs[neg_delta < pos_delta] = -1
+        targ = targ * signs.reshape(-1, 1)
+
+        targ = targ.reshape(-1)
+        pred = pred.reshape(-1)
+
+        valid_idx = torch.bitwise_not(torch.isnan(targ))
+        targ = targ[valid_idx]
+        pred = pred[valid_idx]
+
+        diff = mae_operation(targ, pred)
+        loss = coef * torch.mean(diff)
+
+        return loss
+
+    return loss_fn
+
+
 def name_to_func(name):
     dic = {
         "mse": build_mse_loss,
@@ -778,7 +813,8 @@ def name_to_func(name):
         "skewed_p": build_skewed_p_loss,
         "nacv": build_nacv_loss,
         "multi_nacv": build_multi_nacv_loss,
-        'trans_dipole': build_trans_dip_loss
+        'trans_dipole': build_trans_dip_loss,
+        'mae_trans_dipole': build_mae_trans_dip_loss
     }
     func = dic[name]
     return func
