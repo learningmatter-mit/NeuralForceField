@@ -563,13 +563,14 @@ def correct_nacv_sign(pred,
 
     for targ_batch, pred_batch in zip(targ_list,
                                       pred_list):
+        
         pos_delta = ((targ_batch - pred_batch).abs()
                      .mean().item())
         neg_delta = ((targ_batch + pred_batch).abs()
                      .mean().item())
         sign = 1 if (pos_delta < neg_delta) else -1
         signs.append(sign)
-
+    
     sign_tensor = (torch.cat([sign * torch.ones(n, 3)
                               for sign, n in zip(signs, num_atoms)])
                    .to(targ.device))
@@ -647,10 +648,7 @@ def build_multi_nacv_loss(loss_dict):
         key_to_states[key] = copy.deepcopy(state_idxs)
     
     loss_type = params.get("loss_type", "mse")
-
     coefs = loss_dict["coefs"]
-
-    take_max = params.get("max", False)
     
     sign_mat = torch.cat(((torch.zeros(size=(2**(nstates-1),1)) + 1).T, 
                           torch.Tensor(list(itertools.product([1, -1], 
@@ -658,6 +656,8 @@ def build_multi_nacv_loss(loss_dict):
     
     def loss_fn(ground_truth,
                 results,
+                key_to_states=key_to_states,
+                sign_mat=sign_mat,
                 **kwargs):
 
         num_atoms = ground_truth["num_atoms"].tolist()
@@ -688,8 +688,13 @@ def build_multi_nacv_loss(loss_dict):
                 if torch.isnan(targ_batch).any():
                     good_batch = False
                     break
-                
-                [column1, column2] = key_to_states[key]
+               
+                try:
+                    [column1, column2] = key_to_states[key]
+                except:
+                    print(key_to_states.items())
+                    print(key)
+                    exit()
                 for permut_idx, (sign1, sign2) in enumerate(zip(sign_mat[column1], sign_mat[column2])):
                     sign = sign1*sign2
                     delta = ((targ_batch*sign - pred_batch).abs()
@@ -772,6 +777,7 @@ def name_to_func(name):
         "diabat_sign": build_diabat_sign_loss,
         "skewed_p": build_skewed_p_loss,
         "nacv": build_nacv_loss,
+        "multi_nacv": build_multi_nacv_loss,
         'trans_dipole': build_trans_dip_loss
     }
     func = dic[name]
