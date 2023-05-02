@@ -503,7 +503,7 @@ class ReadoutBlock_Vec(nn.Module):
             new_v_i = u_v * a_vv # (num_atoms, num_feats, 3)
             new_v_i = new_v_i.transpose(1,2) # (num_atoms, 3, num_feats)
 
-            output = readoutdict(new_v_i)
+            output = readoutdict(new_v_i).sum(dim=2) # (num_atoms, 3, 1) -> (num_atoms, 3)
             results[key] = output
 
         return results
