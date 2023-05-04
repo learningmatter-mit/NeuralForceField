@@ -415,6 +415,44 @@ class ReadoutBlock(nn.Module):
         return results
 
 
+class ReadoutBlock_Complex(nn.Module):
+    def __init__(self,
+                 feat_dim,
+                 output_keys,
+                 activation,
+                 dropout,
+                 means=None,
+                 stddevs=None):
+        super().__init__()
+
+        self.readoutdict = nn.ModuleDict(
+            {key: nn.Sequential(
+                Dense(in_features=feat_dim,
+                      out_features=feat_dim//2,
+                      bias=True,
+                      dropout_rate=dropout,
+                      activation=to_module(activation)),
+                Dense(in_features=feat_dim//2,
+                      out_features=2,
+                      bias=True,
+                      dropout_rate=dropout))
+             for key in output_keys}
+        )
+
+    def forward(self, s_i):
+        """
+        Note: no atomwise summation. That's done in the model itself
+        """
+
+        results = {}
+
+        for key, readoutdict in self.readoutdict.items():
+            output = readoutdict(s_i)
+            results[key] = torch.view_as_complex(output)
+
+        return results
+
+
 class ReadoutBlock_Vec(nn.Module):
     def __init__(self,
                  feat_dim,
