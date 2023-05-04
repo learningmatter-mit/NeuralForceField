@@ -220,7 +220,6 @@ class Painn(nn.Module):
 
             if inference:
                 results = batch_detach(results)
-                print(type(results))
             all_results.update(results)
 
         # transfer those results that don't get pooled
