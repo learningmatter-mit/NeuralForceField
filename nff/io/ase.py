@@ -316,7 +316,10 @@ class AtomsBatch(Atoms):
 
         return Atoms_list
 
-    def update_nbr_list(self):
+    def update_num_atoms(self):
+        self.props["num_atoms"] = torch.tensor([len(self)])
+
+    def update_nbr_list(self, update_atoms=False):
         """Update neighbor list and the periodic reindexing
            for the given Atoms object.
            Args:
@@ -327,6 +330,8 @@ class AtomsBatch(Atoms):
            offsets(torch.Tensor)
            nxyz(torch.Tensor)
         """
+        if update_atoms:
+            self.update_num_atoms()
 
         Atoms_list = self.get_list_atoms()
 

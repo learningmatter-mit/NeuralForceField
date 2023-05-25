@@ -145,7 +145,7 @@ class ConstrainAngles(FixConstraint):
             self.force_consts = force_consts
 
         # The derivative of the angle is singular at 180 degrees, so
-        # set the angle to 178 or 182 depending on which side of 180
+        # set the angle to 179.5 or 180.5 depending on which side of 180
         # it's on
 
         lower_idx = ((abs(np.degrees(self.targ_angles) - 180) < 0.5) *
