@@ -827,7 +827,7 @@ def build_cmplx_loss(loss_dict):
     return loss_fn
 
 
-def build_soc_length_loss(loss_dict):
+def build_soc_norm_loss(loss_dict):
 
     params    = loss_dict["params"]
     key_root  = params["key"]
@@ -889,6 +889,7 @@ def name_to_func(name):
         'trans_dipole': build_trans_dip_loss,
         'mae_trans_dipole': build_mae_trans_dip_loss,
         'cmplx': build_cmplx_loss,
+        'soc_norm': build_soc_norm_loss
     }
     func = dic[name]
     return func
