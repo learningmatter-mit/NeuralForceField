@@ -800,6 +800,79 @@ def build_mae_trans_dip_loss(loss_dict):
     return loss_fn
 
 
+def build_cmplx_loss(loss_dict):
+
+    params = loss_dict["params"]
+    key = params["key"]
+    loss_type = params.get("loss_type", "mae")
+
+    coef = loss_dict["coef"]
+
+    def loss_fn(ground_truth,
+                results,
+                **kwargs):
+
+        targ = ground_truth[key]
+        pred = results[key]
+
+        if loss_type == "mae":
+            diff = (targ - pred).abs()
+        else:
+            raise NotImplementedError
+
+        loss = coef * torch.mean(diff)
+
+        return loss
+
+    return loss_fn
+
+
+def build_soc_norm_loss(loss_dict):
+
+    params    = loss_dict["params"]
+    key_root  = params["key"]
+    soc_tpye  = params["type"]
+    loss_type = params.get("loss_type", "mae")
+
+    coef = loss_dict["coef"]
+
+    def loss_fn(ground_truth,
+                results,
+                **kwargs):
+
+        pred_a = results[key_root+"_a"]
+        pred_b = results[key_root+"_b"]
+        pred_c = results[key_root+"_c"]
+        targ   = ground_truth[key_root+"_total"]
+
+        if loss_type == "mae":
+            if soc_type == "T_to_T": 
+                diff = (targ - (4.*(pred_a.pow(2) + pred_b.pow(2)) 
+                                + 2.*pred_c.pow(2)).sqrt()).abs()
+            elif soc_type == "S_to_T":
+                diff = (targ - (2.*(pred_a.pow(2) + pred_b.pow(2))
+                                + pred_c.pow(2)).sqrt()).abs()
+            else:
+                raise NotImplementedError
+        elif loss_type == "mse":
+            if soc_type == "T_to_T":
+                diff = (targ.pow(2) - (4.*(pred_a.pow(2) + pred_b.pow(2)) 
+                                   + 2.*pred_c.pow(2)))
+            elif soc_type == "S_to_T":
+                diff = (targ.pow(2) - (2.*(pred_a.pow(2) + pred_b.pow(2))
+                                   + pred_c.pow(2)))
+            else:
+                raise NotImplementedError
+        else:
+            raise NotImplementedError
+
+        loss = coef * torch.mean(diff)
+
+        return loss
+
+    return loss_fn
+
+
 def name_to_func(name):
     dic = {
         "mse": build_mse_loss,
@@ -814,7 +887,9 @@ def name_to_func(name):
         "nacv": build_nacv_loss,
         "multi_nacv": build_multi_nacv_loss,
         'trans_dipole': build_trans_dip_loss,
-        'mae_trans_dipole': build_mae_trans_dip_loss
+        'mae_trans_dipole': build_mae_trans_dip_loss,
+        'cmplx': build_cmplx_loss,
+        'soc_norm': build_soc_norm_loss
     }
     func = dic[name]
     return func
