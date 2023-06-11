@@ -831,7 +831,7 @@ def build_soc_norm_loss(loss_dict):
 
     params    = loss_dict["params"]
     key_root  = params["key"]
-    soc_tpye  = params["type"]
+    soc_type  = params["type"]
     loss_type = params.get("loss_type", "mae")
 
     coef = loss_dict["coef"]
@@ -873,6 +873,102 @@ def build_soc_norm_loss(loss_dict):
     return loss_fn
 
 
+def build_soc_loss(loss_dict):
+
+    params    = loss_dict["params"]
+    key_root  = params["key"]
+#     soc_type  = params["type"]
+    loss_type = params.get("loss_type", "mae")
+
+    coef = loss_dict["coef"]
+
+    def loss_fn(ground_truth,
+                results,
+                **kwargs):
+        
+        diff = 0.
+        
+        targ_list = []
+        pred_list = []
+        for abc in ['a', 'b', 'c']:
+            pred_list.append(results[key_root+f"_{abc}"])
+            targ_list.append(ground_truth[key_root+f"_{abc}"])
+        
+        signs = []
+        for (targ_a, targ_b, targ_c,
+             pred_a, pred_b, pred_c) in zip(*targ_list,
+                                            *pred_list):
+            
+            # everything is right as is
+            pos_delta  = ((targ_a - pred_b).abs()
+                         .mean().item())
+            pos_delta += ((targ_b - pred_b).abs()
+                         .mean().item())
+            pos_delta += ((targ_c - pred_c).abs()
+                         .mean().item())
+            # the phase is equal to -1
+            neg_delta  = ((targ_a + pred_a).abs()
+                         .mean().item())
+            neg_delta += ((targ_b + pred_b).abs()
+                         .mean().item())
+            neg_delta += ((targ_c + pred_c).abs()
+                         .mean().item())
+            # the SOCs are complex conj
+            conj_delta  = ((targ_a - pred_a).abs()
+                         .mean().item())
+            conj_delta += ((targ_b + pred_b).abs()
+                         .mean().item())
+            conj_delta += ((targ_c + pred_c).abs()
+                         .mean().item())
+            # complex conj and phase -1
+            neg_conj  = ((targ_a + pred_a).abs()
+                         .mean().item())
+            neg_conj += ((targ_b - pred_b).abs()
+                         .mean().item())
+            neg_conj += ((targ_c - pred_c).abs()
+                         .mean().item())
+            
+            argmin = np.argmin([pos_delta, neg_delta, conj_delta, neg_conj])
+#             sign = 1 if (pos_delta < neg_delta) else -1
+            if argmin == 0:
+                sign = [1, 1, 1]
+            elif argmin == 1:
+                sign = [-1, -1, -1]
+            elif argmin == 2:
+                sign = [1, -1, -1]
+            elif argmin == 3:
+                sign = [-1, 1, 1]
+            else:
+                raise ValueError("argmin of 4 entries cannot be outside of [0,3]!")
+                
+            signs.append(sign)
+    
+        sign_tensor = (torch.Tensor(signs)
+                       .to(targ_a.device))
+
+        #for targ, pred in zip(targ_list, pred_list):
+        for ii in range(3):
+            targ = targ_list[ii] * sign_tensor[:,ii]
+            pred = pred_list[ii]
+
+            valid_idx = torch.bitwise_not(torch.isnan(targ))
+            targ = targ[valid_idx]
+            pred = pred[valid_idx]
+
+            if loss_type == "mse":
+                diff += torch.mean(mse_operation(targ, pred))
+            elif loss_type == "mae":
+                diff += torch.mean(mae_operation(targ, pred))
+            else:
+                raise NotImplementedError
+
+        loss = coef * diff
+
+        return loss
+
+    return loss_fn
+
+
 def name_to_func(name):
     dic = {
         "mse": build_mse_loss,
@@ -889,7 +985,8 @@ def name_to_func(name):
         'trans_dipole': build_trans_dip_loss,
         'mae_trans_dipole': build_mae_trans_dip_loss,
         'cmplx': build_cmplx_loss,
-        'soc_norm': build_soc_norm_loss
+        'soc_norm': build_soc_norm_loss,
+        'soc_sign': build_soc_loss,
     }
     func = dic[name]
     return func
