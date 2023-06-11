@@ -239,6 +239,11 @@ class Painn(nn.Module):
             key = f"{e_i}_{e_j}_delta"
             all_results[key] = (all_results[e_i] -
                                 all_results[e_j])
+            grad_keys = [e_i + "_grad", e_j + "_grad"]
+            delta_grad_key = "_".join(grad_keys) + "_delta"
+            if all([grad_key in all_results for grad_key in grad_keys]):
+                all_results[delta_grad_key] = (all_results[grad_keys[0]] -
+                                               all_results[grad_keys[1]])
         return all_results
 
     def V_ex(self, r_ij, nbr_list, xyz):
@@ -422,6 +427,7 @@ class PainnDiabat(Painn):
                                         inference=inference,
                                         do_nan=do_nan,
                                         en_keys_for_grad=en_keys_for_grad)
+        results.update({"xyz": xyz})
 
         return results
 
@@ -689,12 +695,12 @@ class Painn_Complex(Painn):
                                          in self.output_vec_keys})
 
         num_cmplx_readouts = (modelparams["num_conv"] if any(self.skip.values())
-                            else 1)
+                              else 1)
         self.readout_cmplx_blocks = nn.ModuleList(
             [ReadoutBlock_Complex(feat_dim=feat_dim,
-                              output_keys=output_cmplx_keys,
-                              activation=activation,
-                              dropout=readout_dropout)
+                                  output_keys=output_cmplx_keys,
+                                  activation=activation,
+                                  dropout=readout_dropout)
              for _ in range(num_cmplx_readouts)]
         )
 

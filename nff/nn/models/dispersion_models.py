@@ -11,6 +11,7 @@ from nff.utils.scatter import compute_grad
 from nff.utils import constants as const
 from nff.utils.dispersion import get_dispersion as base_dispersion, grimme_dispersion
 from nff.nn.models.painn import Painn
+from nff.nn.models.painn import PainnDiabat
 
 
 class PainnDispersion(nn.Module):
@@ -197,5 +198,75 @@ class PainnDispersion(nn.Module):
                               requires_stress=requires_stress,
                               grimme_disp=grimme_disp,
                               inference=inference)
+
+        return results
+
+
+class PainnDiabatDispersion(PainnDiabat):
+    def __init__(self, modelparams):
+        super().__init__(modelparams=modelparams)
+        self.functional = modelparams["functional"]
+        self.disp_type = modelparams["disp_type"]
+
+    def forward(self,
+                batch,
+                xyz=None,
+                add_nacv=True,
+                add_grad=True,
+                add_gap=True,
+                add_u=False,
+                inference=False,
+                do_nan=True,
+                en_keys_for_grad=None):
+
+        # get diabatic results
+        results = super().forward(batch=batch,
+                                  xyz=xyz,
+                                  add_nacv=add_nacv,
+                                  add_grad=add_grad,
+                                  add_gap=add_gap,
+                                  add_u=add_u,
+                                  inference=inference,
+                                  do_nan=do_nan,
+                                  en_keys_for_grad=en_keys_for_grad)
+        xyz = results["xyz"]
+
+        # get dispersion energy (I couldn't figure out how to sub-class
+        # PainnDiabatDispersion with PainnDispersion without getting errors,
+        # unless I put it before PainnDiabat, which isn't what I want. So
+        # instead I just copied the logic for getting the disperson energy)
+        e_disp, _, _ = base_dispersion(batch=batch,
+                                       xyz=xyz,
+                                       disp_type=self.disp_type,
+                                       functional=self.functional,
+                                       nbrs=batch.get('mol_nbrs'),
+                                       mol_idx=batch.get('mol_idx'))
+        # convert to kcal / mol
+        e_disp = e_disp * const.HARTREE_TO_KCAL_MOL
+
+        # add dispersion energies to diabatic diagonals and adiabatic energies
+
+        diabat_keys = self.diabatic_readout.diabat_keys
+        diagonal_diabat_keys = np.diag(np.array(diabat_keys)).tolist()
+        # don't just do self.diabatic_readout.energy_keys, because if we
+        # have three diabatic states but only specify energy_keys =["energy_0",
+        # "energy_1"], we won't have updated "energy_2" properly
+        energy_keys = ["energy_%d" % i for i in range(len(diabat_keys))]
+
+        for key in (diagonal_diabat_keys + energy_keys):
+            results[key] = results[key] + e_disp.reshape(results[key].shape)
+
+        # add dispersion grads to diabatic diagonal gradients and
+        # adiabatic gradients
+
+        disp_grad = compute_grad(inputs=xyz,
+                                 output=e_disp)
+
+        grad_keys = [key + "_grad" for key in
+                     (diagonal_diabat_keys + energy_keys)]
+        for key in grad_keys:
+            if key in results:
+                results[key] = (results[key] +
+                                disp_grad.reshape(results[key].shape))
 
         return results
