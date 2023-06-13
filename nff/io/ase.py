@@ -169,7 +169,7 @@ class AtomsBatch(Atoms):
                 # get valid indices within the cutoff
                 num = _xyz.shape[0]
                 idx = torch.arange(num)
-                x, y = torch.meshgrid(idx, idx, indexing='xy')
+                x, y = torch.meshgrid(idx, idx)
                 _nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)],
                                                         dim=1).to(self.device)
                 _lattice_points = (torch.tile(
@@ -227,7 +227,7 @@ class AtomsBatch(Atoms):
 
                 n = nxyz.shape[0]
                 idx = torch.arange(n)
-                x, y = torch.meshgrid(idx, idx, indexing='xy')
+                x, y = torch.meshgrid(idx, idx)
 
                 # undirected neighbor list
                 these_nbrs = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1)], dim=1)
