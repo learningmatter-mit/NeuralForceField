@@ -53,7 +53,7 @@ class BiasBase(NeuralFF):
                               'energy_unbiased', 'forces_unbiased', 
                               'cv_vals', 'ext_pos', 'cv_invmass', 
                               'grad_length', 'cv_grad_lengths', 
-                              'cv_dot_PES']
+                              'cv_dot_PES', 'const_vals']
     
     def __init__(self,
                  model,
@@ -254,8 +254,8 @@ class BiasBase(NeuralFF):
         
         for i in range(self.num_const):
             dxi = self.diff(xi[i], self.constraints[i]['pos'], self.constraints[i]['type'])
-            constr_ener += self.constraints[i]['k'] * dxi * grad_xi[i]
-            constr_grad += 0.5 * self.constraints[i]['k'] * dxi**2
+            constr_grad += self.constraints[i]['k'] * dxi * grad_xi[i]
+            constr_ener += 0.5 * self.constraints[i]['k'] * dxi**2
             
         return constr_ener, constr_grad
         
@@ -267,7 +267,7 @@ class BiasBase(NeuralFF):
             properties=['energy', 'forces', 
                         'energy_unbiased', 'forces_unbiased', 
                         'cv_vals', 'cv_invmass', 
-                        'grad_length', 'cv_grad_lengths', 'cv_dot_PES'],
+                        'grad_length', 'cv_grad_lengths', 'cv_dot_PES', 'const_vals'],
             system_changes=all_changes,
     ):
         """Calculates the desired properties for the given AtomsBatch.
