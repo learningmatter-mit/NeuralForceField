@@ -356,7 +356,7 @@ def truhlar_decoherence(c,
                         mass,
                         hbar=1,
                         C=0.1,
-                        eps=1.e-8,
+                        eps=1.e-12,
                         **kwargs):
     """
     Originally attributed to Truhlar, cited from
@@ -389,22 +389,22 @@ def truhlar_decoherence(c,
                              axis=-1)
 
     # vel has shape num_samples x num_atoms x 3
-    E_kin = (1 / 2 * mass.reshape(1, -1, 1) * vel ** 2).sum((-1, -2))
+    E_kin = (1 / 2 * mass.reshape(1, -1, 1) * np.power(vel, 2)).sum((-1, -2))
     # introduced espilon to keep abs(E_k - E_m) > 0
     # needed as energies for systems with SOCs=0 can be highly degenerate
     tau_km = hbar / abs(E_k - E_m + eps) * (1 + C / E_kin.reshape(-1, 1))
     c_k_prime = c_k * np.exp(-dt / tau_km)
 
-    num = 1 - (abs(c_k_prime) ** 2).sum(-1)
+    num = 1 - np.power(np.abs(c_k_prime), 2).sum(-1)
     # in case some c_k's are slightly over 1 due to
     # numerical error
 
     num[num < 0] = 0
 
-    c_m_prime = c_m * (
-        num.reshape(-1, 1)
-        / abs(c_m) ** 2
-    ) ** 0.5
+    c_m_prime = c_m * np.sqrt(
+                        num.reshape(-1, 1)
+                        / np.power(np.abs(c_m), 2)
+                    )
 
     new_c = np.zeros_like(c)
     np.put_along_axis(new_c,

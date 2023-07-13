@@ -87,6 +87,7 @@ class NeuralTully:
         self.models = [self.load_model(model_path).to(device) for model_path in model_paths]
         
         self.T = None
+        self.U_old = None
         
         self.t = 0
         self.props = {}
@@ -180,7 +181,7 @@ class NeuralTully:
         self.save_period = save_period
 
         self.log_template = self.setup_logging()
-        self.p_hop = 0
+        self.p_hop = np.zeros((self.num_samples, self.num_states))
         self.just_hopped = None
         self.surfs = np.ones(self.num_samples,
                              dtype=np.int) * self.initial_surf_num
@@ -230,6 +231,36 @@ class NeuralTully:
         model = load_model(model_path, params, params['model_type'])
 
         return model
+    
+    @property
+    def mass(self):
+        _mass = (self.atoms_list[0].get_masses()
+                 * const.AMU_TO_AU)
+
+        return _mass
+
+    @property
+    def nxyz(self):
+        _nxyz = np.stack([atoms_to_nxyz(atoms) for atoms in
+                          self.atoms_list])
+
+        return _nxyz
+
+    @nxyz.setter
+    def nxyz(self, _nxyz):
+        for atoms, this_nxyz in zip(self.atoms_list, _nxyz):
+            atoms.set_positions(this_nxyz[:, 1:])
+    
+    @property
+    def xyz(self):
+        _xyz = self.nxyz[..., 1:]
+
+        return _xyz
+
+    @xyz.setter
+    def xyz(self, val):
+        for atoms, xyz in zip(self.atoms_list, val):
+            atoms.set_positions(xyz)
 
     def get_vel(self):
         vel = np.stack([atoms.get_velocities()
@@ -265,8 +296,7 @@ class NeuralTully:
         
         return c_diag
 
-    @property
-    def forces(self):
+    def get_forces(self):
         _forces = np.stack([-self.props[f'energy_{key}_grad']
                             for key in self.repeated_keys],
                            axis=1)
@@ -278,16 +308,14 @@ class NeuralTully:
 
         return _forces
 
-    @property
-    def energy(self):
+    def get_energy(self):
         _energy = np.stack([self.props[f'energy_{key}'].reshape(-1)
                             for key in self.repeated_keys],
                            axis=1)
 
         return _energy
 
-    @property
-    def nacv(self):
+    def get_nacv(self):
         _nacv = np.zeros((self.num_samples, self.num_states,
                           self.num_states, self.num_atoms, 3))
         for state_n1 in range(self.num_states):
@@ -312,12 +340,11 @@ class NeuralTully:
                 if key not in self.props:
                     continue
                 _nacv[:, state_n1, state_n2, :] = self.props[key]
-                _nacv[:, state_n2, state_n1, :] = self.props[key]
+                _nacv[:, state_n2, state_n1, :] = -self.props[key]
 
         return _nacv
 
-    @property
-    def gap(self):
+    def get_gap(self):
         num_samples = self.energy.shape[0]
         num_states = self.energy.shape[1]
 
@@ -327,8 +354,7 @@ class NeuralTully:
 
         return _gap
 
-    @property
-    def force_nacv(self):
+    def get_force_nacv(self):
 
         # self.gap has shape num_samples x num_states x num_states
         # `nacv` has shape num_samples x num_states x num_states
@@ -348,38 +374,7 @@ class NeuralTully:
 
         return _force_nacv
 
-    @property
-    def mass(self):
-        _mass = (self.atoms_list[0].get_masses()
-                 * const.AMU_TO_AU)
-
-        return _mass
-
-    @property
-    def nxyz(self):
-        _nxyz = np.stack([atoms_to_nxyz(atoms) for atoms in
-                          self.atoms_list])
-
-        return _nxyz
-
-    @nxyz.setter
-    def nxyz(self, _nxyz):
-        for atoms, this_nxyz in zip(self.atoms_list, _nxyz):
-            atoms.set_positions(this_nxyz[:, 1:])
-    
-    @property
-    def xyz(self):
-        _xyz = self.nxyz[..., 1:]
-
-        return _xyz
-
-    @xyz.setter
-    def xyz(self, val):
-        for atoms, xyz in zip(self.atoms_list, val):
-            atoms.set_positions(xyz)
-
-    @property
-    def pot_V(self):
+    def get_pot_V(self):
         """
         Potential energy matrix in n_adiabat x n_adiabat space
         """
@@ -399,8 +394,7 @@ class NeuralTully:
 
         return V
     
-    @property
-    def SOC_mat(self):
+    def get_SOC_mat(self):
         """
         Matrix with SOCs in HMC basis
         """
@@ -465,8 +459,7 @@ class NeuralTully:
                     
         return H_soc
     
-    @property
-    def H_hmc(self):
+    def get_H_hmc(self):
         """
         Sum of potential energy matrix and SOCs
         """
@@ -476,18 +469,16 @@ class NeuralTully:
         
         return H_hmc       
     
-    @property
-    def U(self):
+    def get_U(self):
         """
         Diagonalizes H^total
         """
         
         eVals, U = np.linalg.eigh(self.H_hmc)
         
-        return U
+        return U, eVals
 
-    @property
-    def H_plus_nacv(self):
+    def get_H_plus_nacv(self):
         if self.nacv is None:
             return
         #pot_V = self.pot_V
@@ -503,8 +494,7 @@ class NeuralTully:
         #return pot_V + nac_term
         return H_hmc + nac_term
 
-    @property
-    def neg_G_hmc(self):
+    def get_neg_G_hmc(self):
         
         neg_G = np.zeros((self.num_samples,
                           self.num_states,
@@ -526,8 +516,7 @@ class NeuralTully:
         
         return neg_G
     
-    @property
-    def neg_G_diag(self):
+    def get_neg_G_diag(self):
         
         neg_G_diag = np.einsum('ijk,ikl...,ilm->ijm...', 
                                self.U.conj().transpose((0,2,1)), 
@@ -536,8 +525,7 @@ class NeuralTully:
         
         return neg_G_diag
     
-    @property
-    def diag_energy(self):
+    def get_diag_energy(self):
         H_diag = np.einsum('ijk,ikl,ilm->ijm', 
                                self.U.conj().transpose((0,2,1)), 
                                self.H_hmc, 
@@ -548,8 +536,7 @@ class NeuralTully:
         
         return _energy.reshape(self.num_samples, self.num_states)
     
-    @property
-    def diag_forces(self):
+    def get_diag_forces(self):
         
         diag_forces = np.diagonal(self.neg_G_diag, 
                                   axis1=1, axis2=2).transpose((0,3,1,2))
@@ -629,7 +616,7 @@ class NeuralTully:
 
         template = "%-10.2f "
         for i, state in enumerate(states):
-            template += "%15.4f%%"
+            template += "%15.6f"
         template += "%15.4f"
         template += "%15.4f"
 
@@ -659,7 +646,7 @@ class NeuralTully:
         argmax = np.argmax(np.abs(self.c_hmc), axis=1)
         for i in range(self.num_states):
             num_surf = (argmax == i).sum()
-            pct = num_surf / self.num_samples * 100
+            pct = num_surf / self.num_samples #* 100
             pcts_hmc.append(pct)
 
         #c, p = self.clean_c_p()
@@ -671,7 +658,11 @@ class NeuralTully:
 
         with open(self.log_file, 'a') as f:
             f.write("\n" + text)
-
+            
+        # sanity check
+        if norm_c > 2.0:
+            print("Norm of coefficients too large!!")
+            exit(1)
 
     @classmethod
     def from_pickle(cls,
@@ -727,12 +718,91 @@ class NeuralTully:
                             batch_size=self.batch_size,)
 
         self.props = props
+        self.update_selfs()
+        
+    def update_selfs(self):
+        # simple reorganiation of NN outputs
+        self.energy      = self.get_energy()
+        self.forces      = self.get_forces()
+        self.nacv        = self.get_nacv()
+        self.gap         = self.get_gap()
+        self.force_nacv  = self.get_force_nacv()
+        self.pot_V       = self.get_pot_V()
+        
+        # assembly of complicated matrices
+        self.SOC_mat     = self.get_SOC_mat()
+        self.H_hmc       = self.get_H_hmc()
+        self.H_plus_nacv = self.get_H_plus_nacv()
+        
+        # diagonalization of HMC representation
+        self.U, evals    = self.get_U()
+        if type(self.U_old) != type(None):
+            # the following is an implementation of Appendix B
+            # from Mai, Marquetand, Gonzalez 
+            # Int.J. Quant. Chem. 2015, 115, 1215-1231
+            V = np.einsum('ijk,ikl->ijl', 
+                               self.U.conj().transpose((0,2,1)), 
+                               self.U_old)
+            
+            # attempt to make V diagonally dominant
+            for replica in range(self.num_samples):
+                abs_v   = np.abs(V[replica])
+                arg_max = np.argmax(abs_v, axis=1)
+                # sanity check print statement
+#                 if len(np.unique(arg_max)) < len(arg_max):
+#                     print("V could not be made diagonal dominant!")
+                    
+                for column in range(self.num_states):
+                    curr_col = copy.deepcopy(V[replica][:, column])
+                    new_col  = copy.deepcopy(V[replica][:, arg_max[column]])
+                    # switch columns
+                    V[replica][:, column] = new_col
+                    V[replica][:, arg_max[column]] = curr_col
+            
+            # (CV)_{ab} = V_{ab} delta(Hdiag_aa - Hdiag_bb) 
+            # setting everything to zero where 
+            # the difference in diagonal elements is NOT zero
+            # for replica, hdiag in enumerate(evals):
+            hdiag = evals.reshape((self.num_samples, self.num_states, 1))
+            diff  = hdiag - hdiag.transpose((0, 2, 1))
+            preserved_idxs = np.isclose(diff, np.zeros(shape=diff.shape), 
+                                        atol=1e-8, rtol=0.0)
+            V[~preserved_idxs] = 0.0
+            
+            # Loewding symmetric orthonormalization
+            u, s, vh = np.linalg.svd(V)
+            Phi_adj  = np.einsum('ijk, ikl->ijl', u, vh)
+            
+            corrected_U = np.einsum('ijk, ikl->ijl', self.U, Phi_adj)
+            self.U = copy.deepcopy(corrected_U)
+            
+            # check eq B11
+            epsilon = 0.1 # hardcoded for now
+            diagonals = np.einsum('ijj->ij', np.einsum('ijk,ikl->ijl', 
+                               self.U.conj().transpose((0,2,1)), 
+                               self.U_old))
+            anti_hermitian = ((1 - epsilon) < diagonals).all()
+            if not anti_hermitian:
+                print("WARNING: Time step likely too large! At least one new unitary matrix ",
+                      "does not fulfill anti-hermicity!")
+#                 print(f"epsilon = {epsilon}")
+#                 print("diagonal elements:\n", diagonals)
+#                 print("H_diag:\n", evals)
+#                 print(V)
+#                 print(preserved_idxs)
+                      
+        self.U_old    = copy.deepcopy(self.U)
+            
+        self.neg_G_hmc   = self.get_neg_G_hmc()
+        self.neg_G_diag  = self.get_neg_G_diag()
+        self.diag_energy = self.get_diag_energy()
+        self.diag_forces = self.get_diag_forces()
         
     def do_hop(self,
                old_c,
                new_c,
                P):
-        
+     
         self.p_hop = get_p_hop(hop_eqn=self.hop_eqn,
                                old_c=old_c,
                                new_c=new_c,
@@ -795,16 +865,21 @@ class NeuralTully:
                                 dt=self.dt)
         self.vel = new_vel
 
-        self.c_hmc, P_hmc = adiabatic_c(c=self.c_hmc,
+        self.c_hmc, self.P_hmc = adiabatic_c(c=self.c_hmc,
                                     elec_substeps=self.elec_substeps,
                                     old_H_plus_nacv=old_H_plus_nacv,
                                     new_H_plus_nacv=self.H_plus_nacv,
                                     dt=self.dt)
         
+#         print("Norm before/after elec substeps (hop):\n",
+#               np.linalg.norm(old_c_hmc, axis=1),
+#               np.linalg.norm(self.c_hmc, axis=1))
+        
         self.c_diag = self.get_c_diag()
-        P_diag = np.einsum('ijk,ikl,ilm->ijm', 
+        self.P_diag = np.einsum('ijk,ikl,ilm->ijm', 
                            self.U.conj().transpose((0,2,1)), 
-                           P_hmc, old_U)
+                           self.P_hmc, 
+                           old_U)
 
 #         if self.nacv is not None:
 #             self.T, _ = compute_T(nacv=self.nacv,
@@ -813,9 +888,12 @@ class NeuralTully:
             
         new_surfs, new_vel = self.do_hop(old_c=old_c_diag,
                                          new_c=self.c_diag,
-                                         P=P_diag)
+                                         P=self.P_diag)
 
         self.just_hopped = (new_surfs != self.surfs).nonzero()[0]
+        #if self.just_hopped.any():
+              
+                
         self.surfs = new_surfs
         self.vel = new_vel
         self.t += self.dt
