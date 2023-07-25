@@ -969,6 +969,34 @@ def build_soc_loss(loss_dict):
     return loss_fn
 
 
+def build_key_diff_loss(loss_dict):
+    
+    params    = loss_dict["params"]
+    key1, key2= params["keys"]
+    loss_type = params.get("loss_type", "mae")
+
+    coef = loss_dict["coef"]
+    
+    def loss_fn(ground_truth,
+                results,
+                **kwargs):
+        
+        pred = results[key1] - results[key2] 
+        targ = ground_truth[key1] - ground_truth[key2]
+        
+        if loss_type == "mse":
+            diff = mse_operation(targ, pred)
+        elif loss_type == "mae":
+            diff = mae_operation(targ, pred)
+        else:
+            raise NotImplementedError
+
+        loss = coef * torch.mean(diff)
+        return loss
+    
+    return loss_fn
+    
+
 def name_to_func(name):
     dic = {
         "mse": build_mse_loss,
@@ -987,6 +1015,7 @@ def name_to_func(name):
         'cmplx': build_cmplx_loss,
         'soc_norm': build_soc_norm_loss,
         'soc_sign': build_soc_loss,
+        'diff': build_key_diff_loss,
     }
     func = dic[name]
     return func

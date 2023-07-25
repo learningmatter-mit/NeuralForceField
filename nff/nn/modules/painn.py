@@ -413,6 +413,61 @@ class ReadoutBlock(nn.Module):
             results[key] = output
 
         return results
+    
+
+class ReadoutBlock_Tuple(nn.Module):
+    def __init__(self,
+                 feat_dim,
+                 output_keys,
+                 activation,
+                 dropout,
+                 means=None,
+                 stddevs=None):
+        super().__init__()
+        
+        self.output_keys = output_keys
+
+        self.readoutdict = nn.ModuleDict(
+            {key_tuple: nn.Sequential(
+                Dense(in_features=feat_dim,
+                      out_features=feat_dim//2,
+                      bias=True,
+                      dropout_rate=dropout,
+                      activation=to_module(activation)),
+                Dense(in_features=feat_dim//2,
+                      out_features=feat_dim//4,
+                      bias=True,
+                      dropout_rate=dropout,
+                      activation=to_module(activation)),
+                Dense(in_features=feat_dim//4,
+                      out_features=feat_dim//8,
+                      bias=True,
+                      dropout_rate=dropout,
+                      activation=to_module(activation)),
+                Dense(in_features=feat_dim//8,
+                      out_features=len(key_tuple.split("+")),
+                      bias=True,
+                      dropout_rate=dropout))
+             for key_tuple in output_keys}
+        )
+
+        self.scale_shift = ScaleShift(means=means,
+                                      stddevs=stddevs)
+
+    def forward(self, s_i):
+        """
+        Note: no atomwise summation. That's done in the model itself
+        """
+
+        results = {}
+
+        for keys, readoutdict in self.readoutdict.items():
+            outputs = readoutdict(s_i)
+            for ii, key in enumerate(keys.split('+')):
+                output = self.scale_shift(outputs[..., ii], key)
+                results[key] = output
+
+        return results
 
 
 class ReadoutBlock_Complex(nn.Module):

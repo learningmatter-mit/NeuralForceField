@@ -4,7 +4,7 @@ import copy
 from nff.utils.tools import make_directed
 from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
                                   EmbeddingBlock, ReadoutBlock, ReadoutBlock_Vec,
-                                  TransformerMessageBlock,
+                                  ReadoutBlock_Tuple, TransformerMessageBlock,
                                   NbrEmbeddingBlock)
 from nff.nn.modules.schnet import (AttentionPool, SumPool, MolFpPool,
                                    MeanPool, get_rij, add_embedding, add_stress)
@@ -689,16 +689,11 @@ class Painn_Complex(Painn):
         activation = modelparams["activation"]
         readout_dropout = modelparams.get("readout_dropout", 0)
 
-        # no skip connection in original paper
-        self.skip_vec = modelparams.get("skip_vec_connection",
-                                        {key: False for key
-                                         in self.output_vec_keys})
-
         num_cmplx_readouts = (modelparams["num_conv"] if any(self.skip.values())
                               else 1)
         self.readout_cmplx_blocks = nn.ModuleList(
             [ReadoutBlock_Complex(feat_dim=feat_dim,
-                                  output_keys=output_cmplx_keys,
+                                  output_keys=self.output_cmplx_keys,
                                   activation=activation,
                                   dropout=readout_dropout)
              for _ in range(num_cmplx_readouts)]
@@ -784,6 +779,135 @@ class Painn_Complex(Painn):
                     continue
                 if not skip:
                     results[key] = new_cmplx_results[key]
+
+        results['features'] = s_i
+        results['features_vec'] = v_i
+
+        return results, xyz, r_ij, nbrs
+    
+    
+class Painn_Tuple(Painn):
+
+    def __init__(self,
+                 modelparams):
+        """
+        Args:
+            modelparams (dict): dictionary of model parameters
+
+
+
+        """
+
+        super().__init__(modelparams)
+
+        self.output_tuple_keys = modelparams["output_tuple_keys"]
+#         # to ensure that it's a list of uncheangeble tuples
+#         for ii in range(len(self.output_tuple_keys)):
+#             self.output_tuple_keys[ii] = tuple(self.output_tuple_keys[ii])
+            
+        feat_dim = modelparams["feat_dim"]
+        activation = modelparams["activation"]
+        readout_dropout = modelparams.get("readout_dropout", 0)
+        
+        # no skip connection in original paper
+        self.skip_tuple = modelparams.get("skip_tuple_connection",
+                                        {key: False for key in self.output_tuple_keys})
+
+        num_tuple_readouts = (modelparams["num_conv"] if any(self.skip_tuple.values())
+                              else 1)
+        self.readout_tuple_blocks = nn.ModuleList(
+            [ReadoutBlock_Tuple(feat_dim=feat_dim,
+                                  output_keys=self.output_tuple_keys,
+                                  activation=activation,
+                                  dropout=readout_dropout)
+             for _ in range(num_tuple_readouts)]
+        )
+        
+        for keys in self.output_tuple_keys:
+            for key in keys.split("+"):
+                self.pool_dic[key] = SumPool()
+
+    def atomwise(self,
+                 batch,
+                 xyz=None):
+
+        # for backwards compatability
+        if isinstance(self.skip, bool):
+            self.skip = {key: self.skip
+                         for key in self.output_keys}
+
+        nbrs, _ = make_directed(batch['nbr_list'])
+        nxyz = batch['nxyz']
+
+        if xyz is None:
+            xyz = nxyz[:, 1:]
+            xyz.requires_grad = True
+
+        z_numbers = nxyz[:, 0].long()
+
+        # get r_ij including offsets and excluding
+        # anything in the neighbor skin
+        self.set_cutoff()
+        r_ij, nbrs = get_rij(xyz=xyz,
+                             batch=batch,
+                             nbrs=nbrs,
+                             cutoff=self.cutoff)
+
+        s_i, v_i = self.embed_block(z_numbers,
+                                    nbrs=nbrs,
+                                    r_ij=r_ij)
+        results = {}
+
+        for i, message_block in enumerate(self.message_blocks):
+            update_block = self.update_blocks[i]
+            ds_message, dv_message = message_block(s_j=s_i,
+                                                   v_j=v_i,
+                                                   r_ij=r_ij,
+                                                   nbrs=nbrs)
+
+            s_i = s_i + ds_message
+            v_i = v_i + dv_message
+
+            ds_update, dv_update = update_block(s_i=s_i,
+                                                v_i=v_i)
+
+            s_i = s_i + ds_update
+            v_i = v_i + dv_update
+
+            if not any(self.skip.values()):
+                continue
+
+            readout_block = self.readout_blocks[i]
+            new_results = readout_block(s_i=s_i)
+            readout_tuple_block = self.readout_tuple_blocks[i]
+            new_tuple_results = readout_tuple_block(s_i=s_i)
+            for key, skip in self.skip.items():
+                if not skip:
+                    continue
+                if key not in new_results:
+                    continue
+                if key in results:
+                    results[key] += new_results[key]
+                else:
+                    results[key] = new_results[key]
+
+        if not all(self.skip.values()):
+            first_readout = self.readout_blocks[0]
+            new_results = first_readout(s_i=s_i)
+            for key, skip in self.skip.items():
+                if key not in new_results:
+                    continue
+                if not skip:
+                    results[key] = new_results[key]
+
+            first_tuple_readout = self.readout_tuple_blocks[0]
+            new_tuple_results = first_tuple_readout(s_i=s_i)
+            for keys, skip in self.skip_tuple.items():
+                for key in keys.split("+"): # bc they are a tuple
+                    if key not in new_tuple_results:
+                        continue
+                    if not skip:
+                        results[key] = new_tuple_results[key]
 
         results['features'] = s_i
         results['features_vec'] = v_i
