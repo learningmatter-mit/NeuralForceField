@@ -316,9 +316,6 @@ class BiasBase(NeuralFF):
         else:
             raise PropertyNotPresent(grad_key)
         
-        energy = copy.deepcopy(model_energy)
-        grad   = copy.deepcopy(model_grad)
-        
         inv_masses = 1. / atoms.get_masses()
         M_inv  = np.diag(np.repeat(inv_masses, 3).flatten())
         
@@ -338,8 +335,8 @@ class BiasBase(NeuralFF):
             cv_dot_PES[ii]   = np.dot(xi_grad.flatten(), model_grad.flatten())
             
         bias_ener, bias_grad = self.step_bias(cvs, cv_grads)
-        energy += bias_ener
-        grad   += bias_grad
+        energy = model_energy + bias_ener
+        grad   = model_grad   + bias_grad
         
         if self.constraints:
             consts      = np.zeros(shape=(self.num_const,1))
