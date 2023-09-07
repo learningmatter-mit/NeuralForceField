@@ -235,7 +235,7 @@ class BiasBase(NeuralFF):
     
     def harmonic_constraint(self,
                             xi: np.ndarray,
-                            grad_xi, np.ndarray,
+                            grad_xi: np.ndarray,
                            ) -> Tuple[np.ndarray, np.ndarray]:
         """energy and gradient of additional harmonic constraint
         
