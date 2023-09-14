@@ -995,6 +995,66 @@ def build_key_diff_loss(loss_dict):
         return loss
     
     return loss_fn
+
+
+def build_wCP_loss(loss_dict):
+
+    params    = loss_dict["params"]
+    en_keys   = params["en_keys"]
+    loss_type = params.get("loss_type", "mae")
+
+    coef = loss_dict["coef"]
+
+    def loss_fn(ground_truth,
+                results,
+                **kwargs):
+
+        diff = 0
+        
+        for idx, enkey_set in enumerate(en_keys):
+            if type(enkey_set)==str:
+                enkey_set = enkey_set.split('+')
+            num_states = len(enkey_set)
+            targ_omega = 0
+            for enkey in enkey_set:
+                targ_omega += ground_truth[enkey]
+            targ_omega /= num_states
+
+            targ_c0 = ground_truth[enkey_set[0]] - targ_omega
+            for enkey in enkey_set[1:]:
+                targ_c0 *= ground_truth[enkey] - targ_omega
+            targ_c0 *= torch.Tensor([-1.]).pow(num_states).to(targ_c0.device)
+        
+            pred_omega = results[f"omega_{idx}"]
+            pred_c0    = results[f"c00_{idx}"]
+
+            if loss_type == "mae":
+                diff += ((pred_omega - targ_omega).abs() +
+                        (pred_c0 - targ_c0).abs())
+            elif loss_type == "mse":
+                diff += ((pred_omega - targ_omega).pow(2) +
+                        (pred_c0 - targ_c0).pow(2))
+            else:
+                raise NotImplementedError
+                
+            if num_states > 2:
+                targ_cnminus2 = 0
+                for ii, key1 in enumerate(enkey_set):
+                    for key2 in enkey_set[ii+1:]:
+                        targ_cnminus2 += ((ground_truth[key1] - targ_omega) *
+                                          (ground_truth[key2] - targ_omega))
+                if loss_type == "mae":
+                    diff += (results[f"c{num_states-2:02d}_{idx}"] 
+                              - targ_cnminus2).abs() 
+                elif loss_type == "mse":
+                    diff += (results[f"c{num_states-2:02d}_{idx}"] 
+                              - targ_cnminus2).pow(2) 
+
+        loss = coef * torch.mean(diff)
+
+        return loss
+
+    return loss_fn
     
 
 def name_to_func(name):
@@ -1016,6 +1076,7 @@ def name_to_func(name):
         'soc_norm': build_soc_norm_loss,
         'soc_sign': build_soc_loss,
         'diff': build_key_diff_loss,
+        'wCP': build_wCP_loss,
     }
     func = dic[name]
     return func
