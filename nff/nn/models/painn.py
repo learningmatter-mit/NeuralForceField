@@ -10,8 +10,10 @@ from nff.nn.modules.schnet import (AttentionPool, SumPool, MolFpPool,
                                    MeanPool, get_rij, add_embedding, add_stress)
 from nff.nn.modules.diabat import DiabaticReadout, AdiabaticReadout
 from nff.nn.layers import (Diagonalize, ExpNormalBasis)
-from nff.utils.scatter import scatter_add
+from nff.utils.scatter import scatter_add, compute_grad
 import torch
+
+import pdb
 
 POOL_DIC = {"sum": SumPool,
             "mean": MeanPool,
@@ -801,9 +803,6 @@ class Painn_Tuple(Painn):
         super().__init__(modelparams)
 
         self.output_tuple_keys = modelparams["output_tuple_keys"]
-#         # to ensure that it's a list of uncheangeble tuples
-#         for ii in range(len(self.output_tuple_keys)):
-#             self.output_tuple_keys[ii] = tuple(self.output_tuple_keys[ii])
             
         feat_dim = modelparams["feat_dim"]
         activation = modelparams["activation"]
@@ -913,6 +912,154 @@ class Painn_Tuple(Painn):
         results['features_vec'] = v_i
 
         return results, xyz, r_ij, nbrs
+    
+    
+class Painn_wCP(Painn_Tuple):
+
+    def __init__(self,
+                 modelparams):
+        """
+        This model tries to implement the Characteristic
+        Polynomial Approach from:
+        
+        Tzu Yu Wang, Simon P. Neville, and Michael S. Schuurman
+        J. Phys. Chem. Lett. 2023, 14, 7780−7786 
+        
+        Args:
+            modelparams (dict): dictionary of model parameters
+
+
+
+        """
+
+        super().__init__(modelparams)
+
+        self.real_output_tuple_keys = copy.deepcopy(
+            self.output_tuple_keys)
+        
+        self.output_tuple_keys = []
+        for ii, longkey in enumerate(self.real_output_tuple_keys):
+            num_energies = len(longkey.split('+'))
+            string = f"omega_{ii}"
+            for cc in range(num_energies -1):
+                string += f"+c{cc:02d}_{ii}"
+            self.output_tuple_keys.append(string)
+            
+        feat_dim = modelparams["feat_dim"]
+        activation = modelparams["activation"]
+        readout_dropout = modelparams.get("readout_dropout", 0)
+        
+        # no skip connection in original paper
+        self.skip_tuple = modelparams.get("skip_tuple_connection",
+                                        {key: False for key in self.output_tuple_keys})
+
+        num_tuple_readouts = (modelparams["num_conv"] if any(self.skip_tuple.values())
+                              else 1)
+        # overwrite what has been done before
+        self.readout_tuple_blocks = nn.ModuleList(
+            [ReadoutBlock_Tuple(feat_dim=feat_dim,
+                                  output_keys=self.output_tuple_keys,
+                                  activation=activation,
+                                  dropout=readout_dropout)
+             for _ in range(num_tuple_readouts)]
+        )
+        
+        for keys in self.output_tuple_keys:
+            for key in keys.split("+"):
+                self.pool_dic[key] = SumPool()
+        
+        # remove the energy keys that were added 
+        for keys in self.real_output_tuple_keys:
+            for key in keys.split("+"):
+                _ = self.pool_dic.pop(key)
+    
+                               
+    def adibatic_energies(self,
+                          all_results,
+                          xyz=None,):
+                               
+        for long1, long2 in zip(self.output_tuple_keys, 
+                                self.real_output_tuple_keys):
+            
+            wCP_keys     = long1.split('+')
+            adiabat_keys = long2.split('+')
+                               
+            num_states = len(wCP_keys)
+            omega = all_results[wCP_keys[0]]
+            batch_size = len(omega)
+                               
+            C_mat0 = torch.zeros(batch_size, num_states, num_states, 
+                                 device=omega.device)
+            #pdb.set_trace()
+            
+            for mat in C_mat0:
+                mat.fill_diagonal_(1)
+            C_mat = (C_mat0 * omega.reshape(-1, 1, 1)
+                               + torch.diag(torch.ones(num_states-1), -1).to(omega.device)
+                    )
+
+            for idx, coef in enumerate(wCP_keys[1:]):
+                C_mat[:, idx, -1] = - all_results[coef]
+                
+            all_results[f"Cmat_{wCP_keys[0][-1]}"] = C_mat
+                               
+            #eigvals = torch.real(torch.linalg.eigvals(C_mat))
+            eigvals = torch.abs(torch.linalg.eigvals(C_mat))
+            for column, key in zip(eigvals.T, adiabat_keys[::-1]):
+                all_results[key] = column
+            
+            for key in adiabat_keys:
+                grad_key = f"{key}_grad"
+                output   = all_results[key]
+                grad     = compute_grad(output=output,
+                                        inputs=xyz)
+                all_results[grad_key] = grad
+                               
+    def run(self,
+            batch,
+            xyz=None,
+            requires_embedding=False,
+            requires_stress=False,
+            inference=False):
+
+        from nff.train import batch_detach
+                               
+        atomwise_out, xyz, r_ij, nbrs = self.atomwise(batch=batch,
+                                                      xyz=xyz)
+
+        if getattr(self, "excl_vol", None):
+            # Excluded Volume interactions
+            r_ex = self.V_ex(r_ij, nbrs, xyz)
+            for key in self.output_keys:
+                atomwise_out[key] += r_ex
+
+        all_results, xyz = self.pool(batch=batch,
+                                     atomwise_out=atomwise_out,
+                                     xyz=xyz,
+                                     r_ij=r_ij,
+                                     nbrs=nbrs,
+                                     inference=False)
+                               
+        self.adibatic_energies(all_results=all_results,
+                               xyz=xyz)
+
+        if requires_embedding:
+            all_results = add_embedding(atomwise_out=atomwise_out,
+                                        all_results=all_results)
+
+        if requires_stress:
+            all_results = add_stress(batch=batch,
+                                     all_results=all_results,
+                                     nbrs=nbrs,
+                                     r_ij=r_ij)
+
+        if getattr(self, "compute_delta", False):
+            all_results = self.add_delta(all_results)
+                               
+        if inference:
+            batch_detach(all_results)
+
+        return all_results, xyz
 
 
 class PainnDipole(Painn_VecOut):
