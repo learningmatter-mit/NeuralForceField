@@ -77,7 +77,7 @@ class Painn(nn.Module):
                                     {key: False for key
                                      in self.output_keys})
 
-        num_readouts = num_conv if any(self.skip.values()) else 1
+        self.num_readouts = num_conv if any(self.skip.values()) else 1
         self.readout_blocks = nn.ModuleList(
             [ReadoutBlock(feat_dim=feat_dim,
                           output_keys=output_keys,
@@ -85,7 +85,7 @@ class Painn(nn.Module):
                           dropout=readout_dropout,
                           means=means,
                           stddevs=stddevs)
-             for _ in range(num_readouts)]
+             for _ in range(self.num_readouts)]
         )
 
         if pool_dic is None:
@@ -990,7 +990,6 @@ class Painn_wCP(Painn_Tuple):
                                
             C_mat0 = torch.zeros(batch_size, num_states, num_states, 
                                  device=omega.device)
-            #pdb.set_trace()
             
             for mat in C_mat0:
                 mat.fill_diagonal_(1)
@@ -1010,10 +1009,11 @@ class Painn_wCP(Painn_Tuple):
             
             for key in adiabat_keys:
                 grad_key = f"{key}_grad"
-                output   = all_results[key]
-                grad     = compute_grad(output=output,
-                                        inputs=xyz)
-                all_results[grad_key] = grad
+                if grad_key in self.grad_keys:
+                    output   = all_results[key]
+                    grad     = compute_grad(output=output,
+                                            inputs=xyz)
+                    all_results[grad_key] = grad
                                
     def run(self,
             batch,
@@ -1060,6 +1060,161 @@ class Painn_wCP(Painn_Tuple):
             batch_detach(all_results)
 
         return all_results, xyz
+    
+    
+    
+# same as Painn_wCP but not based on the tuple architecture
+# seems to perform worse, thus commented out for now, 
+# maybe it should be delted
+# class Painn_wCP2(Painn):
+
+#     def __init__(self,
+#                  modelparams):
+#         """
+#         This model tries to implement the Characteristic
+#         Polynomial Approach from:
+        
+#         Tzu Yu Wang, Simon P. Neville, and Michael S. Schuurman
+#         J. Phys. Chem. Lett. 2023, 14, 7780−7786 
+        
+#         Args:
+#             modelparams (dict): dictionary of model parameters
+
+
+
+#         """
+
+#         super().__init__(modelparams)
+        
+#         self.output_tuple_keys = modelparams["output_tuple_keys"]
+#         #number_wCP_layers = len(output_tuple_keys)
+#         self.wCP_keys = [[]]
+        
+#         for longkey in self.output_tuple_keys:
+#             keys = longkey.split('+')
+#             for key in keys:
+#                 _ = self.pool_dic.pop(key)
+#                 self.output_keys.remove(key)
+        
+#         for ii, longkey in enumerate(self.output_tuple_keys):
+#             num_energies = len(longkey.split('+'))
+#             self.wCP_keys[-1].append(f"omega_{ii}")
+#             self.output_keys.append(f"omega_{ii}")
+#             for cc in range(num_energies -1):
+#                 self.wCP_keys[-1].append(f"c{cc:02d}_{ii}")        
+#                 self.output_keys.append(f"c{cc:02d}_{ii}")      
+            
+#         feat_dim = modelparams["feat_dim"]
+#         activation = modelparams["activation"]
+#         readout_dropout = modelparams.get("readout_dropout", 0)
+#         means = modelparams.get("means")
+#         stddevs = modelparams.get("stddevs")
+        
+#         for key in self.output_keys:
+#             if key not in self.skip.keys():
+#                 self.skip.update({key: False})
+                
+#         self.readout_blocks = nn.ModuleList(
+#             [ReadoutBlock(feat_dim=feat_dim,
+#                           output_keys=self.output_keys,
+#                           activation=activation,
+#                           dropout=readout_dropout,
+#                           means=means,
+#                           stddevs=stddevs)
+#              for _ in range(self.num_readouts)]
+#         )
+        
+#         for keys in self.output_keys:
+#             for key in keys.split("+"):
+#                 self.pool_dic[key] = SumPool()
+                               
+#     def adiabatic_energies(self,
+#                           all_results,
+#                           xyz=None,):
+                               
+#         for list1, long2 in zip(self.wCP_keys, 
+#                                 self.output_tuple_keys):
+            
+#             wCP_keys     = list1
+#             adiabat_keys = long2.split('+')
+                               
+#             num_states = len(wCP_keys)
+#             omega = all_results[wCP_keys[0]]
+#             batch_size = len(omega)
+                               
+#             C_mat0 = torch.zeros(batch_size, num_states, num_states, 
+#                                  device=omega.device)
+#             #pdb.set_trace()
+            
+#             for mat in C_mat0:
+#                 mat.fill_diagonal_(1)
+#             C_mat = (C_mat0 * omega.reshape(-1, 1, 1)
+#                                + torch.diag(torch.ones(num_states-1), -1).to(omega.device)
+#                     )
+
+#             for idx, coef in enumerate(wCP_keys[1:]):
+#                 C_mat[:, idx, -1] = - all_results[coef]
+                
+#             all_results[f"Cmat_{wCP_keys[0][-1]}"] = C_mat
+                               
+#             #eigvals = torch.real(torch.linalg.eigvals(C_mat))
+#             eigvals = torch.abs(torch.linalg.eigvals(C_mat))
+#             for column, key in zip(eigvals.T, adiabat_keys[::-1]):
+#                 all_results[key] = column
+            
+#             for key in adiabat_keys:
+#                 grad_key = f"{key}_grad"
+#                 if grad_key in self.grad_keys:
+#                     output   = all_results[key]
+#                     grad     = compute_grad(output=output,
+#                                             inputs=xyz)
+#                     all_results[grad_key] = grad
+                               
+#     def run(self,
+#             batch,
+#             xyz=None,
+#             requires_embedding=False,
+#             requires_stress=False,
+#             inference=False):
+
+#         from nff.train import batch_detach
+                               
+#         atomwise_out, xyz, r_ij, nbrs = self.atomwise(batch=batch,
+#                                                       xyz=xyz)
+        
+#         if getattr(self, "excl_vol", None):
+#             # Excluded Volume interactions
+#             r_ex = self.V_ex(r_ij, nbrs, xyz)
+#             for key in self.output_keys:
+#                 atomwise_out[key] += r_ex
+
+#         all_results, xyz = self.pool(batch=batch,
+#                                      atomwise_out=atomwise_out,
+#                                      xyz=xyz,
+#                                      r_ij=r_ij,
+#                                      nbrs=nbrs,
+#                                      inference=False)
+                               
+#         self.adiabatic_energies(all_results=all_results,
+#                                xyz=xyz)
+
+#         if requires_embedding:
+#             all_results = add_embedding(atomwise_out=atomwise_out,
+#                                         all_results=all_results)
+
+#         if requires_stress:
+#             all_results = add_stress(batch=batch,
+#                                      all_results=all_results,
+#                                      nbrs=nbrs,
+#                                      r_ij=r_ij)
+
+#         if getattr(self, "compute_delta", False):
+#             all_results = self.add_delta(all_results)
+                               
+#         if inference:
+#             batch_detach(all_results)
+
+#         return all_results, xyz
 
 
 class PainnDipole(Painn_VecOut):

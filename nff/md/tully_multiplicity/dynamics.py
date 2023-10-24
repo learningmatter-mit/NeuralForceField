@@ -782,9 +782,9 @@ class NeuralTully:
                                self.U.conj().transpose((0,2,1)), 
                                self.U_old))
             anti_hermitian = ((1 - epsilon) < diagonals).all()
-            if not anti_hermitian:
-                print("WARNING: Time step likely too large! At least one new unitary matrix ",
-                      "does not fulfill anti-hermicity!")
+#             if not anti_hermitian:
+#                 print("WARNING: Time step likely too large! At least one new unitary matrix ",
+#                       "does not fulfill anti-hermicity!")
 #                 print(f"epsilon = {epsilon}")
 #                 print("diagonal elements:\n", diagonals)
 #                 print("H_diag:\n", evals)

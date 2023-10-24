@@ -1027,6 +1027,11 @@ def build_wCP_loss(loss_dict):
         
             pred_omega = results[f"omega_{idx}"]
             pred_c0    = results[f"c00_{idx}"]
+            
+            # log is better, but only if argument is larger than 1
+            if (num_states > 2) and (not (torch.abs(targ_c0) < 1.).any()):
+                targ_c0 = torch.log(torch.abs(targ_c0))
+                pred_c0 = torch.log(torch.abs(results[f"c00_{idx}"]))
 
             if loss_type == "mae":
                 diff += ((pred_omega - targ_omega).abs() +
@@ -1043,11 +1048,15 @@ def build_wCP_loss(loss_dict):
                     for key2 in enkey_set[ii+1:]:
                         targ_cnminus2 += ((ground_truth[key1] - targ_omega) *
                                           (ground_truth[key2] - targ_omega))
+                targ_cnminus2 = torch.log(torch.abs(targ_cnminus2))
+                    
+                # quantity is only close to 0 if all surfaces cross in one point
+                # which with 3+ surfaces should never be the case
                 if loss_type == "mae":
-                    diff += (results[f"c{num_states-2:02d}_{idx}"] 
+                    diff += (torch.log(torch.abs(results[f"c{num_states-2:02d}_{idx}"]))
                               - targ_cnminus2).abs() 
                 elif loss_type == "mse":
-                    diff += (results[f"c{num_states-2:02d}_{idx}"] 
+                    diff += (torch.log(torch.abs(results[f"c{num_states-2:02d}_{idx}"])) 
                               - targ_cnminus2).pow(2) 
 
         loss = coef * torch.mean(diff)
