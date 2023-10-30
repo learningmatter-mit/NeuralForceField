@@ -207,6 +207,18 @@ class BiasBase(NeuralFF):
         """
         
         self._propagate_ext()
+        bias_ener, bias_grad = self._extended_dynamics(xi, grad_xi)
+         
+        self._update_bias(xi)
+        self._up_extvel()                
+                
+        return bias_ener, bias_grad
+    
+    
+    def _extended_dynamics(self, 
+                         xi: np.ndarray,
+                         grad_xi: np.ndarray,
+                        ) -> Tuple[np.ndarray, np.ndarray]: 
         
         bias_grad = np.zeros_like(grad_xi[0])
         bias_ener = 0.0        
@@ -226,9 +238,6 @@ class BiasBase(NeuralFF):
             elif self.ext_coords[i] < (self.ranges[i][0] - self.margins[i]):
                 r = self.diff(self.ranges[i][0] - self.margins[i], self.ext_coords[i], self.cv_defs[i]['type'])
                 self.ext_forces[i] += self.conf_k[i] * r
-         
-        self._update_bias(xi)
-        self._up_extvel()                
                 
         return bias_ener, bias_grad
     
@@ -259,7 +268,6 @@ class BiasBase(NeuralFF):
             
         return constr_ener, constr_grad
         
-
     
     def calculate(
             self,
@@ -334,6 +342,16 @@ class BiasBase(NeuralFF):
             cv_invmass[ii]   = np.matmul(xi_grad.flatten(), np.matmul(M_inv, xi_grad.flatten()))
             cv_dot_PES[ii]   = np.dot(xi_grad.flatten(), model_grad.flatten())
             
+        self.results = {
+            'energy_unbiased': model_energy.reshape(-1),
+            'forces_unbiased': -model_grad.reshape(-1, 3),
+            'grad_length': np.linalg.norm(model_grad),
+            'cv_vals': cvs,
+            'cv_grad_lengths': cv_grad_lens,
+            'cv_invmass': cv_invmass,
+            'cv_dot_PES': cv_dot_PES,
+        }
+            
         bias_ener, bias_grad = self.step_bias(cvs, cv_grads)
         energy = model_energy + bias_ener
         grad   = model_grad   + bias_grad
@@ -351,18 +369,11 @@ class BiasBase(NeuralFF):
             grad   += const_grad
 
             
-        self.results = {
+        self.results.update({
             'energy': energy.reshape(-1),
             'forces': -grad.reshape(-1, 3),
-            'energy_unbiased': model_energy.reshape(-1),
-            'forces_unbiased': -model_grad.reshape(-1, 3),
-            'grad_length': np.linalg.norm(model_grad),
-            'cv_vals': cvs,
-            'cv_grad_lengths': cv_grad_lens,
-            'cv_invmass': cv_invmass,
-            'cv_dot_PES': cv_dot_PES,
             'ext_pos': self.ext_coords,
-        }
+        })
         
         if self.constraints:
             self.results['const_vals'] = consts
@@ -562,6 +573,231 @@ class eABF(BiasBase):
         self.ext_vel *= self.prefac2
         self.ext_vel += self.rand_push * self.ext_rand_gauss                         
         self.ext_vel += 0.5e0 * self.ext_dt * self.ext_forces / self.ext_masses
+        
+        
+class aMDeABF(eABF):
+    """extended-system Adaptive Biasing Force Calculator 
+       class with neural force field
+       
+       Accelerated Molecular Dynamics
+    
+        see:
+            aMD: Hamelberg et. al., J. Chem. Phys. 120, 11919 (2004); https://doi.org/10.1063/1.1755656
+            GaMD: Miao et. al., J. Chem. Theory Comput. (2015); https://doi.org/10.1021/acs.jctc.5b00436
+            SaMD: Zhao et. al., J. Phys. Chem. Lett. 14, 4, 1103 - 1112 (2023); https://doi.org/10.1021/acs.jpclett.2c03688
+
+        Apply global boost potential to potential energy, that is independent of Collective Variables.
+    
+    Args:
+        model: the neural force field model
+        cv_def: lsit of Collective Variable (CV) definitions
+            [["cv_type", [atom_indices], np.array([minimum, maximum]), bin_width], [possible second dimension]]
+        amd_parameter: acceleration parameter; SaMD, GaMD == sigma0; aMD == alpha
+        init_step: initial steps where no bias is applied to estimate min, max and var of potential energy
+        equil_steps: equilibration steps, min, max and var of potential energy is still updated
+                          force constant of coupling is calculated from previous steps
+        amd_method: "aMD": apply accelerated MD
+                    "GaMD_lower": use lower bound for GaMD boost
+                    "GaMD_upper: use upper bound for GaMD boost
+                    "SaMD: apply Sigmoid accelerated MD
+        equil_temp: float temperature of the simulation (important for extended system dynamics)
+        dt: time step of the extended dynamics (has to be equal to that of the real system dyn!)
+        friction_per_ps: friction for the Lagevin dyn of extended system (has to be equal to that of the real system dyn!)
+        nfull: numer of samples need for full application of bias force
+    """
+
+    def __init__(self,
+                 model,
+                 cv_defs: list[dict],
+                 dt: float,
+                 friction_per_ps: float,
+                 amd_parameter: float,
+                 collect_pot_samples: bool,
+                 estimate_k: bool,
+                 apply_amd: bool,
+                 amd_method: str = "gamd_lower",
+                 samd_c0: float = 0.0001,
+                 equil_temp: float = 300.0,
+                 nfull: int = 100,
+                 device='cpu',
+                 en_key='energy',
+                 directed=DEFAULT_DIRECTED,
+                 **kwargs):
+
+        super().__init__(model=model,
+                         cv_defs=cv_defs,
+                         dt=dt,
+                         friction_per_ps=friction_per_ps,
+                         equil_temp=equil_temp,
+                         nfull=nfull,
+                         device=device,
+                         en_key=en_key,
+                         directed=directed, 
+                         **kwargs)
+
+        self.amd_parameter = amd_parameter
+        self.collect_pot_samples = collect_pot_samples
+        self.estimate_k = estimate_k
+        self.apply_amd = apply_amd
+        
+        self.amd_method = amd_method.lower()
+
+        if amd_method.lower() == "amd":
+            print(f" >>> Warning: Please use GaMD or SaMD to obtain accurate free energy estimates!\n")
+
+        self.pot_count = 0
+        self.pot_var = 0.0
+        self.pot_std = 0.0
+        self.pot_m2 = 0.0
+        self.pot_avg = 0.0
+        self.pot_min = +np.inf
+        self.pot_max = -np.inf
+        self.k0 = 0.0
+        self.k1 = 0.0
+        self.k = 0.0
+        self.E = 0.0
+        self.c0 = samd_c0
+        self.c = 1/self.c0 - 1
+
+        self.amd_pot = 0.0
+        self.amd_pot_traj = []
+
+        self.amd_c1 = np.zeros_like(self.histogram)
+        self.amd_c2 = np.zeros_like(self.histogram)
+        self.amd_m2 = np.zeros_like(self.histogram)
+        self.amd_corr = np.zeros_like(self.histogram)
+
+    def step_bias(self, 
+                 xi: np.ndarray,
+                 grad_xi: np.ndarray,
+                ) -> Tuple[np.ndarray, np.ndarray]: 
+        """energy and gradient of bias
+        
+        Args:
+            curr_cv: current value of the cv
+            cv_index: for multidimensional FES
+            
+        Returns:
+            bias_ener: bias energy
+            bias_grad: gradiant of the bias in CV space, needs to be dotted with the cv_gradient
+        """
+        
+        epot = self.results['energy_unbiased']
+        self.amd_forces = np.copy(self.results['forces_unbiased'])
+
+        self._propagate_ext()
+        bias_ener, bias_grad = self._extended_dynamics(xi, grad_xi)
+        
+        if self.collect_pot_samples == True:
+            self._update_pot_distribution(epot)
+            
+        if self.estimate_k == True:
+            self._calc_E_k0()
+        
+        self._update_bias(xi)
+        
+        if self.apply_amd == True:
+            # apply amd boost potential only if U0 below bound
+            if epot < self.E:
+                boost_ener, boost_grad = self._apply_boost(epot)
+            else:
+                boost_ener, boost_grad = 0.0, 0.0*self.amd_forces
+            bias_ener += boost_ener
+            bias_grad += boost_grad
+
+            bink = self.get_index(xi)
+            (
+                self.amd_c1[bink],
+                self.amd_m2[bink],
+                self.amd_c2[bink],
+            ) = welford_var(
+                self.histogram[bink],
+                self.amd_c1[bink],
+                self.amd_m2[bink],
+                boost_ener,
+            )
+        
+        self._up_extvel()
+                
+        return bias_ener, bias_grad
+    
+    
+    def _apply_boost(self, epot):
+        """Apply boost potential to forces"""
+        if self.amd_method.lower() == "amd":
+            amd_pot = np.square(self.E - epot) / (self.parameter + (self.E - epot))
+            boost_grad = (
+                ((epot - self.E) * (epot - 2.0 * self.parameter - self.E)) / np.square(epot - self.parameter - self.E)
+            ) * self.amd_forces
+        
+        elif self.amd_method.lower() == "samd":
+            amd_pot = self.amd_pot = self.pot_max - epot - 1/self.k * np.log((self.c + np.exp(self.k * (self.pot_max - self.pot_min))) 
+                    / (self.c + np.exp(self.k * (epot - self.pot_min))))
+            boost_grad = -(1.0/(np.exp(-self.k * (epot - self.pot_min) + np.log((1/self.c0) - 1)) + 1) - 1) * self.amd_forces
+
+        else:
+            prefac = self.k0 / (self.pot_max - self.pot_min)
+            amd_pot = 0.5 * prefac * np.power(self.E - epot, 2)
+            boost_grad = prefac * (self.E - epot) * self.amd_forces
+        
+        return amd_pot, boost_grad
+    
+    
+    def _update_pot_distribution(self, epot: float):
+        """update min, max, avg, var and std of epot
+
+        Args:
+            epot: potential energy
+        """
+        self.pot_min = np.min([epot, self.pot_min])
+        self.pot_max = np.max([epot, self.pot_max])
+        self.pot_count += 1
+        self.pot_avg, self.pot_m2, self.pot_var = welford_var(
+            self.pot_count, self.pot_avg, self.pot_m2, epot
+        )
+        self.pot_std = np.sqrt(self.pot_var)
+
+    def _calc_E_k0(self):
+        """compute force constant for amd boost potential
+
+        Args:
+            epot: potential energy
+        """
+        if self.amd_method.lower() == "gamd_lower":
+            self.E = self.pot_max
+            ko = (self.amd_parameter / self.pot_std) * (
+                (self.pot_max - self.pot_min) / (self.pot_max - self.pot_avg)
+            )
+
+            self.k0 = np.min([1.0, ko])
+
+        elif self.amd_method.lower() == "gamd_upper":
+            ko = (1.0 - self.amd_parameter / self.pot_std) * (
+                (self.pot_max - self.pot_min) / (self.pot_avg - self.pot_min)
+            )
+            if 0.0 < ko <= 1.0:
+                self.k0 = ko
+            else:
+                self.k0 = 1.0
+            self.E = self.pot_min + (self.pot_max - self.pot_min) / self.k0
+
+        elif self.amd_method.lower() == "samd":
+            ko = (self.amd_parameter / self.pot_std) * (
+                (self.pot_max - self.pot_min) / (self.pot_max - self.pot_avg)
+            )
+
+            self.k0 = np.min([1.0, ko])
+            if (self.pot_std / self.amd_parameter) <= 1.0:
+                self.k = self.k0
+            else:
+                self.k1 = np.max([0,(np.log(self.c) + np.log((self.pot_std)/(self.amd_parameter) - 1))/(self.pot_avg - self.pot_min)])
+                self.k = np.max([self.k0,self.k1])
+
+        elif self.amd_method.lower() == "amd":
+            self.E = self.pot_max
+ 
+        else:
+            raise ValueError(f" >>> Error: unknown aMD method {self.amd_method}!")
 
         
 class WTMeABF(eABF):
