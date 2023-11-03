@@ -661,7 +661,9 @@ class aMDeABF(eABF):
 
         self.amd_method = amd_method.lower()
 
-        if amd_method.lower() == "amd":
+        assert self.amd_method in ['gamd_upper', 'gamd_lower', 'samd', 'amd'], f"Unknown aMD method {self.amd_method}"
+
+        if self.amd_method == "amd":
             print(
                 " >>> Warning: Please use GaMD or SaMD to obtain accurate free energy estimates!\n"
             )
@@ -741,37 +743,17 @@ class aMDeABF(eABF):
 
     def _apply_boost(self, epot):
         """Apply boost potential to forces"""
-        if self.amd_method.lower() == "amd":
+        if self.amd_method == "amd":
             amd_pot = np.square(self.E - epot) / (self.parameter + (self.E - epot))
             boost_grad = (
                 ((epot - self.E) * (epot - 2.0 * self.parameter - self.E))
                 / np.square(epot - self.parameter - self.E)
             ) * self.amd_forces
 
-        elif self.amd_method.lower() == "samd":
-            amd_pot = self.amd_pot = (
-                self.pot_max
-                - epot
-                - 1
-                / self.k
-                * np.log(
-                    (self.c + np.exp(self.k * (self.pot_max - self.pot_min)))
-                    / (self.c + np.exp(self.k * (epot - self.pot_min)))
-                )
-            )
-            boost_grad = (
-                -(
-                    1.0
-                    / (
-                        np.exp(
-                            -self.k * (epot - self.pot_min) + np.log((1 / self.c0) - 1)
-                        )
-                        + 1
-                    )
-                    - 1
-                )
-                * self.amd_forces
-            )
+        elif self.amd_method == "samd":
+            amd_pot = self.amd_pot = self.pot_max - epot - 1/self.k * np.log((self.c + np.exp(self.k * (self.pot_max - self.pot_min)))
+                    / (self.c + np.exp(self.k * (epot - self.pot_min))))
+            boost_grad = -(1.0/(np.exp(-self.k * (epot - self.pot_min) + np.log((1/self.c0) - 1)) + 1) - 1) * self.amd_forces
 
         else:
             prefac = self.k0 / (self.pot_max - self.pot_min)
@@ -800,7 +782,7 @@ class aMDeABF(eABF):
         Args:
             epot: potential energy
         """
-        if self.amd_method.lower() == "gamd_lower":
+        if self.amd_method == "gamd_lower":
             self.E = self.pot_max
             ko = (self.amd_parameter / self.pot_std) * (
                 (self.pot_max - self.pot_min) / (self.pot_max - self.pot_avg)
@@ -808,7 +790,7 @@ class aMDeABF(eABF):
 
             self.k0 = np.min([1.0, ko])
 
-        elif self.amd_method.lower() == "gamd_upper":
+        elif self.amd_method == "gamd_upper":
             ko = (1.0 - self.amd_parameter / self.pot_std) * (
                 (self.pot_max - self.pot_min) / (self.pot_avg - self.pot_min)
             )
@@ -818,7 +800,7 @@ class aMDeABF(eABF):
                 self.k0 = 1.0
             self.E = self.pot_min + (self.pot_max - self.pot_min) / self.k0
 
-        elif self.amd_method.lower() == "samd":
+        elif self.amd_method == "samd":
             ko = (self.amd_parameter / self.pot_std) * (
                 (self.pot_max - self.pot_min) / (self.pot_max - self.pot_avg)
             )
@@ -839,7 +821,7 @@ class aMDeABF(eABF):
                 )
                 self.k = np.max([self.k0, self.k1])
 
-        elif self.amd_method.lower() == "amd":
+        elif self.amd_method == "amd":
             self.E = self.pot_max
 
         else:
