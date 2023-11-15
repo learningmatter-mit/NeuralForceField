@@ -339,7 +339,7 @@ class BiasBase(NeuralFF):
             cvs[ii]          = xi
             cv_grads[ii]     = xi_grad
             cv_grad_lens[ii] = np.linalg.norm(xi_grad)
-            cv_invmass[ii]   = np.matmul(xi_grad.flatten(), np.matmul(M_inv, xi_grad.flatten()))
+            cv_invmass[ii]   = np.einsum('i,ii,i', xi_grad.flatten(), M_inv, xi_grad.flatten())
             cv_dot_PES[ii]   = np.dot(xi_grad.flatten(), model_grad.flatten())
             
         self.results = {

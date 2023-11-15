@@ -969,6 +969,83 @@ def build_soc_loss(loss_dict):
     return loss_fn
 
 
+def build_diag_energy_loss(loss_dict):
+    
+    params    = loss_dict["params"]
+    diabats   = params['adiabats']
+    en_format = params["en_format"]
+    soc_format= params["soc_format"]
+    loss_type = params.get("loss_type", "mae")
+    reference = params["reference"]
+    
+    coef = loss_dict["coef"]
+    
+    start_tuples = []
+    next_start = 0
+    for enkey in diabats:
+        start_tuples.append((enkey, next_start))
+        if 'S' in enkey:
+            next_start += 1
+        elif 'T' in enkey:
+            next_start += 3
+        else:
+            raise NotImplementedError(f"This loss is not implemeted for diabat key: {enkey}")
+
+    def loss_fn(ground_truth,
+                results,
+                **kwargs):
+    
+        targ = ground_truth[reference]
+        batch_size = len(targ)
+        H_soc = torch.zeros((batch_size, next_start, next_start))
+        
+        for state1, start_1 in start_tuples:
+            for state2, start_2 in start_tuples:
+                if start_2 <= start_1 or (('S' in state1) and ('S' in state2)):
+                    continue
+                    
+                # cm^(-1) to kcal/mol
+                a = results[soc_format.format(state1, state2)+'_a'] * 0.002859
+                b = results[soc_format.format(state1, state2)+'_b'] * 0.002859
+                c = results[soc_format.format(state1, state2)+'_c'] * 0.002859
+                
+                if 'S' in state1:
+                    H_soc[:, start_1, start_2]   = a + 1.j*b
+                    H_soc[:, start_1, start_2+1] = 0.0 + 1.j*c
+                    H_soc[:, start_1, start_2+2] = a - 1.j*b
+                else:
+                    H_soc[:, start_1, start_2]     = 0. + 1j * c
+                    H_soc[:, start_1, start_2+1]   = -a + 1j * b
+                    H_soc[:, start_1+1, start_2]   =  a + 1j * b
+                    H_soc[:, start_1+1, start_2+2] = -a + 1j * b
+                    H_soc[:, start_1+2, start_2+1] =  a + 1j * b
+                    H_soc[:, start_1+2, start_2+2] = 0. - 1j * c
+                    
+        H_soc += (H_soc.transpose((0, 2, 1))).conj()
+        
+        for state1, start_1 in start_tuples:
+            energy = results[en_format.format(state1)]
+            H_soc[:, start_1, start_1] = energy
+            if 'T' in state1:
+                H_soc[:, start_1+1, start_1+1] = energy
+                H_soc[:, start_1+2, start_1+2] = energy
+    
+        pred, _ = torch.linalg.eigh(H_soc)
+        
+        if loss_type == "mse":
+                diff = torch.mean(mse_operation(targ, pred))
+            elif loss_type == "mae":
+                diff = torch.mean(mae_operation(targ, pred))
+            else:
+                raise NotImplementedError
+
+        loss = coef * diff
+    
+        return loss
+    
+    return loss_fn
+    
+
 def build_key_diff_loss(loss_dict):
     
     params    = loss_dict["params"]
@@ -1086,6 +1163,7 @@ def name_to_func(name):
         'soc_sign': build_soc_loss,
         'diff': build_key_diff_loss,
         'wCP': build_wCP_loss,
+        'energy_soc_diag': build_diag_energy_loss,
     }
     func = dic[name]
     return func
