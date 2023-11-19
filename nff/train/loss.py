@@ -1034,10 +1034,10 @@ def build_diag_energy_loss(loss_dict):
         
         if loss_type == "mse":
                 diff = torch.mean(mse_operation(targ, pred))
-            elif loss_type == "mae":
-                diff = torch.mean(mae_operation(targ, pred))
-            else:
-                raise NotImplementedError
+        elif loss_type == "mae":
+            diff = torch.mean(mae_operation(targ, pred))
+        else:
+            raise NotImplementedError
 
         loss = coef * diff
     
