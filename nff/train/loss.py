@@ -996,8 +996,11 @@ def build_diag_energy_loss(loss_dict):
                 **kwargs):
     
         targ = ground_truth[reference]
-        batch_size = len(targ)
-        H_soc = torch.zeros((batch_size, next_start, next_start))
+        targ = targ.reshape(-1, next_start)
+        batch_size = targ.shape[0]
+        H_soc = torch.zeros((batch_size, next_start, next_start), 
+                            dtype=torch.complex64,
+                            device=targ.device)
         
         for state1, start_1 in start_tuples:
             for state2, start_2 in start_tuples:
@@ -1021,16 +1024,16 @@ def build_diag_energy_loss(loss_dict):
                     H_soc[:, start_1+2, start_2+1] =  a + 1j * b
                     H_soc[:, start_1+2, start_2+2] = 0. - 1j * c
                     
-        H_soc += (H_soc.transpose((0, 2, 1))).conj()
+        H_antisym = H_soc + (H_soc.transpose(2, 1)).conj()
         
         for state1, start_1 in start_tuples:
             energy = results[en_format.format(state1)]
-            H_soc[:, start_1, start_1] = energy
+            H_antisym[:, start_1, start_1] = energy
             if 'T' in state1:
-                H_soc[:, start_1+1, start_1+1] = energy
-                H_soc[:, start_1+2, start_1+2] = energy
+                H_antisym[:, start_1+1, start_1+1] = energy
+                H_antisym[:, start_1+2, start_1+2] = energy
     
-        pred, _ = torch.linalg.eigh(H_soc)
+        pred, _ = torch.linalg.eigh(H_antisym)
         
         if loss_type == "mse":
                 diff = torch.mean(mse_operation(targ, pred))
