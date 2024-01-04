@@ -1,26 +1,26 @@
-import torch
-import numbers
-import numpy as np
 import copy
-import nff.utils.constants as const
+import numbers
 from copy import deepcopy
-from sklearn.utils import shuffle as skshuffle
-from sklearn.model_selection import train_test_split
+
+import nff.utils.constants as const
+import numpy as np
+import torch
 from ase import Atoms
 from ase.neighborlist import neighbor_list
-from torch.utils.data import Dataset as TorchDataset
-from tqdm import tqdm
-
-from nff.data.parallel import (featurize_parallel, NUM_PROCS,
-                               add_e3fp_parallel, add_kj_ji_parallel,
-                               add_bond_idx_parallel)
 from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
 from nff.data.features import add_morgan as external_morgan
 from nff.data.features import featurize_rdkit as external_rdkit
-from nff.data.graphs import (get_bond_idx, reconstruct_atoms,
-                             get_neighbor_list, generate_subgraphs,
-                             DISTANCETHRESHOLDICT_Z, get_angle_list,
-                             add_ji_kj, make_dset_directed)
+from nff.data.graphs import (DISTANCETHRESHOLDICT_Z, add_ji_kj,
+                             generate_subgraphs, get_angle_list, get_bond_idx,
+                             get_neighbor_list, make_dset_directed,
+                             reconstruct_atoms)
+from nff.data.parallel import (NUM_PROCS, add_bond_idx_parallel,
+                               add_e3fp_parallel, add_kj_ji_parallel,
+                               featurize_parallel)
+from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle as skshuffle
+from torch.utils.data import Dataset as TorchDataset
+from tqdm import tqdm
 
 
 class Dataset(TorchDataset):
@@ -315,27 +315,33 @@ class Dataset(TorchDataset):
         Raises:
             NotImplementedError: Description
         """
+        conversion_factors = {
+            ('eV', 'kcal/mol'): const.EV_TO_KCAL,
+            ('eV', 'atomic'): const.EV_TO_AU,
+            ('kcal/mol', 'eV'): const.KCAL_TO_EV,
+            ('kcal/mol', 'atomic'): const.KCAL_TO_AU,
+            ('atomic', 'eV'): const.AU_TO_EV,
+            ('atomic', 'kcal/mol'): const.AU_TO_KCAL
+        }
 
-        if target_unit not in ['kcal/mol', 'atomic']:
-            raise NotImplementedError(
-                'unit conversion for {} not implemented'.format(target_unit)
-            )
+        if target_unit not in ['kcal/mol', 'eV', 'atomic']:
+            raise NotImplementedError(f"Unit {target_unit} not implemented")
 
-        if target_unit == 'kcal/mol' and self.units == 'atomic':
-            self.props = const.convert_units(
-                self.props,
-                const.AU_TO_KCAL
-            )
+        curr_unit = self.units
 
-        elif target_unit == 'atomic' and self.units == 'kcal/mol':
-            self.props = const.convert_units(
-                self.props,
-                const.KCAL_TO_AU
-            )
-        else:
+        if target_unit == curr_unit:
             return
+            
+        conversion_factor = conversion_factors.get((curr_unit, target_unit))
+        
+        if conversion_factor is None:
+            raise NotImplementedError(f"Conversion from {curr_unit} to {target_unit} not implemented")
 
+        self.props = const.convert_units(self.props, conversion_factor)
+        if 'units' in self.props.keys() and isinstance(self.props['units'], list):
+            self.props['units'] = [target_unit for x in self.props['units']]
         self.units = target_unit
+        
         return
 
     def change_idx(self, idx):
@@ -579,6 +585,49 @@ class Dataset(TorchDataset):
         self.props['offsets'] = all_offsets
         self.props['nbr_list'] = all_nbr_list
         self._check_dictionary(deepcopy(self.props))
+    
+    def as_atoms_batches(self,
+                        cutoff=5.0,
+                        undirected=False,
+                        offset_key='offsets',
+                        nbr_key='nbr_list'):
+        """
+        Converts the dataset to a list of AtomsBatch objects.
+        Args:
+            cutoff (float): distance up to which atoms are considered bonded.
+            undirected (bool, optional): Description
+            offset_key (str, optional): Description
+            nbr_key (str, optional): Description
+        Returns:
+            List[AtomsBatch]: list of AtomsBatch objects
+        """
+        from nff.io.ase import AtomsBatch
+
+        atoms_batches = []
+        num_batches = len(self.props['nxyz'])
+        for i in range(num_batches):
+            nxyz = self.props['nxyz'][i]
+            atoms = AtomsBatch(
+                nxyz[:, 0].long(),
+                props={key: val[i] for key, val in self.props.items()},
+                positions=nxyz[:, 1:],
+                cell=self.props['lattice'][i] if 'lattice' in self.props.keys() else None,
+                pbc='lattice' in self.props.keys(),
+                cutoff=cutoff,
+                directed=(not undirected)
+            )
+            nbrs, offs = atoms.update_nbr_list()
+            atoms.props.update({
+                'num_atoms': torch.LongTensor([len(nxyz[:, 0])]),
+                nbr_key: nbrs,
+                offset_key: offs
+                })
+            for key, val in atoms.props.items():
+                if isinstance(val, torch.Tensor):
+                    atoms.props[key] = torch.atleast_1d(val) # make sure it's a 1D tensor min
+            atoms.props['units'] = self.units
+            atoms_batches.append(atoms)
+        return atoms_batches
 
     @classmethod
     def from_file(cls, path):
@@ -862,12 +911,53 @@ def binary_split(dataset, targ_name, test_size, seed):
 
     return idx_train, idx_test
 
+def stratified_split(dataset, targ_name,  test_size, seed, min_count=2):
+    """
+    Split the dataset with proportional amounts of k labels in each.
+    Args:
+        dataset (nff.data.dataset): NFF dataset
+        targ_name (str, optional): name of the label to use
+            in splitting.
+        test_size (float, optional): fraction of dataset for test
+        min_count (int, optional): minimum number of samples in each label
+    Returns:
+        idx_train (list[int]): indices of species in the training set
+        idx_test (list[int]): indices of species in the test set
+    """
+        
+    all_idx = list(range(len(dataset)))
+    stratify_labels = dataset.props[targ_name]
+
+    # ensure minimum number of samples in each label
+    from collections import Counter
+    label_counts = Counter(stratify_labels)
+
+    # get labels with count less than min count
+    labels_to_remove = [label for label, count in label_counts.items() if count < min_count]
+
+    # remove labels with count less than min count
+    idx_to_remove = []
+    for bad_label in labels_to_remove:
+        idx_to_remove.extend([i for i, x in enumerate(stratify_labels) if x == bad_label])
+    
+    all_idx = [i for i in all_idx if i not in idx_to_remove]
+    stratify_labels = [x for i, x in enumerate(stratify_labels) if i not in idx_to_remove]
+
+    assert len(all_idx) == len(stratify_labels), "length of indices and labels do not match"
+
+    # use sklearn to split the indices
+    idx_train, idx_test = train_test_split(all_idx, test_size=test_size, random_state=seed, stratify=stratify_labels)
+
+    return idx_train, idx_test
+
 
 def split_train_test(dataset,
                      test_size=0.2,
                      binary=False,
+                     stratified=False,
                      targ_name=None,
-                     seed=None):
+                     seed=None,
+                     **kwargs):
     """Splits the current dataset in two, one for training and
     another for testing.
 
@@ -876,6 +966,8 @@ def split_train_test(dataset,
         test_size (float, optional): fraction of dataset for test
         binary (bool, optional): whether to split the dataset with
             proportional amounts of a binary label in each.
+        stratified (bool, optional): whether to split the dataset with 
+            proportional amounts of k labels in each.
         targ_name (str, optional): name of the binary label to use
             in splitting.
     Returns:
@@ -887,6 +979,11 @@ def split_train_test(dataset,
                                            targ_name=targ_name,
                                            test_size=test_size,
                                            seed=seed)
+    elif stratified:
+        idx_train, idx_test = stratified_split(dataset=dataset,
+                                           targ_name=targ_name,
+                                           test_size=test_size,
+                                           seed=seed, **kwargs)
     else:
         idx = list(range(len(dataset)))
         idx_train, idx_test = train_test_split(idx, test_size=test_size,

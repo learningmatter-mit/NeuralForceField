@@ -1,7 +1,7 @@
-import torch
-from torch.nn import CrossEntropyLoss
 import numpy as np
+import torch
 from nff.utils import constants as const
+from torch.nn import CrossEntropyLoss
 
 __all__ = ["build_mse_loss"]
 
@@ -31,6 +31,7 @@ def build_general_loss(loss_coef,
             given by "energy_grad". This is useful if we're only outputting one quantity,
             such as the energy gradient, but we want two different outputs (such as
             "energy_grad" and "autopology_energy_grad") to be compared to it.
+        cutoff (dict): a dictionary of cutoff values for each property.
 
     Returns:
         mean squared error loss function
@@ -72,7 +73,6 @@ def build_general_loss(loss_coef,
             valid_idx = torch.bitwise_not(torch.isnan(targ))
             if key in cutoff:
                 valid_idx *= (targ <= cutoff[key])
-
             targ = targ[valid_idx]
             pred = pred[valid_idx]
 

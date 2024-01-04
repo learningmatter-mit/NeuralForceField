@@ -1,31 +1,25 @@
-import os, sys
-import numpy as np
-import torch
-
-from ase import Atoms
-from ase.neighborlist import neighbor_list
-from ase.calculators.calculator import Calculator, all_changes
-from ase import units
+import os
+import sys
 
 import nff.utils.constants as const
-from nff.nn.utils import torch_nbr_list
-from nff.utils.cuda import batch_to
+import numpy as np
+import torch
+from ase import Atoms, units
+from ase.calculators.calculator import Calculator, all_changes
+from ase.neighborlist import neighbor_list
+from nff.data import Dataset, collate_dicts
 from nff.data.sparse import sparsify_array
-from nff.train.builders.model import load_model
-from nff.utils.geom import compute_distances, batch_compute_distance
-from nff.utils.scatter import compute_grad
-from nff.data import Dataset
 from nff.nn.graphop import split_and_sum
-
-from nff.nn.models.schnet import SchNet, SchNetDiabat
-from nff.nn.models.hybridgraph import HybridGraphConv
-from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import OnlyBondUpdateCP3D
-
-from nff.data import collate_dicts
-
+from nff.nn.models.hybridgraph import HybridGraphConv
+from nff.nn.models.schnet import SchNet, SchNetDiabat
+from nff.nn.models.schnet_features import SchNetFeatures
+from nff.nn.utils import torch_nbr_list
+from nff.train.builders.model import load_model
+from nff.utils.cuda import batch_to
+from nff.utils.geom import batch_compute_distance, compute_distances
+from nff.utils.scatter import compute_grad
 from torch.autograd import grad
-
 
 DEFAULT_CUTOFF = 5.0
 DEFAULT_DIRECTED = False
@@ -89,6 +83,36 @@ class AtomsBatch(Atoms):
         self.device = device
         self.requires_large_offsets = requires_large_offsets
         self.mol_nbrs, self.mol_idx = self.get_mol_nbrs()
+    
+    def convert_props_units(self, target_unit):
+        """Converts the units of the properties to the desired unit.
+        Args:
+            target_unit (str): target unit.
+        """
+        conversion_factors = {
+            ('eV', 'kcal/mol'): const.EV_TO_KCAL,
+            ('eV', 'atomic'): const.EV_TO_AU,
+            ('kcal/mol', 'eV'): const.KCAL_TO_EV,
+            ('kcal/mol', 'atomic'): const.KCAL_TO_AU,
+            ('atomic', 'eV'): const.AU_TO_EV,
+            ('atomic', 'kcal/mol'): const.AU_TO_KCAL
+        }
+
+        if target_unit not in ['kcal/mol', 'eV', 'atomic']:
+            raise NotImplementedError(f"Unit {target_unit} not implemented")
+
+        curr_unit = self.props.get('units', 'eV')
+
+        if target_unit == curr_unit:
+            return
+
+        conversion_factor = conversion_factors.get((curr_unit, target_unit))
+        if conversion_factor is None:
+            raise NotImplementedError(f"Conversion from {curr_unit} to {target_unit} not implemented")
+
+        self.props = const.convert_units(self.props, conversion_factor)
+        self.props.update({'units': target_unit})
+        return
 
     def get_mol_nbrs(self):
         """
@@ -97,7 +121,7 @@ class AtomsBatch(Atoms):
         """
 
         # Not yet implemented for PBC
-        if self.offsets is not None and (self.offsets != 0).any():
+        if self.offsets is not None and (self.offsets.to_dense() != 0).any():
             return None, None
 
         counter = 0
@@ -156,6 +180,7 @@ class AtomsBatch(Atoms):
         self.props['offsets'] = self.offsets
         if self.pbc.any():
             self.props['cell'] = self.cell
+            self.props['lattice'] = self.cell.tolist()
 
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
         if self.props.get('num_atoms') is None:
