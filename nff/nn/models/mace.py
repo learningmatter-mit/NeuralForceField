@@ -1,34 +1,25 @@
-###########################################################################################
-# Implementation of MACE models and other models based E(3)-Equivariant MPNNs
-# Authors: Ilyes Batatia, Gregor Simm
-# This program is distributed under the MIT License (see MIT.md)
-###########################################################################################
-
-from typing import Any, Callable, Dict, List, Optional, Type, Union
+from typing import Callable, Dict, List, Optional, Type, Union
 
 import numpy as np
 import torch
+import torch.nn as nn
 from e3nn import o3
 from e3nn.util.jit import compile_mode
 
 from nff.io.ase import AtomsBatch
-from nff.nn.modules.mace.scatter import scatter_sum
-
+from nff.io.mace import atomic_data, torch_geometric, utils
 from nff.nn.modules.mace.blocks import (
     AtomicEnergiesBlock,
     EquivariantProductBasisBlock,
     InteractionBlock,
-    LinearDipoleReadoutBlock,
     LinearNodeEmbeddingBlock,
     LinearReadoutBlock,
-    NonLinearDipoleReadoutBlock,
     NonLinearReadoutBlock,
     RadialEmbeddingBlock,
     ScaleShiftBlock,
 )
+from nff.nn.modules.mace.scatter import scatter_sum
 from nff.nn.modules.mace.utils import (
-    compute_fixed_charge_dipole,
-    compute_forces,
     get_edge_vectors_and_lengths,
     get_outputs,
     get_symmetric_displacement,
@@ -388,3 +379,56 @@ class ScaleShiftMACE(MACE):
         }
 
         return output
+
+
+class NFFMACEWrapper(nn.Module):
+    def __init__(self, mace_model: Union[MACE, ScaleShiftMACE]):
+        super().__init__()
+        self.mace_model = mace_model
+        self.z_table = utils.AtomicNumberTable(
+            [int(z) for z in self.mace_model.atomic_numbers]
+        )
+        self.r_max = self.mace_model.r_max.item()
+
+    def forward(self, batch: AtomsBatch):
+        data = self.convert_atomsbatch_to_data(batch)
+        output = self.mace_model(data)
+        return output
+
+    def convert_atomsbatch_to_data(self, batch):
+        cum_idx_list = [0] + torch.cumsum(batch["num_atoms"], 0).tolist()
+        dataset = []
+
+        for i in range(batch["num_atoms"].shape[0]):
+            node_idx = torch.arange(cum_idx_list[i], cum_idx_list[i + 1])
+            positions = batch["nxyz"][node_idx, 1:].cpu().numpy()
+            numbers = batch["nxyz"][node_idx, 0].long().cpu().numpy()
+
+            if "cell" in batch.keys():
+                cell = batch["cell"][3 * i : 3 * i + 3].cpu().numpy()
+            elif "lattice" in batch.keys():
+                cell = batch["lattice"][3 * i : 3 * i + 3].cpu().numpy()
+            else:
+                raise ValueError("No cell or lattice found in batch")
+
+            config = utils.Configuration(
+                atomic_numbers=numbers,
+                positions=positions,
+                cell=cell,
+                pbc=(True, True, True),
+            )
+            dataset.append(
+                atomic_data.AtomicData.from_config(
+                    config, z_table=self.z_table, cutoff=self.r_max
+                )
+            )
+
+        data_loader = torch_geometric.dataloader.DataLoader(
+            dataset=dataset,
+            batch_size=len(dataset),
+            shuffle=False,
+            drop_last=False,
+        )
+        data = next(iter(data_loader)).to(batch["nxyz"].device)
+
+        return data
