@@ -1,5 +1,7 @@
+import copy
 import os
 import sys
+from collections import Counter
 
 import nff.utils.constants as const
 import numpy as np
@@ -7,6 +9,7 @@ import torch
 from ase import Atoms, units
 from ase.calculators.calculator import Calculator, all_changes
 from ase.neighborlist import neighbor_list
+from functorch import combine_state_for_ensemble, vmap
 from nff.data import Dataset, collate_dicts
 from nff.data.sparse import sparsify_array
 from nff.nn.graphop import split_and_sum
@@ -16,10 +19,14 @@ from nff.nn.models.schnet import SchNet, SchNetDiabat
 from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.utils import torch_nbr_list
 from nff.train.builders.model import load_model
+from nff.utils.constants import EV_TO_KCAL_MOL, HARTREE_TO_KCAL_MOL
 from nff.utils.cuda import batch_to
 from nff.utils.geom import batch_compute_distance, compute_distances
 from nff.utils.scatter import compute_grad
 from torch.autograd import grad
+
+HARTREE_TO_EV = HARTREE_TO_KCAL_MOL / EV_TO_KCAL_MOL
+# from torch.func import functional_call, stack_module_state
 
 DEFAULT_CUTOFF = 5.0
 DEFAULT_DIRECTED = False
@@ -637,11 +644,31 @@ class EnsembleNFF(Calculator):
             m.eval()
         self.device = device
         self.to(device)
+        self.offset_data = {}
 
     def to(self, device):
         self.device = device
         for m in self.models:
             m.to(device)
+
+    def offset_energy(self, atoms, energy: float or np.ndarray):
+        """Offset the NFF energy to obtain the correct reference energy
+
+        Args:
+        atoms (Atoms): Atoms object
+        energy (float or np.ndarray): energy to be offset
+        """
+
+        ads_count = Counter(atoms.get_chemical_symbols())
+
+        stoidict = self.offset_data["stoidict"]
+        ref_en = 0
+        for ele, num in ads_count.items():
+            ref_en += num * stoidict[ele]
+        ref_en += stoidict["offset"]
+
+        energy += ref_en * HARTREE_TO_EV
+        return energy
 
     def calculate(
             self,
@@ -665,9 +692,13 @@ class EnsembleNFF(Calculator):
 
         Calculator.calculate(self, atoms, properties, system_changes)
 
+        # TODO can probably make it more efficient by only calculating the system changes
+
         # run model
         # atomsbatch = AtomsBatch(atoms)
         # batch_to(atomsbatch.get_batch(), self.device)
+        # TODO update atoms only when necessary
+        atoms.update_nbr_list(update_atoms=True)
         batch = batch_to(atoms.get_batch(), self.device)
 
         # add keys so that the readout function can calculate these properties
@@ -677,6 +708,22 @@ class EnsembleNFF(Calculator):
 
         energies = []
         gradients = []
+
+        # do this in parallel, using the version here: https://pytorch.org/functorch/1.13/notebooks/ensembling.html
+
+        # fmodel, params, buffers = combine_state_for_ensemble(self.models)
+        # predictions_vmap = vmap(fmodel, in_dims=(0, 0, None))(params, buffers, batch)
+
+        # Construct a "stateless" version of one of the models. It is "stateless" in
+        # the sense that the parameters are meta Tensors and do not have storage.
+        # self.base_model = copy.deepcopy(self.models[0])
+        # self.base_model = self.base_model.to('meta')
+        # def fmodel(params, buffers, x):
+        #     return functional_call(self.base_model, (params, buffers), (x,))
+
+        # predictions_vmap = vmap(fmodel, in_dims=(0, 0, None))(params, buffers, batch)
+
+        # do this in parallel
         for model in self.models:
             prediction = model(batch)
 
@@ -699,6 +746,9 @@ class EnsembleNFF(Calculator):
         energies = np.stack(energies)
         gradients = np.stack(gradients)
 
+        # offset energies
+        energies = self.offset_energy(atoms, energies)
+
         self.results = {
             'energy': energies.mean(0).reshape(-1),
             'energy_std': energies.std(0).reshape(-1),
@@ -709,6 +759,19 @@ class EnsembleNFF(Calculator):
             self.results['forces_std'] = gradients.std(0).reshape(-1, 3)
 
         atoms.results = self.results.copy()
+
+    def set(self, **kwargs):
+        """Set parameters like set(key1=value1, key2=value2, ...).
+
+        A dictionary containing the parameters that have been changed
+        is returned.
+
+        The special keyword 'parameters' can be used to read
+        parameters from a file."""
+        Calculator.set(self, **kwargs)
+        if 'offset_data' in self.parameters.keys():
+            self.offset_data = self.parameters['offset_data']
+            print(f"offset data: {self.offset_data} is set from parameters")
 
     @classmethod
     def from_files(

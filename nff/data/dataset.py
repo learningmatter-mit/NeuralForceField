@@ -575,7 +575,7 @@ class Dataset(TorchDataset):
         self._check_dictionary(deepcopy(self.props))
 
     def as_atoms_batches(
-        self, cutoff=5.0, undirected=False, offset_key="offsets", nbr_key="nbr_list"
+        self, cutoff=5.0, undirected=False, offset_key="offsets", nbr_key="nbr_list", device='cuda'
     ):
         """
         Converts the dataset to a list of AtomsBatch objects.
@@ -603,6 +603,7 @@ class Dataset(TorchDataset):
                 pbc="lattice" in self.props.keys(),
                 cutoff=cutoff,
                 directed=(not undirected),
+                device=device,
             )
             nbrs, offs = atoms.update_nbr_list()
             atoms.props.update(
