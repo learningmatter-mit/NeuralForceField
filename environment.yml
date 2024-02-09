@@ -162,7 +162,6 @@ dependencies:
   - openbabel=3.1.1=py39hee2736e_3
   - openh264=2.1.1=h780b84a_0
   - openjpeg=2.4.0=hb52868f_1
-  - openssl=3.0.5=h166bdaf_0
   - packaging=21.3=pyhd8ed1ab_0
   - palettable=3.3.0=py_0
   - pandas=1.4.2=py39h1832856_2
