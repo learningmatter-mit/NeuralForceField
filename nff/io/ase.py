@@ -1,32 +1,32 @@
-import os, sys
-import numpy as np
-import torch
-
-from ase import Atoms
-from ase.neighborlist import neighbor_list
-from ase.calculators.calculator import Calculator, all_changes
-from ase import units
-from ase.stress import voigt_6_to_full_3x3_stress, full_3x3_to_voigt_6_stress
+import copy
+import os
+import sys
+from collections import Counter
 
 import nff.utils.constants as const
-from nff.nn.utils import torch_nbr_list
-from nff.utils.cuda import batch_to
+import numpy as np
+import torch
+from ase import Atoms, units
+from ase.calculators.calculator import Calculator, all_changes
+from ase.neighborlist import neighbor_list
+from functorch import combine_state_for_ensemble, vmap
+from nff.data import Dataset, collate_dicts
 from nff.data.sparse import sparsify_array
-from nff.train.builders.model import load_model
-from nff.utils.geom import compute_distances, batch_compute_distance
-from nff.utils.scatter import compute_grad
-from nff.data import Dataset
 from nff.nn.graphop import split_and_sum
-
-from nff.nn.models.schnet import SchNet, SchNetDiabat
-from nff.nn.models.hybridgraph import HybridGraphConv
-from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import OnlyBondUpdateCP3D
-
-from nff.utils.dispersion import clean_matrix, lattice_points_in_supercell
-from nff.data import collate_dicts
-
+from nff.nn.models.hybridgraph import HybridGraphConv
+from nff.nn.models.schnet import SchNet, SchNetDiabat
+from nff.nn.models.schnet_features import SchNetFeatures
+from nff.nn.utils import torch_nbr_list
+from nff.train.builders.model import load_model
+from nff.utils.constants import EV_TO_KCAL_MOL, HARTREE_TO_KCAL_MOL
+from nff.utils.cuda import batch_to
+from nff.utils.geom import batch_compute_distance, compute_distances
+from nff.utils.scatter import compute_grad
 from torch.autograd import grad
+
+HARTREE_TO_EV = HARTREE_TO_KCAL_MOL / EV_TO_KCAL_MOL
+# from torch.func import functional_call, stack_module_state
 
 
 DEFAULT_CUTOFF = 5.0
@@ -95,6 +95,36 @@ class AtomsBatch(Atoms):
             self.mol_nbrs, self.mol_idx = self.get_mol_nbrs()
         else:
             self.mol_nbrs, self.mol_idx = None, None
+
+    def convert_props_units(self, target_unit):
+        """Converts the units of the properties to the desired unit.
+        Args:
+            target_unit (str): target unit.
+        """
+        conversion_factors = {
+            ('eV', 'kcal/mol'): const.EV_TO_KCAL,
+            ('eV', 'atomic'): const.EV_TO_AU,
+            ('kcal/mol', 'eV'): const.KCAL_TO_EV,
+            ('kcal/mol', 'atomic'): const.KCAL_TO_AU,
+            ('atomic', 'eV'): const.AU_TO_EV,
+            ('atomic', 'kcal/mol'): const.AU_TO_KCAL
+        }
+
+        if target_unit not in ['kcal/mol', 'eV', 'atomic']:
+            raise NotImplementedError(f"Unit {target_unit} not implemented")
+
+        curr_unit = self.props.get('units', 'eV')
+
+        if target_unit == curr_unit:
+            return
+
+        conversion_factor = conversion_factors.get((curr_unit, target_unit))
+        if conversion_factor is None:
+            raise NotImplementedError(f"Conversion from {curr_unit} to {target_unit} not implemented")
+
+        self.props = const.convert_units(self.props, conversion_factor)
+        self.props.update({'units': target_unit})
+        return
 
     def get_mol_nbrs(self, r_cut=95):
         """
@@ -272,6 +302,7 @@ class AtomsBatch(Atoms):
         self.props['offsets'] = self.offsets
         if self.pbc.any():
             self.props['cell'] = torch.Tensor(np.array(self.cell))
+            self.props['lattice'] = self.cell.tolist()
 
         self.props['nxyz'] = torch.Tensor(self.get_nxyz())
         if self.props.get('num_atoms') is None:
@@ -785,6 +816,7 @@ class EnsembleNFF(Calculator):
         self.device = device
         self.to(device)
         self.jobdir = jobdir
+        self.offset_data = {}
         self.properties = properties
         self.model_kwargs = model_kwargs
 
@@ -792,6 +824,25 @@ class EnsembleNFF(Calculator):
         self.device = device
         for m in self.models:
             m.to(device)
+
+    def offset_energy(self, atoms, energy: float or np.ndarray):
+        """Offset the NFF energy to obtain the correct reference energy
+
+        Args:
+        atoms (Atoms): Atoms object
+        energy (float or np.ndarray): energy to be offset
+        """
+
+        ads_count = Counter(atoms.get_chemical_symbols())
+
+        stoidict = self.offset_data.get("stoidict", {})
+        ref_en = 0
+        for ele, num in ads_count.items():
+            ref_en += num * stoidict.get(ele, 0.0)
+        ref_en += stoidict.get("offset", 0.0)
+
+        energy += ref_en * HARTREE_TO_EV
+        return energy
 
     def log_ensemble(self,
                      jobdir,
@@ -843,6 +894,14 @@ class EnsembleNFF(Calculator):
 
         Calculator.calculate(self, atoms, properties, system_changes)
 
+        # TODO can probably make it more efficient by only calculating the system changes
+
+        # run model
+        # atomsbatch = AtomsBatch(atoms)
+        # batch_to(atomsbatch.get_batch(), self.device)
+        # TODO update atoms only when necessary
+        atoms.update_nbr_list(update_atoms=True)
+
         kwargs = {}
         requires_stress = "stress" in self.properties
         if requires_stress:
@@ -864,6 +923,23 @@ class EnsembleNFF(Calculator):
         energies = []
         gradients = []
         stresses = []
+
+        # do this in parallel, using the version here: https://pytorch.org/functorch/1.13/notebooks/ensembling.html
+
+        # fmodel, params, buffers = combine_state_for_ensemble(self.models)
+        # predictions_vmap = vmap(fmodel, in_dims=(0, 0, None))(params, buffers, batch)
+
+        # Construct a "stateless" version of one of the models. It is "stateless" in
+        # the sense that the parameters are meta Tensors and do not have storage.
+        # self.base_model = copy.deepcopy(self.models[0])
+        # self.base_model = self.base_model.to('meta')
+        # def fmodel(params, buffers, x):
+        #     return functional_call(self.base_model, (params, buffers), (x,))
+
+        # predictions_vmap = vmap(fmodel, in_dims=(0, 0, None))(params, buffers, batch)
+
+        # do this in parallel
+
         for model in self.models:
             prediction = model(batch, **kwargs)
 
@@ -894,6 +970,10 @@ class EnsembleNFF(Calculator):
 
         energies = np.stack(energies)
         gradients = np.stack(gradients)
+
+        # offset energies
+        energies = self.offset_energy(atoms, energies)
+
         if len(stresses) > 0:
             stresses = np.stack(stresses)
 
@@ -926,6 +1006,19 @@ class EnsembleNFF(Calculator):
                 self.log_ensemble(self.jobdir,'stress_nff_ensemble.npy',stresses)
 
         atoms.results = self.results.copy()
+
+    def set(self, **kwargs):
+        """Set parameters like set(key1=value1, key2=value2, ...).
+
+        A dictionary containing the parameters that have been changed
+        is returned.
+
+        The special keyword 'parameters' can be used to read
+        parameters from a file."""
+        Calculator.set(self, **kwargs)
+        if 'offset_data' in self.parameters.keys():
+            self.offset_data = self.parameters['offset_data']
+            print(f"offset data: {self.offset_data} is set from parameters")
 
     @classmethod
     def from_files(

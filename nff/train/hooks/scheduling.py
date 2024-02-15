@@ -6,7 +6,7 @@ Retrieved from https://github.com/atomistic-machine-learning/schnetpack/tree/dev
 import torch
 import numpy as np
 from torch.optim.lr_scheduler import (ReduceLROnPlateau, StepLR,
-                                      _LRScheduler)
+                                      _LRScheduler, CosineAnnealingLR)
 from nff.train.hooks import Hook
 
 
@@ -48,9 +48,8 @@ class EarlyStoppingHook(Hook):
 
 class WarmRestartHook(Hook):
     def __init__(
-        self, T0=10, Tmult=2, each_step=False, lr_min=1e-6, lr_factor=1.0, patience=1
+        self, T0=10, Tmult=2, each_step=False, lr_min=1e-6, lr_factor=1.0, patience=1, optimizer=None
     ):
-        self.scheduler = None
         self.each_step = each_step
         self.T0 = T0
         self.Tmult = Tmult
@@ -59,12 +58,14 @@ class WarmRestartHook(Hook):
         self.lr_factor = lr_factor
         self.patience = patience
         self.waiting = 0
-
+        self.scheduler = CosineAnnealingLR(
+            optimizer, self.Tmax, self.lr_min
+        )
         self.best_previous = float("Inf")
         self.best_current = float("Inf")
 
     def on_train_begin(self, trainer):
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        self.scheduler = CosineAnnealingLR(
             trainer.optimizer, self.Tmax, self.lr_min
         )
         self.init_opt_state = trainer.optimizer.state_dict()
@@ -207,7 +208,6 @@ class LRScheduleHook(Hook):
         """
         if not self.each_step:
             self.scheduler.step()
-
 
 class ReduceLROnPlateauHook(Hook):
     r"""Hook for reduce plateau learning rate scheduling.

@@ -1,9 +1,9 @@
 import copy
-import torch
-from tqdm import tqdm
 
-from nff.utils.cuda import batch_to, batch_detach
+import torch
 from nff.data.dataset import concatenate_dict
+from nff.utils.cuda import batch_detach, batch_to
+from tqdm import tqdm
 
 
 def shrink_batch(batch):

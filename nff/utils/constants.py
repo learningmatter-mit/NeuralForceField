@@ -1,17 +1,16 @@
-import torch
-import math
-from rdkit import Chem
 import copy
+import json
 import math
 import os
-import json
 
-from ase import units
+import torch
+from rdkit import Chem
 
 PERIODICTABLE = Chem.GetPeriodicTable()
 
 HARTREE_TO_KCAL_MOL = 627.509
 EV_TO_KCAL_MOL = 23.06052
+HARTREE_TO_EV = HARTREE_TO_KCAL_MOL / EV_TO_KCAL_MOL
 
 # Distances
 BOHR_RADIUS = 0.529177
@@ -31,19 +30,39 @@ ATOMIC_MASS = {
 AU_TO_KCAL = {
     'energy': HARTREE_TO_KCAL_MOL,
     '_grad': 1.0 / BOHR_RADIUS,
-    'stress': (units.Hartree * 1/(units.kcal / units.mol) / (units.Bohr**3))
+}
+
+AU_TO_EV = {
+    'energy': HARTREE_TO_EV,
+    '_grad': 1.0 / BOHR_RADIUS,
+}
+
+EV_TO_AU = {
+    'energy': 1.0 / HARTREE_TO_EV,
+    '_grad': BOHR_RADIUS,
+}
+
+EV_TO_KCAL = {
+    'energy': EV_TO_KCAL_MOL,
+    '_grad': 1.0,
 }
 
 KCAL_TO_AU = {
     'energy': 1.0 / HARTREE_TO_KCAL_MOL,
     '_grad': BOHR_RADIUS,
-    'stress': 1/( (units.Hartree * 1/(units.kcal / units.mol) / (units.Bohr**3)) )
+}
+
+KCAL_TO_EV = {
+    'energy': 1.0 / EV_TO_KCAL_MOL,
+    '_grad': 1.0,
 }
 
 KB_EV = 0.0000861731
 KB_AU = 3.166815e-6
 EV_TO_AU = 1 / 27.2114
+EV_A_TO_AU = 1 / 51.4221
 INV_CM_TO_AU = 4.5564e-6
+
 
 # Coulomb's constant, in (kcal/mol) * (A / e^2),
 # where A is Angstroms and e is the electron charge
@@ -123,16 +142,6 @@ ANGS_TO_M = 1e-10
 MDYN_PER_A_TO_J_PER_M = DYN_TO_J_PER_M / 1000 / ANGS_TO_M
 KG_TO_AMU = 1 / (1.66e-27)
 HBAR_SI = 6.626e-34 / (2 * math.pi)
-
-# AU_TO_KCAL = {
-#     'energy': HARTREE_TO_KCAL_MOL,
-#     '_grad': 1.0 / BOHR_RADIUS,
-# }
-
-# KCAL_TO_AU = {
-#     'energy': 1.0 / HARTREE_TO_KCAL_MOL,
-#     '_grad': BOHR_RADIUS,
-# }
 
 
 ELEC_CONFIG = {"1": [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
