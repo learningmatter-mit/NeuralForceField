@@ -17,7 +17,7 @@ from nff.nn.models.cp3d import OnlyBondUpdateCP3D
 from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.schnet import SchNet, SchNetDiabat
 from nff.nn.models.schnet_features import SchNetFeatures
-from nff.nn.utils import torch_nbr_list
+from nff.nn.utils import clean_matrix, lattice_points_in_supercell, torch_nbr_list
 from nff.train.builders.model import load_model
 from nff.utils.constants import EV_TO_KCAL_MOL, HARTREE_TO_KCAL_MOL
 from nff.utils.cuda import batch_to
@@ -331,12 +331,18 @@ class AtomsBatch(Atoms):
         masses = list(torch.Tensor(self.get_masses())
                       .split(mol_split_idx))
 
+        # split cell if periodic
+        if self.pbc.any():
+            if "lattice" in self.props:
+                cells = torch.split(self.props['lattice'], 3)
+            else:
+                cells = torch.unsqueeze(torch.tensor(self.cell), 0).repeat(len(mol_split_idx), 1, 1)
         Atoms_list = []
 
         for i, molecule_xyz in enumerate(positions):
             atoms = Atoms(Z[i].tolist(),
                           molecule_xyz.numpy(),
-                          cell=self.cell,
+                          cell=cells[i].numpy() if self.pbc.any() else None,
                           pbc=self.pbc)
 
             # in case you artificially changed the masses
