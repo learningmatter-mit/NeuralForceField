@@ -6,10 +6,6 @@ from collections import Counter
 import nff.utils.constants as const
 import numpy as np
 import torch
-from ase import Atoms, units
-from ase.calculators.calculator import Calculator, all_changes
-from ase.stress import full_3x3_to_voigt_6_stress
-from ase.neighborlist import neighbor_list
 from functorch import combine_state_for_ensemble, vmap
 from nff.data import Dataset, collate_dicts
 from nff.data.sparse import sparsify_array
@@ -18,13 +14,19 @@ from nff.nn.models.cp3d import OnlyBondUpdateCP3D
 from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.schnet import SchNet, SchNetDiabat
 from nff.nn.models.schnet_features import SchNetFeatures
-from nff.nn.utils import clean_matrix, lattice_points_in_supercell, torch_nbr_list
+from nff.nn.utils import (clean_matrix, lattice_points_in_supercell,
+                          torch_nbr_list)
 from nff.train.builders.model import load_model
 from nff.utils.constants import EV_TO_KCAL_MOL, HARTREE_TO_KCAL_MOL
 from nff.utils.cuda import batch_to
 from nff.utils.geom import batch_compute_distance, compute_distances
 from nff.utils.scatter import compute_grad
 from torch.autograd import grad
+
+from ase import Atoms, units
+from ase.calculators.calculator import Calculator, all_changes
+from ase.neighborlist import neighbor_list
+from ase.stress import full_3x3_to_voigt_6_stress
 
 HARTREE_TO_EV = HARTREE_TO_KCAL_MOL / EV_TO_KCAL_MOL
 # from torch.func import functional_call, stack_module_state
@@ -343,7 +345,7 @@ class AtomsBatch(Atoms):
             if "lattice" in self.props:
                 cells = torch.split(self.props['lattice'], 3)
             else:
-                cells = torch.unsqueeze(torch.tensor(self.cell), 0).repeat(len(mol_split_idx), 1, 1)
+                cells = torch.unsqueeze(torch.tensor(np.array(self.cell)), 0).repeat(len(mol_split_idx), 1, 1)
         Atoms_list = []
 
         for i, molecule_xyz in enumerate(positions):
