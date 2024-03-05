@@ -16,8 +16,8 @@ from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import ChemProp3D, OnlyBondUpdateCP3D
 from nff.nn.models.dimenet import DimeNet, DimeNetDiabat, DimeNetDiabatDelta, DimeNetDelta
 from nff.nn.models.painn import (Painn, PainnDiabat, PainnTransformer,
-                                 PainnAdiabat, Painn_VecOut, Painn_Tuple, 
-                                 Painn_wCP, PainnDipole)
+                                 PainnAdiabat, Painn_VecOut, Painn_NAC_OuterProd, Painn_Tuple, 
+                                 Painn_wCP, Painn_VecOut2, PainnDipole)
 from nff.nn.models.dispersion_models import PainnDispersion
 
 PARAMS_TYPE = {"SchNet":
@@ -263,6 +263,38 @@ PARAMS_TYPE = {"SchNet":
 
                },
                
+               "Painn_VecOut2":
+               {
+                   "feat_dim": int,
+                   "activation": str,
+                   "n_rbf": int,
+                   "cutoff": float,
+                   "num_conv": int,
+                   "output_keys": list,
+                   "output_vec_keys": list,
+                   "grad_keys": list,
+                   "excl_vol": bool,
+                   "V_ex_power": int,
+                   "V_ex_sigma": float
+
+               },
+               
+               "Painn_NAC_OuterProd":
+               {
+                   "feat_dim": int,
+                   "activation": str,
+                   "n_rbf": int,
+                   "cutoff": float,
+                   "num_conv": int,
+                   "output_keys": list,
+                   "output_vec_keys": list,
+                   "grad_keys": list,
+                   "excl_vol": bool,
+                   "V_ex_power": int,
+                   "V_ex_sigma": float
+
+               },
+               
                "Painn_Tuple":
                {
                    "feat_dim": int,
@@ -431,6 +463,8 @@ MODEL_DICT = {
     "RealSpookyNet": RealSpookyNet,
     "PainnDispersion": PainnDispersion,
     "Painn_VecOut": Painn_VecOut,
+    "Painn_VecOut2": Painn_VecOut2,
+    "Painn_NAC_OuterProd": Painn_NAC_OuterProd,
     "Painn_Tuple": Painn_Tuple,
     "Painn_wCP": Painn_wCP,
     "PainnDipole": PainnDipole,

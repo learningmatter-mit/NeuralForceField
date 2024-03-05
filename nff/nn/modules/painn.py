@@ -373,6 +373,57 @@ class NbrEmbeddingBlock(nn.Module):
         return s_i, v_i
 
 
+class GatedEquivariantBlock(nn.Module):
+    def __init__(self,
+                 feat_dim,
+                 activation,
+                 dropout_rate):
+        
+        super().__init__()
+        self.W1 = Dense(in_features=feat_dim,
+                           out_features=feat_dim,
+                           bias=False)
+        self.W2 = Dense(in_features=feat_dim,
+                           out_features=feat_dim,
+                           bias=False)
+        self.s_dense = nn.Sequential(Dense(in_features=2*feat_dim,
+                                           out_features=feat_dim,
+                                           bias=True,
+                                           dropout_rate=dropout_rate,
+                                           activation=to_module(activation)),
+                                     Dense(in_features=feat_dim,
+                                           out_features=2*feat_dim,
+                                           bias=True,
+                                           dropout_rate=dropout_rate))
+
+    def forward(self,
+                sv_tuple):
+        
+        s_i, v_i = sv_tuple
+
+        v_tranpose = v_i.transpose(1, 2).reshape(-1, v_i.shape[1])
+        num_feats = v_i.shape[1]
+        
+        W1_v = (self.W1(v_tranpose).reshape(-1, 3, num_feats)
+               .transpose(1, 2))
+        W2_v = (self.W2(v_tranpose).reshape(-1, 3, num_feats)
+               .transpose(1, 2))
+
+        W2_v_norm = norm(W2_v)
+        s_stack = torch.cat([s_i, W2_v_norm], dim=-1)
+
+        split = (self.s_dense(s_stack)
+                 .reshape(s_i.shape[0], 2, -1))
+
+        # delta v update
+        new_v = W1_v * split[:, 0, :].unsqueeze(-1)
+
+        # delta s update
+        new_s = split[:, 1, :]
+
+        return (new_s, new_v)
+    
+    
 class ReadoutBlock(nn.Module):
     def __init__(self,
                  feat_dim,
@@ -597,6 +648,113 @@ class ReadoutBlock_Vec(nn.Module):
             new_v_i = new_v_i.transpose(1, 2)  # (num_atoms, 3, num_feats)
 
             output = readoutdict(new_v_i).sum(dim=2) # (num_atoms, 3, 1) -> (num_atoms, 3)
+            results[key] = output
+
+        return results
+
+
+class ReadoutBlock_Vec2(nn.Module):
+    # this does not use part of the update block but n gated equivariant blocks
+    # as shown in the original PaiNN paper in Fig. 3
+    def __init__(self,
+                 feat_dim,
+                 # out_dims, # right now we can only get Natomsx3 but what if we just want 1x3?
+                 output_keys,
+                 activation,
+                 dropout,
+                 means=None,
+                 stddevs=None):
+        super().__init__()
+
+        self.gated_dict = nn.ModuleDict(
+            {key: nn.Sequential(GatedEquivariantBlock(feat_dim=feat_dim,
+                                      dropout_rate=dropout,
+                                      activation=activation),
+                                GatedEquivariantBlock(feat_dim=feat_dim,
+                                      dropout_rate=dropout,
+                                      activation=activation))
+             for key in output_keys}
+        )
+
+        # figure out how to do the collapsing
+        self.readoutdict = nn.ModuleDict(
+            {key:
+             Dense(in_features=feat_dim,
+                   out_features=1,
+                   bias=False,
+                   dropout_rate=dropout,)
+             for key in output_keys}
+        )
+
+    def forward(self,
+                s_i,
+                v_i):
+        """
+        Note: no atomwise summation. That's done in the model itself
+        """
+
+        results = {}
+
+        for key, readoutdict in self.readoutdict.items():
+
+            new_s_i, new_v_i = self.gated_dict[key]((s_i, v_i))
+            new_v_i = new_v_i.transpose(1, 2)  # (num_atoms, 3, num_feats)
+            output = readoutdict(new_v_i).sum(dim=2) # (num_atoms, 3, 1) -> (num_atoms, 3)
+            results[key] = output
+
+        return results
+
+    
+class ReadoutBlock_Mat3Nx3N(nn.Module):
+    # this does not use part of the update block but n gated equivariant blocks
+    # as shown in the original PaiNN paper in Fig. 3
+    def __init__(self,
+                 feat_dim,
+                 # out_dims, # right now we can only get Natomsx3 but what if we just want 1x3?
+                 output_keys,
+                 activation,
+                 dropout,
+                 means=None,
+                 stddevs=None):
+        super().__init__()
+
+        self.gated_dict = nn.ModuleDict(
+            {key: nn.Sequential(GatedEquivariantBlock(feat_dim=feat_dim,
+                                      dropout_rate=dropout,
+                                      activation=activation),
+                                GatedEquivariantBlock(feat_dim=feat_dim,
+                                      dropout_rate=dropout,
+                                      activation=activation))
+             for key in output_keys}
+        )
+
+        # figure out how to do the collapsing
+        self.readoutdict = nn.ModuleDict(
+            {key:
+             Dense(in_features=feat_dim,
+                   out_features=1,
+                   bias=False,
+                   dropout_rate=dropout,)
+             for key in output_keys}
+        )
+
+    def forward(self,
+                s_i,
+                v_i,
+                r_i):
+        """
+        Note: no atomwise summation. That's done in the model itself
+        """
+
+        results = {}
+
+        for key, readoutdict in self.readoutdict.items():
+
+            new_s_i, new_v_i = self.gated_dict[key]((s_i, v_i))
+            new_v_i = new_v_i.transpose(1, 2)  # (num_atoms, 3, num_feats)
+            nu = readoutdict(new_v_i).sum(dim=2) # (num_atoms, 3, 1) -> (num_atoms, 3)
+            output = (torch.outer(r_i.reshape(-1), nu.reshape(-1)) 
+                      + torch.outer(nu.reshape(-1), r_i.reshape(-1)))
             results[key] = output
 
         return results
