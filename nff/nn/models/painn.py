@@ -808,6 +808,12 @@ class Painn_VecOut2(Painn_VecOut):
         readout_dropout = modelparams.get("readout_dropout", 0)
         means = modelparams.get("means")
         stddevs = modelparams.get("stddevs")
+        
+        self.output_vec_keys = output_vec_keys
+        # no skip connection in original paper
+        self.skip_vec = modelparams.get("skip_vec_connection",
+                                        {key: False for key
+                                         in self.output_vec_keys})
 
         num_vec_readouts = (modelparams["num_conv"] if any(self.skip.values())
                             else 1)
@@ -822,7 +828,7 @@ class Painn_VecOut2(Painn_VecOut):
         )
         
         
-class Painn_NAC_OuterProd(Painn):
+class Painn_NAC_OuterProd(Painn_VecOut2):
     # This model attempts to learn non-adiabatic coupling vectors
     # as suggested by Jeremy Richardson, as eigenvector
     # of an outer product matrix
@@ -835,134 +841,36 @@ class Painn_NAC_OuterProd(Painn):
         """
 
         super().__init__(modelparams)
-
-        output_vec_keys = modelparams["output_vec_keys"]
-        feat_dim = modelparams["feat_dim"]
-        activation = modelparams["activation"]
-        readout_dropout = modelparams.get("readout_dropout", 0)
-        means = modelparams.get("means")
-        stddevs = modelparams.get("stddevs")
-        
-        self.output_vec_keys = output_vec_keys
-        # no skip connection in original paper
-        self.skip_vec = modelparams.get("skip_vec_connection",
-                                        {key: False for key
-                                         in self.output_vec_keys})
-
-        num_vec_readouts = (modelparams["num_conv"] if any(self.skip.values())
-                            else 1)
-        self.readout_vec_blocks = nn.ModuleList(
-            [ReadoutBlock_Mat3Nx3N(feat_dim=feat_dim,
-                              output_keys=output_vec_keys,
-                              activation=activation,
-                              dropout=readout_dropout,
-                              means=means,
-                              stddevs=stddevs)
-             for _ in range(num_vec_readouts)]
-        )
-        
-    def atomwise(self,
-                 batch,
-                 xyz=None):
-
-        # for backwards compatability
-        if isinstance(self.skip, bool):
-            self.skip = {key: self.skip
-                         for key in self.output_keys}
-
-        nbrs, _ = make_directed(batch['nbr_list'])
-        nxyz = batch['nxyz']
-
-        if xyz is None:
-            xyz = nxyz[:, 1:]
-            xyz.requires_grad = True
-
-        z_numbers = nxyz[:, 0].long()
-
-        # get r_ij including offsets and excluding
-        # anything in the neighbor skin
-        self.set_cutoff()
-        r_ij, nbrs = get_rij(xyz=xyz,
-                             batch=batch,
-                             nbrs=nbrs,
-                             cutoff=self.cutoff)
-
-        s_i, v_i = self.embed_block(z_numbers,
-                                    nbrs=nbrs,
-                                    r_ij=r_ij)
-        results = {}
-
-        for i, message_block in enumerate(self.message_blocks):
-            update_block = self.update_blocks[i]
-            ds_message, dv_message = message_block(s_j=s_i,
-                                                   v_j=v_i,
-                                                   r_ij=r_ij,
-                                                   nbrs=nbrs)
-
-            s_i = s_i + ds_message
-            v_i = v_i + dv_message
-
-            ds_update, dv_update = update_block(s_i=s_i,
-                                                v_i=v_i)
-
-            s_i = s_i + ds_update
-            v_i = v_i + dv_update
-
-            if not any(self.skip.values()):
-                continue
-
-            readout_block = self.readout_blocks[i]
-            new_results = readout_block(s_i=s_i)
-            readout_vec_block = self.readout_vec_blocks[i]
-            new_vec_results = readout_vec_block(s_i=s_i, v_i=v_i, r_i=xyz)
-            for key, skip in self.skip.items():
-                if not skip:
-                    continue
-                if key not in new_results:
-                    continue
-                if key in results:
-                    results[key] += new_results[key]
-                else:
-                    results[key] = new_results[key]
-
-        if not all(self.skip.values()):
-            first_readout = self.readout_blocks[0]
-            new_results = first_readout(s_i=s_i)
-            for key, skip in self.skip.items():
-                if key not in new_results:
-                    continue
-                if not skip:
-                    results[key] = new_results[key]
-
-            first_vec_readout = self.readout_vec_blocks[0]
-            new_vec_results = first_vec_readout(s_i=s_i, v_i=v_i, r_i=xyz)
-            for key, skip in self.skip_vec.items():
-                if key not in new_vec_results:
-                    continue
-                if not skip:
-                    results[key+"_mat"] = new_vec_results[key]
-
-        results['features'] = s_i
-        results['features_vec'] = v_i
-
-        return results, xyz, r_ij, nbrs
         
     def get_nac(self,
                 all_results,
-                xyz=None,):
-                               
+                batch,
+                xyz):
+        
+        N = batch["num_atoms"].detach().cpu().tolist()
+        xyz_s = torch.split(xyz, N)
+            
         for key in self.output_vec_keys:
             
-            large_mat = all_results[key+"_mat"]
-            eigvals, eigvecs = torch.linalg.eigh(large_mat)
-            real_vals = torch.abs(eigvals)
-            phase = eigvals[0] / real_vals[0]
-            real_vecs = torch.real(eigvecs / phase)
+            mats = []
+            nacs = []
+            nu_s = torch.split(all_results[key], N)
+            for nu, r in zip(nu_s, xyz_s):
+                mat = (torch.outer(r.reshape(-1), nu.reshape(-1)) 
+                      + torch.outer(nu.reshape(-1), r.reshape(-1)))
+                mats.append(mat)
             
-            max_idx = torch.argmax(real_vals)
-            nac = real_vecs[:, max_idx] * torch.sqrt(real_vals[max_idx])
-            
-            all_results[key] = nac.reshape(-1, 3)
+                eigvals, eigvecs = torch.linalg.eigh(mat)
+                real_vals = torch.abs(eigvals)
+                phase = eigvals[0] / real_vals[0]
+                real_vecs = torch.real(eigvecs / phase)
+
+                max_idx = torch.argmax(real_vals)
+                nac = real_vecs[:, max_idx] * torch.sqrt(real_vals[max_idx])
+                nacs.append(nac.reshape(-1, 3))
+                
+            all_results[key] = torch.cat(nacs)
+            all_results[key+"_mat"] = torch.stack(mats)
                     
         return all_results, xyz
         
@@ -984,15 +892,16 @@ class Painn_NAC_OuterProd(Painn):
             for key in self.output_keys:
                 atomwise_out[key] += r_ex
 
-        intermediate_results, xyz = self.pool(batch=batch,
+        pooled_results, xyz = self.pool(batch=batch,
                                      atomwise_out=atomwise_out,
                                      xyz=xyz,
                                      r_ij=r_ij,
                                      nbrs=nbrs,
                                      inference=False)
                                
-        all_results, xyz = self.get_nac(all_results=intermediate_results,
-                               xyz=xyz)
+        all_results, xyz = self.get_nac(all_results=pooled_results,
+                                        batch=batch,
+                                        xyz=xyz)
 
         if requires_embedding:
             all_results = add_embedding(atomwise_out=atomwise_out,

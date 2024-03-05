@@ -704,57 +704,59 @@ class ReadoutBlock_Vec2(nn.Module):
 
         return results
 
-    
-class ReadoutBlock_Mat3Nx3N(nn.Module):
-    # this does not use part of the update block but n gated equivariant blocks
-    # as shown in the original PaiNN paper in Fig. 3
-    def __init__(self,
-                 feat_dim,
-                 # out_dims, # right now we can only get Natomsx3 but what if we just want 1x3?
-                 output_keys,
-                 activation,
-                 dropout,
-                 means=None,
-                 stddevs=None):
-        super().__init__()
 
-        self.gated_dict = nn.ModuleDict(
-            {key: nn.Sequential(GatedEquivariantBlock(feat_dim=feat_dim,
-                                      dropout_rate=dropout,
-                                      activation=activation),
-                                GatedEquivariantBlock(feat_dim=feat_dim,
-                                      dropout_rate=dropout,
-                                      activation=activation))
-             for key in output_keys}
-        )
+# this class is likely not needed, as this can be done in a version of PaiNN instead
+# pls remove if not used by the end of 2024
+# class ReadoutBlock_Mat3Nx3N(nn.Module):
+#     # this does not use part of the update block but n gated equivariant blocks
+#     # as shown in the original PaiNN paper in Fig. 3
+#     def __init__(self,
+#                  feat_dim,
+#                  # out_dims, # right now we can only get Natomsx3 but what if we just want 1x3?
+#                  output_keys,
+#                  activation,
+#                  dropout,
+#                  means=None,
+#                  stddevs=None):
+#         super().__init__()
 
-        # figure out how to do the collapsing
-        self.readoutdict = nn.ModuleDict(
-            {key:
-             Dense(in_features=feat_dim,
-                   out_features=1,
-                   bias=False,
-                   dropout_rate=dropout,)
-             for key in output_keys}
-        )
+#         self.gated_dict = nn.ModuleDict(
+#             {key: nn.Sequential(GatedEquivariantBlock(feat_dim=feat_dim,
+#                                       dropout_rate=dropout,
+#                                       activation=activation),
+#                                 GatedEquivariantBlock(feat_dim=feat_dim,
+#                                       dropout_rate=dropout,
+#                                       activation=activation))
+#              for key in output_keys}
+#         )
 
-    def forward(self,
-                s_i,
-                v_i,
-                r_i):
-        """
-        Note: no atomwise summation. That's done in the model itself
-        """
+#         # figure out how to do the collapsing
+#         self.readoutdict = nn.ModuleDict(
+#             {key:
+#              Dense(in_features=feat_dim,
+#                    out_features=1,
+#                    bias=False,
+#                    dropout_rate=dropout,)
+#              for key in output_keys}
+#         )
 
-        results = {}
+#     def forward(self,
+#                 s_i,
+#                 v_i,
+#                 r_i):
+#         """
+#         Note: no atomwise summation. That's done in the model itself
+#         """
 
-        for key, readoutdict in self.readoutdict.items():
+#         results = {}
 
-            new_s_i, new_v_i = self.gated_dict[key]((s_i, v_i))
-            new_v_i = new_v_i.transpose(1, 2)  # (num_atoms, 3, num_feats)
-            nu = readoutdict(new_v_i).sum(dim=2) # (num_atoms, 3, 1) -> (num_atoms, 3)
-            output = (torch.outer(r_i.reshape(-1), nu.reshape(-1)) 
-                      + torch.outer(nu.reshape(-1), r_i.reshape(-1)))
-            results[key] = output
+#         for key, readoutdict in self.readoutdict.items():
 
-        return results
+#             new_s_i, new_v_i = self.gated_dict[key]((s_i, v_i))
+#             new_v_i = new_v_i.transpose(1, 2)  # (num_atoms, 3, num_feats)
+#             nu = readoutdict(new_v_i).sum(dim=2) # (num_atoms, 3, 1) -> (num_atoms, 3)
+#             output = (torch.outer(r_i.reshape(-1), nu.reshape(-1)) 
+#                       + torch.outer(nu.reshape(-1), r_i.reshape(-1)))
+#             results[key] = output
+
+#         return results
