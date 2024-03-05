@@ -14,399 +14,383 @@ from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import ChemProp3D, OnlyBondUpdateCP3D
-from nff.nn.models.dimenet import DimeNet, DimeNetDiabat, DimeNetDiabatDelta, DimeNetDelta
-from nff.nn.models.painn import (Painn, PainnDiabat, PainnTransformer,
-                                 PainnAdiabat, Painn_VecOut, Painn_Tuple, 
-                                 Painn_wCP, PainnDipole)
+from nff.nn.models.dimenet import (
+    DimeNet,
+    DimeNetDiabat,
+    DimeNetDiabatDelta,
+    DimeNetDelta,
+)
+from nff.nn.models.painn import (
+    Painn,
+    PainnDiabat,
+    PainnTransformer,
+    PainnAdiabat,
+    Painn_VecOut,
+    Painn_Tuple,
+    Painn_wCP,
+    PainnDipole,
+)
 from nff.nn.models.dispersion_models import PainnDispersion
+from nff.nn.models.chgnet import CHGNetNFF
+from chgnet.model.model import CHGNet
+from nff.nn.models.mace import NFFMACEWrapper
+from mace.modules.models import MACE, ScaleShiftMACE
 
-PARAMS_TYPE = {"SchNet":
-               {
-                   'n_atom_basis': int,
-                   'n_filters': int,
-                   'n_gaussians': int,
-                   'n_convolutions': int,
-                   'cutoff': float,
-                   'bond_par': float,
-                   'trainable_gauss': bool,
-                   'box_size': np.array,
-                   'excl_vol': bool,
-                   'V_ex_power': int,
-                   'V_ex_sigma': float,
-                   'dropout_rate': float
-               },
-               "HybridGraphConv":
-               {
-                   'n_atom_basis': int,
-                   'n_filters': int,
-                   'n_gaussians': int,
-                   'mol_n_convolutions': int,
-                   'mol_n_cutoff': float,
-                   'sys_n_convolutions': int,
-                   'sys_n_cutoff': float,
-                   'V_ex_power': int,
-                   'V_ex_sigma': float,
-                   'trainable_gauss': bool
-               },
-
-               "WeightedConformers":
-               {
-                   'n_atom_basis': int,
-                   'n_filters': int,
-                   'n_gaussians': int,
-                   'n_convolutions': int,
-                   'trainable_gauss': bool,
-                   'dropout_rate': float,
-                   'readoutdict': dict,
-                   'mol_fp_layers': list
-               },
-
-               "SchNetFeatures":
-               {
-                   'n_atom_basis': int,
-                   'n_filters': int,
-                   'n_gaussians': int,
-                   'n_convolutions': int,
-                   'cutoff': float,
-                   'bond_par': float,
-                   'trainable_gauss': bool,
-                   'box_size': np.array,
-                   'dropout_rate': float,
-                   'n_bond_hidden': int,
-                   'n_bond_features': int,
-                   'activation': str
-               },
-
-               "ChemProp3D":
-               {
-                   'n_atom_basis': int,
-                   'n_filters': int,
-                   'n_gaussians': int,
-                   'n_convolutions': int,
-                   'cutoff': float,
-                   'bond_par': float,
-                   'trainable_gauss': bool,
-                   'box_size': np.array,
-                   'dropout_rate': float,
-                   'cp_input_layers': list,
-                   'schnet_input_layers': list,
-                   'output_layers': list,
-                   'n_bond_hidden': int,
-                   'activation': str
-               },
-
-               "OnlyBondUpdateCP3D":
-
-               {
-                   'n_atom_basis': int,
-                   'n_filters': int,
-                   'n_gaussians': int,
-                   'n_convolutions': int,
-                   'cutoff': float,
-                   'bond_par': float,
-                   'trainable_gauss': bool,
-                   'box_size': np.array,
-                   'schnet_dropout': float,
-                   'cp_dropout': float,
-                   'input_layers': list,
-                   'output_layers': list,
-                   'n_bond_hidden': int,
-                   'activation': str
-               },
-
-               "DimeNet":
-               {
-                   "n_rbf": int,
-                   "cutoff": float,
-                   "envelope_p": int,
-                   "n_spher": int,
-                   "l_spher": int,
-                   "atom_embed_dim": int,
-                   "n_bilinear": int,
-                   "activation": str,
-                   "n_convolutions": int,
-                   "output_keys": list,
-                   "grad_keys": list
-
-               },
-
-               "DimeNetDiabat":
-               {
-                   "n_rbf": int,
-                   "cutoff": float,
-                   "envelope_p": int,
-                   "n_spher": int,
-                   "l_spher": int,
-                   "atom_embed_dim": int,
-                   "n_bilinear": int,
-                   "activation": str,
-                   "n_convolutions": int,
-                   "output_keys": list,
-                   "grad_keys": list,
-                   "diabat_keys": list
-
-               },
-
-               "DimeNetDiabatDelta":
-               {
-                   "n_rbf": int,
-                   "cutoff": float,
-                   "envelope_p": int,
-                   "n_spher": int,
-                   "l_spher": int,
-                   "atom_embed_dim": int,
-                   "n_bilinear": int,
-                   "activation": str,
-                   "n_convolutions": int,
-                   "output_keys": list,
-                   "grad_keys": list,
-                   "diabat_keys": list
-
-               },
-
-               "DimeNetDelta":
-               {
-                   "n_rbf": int,
-                   "cutoff": float,
-                   "envelope_p": int,
-                   "n_spher": int,
-                   "l_spher": int,
-                   "atom_embed_dim": int,
-                   "n_bilinear": int,
-                   "activation": str,
-                   "n_convolutions": int,
-                   "output_keys": list,
-                   "grad_keys": list,
-                   "diabat_keys": list
-
-               },
-
-               "SchNetDiabat":
-               {
-                   'n_atom_basis': int,
-                   'n_filters': int,
-                   'n_gaussians': int,
-                   'n_convolutions': int,
-                   'cutoff': float,
-                   'bond_par': float,
-                   'trainable_gauss': bool,
-                   'box_size': np.array,
-                   'dropout_rate': float
-               },
-
-               "Painn":
-               {
-                   "feat_dim": int,
-                   "activation": str,
-                   "n_rbf": int,
-                   "cutoff": float,
-                   "num_conv": int,
-                   "output_keys": list,
-                   "grad_keys": list,
-                   "excl_vol": bool,
-                   "V_ex_power": int,
-                   "V_ex_sigma": float
-
-               },
-
-               "PainnTransformer":
-
-               {
-                   "feat_dim": int,
-                   "activation": str,
-                   "n_rbf": int,
-                   "cutoff": float,
-                   "num_conv": int,
-                   "output_keys": list,
-                   "grad_keys": list
-
-               },
-
-               "PainnDiabat":
-               {
-                   "feat_dim": int,
-                   "activation": str,
-                   "n_rbf": int,
-                   "cutoff": float,
-                   "num_conv": int,
-                   "output_keys": list,
-                   "grad_keys": list,
-                   "diabat_keys": list
-
-               },
-
-               "PainnAdiabat":
-               {
-                   "feat_dim": int,
-                   "activation": str,
-                   "n_rbf": int,
-                   "cutoff": float,
-                   "num_conv": int,
-                   "output_keys": list,
-                   "grad_keys": list
-
-               },
-
-               "Painn_VecOut":
-               {
-                   "feat_dim": int,
-                   "activation": str,
-                   "n_rbf": int,
-                   "cutoff": float,
-                   "num_conv": int,
-                   "output_keys": list,
-                   "output_vec_keys": list,
-                   "grad_keys": list,
-                   "excl_vol": bool,
-                   "V_ex_power": int,
-                   "V_ex_sigma": float
-
-               },
-               
-               "Painn_Tuple":
-               {
-                   "feat_dim": int,
-                   "activation": str,
-                   "n_rbf": int,
-                   "cutoff": float,
-                   "num_conv": int,
-                   "output_keys": list,
-                   "output_vec_keys": list,
-                   "grad_keys": list,
-                   "excl_vol": bool,
-                   "V_ex_power": int,
-                   "V_ex_sigma": float
-
-               },
-               
-               "Painn_wCP":
-               {
-                   "feat_dim": int,
-                   "activation": str,
-                   "n_rbf": int,
-                   "cutoff": float,
-                   "num_conv": int,
-                   "output_keys": list,
-                   "output_vec_keys": list,
-                   "grad_keys": list,
-                   "excl_vol": bool,
-                   "V_ex_power": int,
-                   "V_ex_sigma": float
-
-               },
-
-               "TorchMDNet":
-
-               {
-                   "feat_dim": int,
-                   "activation": str,
-                   "n_rbf": int,
-                   "cutoff": float,
-                   "num_conv": int,
-                   "output_keys": list,
-                   "grad_keys": list
-
-               },
-
-               "SpookyNet":
-               {
-                   "output_keys": list,
-                   "grad_keys": list,
-                   "feat_dim": int,
-                   "r_cut": float,
-                   "gamma": float,
-                   "bern_k": int,
-                   "num_conv": int
-               },
-
-               "SpookyPainn":
-               {
-                   "feat_dim": int,
-                   "activation": str,
-                   "n_rbf": int,
-                   "cutoff": float,
-                   "num_conv": int,
-                   "output_keys": list,
-                   "grad_keys": list
-
-               },
-
-               "SpookyPainnDiabat":
-               {
-                   "feat_dim": int,
-                   "activation": str,
-                   "n_rbf": int,
-                   "cutoff": float,
-                   "num_conv": int,
-                   "output_keys": list,
-                   "grad_keys": list,
-                   "diabat_keys": list
-               },
-
-               "RealSpookyNet": {
-                   "activation": str,
-                   "num_features": int,
-                   "num_basis_functions": int,
-                   "num_modules": int,
-                   "num_residual_electron": int,
-                   "num_residual_pre": int,
-                   "num_residual_post": int,
-                   "num_residual_pre_local_x": int,
-                   "num_residual_pre_local_s": int,
-                   "num_residual_pre_local_p": int,
-                   "num_residual_pre_local_d": int,
-                   "num_residual_post": int,
-
-                   "num_residual_output": int,
-                   "basis_functions": str,
-                   "exp_weighting": bool,
-                   "cutoff": float,
-                   "lr_cutoff": float,
-                   "use_zbl_repulsion": bool,
-                   "use_electrostatics": bool,
-                   "use_d4_dispersion": bool,
-                   "use_irreps": bool,
-                   "use_nonlinear_embedding": bool,
-                   "compute_d4_atomic": bool,
-                   "module_keep_prob": float,
-                   "load_from": str,
-                   "Zmax": int,
-                   "zero_init": bool
-               },
-
-               "PainnDispersion":
-               {
-                   "functional": str,
-                   "disp_type": str,
-                   "feat_dim": int,
-                   "activation": str,
-                   "n_rbf": int,
-                   "cutoff": float,
-                   "num_conv": int,
-                   "output_keys": list,
-                   "grad_keys": list,
-                   "excl_vol": bool,
-                   "V_ex_power": int,
-                   "V_ex_sigma": float
-               },
-
-               "PainnDipole":
-               {
-                   "feat_dim": int,
-                   "activation": str,
-                   "n_rbf": int,
-                   "cutoff": float,
-                   "num_conv": int,
-                   "output_keys": list,
-                   "grad_keys": list,
-                   "excl_vol": bool,
-                   "V_ex_power": int,
-                   "V_ex_sigma": float,
-                   "output_vec_keys": list,
-                   "vector_per_atom": dict,
-               },
-
-               }
+PARAMS_TYPE = {
+    "SchNet": {
+        "n_atom_basis": int,
+        "n_filters": int,
+        "n_gaussians": int,
+        "n_convolutions": int,
+        "cutoff": float,
+        "bond_par": float,
+        "trainable_gauss": bool,
+        "box_size": np.array,
+        "excl_vol": bool,
+        "V_ex_power": int,
+        "V_ex_sigma": float,
+        "dropout_rate": float,
+    },
+    "HybridGraphConv": {
+        "n_atom_basis": int,
+        "n_filters": int,
+        "n_gaussians": int,
+        "mol_n_convolutions": int,
+        "mol_n_cutoff": float,
+        "sys_n_convolutions": int,
+        "sys_n_cutoff": float,
+        "V_ex_power": int,
+        "V_ex_sigma": float,
+        "trainable_gauss": bool,
+    },
+    "WeightedConformers": {
+        "n_atom_basis": int,
+        "n_filters": int,
+        "n_gaussians": int,
+        "n_convolutions": int,
+        "trainable_gauss": bool,
+        "dropout_rate": float,
+        "readoutdict": dict,
+        "mol_fp_layers": list,
+    },
+    "SchNetFeatures": {
+        "n_atom_basis": int,
+        "n_filters": int,
+        "n_gaussians": int,
+        "n_convolutions": int,
+        "cutoff": float,
+        "bond_par": float,
+        "trainable_gauss": bool,
+        "box_size": np.array,
+        "dropout_rate": float,
+        "n_bond_hidden": int,
+        "n_bond_features": int,
+        "activation": str,
+    },
+    "ChemProp3D": {
+        "n_atom_basis": int,
+        "n_filters": int,
+        "n_gaussians": int,
+        "n_convolutions": int,
+        "cutoff": float,
+        "bond_par": float,
+        "trainable_gauss": bool,
+        "box_size": np.array,
+        "dropout_rate": float,
+        "cp_input_layers": list,
+        "schnet_input_layers": list,
+        "output_layers": list,
+        "n_bond_hidden": int,
+        "activation": str,
+    },
+    "OnlyBondUpdateCP3D": {
+        "n_atom_basis": int,
+        "n_filters": int,
+        "n_gaussians": int,
+        "n_convolutions": int,
+        "cutoff": float,
+        "bond_par": float,
+        "trainable_gauss": bool,
+        "box_size": np.array,
+        "schnet_dropout": float,
+        "cp_dropout": float,
+        "input_layers": list,
+        "output_layers": list,
+        "n_bond_hidden": int,
+        "activation": str,
+    },
+    "DimeNet": {
+        "n_rbf": int,
+        "cutoff": float,
+        "envelope_p": int,
+        "n_spher": int,
+        "l_spher": int,
+        "atom_embed_dim": int,
+        "n_bilinear": int,
+        "activation": str,
+        "n_convolutions": int,
+        "output_keys": list,
+        "grad_keys": list,
+    },
+    "DimeNetDiabat": {
+        "n_rbf": int,
+        "cutoff": float,
+        "envelope_p": int,
+        "n_spher": int,
+        "l_spher": int,
+        "atom_embed_dim": int,
+        "n_bilinear": int,
+        "activation": str,
+        "n_convolutions": int,
+        "output_keys": list,
+        "grad_keys": list,
+        "diabat_keys": list,
+    },
+    "DimeNetDiabatDelta": {
+        "n_rbf": int,
+        "cutoff": float,
+        "envelope_p": int,
+        "n_spher": int,
+        "l_spher": int,
+        "atom_embed_dim": int,
+        "n_bilinear": int,
+        "activation": str,
+        "n_convolutions": int,
+        "output_keys": list,
+        "grad_keys": list,
+        "diabat_keys": list,
+    },
+    "DimeNetDelta": {
+        "n_rbf": int,
+        "cutoff": float,
+        "envelope_p": int,
+        "n_spher": int,
+        "l_spher": int,
+        "atom_embed_dim": int,
+        "n_bilinear": int,
+        "activation": str,
+        "n_convolutions": int,
+        "output_keys": list,
+        "grad_keys": list,
+        "diabat_keys": list,
+    },
+    "SchNetDiabat": {
+        "n_atom_basis": int,
+        "n_filters": int,
+        "n_gaussians": int,
+        "n_convolutions": int,
+        "cutoff": float,
+        "bond_par": float,
+        "trainable_gauss": bool,
+        "box_size": np.array,
+        "dropout_rate": float,
+    },
+    "Painn": {
+        "feat_dim": int,
+        "activation": str,
+        "n_rbf": int,
+        "cutoff": float,
+        "num_conv": int,
+        "output_keys": list,
+        "grad_keys": list,
+        "excl_vol": bool,
+        "V_ex_power": int,
+        "V_ex_sigma": float,
+    },
+    "PainnTransformer": {
+        "feat_dim": int,
+        "activation": str,
+        "n_rbf": int,
+        "cutoff": float,
+        "num_conv": int,
+        "output_keys": list,
+        "grad_keys": list,
+    },
+    "PainnDiabat": {
+        "feat_dim": int,
+        "activation": str,
+        "n_rbf": int,
+        "cutoff": float,
+        "num_conv": int,
+        "output_keys": list,
+        "grad_keys": list,
+        "diabat_keys": list,
+    },
+    "PainnAdiabat": {
+        "feat_dim": int,
+        "activation": str,
+        "n_rbf": int,
+        "cutoff": float,
+        "num_conv": int,
+        "output_keys": list,
+        "grad_keys": list,
+    },
+    "Painn_VecOut": {
+        "feat_dim": int,
+        "activation": str,
+        "n_rbf": int,
+        "cutoff": float,
+        "num_conv": int,
+        "output_keys": list,
+        "output_vec_keys": list,
+        "grad_keys": list,
+        "excl_vol": bool,
+        "V_ex_power": int,
+        "V_ex_sigma": float,
+    },
+    "Painn_Tuple": {
+        "feat_dim": int,
+        "activation": str,
+        "n_rbf": int,
+        "cutoff": float,
+        "num_conv": int,
+        "output_keys": list,
+        "output_vec_keys": list,
+        "grad_keys": list,
+        "excl_vol": bool,
+        "V_ex_power": int,
+        "V_ex_sigma": float,
+    },
+    "Painn_wCP": {
+        "feat_dim": int,
+        "activation": str,
+        "n_rbf": int,
+        "cutoff": float,
+        "num_conv": int,
+        "output_keys": list,
+        "output_vec_keys": list,
+        "grad_keys": list,
+        "excl_vol": bool,
+        "V_ex_power": int,
+        "V_ex_sigma": float,
+    },
+    "TorchMDNet": {
+        "feat_dim": int,
+        "activation": str,
+        "n_rbf": int,
+        "cutoff": float,
+        "num_conv": int,
+        "output_keys": list,
+        "grad_keys": list,
+    },
+    "SpookyNet": {
+        "output_keys": list,
+        "grad_keys": list,
+        "feat_dim": int,
+        "r_cut": float,
+        "gamma": float,
+        "bern_k": int,
+        "num_conv": int,
+    },
+    "SpookyPainn": {
+        "feat_dim": int,
+        "activation": str,
+        "n_rbf": int,
+        "cutoff": float,
+        "num_conv": int,
+        "output_keys": list,
+        "grad_keys": list,
+    },
+    "SpookyPainnDiabat": {
+        "feat_dim": int,
+        "activation": str,
+        "n_rbf": int,
+        "cutoff": float,
+        "num_conv": int,
+        "output_keys": list,
+        "grad_keys": list,
+        "diabat_keys": list,
+    },
+    "RealSpookyNet": {
+        "activation": str,
+        "num_features": int,
+        "num_basis_functions": int,
+        "num_modules": int,
+        "num_residual_electron": int,
+        "num_residual_pre": int,
+        "num_residual_post": int,
+        "num_residual_pre_local_x": int,
+        "num_residual_pre_local_s": int,
+        "num_residual_pre_local_p": int,
+        "num_residual_pre_local_d": int,
+        "num_residual_output": int,
+        "basis_functions": str,
+        "exp_weighting": bool,
+        "cutoff": float,
+        "lr_cutoff": float,
+        "use_zbl_repulsion": bool,
+        "use_electrostatics": bool,
+        "use_d4_dispersion": bool,
+        "use_irreps": bool,
+        "use_nonlinear_embedding": bool,
+        "compute_d4_atomic": bool,
+        "module_keep_prob": float,
+        "load_from": str,
+        "Zmax": int,
+        "zero_init": bool,
+    },
+    "PainnDispersion": {
+        "functional": str,
+        "disp_type": str,
+        "feat_dim": int,
+        "activation": str,
+        "n_rbf": int,
+        "cutoff": float,
+        "num_conv": int,
+        "output_keys": list,
+        "grad_keys": list,
+        "excl_vol": bool,
+        "V_ex_power": int,
+        "V_ex_sigma": float,
+    },
+    "PainnDipole": {
+        "feat_dim": int,
+        "activation": str,
+        "n_rbf": int,
+        "cutoff": float,
+        "num_conv": int,
+        "output_keys": list,
+        "grad_keys": list,
+        "excl_vol": bool,
+        "V_ex_power": int,
+        "V_ex_sigma": float,
+        "output_vec_keys": list,
+        "vector_per_atom": dict,
+    },
+    # FIXME: need to add the correct parameters for MACE
+    "NFFMACEWrapper": {
+        "n_atom_basis": int,
+        "n_filters": int,
+        "n_gaussians": int,
+        "n_convolutions": int,
+        "cutoff": float,
+        "bond_par": float,
+        "trainable_gauss": bool,
+        "box_size": np.array,
+        "dropout_rate": float,
+        "n_bond_hidden": int,
+        "n_bond_features": int,
+        "activation": str,
+        "output_keys": list,
+        "grad_keys": list,
+    },
+    "DirectNffScaleMACEWrapper": {
+        "n_atom_basis": int,
+        "n_filters": int,
+        "n_gaussians": int,
+        "n_convolutions": int,
+        "cutoff": float,
+        "bond_par": float,
+        "trainable_gauss": bool,
+        "box_size": np.array,
+        "dropout_rate": float,
+        "n_bond_hidden": int,
+        "n_bond_features": int,
+        "activation": str,
+        "output_keys": list,
+        "grad_keys": list,
+    },
+}
 
 MODEL_DICT = {
     "SchNet": SchNet,
@@ -434,7 +418,23 @@ MODEL_DICT = {
     "Painn_Tuple": Painn_Tuple,
     "Painn_wCP": Painn_wCP,
     "PainnDipole": PainnDipole,
+    "MACE": MACE,
+    "ScaleShiftMACE": ScaleShiftMACE,
+    "CHGNet": CHGNet,
+    "CHGNetNFF": CHGNetNFF,
+    "NFFMACEWrapper": NFFMACEWrapper,
 }
+
+MACE_WRAPPERS = {
+    "MACE": NFFMACEWrapper,
+    "ScaleShiftMACE": NFFMACEWrapper,
+}
+
+CHGNET_WRAPPERS = {
+    "CHGNet": CHGNetNFF,
+}
+
+WRAPPER_MODELS = {**MACE_WRAPPERS, **CHGNET_WRAPPERS}
 
 
 class ParameterError(Exception):
@@ -480,7 +480,7 @@ def get_model(params, model_type="SchNet", **kwargs):
 def load_params(param_path):
     with open(param_path, "r") as f:
         info = json.load(f)
-    keys = ['details', 'modelparams']
+    keys = ["details", "modelparams"]
     params = None
     for key in keys:
         if key in info:
@@ -489,7 +489,7 @@ def load_params(param_path):
     if params is None:
         params = info
 
-    model_type = params['model_type']
+    model_type = params["model_type"]
 
     return params, model_type
 
@@ -510,29 +510,47 @@ def load_model(path, params=None, model_type=None, **kwargs):
 
     try:
         if os.path.isdir(path):
-            return torch.load(os.path.join(path, "best_model"), map_location="cpu")
+            model = torch.load(os.path.join(path, "best_model"), map_location="cpu")
         elif os.path.exists(path):
-            return torch.load(path, map_location="cpu")
+            model = torch.load(path, map_location="cpu")
         else:
             raise FileNotFoundError("{} was not found".format(path))
     except (FileNotFoundError, EOFError, RuntimeError):
-
         param_path = os.path.join(path, "params.json")
         if os.path.isfile(param_path):
             params, model_type = load_params(param_path)
 
-        assert params is not None, "Must specify params if you want to load the state dict"
-        assert model_type is not None, "Must specify the model type if you want to load the state dict"
+        assert (
+            params is not None
+        ), "Must specify params if you want to load the state dict"
+        assert (
+            model_type is not None
+        ), "Must specify the model type if you want to load the state dict"
 
         model = get_model(params, model_type=model_type, **kwargs)
 
         if os.path.isdir(path):
-            state_dict = torch.load(os.path.join(
-                path, "best_model.pth.tar"), map_location="cpu")
+            state_dict = torch.load(
+                os.path.join(path, "best_model.pth.tar"), map_location="cpu"
+            )
         elif os.path.exists(path):
             state_dict = torch.load(path, map_location="cpu")
         else:
             raise FileNotFoundError("{} was not found".format(path))
 
         model.load_state_dict(state_dict["model"], strict=False)
-        return model
+
+    # check if the model is one that requires a wrapper and apply the wrapper
+    if isinstance(model, WRAPPER_MODELS.values()):
+        # better to specify the model type, but if not, we can try to infer it
+        if model_type is None:
+            for key, val in WRAPPER_MODELS.items():
+                if isinstance(model, val):
+                    model_type = key
+                    break
+        if model_type in MACE_WRAPPERS:
+            model = WRAPPER_MODELS[model_type](mace_model=model, **kwargs)
+        elif model_type in CHGNET_WRAPPERS:
+            model = WRAPPER_MODELS[model_type].from_dict(model["model"], **kwargs)
+
+    return model
