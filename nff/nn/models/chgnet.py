@@ -4,7 +4,7 @@ import math
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Literal
+from typing import TYPE_CHECKING, Dict, Literal, Union
 
 import torch
 from chgnet.data.dataset import collate_graphs
@@ -69,7 +69,7 @@ class CHGNetNFF(CHGNet):
 
         return output
 
-    def negate_value(self, key: str, value: list or Tensor) -> list or Tensor:
+    def negate_value(self, key: str, value: Union[list, Tensor]) -> Union[list, Tensor]:
         if key in self.negate_keys:
             if isinstance(value, list):
                 return [-x for x in value]
