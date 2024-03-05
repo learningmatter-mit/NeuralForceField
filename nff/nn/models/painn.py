@@ -5,7 +5,6 @@ from nff.utils.tools import make_directed
 from nff.nn.modules.painn import (MessageBlock, UpdateBlock,
                                   EmbeddingBlock, ReadoutBlock, ReadoutBlock_Vec,
                                   ReadoutBlock_Vec2, GatedEquivariantBlock,
-                                  ReadoutBlock_Mat3Nx3N,
                                   ReadoutBlock_Tuple, TransformerMessageBlock,
                                   NbrEmbeddingBlock)
 from nff.nn.modules.schnet import (AttentionPool, SumPool, MolFpPool,
