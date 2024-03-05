@@ -3,12 +3,12 @@
 from typing import Dict
 
 import torch
-from chgnet.data.dataset import StructureData
-from pymatgen.io.ase import AseAtomsAdaptor
-
 from nff.data import Dataset
 from nff.io import AtomsBatch
 from nff.utils.cuda import batch_detach, batch_to, detach
+from pymatgen.io.ase import AseAtomsAdaptor
+
+from chgnet.data.dataset import StructureData
 
 
 def convert_nff_to_chgnet_structure_data(
@@ -105,12 +105,13 @@ def convert_data_batch(
 
     stresses = data_batch.get("stress", None)
     magmoms = data_batch.get("magmoms", None)
-    if forces is not None:
-        forces = torch.split(forces, num_atoms)
-    if stresses is not None:
-        stresses = torch.split(stresses, num_atoms)
-    if magmoms is not None:
-        magmoms = torch.split(magmoms, num_atoms)
+    if forces is not None and len(forces) > 0:
+        forces = torch.split(torch.atleast_2d(forces), num_atoms)
+    if stresses is not None and len(stresses) > 0:
+        stresses = torch.split(torch.atleast_2d(stresses), num_atoms)
+    if magmoms is not None and len(magmoms) > 0:
+        magmoms = torch.split(torch.atleast_2d(magmoms), num_atoms)
+    import pdb; pdb.set_trace()
 
     chgnet_dataset = StructureData(
         structures=pymatgen_structures,

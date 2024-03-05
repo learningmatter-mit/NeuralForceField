@@ -14,8 +14,13 @@ from chgnet.model import CHGNet
 from chgnet.model.composition_model import AtomRef
 from chgnet.model.encoders import AngleEncoder, AtomEmbedding, BondEncoder
 from chgnet.model.functions import MLP, GatedMLP, find_normalization
-from chgnet.model.layers import (AngleUpdate, AtomConv, BondConv,
-                                 GraphAttentionReadOut, GraphPooling)
+from chgnet.model.layers import (
+    AngleUpdate,
+    AtomConv,
+    BondConv,
+    GraphAttentionReadOut,
+    GraphPooling,
+)
 from chgnet.utils import cuda_devices_sorted_by_free_mem
 from pymatgen.core import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
@@ -47,7 +52,7 @@ class CHGNetNFF(CHGNet):
             }
             self.negate_keys = ("f",)
 
-    def forward(self, data_batch: Dict):
+    def forward(self, data_batch: Dict, **kwargs):
         chgnet_data_batch = convert_data_batch(data_batch)
         graphs, targets = collate_graphs(chgnet_data_batch)
 
@@ -59,7 +64,7 @@ class CHGNetNFF(CHGNet):
         output = cat_props({self.key_mappings[k]: self.negate_value(k, v) for k, v in output.items()})
 
         return output
-    
+
     def negate_value(self, key: str, value: list or Tensor) -> list or Tensor:
         if key in self.negate_keys:
             if isinstance(value, list):
