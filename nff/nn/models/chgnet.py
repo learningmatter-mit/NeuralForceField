@@ -4,7 +4,7 @@ import math
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Literal
+from typing import TYPE_CHECKING, Dict, Literal, Union
 
 import torch
 from chgnet.data.dataset import collate_graphs
@@ -14,13 +14,8 @@ from chgnet.model import CHGNet
 from chgnet.model.composition_model import AtomRef
 from chgnet.model.encoders import AngleEncoder, AtomEmbedding, BondEncoder
 from chgnet.model.functions import MLP, GatedMLP, find_normalization
-from chgnet.model.layers import (
-    AngleUpdate,
-    AtomConv,
-    BondConv,
-    GraphAttentionReadOut,
-    GraphPooling,
-)
+from chgnet.model.layers import (AngleUpdate, AtomConv, BondConv,
+                                 GraphAttentionReadOut, GraphPooling)
 from chgnet.utils import cuda_devices_sorted_by_free_mem
 from pymatgen.core import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
@@ -36,8 +31,10 @@ if TYPE_CHECKING:
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
+
 class CHGNetNFF(CHGNet):
     """Wrapper class for CHGNet model."""
+
     def __init__(self, *args, units: str = "eV", key_mappings=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.units = units
@@ -61,11 +58,13 @@ class CHGNetNFF(CHGNet):
         output = super().forward(graphs, task="ef")
 
         # convert to NFF keys and negate energy_grad
-        output = cat_props({self.key_mappings[k]: self.negate_value(k, v) for k, v in output.items()})
+        output = cat_props(
+            {self.key_mappings[k]: self.negate_value(k, v) for k, v in output.items()}
+        )
 
         return output
 
-    def negate_value(self, key: str, value: list or Tensor) -> list or Tensor:
+    def negate_value(self, key: str, value: Union[list, Tensor]) -> Union[list, Tensor]:
         if key in self.negate_keys:
             if isinstance(value, list):
                 return [-x for x in value]
@@ -108,6 +107,7 @@ class CHGNetNFF(CHGNet):
             mlp_out_bias=model_name == "0.2.0",
             version=model_name,
         )
+
 
 @dataclass
 class BatchedGraph:
