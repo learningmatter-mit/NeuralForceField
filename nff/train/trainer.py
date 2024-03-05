@@ -3,17 +3,18 @@
 Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/train/trainer.py
 """
 
+import copy
 import os
+import pickle
+
 import numpy as np
 import torch
-import copy
-import pickle
 from tqdm import tqdm
 
-from nff.utils.cuda import batch_to, batch_detach
 from nff.train.evaluate import evaluate
-from nff.train.parallel import update_optim
 from nff.train.hooks.scheduling import ReduceLROnPlateauHook
+from nff.train.parallel import update_optim
+from nff.utils.cuda import batch_detach, batch_to
 
 MAX_EPOCHS = 100
 PAR_INFO_FILE = "info.json"
@@ -142,7 +143,7 @@ class Trainer:
             # only make the checkpoint and save to it
             # if this is the base process
             if self.base:
-                os.makedirs(self.checkpoint_path)
+                os.makedirs(self.checkpoint_path, exist_ok=True)
                 self.store_checkpoint()
 
     def tqdm_enum(self, iter):

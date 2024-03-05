@@ -4,30 +4,27 @@ import math
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Dict
-from nff.io.ase import AtomsBatch
-from nff.nn.modules.chgnet.data.dataset import StructureData
-from nff.utils.cuda import detach
-from pymatgen.io.ase import AseAtomsAdaptor
+from typing import TYPE_CHECKING, Dict, Literal
 
 import torch
-from pymatgen.core import Structure
-from torch import Tensor, nn
-
+from chgnet.data.dataset import collate_graphs
 from chgnet.graph import CrystalGraph, CrystalGraphConverter
 from chgnet.graph.crystalgraph import datatype
 from chgnet.model import CHGNet
 from chgnet.model.composition_model import AtomRef
 from chgnet.model.encoders import AngleEncoder, AtomEmbedding, BondEncoder
 from chgnet.model.functions import MLP, GatedMLP, find_normalization
-from chgnet.model.layers import (
-    AngleUpdate,
-    AtomConv,
-    BondConv,
-    GraphAttentionReadOut,
-    GraphPooling,
-)
+from chgnet.model.layers import (AngleUpdate, AtomConv, BondConv,
+                                 GraphAttentionReadOut, GraphPooling)
 from chgnet.utils import cuda_devices_sorted_by_free_mem
+from pymatgen.core import Structure
+from pymatgen.io.ase import AseAtomsAdaptor
+from torch import Tensor, nn
+
+from nff.io.ase import AtomsBatch
+from nff.io.chgnet import convert_data_batch
+from nff.nn.modules.chgnet.data.dataset import StructureData
+from nff.utils.misc import cat_props
 
 if TYPE_CHECKING:
     from chgnet import PredTask
@@ -36,81 +33,39 @@ module_dir = os.path.dirname(os.path.abspath(__file__))
 
 class CHGNetNFF(CHGNet):
     """Wrapper class for CHGNet model."""
-    def __init__(self, *args, units: str = "eV", **kwargs):
+    def __init__(self, *args, units: str = "eV", key_mappings=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.units = units
+        if not key_mappings:
+            # map from CHGNet keys to NFF keys
+            self.key_mappings = {
+                "e": "energy",
+                "f": "energy_grad",
+                "s": "stress",
+                "m": "magmom",
+                "atoms_per_graph": "num_atoms",
+            }
+            self.negate_keys = ("f",)
 
     def forward(self, data_batch: Dict):
-        graphs, targets = self.convert_data_batch_to_data(data_batch)
-        breakpoint()
+        chgnet_data_batch = convert_data_batch(data_batch)
+        graphs, targets = collate_graphs(chgnet_data_batch)
+
+        graphs = [graph.to(self.device) for graph in graphs]
+
         output = super().forward(graphs, task="ef")
+
+        # convert to NFF keys and negate energy_grad
+        output = cat_props({self.key_mappings[k]: self.negate_value(k, v) for k, v in output.items()})
+
         return output
-
-    def convert_data_batch_to_data(
-        self,
-        data_batch: Dict,
-        cutoff: float = 5.0,
-    ):
-        '''The function `convert_data_batch_to_data` converts a dataset in NFF format to a dataset in
-        CHGNet structure data format.
-        
-        Parameters
-        ----------
-        data_batch : Dict
-        cutoff : float
-            The `cutoff` parameter is a float value that represents the distance cutoff for constructing the
-        neighbor list in the conversion process. It determines the maximum distance between atoms within
-        which they are considered neighbors. Any atoms beyond this distance will not be included in the
-        neighbor list.
-        
-        Returns
-        -------
-        a `chgnet_dataset` object of type `StructureData`.
-        
-        '''
-       
-        nxyz = data_batch["nxyz"]
-        atoms_batch= AtomsBatch(
-            nxyz[:, 0].long(),
-            props=data_batch,
-            positions=nxyz[:, 1:],
-            cell=data_batch["lattice"][0]
-                if "lattice" in data_batch.keys()
-                else None,
-            pbc="lattice" in data_batch.keys(),
-            cutoff=cutoff,
-            dense_nbrs=False,
-        )
-        atoms_list = atoms_batch.get_list_atoms()
-
-        pymatgen_structures = [AseAtomsAdaptor.get_structure(atoms_batch) for atoms_batch in atoms_list]
-
-        energies = data_batch["energy"]
-        energies_per_atoms = [energy / len(structure) for energy, structure in zip(energies, pymatgen_structures)]
-
-        energy_grads = data_batch["energy_grad"]
-        forces = [-x for x in energy_grads] if isinstance(energy_grads, list) else -energy_grads
-        num_atoms = detach(data_batch["num_atoms"]).tolist()
-
-        stresses = data_batch.get("stress", None)
-        magmoms = data_batch.get("magmoms", None)
-        if forces is not None:
-            forces = torch.split(forces, num_atoms)
-        if stresses is not None:
-            stresses = torch.split(stresses, num_atoms)
-        if magmoms is not None:
-            magmoms = torch.split(magmoms, num_atoms)
-
-
-        chgnet_dataset = StructureData(
-            structures=pymatgen_structures,
-            energies=energies_per_atoms,
-            forces=forces,
-            stresses=stresses,
-            magmoms=magmoms,
-        )
-
-        return chgnet_dataset
+    
+    def negate_value(self, key: str, value: list or Tensor) -> list or Tensor:
+        if key in self.negate_keys:
+            if isinstance(value, list):
+                return [-x for x in value]
+            return -value
+        return value
 
     @classmethod
     def from_dict(cls, dict, **kwargs):
