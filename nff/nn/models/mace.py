@@ -152,6 +152,7 @@ class DirectNffScaleMACEWrapper(ScaleShiftMACE):
     ):
         atomic_inter_scale = mace_model.scale_shift.scale
         atomic_inter_shift = mace_model.scale_shift.shift
+        print(kwargs)
         super().__init__(atomic_inter_scale, atomic_inter_shift, **kwargs)
         self.mace_model = mace_model
         self.z_table = AtomicNumberTable(
@@ -222,8 +223,12 @@ class DirectNffScaleMACEWrapper(ScaleShiftMACE):
                 cell=cell,
                 pbc=(True, True, True),
             )
+            if isinstance(self.r_max, float):
+                r_max = self.r_max
+            elif isinstance(self.r_max, torch.Tensor):
+                r_max = self.r_max.item()
             dataset.append(
-                AtomicData.from_config(config, z_table=self.z_table, cutoff=self.r_max)
+                AtomicData.from_config(config, z_table=self.z_table, cutoff=r_max)
             )
 
         data_loader = torch_geometric.dataloader.DataLoader(
