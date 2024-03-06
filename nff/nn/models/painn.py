@@ -869,7 +869,7 @@ class Painn_NAC_OuterProd(Painn_VecOut2):
                 nacs.append(nac.reshape(-1, 3))
                 
             all_results[key] = torch.cat(nacs)
-            all_results[key+"_mat"] = torch.stack(mats)
+            all_results[key+"_mat"] = tuple(mats)
                     
         return all_results, xyz
         

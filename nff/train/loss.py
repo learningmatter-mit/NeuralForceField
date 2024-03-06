@@ -631,6 +631,43 @@ def build_nacv_loss(loss_dict):
 
     return loss_fn
 
+def build_nacv_outer_loss(loss_dict):
+
+    params = loss_dict["params"]
+    key = params["key"]
+    loss_type = params.get("loss_type", "mse")
+
+    coef = loss_dict["coef"]
+
+    def loss_fn(ground_truth,
+                results,
+                **kwargs):
+
+        num_atoms = ground_truth["num_atoms"].tolist()
+        targ_vecs = torch.split(ground_truth[key], num_atoms)
+        pred_mats = results[key+"_mat"]
+
+        diff = 0.0
+        
+        for vec, pred in zip(targ_vecs, pred_mats):
+            if torch.isnan(vec).any():
+                continue
+            
+            targ = torch.outer(vec.flatten(), vec.flatten())
+
+            if loss_type == "mse":
+                diff += mse_operation(targ, pred)
+            elif loss_type == "mae":
+                diff += mae_operation(targ, pred)
+            else:
+                raise NotImplementedError
+
+        loss = coef * torch.mean(diff)
+
+        return loss
+
+    return loss_fn
+
 
 def build_multi_nacv_loss(loss_dict):
 
@@ -1159,6 +1196,7 @@ def name_to_func(name):
         "skewed_p": build_skewed_p_loss,
         "nacv": build_nacv_loss,
         "multi_nacv": build_multi_nacv_loss,
+        "nacv_outer": build_nacv_outer_loss,
         'trans_dipole': build_trans_dip_loss,
         'mae_trans_dipole': build_mae_trans_dip_loss,
         'cmplx': build_cmplx_loss,
