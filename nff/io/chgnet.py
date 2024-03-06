@@ -3,12 +3,12 @@
 from typing import Dict
 
 import torch
+from chgnet.data.dataset import StructureData
+from pymatgen.io.ase import AseAtomsAdaptor
+
 from nff.data import Dataset
 from nff.io import AtomsBatch
 from nff.utils.cuda import batch_detach, batch_to, detach
-from pymatgen.io.ase import AseAtomsAdaptor
-
-from chgnet.data.dataset import StructureData
 
 
 def convert_nff_to_chgnet_structure_data(
@@ -97,21 +97,44 @@ def convert_data_batch(
     pymatgen_structures = [AseAtomsAdaptor.get_structure(atoms_batch) for atoms_batch in atoms_list]
 
     energies = data_batch["energy"]
-    energies_per_atoms = [energy / len(structure) for energy, structure in zip(energies, pymatgen_structures)]
+    if energies is not None and len(energies) > 0:
+        energies_per_atoms = [
+            energy / len(structure)
+            for energy, structure in zip(energies, pymatgen_structures)
+        ]
+    else:
+        # fake energies
+        energies_per_atoms = torch.Tensor([0.0] * len(pymatgen_structures))
 
     energy_grads = data_batch["energy_grad"]
-    forces = [-x for x in energy_grads] if isinstance(energy_grads, list) else -energy_grads
-    num_atoms = detach(data_batch["num_atoms"]).tolist()
 
+    num_atoms = detach(data_batch["num_atoms"]).tolist()
     stresses = data_batch.get("stress", None)
     magmoms = data_batch.get("magmoms", None)
+
+    if energy_grads is not None and len(energy_grads) > 0:
+        forces = (
+            [-x for x in energy_grads]
+            if isinstance(energy_grads, list)
+            else -energy_grads
+        )
+    else:
+        forces = None
+
     if forces is not None and len(forces) > 0:
+        # organize forces per structure
         forces = torch.split(torch.atleast_2d(forces), num_atoms)
+    else:
+        # fake forces for NFF Calculator
+        forces = [
+            torch.zeros_like(torch.Tensor(atoms_batch.get_positions()))
+            for atoms_batch in atoms_list
+        ]
+
     if stresses is not None and len(stresses) > 0:
         stresses = torch.split(torch.atleast_2d(stresses), num_atoms)
     if magmoms is not None and len(magmoms) > 0:
         magmoms = torch.split(torch.atleast_2d(magmoms), num_atoms)
-    import pdb; pdb.set_trace()
 
     chgnet_dataset = StructureData(
         structures=pymatgen_structures,

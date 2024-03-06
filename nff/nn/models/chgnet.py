@@ -14,8 +14,13 @@ from chgnet.model import CHGNet
 from chgnet.model.composition_model import AtomRef
 from chgnet.model.encoders import AngleEncoder, AtomEmbedding, BondEncoder
 from chgnet.model.functions import MLP, GatedMLP, find_normalization
-from chgnet.model.layers import (AngleUpdate, AtomConv, BondConv,
-                                 GraphAttentionReadOut, GraphPooling)
+from chgnet.model.layers import (
+    AngleUpdate,
+    AtomConv,
+    BondConv,
+    GraphAttentionReadOut,
+    GraphPooling,
+)
 from chgnet.utils import cuda_devices_sorted_by_free_mem
 from pymatgen.core import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
@@ -31,13 +36,16 @@ if TYPE_CHECKING:
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
-
 class CHGNetNFF(CHGNet):
     """Wrapper class for CHGNet model."""
 
-    def __init__(self, *args, units: str = "eV", key_mappings=None, **kwargs):
+    def __init__(
+        self, *args, units: str = "eV", key_mappings=None, device="cpu", **kwargs
+    ):
         super().__init__(*args, **kwargs)
         self.units = units
+        self.device = device
+
         if not key_mappings:
             # map from CHGNet keys to NFF keys
             self.key_mappings = {
@@ -50,6 +58,34 @@ class CHGNetNFF(CHGNet):
             self.negate_keys = ("f",)
 
     def forward(self, data_batch: Dict, **kwargs):
+        """
+        Convert data_batch to CHGNet format and run forward pass.
+
+        Parameters
+        ----------
+        data_batch : Dict
+            A dictionary of properties for each structure in the batch.
+            Basically the props in NFF Dataset
+            Example:
+                props = {
+                    'nxyz': [np.array([[1, 0, 0, 0], [1, 1.1, 0, 0]]),
+                             np.array([[1, 3, 0, 0], [1, 1.1, 5, 0]])],
+                    'lattice': [np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+                                np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])],
+                    'num_atoms': [2, 2],
+                }
+
+        Returns
+        -------
+        output : Dict
+            A dictionary of predicted properties for each structure in the batch.
+            Example:
+                props = {
+                    'energy': [1, 1.2],
+                    'energy_grad': [np.array([[0, 0, 0], [0.1, 0.2, 0.3]]),
+                                      np.array([[0, 0, 0], [0.1, 0.2, 0.3]])],
+                }
+        """
         chgnet_data_batch = convert_data_batch(data_batch)
         graphs, targets = collate_graphs(chgnet_data_batch)
 
@@ -85,7 +121,7 @@ class CHGNetNFF(CHGNet):
         return CHGNetNFF.from_dict(state["model"], **kwargs)
 
     @classmethod
-    def load(cls, model_name="0.3.0"):
+    def load(cls, model_name="0.3.0", **kwargs):
         """Load pretrained CHGNetNFF model.
 
         Args:
@@ -106,6 +142,7 @@ class CHGNetNFF(CHGNet):
             os.path.join(module_dir, checkpoint_path),
             mlp_out_bias=model_name == "0.2.0",
             version=model_name,
+            **kwargs,
         )
 
 
