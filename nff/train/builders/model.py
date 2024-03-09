@@ -2,6 +2,7 @@
 Helper functions to create models, functions and other classes
 while checking for the validity of hyperparameters.
 """
+
 from nff.nn.models.spooky import SpookyNet, RealSpookyNet
 from nff.nn.models.torchmd_net import TorchMDNet
 from nff.nn.models.spooky_painn import SpookyPainn, SpookyPainnDiabat
@@ -32,9 +33,7 @@ from nff.nn.models.painn import (
 )
 from nff.nn.models.dispersion_models import PainnDispersion
 from nff.nn.models.chgnet import CHGNetNFF
-from chgnet.model.model import CHGNet
-from nff.nn.models.mace import NFFMACEWrapper
-from mace.modules.models import MACE, ScaleShiftMACE
+from nff.nn.models.mace import NffScaleMACE
 
 PARAMS_TYPE = {
     "SchNet": {
@@ -358,23 +357,7 @@ PARAMS_TYPE = {
         "vector_per_atom": dict,
     },
     # FIXME: need to add the correct parameters for MACE
-    "NFFMACEWrapper": {
-        "n_atom_basis": int,
-        "n_filters": int,
-        "n_gaussians": int,
-        "n_convolutions": int,
-        "cutoff": float,
-        "bond_par": float,
-        "trainable_gauss": bool,
-        "box_size": np.array,
-        "dropout_rate": float,
-        "n_bond_hidden": int,
-        "n_bond_features": int,
-        "activation": str,
-        "output_keys": list,
-        "grad_keys": list,
-    },
-    "DirectNffScaleMACEWrapper": {
+    "NffScaleMACE": {
         "n_atom_basis": int,
         "n_filters": int,
         "n_gaussians": int,
@@ -418,23 +401,18 @@ MODEL_DICT = {
     "Painn_Tuple": Painn_Tuple,
     "Painn_wCP": Painn_wCP,
     "PainnDipole": PainnDipole,
-    "MACE": MACE,
-    "ScaleShiftMACE": ScaleShiftMACE,
-    "CHGNet": CHGNet,
     "CHGNetNFF": CHGNetNFF,
-    "NFFMACEWrapper": NFFMACEWrapper,
+    "NffScaleMACE": NffScaleMACE,
 }
 
-MACE_WRAPPERS = {
-    "MACE": NFFMACEWrapper,
-    "ScaleShiftMACE": NFFMACEWrapper,
+DEFAULT_KWARGS = {
+    "CHGNetNFF": {
+        "model": "0.3.0",
+    },
+    "NffScaleMACE": {
+        "model": "medium",
+    },
 }
-
-CHGNET_WRAPPERS = {
-    "CHGNet": CHGNetNFF,
-}
-
-WRAPPER_MODELS = {**MACE_WRAPPERS, **CHGNET_WRAPPERS}
 
 
 class ParameterError(Exception):
@@ -460,7 +438,7 @@ def check_parameters(params_type, params):
                 check_parameters(PARAMS_TYPE[model], val)
 
 
-def get_model(params, model_type="SchNet", **kwargs):
+def get_model(params: dict, model_type: str = "SchNet", **kwargs):
     """Create new model with the given parameters.
 
     Args:
@@ -494,7 +472,8 @@ def load_params(param_path):
     return params, model_type
 
 
-def load_model(path, params=None, model_type=None, **kwargs):
+# TODO: update this to load MACE and CHGNet wrapped models
+def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Module:
     """Load pretrained model from the path. If no epoch is specified,
             load the best model.
 
@@ -505,52 +484,46 @@ def load_model(path, params=None, model_type=None, **kwargs):
                     in which you can't pickle the model directly.
             model_type (str, optional): name of the model to be used
     Returns:
-            model
+            torch.nn.Module: a Pytorch model
     """
 
-    try:
-        if os.path.isdir(path):
-            model = torch.load(os.path.join(path, "best_model"), map_location="cpu")
-        elif os.path.exists(path):
-            model = torch.load(path, map_location="cpu")
-        else:
-            raise FileNotFoundError("{} was not found".format(path))
-    except (FileNotFoundError, EOFError, RuntimeError):
-        param_path = os.path.join(path, "params.json")
-        if os.path.isfile(param_path):
-            params, model_type = load_params(param_path)
+    if path is None and model_type in ["CHGNetNFF", "DirectNffScaleMACEWrapper"]:
+        if not kwargs:
+            kwargs = DEFAULT_KWARGS[model_type]
+        # Both CHGNet and MACE are wrapped models have a class "load" method
+        # that can be used to load the pre-trained model
+        return MODEL_DICT[model_type].load(**kwargs)
+    else:
+        try:
+            if os.path.isdir(path):
+                model = torch.load(os.path.join(path, "best_model"), map_location="cpu")
+            elif os.path.exists(path):
+                model = torch.load(path, map_location="cpu")
+            else:
+                raise FileNotFoundError("{} was not found".format(path))
+        except (FileNotFoundError, EOFError, RuntimeError):
+            param_path = os.path.join(path, "params.json")
+            if os.path.isfile(param_path):
+                params, model_type = load_params(param_path)
 
-        assert (
-            params is not None
-        ), "Must specify params if you want to load the state dict"
-        assert (
-            model_type is not None
-        ), "Must specify the model type if you want to load the state dict"
+            assert (
+                params is not None
+            ), "Must specify params if you want to load the state dict"
+            assert (
+                model_type is not None
+            ), "Must specify the model type if you want to load the state dict"
 
-        model = get_model(params, model_type=model_type, **kwargs)
+            model = get_model(params, model_type=model_type, **kwargs)
 
-        if os.path.isdir(path):
-            state_dict = torch.load(
-                os.path.join(path, "best_model.pth.tar"), map_location="cpu"
-            )
-        elif os.path.exists(path):
-            state_dict = torch.load(path, map_location="cpu")
-        else:
-            raise FileNotFoundError("{} was not found".format(path))
+            if os.path.isdir(path):
+                state_dict = torch.load(
+                    os.path.join(path, "best_model.pth.tar"), map_location="cpu"
+                )
+            elif os.path.exists(path):
+                state_dict = torch.load(path, map_location="cpu")
+            else:
+                raise FileNotFoundError("{} was not found".format(path))
 
-        model.load_state_dict(state_dict["model"], strict=False)
-
-    # check if the model is one that requires a wrapper and apply the wrapper
-    if isinstance(model, WRAPPER_MODELS.values()):
-        # better to specify the model type, but if not, we can try to infer it
-        if model_type is None:
-            for key, val in WRAPPER_MODELS.items():
-                if isinstance(model, val):
-                    model_type = key
-                    break
-        if model_type in MACE_WRAPPERS:
-            model = WRAPPER_MODELS[model_type](mace_model=model, **kwargs)
-        elif model_type in CHGNET_WRAPPERS:
-            model = WRAPPER_MODELS[model_type].from_dict(model["model"], **kwargs)
+            model.load_state_dict(state_dict["model"], strict=False)
 
     return model
