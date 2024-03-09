@@ -10,17 +10,28 @@ from ase.neighborlist import neighbor_list
 from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
 from nff.data.features import add_morgan as external_morgan
 from nff.data.features import featurize_rdkit as external_rdkit
-from nff.data.graphs import (DISTANCETHRESHOLDICT_Z, add_ji_kj,
-                             generate_subgraphs, get_angle_list, get_bond_idx,
-                             get_neighbor_list, make_dset_directed,
-                             reconstruct_atoms)
-from nff.data.parallel import (NUM_PROCS, add_bond_idx_parallel,
-                               add_e3fp_parallel, add_kj_ji_parallel,
-                               featurize_parallel)
+from nff.data.graphs import (
+    DISTANCETHRESHOLDICT_Z,
+    add_ji_kj,
+    generate_subgraphs,
+    get_angle_list,
+    get_bond_idx,
+    get_neighbor_list,
+    make_dset_directed,
+    reconstruct_atoms,
+)
+from nff.data.parallel import (
+    NUM_PROCS,
+    add_bond_idx_parallel,
+    add_e3fp_parallel,
+    add_kj_ji_parallel,
+    featurize_parallel,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle as skshuffle
 from torch.utils.data import Dataset as TorchDataset
 from tqdm import tqdm
+# from typing import Dict
 
 
 class Dataset(TorchDataset):
@@ -65,11 +76,7 @@ class Dataset(TorchDataset):
 
     """
 
-    def __init__(self,
-                 props,
-                 units='kcal/mol',
-                 check_props=True,
-                 do_copy=True):
+    def __init__(self, props: dict, units="kcal/mol", check_props=True, do_copy=True):
         """Constructor for Dataset class.
 
         Args:
@@ -86,7 +93,7 @@ class Dataset(TorchDataset):
         else:
             self.props = props
         self.units = units
-        self.to_units('kcal/mol')
+        self.to_units("kcal/mol")
 
     def __len__(self):
         """Summary
@@ -94,7 +101,7 @@ class Dataset(TorchDataset):
         Returns:
             TYPE: Description
         """
-        return len(self.props['nxyz'])
+        return len(self.props["nxyz"])
 
     def __getitem__(self, idx):
         """Summary
@@ -130,8 +137,7 @@ class Dataset(TorchDataset):
                 new_props[key] += val
             else:
                 old_val = new_props[key]
-                new_props[key] = torch.cat([old_val,
-                                            val.to(old_val.dtype)])
+                new_props[key] = torch.cat([old_val, val.to(old_val.dtype)])
         self.props = new_props
 
         return copy.deepcopy(self)
@@ -147,47 +153,46 @@ class Dataset(TorchDataset):
             TYPE: Description
         """
 
-        assert 'nxyz' in props.keys()
-        n_atoms = [len(x) for x in props['nxyz']]
-        n_geoms = len(props['nxyz'])
+        assert "nxyz" in props.keys()
+        n_atoms = [len(x) for x in props["nxyz"]]
+        n_geoms = len(props["nxyz"])
 
-        if 'num_atoms' not in props.keys():
-            props['num_atoms'] = torch.LongTensor(n_atoms)
+        if "num_atoms" not in props.keys():
+            props["num_atoms"] = torch.LongTensor(n_atoms)
         else:
-            props['num_atoms'] = torch.LongTensor(props['num_atoms'])
+            props["num_atoms"] = torch.LongTensor(props["num_atoms"])
 
         for key, val in props.items():
-
             if val is None:
                 props[key] = to_tensor([np.nan] * n_geoms)
 
             elif any([x is None for x in val]):
                 bad_indices = [i for i, item in enumerate(val) if item is None]
-                good_indices = [index for index in range(
-                    len(val)) if index not in bad_indices]
+                good_indices = [
+                    index for index in range(len(val)) if index not in bad_indices
+                ]
                 if len(good_indices) == 0:
                     nan_list = np.array([float("NaN")]).tolist()
                 else:
                     good_index = good_indices[0]
-                    nan_list = (np.array(val[good_index])
-                                * float('NaN')).tolist()
+                    nan_list = (np.array(val[good_index]) * float("NaN")).tolist()
                 for index in bad_indices:
                     props[key][index] = nan_list
                 props.update({key: to_tensor(val)})
 
             else:
-                assert len(val) == n_geoms, (f'length of {key} is not '
-                                             f'compatible with {n_geoms} '
-                                             'geometries')
+                assert len(val) == n_geoms, (
+                    f"length of {key} is not "
+                    f"compatible with {n_geoms} "
+                    "geometries"
+                )
                 props[key] = to_tensor(val)
 
         return props
 
-    def generate_neighbor_list(self,
-                               cutoff,
-                               undirected=True,
-                               key='nbr_list',
-                               offset_key='offsets'):
+    def generate_neighbor_list(
+        self, cutoff, undirected=True, key="nbr_list", offset_key="offsets"
+    ):
         """Generates a neighbor list for each one of the atoms in the dataset.
             By default, does not consider periodic boundary conditions.
 
@@ -198,20 +203,19 @@ class Dataset(TorchDataset):
         Returns:
             TYPE: Description
         """
-        if 'lattice' not in self.props:
+        if "lattice" not in self.props:
             self.props[key] = [
                 get_neighbor_list(nxyz[:, 1:4], cutoff, undirected)
-                for nxyz in self.props['nxyz']
+                for nxyz in self.props["nxyz"]
             ]
             self.props[offset_key] = [
                 torch.sparse.FloatTensor(nbrlist.shape[0], 3)
                 for nbrlist in self.props[key]
             ]
         else:
-            self._get_periodic_neighbor_list(cutoff=cutoff,
-                                             undirected=undirected,
-                                             offset_key=offset_key,
-                                             nbr_key=key)
+            self._get_periodic_neighbor_list(
+                cutoff=cutoff, undirected=undirected, offset_key=offset_key, nbr_key=key
+            )
             return self.props[key], self.props[offset_key]
 
         return self.props[key]
@@ -225,20 +229,19 @@ class Dataset(TorchDataset):
         make_dset_directed(self)
 
     def generate_angle_list(self):
-
-        if 'lattice' in self.props:
+        if "lattice" in self.props:
             raise NotImplementedError("Angles not implemented for PBC.")
 
         self.make_all_directed()
 
-        angles, nbrs = get_angle_list(self.props['nbr_list'])
-        self.props['nbr_list'] = nbrs
-        self.props['angle_list'] = angles
+        angles, nbrs = get_angle_list(self.props["nbr_list"])
+        self.props["nbr_list"] = nbrs
+        self.props["angle_list"] = angles
 
         ji_idx, kj_idx = add_ji_kj(angles, nbrs)
 
-        self.props['ji_idx'] = ji_idx
-        self.props['kj_idx'] = kj_idx
+        self.props["ji_idx"] = ji_idx
+        self.props["kj_idx"] = kj_idx
 
         return angles
 
@@ -249,28 +252,24 @@ class Dataset(TorchDataset):
         """
 
         self.make_all_directed()
-        add_kj_ji_parallel(self,
-                           num_procs=num_procs)
+        add_kj_ji_parallel(self, num_procs=num_procs)
 
-    def _get_periodic_neighbor_list(self,
-                                    cutoff,
-                                    undirected=False,
-                                    offset_key='offsets',
-                                    nbr_key='nbr_list'):
-
+    def _get_periodic_neighbor_list(
+        self, cutoff, undirected=False, offset_key="offsets", nbr_key="nbr_list"
+    ):
         from nff.io.ase import AtomsBatch
 
         nbrlist = []
         offsets = []
-        for nxyz, lattice in zip(self.props['nxyz'], self.props['lattice']):
+        for nxyz, lattice in zip(self.props["nxyz"], self.props["lattice"]):
             atoms = AtomsBatch(
                 nxyz[:, 0].long(),
-                props={'num_atoms': torch.LongTensor([len(nxyz[:, 0])])},
+                props={"num_atoms": torch.LongTensor([len(nxyz[:, 0])])},
                 positions=nxyz[:, 1:],
                 cell=lattice,
                 pbc=True,
                 cutoff=cutoff,
-                directed=(not undirected)
+                directed=(not undirected),
             )
             nbrs, offs = atoms.update_nbr_list()
             nbrlist.append(nbrs)
@@ -370,10 +369,12 @@ class Dataset(TorchDataset):
         reindex = skshuffle(idx)
         self.change_idx(reindex)
 
-    def featurize(self,
-                  num_procs=NUM_PROCS,
-                  bond_feats=BOND_FEAT_TYPES,
-                  atom_feats=ATOM_FEAT_TYPES):
+    def featurize(
+        self,
+        num_procs=NUM_PROCS,
+        bond_feats=BOND_FEAT_TYPES,
+        atom_feats=ATOM_FEAT_TYPES,
+    ):
         """
         Featurize dataset with atom and bond features.
         Args:
@@ -384,10 +385,9 @@ class Dataset(TorchDataset):
             None
         """
 
-        featurize_parallel(self,
-                           num_procs=num_procs,
-                           bond_feats=bond_feats,
-                           atom_feats=atom_feats)
+        featurize_parallel(
+            self, num_procs=num_procs, bond_feats=bond_feats, atom_feats=atom_feats
+        )
 
     def add_morgan(self, vec_length):
         """
@@ -399,9 +399,7 @@ class Dataset(TorchDataset):
         """
         external_morgan(self, vec_length)
 
-    def add_e3fp(self,
-                 fp_length,
-                 num_procs=NUM_PROCS):
+    def add_e3fp(self, fp_length, num_procs=NUM_PROCS):
         """
         Add E3FP fingerprints for each conformer of each species
         in the dataset.
@@ -413,9 +411,7 @@ class Dataset(TorchDataset):
             None
         """
 
-        add_e3fp_parallel(self,
-                          fp_length,
-                          num_procs)
+        add_e3fp_parallel(self, fp_length, num_procs)
 
     def featurize_rdkit(self, method):
         """
@@ -438,20 +434,22 @@ class Dataset(TorchDataset):
         """
         from nff.io.ase import AtomsBatch
 
-        for i in range(len(self.props['nxyz'])):
+        for i in range(len(self.props["nxyz"])):
             # makes atoms object
 
-            atoms = AtomsBatch(positions=self.props['nxyz'][i][:, 1:4],
-                               numbers=self.props['nxyz'][i][:, 0],
-                               cell=self.props["cell"][i],
-                               pbc=True)
+            atoms = AtomsBatch(
+                positions=self.props["nxyz"][i][:, 1:4],
+                numbers=self.props["nxyz"][i][:, 0],
+                cell=self.props["cell"][i],
+                pbc=True,
+            )
 
             # recontruct coordinates based on subgraphs index
-            if self.props['smiles']:
-                mol_idx = mol_dic[self.props['smiles'][i]]
+            if self.props["smiles"]:
+                mol_idx = mol_dic[self.props["smiles"][i]]
                 atoms.set_positions(reconstruct_atoms(atoms, mol_idx))
                 nxyz = atoms.get_nxyz()
-            self.props['nxyz'][i] = torch.Tensor(nxyz)
+            self.props["nxyz"][i] = torch.Tensor(nxyz)
 
     def save(self, path):
         """Summary
@@ -461,7 +459,7 @@ class Dataset(TorchDataset):
         """
 
         # to deal with the fact that sparse tensors can't be pickled
-        offsets = self.props.get('offsets', torch.LongTensor([0]))
+        offsets = self.props.get("offsets", torch.LongTensor([0]))
         old_offsets = copy.deepcopy(offsets)
 
         # check if it's a sparse tensor. The first two conditions
@@ -470,25 +468,27 @@ class Dataset(TorchDataset):
 
         if all([hasattr(offsets, "__len__"), len(offsets) > 0]):
             if isinstance(offsets[0], torch.sparse.FloatTensor):
-                self.props['offsets'] = [val.to_dense() for val in offsets]
+                self.props["offsets"] = [val.to_dense() for val in offsets]
 
         torch.save(self, path)
         if "offsets" in self.props:
-            self.props['offsets'] = old_offsets
+            self.props["offsets"] = old_offsets
 
     def gen_bond_stats(self):
-
         bond_len_dict = {}
         # generate bond statistics
-        for i in range(len(self.props['nxyz'])):
-            z = self.props['nxyz'][i][:, 0]
-            xyz = self.props['nxyz'][i][:, 1:4]
-            bond_list = self.props['bonds'][i]
-            bond_len = (xyz[bond_list[:, 0]] - xyz[bond_list[:, 1]]
-                        ).pow(2).sum(-1).sqrt()[:, None]
+        for i in range(len(self.props["nxyz"])):
+            z = self.props["nxyz"][i][:, 0]
+            xyz = self.props["nxyz"][i][:, 1:4]
+            bond_list = self.props["bonds"][i]
+            bond_len = (
+                (xyz[bond_list[:, 0]] - xyz[bond_list[:, 1]])
+                .pow(2)
+                .sum(-1)
+                .sqrt()[:, None]
+            )
 
-            bond_type_list = torch.stack(
-                (z[bond_list[:, 0]], z[bond_list[:, 1]])).t()
+            bond_type_list = torch.stack((z[bond_list[:, 0]], z[bond_list[:, 1]])).t()
             for i, bond in enumerate(bond_type_list):
                 bond = tuple(torch.LongTensor(sorted(bond)).tolist())
                 if bond not in bond_len_dict.keys():
@@ -497,8 +497,9 @@ class Dataset(TorchDataset):
                     bond_len_dict[bond].append(bond_len[i])
 
         # compute bond len averages
-        self.bond_len_dict = {key: torch.stack(
-            bond_len_dict[key]).mean(0) for key in bond_len_dict.keys()}
+        self.bond_len_dict = {
+            key: torch.stack(bond_len_dict[key]).mean(0) for key in bond_len_dict.keys()
+        }
 
         return self.bond_len_dict
 
@@ -511,21 +512,17 @@ class Dataset(TorchDataset):
         bond_dict = {}
         mol_idx_dict = {}
 
-        #---------This part can be simplified---------#
-        for i in range(len(self.props['nxyz'])):
-            z = self.props['nxyz'][i][:, 0]
-            xyz = self.props['nxyz'][i][:, 1:4]
+        # ---------This part can be simplified---------#
+        for i in range(len(self.props["nxyz"])):
+            z = self.props["nxyz"][i][:, 0]
+            xyz = self.props["nxyz"][i][:, 1:4]
 
             # generate arguments for ase Atoms object
-            cell = self.props['cell'][i] if 'cell' in self.props.keys(
-            ) else None
-            ase_param = {"numbers": z,
-                         "positions": xyz,
-                         "pbc": True,
-                         "cell": cell}
+            cell = self.props["cell"][i] if "cell" in self.props.keys() else None
+            ase_param = {"numbers": z, "positions": xyz, "pbc": True, "cell": cell}
 
             atoms = Atoms(**ase_param)
-            sys_name = self.props['smiles'][i]
+            sys_name = self.props["smiles"][i]
             if sys_name not in bond_dict.keys():
                 print(sys_name)
                 i, j = neighbor_list("ij", atoms, DISTANCETHRESHOLDICT_Z)
@@ -541,9 +538,9 @@ class Dataset(TorchDataset):
         # generate topologies
         # TODO: include options to only generate bond topology
         self.generate_topologies(bond_dic=bond_dict)
-        if 'cell' in self.props.keys():
+        if "cell" in self.props.keys():
             self.unwrap_xyz(mol_idx_dict)
-        #---------This part can be simplified---------#
+        # ---------This part can be simplified---------#
 
         # generate bond length dictionary if not given
         if not bond_len_dict:
@@ -553,13 +550,12 @@ class Dataset(TorchDataset):
         all_bond_len = []
         all_offsets = []
         all_nbr_list = []
-        for i in range(len(self.props['nxyz'])):
-            z = self.props['nxyz'][i][:, 0]
-            xyz = self.props['nxyz'][i][:, 1:4]
+        for i in range(len(self.props["nxyz"])):
+            z = self.props["nxyz"][i][:, 0]
+            xyz = self.props["nxyz"][i][:, 1:4]
 
-            bond_list = self.props['bonds'][i]
-            bond_type_list = torch.stack(
-                (z[bond_list[:, 0]], z[bond_list[:, 1]])).t()
+            bond_list = self.props["bonds"][i]
+            bond_type_list = torch.stack((z[bond_list[:, 0]], z[bond_list[:, 1]])).t()
             bond_len_list = []
             for bond in bond_type_list:
                 bond_type = tuple(torch.LongTensor(sorted(bond)).tolist())
@@ -567,14 +563,15 @@ class Dataset(TorchDataset):
             all_bond_len.append(torch.Tensor(bond_len_list).reshape(-1, 1))
 
             # update offsets
-            cell = self.props['cell'][i] if 'cell' in self.props.keys(
-            ) else None,
-            ase_param = {"numbers": z,
-                         "positions": xyz,
-                         "pbc": True,
-                         "cutoff": cutoff,
-                         "cell": cell,
-                         "nbr_torch": False}
+            cell = (self.props["cell"][i] if "cell" in self.props.keys() else None,)
+            ase_param = {
+                "numbers": z,
+                "positions": xyz,
+                "pbc": True,
+                "cutoff": cutoff,
+                "cell": cell,
+                "nbr_torch": False,
+            }
 
             # the coordinates have been unwrapped and try to results offsets
             atoms = AtomsBatch(**ase_param)
@@ -583,13 +580,18 @@ class Dataset(TorchDataset):
             all_nbr_list.append(atoms.nbr_list)
 
         # update
-        self.props['bond_len'] = all_bond_len
-        self.props['offsets'] = all_offsets
-        self.props['nbr_list'] = all_nbr_list
+        self.props["bond_len"] = all_bond_len
+        self.props["offsets"] = all_offsets
+        self.props["nbr_list"] = all_nbr_list
         self._check_dictionary(deepcopy(self.props))
 
     def as_atoms_batches(
-        self, cutoff=5.0, undirected=False, offset_key="offsets", nbr_key="nbr_list", device='cuda'
+        self,
+        cutoff=5.0,
+        undirected=False,
+        offset_key="offsets",
+        nbr_key="nbr_list",
+        device="cuda",
     ):
         """
         Converts the dataset to a list of AtomsBatch objects.
@@ -636,15 +638,42 @@ class Dataset(TorchDataset):
             atoms_batches.append(atoms)
         return atoms_batches
 
+    def update_dtype(self, dtype: str) -> None:
+        """Update the datatype of all torch objects in the batch
+        to match the given dtype.
+
+        Args:
+            dtype (str): the desired data type, either
+                "float" (torch.float32) or "double" (torch.float64)
+        """
+        for key in self.props.keys():
+            if isinstance(self.props[key], torch.Tensor):
+                print(f"{key} is a tensor")
+                if dtype == "float":
+                    self.props[key] = self.props[key].float()
+                elif dtype == "double":
+                    self.props[key] = self.props[key].double()
+            elif isinstance(self.props[key], list) and isinstance(
+                self.props[key][0], torch.Tensor
+            ):
+                print(f"{key} is a list of tensors")
+                for i, val in enumerate(self.props[key]):
+                    if dtype == "float":
+                        self.props[key][i] = val.float()
+                    elif dtype == "double":
+                        self.props[key][i] = val.double()
+            else:
+                continue
+
     @classmethod
-    def from_file(cls, path):
+    def from_file(cls, path: str):
         """Summary
 
         Args:
-            path (TYPE): Description
+            path (str): path to the file from which you want to load a dataset
 
         Returns:
-            TYPE: Description
+            Dataset: a dataset from the file
 
         Raises:
             TypeError: Description
@@ -653,9 +682,8 @@ class Dataset(TorchDataset):
         if isinstance(obj, cls):
             return obj
         else:
-            raise TypeError(
-                '{} is not an instance from {}'.format(path, type(cls))
-            )
+            print(type(obj))
+            raise TypeError(f"{path} is not an instance from {type(cls)}")
 
 
 def force_to_energy_grad(dataset):
@@ -672,20 +700,17 @@ def force_to_energy_grad(dataset):
         success (bool): if True, forces were removed and energy_grad
             became the new key.
     """
-    if 'forces' not in dataset.props.keys():
+    if "forces" not in dataset.props.keys():
         return False
     else:
-        dataset.props['energy_grad'] = [
-            -x
-            for x in dataset.props.pop('forces')
-        ]
+        dataset.props["energy_grad"] = [-x for x in dataset.props.pop("forces")]
         return True
 
 
 def convert_nan(x):
     """
-    If a list has any elements that contain nan, convert its contents 
-    to the right form so that it can eventually be converted to a tensor. 
+    If a list has any elements that contain nan, convert its contents
+    to the right form so that it can eventually be converted to a tensor.
     Args:
         x (list): any list with floats, ints, or Tensors.
     Returns:
@@ -696,7 +721,6 @@ def convert_nan(x):
     # whether any of the contents have nan
     has_nan = any([np.isnan(y).any() for y in x])
     for y in x:
-
         if has_nan:
             # if one is nan then they will have to become float tensors
             if type(y) in [int, float]:
@@ -706,8 +730,10 @@ def convert_nan(x):
             elif isinstance(y, list):
                 new_x.append(torch.Tensor(y))
             else:
-                msg = ("Don't know how to convert sub-components of type "
-                       f"{type(x)} when components might contain nan")
+                msg = (
+                    "Don't know how to convert sub-components of type "
+                    f"{type(x)} when components might contain nan"
+                )
                 raise Exception(msg)
         else:
             # otherwise they can be kept as is
@@ -738,13 +764,12 @@ def to_tensor(x, stack=False):
     if isinstance(x, torch.Tensor):
         return x
 
-    if type(x) is list and type(x[0]) != str:
+    if isinstance(x, list) and not isinstance(x[0], str):
         if not isinstance(x[0], torch.sparse.FloatTensor):
             x = convert_nan(x)
 
     # all objects in x are tensors
     if isinstance(x, list) and all([isinstance(y, torch.Tensor) for y in x]):
-
         # list of tensors with zero or one effective dimension
         # flatten the tensor
 
@@ -760,7 +785,6 @@ def to_tensor(x, stack=False):
 
     # some objects are not tensors
     elif isinstance(x, list):
-
         # list of strings
         if all([isinstance(y, str) for y in x]):
             return x
@@ -777,7 +801,7 @@ def to_tensor(x, stack=False):
         if any([isinstance(y, (list, np.ndarray)) for y in x]):
             return [torch.Tensor(y) for y in x]
 
-    raise TypeError('Data type not understood')
+    raise TypeError("Data type not understood")
 
 
 def concatenate_dict(*dicts):
@@ -801,8 +825,9 @@ def concatenate_dict(*dicts):
         TYPE: Description
     """
 
-    assert all([type(d) == dict for d in dicts]), \
-        'all arguments have to be dictionaries'
+    assert all(
+        [type(d) == dict for d in dicts]
+    ), "all arguments have to be dictionaries"
 
     # Old method
     # keys = set(sum([list(d.keys()) for d in dicts], []))
@@ -835,14 +860,14 @@ def concatenate_dict(*dicts):
         return 1
 
     def get_length_of_values(dict_):
-        if 'nxyz' in dict_:
-            return get_length(dict_['nxyz'])
+        if "nxyz" in dict_:
+            return get_length(dict_["nxyz"])
         return min([get_length(v) for v in dict_.values()])
 
     def flatten_val(value):
         """Given a value, which can be a number, a list or
-            a torch.Tensor, return its flattened version
-            to be appended to a list of values
+        a torch.Tensor, return its flattened version
+        to be appended to a list of values
         """
         if is_list_of_lists(value):
             if is_list_of_lists(value[0]):
@@ -875,9 +900,7 @@ def concatenate_dict(*dicts):
         # flatten list of values
         values = []
         for num_values, d in zip(values_per_dict, dicts):
-            val = d.get(key,
-                        ([None] * num_values if num_values > 1 else None)
-                        )
+            val = d.get(key, ([None] * num_values if num_values > 1 else None))
             values += flatten_val(val)
         joint_dict[key] = values
 
@@ -898,17 +921,16 @@ def binary_split(dataset, targ_name, test_size, seed):
     """
 
     # get indices of positive and negative values
-    pos_idx = [i for i, targ in enumerate(dataset.props[targ_name])
-               if targ]
+    pos_idx = [i for i, targ in enumerate(dataset.props[targ_name]) if targ]
     neg_idx = [i for i in range(len(dataset)) if i not in pos_idx]
 
     # split the positive and negative indices separately
-    pos_idx_train, pos_idx_test = train_test_split(pos_idx,
-                                                   test_size=test_size,
-                                                   random_state=seed)
-    neg_idx_train, neg_idx_test = train_test_split(neg_idx,
-                                                   test_size=test_size,
-                                                   random_state=seed)
+    pos_idx_train, pos_idx_test = train_test_split(
+        pos_idx, test_size=test_size, random_state=seed
+    )
+    neg_idx_train, neg_idx_test = train_test_split(
+        neg_idx, test_size=test_size, random_state=seed
+    )
 
     # combine the negative and positive test idx to get the test idx
     # do the same for train
@@ -917,6 +939,7 @@ def binary_split(dataset, targ_name, test_size, seed):
     idx_test = pos_idx_test + neg_idx_test
 
     return idx_train, idx_test
+
 
 def stratified_split(dataset, targ_name, test_size, seed, min_count=2):
     """
