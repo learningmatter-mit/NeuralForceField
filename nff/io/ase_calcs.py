@@ -11,15 +11,16 @@ and geometry optimizations using NFF AtomsBatch objects.
 import os
 import sys
 
-import nff.utils.constants as const
-import numpy as np
-import torch
-
 from collections import Counter
 from typing import List, Union
+import torch
+from torch.autograd import grad
+import numpy as np
 from ase import units
 from ase.calculators.calculator import Calculator, all_changes
 from ase.stress import full_3x3_to_voigt_6_stress
+
+import nff.utils.constants as const
 from nff.data import Dataset, collate_dicts
 from nff.train.builders.model import load_model
 from nff.utils.cuda import batch_to
@@ -30,7 +31,6 @@ from nff.nn.models.cp3d import OnlyBondUpdateCP3D
 from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.schnet import SchNet, SchNetDiabat
 from nff.nn.models.schnet_features import SchNetFeatures
-from torch.autograd import grad
 from nff.utils.constants import EV_TO_KCAL_MOL, HARTREE_TO_KCAL_MOL
 
 HARTREE_TO_EV = HARTREE_TO_KCAL_MOL / EV_TO_KCAL_MOL
@@ -65,7 +65,7 @@ class NeuralFF(Calculator):
         model (TYPE): Description
         device (str): device on which the calculations will be performed
         properties (list of str): 'energy', 'forces' or both and also stress for only
-        schnet  and painn
+            schnet  and painn
         **kwargs: Description
         model (one of nff.nn.models)
         """
@@ -405,7 +405,9 @@ class EnsembleNFF(Calculator):
                 )
             if self.jobdir is not None:
                 forces_std = self.results["forces_std"][None, :, :]
-                self.log_ensemble(self.jobdir, "forces_nff_ensemble.npy", -gradients)
+                self.log_ensemble(
+                    self.jobdir, "forces_nff_ensemble.npy", -1 * gradients
+                )
 
         if "stress" in properties:
             self.results["stress"] = stresses.mean(0)
