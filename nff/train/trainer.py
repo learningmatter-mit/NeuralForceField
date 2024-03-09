@@ -87,7 +87,6 @@ class Trainer:
         metric_as_loss=None,
         metric_objective=None,
         epoch_cutoff=float("inf"),
-        retain_graph=False,
     ):
         self.model_path = model_path
         self.checkpoint_path = os.path.join(self.model_path, "checkpoints")
@@ -101,7 +100,6 @@ class Trainer:
         self.mol_loss_norm = mol_loss_norm
         self.mini_batches = mini_batches
         self.epoch_cutoff = epoch_cutoff
-        self.retain_graph = retain_graph
 
         self._model = model
         self._stop = False
@@ -258,7 +256,7 @@ class Trainer:
 
     def loss_backward(self, loss):
         if hasattr(loss, "backward"):
-            loss.backward(retain_graph=self.retain_graph)
+            loss.backward()
         self.back_count += 1
         self.batch_stop = self.back_count == self.max_batch_iters
 
