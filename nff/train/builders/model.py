@@ -472,10 +472,10 @@ def load_params(param_path):
     return params, model_type
 
 
-# TODO: update this to load MACE and CHGNet wrapped models
 def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Module:
     """Load pretrained model from the path. If no epoch is specified,
-            load the best model.
+            load the best model. For big pre-trained models like CHGNet and MACE,
+            the model is loaded independent of the path or other params.
 
     Args:
             path (str): path where the model was trained.

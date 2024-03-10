@@ -648,7 +648,6 @@ class Dataset(TorchDataset):
         """
         for key in self.props.keys():
             if isinstance(self.props[key], torch.Tensor):
-                print(f"{key} is a tensor")
                 if dtype == "float":
                     self.props[key] = self.props[key].float()
                 elif dtype == "double":
@@ -656,7 +655,6 @@ class Dataset(TorchDataset):
             elif isinstance(self.props[key], list) and isinstance(
                 self.props[key][0], torch.Tensor
             ):
-                print(f"{key} is a list of tensors")
                 for i, val in enumerate(self.props[key]):
                     if dtype == "float":
                         self.props[key][i] = val.float()
