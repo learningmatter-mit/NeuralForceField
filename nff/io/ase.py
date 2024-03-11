@@ -4,11 +4,9 @@ from ase import Atoms, units
 from ase.neighborlist import neighbor_list
 
 import nff.utils.constants as const
-import nff.utils.constants as const
 from nff.data.sparse import sparsify_array
 from nff.nn.graphop import split_and_sum
-from nff.nn.utils import (clean_matrix, lattice_points_in_supercell,
-                          torch_nbr_list)
+from nff.nn.utils import clean_matrix, lattice_points_in_supercell, torch_nbr_list
 
 DEFAULT_CUTOFF = 5.0
 DEFAULT_DIRECTED = False
@@ -71,15 +69,6 @@ class AtomsBatch(Atoms):
         Args:
             target_unit (str): target unit.
         """
-        conversion_factors = {
-            ("eV", "kcal/mol"): const.EV_TO_KCAL,
-            ("eV", "atomic"): const.EV_TO_AU,
-            ("kcal/mol", "eV"): const.KCAL_TO_EV,
-            ("kcal/mol", "atomic"): const.KCAL_TO_AU,
-            ("atomic", "eV"): const.AU_TO_EV,
-            ("atomic", "kcal/mol"): const.AU_TO_KCAL,
-        }
-
         if target_unit not in ["kcal/mol", "eV", "atomic"]:
             raise NotImplementedError(f"Unit {target_unit} not implemented")
 
@@ -88,7 +77,7 @@ class AtomsBatch(Atoms):
         if target_unit == curr_unit:
             return
 
-        conversion_factor = conversion_factors.get((curr_unit, target_unit))
+        conversion_factor = const.conversion_factors.get((curr_unit, target_unit))
         if conversion_factor is None:
             raise NotImplementedError(
                 f"Conversion from {curr_unit} to {target_unit} not implemented"
