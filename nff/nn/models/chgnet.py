@@ -98,6 +98,18 @@ class CHGNetNFF(CHGNet):
             {self.key_mappings[k]: self.negate_value(k, v) for k, v in output.items()}
         )
 
+        # Convert Result
+        # TODO maybe convert from eV/atom to eV for energies
+        # factor = 1 if not self.model.is_intensive else structure.composition.num_atoms
+        # self.results.update(
+        #     energy=model_prediction["e"] * factor,
+        #     forces=model_prediction["f"],
+        #     free_energy=model_prediction["e"] * factor,
+        #     magmoms=model_prediction["m"],
+        #     stress=model_prediction["s"] * self.stress_weight,
+        #     crystal_fea=model_prediction["crystal_fea"],
+        # )
+
         return output
 
     def negate_value(self, key: str, value: Union[list, Tensor]) -> Union[list, Tensor]:

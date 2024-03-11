@@ -8,8 +8,8 @@ from rdkit import Chem
 
 PERIODICTABLE = Chem.GetPeriodicTable()
 
-HARTREE_TO_KCAL_MOL = 627.509
-EV_TO_KCAL_MOL = 23.06052
+HARTREE_TO_KCAL_MOL = 627.5096080305927
+EV_TO_KCAL_MOL = 23.060541945329334
 HARTREE_TO_EV = HARTREE_TO_KCAL_MOL / EV_TO_KCAL_MOL
 
 # Distances
@@ -57,12 +57,27 @@ KCAL_TO_EV = {
     '_grad': 1.0,
 }
 
+DEFAULT = {
+    "energy": 1.0,
+    "_grad": 1.0,
+}
+
 KB_EV = 0.0000861731
 KB_AU = 3.166815e-6
 EV_TO_AU = 1 / 27.2114
 EV_A_TO_AU = 1 / 51.4221
 INV_CM_TO_AU = 4.5564e-6
 
+
+# conversion factors
+conversion_factors = {
+    ("eV", "kcal/mol"): EV_TO_KCAL,
+    ("eV", "atomic"): EV_TO_AU,
+    ("kcal/mol", "eV"): KCAL_TO_EV,
+    ("kcal/mol", "atomic"): KCAL_TO_AU,
+    ("atomic", "eV"): AU_TO_EV,
+    ("atomic", "kcal/mol"): AU_TO_KCAL,
+}
 
 # Coulomb's constant, in (kcal/mol) * (A / e^2),
 # where A is Angstroms and e is the electron charge
