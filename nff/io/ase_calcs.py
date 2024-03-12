@@ -20,6 +20,7 @@ from ase.calculators.calculator import Calculator, all_changes
 from ase.stress import full_3x3_to_voigt_6_stress
 from torch.autograd import grad
 
+
 import nff.utils.constants as const
 from nff.data import Dataset, collate_dicts
 from nff.io.ase import DEFAULT_DIRECTED, AtomsBatch
@@ -67,7 +68,7 @@ class NeuralFF(Calculator):
         model (TYPE): Description
         device (str): device on which the calculations will be performed
         properties (list of str): 'energy', 'forces' or both and also stress for only
-        schnet  and painn
+            schnet  and painn
         **kwargs: Description
         model (one of nff.nn.models)
         """
@@ -434,7 +435,9 @@ class EnsembleNFF(Calculator):
                 )
             if self.jobdir is not None:
                 forces_std = self.results["forces_std"][None, :, :]
-                self.log_ensemble(self.jobdir, "forces_nff_ensemble.npy", -gradients)
+                self.log_ensemble(
+                    self.jobdir, "forces_nff_ensemble.npy", -1 * gradients
+                )
 
         if "stress" in properties:
             self.results["stress"] = stresses.mean(0)

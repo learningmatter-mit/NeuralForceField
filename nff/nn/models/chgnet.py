@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
+
 class CHGNetNFF(CHGNet):
     """Wrapper class for CHGNet model."""
 
