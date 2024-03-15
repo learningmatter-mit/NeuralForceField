@@ -1,34 +1,18 @@
 from __future__ import annotations
 
-import math
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Literal, Union
+from typing import TYPE_CHECKING, Dict, Union
 
 import torch
 from chgnet.data.dataset import collate_graphs
-from chgnet.graph import CrystalGraph, CrystalGraphConverter
+from chgnet.graph import CrystalGraph
 from chgnet.graph.crystalgraph import datatype
 from chgnet.model import CHGNet
-from chgnet.model.composition_model import AtomRef
-from chgnet.model.encoders import AngleEncoder, AtomEmbedding, BondEncoder
-from chgnet.model.functions import MLP, GatedMLP, find_normalization
-from chgnet.model.layers import (
-    AngleUpdate,
-    AtomConv,
-    BondConv,
-    GraphAttentionReadOut,
-    GraphPooling,
-)
-from chgnet.utils import cuda_devices_sorted_by_free_mem
-from pymatgen.core import Structure
-from pymatgen.io.ase import AseAtomsAdaptor
 from torch import Tensor, nn
 
-from nff.io.ase import AtomsBatch
 from nff.io.chgnet import convert_data_batch
-from nff.nn.modules.chgnet.data.dataset import StructureData
 from nff.utils.misc import cat_props
 
 if TYPE_CHECKING:
