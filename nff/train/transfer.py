@@ -8,7 +8,7 @@ Last refactored 2024-03-07 by Alex Hoffman
 """
 
 import torch
-from typing import List, Union
+from typing import List
 
 
 class LayerFreezer:
