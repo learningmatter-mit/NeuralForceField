@@ -10,33 +10,34 @@ and geometry optimizations using NFF AtomsBatch objects.
 
 import os
 import sys
-
 from collections import Counter
 from typing import List, Union
-import torch
-from torch.autograd import grad
+
 import numpy as np
+import torch
 from ase import units
 from ase.calculators.calculator import Calculator, all_changes
 from ase.stress import full_3x3_to_voigt_6_stress
+from torch.autograd import grad
+
 
 import nff.utils.constants as const
 from nff.data import Dataset, collate_dicts
-from nff.train.builders.model import load_model
-from nff.utils.cuda import batch_to
-from nff.utils.geom import batch_compute_distance, compute_distances
-from nff.utils.scatter import compute_grad
-from nff.io.ase import AtomsBatch, DEFAULT_DIRECTED
+from nff.io.ase import DEFAULT_DIRECTED, AtomsBatch
 from nff.nn.models.cp3d import OnlyBondUpdateCP3D
 from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.schnet import SchNet, SchNetDiabat
 from nff.nn.models.schnet_features import SchNetFeatures
+from nff.train.builders.model import load_model
 from nff.utils.constants import EV_TO_KCAL_MOL, HARTREE_TO_KCAL_MOL
+from nff.utils.cuda import batch_detach, batch_to
+from nff.utils.geom import batch_compute_distance, compute_distances
+from nff.utils.scatter import compute_grad
 
 HARTREE_TO_EV = HARTREE_TO_KCAL_MOL / EV_TO_KCAL_MOL
 
-UNDIRECTED = [SchNet, SchNetDiabat, HybridGraphConv, SchNetFeatures, OnlyBondUpdateCP3D]
 
+UNDIRECTED = [SchNet, SchNetDiabat, HybridGraphConv, SchNetFeatures, OnlyBondUpdateCP3D]
 
 def check_directed(model, atoms):
     model_cls = model.__class__.__name__
@@ -57,6 +58,8 @@ class NeuralFF(Calculator):
         en_key="energy",
         properties=["energy", "forces"],
         model_kwargs=None,
+        model_units="kcal/mol",
+        prediction_units="eV",
         **kwargs,
     ):
         """Creates a NeuralFF calculator.nff/io/ase.py
@@ -79,6 +82,8 @@ class NeuralFF(Calculator):
         self.en_key = en_key
         self.properties = properties
         self.model_kwargs = model_kwargs
+        self.model_units = model_units
+        self.prediction_units = prediction_units
 
     def to(self, device):
         self.device = device
@@ -155,25 +160,34 @@ class NeuralFF(Calculator):
         # print(prediction.keys())
 
         # change energy and force to numpy array
-
-        energy = prediction[self.en_key].detach().cpu().numpy() * (
-            1 / const.EV_TO_KCAL_MOL
+        conversion_factor: dict = const.conversion_factors.get(
+            (self.model_units, self.prediction_units), const.DEFAULT
+        )
+        prediction_numpy = batch_detach(
+            const.convert_units(prediction, conversion_factor), to_numpy=True
         )
 
-        if grad_key in prediction:
-            energy_grad = prediction[grad_key].detach().cpu().numpy() * (
-                1 / const.EV_TO_KCAL_MOL
-            )
+        # change energy and force to numpy array
+        if "/atom" in self.model_units:
+            energy = prediction_numpy[self.en_key] * len(atoms)
+            prediction_numpy[self.en_key + "_per_atom"] = prediction_numpy[self.en_key]
+            prediction_numpy[self.en_key] = energy
+        else:
+            energy = prediction_numpy[self.en_key]
+
+        if grad_key in prediction_numpy:
+            energy_grad = prediction_numpy[grad_key]
         else:
             energy_grad = None
 
+        # TODO: implement unit conversion with prediction_numpy
         self.results = {"energy": energy.reshape(-1)}
         if "e_disp" in prediction:
             self.results["energy"] = self.results["energy"] + prediction["e_disp"]
 
         if "forces" in self.properties:
             # HACK: this is a fix to make the MACE model work with the calculator
-            if energy_grad:
+            if energy_grad is not None:
                 self.results["forces"] = -energy_grad.reshape(-1, 3)
             else:
                 self.results["forces"] = prediction["forces"].detach().cpu().numpy()
@@ -188,7 +202,9 @@ class NeuralFF(Calculator):
 
         if requires_stress:
             stress = prediction["stress_volume"].detach().cpu().numpy() * (
-                1 / const.EV_TO_KCAL_MOL
+                1
+                / const.EV_TO_KCAL_MOL
+                # TODO change to more general prediction
             )
             self.results["stress"] = stress * (1 / atoms.get_volume())
             if "stress_disp" in prediction:
@@ -220,6 +236,8 @@ class EnsembleNFF(Calculator):
         jobdir=None,
         properties=["energy", "forces"],
         model_kwargs=None,
+        model_units="kcal/mol",
+        prediction_units="eV",
         **kwargs,
     ):
         """Creates a NeuralFF calculator.nff/io/ase.py
@@ -242,6 +260,8 @@ class EnsembleNFF(Calculator):
         self.offset_data = {}
         self.properties = properties
         self.model_kwargs = model_kwargs
+        self.model_units = model_units
+        self.prediction_units = prediction_units
 
     def to(self, device):
         self.device = device
@@ -360,17 +380,27 @@ class EnsembleNFF(Calculator):
         # do this in parallel
 
         for model in self.models:
+            # TODO can export to function and merge with NeuralFF class
             prediction = model(batch, **kwargs)
 
             # change energy and force to numpy array
-            energies.append(
-                prediction["energy"].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+            conversion_factor: dict = const.conversion_factors.get(
+                (self.model_units, self.prediction_units), const.DEFAULT
             )
-            gradients.append(
-                prediction["energy_grad"].detach().cpu().numpy()
-                * (1 / const.EV_TO_KCAL_MOL)
+            prediction_numpy = batch_detach(
+                const.convert_units(prediction, conversion_factor), to_numpy=True
             )
+
+            if "/atom" in self.model_units:
+                energy = prediction_numpy["energy"] * len(atoms)
+                prediction_numpy["energy_per_atom"] = prediction_numpy["energy"]
+                prediction_numpy["energy"] = energy
+            else:
+                energy = prediction_numpy["energy"]
+            energies.append(energy)
+            gradients.append(prediction_numpy["energy_grad"])
             if "stress_volume" in prediction:
+                # TODO: implement unit conversion for stress with prediction_numpy
                 stresses.append(
                     prediction["stress_volume"].detach().cpu().numpy()
                     * (1 / const.EV_TO_KCAL_MOL)

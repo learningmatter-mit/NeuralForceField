@@ -1,6 +1,7 @@
 """Functions to deal with the GPU and the CUDA driver
 """
 
+import numpy as np
 import nvidia_smi
 
 
@@ -11,15 +12,27 @@ def batch_to(batch, device):
     return gpu_batch
 
 
-def detach(val):
+def detach(val, to_numpy=False):
+    """detach GPU tensor
+
+    Args:
+        val (tensor): tensor to detach
+        to_numpy (bool, optional): convert to numpy. Defaults to False.
+
+    Returns:
+        TYPE: tensor
+    """
+    if to_numpy:
+        return val.detach().cpu().numpy() if hasattr(val, "detach") else val
     return val.detach().cpu() if hasattr(val, "detach") else val
 
 
-def batch_detach(batch):
+def batch_detach(batch, to_numpy=False):
     """detach batch of GPU tensors
 
     Args:
         batch (dict): batches of data/prediction
+        to_numpy (bool, optional): convert to numpy. Defaults to False.
 
     Returns:
         TYPE: dict
@@ -27,9 +40,13 @@ def batch_detach(batch):
     detach_batch = dict()
     for key, val in batch.items():
         if type(val) is list:
-            detach_batch[key] = [detach(sub_val) for sub_val in val]
+            detach_batch[key] = [detach(sub_val, to_numpy=to_numpy) for sub_val in val]
         else:
-            detach_batch[key] = detach(val)
+            detach_batch[key] = detach(val, to_numpy=to_numpy)
+
+        if to_numpy:
+            detach_batch[key] = np.array(detach_batch[key])
+
     return detach_batch
 
 
