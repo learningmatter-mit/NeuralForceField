@@ -8,6 +8,7 @@ Last refactored 2024-03-07 by Alex Hoffman
 """
 
 import torch
+from typing import List, Union
 
 
 class LayerFreezer:
@@ -34,6 +35,20 @@ class LayerFreezer:
         for param in module.parameters():
             param.requires_grad = True
 
+    def custom_unfreeze(self, model: torch.nn.Module, custom_layers: List[str]) -> None:
+        """Unfreeze parameters from a custom list.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+            custom_unfreeze (List[str]): list of layers to unfreeze specified by
+                the user. The items in the custom list should be strings
+                from the names of the parameters in the model, which can be obtained
+                from list(model.named_parameters())
+        """
+        for module in model.named_parameters():
+            if module[0] in custom_layers:
+                module[1].requires_grad = True
+
     def unfreeze_readout(self, model: torch.nn.Module) -> None:
         """
         Unfreezes the parameters from the readout layers.
@@ -41,7 +56,6 @@ class LayerFreezer:
         Args:
             model (any of nff.nn.models): the model to be transfer learned
         """
-
         self.unfreeze_parameters(model.atomwisereadout)
 
     def model_tl(
@@ -50,6 +64,7 @@ class LayerFreezer:
         freeze_gap_embedding: bool,
         freeze_pooling: bool,
         freeze_skip: bool,
+        custom_layers: List[str],
         **kwargs,
     ) -> None:
         """
@@ -92,6 +107,7 @@ class PainnLayerFreezer(LayerFreezer):
         freeze_gap_embedding: bool,  # unused for regular PaiNN
         freeze_pooling: bool,
         freeze_skip: bool,
+        custom_layers: List[str],  # unused for PaiNN
         **kwargs,
     ) -> None:
         """Function to transfer learn a PaiNN model.
@@ -102,6 +118,8 @@ class PainnLayerFreezer(LayerFreezer):
                 for diabatic models
             freeze_pooling (bool): if true, keep all pooling layers frozen
             freeze_skip (bool): if true, keep all but the last readout layer frozen
+            custom_layers (List[str]): list of layers to unfreeze specified by the user
+                that is different from the default. Unused in this class.
         """
         self.freeze_parameters(model)
         self.unfreeze_painn_readout(model=model, freeze_skip=freeze_skip)
@@ -138,6 +156,7 @@ class PainnDiabatLayerFreezer(PainnLayerFreezer):
         freeze_gap_embedding: bool,
         freeze_pooling: bool,
         freeze_skip: bool,
+        custom_layers: List[str],  # unused for PaiNN
         **kwargs,
     ):
         """Function to transfer learn a PaiNN model with diabatic readout.
@@ -147,6 +166,8 @@ class PainnDiabatLayerFreezer(PainnLayerFreezer):
             freeze_gap_embedding (bool): if true, keep the gap embedding frozen
             freeze_pooling (bool): if true, keep all pooling layers frozen
             freeze_skip (bool): if true, keep all but the last readout layer frozen
+            custom_layers (List[str]): list of layers to unfreeze specified by the user
+                that is different from the default. Unused in this class.
         """
         self.freeze_parameters(model)
         self.unfreeze_painn_readout(model=model, freeze_skip=freeze_skip)
@@ -162,6 +183,19 @@ class PainnDiabatLayerFreezer(PainnLayerFreezer):
 # TODO: need to update this to work with MACE
 class MaceLayerFreezer(LayerFreezer):
     """Class to handle freezing layers in MACE models."""
+
+    def unfreeze_mace_interaction_linears(self, model: torch.nn.Module) -> None:
+        """Unfreeze the linear readout layer from the interaction blocks in
+        a MACE model.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+        """
+        interaction_linears = [
+            "interactions.0.linear.weight",
+            "interactions.1.linear.weight",
+        ]
+        self.custom_unfreeze(model, interaction_linears)
 
     def unfreeze_mace_pooling(self, model: torch.nn.Module) -> None:
         """Unfreeze the pooling layers in a MACE model (called the products layer)
@@ -195,6 +229,7 @@ class MaceLayerFreezer(LayerFreezer):
         freeze_gap_embedding: bool = False,  # unused for MACE
         freeze_pooling: bool = True,
         freeze_skip: bool = False,
+        custom_layers: List[str] = [],
         **kwargs,
     ) -> None:
         """Function to transfer learn a MACE model.
@@ -207,12 +242,19 @@ class MaceLayerFreezer(LayerFreezer):
                 Defaults to True.
             freeze_skip (bool, optional): If true, keep all but the last readout layer
                 frozen. Defaults to False.
+            custom_layers (List[str]): list of layers to unfreeze specified by the user
+                that is different from the default. From the output of
+                list(model.named_parameters())[:]
         """
         self.freeze_parameters(model)
-        self.unfreeze_mace_readout(model, freeze_skip=freeze_skip)
-        unfreeze_pool = not freeze_pooling
-        if unfreeze_pool:
-            self.unfreeze_mace_pooling(model)
+        if custom_layers:
+            self.custom_unfreeze(model, custom_layers)
+        else:
+            self.unfreeze_mace_interaction_linears(model)
+            self.unfreeze_mace_readout(model, freeze_skip=freeze_skip)
+            unfreeze_pool = not freeze_pooling
+            if unfreeze_pool:
+                self.unfreeze_mace_pooling(model)
 
 
 # TODO: update this to work with CHGNet
@@ -270,6 +312,7 @@ class ChgnetLayerFreezer(LayerFreezer):
         freeze_gap_embedding: bool = False,  # unused for CHGNet
         freeze_pooling: bool = False,  # suggested default from CHGNet repo
         freeze_skip: bool = False,
+        custom_layers: List[str] = [],
         **kwargs,
     ) -> None:
         """Function to transfer learn a CHGNet model. Freezes all but
@@ -281,10 +324,16 @@ class ChgnetLayerFreezer(LayerFreezer):
                 for consistency with diabatic model
             freeze_pooling (bool): if true, keep all pooling layers frozen
             freeze_skip (bool): if true, keep all but the last readout layer frozen
+            custom_layers (List[str]): list of layers to unfreeze specified by the user
+                that is different from the default. From the output of
+                list(model.named_parameters())[:]
         """
         self.freeze_parameters(model)
-        self.unfreeze_chgnet_mlp(model, freeze_skip=freeze_skip)
-        unfreeze_pool = not freeze_pooling
-        if unfreeze_pool:
-            self.unfreeze_chgnet_last_atom_conv_layer(model)
-            self.unfreeze_chgnet_pooling(model)
+        if custom_layers:
+            self.custom_unfreeze(model, custom_layers)
+        else:
+            self.unfreeze_chgnet_mlp(model, freeze_skip=freeze_skip)
+            unfreeze_pool = not freeze_pooling
+            if unfreeze_pool:
+                self.unfreeze_chgnet_last_atom_conv_layer(model)
+                self.unfreeze_chgnet_pooling(model)

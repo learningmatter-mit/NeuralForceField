@@ -357,22 +357,8 @@ PARAMS_TYPE = {
         "vector_per_atom": dict,
     },
     # FIXME: need to add the correct parameters for MACE
-    "NffScaleMACE": {
-        "n_atom_basis": int,
-        "n_filters": int,
-        "n_gaussians": int,
-        "n_convolutions": int,
-        "cutoff": float,
-        "bond_par": float,
-        "trainable_gauss": bool,
-        "box_size": np.array,
-        "dropout_rate": float,
-        "n_bond_hidden": int,
-        "n_bond_features": int,
-        "activation": str,
-        "output_keys": list,
-        "grad_keys": list,
-    },
+    "NffScaleMACE": {"mace_model": torch.nn.Module},
+    "CHGNetNFF": {},
 }
 
 MODEL_DICT = {
@@ -487,6 +473,7 @@ def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Mo
             torch.nn.Module: a Pytorch model
     """
 
+    # For TL with pre-trained CHGNet and MACE, we pass no path
     if path is None and model_type in ["CHGNetNFF", "DirectNffScaleMACEWrapper"]:
         if not kwargs:
             kwargs = DEFAULT_KWARGS[model_type]
