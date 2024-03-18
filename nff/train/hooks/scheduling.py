@@ -3,10 +3,16 @@ Copyright: SchNetPack, 2019
 Retrieved from https://github.com/atomistic-machine-learning/schnetpack/tree/dev/src/schnetpack/train/hooks
 """
 
-import torch
 import numpy as np
-from torch.optim.lr_scheduler import (ReduceLROnPlateau, StepLR,
-                                      _LRScheduler, CosineAnnealingLR)
+import torch
+from torch.optim.lr_scheduler import (
+    CosineAnnealingLR,
+    ReduceLROnPlateau,
+    StepLR,
+    _LRScheduler,
+)
+
+
 from nff.train.hooks import Hook
 
 
@@ -47,8 +53,16 @@ class EarlyStoppingHook(Hook):
 
 
 class WarmRestartHook(Hook):
+
     def __init__(
-        self, T0=10, Tmult=2, each_step=False, lr_min=1e-6, lr_factor=1.0, patience=1, optimizer=None
+        self,
+        optimizer,
+        T0=10,
+        Tmult=2,
+        each_step=False,
+        lr_min=1e-6,
+        lr_factor=1.0,
+        patience=1,
     ):
         self.each_step = each_step
         self.T0 = T0
