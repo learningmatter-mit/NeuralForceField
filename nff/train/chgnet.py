@@ -1,4 +1,4 @@
-from typing import Dict, Iterable
+from typing import Dict, Iterable, Union
 
 import torch
 from chgnet.trainer.trainer import CombinedLoss
@@ -35,7 +35,7 @@ class CombinedLossNFF(CombinedLoss):
         # TODO feels super hacky and unnecessary since we're breaking down the values and negating them again
         if key_style not in ["nff", "chgnet"]:
             raise ValueError("key_style must be either 'nff' or 'chgnet'")
-    
+
         targets = {k: self.split_props(k, v, detach(targets["num_atoms"]).tolist()) for k, v in targets.items()}
         predictions = {k: self.split_props(k, v, detach(predictions["num_atoms"]).tolist()) for k, v in predictions.items()}
 
@@ -48,14 +48,35 @@ class CombinedLossNFF(CombinedLoss):
 
         return loss
 
-    def negate_value(self, key: str, value: Iterable) -> list or Tensor:
+    def negate_value(self, key: str, value: Iterable) -> Union[list, Tensor]:
+        """Negate the value if the key is in the negate_keys list.
+
+        Args:
+            key (str): the key
+            value (Iterable): the value
+
+        Returns:
+            Union[list, Tensor]: the negated value
+        """
         if key in self.negate_keys:
             if not isinstance(value, Tensor):
                 return [-x for x in value]
             return -value
         return value
-    
-    def split_props(self, key: str, value: list or Tensor, num_atoms: list or Tensor) -> list or Tensor:
+
+    def split_props(
+        self, key: str, value: Union[list, Tensor], num_atoms: Union[list, Tensor]
+    ) -> Union[list, Tensor]:
+        """Split the properties if the key is in the split_keys list.
+
+        Args:
+            key (str): the key
+            value (Union[list, Tensor]): the value
+            num_atoms (Union[list, Tensor]): the number of atoms in the system
+
+        Returns:
+            Union[list, Tensor]: the split value
+        """
         if key in self.split_keys:
             return torch.split(value, num_atoms)
         return value

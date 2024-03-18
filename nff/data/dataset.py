@@ -15,13 +15,23 @@ import nff.utils.constants as const
 from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
 from nff.data.features import add_morgan as external_morgan
 from nff.data.features import featurize_rdkit as external_rdkit
-from nff.data.graphs import (DISTANCETHRESHOLDICT_Z, add_ji_kj,
-                             generate_subgraphs, get_angle_list, get_bond_idx,
-                             get_neighbor_list, make_dset_directed,
-                             reconstruct_atoms)
-from nff.data.parallel import (NUM_PROCS, add_bond_idx_parallel,
-                               add_e3fp_parallel, add_kj_ji_parallel,
-                               featurize_parallel)
+from nff.data.graphs import (
+    DISTANCETHRESHOLDICT_Z,
+    add_ji_kj,
+    generate_subgraphs,
+    get_angle_list,
+    get_bond_idx,
+    get_neighbor_list,
+    make_dset_directed,
+    reconstruct_atoms,
+)
+from nff.data.parallel import (
+    NUM_PROCS,
+    add_bond_idx_parallel,
+    add_e3fp_parallel,
+    add_kj_ji_parallel,
+    featurize_parallel,
+)
 
 # from typing import Dict
 
@@ -32,7 +42,10 @@ class Dataset(TorchDataset):
     Attributes:
         props (dict of lists): dictionary, where each key is the name of a property and
             each value is a list. The element of each list is the properties of a single
+            geometry, whose coordinates are given by
+            `nxyz`.
 
+            Keys are the name of the property and values are the properties. Each value
             is given by `props[idx][key]`. The only mandatory key is 'nxyz'. If inputting
             energies, forces or hessians of different electronic states, the quantities
             should be distinguished with a "_n" suffix, where n = 0, 1, 2, ...

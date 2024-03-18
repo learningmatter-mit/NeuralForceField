@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Union
+from typing import TYPE_CHECKING, Dict, List, Union
 
 import torch
 from chgnet.data.dataset import collate_graphs
@@ -22,10 +22,15 @@ module_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 class CHGNetNFF(CHGNet):
-    """Wrapper class for CHGNet model."""
+    """Wrapper class for CHGNet model that allows for NFF-style forward pass."""
 
     def __init__(
-        self, *args, units: str = "eV", key_mappings=None, device="cpu", **kwargs
+        self,
+        *args,
+        units: str = "eV",
+        key_mappings: Dict[str, str] = None,
+        device: str = "cpu",
+        **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.units = units
@@ -42,7 +47,9 @@ class CHGNetNFF(CHGNet):
             }
             self.negate_keys = ("f",)
 
-    def forward(self, data_batch: Dict, **kwargs):
+    def forward(
+        self, data_batch: Dict[str, List], **kwargs
+    ) -> Dict[str, Union[Tensor, List]]:
         """
         Convert data_batch to CHGNet format and run forward pass.
 
@@ -105,20 +112,20 @@ class CHGNetNFF(CHGNet):
         return value
 
     @classmethod
-    def from_dict(cls, dict, **kwargs):
+    def from_dict(cls, dict, **kwargs) -> CHGNetNFF:
         """Build a CHGNetNFF from a saved dictionary."""
         chgnet = CHGNetNFF(**dict["model_args"], **kwargs)
         chgnet.load_state_dict(dict["state_dict"])
         return chgnet
 
     @classmethod
-    def from_file(cls, path, **kwargs):
+    def from_file(cls, path, **kwargs) -> CHGNetNFF:
         """Build a CHGNetNFF from a saved file."""
         state = torch.load(path, map_location=torch.device("cpu"))
         return CHGNetNFF.from_dict(state["model"], **kwargs)
 
     @classmethod
-    def load(cls, model_name="0.3.0", **kwargs):
+    def load(cls, model_name="0.3.0", **kwargs) -> CHGNetNFF:
         """Load pretrained CHGNetNFF model.
 
         Args:
