@@ -135,8 +135,8 @@ class CHGNetNFF(CHGNet):
             ValueError: On unknown model_name.
         """
         checkpoint_path = {
-            "0.3.0": "../pretrained/chgnet/0.3.0/chgnet_0.3.0_e29f68s314m37.pth.tar",
-            "0.2.0": "../pretrained/chgnet/0.2.0/chgnet_0.2.0_e30f77s348m32.pth.tar",
+            "0.3.0": "../../../models/foundation_models/chgnet/0.3.0/chgnet_0.3.0_e29f68s314m37.pth.tar",
+            "0.2.0": "../../..models/foundation_models/chgnet/0.2.0/chgnet_0.2.0_e30f77s348m32.pth.tar",
         }.get(model_name)
 
         if checkpoint_path is None:

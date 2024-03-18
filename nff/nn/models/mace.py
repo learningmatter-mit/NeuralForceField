@@ -7,27 +7,28 @@
 
 import os
 import urllib
-from mace.modules.models import MACE, ScaleShiftMACE
-from mace.data.utils import Configuration
-from mace.data.atomic_data import AtomicData, AtomicNumberTable, torch_geometric
-from mace.tools import torch_tools
-from mace.calculators.mace import get_model_dtype
 from typing import Union
+
 import torch
+from mace.calculators.mace import get_model_dtype
+from mace.data.atomic_data import AtomicData, AtomicNumberTable, torch_geometric
+from mace.data.utils import Configuration
+from mace.modules.models import MACE, ScaleShiftMACE
+from mace.tools import torch_tools
 
 # get the path to NFF models dir, which is the parent directory of this file
 module_dir = os.path.abspath(
-    os.path.join(os.path.abspath(__file__), "..", "..", "..", "models")
+    os.path.join(os.path.abspath(__file__), "..", "..", "..", "..", "models")
 )
 print(module_dir)
 LOCAL_MODEL_PATH = os.path.join(
-    module_dir, "foundations_models/2023-12-03-mace-mp.model"
+    module_dir, "foundation_models/mace/2023-12-03-mace-mp.model"
 )
 
 MACE_URLS = dict(
-    small="https://tinyurl.com/2jmmb8b7",  # 2023-12-10-mace-128-L0_energy_epoch-249.model
-    medium="https://tinyurl.com/y7uhwpje",  # 2023-12-03-mace-128-L1_epoch-199.model
-    large="https://figshare.com/ndownloader/files/43117273",
+    small="http://tinyurl.com/46jrkm3v",  # 2023-12-10-mace-128-L0_energy_epoch-249.model
+    medium="http://tinyurl.com/5yyxdm76",  # 2023-12-03-mace-128-L1_epoch-199.model
+    large="http://tinyurl.com/5f5yavf3",  # MACE_MPtrj_2022.9.model
 )
 
 
