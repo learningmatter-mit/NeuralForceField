@@ -180,7 +180,6 @@ class PainnDiabatLayerFreezer(PainnLayerFreezer):
             self.unfreeze_painn_pooling(model)
 
 
-# TODO: need to update this to work with MACE
 class MaceLayerFreezer(LayerFreezer):
     """Class to handle freezing layers in MACE models."""
 
@@ -257,7 +256,6 @@ class MaceLayerFreezer(LayerFreezer):
                 self.unfreeze_mace_pooling(model)
 
 
-# TODO: update this to work with CHGNet
 class ChgnetLayerFreezer(LayerFreezer):
     """Class to handle freezing layers in Chgnet models.
 
