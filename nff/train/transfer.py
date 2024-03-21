@@ -14,7 +14,7 @@ from typing import List
 class LayerFreezer:
     """General class to handle freezing layers in models"""
 
-    def freeze_parameters(self, model: torch.nn.Module) -> torch.nn.Module:
+    def freeze_parameters(self, model: torch.nn.Module) -> None:
         """
         Freezes all parameters from a given model.
 
@@ -23,8 +23,6 @@ class LayerFreezer:
         """
         for param in model.parameters():
             param.requires_grad = False
-
-        return model
 
     def unfreeze_parameters(self, module: torch.nn.Module) -> None:
         """Unfreeze parameters in the module
