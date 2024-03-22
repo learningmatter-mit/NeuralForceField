@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Union
 
 import torch
@@ -30,11 +31,13 @@ class CHGNetNFF(CHGNet):
         units: str = "eV",
         key_mappings: Dict[str, str] = None,
         device: str = "cpu",
+        requires_embedding: bool = False,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.units = units
         self.device = device
+        self.requires_embedding = requires_embedding
 
         if not key_mappings:
             # map from CHGNet keys to NFF keys
@@ -44,6 +47,7 @@ class CHGNetNFF(CHGNet):
                 "s": "stress",
                 "m": "magmom",
                 "atoms_per_graph": "num_atoms",
+                "crystal_fea": "embedding",
             }
             self.negate_keys = ("f",)
 
@@ -83,7 +87,9 @@ class CHGNetNFF(CHGNet):
 
         graphs = [graph.to(self.device) for graph in graphs]
 
-        output = super().forward(graphs, task="ef")
+        output = super().forward(
+            graphs, task="ef", return_crystal_feas=self.requires_embedding
+        )
 
         # convert to NFF keys and negate energy_grad
         output = cat_props(
