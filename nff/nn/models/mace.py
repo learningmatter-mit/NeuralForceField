@@ -82,30 +82,38 @@ def get_mace_mp_model(model: str = None) -> str:
 
 class NffScaleMACE(ScaleShiftMACE):
     """Wrapper for the ScaleShiftMACE model that allows for direct
-    forward passes with an AtomsBatch object in NFF
+    forward passes in NFF
     """
 
     def __init__(
         self,
-        mace_model: Union[MACE, ScaleShiftMACE],
-        default_dtype="",
+        mace_model: ScaleShiftMACE,
+        default_dtype: str = "",
         training: bool = False,
         **kwargs,
     ):
+        """Initialize the NffScaleMACE model
+
+        Args:
+            mace_model (ScaleShiftMACE): MACE model that you want to wrap
+            default_dtype (str, optional): default dtype for the model, either
+                "float64" or "float32". Defaults to "", which will use the dtype
+                from the input MACE model.
+            training (bool, optional): training mode for the model. Defaults to False.
+                Needs to be true if you want to fine-tune.
+            kwargs: additional keyword arguments for the super().init() function from MACE
+        """
         atomic_inter_scale = mace_model.scale_shift.scale
         atomic_inter_shift = mace_model.scale_shift.shift
         super().__init__(atomic_inter_scale, atomic_inter_shift, **kwargs)
-        self.mace_model = mace_model
-        self.z_table = AtomicNumberTable(
-            [int(z) for z in self.mace_model.atomic_numbers]
-        )
+        self.z_table = AtomicNumberTable([int(z) for z in mace_model.atomic_numbers])
 
         # set the model to training mode if necessary because the
         # MACE model is not set to training mode by default and takes
         # the training argument in the forward pass
         self.training = training
 
-        model_dtype = get_model_dtype(self.mace_model)
+        model_dtype = get_model_dtype(mace_model)
         if default_dtype == "":
             print(
                 f"No dtype selected, switching to {model_dtype} to match model dtype."
@@ -116,9 +124,9 @@ class NffScaleMACE(ScaleShiftMACE):
                 f"Default dtype {default_dtype} does not match model dtype {model_dtype}, converting models to {default_dtype}."
             )
             if default_dtype == "float64":
-                self.mace_model = self.mace_model.double()
+                self.double()
             elif default_dtype == "float32":
-                self.mace_model = self.mace_model.float()
+                self.float()
         torch_tools.set_default_dtype(default_dtype)
 
     def forward(
@@ -156,13 +164,12 @@ class NffScaleMACE(ScaleShiftMACE):
         that is used in the MACE model
 
         Args:
-            batch (dict): a batch object that contains the properties. The NFF
-                calculators automatically convert AtomsBatch objects to dictionaries
-                to be used in the forward pass. This function will also work with
-                Trainers that use the batches from Dataloaders directly.
+            batch (dict): a batch object that contains the properties. This
+                function will also work with Trainers that use the batches
+                from Dataloaders directly.
 
         Raises:
-            ValueError: raised if no cell or lattice is found in the AtomsBatch
+            ValueError: raised if no cell or lattice is found in the batch
 
         Returns:
             torch_geometric.data.Data: torch geometric data object

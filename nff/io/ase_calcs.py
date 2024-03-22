@@ -202,8 +202,7 @@ class NeuralFF(Calculator):
 
         if requires_stress:
             stress = prediction["stress_volume"].detach().cpu().numpy() * (
-                1
-                / const.EV_TO_KCAL_MOL
+                1 / const.EV_TO_KCAL_MOL
                 # TODO change to more general prediction
             )
             self.results["stress"] = stress * (1 / atoms.get_volume())

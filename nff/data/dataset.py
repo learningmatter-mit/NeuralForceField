@@ -2,6 +2,7 @@ import copy
 import numbers
 from collections import Counter
 from copy import deepcopy
+from typing import Literal
 
 import numpy as np
 import torch
@@ -10,7 +11,6 @@ from ase.neighborlist import neighbor_list
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle as skshuffle
 from torch.utils.data import Dataset as TorchDataset
-from tqdm import tqdm
 
 import nff.utils.constants as const
 from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
@@ -21,7 +21,6 @@ from nff.data.graphs import (
     add_ji_kj,
     generate_subgraphs,
     get_angle_list,
-    get_bond_idx,
     get_neighbor_list,
     make_dset_directed,
     reconstruct_atoms,
@@ -633,7 +632,7 @@ class Dataset(TorchDataset):
             atoms_batches.append(atoms)
         return atoms_batches
 
-    def update_dtype(self, dtype: str) -> None:
+    def update_dtype(self, dtype: Literal["float", "double"]) -> None:
         """Update the datatype of all torch objects in the batch
         to match the given dtype.
 
