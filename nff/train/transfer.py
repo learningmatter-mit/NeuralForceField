@@ -274,25 +274,27 @@ class ChgnetLayerFreezer(LayerFreezer):
 
     def unfreeze_chgnet_pooling(self, model: torch.nn.Module) -> None:
         """Unfreeze the layers after the representation layers
-        ("site_wise", "readout_norm", and "pooling" layers in a CHGNet model.
+        (, and "pooling" layers in a CHGNet model.
 
         Args:
             model (torch.nn.Module): model to be transfer learned
         """
-        for module in [model.site_wise, model.readout_norm, model.pooling]:
-            self.unfreeze_parameters(module)
+        self.unfreeze_parameters(model.pooling)
 
-    def unfreeze_chgnet_mlp(
+    def unfreeze_chgnet_readout(
         self, model: torch.nn.Module, freeze_skip: bool = False
     ) -> None:
-        """Unfreeze the last MLP layers in a CHGNet model. Similar to readout
-        layers in other models.
+        """Unfreeze the "site_wise", "readout_norm", and last MLP layers
+        in a CHGNet model. Similar to readout layers in other models.
 
         Args:
             model (torch.nn.Module): model to be transfer learned
             freeze_skip (bool, optional): If true, keep all but the last layer
                 frozen. Defaults to False.
         """
+        for module in [model.site_wise, model.readout_norm]:
+            self.unfreeze_parameters(module)
+
         num_readouts = len(model.mlp.layers)
         unfreeze_skip = not freeze_skip
 
