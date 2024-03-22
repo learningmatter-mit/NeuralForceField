@@ -189,8 +189,8 @@ class MaceLayerFreezer(LayerFreezer):
             model (torch.nn.Module): model to be transfer learned
         """
         interaction_linears = [
-            "interactions.0.linear.weight",
-            "interactions.1.linear.weight",
+            f"interactions.{i}.linear.weight"
+            for i in range(len(model.num_interactions))
         ]
         self.custom_unfreeze(model, interaction_linears)
 
