@@ -20,7 +20,6 @@ from ase.calculators.calculator import Calculator, all_changes
 from ase.stress import full_3x3_to_voigt_6_stress
 from torch.autograd import grad
 
-
 import nff.utils.constants as const
 from nff.data import Dataset, collate_dicts
 from nff.io.ase import DEFAULT_DIRECTED, AtomsBatch
@@ -38,6 +37,7 @@ HARTREE_TO_EV = HARTREE_TO_KCAL_MOL / EV_TO_KCAL_MOL
 
 
 UNDIRECTED = [SchNet, SchNetDiabat, HybridGraphConv, SchNetFeatures, OnlyBondUpdateCP3D]
+
 
 def check_directed(model, atoms):
     model_cls = model.__class__.__name__
@@ -218,8 +218,9 @@ class NeuralFF(Calculator):
 
     @classmethod
     def from_file(cls, model_path, device="cuda", **kwargs):
-        model = load_model(model_path, **kwargs)
+        model = load_model(model_path, device=device, **kwargs)
         out = cls(model=model, device=device, **kwargs)
+
         return out
 
 
@@ -467,7 +468,7 @@ class EnsembleNFF(Calculator):
 
     @classmethod
     def from_files(cls, model_paths: list, device="cuda", **kwargs):
-        models = [load_model(path) for path in model_paths]
+        models = [load_model(path, device=device, **kwargs) for path in model_paths]
         return cls(models, device, **kwargs)
 
 
