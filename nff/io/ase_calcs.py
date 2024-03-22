@@ -39,6 +39,7 @@ HARTREE_TO_EV = HARTREE_TO_KCAL_MOL / EV_TO_KCAL_MOL
 
 UNDIRECTED = [SchNet, SchNetDiabat, HybridGraphConv, SchNetFeatures, OnlyBondUpdateCP3D]
 
+
 def check_directed(model, atoms):
     model_cls = model.__class__.__name__
     msg = f"{model_cls} needs a directed neighbor list"
@@ -202,8 +203,7 @@ class NeuralFF(Calculator):
 
         if requires_stress:
             stress = prediction["stress_volume"].detach().cpu().numpy() * (
-                1
-                / const.EV_TO_KCAL_MOL
+                1 / const.EV_TO_KCAL_MOL
                 # TODO change to more general prediction
             )
             self.results["stress"] = stress * (1 / atoms.get_volume())
