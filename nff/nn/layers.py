@@ -1,11 +1,11 @@
 from functools import partial
+
+import numpy as np
 import sympy as sym
 import torch
 import torch.nn as nn
-from torch.nn.init import xavier_uniform_, constant_
-import numpy as np
-
 from nff.utils import bessel_basis, real_sph_harm
+from torch.nn.init import constant_, xavier_uniform_
 
 zeros_initializer = partial(constant_, val=0.0)
 DEFAULT_DROPOUT_RATE = 0.0

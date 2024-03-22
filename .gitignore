@@ -40,7 +40,7 @@ Thumbs.db
 .ipynb_checkpoints
 __pycache__
 
-# data fiels #
+# data files #
 *.dat
 *.xyz
 *.pdb

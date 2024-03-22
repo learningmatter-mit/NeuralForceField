@@ -1,9 +1,9 @@
 import copy
-import torch
-from tqdm import tqdm
 
-from nff.utils.cuda import batch_to, batch_detach
+import torch
 from nff.data.dataset import concatenate_dict
+from nff.utils.cuda import batch_detach, batch_to
+from tqdm import tqdm
 
 
 def shrink_batch(batch):
@@ -11,21 +11,13 @@ def shrink_batch(batch):
     Exclude certain keys from the batch that take up a lot of memory
     """
 
-    bad_keys = ['nbr_list', 'kj_idx', 'ji_idx',
-                'angle_list']
-    new_batch = {key: val for key, val in batch.items()
-                 if key not in bad_keys}
+    bad_keys = ["nbr_list", "kj_idx", "ji_idx", "angle_list"]
+    new_batch = {key: val for key, val in batch.items() if key not in bad_keys}
 
     return new_batch
 
 
-def get_results(batch,
-                model,
-                device,
-                submodel,
-                loss_fn,
-                **kwargs):
-
+def get_results(batch, model, device, submodel, loss_fn, **kwargs):
     batch = batch_to(batch, device)
     model.to(device)
     if submodel is not None:
@@ -33,23 +25,30 @@ def get_results(batch,
     else:
         results = model(batch, **kwargs)
     results = batch_to(batch_detach(results), device)
+    if "forces" in results and "energy_grad" not in results:
+        results["energy_grad"] = (
+            [-x for x in results["forces"]]
+            if isinstance(results["forces"], list)
+            else -results["forces"]
+        )
     eval_batch_loss = loss_fn(batch, results).data.cpu().numpy()
 
     return results, eval_batch_loss
 
 
-def evaluate(model,
-             loader,
-             loss_fn,
-             device,
-             return_results=True,
-             loss_is_normalized=True,
-             submodel=None,
-             trim_batch=False,
-             catch_oom=True,
-             **kwargs):
-    """Evaluate the current state of the model using a given dataloader
-    """
+def evaluate(
+    model,
+    loader,
+    loss_fn,
+    device,
+    return_results=True,
+    loss_is_normalized=True,
+    submodel=None,
+    trim_batch=False,
+    catch_oom=True,
+    **kwargs,
+):
+    """Evaluate the current state of the model using a given dataloader"""
 
     model.eval()
     model.to(device)
@@ -61,37 +60,39 @@ def evaluate(model,
     all_batches = []
 
     for batch in tqdm(loader):
-
-        vsize = batch['nxyz'].size(0)
+        vsize = batch["nxyz"].size(0)
         n_eval += vsize
 
         if catch_oom:
             use_device = copy.deepcopy(device)
             while True:
                 try:
-                    results, eval_batch_loss = get_results(batch=batch,
-                                                           model=model,
-                                                           device=use_device,
-                                                           submodel=submodel,
-                                                           loss_fn=loss_fn,
-                                                           **kwargs)
+                    results, eval_batch_loss = get_results(
+                        batch=batch,
+                        model=model,
+                        device=use_device,
+                        submodel=submodel,
+                        loss_fn=loss_fn,
+                        **kwargs,
+                    )
 
                     break
                 except RuntimeError as err:
-                    if 'CUDA out of memory' in str(err):
-                        print(("CUDA out of memory. Doing this batch "
-                               "on cpu."))
+                    if "CUDA out of memory" in str(err):
+                        print(("CUDA out of memory. Doing this batch " "on cpu."))
                         use_device = "cpu"
                         torch.cuda.empty_cache()
                     else:
                         raise err
         else:
-            results, eval_batch_loss = get_results(batch=batch,
-                                                   model=model,
-                                                   device=device,
-                                                   submodel=submodel,
-                                                   loss_fn=loss_fn,
-                                                   **kwargs)
+            results, eval_batch_loss = get_results(
+                batch=batch,
+                model=model,
+                device=device,
+                submodel=submodel,
+                loss_fn=loss_fn,
+                **kwargs,
+            )
 
         if loss_is_normalized:
             eval_loss += eval_batch_loss * vsize

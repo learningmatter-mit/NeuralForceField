@@ -1,10 +1,7 @@
-import torch
-from torch.nn import CrossEntropyLoss
 import numpy as np
+import torch
 from nff.utils import constants as const
-import pdb
-import itertools as itertools
-import copy
+from torch.nn import CrossEntropyLoss
 
 __all__ = ["build_mse_loss"]
 
@@ -34,6 +31,7 @@ def build_general_loss(loss_coef,
             given by "energy_grad". This is useful if we're only outputting one quantity,
             such as the energy gradient, but we want two different outputs (such as
             "energy_grad" and "autopology_energy_grad") to be compared to it.
+        cutoff (dict): a dictionary of cutoff values for each property.
 
     Returns:
         mean squared error loss function
@@ -75,7 +73,6 @@ def build_general_loss(loss_coef,
             valid_idx = torch.bitwise_not(torch.isnan(targ))
             if key in cutoff:
                 valid_idx *= (targ <= cutoff[key])
-
             targ = targ[valid_idx]
             pred = pred[valid_idx]
 
@@ -563,14 +560,13 @@ def correct_nacv_sign(pred,
 
     for targ_batch, pred_batch in zip(targ_list,
                                       pred_list):
-        
         pos_delta = ((targ_batch - pred_batch).abs()
                      .mean().item())
         neg_delta = ((targ_batch + pred_batch).abs()
                      .mean().item())
         sign = 1 if (pos_delta < neg_delta) else -1
         signs.append(sign)
-    
+
     sign_tensor = (torch.cat([sign * torch.ones(n, 3)
                               for sign, n in zip(signs, num_atoms)])
                    .to(targ.device))
@@ -669,100 +665,6 @@ def build_nacv_outer_loss(loss_dict):
     return loss_fn
 
 
-def build_multi_nacv_loss(loss_dict):
-
-    params = loss_dict["params"]
-    keys = params["keys"]
-    states = params["states"]
-    nstates = len(states)
-
-    key_to_states = {}
-    for key in keys:
-        state_idxs = []
-        for ii, state in enumerate(states):
-            if state in key:
-                state_idxs.append(ii)
-
-        key_to_states[key] = copy.deepcopy(state_idxs)
-
-    loss_type = params.get("loss_type", "mse")
-    coefs = loss_dict["coefs"]
-    
-    sign_mat = torch.cat(((torch.zeros(size=(2**(nstates-1),1)) + 1).T, 
-                          torch.Tensor(list(itertools.product([1, -1], 
-                        repeat=nstates-1))).T))
-
-    def loss_fn(ground_truth,
-                results,
-                key_to_states=key_to_states,
-                sign_mat=sign_mat,
-                **kwargs):
-
-        num_atoms = ground_truth["num_atoms"].tolist()
-        loss_list = []
-
-        list_targets = []
-        list_preds = []
-        for key in keys:
-            targ = ground_truth[key]
-            pred = results[key]
-            targ_list = torch.split(targ, num_atoms)
-            pred_list = torch.split(pred, num_atoms)
-            list_targets.append(targ_list)
-            list_preds.append(pred_list)
-
-        batch_size = len(pred_list)
-        loss = torch.zeros(size=(1,),
-                           requires_grad=True,
-                           device=pred_list[0].device)
-
-        for b_idx in range(batch_size):
-            deltas = torch.zeros(size=(2**(nstates-1),))
-            good_batch = True
-            for ii, key in enumerate(keys):
-                targ_batch = list_targets[ii][b_idx].reshape(
-                    (num_atoms[b_idx], 3))
-                pred_batch = list_preds[ii][b_idx].reshape(
-                    (num_atoms[b_idx], 3))
-                if torch.isnan(targ_batch).any():
-                    good_batch = False
-                    break
-
-                [column1, column2] = key_to_states[key]
-                for permut_idx, (sign1, sign2) in enumerate(zip(sign_mat[column1], sign_mat[column2])):
-                    sign = sign1*sign2
-                    delta = ((targ_batch*sign - pred_batch).abs()
-                             .mean().item())
-                    deltas[permut_idx] += delta
-
-            if good_batch:
-                best_permut = torch.argmin(deltas)
-
-                for ii, key in enumerate(keys):
-                    targ = list_targets[ii][b_idx].reshape(
-                        (num_atoms[b_idx], 3))
-                    pred = list_preds[ii][b_idx].reshape((num_atoms[b_idx], 3))
-
-                    [column1, column2] = key_to_states[key]
-                    sign1, sign2 = sign_mat[column1,
-                                            best_permut], sign_mat[column2, best_permut]
-                    pred = pred * (sign1*sign2)
-
-                    if loss_type == "mse":
-                        diff = mse_operation(targ, pred)
-                    elif loss_type == "mae":
-                        diff = mae_operation(targ, pred)
-                    else:
-                        raise NotImplementedError
-
-                    coef = coefs[key]
-                    loss = loss + coef * torch.mean(diff)
-
-        return loss.mean()
-
-    return loss_fn
-
-
 def build_trans_dip_loss(loss_dict):
 
     params = loss_dict["params"]
@@ -800,389 +702,6 @@ def build_trans_dip_loss(loss_dict):
     return loss_fn
 
 
-def build_mae_trans_dip_loss(loss_dict):
-
-    params = loss_dict["params"]
-    key = params["key"]
-    coef = loss_dict["coef"]
-
-    def loss_fn(ground_truth,
-                results,
-                **kwargs):
-
-        targ = ground_truth[key].reshape(-1, 3)
-        pred = results[key].reshape(-1, 3)
-
-        pos_delta = (abs(targ - pred)).mean(-1)
-        neg_delta = (abs(targ + pred)).mean(-1)
-
-        signs = (torch.ones(pos_delta.shape[0],
-                            dtype=torch.long)
-                 .to(pos_delta.device))
-        signs[neg_delta < pos_delta] = -1
-        targ = targ * signs.reshape(-1, 1)
-
-        targ = targ.reshape(-1)
-        pred = pred.reshape(-1)
-
-        valid_idx = torch.bitwise_not(torch.isnan(targ))
-        targ = targ[valid_idx]
-        pred = pred[valid_idx]
-
-        diff = mae_operation(targ, pred)
-        loss = coef * torch.mean(diff)
-
-        return loss
-
-    return loss_fn
-
-
-def build_cmplx_loss(loss_dict):
-
-    params = loss_dict["params"]
-    key = params["key"]
-    loss_type = params.get("loss_type", "mae")
-
-    coef = loss_dict["coef"]
-
-    def loss_fn(ground_truth,
-                results,
-                **kwargs):
-
-        targ = ground_truth[key]
-        pred = results[key]
-
-        if loss_type == "mae":
-            diff = (targ - pred).abs()
-        else:
-            raise NotImplementedError
-
-        loss = coef * torch.mean(diff)
-
-        return loss
-
-    return loss_fn
-
-
-def build_soc_norm_loss(loss_dict):
-
-    params    = loss_dict["params"]
-    key_root  = params["key"]
-    soc_type  = params["type"]
-    loss_type = params.get("loss_type", "mae")
-
-    coef = loss_dict["coef"]
-
-    def loss_fn(ground_truth,
-                results,
-                **kwargs):
-
-        pred_a = results[key_root+"_a"]
-        pred_b = results[key_root+"_b"]
-        pred_c = results[key_root+"_c"]
-        targ   = ground_truth[key_root+"_total"]
-
-        if loss_type == "mae":
-            if soc_type == "T_to_T": 
-                diff = (targ - (4.*(pred_a.pow(2) + pred_b.pow(2)) 
-                                + 2.*pred_c.pow(2)).sqrt()).abs()
-            elif soc_type == "S_to_T":
-                diff = (targ - (2.*(pred_a.pow(2) + pred_b.pow(2))
-                                + pred_c.pow(2)).sqrt()).abs()
-            else:
-                raise NotImplementedError
-        elif loss_type == "mse":
-            if soc_type == "T_to_T":
-                diff = (targ.pow(2) - (4.*(pred_a.pow(2) + pred_b.pow(2)) 
-                                   + 2.*pred_c.pow(2)))
-            elif soc_type == "S_to_T":
-                diff = (targ.pow(2) - (2.*(pred_a.pow(2) + pred_b.pow(2))
-                                   + pred_c.pow(2)))
-            else:
-                raise NotImplementedError
-        else:
-            raise NotImplementedError
-
-        loss = coef * torch.mean(diff)
-
-        return loss
-
-    return loss_fn
-
-
-def build_soc_loss(loss_dict):
-
-    params    = loss_dict["params"]
-    key_root  = params["key"]
-#     soc_type  = params["type"]
-    loss_type = params.get("loss_type", "mae")
-
-    coef = loss_dict["coef"]
-
-    def loss_fn(ground_truth,
-                results,
-                **kwargs):
-        
-        diff = 0.
-        
-        targ_list = []
-        pred_list = []
-        for abc in ['a', 'b', 'c']:
-            pred_list.append(results[key_root+f"_{abc}"])
-            targ_list.append(ground_truth[key_root+f"_{abc}"])
-        
-        signs = []
-        for (targ_a, targ_b, targ_c,
-             pred_a, pred_b, pred_c) in zip(*targ_list,
-                                            *pred_list):
-            
-            # everything is right as is
-            pos_delta  = ((targ_a - pred_b).abs()
-                         .mean().item())
-            pos_delta += ((targ_b - pred_b).abs()
-                         .mean().item())
-            pos_delta += ((targ_c - pred_c).abs()
-                         .mean().item())
-            # the phase is equal to -1
-            neg_delta  = ((targ_a + pred_a).abs()
-                         .mean().item())
-            neg_delta += ((targ_b + pred_b).abs()
-                         .mean().item())
-            neg_delta += ((targ_c + pred_c).abs()
-                         .mean().item())
-            # the SOCs are complex conj
-            conj_delta  = ((targ_a - pred_a).abs()
-                         .mean().item())
-            conj_delta += ((targ_b + pred_b).abs()
-                         .mean().item())
-            conj_delta += ((targ_c + pred_c).abs()
-                         .mean().item())
-            # complex conj and phase -1
-            neg_conj  = ((targ_a + pred_a).abs()
-                         .mean().item())
-            neg_conj += ((targ_b - pred_b).abs()
-                         .mean().item())
-            neg_conj += ((targ_c - pred_c).abs()
-                         .mean().item())
-            
-            argmin = np.argmin([pos_delta, neg_delta, conj_delta, neg_conj])
-#             sign = 1 if (pos_delta < neg_delta) else -1
-            if argmin == 0:
-                sign = [1, 1, 1]
-            elif argmin == 1:
-                sign = [-1, -1, -1]
-            elif argmin == 2:
-                sign = [1, -1, -1]
-            elif argmin == 3:
-                sign = [-1, 1, 1]
-            else:
-                raise ValueError("argmin of 4 entries cannot be outside of [0,3]!")
-                
-            signs.append(sign)
-    
-        sign_tensor = (torch.Tensor(signs)
-                       .to(targ_a.device))
-
-        #for targ, pred in zip(targ_list, pred_list):
-        for ii in range(3):
-            targ = targ_list[ii] * sign_tensor[:,ii]
-            pred = pred_list[ii]
-
-            valid_idx = torch.bitwise_not(torch.isnan(targ))
-            targ = targ[valid_idx]
-            pred = pred[valid_idx]
-
-            if loss_type == "mse":
-                diff += torch.mean(mse_operation(targ, pred))
-            elif loss_type == "mae":
-                diff += torch.mean(mae_operation(targ, pred))
-            else:
-                raise NotImplementedError
-
-        loss = coef * diff
-
-        return loss
-
-    return loss_fn
-
-
-def build_diag_energy_loss(loss_dict):
-    
-    params    = loss_dict["params"]
-    diabats   = params['adiabats']
-    en_format = params["en_format"]
-    soc_format= params["soc_format"]
-    loss_type = params.get("loss_type", "mae")
-    reference = params["reference"]
-    
-    coef = loss_dict["coef"]
-    
-    start_tuples = []
-    next_start = 0
-    for enkey in diabats:
-        start_tuples.append((enkey, next_start))
-        if 'S' in enkey:
-            next_start += 1
-        elif 'T' in enkey:
-            next_start += 3
-        else:
-            raise NotImplementedError(f"This loss is not implemeted for diabat key: {enkey}")
-
-    def loss_fn(ground_truth,
-                results,
-                **kwargs):
-    
-        targ = ground_truth[reference]
-        targ = targ.reshape(-1, next_start)
-        batch_size = targ.shape[0]
-        H_soc = torch.zeros((batch_size, next_start, next_start), 
-                            dtype=torch.complex64,
-                            device=targ.device)
-        
-        for state1, start_1 in start_tuples:
-            for state2, start_2 in start_tuples:
-                if start_2 <= start_1 or (('S' in state1) and ('S' in state2)):
-                    continue
-                    
-                # cm^(-1) to kcal/mol
-                a = results[soc_format.format(state1, state2)+'_a'] * 0.002859
-                b = results[soc_format.format(state1, state2)+'_b'] * 0.002859
-                c = results[soc_format.format(state1, state2)+'_c'] * 0.002859
-                
-                if 'S' in state1:
-                    H_soc[:, start_1, start_2]   = a + 1.j*b
-                    H_soc[:, start_1, start_2+1] = 0.0 + 1.j*c
-                    H_soc[:, start_1, start_2+2] = a - 1.j*b
-                else:
-                    H_soc[:, start_1, start_2]     = 0. + 1j * c
-                    H_soc[:, start_1, start_2+1]   = -a + 1j * b
-                    H_soc[:, start_1+1, start_2]   =  a + 1j * b
-                    H_soc[:, start_1+1, start_2+2] = -a + 1j * b
-                    H_soc[:, start_1+2, start_2+1] =  a + 1j * b
-                    H_soc[:, start_1+2, start_2+2] = 0. - 1j * c
-                    
-        H_antisym = H_soc + (H_soc.transpose(2, 1)).conj()
-        
-        for state1, start_1 in start_tuples:
-            energy = results[en_format.format(state1)]
-            H_antisym[:, start_1, start_1] = energy
-            if 'T' in state1:
-                H_antisym[:, start_1+1, start_1+1] = energy
-                H_antisym[:, start_1+2, start_1+2] = energy
-    
-        pred, _ = torch.linalg.eigh(H_antisym)
-        
-        if loss_type == "mse":
-                diff = torch.mean(mse_operation(targ, pred))
-        elif loss_type == "mae":
-            diff = torch.mean(mae_operation(targ, pred))
-        else:
-            raise NotImplementedError
-
-        loss = coef * diff
-    
-        return loss
-    
-    return loss_fn
-    
-
-def build_key_diff_loss(loss_dict):
-    
-    params    = loss_dict["params"]
-    key1, key2= params["keys"]
-    loss_type = params.get("loss_type", "mae")
-
-    coef = loss_dict["coef"]
-    
-    def loss_fn(ground_truth,
-                results,
-                **kwargs):
-        
-        pred = results[key1] - results[key2] 
-        targ = ground_truth[key1] - ground_truth[key2]
-        
-        if loss_type == "mse":
-            diff = mse_operation(targ, pred)
-        elif loss_type == "mae":
-            diff = mae_operation(targ, pred)
-        else:
-            raise NotImplementedError
-
-        loss = coef * torch.mean(diff)
-        return loss
-    
-    return loss_fn
-
-
-def build_wCP_loss(loss_dict):
-
-    params    = loss_dict["params"]
-    en_keys   = params["en_keys"]
-    loss_type = params.get("loss_type", "mae")
-
-    coef = loss_dict["coef"]
-
-    def loss_fn(ground_truth,
-                results,
-                **kwargs):
-
-        diff = 0
-        
-        for idx, enkey_set in enumerate(en_keys):
-            if type(enkey_set)==str:
-                enkey_set = enkey_set.split('+')
-            num_states = len(enkey_set)
-            targ_omega = 0
-            for enkey in enkey_set:
-                targ_omega += ground_truth[enkey]
-            targ_omega /= num_states
-
-            targ_c0 = ground_truth[enkey_set[0]] - targ_omega
-            for enkey in enkey_set[1:]:
-                targ_c0 *= ground_truth[enkey] - targ_omega
-            targ_c0 *= torch.Tensor([-1.]).pow(num_states).to(targ_c0.device)
-        
-            pred_omega = results[f"omega_{idx}"]
-            pred_c0    = results[f"c00_{idx}"]
-            
-            # log is better, but only if argument is larger than 1
-            if (num_states > 2) and (not (torch.abs(targ_c0) < 1.).any()):
-                targ_c0 = torch.log(torch.abs(targ_c0))
-                pred_c0 = torch.log(torch.abs(results[f"c00_{idx}"]))
-
-            if loss_type == "mae":
-                diff += ((pred_omega - targ_omega).abs() +
-                        (pred_c0 - targ_c0).abs())
-            elif loss_type == "mse":
-                diff += ((pred_omega - targ_omega).pow(2) +
-                        (pred_c0 - targ_c0).pow(2))
-            else:
-                raise NotImplementedError
-                
-            if num_states > 2:
-                targ_cnminus2 = 0
-                for ii, key1 in enumerate(enkey_set):
-                    for key2 in enkey_set[ii+1:]:
-                        targ_cnminus2 += ((ground_truth[key1] - targ_omega) *
-                                          (ground_truth[key2] - targ_omega))
-                targ_cnminus2 = torch.log(torch.abs(targ_cnminus2))
-                    
-                # quantity is only close to 0 if all surfaces cross in one point
-                # which with 3+ surfaces should never be the case
-                if loss_type == "mae":
-                    diff += (torch.log(torch.abs(results[f"c{num_states-2:02d}_{idx}"]))
-                              - targ_cnminus2).abs() 
-                elif loss_type == "mse":
-                    diff += (torch.log(torch.abs(results[f"c{num_states-2:02d}_{idx}"])) 
-                              - targ_cnminus2).pow(2) 
-
-        loss = coef * torch.mean(diff)
-
-        return loss
-
-    return loss_fn
-    
-
 def name_to_func(name):
     dic = {
         "mse": build_mse_loss,
@@ -1197,14 +716,14 @@ def name_to_func(name):
         "nacv": build_nacv_loss,
         "multi_nacv": build_multi_nacv_loss,
         "nacv_outer": build_nacv_outer_loss,
-        'trans_dipole': build_trans_dip_loss,
-        'mae_trans_dipole': build_mae_trans_dip_loss,
-        'cmplx': build_cmplx_loss,
-        'soc_norm': build_soc_norm_loss,
-        'soc_sign': build_soc_loss,
-        'diff': build_key_diff_loss,
-        'wCP': build_wCP_loss,
-        'energy_soc_diag': build_diag_energy_loss,
+        "trans_dipole": build_trans_dip_loss,
+        "mae_trans_dipole": build_mae_trans_dip_loss,
+        "cmplx": build_cmplx_loss,
+        "soc_norm": build_soc_norm_loss,
+        "soc_sign": build_soc_loss,
+        "diff": build_key_diff_loss,
+        "wCP": build_wCP_loss,
+        "energy_soc_diag": build_diag_energy_loss,
     }
     func = dic[name]
     return func
