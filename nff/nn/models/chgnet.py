@@ -134,13 +134,18 @@ class CHGNetNFF(CHGNet):
         Raises:
             ValueError: On unknown model_name.
         """
-        checkpoint_path = {
-            "0.3.0": "../../../models/foundation_models/chgnet/0.3.0/chgnet_0.3.0_e29f68s314m37.pth.tar",
-            "0.2.0": "../../..models/foundation_models/chgnet/0.2.0/chgnet_0.2.0_e30f77s348m32.pth.tar",
-        }.get(model_name)
 
-        if checkpoint_path is None:
-            raise ValueError(f"Unknown {model_name=}")
+        try:
+            checkpoint_path = {
+                "0.3.0": "../../../models/foundation_models/chgnet/0.3.0/chgnet_0.3.0_e29f68s314m37.pth.tar",
+                "0.2.0": "../../..models/foundation_models/chgnet/0.2.0/chgnet_0.2.0_e30f77s348m32.pth.tar",
+            }[model_name]
+
+        except KeyError:
+            if Path(checkpoint_path).is_file():
+                checkpoint_path = model_name
+            elif checkpoint_path is None:
+                raise ValueError(f"Unknown {model_name=}")
 
         return cls.from_file(
             os.path.join(module_dir, checkpoint_path),

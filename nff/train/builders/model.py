@@ -3,37 +3,39 @@ Helper functions to create models, functions and other classes
 while checking for the validity of hyperparameters.
 """
 
-from nff.nn.models.spooky import SpookyNet, RealSpookyNet
-from nff.nn.models.torchmd_net import TorchMDNet
-from nff.nn.models.spooky_painn import SpookyPainn, SpookyPainnDiabat
-import os
 import json
+import os
+
 import numpy as np
 import torch
-from nff.nn.models.schnet import SchNet, SchNetDiabat
-from nff.nn.models.hybridgraph import HybridGraphConv
+
+from nff.nn.models.chgnet import CHGNetNFF
 from nff.nn.models.conformers import WeightedConformers
-from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import ChemProp3D, OnlyBondUpdateCP3D
 from nff.nn.models.dimenet import (
     DimeNet,
+    DimeNetDelta,
     DimeNetDiabat,
     DimeNetDiabatDelta,
-    DimeNetDelta,
-)
-from nff.nn.models.painn import (
-    Painn,
-    PainnDiabat,
-    PainnTransformer,
-    PainnAdiabat,
-    Painn_VecOut,
-    Painn_Tuple,
-    Painn_wCP,
-    PainnDipole,
 )
 from nff.nn.models.dispersion_models import PainnDispersion
-from nff.nn.models.chgnet import CHGNetNFF
+from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.mace import NffScaleMACE
+from nff.nn.models.painn import (
+    Painn,
+    Painn_Tuple,
+    Painn_VecOut,
+    Painn_wCP,
+    PainnAdiabat,
+    PainnDiabat,
+    PainnDipole,
+    PainnTransformer,
+)
+from nff.nn.models.schnet import SchNet, SchNetDiabat
+from nff.nn.models.schnet_features import SchNetFeatures
+from nff.nn.models.spooky import RealSpookyNet, SpookyNet
+from nff.nn.models.spooky_painn import SpookyPainn, SpookyPainnDiabat
+from nff.nn.models.torchmd_net import TorchMDNet
 
 PARAMS_TYPE = {
     "SchNet": {
@@ -474,11 +476,15 @@ def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Mo
     """
 
     # For TL with pre-trained CHGNet and MACE, we pass no path
-    if path is None and model_type in ["CHGNetNFF", "DirectNffScaleMACEWrapper"]:
+    if model_type in ["CHGNetNFF", "DirectNffScaleMACEWrapper"]:
         if not kwargs:
             kwargs = DEFAULT_KWARGS[model_type]
         # Both CHGNet and MACE are wrapped models have a class "load" method
         # that can be used to load the pre-trained model
+
+        if path:
+            kwargs.update({"model": path})
+        print(f"Loading {model_type} with kwargs {kwargs}")
         return MODEL_DICT[model_type].load(**kwargs)
     else:
         try:
