@@ -1,14 +1,45 @@
+from typing import Dict, Literal, Union
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from nff.data.dataset import to_tensor
+from matplotlib.lines import Line2D
+from scipy import stats
+from scipy.stats import gaussian_kde
+
+from nff.data import to_tensor
 from nff.utils import cuda
 
 from . import mpl_settings
 
 
-def plot_parity(results, targets, figname, plot_type="hexbin", energy_key="energy", force_key="energy_grad", units={"energy": "eV", "energy_grad": "eV/Ang"}):
+def plot_parity(
+    results: Dict[str, Union[list, torch.Tensor]],
+    targets: Dict[str, Union[list, torch.Tensor]],
+    figname: str,
+    plot_type: Literal["hexbin", "scatter"] = "hexbin",
+    energy_key: str = "energy",
+    force_key: str = "energy_grad",
+    units: Dict[str, str] = {"energy": "eV", "energy_grad": "eV/Ang"},
+) -> tuple[float, float]:
+    """
+    Perform a parity plot between the results and the targets.
+
+    Args:
+        results (dict): dictionary containing the results
+        targets (dict): dictionary containing the targets
+        figname (str): name of the figure
+        plot_type (str): type of plot to use, either "hexbin" or "scatter"
+        energy_key (str): key for the energy
+        force_key (str): key for the forces
+        units (dict): dictionary containing the units of the keys
+
+    Returns:
+        float: MAE of the energy
+        float: MAE of the forces
+    """
+
     fig, ax_fig = plt.subplots(1, 2, figsize=(12, 6), dpi=mpl_settings.DPI)
 
     mae_save = {force_key: 0, energy_key: 0}
@@ -23,6 +54,19 @@ def plot_parity(results, targets, figname, plot_type="hexbin", energy_key="energ
         mae = abs(pred - targ).mean()
         mae_save[key] = mae
 
+        lim_min = min(torch.min(pred), torch.min(targ))
+        lim_max = max(torch.max(pred), torch.max(targ))
+
+        if lim_min < 0:
+            lim_min *= 1.1
+        else:
+            lim_min *= 0.9
+
+        if lim_max < 0:
+            lim_max *= 0.9
+        else:
+            lim_max *= 1.1
+
         if plot_type.lower() == "hexbin":
             hb = ax.hexbin(
                 pred,
@@ -32,6 +76,7 @@ def plot_parity(results, targets, figname, plot_type="hexbin", energy_key="energ
                 bins="log",
                 cmap=mpl_settings.cmap,
                 edgecolor="None",
+                extent=(lim_min, lim_max, lim_min, lim_max),
             )
 
         else:
@@ -40,28 +85,10 @@ def plot_parity(results, targets, figname, plot_type="hexbin", energy_key="energ
         cb = fig.colorbar(hb, ax=ax)
         cb.set_label("Counts")
 
-        lim_min = min(torch.min(pred), torch.min(targ))
-        lim_max = max(torch.max(pred), torch.max(targ))
-
-        if lim_min < 0:
-            lim_min *= 1.1
-        else:
-            lim_min *= 0.9
-        
-        if lim_max < 0:
-            lim_max *= 0.9
-        else:
-            lim_max *= 1.1
-
         ax.set_xlim(lim_min, lim_max)
         ax.set_ylim(lim_min, lim_max)
 
-        ax.plot(
-            (lim_min, lim_max),
-            (lim_min, lim_max),
-            color="#000000",
-            zorder=-1
-        )
+        ax.plot((lim_min, lim_max), (lim_min, lim_max), color="#000000", zorder=-1)
 
         label = key
         ax.set_title(label.upper())
@@ -82,7 +109,38 @@ def plot_parity(results, targets, figname, plot_type="hexbin", energy_key="energ
     mae_forces = float(mae_save[force_key])
     return mae_energy, mae_forces
 
-def plot_err_var(err, var, figname, units="eV/Å", x_min=0, x_max=1, y_min=0, y_max=1, sample_frac=1.0, num_bins=10, cb_format="%.2f"):
+
+def plot_err_var(
+    err: Union[torch.Tensor, np.ndarray],
+    var: Union[torch.Tensor, np.ndarray],
+    figname: str,
+    units: str = "eV/Å",
+    x_min: float = 0.0,
+    x_max: float = 1.0,
+    y_min: float = 0.0,
+    y_max: float = 1.0,
+    sample_frac: float = 1.0,
+    num_bins: int = 10,
+    cb_format: str = "%.2f",
+) -> None:
+    """Plot the error vs variance of the forces.
+
+    Args:
+        err (torch.Tensor): error of the forces
+        var (torch.Tensor): variance of the forces
+        figname (str): name of the figure
+        units (str): units of the error and variance
+        x_min (float): minimum value of the x-axis
+        x_max (float): maximum value of the x-axis
+        y_min (float): minimum value of the y-axis
+        y_max (float): maximum value of the y-axis
+        sample_frac (float): fraction of the data to sample for the plot
+        num_bins (int): number of bins to use for binning
+        cb_format (str): format of the colorbar
+
+    Returns:
+        None
+    """
     fig, ax = plt.subplots(1, 1, figsize=(6, 6), dpi=mpl_settings.DPI)
 
     idx = np.arange(len(var))
@@ -94,7 +152,6 @@ def plot_err_var(err, var, figname, units="eV/Å", x_min=0, x_max=1, y_min=0, y_
     err = err.flatten()[sample_idx]
 
     # binning force var and force MAE
-    from scipy import stats
 
     err_binned, var_binned_edges, bin_nums = stats.binned_statistic(
         var, err, statistic="mean", bins=num_bins, range=(x_min, x_max)
@@ -106,7 +163,6 @@ def plot_err_var(err, var, figname, units="eV/Å", x_min=0, x_max=1, y_min=0, y_
     # plot density kernel
     x = pd.Series(var)
     y = pd.Series(err)
-    from scipy.stats import gaussian_kde
 
     kernel = gaussian_kde(
         np.vstack(
@@ -155,8 +211,6 @@ def plot_err_var(err, var, figname, units="eV/Å", x_min=0, x_max=1, y_min=0, y_
 
     ax.set_xlabel(f"Force SD [{units}]", labelpad=5)
     ax.set_ylabel(f"Force MAE [{units}]", labelpad=5)
-
-    from matplotlib.lines import Line2D
 
     scatter_leg = (
         Line2D(

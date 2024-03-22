@@ -52,26 +52,45 @@ params = {
 plt.rcParams.update(params)
 
 
-def hex_to_rgb(value):
+def hex_to_rgb(value: str) -> tuple:
     """
     Converts hex to rgb colours
-    value: string of 6 characters representing a hex colour.
-    Returns: list length 3 of RGB values"""
+
+    Parameters
+    ----------
+    value: string of 6 characters representing a hex colour
+
+    Returns
+    ----------
+    tuple of 3 integers representing the RGB values
+    """
+
     value = value.strip("#")  # removes hash symbol if present
     lv = len(value)
     return tuple(int(value[i : i + lv // 3], 16) for i in range(0, lv, lv // 3))
 
 
-def rgb_to_dec(value):
+def rgb_to_dec(value: list):
     """
     Converts rgb to decimal colours (i.e. divides each value by 256)
-    value: list (length 3) of RGB values
-    Returns: list (length 3) of decimal values"""
+
+    Parameters
+    ----------
+    value: list of 3 integers representing the RGB values
+
+    Returns
+    ----------
+    list of 3 floats representing the RGB values
+    """
+
     return [v / 256 for v in value]
 
 
-def get_continuous_cmap(hex_list, float_list=None):
-    """creates and returns a color map that can be used in heat map figures.
+def get_continuous_cmap(
+    hex_list: List[str], float_list: List[float] = None
+) -> matplotlib.colors.Colormap:
+    """
+    Creates and returns a color map that can be used in heat map figures.
     If float_list is not provided, colour map graduates linearly between each color in hex_list.
     If float_list is provided, each color in hex_list is mapped to the respective location in float_list.
 
@@ -82,7 +101,8 @@ def get_continuous_cmap(hex_list, float_list=None):
 
     Returns
     ----------
-    colour map"""
+    Colormap
+    """
     rgb_list = [rgb_to_dec(hex_to_rgb(i)) for i in hex_list]
     if float_list:
         pass
