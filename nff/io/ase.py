@@ -303,9 +303,11 @@ class AtomsBatch(Atoms):
         # split cell if periodic
         if self.pbc.any():
             if "lattice" in self.props:
-                cells = torch.split(torch.Tensor(self.props['lattice']), 3)
+                cells = torch.split(torch.Tensor(self.props["lattice"]), 3)
             else:
-                cells = torch.unsqueeze(torch.Tensor(np.array(self.cell)), 0).repeat(len(mol_split_idx), 1, 1)
+                cells = torch.unsqueeze(torch.Tensor(np.array(self.cell)), 0).repeat(
+                    len(mol_split_idx), 1, 1
+                )
         Atoms_list = []
 
         for i, molecule_xyz in enumerate(positions):
@@ -428,8 +430,13 @@ class AtomsBatch(Atoms):
 
     @classmethod
     def from_atoms(cls, atoms, **kwargs):
+        props = kwargs.pop("props", {})
         return cls(
-            atoms, positions=atoms.positions, numbers=atoms.numbers, props={}, **kwargs
+            atoms,
+            positions=atoms.positions,
+            numbers=atoms.numbers,
+            props=props,
+            **kwargs,
         )
 
 
