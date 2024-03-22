@@ -30,6 +30,8 @@ from nff.nn.models.painn import (
     PainnDiabat,
     PainnDipole,
     PainnTransformer,
+    Painn_NAC_OuterProd,
+    Painn_VecOut2,
 )
 from nff.nn.models.schnet import SchNet, SchNetDiabat
 from nff.nn.models.schnet_features import SchNetFeatures
@@ -242,6 +244,32 @@ PARAMS_TYPE = {
         "V_ex_power": int,
         "V_ex_sigma": float,
     },
+    "Painn_VecOut2": {
+        "feat_dim": int,
+        "activation": str,
+        "n_rbf": int,
+        "cutoff": float,
+        "num_conv": int,
+        "output_keys": list,
+        "output_vec_keys": list,
+        "grad_keys": list,
+        "excl_vol": bool,
+        "V_ex_power": int,
+        "V_ex_sigma": float,
+    },
+    "Painn_NAC_OuterProd": {
+        "feat_dim": int,
+        "activation": str,
+        "n_rbf": int,
+        "cutoff": float,
+        "num_conv": int,
+        "output_keys": list,
+        "output_vec_keys": list,
+        "grad_keys": list,
+        "excl_vol": bool,
+        "V_ex_power": int,
+        "V_ex_sigma": float,
+    },
     "Painn_Tuple": {
         "feat_dim": int,
         "activation": str,
@@ -382,6 +410,7 @@ PARAMS_TYPE = {
     "CHGNetNFF": {},
 }
 
+
 MODEL_DICT = {
     "SchNet": SchNet,
     "SchNetDiabat": SchNetDiabat,
@@ -405,6 +434,8 @@ MODEL_DICT = {
     "RealSpookyNet": RealSpookyNet,
     "PainnDispersion": PainnDispersion,
     "Painn_VecOut": Painn_VecOut,
+    "Painn_VecOut2": Painn_VecOut2,
+    "Painn_NAC_OuterProd": Painn_NAC_OuterProd,
     "Painn_Tuple": Painn_Tuple,
     "Painn_wCP": Painn_wCP,
     "PainnDipole": PainnDipole,

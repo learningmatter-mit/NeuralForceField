@@ -336,7 +336,7 @@ class NeuralTully:
                     # checks for the same degeneracy
                     continue
                     
-                key = f'NACP_{adiabat1}_to_{adiabat2}_grad'
+                key = f'NACV_{adiabat1}_to_{adiabat2}_grad'
                 if key not in self.props:
                     continue
                 _nacv[:, state_n1, state_n2, :] = self.props[key]

@@ -107,7 +107,7 @@ def concat_and_conv(results_list,
             val = val.reshape(*grad_shape)
         elif 'energy' in key:
             val *= conv['energy']
-        elif 'nacv' in key or 'NACV' in key: 
+        elif ('nacv' in key or 'NACV' in key) and 'grad' in key: 
             val *= conv['_grad']
             val = val.reshape(*grad_shape)
         elif 'NACP' in key and 'grad' in key:
