@@ -4,26 +4,38 @@ and other statistical functions.
 """
 
 import logging
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import torch
+from ase.formula import Formula
+from sklearn import linear_model
+
 from nff.data import Dataset
-from nff.utils.misc import cat_props
 
 logger = logging.getLogger(__name__)
 
 
 def remove_outliers(
-    array, std_away=3, reference_mean=None, reference_std=None, max_value=np.inf
-):
+    array: Union[List, np.ndarray, torch.Tensor],
+    std_away: float = 3.0,
+    reference_mean: float = None,
+    reference_std: float = None,
+    max_value: float = np.inf,
+) -> Tuple[np.ndarray, np.ndarray, float, float]:
     """
     Remove outliers from given array using both a number of standard
         deviations and a hard cutoff.
 
     Args:
-        array (np.array): array from which the outliers will be removed.
+        array (Union[List, np.ndarray, torch.Tensor]): array from which the
+            outliers will be removed.
         std_away (float): maximum number of standard deviations to consider
             a value as outlier.
+        reference_mean (float): mean of the array. If None, the mean of the
+            array will be calculated.
+        reference_std (float): standard deviation of the array. If None, the
+            standard deviation of the array will be calculated.
         max_value (float): cutoff for the values of array. Values higher than
             this cutoff will be considered outliers and thus removed from the
             array.
@@ -32,25 +44,9 @@ def remove_outliers(
         array without outliers (np.array)
         non_outlier (np.array): array containing the indices of non-outlier
             values.
+        mean (float): mean of the array.
+        std (float): standard deviation of the array.
     """
-
-    # make it such that list of tensors is also accepted
-    # [
-    # tensor([
-    #     [    -6.755,      7.485,     -2.375],
-    #     [    -4.279,     -2.333,    -16.660],
-    #     [  -172.758,     85.170,    -33.607],
-    #     [    49.946,     73.799,   -328.536],
-    #     [    57.863,   -241.229,   -222.986]]),
-    # tensor([
-    #     [     0.005,      1.650,     15.700],
-    #     [    -0.071,      1.101,      0.325],
-    #     [    -0.009,     -3.058,      0.544],
-    #     [     0.060,      0.201,     -5.930],
-    #     [   -69.223,     25.373,   -314.424],
-    #     [  -803.129,  -1185.960,   -216.054],
-    #     [    75.811,    113.932,   -250.642]])
-    # ]
 
     if isinstance(array, list):
         stats_array = torch.cat(array, dim=0).flatten().cpu().numpy()
@@ -86,13 +82,13 @@ def remove_outliers(
 
 
 def remove_dataset_outliers(
-    dset,
-    reference_key="energy",
-    reference_mean=None,
-    reference_std=None,
-    std_away=3,
-    max_value=np.inf,
-):
+    dset: Dataset,
+    reference_key: str = "energy",
+    reference_mean: float = None,
+    reference_std: float = None,
+    std_away: float = 3.0,
+    max_value: float = np.inf,
+) -> Tuple[Dataset, float, float]:
     """
     Remove outliers from given dataset using both a number of standard
         deviations and a hard cutoff.
@@ -101,6 +97,10 @@ def remove_dataset_outliers(
         dset (nff.data.Dataset): dataset from which the outliers will be removed.
         reference_key (str): key of the dataset which should serve as reference
             when removing the outliers.
+        reference_mean (float): mean of the array. If None, the mean of the
+            referenced array will be calculated.
+        reference_std (float): standard deviation of the array. If None, the
+            standard deviation of the referenced array will be calculated.
         std_away (float): maximum number of standard deviations to consider
             a value as outlier.
         max_value (float): cutoff for the values of array. Values higher than
@@ -129,7 +129,9 @@ def remove_dataset_outliers(
     return Dataset(new_props, units=dset.units), mean, std
 
 
-def center_dataset(dset, reference_key="energy", reference_value=None):
+def center_dataset(
+    dset: Dataset, reference_key: str = "energy", reference_value: float = None
+) -> Tuple[Dataset, float]:
     """
     Center a dataset by subtracting the mean of the reference key.
 
@@ -158,9 +160,8 @@ def center_dataset(dset, reference_key="energy", reference_value=None):
     return new_dset, reference_value
 
 
-def get_atom_count(formula):
-    """The function `get_atom_count` takes a chemical formula as input and returns a dictionary containing
-    the count of each atom in the formula.
+def get_atom_count(formula: str) -> Dict[str, int]:
+    """Count the number of each atom type in the formula.
 
     Parameters
     ----------
@@ -174,22 +175,19 @@ def get_atom_count(formula):
     """
 
     # return dictionary
-    from ase.formula import Formula
-
     formula = Formula(formula)
     return formula.count()
 
 
-def all_atoms(unique_formulas):
-    """ The function `all_atoms` takes a list of chemical formulas as input and returns a set containing
-    all the atoms in the list of formulas.
-    
+def all_atoms(unique_formulas: List[str]) -> set:
+    """Return set of all atoms in the list of formulas.
+
     Parameters
     ----------
     unique_formulas
-        The `unique_formulas` parameter is a list of strings representing the chemical formulas for which
-        you want to find the atoms.
-        
+        list of strings representing the chemical formulas for which you want to count the
+    occurrences of each atom.
+
     Returns
     -------
         a set containing all the atoms in the list of formulas.
@@ -202,24 +200,22 @@ def all_atoms(unique_formulas):
     return atom_set
 
 
-def reg_atom_count(formula, atoms):
-    """The function `reg_atom_count` takes a chemical formula and a list of atoms as input, and returns an
-    array containing the count of each atom in the formula.
+def reg_atom_count(formula: str, atoms: List[str]) -> np.ndarray:
+    """Count the number of each specified atom type in the formula.
 
     Parameters
     ----------
     formula
-        The formula parameter is a string that represents a chemical formula. It can contain elements and
+        A string that represents a chemical formula. It can contain elements and
     their corresponding subscripts. For example, "H2O" represents water, where "H" is the element
     hydrogen and "O" is the element oxygen. The subscript "2" indicates that there are two
     atoms
-        The `atoms` parameter is a list of strings representing the atoms for which you want to count the
+        list of strings representing the atoms for which you want to count the
     occurrences in the `formula`.
 
     Returns
     -------
         an array containing the count of each atom in the given formula.
-
     """
     dictio = get_atom_count(formula)
     count_array = np.array([dictio.get(atom, 0) for atom in atoms])
@@ -227,28 +223,27 @@ def reg_atom_count(formula, atoms):
     return count_array
 
 
-def get_stoich_dict(dset, formula_key="formula", energy_key="energy"):
-    """The function `get_stoich_dict` takes a dataset, and optional keys for formula and energy, and
-    returns a stoichiometry dictionary.
+def get_stoich_dict(
+    dset: Dataset, formula_key: str = "formula", energy_key: str = "energy"
+) -> Dict[str, float]:
+    """Linear regression to find the per atom energy for each element in the dataset.
 
     Parameters
     ----------
     dset
-        The `dset` parameter is a dataset object that contains properties for each data point. It is
-    assumed to have a property for the chemical formula of each data point and a property for the energy
-    value of each data point.
+        Dataset object containing properties for each data point. It is assumed to have a property
+        for the chemical formula of each data point and a property for the energy value of each data point.
     formula_key, optional
-        The parameter `formula_key` is a string that represents the key in the dataset properties
-    dictionary where the formulas are stored. This key is used to access the formulas for each entry in
-    the dataset.
+        key for chemical formula in the dset properties dictionary.
     energy_key, optional
-        The `energy_key` parameter is a string that represents the key in the dataset properties where the
-    energy values are stored.
+        key for energy in the dset properties dictionary.
+
+    Returns
+    -------
+        a dictionary containing the stoichiometric energy coefficients for each element in the dataset.
 
     """
     # calculates the linear regresion and return the stoich dictionary
-    from sklearn import linear_model
-
     formulas = dset.props[formula_key]
     energies = dset.props[energy_key]
     logging.debug("formulas: %s", formulas)
@@ -280,11 +275,11 @@ def get_stoich_dict(dset, formula_key="formula", energy_key="energy"):
 
     pred = (clf.coef_ * x_in).sum(-1) + clf.intercept_
     # pred = clf.predict(x_in)
-    logging.info(f"coef: {clf.coef_}")
-    logging.info(f"intercept: {clf.intercept_}")
+    logging.info("coef: %s", clf.coef_)
+    logging.info("intercept: %s", clf.intercept_)
     logging.debug("pred: %s", pred)
     err = abs(pred - y_out).mean()  # in kcal/mol
-    logging.info(f"MAE between target energy and stoich energy is {err:.3f} kcal/mol")
+    logging.info("MAE between target energy and stoich energy is %.3f kcal/mol", err)
     logging.info("R : %s", clf.score(x_in, y_out))
     fit_dic = {atom: coef for atom, coef in zip(unique_atoms, clf.coef_.reshape(-1))}
     stoich_dict = {**fit_dic, "offset": clf.intercept_.item()}
@@ -293,31 +288,30 @@ def get_stoich_dict(dset, formula_key="formula", energy_key="energy"):
     return stoich_dict
 
 
-def perform_energy_offset(dset, stoic_dict, formula_key="formula", energy_key="energy"):
-    """The function `perform_energy_offset` takes a dataset, a stoichiometry dictionary, and optional keys
-    for formula and energy, and performs an energy offset calculation on the dataset.
+def perform_energy_offset(
+    dset: Dataset,
+    stoic_dict: Dict[str, float],
+    formula_key: str = "formula",
+    energy_key: str = "energy",
+) -> Dataset:
+    """Peform energy offset calculation on the dataset. Subtract the energy of the reference state for each atom
+    from the energy of each data point in the dataset.
 
     Parameters
     ----------
     dset
-        The `dset` parameter is a dataset object that contains properties for each data point. It is
-    assumed to have a property for the chemical formula of each data point and a property for the energy
-    value of each data point.
+        Dataset object containing properties for each data point. It is assumed to have a property
+        for the chemical formula of each data point and a property for the energy value of each data point.
     stoic_dict
-        The `stoic_dict` parameter is a dictionary that contains the stoichiometric coefficients for each
-    element in the formula. The keys of the dictionary are the element symbols, and the values are the
-    corresponding stoichiometric coefficients.
+        a dictionary containing the stoichiometric energy coefficients for each element in the dataset.
     formula_key, optional
-        The parameter `formula_key` is a string that represents the key in the dataset properties
-    dictionary where the formulas are stored. This key is used to access the formulas for each entry in
-    the dataset.
+        key for chemical formula in the dset properties dictionary.
     energy_key, optional
-        The `energy_key` parameter is a string that represents the key in the dataset properties where the
-    energy values are stored.
+        key for energy in the dset properties dictionary.
 
     Returns
     -------
-        a new dataset (`new_dset`).
+        a new dataset with the energy offset performed.
 
     """
     # perform the energy offset
@@ -338,9 +332,9 @@ def perform_energy_offset(dset, stoic_dict, formula_key="formula", energy_key="e
 
         new_energies[i] -= ref_en
 
-    logging.info(f"new_energies: {new_energies}")
+    logging.info("new_energies: %s", new_energies)
     new_dset = dset.copy()
-    logging.info(f"old energies: {new_dset.props[energy_key]}")
+    logging.info("old energies: %s", new_dset.props[energy_key])
     new_dset.props[energy_key] = new_energies
-    logging.info(f"new energies: {new_dset.props[energy_key]}")
+    logging.info("new energies: %s", new_dset.props[energy_key])
     return new_dset
