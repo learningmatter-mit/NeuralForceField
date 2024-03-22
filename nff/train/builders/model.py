@@ -36,6 +36,9 @@ from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.spooky import RealSpookyNet, SpookyNet
 from nff.nn.models.spooky_painn import SpookyPainn, SpookyPainnDiabat
 from nff.nn.models.torchmd_net import TorchMDNet
+from mace.modules.blocks import InteractionBlock
+from typing import Union, Type, List, Optional, Callable
+from e3nn import o3
 
 PARAMS_TYPE = {
     "SchNet": {
@@ -358,8 +361,24 @@ PARAMS_TYPE = {
         "output_vec_keys": list,
         "vector_per_atom": dict,
     },
-    # FIXME: need to add the correct parameters for MACE
-    "NffScaleMACE": {"mace_model": torch.nn.Module},
+    # MACE and CHGNet params can also be loaded from pre-trained model
+    "NffScaleMACE": {
+        "r_max": float,
+        "num_bessel": int,
+        "num_polynomial_cutoff": int,
+        "max_ell": int,
+        "interaction_cls": Type[InteractionBlock],
+        "interaction_cls_first": Type[InteractionBlock],
+        "num_interactions": int,
+        "num_elements": int,
+        "hidden_irreps": o3.Irreps,
+        "MLP_irreps": o3.Irreps,
+        "atomic_energies": np.ndarray,
+        "avg_num_neighbors": float,
+        "atomic_numbers": List[int],
+        "correlation": Union[int, List[int]],
+        "gate": Optional[Callable],
+    },
     "CHGNetNFF": {},
 }
 
