@@ -8,6 +8,7 @@ from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import torch
+from ase.formula import Formula
 from sklearn import linear_model
 
 from nff.data import Dataset
@@ -174,8 +175,6 @@ def get_atom_count(formula: str) -> Dict[str, int]:
     """
 
     # return dictionary
-    from ase.formula import Formula
-
     formula = Formula(formula)
     return formula.count()
 
