@@ -39,18 +39,6 @@ def powell_update(hessian_old, h, gradient_old, gradient_new):
 
     powell_hessian = hessian_old + update
 
-    # if any(powell_hessian.isnan().tolist()):
-    #     print(
-    #         f"""Hessian has NaNs!!!
-    #         Old Hessian is: {hessian_old}
-    #         H is: {h}
-    #         Gradient old is: {gradient_old}
-    #         Gradient new is: {gradient_new}
-    #         V is: {V}
-    #         Update is: {update}
-    #         """
-    #     )
-
     return powell_hessian.detach()
 
 
@@ -83,17 +71,13 @@ def eigvec_following(
     eigvecs = eigvecs.real
 
     # Ordering eigenvalues and eigenvectors in ascending order
-    print("EIGENVALS:", eigenvalues)
     idx = eigenvalues[:].argsort()
-    print(idx)
     eigenvalues = eigenvalues[idx]
     # print(eigenvalues)
 
     eigvecs = eigvecs[:, idx]
     eigvecs_t = torch.t(eigvecs)
-    print("TRANPOSE EIGENVECS:", eigvecs_t)
 
-    print("GRAD:", grad)
     F = torch.mv(eigvecs_t, grad).reshape(-1, 1)
 
     matrix_p = torch.Tensor([[eigenvalues[0], F[0]], [F[0], 0]])
