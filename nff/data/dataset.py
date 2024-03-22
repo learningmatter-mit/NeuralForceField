@@ -1,5 +1,6 @@
 import copy
 import numbers
+from collections import Counter
 from copy import deepcopy
 
 import numpy as np
@@ -607,9 +608,9 @@ class Dataset(TorchDataset):
                 nxyz[:, 0].long(),
                 props={key: val[i] for key, val in self.props.items()},
                 positions=nxyz[:, 1:],
-                cell=self.props["lattice"][i]
-                if "lattice" in self.props.keys()
-                else None,
+                cell=(
+                    self.props["lattice"][i] if "lattice" in self.props.keys() else None
+                ),
                 pbc="lattice" in self.props.keys(),
                 cutoff=cutoff,
                 directed=(not undirected),
@@ -951,8 +952,6 @@ def stratified_split(dataset, targ_name, test_size, seed, min_count=2):
     stratify_labels = dataset.props[targ_name]
 
     # ensure minimum number of samples in each label
-    from collections import Counter
-
     label_counts = Counter(stratify_labels)
 
     # get labels with count less than min count
