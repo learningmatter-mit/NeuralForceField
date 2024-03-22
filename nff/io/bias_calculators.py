@@ -7,7 +7,7 @@ from ase import units
 import nff.utils.constants as const
 from nff.utils.cuda import batch_to
 
-from nff.io.ase import NeuralFF, check_directed
+from nff.io.ase_calcs import NeuralFF, check_directed
 from nff.md.colvars import ColVar as CV
 
 from nff.nn.models.schnet import SchNet, SchNetDiabat
@@ -57,7 +57,6 @@ class BiasBase(NeuralFF):
         extra_constraints: list[dict] = None,
         **kwargs,
     ):
-
         NeuralFF.__init__(
             self, model=model, device=device, en_key=en_key, directed=directed, **kwargs
         )
@@ -163,12 +162,10 @@ class BiasBase(NeuralFF):
 
         # wrap to range(-pi,pi) for angle
         if isinstance(diff, np.ndarray) and cv_type == "angle":
-
             diff[diff > np.pi] -= 2 * np.pi
             diff[diff < -np.pi] += 2 * np.pi
 
         elif cv_type == "angle":
-
             if diff < -np.pi:
                 diff += 2 * np.pi
             elif diff > np.pi:
@@ -205,7 +202,6 @@ class BiasBase(NeuralFF):
         xi: np.ndarray,
         grad_xi: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
-
         bias_grad = np.zeros_like(grad_xi[0])
         bias_ener = 0.0
 
@@ -348,9 +344,11 @@ class BiasBase(NeuralFF):
             cvs[ii] = xi
             cv_grads[ii] = xi_grad
             cv_grad_lens[ii] = np.linalg.norm(xi_grad)
-            cv_invmass[ii]   = np.einsum('i,ii,i', xi_grad.flatten(), M_inv, xi_grad.flatten())
-            cv_dot_PES[ii]   = np.dot(xi_grad.flatten(), model_grad.flatten())
-            
+            cv_invmass[ii] = np.einsum(
+                "i,ii,i", xi_grad.flatten(), M_inv, xi_grad.flatten()
+            )
+            cv_dot_PES[ii] = np.dot(xi_grad.flatten(), model_grad.flatten())
+
         self.results = {
             "energy_unbiased": model_energy.reshape(-1),
             "forces_unbiased": -model_grad.reshape(-1, 3),
@@ -426,7 +424,6 @@ class eABF(BiasBase):
         directed=DEFAULT_DIRECTED,
         **kwargs,
     ):
-
         BiasBase.__init__(
             self,
             cv_defs=cv_defs,
@@ -523,7 +520,6 @@ class eABF(BiasBase):
 
     def _update_bias(self, xi: np.ndarray):
         if self._check_boundaries(self.ext_coords):
-
             bink = self.get_index(self.ext_coords)
             self.ext_hist[bink] += 1
 
@@ -535,7 +531,6 @@ class eABF(BiasBase):
             )
 
             for i in range(self.num_cv):
-
                 # apply bias force on extended system
                 (
                     self.bias[i][bink],
@@ -566,7 +561,6 @@ class eABF(BiasBase):
         """
 
     def _propagate_ext(self):
-
         self.ext_rand_gauss = np.random.randn(len(self.ext_vel), 1)
 
         self.ext_vel += self.rand_push * self.ext_rand_gauss
@@ -582,7 +576,6 @@ class eABF(BiasBase):
                     self.ext_coords[ii] += 2 * np.pi
 
     def _up_extvel(self):
-
         self.ext_vel *= self.prefac2
         self.ext_vel += self.rand_push * self.ext_rand_gauss
         self.ext_vel += 0.5e0 * self.ext_dt * self.ext_forces / self.ext_masses
@@ -638,7 +631,6 @@ class aMDeABF(eABF):
         directed=DEFAULT_DIRECTED,
         **kwargs,
     ):
-
         super().__init__(
             model=model,
             cv_defs=cv_defs,
@@ -659,7 +651,12 @@ class aMDeABF(eABF):
 
         self.amd_method = amd_method.lower()
 
-        assert self.amd_method in ['gamd_upper', 'gamd_lower', 'samd', 'amd'], f"Unknown aMD method {self.amd_method}"
+        assert self.amd_method in [
+            "gamd_upper",
+            "gamd_lower",
+            "samd",
+            "amd",
+        ], f"Unknown aMD method {self.amd_method}"
 
         if self.amd_method == "amd":
             print(
@@ -728,7 +725,11 @@ class aMDeABF(eABF):
             bias_grad += boost_grad
 
             bink = self.get_index(xi)
-            (self.amd_c1[bink], self.amd_m2[bink], self.amd_c2[bink],) = welford_var(
+            (
+                self.amd_c1[bink],
+                self.amd_m2[bink],
+                self.amd_c2[bink],
+            ) = welford_var(
                 self.histogram[bink],
                 self.amd_c1[bink],
                 self.amd_m2[bink],
@@ -749,9 +750,29 @@ class aMDeABF(eABF):
             ) * self.amd_forces
 
         elif self.amd_method == "samd":
-            amd_pot = self.amd_pot = self.pot_max - epot - 1/self.k * np.log((self.c + np.exp(self.k * (self.pot_max - self.pot_min)))
-                    / (self.c + np.exp(self.k * (epot - self.pot_min))))
-            boost_grad = -(1.0/(np.exp(-self.k * (epot - self.pot_min) + np.log((1/self.c0) - 1)) + 1) - 1) * self.amd_forces
+            amd_pot = self.amd_pot = (
+                self.pot_max
+                - epot
+                - 1
+                / self.k
+                * np.log(
+                    (self.c + np.exp(self.k * (self.pot_max - self.pot_min)))
+                    / (self.c + np.exp(self.k * (epot - self.pot_min)))
+                )
+            )
+            boost_grad = (
+                -(
+                    1.0
+                    / (
+                        np.exp(
+                            -self.k * (epot - self.pot_min) + np.log((1 / self.c0) - 1)
+                        )
+                        + 1
+                    )
+                    - 1
+                )
+                * self.amd_forces
+            )
 
         else:
             prefac = self.k0 / (self.pot_max - self.pot_min)
@@ -859,7 +880,6 @@ class WTMeABF(eABF):
         directed=DEFAULT_DIRECTED,
         **kwargs,
     ):
-
         eABF.__init__(
             self,
             cv_defs=cv_defs,
@@ -894,12 +914,10 @@ class WTMeABF(eABF):
         self.metaforce = np.zeros_like(self.bias)
 
     def _update_bias(self, xi: np.ndarray):
-
         mtd_forces = self.get_wtm_force(self.ext_coords)
         self.call_count += 1
 
         if self._check_boundaries(self.ext_coords):
-
             bink = self.get_index(self.ext_coords)
             self.ext_hist[bink] += 1
 
@@ -911,7 +929,6 @@ class WTMeABF(eABF):
             )
 
             for i in range(self.num_cv):
-
                 # apply bias force on extended system
                 (
                     self.bias[i][bink],
@@ -957,7 +974,6 @@ class WTMeABF(eABF):
 
         bink = self.get_index(xi)
         if self.call_count % self.hill_drop_freq == 0:
-
             w = self.hill_height * np.exp(
                 -self.metapot[bink] / (units.kB * self.well_tempered_temp)
             )
@@ -1023,7 +1039,7 @@ class WTMeABF(eABF):
 
         return bias_force.reshape(-1, 1), local_pot
 
-    
+
 class AttractiveBias(NeuralFF):
     """Biased Calculator that introduces an attractive term
        Designed to be used with UQ as CV
@@ -1061,7 +1077,6 @@ class AttractiveBias(NeuralFF):
         extra_constraints: list[dict] = None,
         **kwargs,
     ):
-
         NeuralFF.__init__(
             self, model=model, device=device, en_key=en_key, directed=directed, **kwargs
         )
@@ -1137,12 +1152,10 @@ class AttractiveBias(NeuralFF):
 
         # wrap to range(-pi,pi) for angle
         if isinstance(diff, np.ndarray) and cv_type == "angle":
-
             diff[diff > np.pi] -= 2 * np.pi
             diff[diff < -np.pi] += 2 * np.pi
 
         elif cv_type == "angle":
-
             if diff < -np.pi:
                 diff += 2 * np.pi
             elif diff > np.pi:
@@ -1166,8 +1179,8 @@ class AttractiveBias(NeuralFF):
             bias_grad: gradiant of the bias in CV space, needs to be dotted with the cv_gradient
         """
 
-        bias_grad = - (self.gamma * grad_xi).sum(axis=0)
-        bias_ener = - (self.gamma * xi).sum()
+        bias_grad = -(self.gamma * grad_xi).sum(axis=0)
+        bias_ener = -(self.gamma * xi).sum()
 
         # harmonic walls for confinement to range of interest
         for i in range(self.num_cv):
@@ -1300,13 +1313,15 @@ class AttractiveBias(NeuralFF):
         cv_invmass = np.zeros(shape=(self.num_cv, 1))
         cv_dot_PES = np.zeros(shape=(self.num_cv, 1))
         for ii, cv_def in enumerate(self.cv_defs):
-            xi, xi_grad      = self.the_cv[ii](atoms)
-            cvs[ii]          = xi
-            cv_grads[ii]     = xi_grad
+            xi, xi_grad = self.the_cv[ii](atoms)
+            cvs[ii] = xi
+            cv_grads[ii] = xi_grad
             cv_grad_lens[ii] = np.linalg.norm(xi_grad)
-            cv_invmass[ii]   = np.einsum('i,ii,i', xi_grad.flatten(), M_inv, xi_grad.flatten())
-            cv_dot_PES[ii]   = np.dot(xi_grad.flatten(), model_grad.flatten())
-            
+            cv_invmass[ii] = np.einsum(
+                "i,ii,i", xi_grad.flatten(), M_inv, xi_grad.flatten()
+            )
+            cv_dot_PES[ii] = np.dot(xi_grad.flatten(), model_grad.flatten())
+
         self.results = {
             "energy_unbiased": model_energy.reshape(-1),
             "forces_unbiased": -model_grad.reshape(-1, 3),
@@ -1352,15 +1367,8 @@ class AttractiveBias(NeuralFF):
             stress = prediction["stress_volume"].detach().cpu().numpy() * (
                 1 / const.EV_TO_KCAL_MOL
             )
-            self.results["stress"] = stress * (1 / atoms.get_volume())   
-    
-    
-    
-    
-    
-    
-    
-    
+            self.results["stress"] = stress * (1 / atoms.get_volume())
+
 
 def welford_var(
     count: float, mean: float, M2: float, newValue: float
