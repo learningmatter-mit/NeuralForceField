@@ -273,8 +273,8 @@ class ChgnetLayerFreezer(LayerFreezer):
         self.unfreeze_parameters(module)
 
     def unfreeze_chgnet_pooling(self, model: torch.nn.Module) -> None:
-        """Unfreeze the layers after the representation layers
-        (, and "pooling" layers in a CHGNet model.
+        """Unfreeze the "pooling" layers after the representation layers
+        in a CHGNet model.
 
         Args:
             model (torch.nn.Module): model to be transfer learned
@@ -330,7 +330,7 @@ class ChgnetLayerFreezer(LayerFreezer):
         if custom_layers:
             self.custom_unfreeze(model, custom_layers)
         else:
-            self.unfreeze_chgnet_mlp(model, freeze_skip=freeze_skip)
+            self.unfreeze_chgnet_readout(model, freeze_skip=freeze_skip)
             unfreeze_pool = not freeze_pooling
             if unfreeze_pool:
                 self.unfreeze_chgnet_last_atom_conv_layer(model)
