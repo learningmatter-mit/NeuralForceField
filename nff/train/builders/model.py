@@ -5,9 +5,12 @@ while checking for the validity of hyperparameters.
 
 import json
 import os
+from typing import Callable, List, Optional, Type, Union
 
 import numpy as np
 import torch
+from e3nn import o3
+from mace.modules.blocks import InteractionBlock
 
 from nff.nn.models.chgnet import CHGNetNFF
 from nff.nn.models.conformers import WeightedConformers
@@ -23,24 +26,21 @@ from nff.nn.models.hybridgraph import HybridGraphConv
 from nff.nn.models.mace import NffScaleMACE
 from nff.nn.models.painn import (
     Painn,
+    Painn_NAC_OuterProd,
     Painn_Tuple,
     Painn_VecOut,
+    Painn_VecOut2,
     Painn_wCP,
     PainnAdiabat,
     PainnDiabat,
     PainnDipole,
     PainnTransformer,
-    Painn_NAC_OuterProd,
-    Painn_VecOut2,
 )
 from nff.nn.models.schnet import SchNet, SchNetDiabat
 from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.spooky import RealSpookyNet, SpookyNet
 from nff.nn.models.spooky_painn import SpookyPainn, SpookyPainnDiabat
 from nff.nn.models.torchmd_net import TorchMDNet
-from mace.modules.blocks import InteractionBlock
-from typing import Union, Type, List, Optional, Callable
-from e3nn import o3
 
 PARAMS_TYPE = {
     "SchNet": {
@@ -526,13 +526,13 @@ def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Mo
     """
 
     # For TL with pre-trained CHGNet and MACE, we pass no path
-    if path is None and model_type in ["CHGNetNFF", "NffScaleMACE"]:
+    if model_type in ["CHGNetNFF", "NffScaleMACE"]:
         if not kwargs:
             kwargs = DEFAULT_KWARGS[model_type]
         # Both CHGNet and MACE are wrapped models have a class "load" method
         # that can be used to load the pre-trained model
 
-        if path:
+        if path != "":
             kwargs.update({"model": path})
         print(f"Loading {model_type} with kwargs {kwargs}")
         return MODEL_DICT[model_type].load(**kwargs)
