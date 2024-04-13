@@ -5,79 +5,16 @@
 # See LICENSE for more info
 ####################################################################################################
 
-import os
-import urllib
-from typing import Union
-
 import torch
 from mace.calculators.mace import get_model_dtype
-from mace.data.atomic_data import AtomicData, AtomicNumberTable, torch_geometric
+from mace.data.atomic_data import (AtomicData, AtomicNumberTable,
+                                   torch_geometric)
 from mace.data.utils import Configuration
 from mace.modules.models import MACE, ScaleShiftMACE
+from mace.modules.radial import BesselBasis, GaussianBasis
 from mace.tools import torch_tools
-
-# get the path to NFF models dir, which is the parent directory of this file
-module_dir = os.path.abspath(
-    os.path.join(os.path.abspath(__file__), "..", "..", "..", "..", "models")
-)
-print(module_dir)
-LOCAL_MODEL_PATH = os.path.join(
-    module_dir, "foundation_models/mace/2023-12-03-mace-mp.model"
-)
-
-MACE_URLS = dict(
-    small="http://tinyurl.com/46jrkm3v",  # 2023-12-10-mace-128-L0_energy_epoch-249.model
-    medium="http://tinyurl.com/5yyxdm76",  # 2023-12-03-mace-128-L1_epoch-199.model
-    large="http://tinyurl.com/5f5yavf3",  # MACE_MPtrj_2022.9.model
-)
-
-
-def get_mace_mp_model(model: str = None) -> str:
-    """Get the default MACE MP model. Replicated from the MACE codebase,
-    Copyright (c) 2022 ACEsuit/mace and licensed under the MIT license.
-
-    Args:
-        model (str, optional): MACE_MP model that you want to get.
-            Defaults to None. Can be "small", "medium", "large", or a URL.
-
-    Raises:
-        RuntimeError: raised if the model download fails and no local model is found
-
-    Returns:
-        str: path to the model
-    """
-    if model in (None, "medium") and os.path.isfile(LOCAL_MODEL_PATH):
-        model = LOCAL_MODEL_PATH
-        print(
-            f"Using local medium Materials Project MACE model for MACECalculator {model}"
-        )
-    elif model in (None, "small", "medium", "large") or str(model).startswith("https:"):
-        try:
-            checkpoint_url = (
-                MACE_URLS.get(model, MACE_URLS["medium"])
-                if model in (None, "small", "medium", "large")
-                else model
-            )
-            cache_dir = os.path.expanduser("~/.cache/mace")
-            checkpoint_url_name = "".join(
-                c for c in os.path.basename(checkpoint_url) if c.isalnum() or c in "_"
-            )
-            cached_model_path = f"{cache_dir}/{checkpoint_url_name}"
-            if not os.path.isfile(cached_model_path):
-                os.makedirs(cache_dir, exist_ok=True)
-                # download and save to disk
-                print(f"Downloading MACE model from {checkpoint_url!r}")
-                urllib.request.urlretrieve(checkpoint_url, cached_model_path)
-                print(f"Cached MACE model to {cached_model_path}")
-            model = cached_model_path
-            msg = f"Loading Materials Project MACE with {model}"
-            print(msg)
-        except Exception as exc:
-            raise RuntimeError(
-                "Model download failed and no local model found"
-            ) from exc
-
-    return model
+from nff.io.mace import get_mace_mp_model_path, get_init_kwargs_from_model, get_atomic_number_table_from_zs
+from typing import List
 
 
 class NffScaleMACE(ScaleShiftMACE):
@@ -87,47 +24,17 @@ class NffScaleMACE(ScaleShiftMACE):
 
     def __init__(
         self,
-        mace_model: ScaleShiftMACE,
-        default_dtype: str = "",
-        training: bool = False,
+        atomic_inter_scale: float,
+        atomic_inter_shift: float,
         **kwargs,
     ):
-        """Initialize the NffScaleMACE model
+        """NFF compatible ScaleShiftMACE
 
         Args:
-            mace_model (ScaleShiftMACE): MACE model that you want to wrap
-            default_dtype (str, optional): default dtype for the model, either
-                "float64" or "float32". Defaults to "", which will use the dtype
-                from the input MACE model.
-            training (bool, optional): training mode for the model. Defaults to False.
-                Needs to be true if you want to fine-tune.
-            kwargs: additional keyword arguments for the super().init() function from MACE
+            atomic_inter_scale (float): interaction energy scale
+            atomic_inter_shift (float): interaction energy shift
         """
-        atomic_inter_scale = mace_model.scale_shift.scale
-        atomic_inter_shift = mace_model.scale_shift.shift
         super().__init__(atomic_inter_scale, atomic_inter_shift, **kwargs)
-        self.z_table = AtomicNumberTable([int(z) for z in mace_model.atomic_numbers])
-
-        # set the model to training mode if necessary because the
-        # MACE model is not set to training mode by default and takes
-        # the training argument in the forward pass
-        self.training = training
-
-        model_dtype = get_model_dtype(mace_model)
-        if default_dtype == "":
-            print(
-                f"No dtype selected, switching to {model_dtype} to match model dtype."
-            )
-            default_dtype = model_dtype
-        if model_dtype != default_dtype:
-            print(
-                f"Default dtype {default_dtype} does not match model dtype {model_dtype}, converting models to {default_dtype}."
-            )
-            if default_dtype == "float64":
-                self.double()
-            elif default_dtype == "float32":
-                self.float()
-        torch_tools.set_default_dtype(default_dtype)
 
     def forward(
         self,
@@ -150,13 +57,15 @@ class NffScaleMACE(ScaleShiftMACE):
         data = self.convert_batch_to_data(batch)
         output = super().forward(
             data,
-            training=self.training,  # set the training mode to the value of the wrapper
+            training=training,  # set the training mode to the value of the wrapper
             compute_force=compute_force,
             compute_virials=compute_virials,
             compute_stress=compute_stress,
             compute_displacement=compute_displacement,
         )
-        output = self.add_engrad_to_output(output)
+        forces = output.pop("forces")
+        node_features = output.pop("node_feats")
+        output.update({"energy_grad": -forces, "node_features": node_features})
         return output
 
     def convert_batch_to_data(self, batch: dict) -> torch_geometric.data.Data:
@@ -178,10 +87,16 @@ class NffScaleMACE(ScaleShiftMACE):
             props = batch
         else:
             raise ValueError("Batch must be a dictionary")
-        cum_idx_list = [0] + torch.cumsum(props["num_atoms"], 0).tolist()
+        if props["num_atoms"].dim() == 0:
+            num_atoms = props["num_atoms"].unsqueeze(0)
+        else:
+            num_atoms = props["num_atoms"]
+        cum_idx_list = [0] + torch.cumsum(num_atoms, 0).tolist()
+        z_table = AtomicNumberTable([int(z) for z in self.atomic_numbers])
+
         dataset = []
 
-        for i in range(props.get("num_atoms").shape[0]):
+        for i in range(num_atoms.shape[0]):
             node_idx = torch.arange(cum_idx_list[i], cum_idx_list[i + 1])
             positions = props.get("nxyz")[node_idx, 1:].cpu().numpy()
             numbers = props.get("nxyz")[node_idx, 0].long().cpu().numpy()
@@ -203,7 +118,7 @@ class NffScaleMACE(ScaleShiftMACE):
             elif isinstance(self.r_max, torch.Tensor):
                 r_max = self.r_max.item()
             dataset.append(
-                AtomicData.from_config(config, z_table=self.z_table, cutoff=r_max)
+                AtomicData.from_config(config, z_table=z_table, cutoff=r_max)
             )
 
         data_loader = torch_geometric.dataloader.DataLoader(
@@ -216,62 +131,384 @@ class NffScaleMACE(ScaleShiftMACE):
 
         return data
 
-    def add_engrad_to_output(self, output: dict) -> dict:
-        """Adds an energy gradient to the output dictionary, which is
-        computed from the force prediction
-
-        Args:
-            output (dict): dictionary of the output of a forward pass
-                through the model
+    @property
+    def num_params(self):
+        """Count the number of parameters in the model.
 
         Returns:
-            dict: updated output dictionary with "energy_grad" key and value
+            int: Number of parameters.
         """
-        output["energy_grad"] = -output["forces"]
-        return output
+        return sum(p.numel() for p in self.parameters())
+    
+    @property
+    def num_trainable_params(self):
+        """Count the number of parameters in the model.
 
-    @classmethod
-    def get_init_args_from_model(cls, model: Union[ScaleShiftMACE, MACE]) -> dict:
+        Returns:
+            int: Number of parameters.
+        """
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+    
+    def get_init_kwargs(self) -> dict:
         """Get the initialization arguments from the model"""
-        init_args = {
-            "r_max": model.r_max.item(),
-            "num_bessel": model.radial_embedding.out_dim,
-            "num_polynomial_cutoff": model.radial_embedding.cutoff_fn.p.item(),
-            "max_ell": model.spherical_harmonics.irreps_out.lmax,
-            "interaction_cls": type(model.interactions[1]),
-            "interaction_cls_first": type(model.interactions[0]),
-            "num_interactions": model.num_interactions.item(),
-            "num_elements": model.node_embedding.linear.irreps_in.dim,
-            "hidden_irreps": model.interactions[0].hidden_irreps,
-            "MLP_irreps": model.readouts[-1].hidden_irreps,
-            "atomic_energies": model.atomic_energies_fn.atomic_energies,
-            "avg_num_neighbors": model.interactions[0].avg_num_neighbors,
-            "atomic_numbers": model.atomic_numbers.tolist(),
-            "correlation": model.products[0]
+        if isinstance(self.radial_embedding.bessel_fn, BesselBasis):
+            radial_type = "bessel"
+        elif isinstance(self.radial_embedding.bessel_fn, GaussianBasis):
+            radial_type = "gaussian"
+        
+        init_kwargs = {
+            "atomic_inter_scale": self.scale_shift.scale, 
+            "atomic_inter_shift": self.scale_shift.shift,
+            "r_max": self.r_max.item(),
+            "num_bessel": self.radial_embedding.out_dim,
+            "num_polynomial_cutoff": self.radial_embedding.cutoff_fn.p.item(),
+            "max_ell": self.spherical_harmonics.irreps_out.lmax,
+            "interaction_cls": type(self.interactions[1]),
+            "interaction_cls_first": type(self.interactions[0]),
+            "num_interactions": self.num_interactions.item(),
+            "num_elements": self.node_embedding.linear.irreps_in.dim,
+            "hidden_irreps": self.interactions[0].hidden_irreps,
+            "MLP_irreps": self.readouts[-1].hidden_irreps,
+            "atomic_energies": self.atomic_energies_fn.atomic_energies,
+            "avg_num_neighbors": self.interactions[0].avg_num_neighbors,
+            "atomic_numbers": self.atomic_numbers.tolist(),
+            "correlation": self.products[0]
             .symmetric_contractions.contractions[0]
             .correlation,
-            "gate": model.readouts[-1].non_linearity.acts[0].f,
+            "gate": self.readouts[-1].non_linearity.acts[0].f,
+            "radial_MLP": self.interactions[0].radial_MLP,
+            "radial_type": radial_type
         }
-        return init_args
+        return init_kwargs
 
-    @classmethod
-    def from_file(
-        cls, path: str, map_location: str = "cpu", default_dtype: str = ""
-    ) -> "NffScaleMACE":
-        """Build a NffScaleMACE from a saved file."""
-        state = torch.load(path, map_location=map_location)
-        # extract initialization parameters from the state
-        init_params = NffScaleMACE.get_init_args_from_model(state)
-        return NffScaleMACE(
-            mace_model=state, default_dtype=default_dtype, **init_params
-        )
-
-    @classmethod
-    def load(
-        cls, model: str = "medium", map_location: str = "cpu", default_dtype: str = ""
-    ) -> "NffScaleMACE":
+    def save(self, path: str):
         """Load a MACE model from a file or URL"""
-        mace_model = get_mace_mp_model(model)
-        return cls.from_file(
-            mace_model, map_location=map_location, default_dtype=default_dtype
+        hparams = self.get_init_kwargs()
+        state_dict = self.state_dict()
+        torch.save({"init_params": hparams, "state_dict": state_dict}, path)
+
+    @classmethod
+    def load(cls, state_dict, **hparams):
+        model = cls(**hparams)
+        model.load_state_dict(state_dict=state_dict)
+        return model
+
+    @classmethod
+    def from_file(cls, path: str) -> "NffScaleMACE":
+        """Load the model from checkpoint created by pytorch lightning.
+
+        Args:
+            path (str): Path to the checkpoint file.
+
+        Returns:
+            InterAtomicPotential: The loaded model.
+        """
+        map_location = None if torch.cuda.is_available() else "cpu"
+        ckpt = torch.load(path, map_location=map_location)
+        hparams = ckpt["init_params"]
+        state_dict = ckpt["state_dict"]
+        model = cls.load(state_dict, **hparams)
+        return model
+
+    @classmethod
+    def load_foundations(cls, model: str = "medium", map_location: str = "cpu", default_dtype: str = ""):
+        mace_model_path = get_mace_mp_model_path(model)
+        mace_model = torch.load(mace_model_path, map_location=map_location)
+        init_params = get_init_kwargs_from_model(mace_model)
+        model_dtype = get_model_dtype(mace_model)
+        if default_dtype == "":
+            print(
+                f"No dtype selected, switching to {model_dtype} to match model dtype."
+            )
+            default_dtype = model_dtype
+        if model_dtype != default_dtype:
+            print(
+                f"Default dtype {default_dtype} does not match model dtype {model_dtype}, converting models to {default_dtype}."
+            )
+            if default_dtype == "float64":
+                mace_model.double()
+            elif default_dtype == "float32":
+                mace_model.float()
+        torch_tools.set_default_dtype(default_dtype)
+
+        nff_scaleshift_mace = cls.load(mace_model.state_dict(), **init_params)
+        # nff_scaleshift_mace.load_state_dict(mace_model.state_dict())
+
+        return nff_scaleshift_mace
+
+
+def reduce_foundations(
+    model_foundations: NffScaleMACE,
+    table: List | AtomicNumberTable,
+    load_readout=False,
+    use_shift=True,
+    use_scale=True,
+    max_L=1,
+) -> "NffScaleMACE":
+    """
+    Load the foundations of a model into a model for fine-tuning.
+    """
+    if isinstance(table, List):
+        reduced_atomic_numbers = table
+        table = get_atomic_number_table_from_zs(table)
+    elif isinstance(AtomicNumberTable):
+        reduced_atomic_numbers = [n for n in table.zs]
+    z_table = AtomicNumberTable([int(z) for z in model_foundations.atomic_numbers])
+    new_z_table = table
+    num_species_foundations = len(z_table.zs)
+    num_channels_foundation = model_foundations.node_embedding.linear.weight.shape[0] // num_species_foundations
+    indices_weights = [z_table.z_to_index(z) for z in new_z_table.zs]
+
+    init_params = model_foundations.get_init_kwargs()
+    atomic_energies = init_params["atomic_energies"]
+    reduced_atomic_energies = atomic_energies[torch.tensor(indices_weights, dtype=torch.long)].clone()
+
+    init_params.update({"atomic_energies": reduced_atomic_energies, "atomic_numbers": reduced_atomic_numbers, "num_elements": len(reduced_atomic_numbers)})
+    model = NffScaleMACE(**init_params)
+    assert model_foundations.r_max == model.r_max
+
+    num_radial = model.radial_embedding.out_dim
+    num_species = len(indices_weights)
+    model.node_embedding.linear.weight = torch.nn.Parameter(
+        model_foundations.node_embedding.linear.weight.view(
+            num_species_foundations, -1
+        )[indices_weights, :]
+        .flatten()
+        .clone()
+        / (num_species_foundations / num_species) ** 0.5
+    )
+
+    for i in range(int(model.num_interactions)):
+        model.interactions[i].linear_up.weight = torch.nn.Parameter(
+            model_foundations.interactions[i].linear_up.weight.clone()
         )
+        model.interactions[i].avg_num_neighbors = model_foundations.interactions[
+            i
+        ].avg_num_neighbors
+        for j in range(4):  # Assuming 4 layers in conv_tp_weights,
+            layer_name = f"layer{j}"
+            if j == 0:
+                getattr(
+                    model.interactions[i].conv_tp_weights, layer_name
+                ).weight = torch.nn.Parameter(
+                    getattr(
+                        model_foundations.interactions[i].conv_tp_weights, layer_name
+                    )
+                    .weight[:num_radial, :]
+                    .clone()
+                )
+            else:
+                getattr(
+                    model.interactions[i].conv_tp_weights, layer_name
+                ).weight = torch.nn.Parameter(
+                    getattr(
+                        model_foundations.interactions[i].conv_tp_weights, layer_name
+                    ).weight.clone()
+                )
+
+        model.interactions[i].linear.weight = torch.nn.Parameter(
+            model_foundations.interactions[i].linear.weight.clone()
+        )
+        if (
+            model.interactions[i].__class__.__name__
+            == "RealAgnosticResidualInteractionBlock"
+        ):
+            model.interactions[i].skip_tp.weight = torch.nn.Parameter(
+                model_foundations.interactions[i]
+                .skip_tp.weight.reshape(
+                    num_channels_foundation,
+                    num_species_foundations,
+                    num_channels_foundation,
+                )[:, indices_weights, :]
+                .flatten()
+                .clone()
+                / (num_species_foundations / num_species) ** 0.5
+            )
+
+    # Transferring products
+    for i in range(2):  # Assuming 2 products modules
+        max_range = max_L + 1 if i == 0 else 1
+        for j in range(max_range):  # Assuming 3 contractions in symmetric_contractions
+            model.products[i].symmetric_contractions.contractions[
+                j
+            ].weights_max = torch.nn.Parameter(
+                model_foundations.products[i]
+                .symmetric_contractions.contractions[j]
+                .weights_max[indices_weights, :, :]
+                .clone()
+            )
+
+            for k in range(2):  # Assuming 2 weights in each contraction
+                model.products[i].symmetric_contractions.contractions[j].weights[
+                    k
+                ] = torch.nn.Parameter(
+                    model_foundations.products[i]
+                    .symmetric_contractions.contractions[j]
+                    .weights[k][indices_weights, :, :]
+                    .clone()
+                )
+
+        model.products[i].linear.weight = torch.nn.Parameter(
+            model_foundations.products[i].linear.weight.clone()
+        )
+
+    if load_readout:
+        # Transferring readouts
+        model.readouts[0].linear.weight = torch.nn.Parameter(
+            model_foundations.readouts[0].linear.weight.clone()
+        )
+
+        model.readouts[1].linear_1.weight = torch.nn.Parameter(
+            model_foundations.readouts[1].linear_1.weight.clone()
+        )
+
+        model.readouts[1].linear_2.weight = torch.nn.Parameter(
+            model_foundations.readouts[1].linear_2.weight.clone()
+        )
+    if model_foundations.scale_shift is not None:
+        if use_scale:
+            model.scale_shift.scale = model_foundations.scale_shift.scale.clone()
+        if use_shift:
+            model.scale_shift.shift = model_foundations.scale_shift.shift.clone()
+    return model
+
+
+def restore_foundations(
+    model: NffScaleMACE,
+    model_foundations: NffScaleMACE,
+    load_readout=True,
+    use_shift=True,
+    use_scale=True,
+    max_L=1,
+) -> "NffScaleMACE":
+    """Restore back to foundational model from reduced model
+
+    Args:
+        model (NffScaleMACE): reduced model
+        model_foundations (NffScaleMACE): foundational model
+        load_readout (bool, optional): whether to restore the reduced model readouts. Defaults to True.
+        use_shift (bool, optional): whether to restore the reduced model shift. Defaults to True.
+        use_scale (bool, optional): whether to restore the reduced model scale. Defaults to True.
+        max_L (int, optional): product blocks contraction max L. Defaults to 2.
+
+    Returns:
+        NffScaleMACE: _description_
+    """
+    assert model_foundations.r_max == model.r_max
+    assert model_foundations.radial_embedding.out_dim == model.radial_embedding.out_dim
+    z_table = AtomicNumberTable([int(z) for z in model_foundations.atomic_numbers])
+    new_z_table = AtomicNumberTable([int(z) for z in model.atomic_numbers])
+    num_species_foundations = len(z_table.zs)
+    indices_weights = [z_table.z_to_index(z) for z in new_z_table.zs]
+    num_species = len(indices_weights)
+    num_channels_foundation = (
+        model_foundations.node_embedding.linear.weight.shape[0]
+        // num_species_foundations
+    )
+    num_channels = (
+        model.node_embedding.linear.weight.shape[0]
+        // num_species
+    )
+    num_radial = model.radial_embedding.out_dim
+    num_radial_foundations = model_foundations.radial_embedding.out_dim
+
+    assert num_channels_foundation == num_channels
+    assert num_radial_foundations == num_radial
+
+    for i in range(int(model.num_interactions)):
+        model_foundations.interactions[i].linear_up.weight = torch.nn.Parameter(
+            model.interactions[i].linear_up.weight.clone()
+        )
+        model_foundations.interactions[i].avg_num_neighbors = model.interactions[
+            i
+        ].avg_num_neighbors
+        for j in range(4):  # Assuming 4 layers in conv_tp_weights,
+            layer_name = f"layer{j}"
+            if j == 0:
+                getattr(
+                    model_foundations.interactions[i].conv_tp_weights, layer_name
+                ).weight = torch.nn.Parameter(
+                    getattr(
+                        model.interactions[i].conv_tp_weights, layer_name
+                    )
+                    .weight[:num_radial, :]
+                    .clone()
+                )
+            else:
+                getattr(
+                    model_foundations.interactions[i].conv_tp_weights, layer_name
+                ).weight = torch.nn.Parameter(
+                    getattr(
+                        model.interactions[i].conv_tp_weights, layer_name
+                    ).weight.clone()
+                )
+
+        model_foundations.interactions[i].linear.weight = torch.nn.Parameter(
+            model.interactions[i].linear.weight.clone()
+        )
+        # Assuming 'model' and 'model_foundations' are instances of some torch.nn.Module
+        # And assuming the other variables (num_channels_foundation, num_species_foundations, etc.) are correctly defined
+
+        if (
+            model.interactions[i].__class__.__name__
+            == "RealAgnosticResidualInteractionBlock"
+        ):
+            for k, index in enumerate(indices_weights):
+                # Get the original weights and apply transformation
+                original_weights = model.interactions[i].skip_tp.weight.view(num_channels, num_species, num_channels)[:,k,:]
+                transformed_weights = original_weights.flatten().clone() * (num_species_foundations / num_species) ** 0.5
+
+                # Ensure the target tensor is appropriately resized
+                # This step assumes you want to replace the weights directly. 
+                # Adjust the view dimensions as necessary to match your actual model architecture.
+                target_shape = (num_channels_foundation, num_species_foundations, num_channels_foundation)
+                model_foundations.interactions[i].skip_tp.weight.data = model_foundations.interactions[i].skip_tp.weight.data.view(*target_shape)
+                
+                # Update the weights directly without wrapping them in torch.nn.Parameter
+                model_foundations.interactions[i].skip_tp.weight.data[:,index,:] = transformed_weights.view_as(model_foundations.interactions[i].skip_tp.weight.data[:,index,:])
+    # Transferring products
+    for i in range(2):  # Assuming 2 products modules
+        max_range = max_L + 1 if i == 0 else 1
+        for j in range(max_range):  # Adjust `max_range` as per your specific case
+            # Extract the entire weights tensor
+            original_weights_max = model_foundations.products[i].symmetric_contractions.contractions[j].weights_max
+            
+            # Assuming 'indices_weights' is a list of indices you wish to update in 'original_weights'
+            for k, index in enumerate(indices_weights):
+                # Clone and prepare the new parameter from the source model
+                new_weights_max = model.products[i].symmetric_contractions.contractions[j].weights_max[k, :, :].clone()
+                
+                # Replace the relevant slice of 'original_weights' with 'new_weight'
+                # Note: This is done outside the parameter to avoid in-place modification errors
+                original_weights_max.data[index, :, :] = torch.nn.Parameter(new_weights_max)
+
+            original_weights_list = model_foundations.products[i].symmetric_contractions.contractions[j].weights
+            for l in range(2): # Assuming 2 weights in each contractions
+                original_weights = original_weights_list[l]
+                for k, index in enumerate(indices_weights):
+                    new_weights = model.products[i].symmetric_contractions.contractions[j].weights[l][k, :, :].clone()
+                    original_weights.data[index, :, :] = torch.nn.Parameter(new_weights)
+
+        model_foundations.products[i].linear.weight = torch.nn.Parameter(
+            model.products[i].linear.weight.clone()
+        )
+
+    if load_readout:
+        # Transferring readouts
+        model_foundations.readouts[0].linear.weight = torch.nn.Parameter(
+            model.readouts[0].linear.weight.clone()
+        )
+
+        model_foundations.readouts[1].linear_1.weight = torch.nn.Parameter(
+            model.readouts[1].linear_1.weight.clone()
+        )
+
+        model_foundations.readouts[1].linear_2.weight = torch.nn.Parameter(
+            model.readouts[1].linear_2.weight.clone()
+        )
+    if model.scale_shift is not None:
+        if use_scale:
+            model_foundations.scale_shift.scale = model.scale_shift.scale.clone()
+        if use_shift:
+            model_foundations.scale_shift.shift = model.scale_shift.shift.clone()
+    return model_foundations
