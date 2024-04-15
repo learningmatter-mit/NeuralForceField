@@ -68,6 +68,10 @@ def get_mace_mp_model_path(model: str = None) -> str:
             raise RuntimeError(
                 "Model download failed and no local model found"
             ) from exc
+    else:
+        raise RuntimeError(
+            "Model download failed and no local model found"
+        )
 
     return model_path
 
@@ -97,7 +101,7 @@ def get_init_kwargs_from_model(model: Union[ScaleShiftMACE, MACE]) -> dict:
         .symmetric_contractions.contractions[0]
         .correlation,
         "gate": model.readouts[-1].non_linearity.acts[0].f,
-        "radial_MLP": model.interactions[0].radial_MLP,
+        "radial_MLP": model.interactions[0].conv_tp_weights.hs[1:-1],
         "radial_type": radial_type
     }
     if isinstance(model, ScaleShiftMACE):

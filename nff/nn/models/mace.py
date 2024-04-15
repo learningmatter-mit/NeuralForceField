@@ -176,7 +176,7 @@ class NffScaleMACE(ScaleShiftMACE):
             .symmetric_contractions.contractions[0]
             .correlation,
             "gate": self.readouts[-1].non_linearity.acts[0].f,
-            "radial_MLP": self.interactions[0].radial_MLP,
+            "radial_MLP": self.interactions[0].conv_tp_weights.hs[1:-1],
             "radial_type": radial_type
         }
         return init_kwargs
