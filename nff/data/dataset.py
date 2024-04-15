@@ -333,9 +333,6 @@ class Dataset(TorchDataset):
         Args:
             target_unit (str): unit to use as final one
 
-        Returns:
-            TYPE: Description
-
         Raises:
             NotImplementedError: Description
         """
@@ -357,6 +354,13 @@ class Dataset(TorchDataset):
         self.props = const.convert_units(self.props, conversion_factor)
         if "units" in self.props and isinstance(self.props["units"], list):
             self.props["units"] = [target_unit for x in self.props["units"]]
+
+        # eV/atom units puts the forces in eV/Angstrom (just like eV does) but
+        # divides the energy by the number of atoms for each geometry
+        if target_unit == "eV/atom":
+            self.props["energy"] = [
+                x / len(y) for x, y in zip(self.props["energy"], self.props["nxyz"])
+            ]
         self.units = target_unit
 
         return
@@ -674,11 +678,12 @@ class Dataset(TorchDataset):
                 continue
 
     @classmethod
-    def from_file(cls, path: str):
+    def from_file(cls, path: str, units: str = "kcal/mol") -> Dataset:
         """Load a dataset from a file.
 
         Args:
             path (str): path to the file from which you want to load a dataset
+            units (str, optional): units of the dataset. Defaults to "kcal/mol".
 
         Returns:
             Dataset: a dataset from the file
@@ -688,6 +693,8 @@ class Dataset(TorchDataset):
         """
         obj = torch.load(path)
         if isinstance(obj, cls):
+            if obj.units != units:
+                obj.to_units(units)
             return obj
 
         print(type(obj))
