@@ -5,6 +5,10 @@
 # See LICENSE for more info
 ####################################################################################################
 
+from __future__ import annotations
+
+from typing import List, Union
+
 import torch
 from mace.calculators.mace import get_model_dtype
 from mace.data.atomic_data import (AtomicData, AtomicNumberTable,
@@ -13,8 +17,9 @@ from mace.data.utils import Configuration
 from mace.modules.models import MACE, ScaleShiftMACE
 from mace.modules.radial import BesselBasis, GaussianBasis
 from mace.tools import torch_tools
-from nff.io.mace import get_mace_mp_model_path, get_init_kwargs_from_model, get_atomic_number_table_from_zs
-from typing import List
+
+from nff.io.mace import (get_atomic_number_table_from_zs,
+                         get_init_kwargs_from_model, get_mace_mp_model_path)
 
 
 class NffScaleMACE(ScaleShiftMACE):
@@ -231,19 +236,19 @@ class NffScaleMACE(ScaleShiftMACE):
                 mace_model.float()
         torch_tools.set_default_dtype(default_dtype)
 
-        nff_scaleshift_mace = cls.load(mace_model.state_dict(), **init_params)
-        # nff_scaleshift_mace.load_state_dict(mace_model.state_dict())
-
-        return nff_scaleshift_mace
+        return cls.load(mace_model.state_dict(), **init_params)
 
 
 def reduce_foundations(
     model_foundations: NffScaleMACE,
-    table: List | AtomicNumberTable,
+    table: Union[List, AtomicNumberTable],
     load_readout=False,
     use_shift=True,
     use_scale=True,
     max_L=1,
+    num_conv_tp_weights=4,
+    num_products=2,
+    num_contraction=2
 ) -> "NffScaleMACE":
     """
     Load the foundations of a model into a model for fine-tuning.
@@ -285,7 +290,7 @@ def reduce_foundations(
         model.interactions[i].avg_num_neighbors = model_foundations.interactions[
             i
         ].avg_num_neighbors
-        for j in range(4):  # Assuming 4 layers in conv_tp_weights,
+        for j in range(num_conv_tp_weights):  # Assuming 4 layers in conv_tp_weights,
             layer_name = f"layer{j}"
             if j == 0:
                 getattr(
@@ -326,7 +331,7 @@ def reduce_foundations(
             )
 
     # Transferring products
-    for i in range(2):  # Assuming 2 products modules
+    for i in range(num_products):  # Assuming 2 products modules
         max_range = max_L + 1 if i == 0 else 1
         for j in range(max_range):  # Assuming 3 contractions in symmetric_contractions
             model.products[i].symmetric_contractions.contractions[
@@ -338,7 +343,7 @@ def reduce_foundations(
                 .clone()
             )
 
-            for k in range(2):  # Assuming 2 weights in each contraction
+            for k in range(num_contraction):  # Assuming 2 weights in each contraction
                 model.products[i].symmetric_contractions.contractions[j].weights[
                     k
                 ] = torch.nn.Parameter(
@@ -380,6 +385,9 @@ def restore_foundations(
     use_shift=True,
     use_scale=True,
     max_L=1,
+    num_conv_tp_weights=4,
+    num_products=2,
+    num_contraction=2
 ) -> "NffScaleMACE":
     """Restore back to foundational model from reduced model
 
@@ -422,7 +430,7 @@ def restore_foundations(
         model_foundations.interactions[i].avg_num_neighbors = model.interactions[
             i
         ].avg_num_neighbors
-        for j in range(4):  # Assuming 4 layers in conv_tp_weights,
+        for j in range(num_conv_tp_weights):  # Assuming 4 layers in conv_tp_weights,
             layer_name = f"layer{j}"
             if j == 0:
                 getattr(
@@ -467,7 +475,7 @@ def restore_foundations(
                 # Update the weights directly without wrapping them in torch.nn.Parameter
                 model_foundations.interactions[i].skip_tp.weight.data[:,index,:] = transformed_weights.view_as(model_foundations.interactions[i].skip_tp.weight.data[:,index,:])
     # Transferring products
-    for i in range(2):  # Assuming 2 products modules
+    for i in range(num_products):  # Assuming 2 products modules
         max_range = max_L + 1 if i == 0 else 1
         for j in range(max_range):  # Adjust `max_range` as per your specific case
             # Extract the entire weights tensor
@@ -483,7 +491,7 @@ def restore_foundations(
                 original_weights_max.data[index, :, :] = torch.nn.Parameter(new_weights_max)
 
             original_weights_list = model_foundations.products[i].symmetric_contractions.contractions[j].weights
-            for l in range(2): # Assuming 2 weights in each contractions
+            for l in range(num_contraction): # Assuming 2 weights in each contractions
                 original_weights = original_weights_list[l]
                 for k, index in enumerate(indices_weights):
                     new_weights = model.products[i].symmetric_contractions.contractions[j].weights[l][k, :, :].clone()
