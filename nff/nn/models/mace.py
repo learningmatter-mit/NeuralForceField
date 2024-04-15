@@ -69,8 +69,8 @@ class NffScaleMACE(ScaleShiftMACE):
             compute_displacement=compute_displacement,
         )
         forces = output.pop("forces")
-        node_features = output.pop("node_feats")
-        output.update({"energy_grad": -forces, "node_features": node_features})
+        node_features = output.pop("node_feats") # Node embedding
+        output.update({"energy_grad": -forces, "embedding": node_features})
         return output
 
     def convert_batch_to_data(self, batch: dict) -> torch_geometric.data.Data:
