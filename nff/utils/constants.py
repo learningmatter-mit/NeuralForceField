@@ -1,7 +1,11 @@
+"""This module contains constants and conversion factors used
+in the NFF package. Specifically, it contains methods to convert
+between kcal/mol, eV, and atomic units, as well as other useful
+constants.
+"""
+
 import copy
-import json
 import math
-import os
 
 import torch
 from rdkit import Chem
@@ -198,9 +202,8 @@ def convert_units(props, conversion_dict):
     Returns:
         props (dict): dictionary with properties converted.
     """
-
     props = props.copy()
-    for prop_key in props.keys():
+    for prop_key in props:
         for conv_key, conv_const in conversion_dict.items():
             if conv_key in prop_key:
                 props[prop_key] = [x * conv_const for x in props[prop_key]]
@@ -208,17 +211,21 @@ def convert_units(props, conversion_dict):
     return props
 
 
-def exc_ev_to_hartree(props, add_ground_energy=False):
-    """Note: only converts excited state energies from ev to hartree,
-    not gradients.
+def exc_ev_to_hartree(props: dict, add_ground_energy: bool = False) -> dict:
+    """Converts excited state energies from ev to hartree. Note: only works
+    for energies, not gradients.
 
+    Args:
+        props (dict): dictionary containing the properties of interest.
+        add_ground_energy (bool): whether to add the ground state energy
+            to the excited state energies.
+
+    Returns:
+        new_props (dict): dictionary with properties converted.
     """
-
-    assert "energy_0" in props.keys()
+    assert "energy_0" in props
     exc_keys = [
-        key
-        for key in props.keys()
-        if key.startswith("energy") and "grad" not in key and key != "energy_0"
+        key for key in props if key.startswith("energy") and "grad" not in key and key != "energy_0"
     ]
     energy_0 = props["energy_0"]
     new_props = copy.deepcopy(props)
