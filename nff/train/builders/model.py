@@ -1,7 +1,8 @@
-"""
-Helper functions to create models, functions and other classes
+"""Helper functions to create models, functions and other classes
 while checking for the validity of hyperparameters.
 """
+
+from __future__ import annotations
 
 import json
 import os
@@ -10,8 +11,8 @@ from typing import Callable, List, Optional, Type, Union
 import numpy as np
 import torch
 from e3nn import o3
-from mace.modules.blocks import InteractionBlock
 
+from mace.modules.blocks import InteractionBlock
 from nff.nn.models.chgnet import CHGNetNFF
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.models.cp3d import ChemProp3D, OnlyBondUpdateCP3D
@@ -456,23 +457,22 @@ DEFAULT_KWARGS = {
 class ParameterError(Exception):
     """Raised when a hyperparameter is of incorrect type"""
 
-    pass
-
 
 def check_parameters(params_type, params):
     """Check whether the parameters correspond to the specified types
 
     Args:
-            params (dict)
+        params_type (dict): dictionary with the types of the parameters
+        params (dict): dictionary with the parameters
     """
     for key, val in params.items():
         if val is None:
             continue
         if key in params_type and not isinstance(val, params_type[key]):
-            raise ParameterError("%s is not %s" % (str(key), params_type[key]))
+            raise ParameterError(f"{key} is not {params_type[key]}")
 
-        for model in PARAMS_TYPE.keys():
-            if key == "{}_params".format(model.lower()):
+        for model in PARAMS_TYPE:
+            if key == f"{model.lower()}_params":
                 check_parameters(PARAMS_TYPE[model], val)
 
 
@@ -480,20 +480,28 @@ def get_model(params: dict, model_type: str = "SchNet", **kwargs):
     """Create new model with the given parameters.
 
     Args:
-            params (dict): parameters used to construct the model
-            model_type (str): name of the model to be used
+        params (dict): parameters used to construct the model
+        model_type (str): name of the model to be used
+        kwargs (dict): any additional arguments to pass to the model
 
     Returns:
-            model (nff.nn.models)
+        model (nff.nn.models)
     """
-
     check_parameters(PARAMS_TYPE[model_type], params)
-    model = MODEL_DICT[model_type](params, **kwargs)
-
-    return model
+    return MODEL_DICT[model_type](params, **kwargs)
 
 
-def load_params(param_path):
+def load_params(param_path: str) -> tuple(dict, str):
+    """Load parameters from a json file. If the parameters are nested
+    in a dictionary, the function will look for the keys "details" or
+    "modelparams" to find the parameters.
+
+    Args:
+        param_path (str): path to the params file
+
+    Returns:
+        tuple(dict, str): parameters and model type
+    """
     with open(param_path, "r") as f:
         info = json.load(f)
     keys = ["details", "modelparams"]
@@ -512,61 +520,58 @@ def load_params(param_path):
 
 def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Module:
     """Load pretrained model from the path. If no epoch is specified,
-            load the best model. For big pre-trained models like CHGNet and MACE,
-            the model is loaded independent of the path or other params.
+    load the best model. For big pre-trained models like CHGNet and MACE,
+    the model is loaded independent of the path or other params.
 
     Args:
-            path (str): path where the model was trained.
-            params (dict, optional): Any parameters you need to instantiate
-                    a model before loading its state dict. This is required for DimeNet,
-                    in which you can't pickle the model directly.
-            model_type (str, optional): name of the model to be used
+        path (str): path where the model was trained.
+        params (dict, optional): Any parameters you need to instantiate
+                a model before loading its state dict. This is required for DimeNet,
+                in which you can't pickle the model directly.
+        model_type (str, optional): name of the model to be used
+        kwargs (dict): any additional arguments to pass to the model
     Returns:
-            torch.nn.Module: a Pytorch model
+        torch.nn.Module: a Pytorch model
     """
-
     # For TL with pre-trained CHGNet and MACE, we pass no path
     if model_type in ["CHGNetNFF", "NffScaleMACE"]:
         if not kwargs:
             kwargs = DEFAULT_KWARGS[model_type]
+
         # Both CHGNet and MACE are wrapped models have a class "load" method
         # that can be used to load the pre-trained model
-
-        if path != "":
+        # both "" and None should evaluate to False
+        if path:
             kwargs.update({"model": path})
         print(f"Loading {model_type} with kwargs {kwargs}")
         return MODEL_DICT[model_type].load(**kwargs)
-    else:
-        try:
-            if os.path.isdir(path):
-                model = torch.load(os.path.join(path, "best_model"), map_location="cpu")
-            elif os.path.exists(path):
-                model = torch.load(path, map_location="cpu")
-            else:
-                raise FileNotFoundError("{} was not found".format(path))
-        except (FileNotFoundError, EOFError, RuntimeError):
-            param_path = os.path.join(path, "params.json")
-            if os.path.isfile(param_path):
-                params, model_type = load_params(param_path)
 
-            assert (
-                params is not None
-            ), "Must specify params if you want to load the state dict"
-            assert (
-                model_type is not None
-            ), "Must specify the model type if you want to load the state dict"
+    try:
+        if os.path.isdir(path):
+            model = torch.load(os.path.join(path, "best_model"), map_location="cpu")
+        elif os.path.exists(path):
+            model = torch.load(path, map_location="cpu")
+        else:
+            raise FileNotFoundError(f"{path} was not found")
+    except (FileNotFoundError, EOFError, RuntimeError):
+        param_path = os.path.join(path, "params.json")
+        if os.path.isfile(param_path):
+            params, model_type = load_params(param_path)
 
-            model = get_model(params, model_type=model_type, **kwargs)
+        assert params is not None, "Must specify params if you want to load the state dict"
+        assert (
+            model_type is not None
+        ), "Must specify the model type if you want to load the state dict"
 
-            if os.path.isdir(path):
-                state_dict = torch.load(
-                    os.path.join(path, "best_model.pth.tar"), map_location="cpu"
-                )
-            elif os.path.exists(path):
-                state_dict = torch.load(path, map_location="cpu")
-            else:
-                raise FileNotFoundError("{} was not found".format(path))
+        model = get_model(params, model_type=model_type, **kwargs)
 
-            model.load_state_dict(state_dict["model"], strict=False)
+        if os.path.isdir(path):
+            state_dict = torch.load(os.path.join(path, "best_model.pth.tar"), map_location="cpu")
+        elif os.path.exists(path):
+            state_dict = torch.load(path, map_location="cpu")
+        else:
+            raise FileNotFoundError(f"{path} was not found")  # noqa: B904
+
+        model.load_state_dict(state_dict["model"], strict=False)
 
     return model
