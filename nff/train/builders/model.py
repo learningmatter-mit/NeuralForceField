@@ -535,14 +535,17 @@ def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Mo
     """
     # For TL with pre-trained CHGNet and MACE, we pass no path
     if model_type in ["CHGNetNFF", "NffScaleMACE"]:
+        # If path is not None, we load the model from the path (usually a
+        # fine-tuned model that we want to test or use for calculations)
+        if path:
+            return MODEL_DICT[model_type].from_file(path, **kwargs)
+
         if not kwargs:
             kwargs = DEFAULT_KWARGS[model_type]
 
         # Both CHGNet and MACE are wrapped models have a class "load" method
         # that can be used to load the pre-trained model
         # both "" and None should evaluate to False
-        if path:
-            kwargs.update({"model": path})
         print(f"Loading {model_type} with kwargs {kwargs}")
         return MODEL_DICT[model_type].load(**kwargs)
 
