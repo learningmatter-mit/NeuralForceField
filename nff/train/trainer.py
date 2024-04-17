@@ -562,8 +562,8 @@ class Trainer:
         """
         # try to save the model
         if hasattr(model, "save"):
-            state_path = self.best_model + ".pth.tar"
-            model.save(state_path)
+            # state_path = self.best_model + ".pth.tar"
+            model.save(self.best_model)
         else:
             try:
                 torch.save(model, self.best_model)
