@@ -3,9 +3,6 @@
 from typing import Dict
 
 import torch
-from chgnet.data.dataset import StructureData
-from pymatgen.io.ase import AseAtomsAdaptor
-
 from nff.data import Dataset
 from nff.io import AtomsBatch
 from nff.utils.cuda import batch_detach, batch_to, detach
@@ -17,21 +14,23 @@ from chgnet.data.dataset import StructureData
 def convert_nff_to_chgnet_structure_data(
     dataset: Dataset,
     cutoff: float = 5.0,
+    shuffle: bool = True,
 ):
-    '''The function `convert_nff_to_chgnet_structure_data` converts a dataset in NFF format to a dataset in
+    """The function `convert_nff_to_chgnet_structure_data` converts a dataset in NFF format to a dataset in
     CHGNet structure data format.
-    
+
     Parameters
     ----------
     dataset : Dataset
-        The `dataset` parameter is an object of the `Dataset` class. It contains the data that needs to be
-    converted to the `chgnet_dataset` format.
+        The `dataset` parameter is an object of the `Dataset` class.
     cutoff : float
         The `cutoff` parameter is a float value that represents the distance cutoff for constructing the
     neighbor list in the conversion process. It determines the maximum distance between atoms within
     which they are considered neighbors. Any atoms beyond this distance will not be included in the
     neighbor list.
-    
+    shuffle : bool
+        The `shuffle` parameter is a boolean value that determines whether the dataset should be shuffled
+
     Returns
     -------
     a `chgnet_dataset` object of type `StructureData`.
@@ -60,35 +59,50 @@ def convert_nff_to_chgnet_structure_data(
 
     chgnet_dataset = StructureData(
         structures=pymatgen_structures,
-        energies=energies_per_atoms,
+        energies=energies_per_atom,
         forces=forces,
         stresses=stresses,
         magmoms=magmoms,
+        shuffle=shuffle,
     )
 
     return chgnet_dataset
 
+
 def convert_data_batch(
     data_batch: Dict,
     cutoff: float = 5.0,
+    shuffle: bool = True,
 ):
-    '''Converts a dataset in NFF format to a dataset in
+    """Converts a dataset in NFF format to a dataset in
     CHGNet structure data format.
-    
+
     Parameters
     ----------
     data_batch : Dict
+        A dictionary of properties for each structure in the batch.
+        Basically the props in NFF Dataset
+        Example:
+            props = {
+                'nxyz': [np.array([[1, 0, 0, 0], [1, 1.1, 0, 0]]),
+                            np.array([[1, 3, 0, 0], [1, 1.1, 5, 0]])],
+                'lattice': [np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+                            np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])],
+                'num_atoms': [2, 2],
+            }
     cutoff : float
         The `cutoff` parameter is a float value that represents the distance cutoff for constructing the
     neighbor list in the conversion process. It determines the maximum distance between atoms within
     which they are considered neighbors. Any atoms beyond this distance will not be included in the
     neighbor list.
-    
+    shuffle : bool
+        The `shuffle` parameter is a boolean value that determines whether the dataset should be shuffled
+
     Returns
     -------
     a `chgnet_dataset` object of type `StructureData`.
-    
-    '''
+
+    """
     detached_batch = batch_detach(data_batch)
     nxyz = detached_batch["nxyz"]
     atoms_batch = AtomsBatch(
@@ -161,10 +175,11 @@ def convert_data_batch(
 
     chgnet_dataset = StructureData(
         structures=pymatgen_structures,
-        energies=energies_per_atoms,
+        energies=energies_per_atom,
         forces=forces,
         stresses=stresses,
         magmoms=magmoms,
+        shuffle=shuffle,
     )
 
     return chgnet_dataset

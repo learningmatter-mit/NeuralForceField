@@ -88,7 +88,10 @@ class CHGNetNFF(CHGNet):
                                       np.array([[0, 0, 0], [0.1, 0.2, 0.3]])],
                 }
         """
-        chgnet_data_batch = convert_data_batch(data_batch)
+        chgnet_data_batch = convert_data_batch(
+            data_batch, cutoff=self.cutoff, shuffle=False
+        )  # shuffle=False to keep the order of the structures
+
         graphs, targets = collate_graphs(chgnet_data_batch)
 
         graphs = [graph.to(self.device) for graph in graphs]
@@ -96,7 +99,6 @@ class CHGNetNFF(CHGNet):
         output = super().forward(
             graphs, task="ef", return_crystal_feas=self.requires_embedding
         )
-
         # convert to NFF keys and negate energy_grad
         output = cat_props(
             {self.key_mappings[k]: self.negate_value(k, v) for k, v in output.items()}
