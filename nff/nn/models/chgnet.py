@@ -28,13 +28,19 @@ class CHGNetNFF(CHGNet):
     def __init__(
         self,
         *args,
-        units: str = "eV",
+        units: str = "eV/atom",
+        is_intensive: bool = True,
+        cutoff: float = 5.0,
         key_mappings: Dict[str, str] = None,
         device: str = "cpu",
         requires_embedding: bool = False,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+
+        super().__init__(*args, is_intensive=is_intensive, **kwargs)
+        if is_intensive and "/atom" not in units:
+            units += "/atom"
+        self.cutoff = cutoff
         self.units = units
         self.device = device
         self.requires_embedding = requires_embedding
