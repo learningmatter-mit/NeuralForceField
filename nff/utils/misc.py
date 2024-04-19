@@ -1,46 +1,59 @@
 import argparse
-import sys
-from tqdm import tqdm
 import json
-import subprocess
 import os
 import random
+import subprocess
+import sys
+
 import numpy as np
 import torch
 from ase.build.rotate import rotation_matrix_from_points
-from sklearn.metrics import (roc_auc_score, auc, precision_recall_curve,
-                             r2_score, accuracy_score, log_loss)
+from sklearn.metrics import (
+    accuracy_score,
+    auc,
+    log_loss,
+    precision_recall_curve,
+    r2_score,
+    roc_auc_score,
+)
+from tqdm import tqdm
 
 # optimization goal for various metrics
 
-METRIC_DIC = {"pr_auc": "maximize",
-              "roc_auc": "maximize",
-              "r2": "maximize",
-              "class_loss": "minimize",
-              "regress_loss": "minimize",
-              "mae": "minimize",
-              "mse": "minimize"}
+METRIC_DIC = {
+    "pr_auc": "maximize",
+    "roc_auc": "maximize",
+    "r2": "maximize",
+    "class_loss": "minimize",
+    "regress_loss": "minimize",
+    "mae": "minimize",
+    "mse": "minimize",
+}
 
 METRICS = list(METRIC_DIC.keys())
 
 # transform from chemprop syntax to our syntax for the metrics
 
-CHEMPROP_TRANSFORM = {"auc": "roc_auc",
-                      "prc-auc": "pr_auc",
-                      "binary_cross_entropy": "class_loss",
-                      "mse": "regress_loss"}
+CHEMPROP_TRANSFORM = {
+    "auc": "roc_auc",
+    "prc-auc": "pr_auc",
+    "binary_cross_entropy": "class_loss",
+    "mse": "regress_loss",
+}
 
 # metrics available in chemprop
 
-CHEMPROP_METRICS = ["auc",
-                    "prc-auc",
-                    "rmse",
-                    "mae",
-                    "mse",
-                    "r2",
-                    "accuracy",
-                    "cross_entropy",
-                    "binary_cross_entropy"]
+CHEMPROP_METRICS = [
+    "auc",
+    "prc-auc",
+    "rmse",
+    "mae",
+    "mse",
+    "r2",
+    "accuracy",
+    "cross_entropy",
+    "binary_cross_entropy",
+]
 
 
 def tqdm_enum(iter):
@@ -59,14 +72,25 @@ def tqdm_enum(iter):
         i += 1
 
 
+def log(prefix, msg):
+    """
+    Logs on the screen a message in the format of 'PREFIX:  msg'
+
+    Args:
+        prefix (str)
+        msg (str)
+    """
+    print("{:>12}:  {}".format(prefix.upper(), msg))
+
+
 def add_json_args(args, config_flag="config_file"):
     config_path = getattr(args, config_flag, None)
     if config_path is not None:
         with open(config_path, "r") as f:
             config_args = json.load(f)
-        if 'details' in config_args:
-            config_args.update(config_args['details'])
-            config_args.pop('details')
+        if "details" in config_args:
+            config_args.update(config_args["details"])
+            config_args.pop("details")
         for key, val in config_args.items():
             if hasattr(args, key):
                 setattr(args, key, val)
@@ -108,19 +132,19 @@ def fprint(msg):
 
 
 def bash_command(cmd):
-    """ Run a command from the command line using subprocess.
+    """Run a command from the command line using subprocess.
     Args:
         cmd (str): command
     Returns:
         None
     """
 
-    return subprocess.Popen(cmd, shell=True, executable='/bin/bash')
+    return subprocess.Popen(cmd, shell=True, executable="/bin/bash")
 
 
 def convert_metric(metric):
     """
-    Convert a metric name to a fixed name that can be used in 
+    Convert a metric name to a fixed name that can be used in
     various scripts.
     Args:
         metric (str): input metric
@@ -155,8 +179,7 @@ def prepare_metric(lines, metric):
     else:
         for i, item in enumerate(header_items):
             sub_keys = metric.split("_")
-            if all([key.lower() in item.lower()
-                    for key in sub_keys]):
+            if all([key.lower() in item.lower() for key in sub_keys]):
                 idx = i
 
     optim = METRIC_DIC[metric]
@@ -186,9 +209,7 @@ def parse_score(model_path, metric):
     with open(log_path, "r") as f:
         lines = f.readlines()
 
-    idx, best_score, best_epoch, optim = prepare_metric(
-        lines=lines,
-        metric=metric)
+    idx, best_score, best_epoch, optim = prepare_metric(lines=lines, metric=metric)
 
     for line in lines:
         splits = [i.strip() for i in line.split("|")]
@@ -197,8 +218,12 @@ def parse_score(model_path, metric):
         except (ValueError, IndexError):
             continue
 
-        if any([(optim == "minimize" and score < best_score),
-                (optim == "maximize" and score > best_score)]):
+        if any(
+            [
+                (optim == "minimize" and score < best_score),
+                (optim == "maximize" and score > best_score),
+            ]
+        ):
             best_score = score
             best_epoch = splits[1]
 
@@ -257,11 +282,7 @@ def write_csv(path, dic):
         f.write(text)
 
 
-def prop_split(max_specs,
-               dataset_type,
-               props,
-               sample_dic,
-               seed):
+def prop_split(max_specs, dataset_type, props, sample_dic, seed):
     """
     Sample a set of smiles strings by up to a maximum number. If the
     property of interest is a binary value, try to get as many of the
@@ -286,10 +307,12 @@ def prop_split(max_specs,
         assert len(props) == 1, msg
 
         prop = props[0]
-        pos_smiles = [key for key, sub_dic in sample_dic.items()
-                      if sub_dic.get(prop) == 1]
-        neg_smiles = [key for key, sub_dic in sample_dic.items()
-                      if sub_dic.get(prop) == 0]
+        pos_smiles = [
+            key for key, sub_dic in sample_dic.items() if sub_dic.get(prop) == 1
+        ]
+        neg_smiles = [
+            key for key, sub_dic in sample_dic.items() if sub_dic.get(prop) == 0
+        ]
 
         # find the underrepresnted and overrepresented class
         if len(pos_smiles) < len(neg_smiles):
@@ -309,8 +332,7 @@ def prop_split(max_specs,
         else:
             random.shuffle(underrep)
             random.shuffle(overrep)
-            keep_smiles = (underrep[:max_specs // 2]
-                           + overrep[max_specs // 2:])
+            keep_smiles = underrep[: max_specs // 2] + overrep[max_specs // 2 :]
     else:
 
         keep_smiles = list(sample_dic.keys())
@@ -327,9 +349,7 @@ def prop_split(max_specs,
     return keep_smiles
 
 
-def get_split_names(train_only,
-                    val_only,
-                    test_only):
+def get_split_names(train_only, val_only, test_only):
     """
     Get names of dataset splits.
     Args:
@@ -342,15 +362,12 @@ def get_split_names(train_only,
             monitoring.
     """
 
-    only_dic = {"train": train_only,
-                "val": val_only,
-                "test": test_only}
+    only_dic = {"train": train_only, "val": val_only, "test": test_only}
 
-    requested = [name for name, only in only_dic.items()
-                 if only]
+    requested = [name for name, only in only_dic.items() if only]
     if len(requested) > 1:
         string = ", ".join(requested)
-        msg = (f"Requested {string}, which are mutually exclusive")
+        msg = f"Requested {string}, which are mutually exclusive"
         raise Exception(msg)
 
     if len(requested) != 0:
@@ -411,7 +428,8 @@ def apply_metric(metric, pred, actual):
             score = 0
         else:
             precision, recall, _ = precision_recall_curve(
-                y_true=actual, probas_pred=pred)
+                y_true=actual, probas_pred=pred
+            )
             score = auc(recall, precision)
     elif metric == "mse":
         score = ((np.array(pred) - np.array(actual)) ** 2).mean()
@@ -443,7 +461,7 @@ def avg_distances(dset):
     # Get the neighbor list that includes the neighbor list of each conformer
 
     all_nbrs = []
-    for nbrs in dset.props['nbr_list']:
+    for nbrs in dset.props["nbr_list"]:
         for pair in nbrs:
             all_nbrs.append(tuple(pair.tolist()))
     all_nbrs_tuple = list(set(tuple(all_nbrs)))
@@ -455,8 +473,9 @@ def avg_distances(dset):
 
     for i, batch in enumerate(dset):
         xyz = batch["nxyz"][:, 1:]
-        all_distances[i] = ((xyz[all_nbrs[:, 0]] - xyz[all_nbrs[:, 1]])
-                            .pow(2).sum(1).sqrt())
+        all_distances[i] = (
+            (xyz[all_nbrs[:, 0]] - xyz[all_nbrs[:, 1]]).pow(2).sum(1).sqrt()
+        )
 
     weights = dset.props["weights"].reshape(-1, 1)
     avg_d = (all_distances * weights).sum(0)
@@ -484,60 +503,54 @@ def cat_props(props):
 
 def kron(a, b):
     ein = torch.einsum("ab,cd-> acbd", a, b)
-    out = ein.view(a.size(0) * b.size(0),
-                   a.size(1) * b.size(1))
+    out = ein.view(a.size(0) * b.size(0), a.size(1) * b.size(1))
 
     return out
 
 
-def load_defaults(direc,
-                  arg_path):
+def load_defaults(direc, arg_path):
     """
     Load default arguments from a JSON file
     """
 
     args_path = os.path.join(direc, arg_path)
-    with open(args_path, 'r') as f:
+    with open(args_path, "r") as f:
         default_args = json.load(f)
 
     return default_args
 
 
-def parse_args_from_json(arg_path,
-                         direc):
+def parse_args_from_json(arg_path, direc):
 
-    default_args = load_defaults(arg_path=arg_path,
-                                 direc=direc)
-    description = default_args['description']
+    default_args = load_defaults(arg_path=arg_path, direc=direc)
+    description = default_args["description"]
 
     parser = argparse.ArgumentParser(description=description)
-    default_args.pop('description')
+    default_args.pop("description")
 
-    required = parser.add_argument_group(('required arguments (either in '
-                                          'the command line or the config '
-                                          'file)'))
-    optional = parser.add_argument_group('optional arguments')
+    required = parser.add_argument_group(
+        ("required arguments (either in " "the command line or the config " "file)")
+    )
+    optional = parser.add_argument_group("optional arguments")
 
     for name, info in default_args.items():
-        keys = ['default', 'choices', 'nargs', 'action']
-        kwargs = {key: info[key] for key in keys
-                  if key in info}
-        if 'type' in info:
-            kwargs.update({"type": eval(info['type'])})
+        keys = ["default", "choices", "nargs", "action"]
+        kwargs = {key: info[key] for key in keys if key in info}
+        if "type" in info:
+            kwargs.update({"type": eval(info["type"])})
 
         # Required arguments get put in one group and optional ones in another
         # so that they're separated in `--help` . We don't actually set
         # required=True for required ones, though, because they can be given in
         # the config file instead of the command line
 
-        group = required if info.get('required', False) else optional
-        group.add_argument(f'--{name}',
-                            help=info['help'],
-                            **kwargs)
+        group = required if info.get("required", False) else optional
+        group.add_argument(f"--{name}", help=info["help"], **kwargs)
 
     args = parser.parse_args()
 
     return args
+
 
 def align_and_return(target, atoms):
     """
@@ -563,4 +576,3 @@ def align_and_return(target, atoms):
     atoms.set_positions(np.dot(p, R.T) + c0)
 
     return R, c0, c
-
