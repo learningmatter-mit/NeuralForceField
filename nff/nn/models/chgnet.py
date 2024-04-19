@@ -127,8 +127,9 @@ class CHGNetNFF(CHGNet):
     @classmethod
     def from_file(cls, path, **kwargs) -> CHGNetNFF:
         """Build a CHGNetNFF from a saved file."""
-        state = torch.load(path, map_location=torch.device("cpu"))
-        return CHGNetNFF.from_dict(state["model"], **kwargs)
+        device = kwargs.pop("device", "cpu")
+        state = torch.load(path, map_location=torch.device(device))
+        return CHGNetNFF.from_dict(state["model"], device=device, **kwargs)
 
     @classmethod
     def load(cls, model_name="0.3.0", **kwargs) -> CHGNetNFF:
@@ -159,6 +160,12 @@ class CHGNetNFF(CHGNet):
             version=model_name,
             **kwargs,
         )
+
+    def to(self, *args, **kwargs):
+        self = super().to(*args, **kwargs)
+        if hasattr(self, "composition_model"):
+            self.composition_model = self.composition_model.to(*args, **kwargs)
+        return self
 
 
 @dataclass
