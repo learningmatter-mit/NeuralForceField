@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 
 from nff.data import Dataset, collate_dicts
 from nff.nn.models.chgnet import CHGNetNFF
-from nff.train import Trainer, hooks, loss, metrics
+from nff.train import Trainer, get_model, hooks, loss, metrics
 from nff.utils.cuda import cuda_devices_sorted_by_free_mem
 from nff.utils.misc import log
 
@@ -49,13 +49,26 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         type=str,
     )
 
+    # Model params
+    parser.add_argument(
+        "--model_type", help="Name of model", type=str, default="CHGNetNFF"
+    )
+    parser.add_argument(
+        "--model_params_path", help="Path to model parameters", type=str
+    )
+    parser.add_argument(
+        "--fine_tune",
+        help="Whether to fine-tune the model",
+        action="store_true",
+    )
+
+    # Training params
     parser.add_argument(
         "--forces_weight", help="weight of forces loss", type=float, default=1.0
     )
     parser.add_argument(
         "--energy_weight", help="weight of energy loss", type=float, default=0.05
     )
-
     parser.add_argument("--batch_size", help="batch size", type=int, default=16)
 
     parser.add_argument(
@@ -69,11 +82,6 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         help="Maximum number of consecutive epochs of increasing loss",
         type=int,
         default=25,
-    )
-    parser.add_argument(
-        "--fine_tune",
-        help="Whether to fine-tune the model",
-        action="store_true",
     )
     parser.add_argument(
         "--allow_grad",
@@ -129,8 +137,7 @@ def main(all_params):
         device_with_most_available_memory = cuda_devices_sorted_by_free_mem()[-1]
         device = f"cuda:{device_with_most_available_memory}"
 
-    # params = all_params['details']
-    params = {
+    trainingparams = {
         "targets": "ef",
         "lr": 0.001,
         "weight_decay": 0.0,
@@ -145,6 +152,35 @@ def main(all_params):
         "scheduler_decay_fraction": 1e-2,
         "batch_size": all_params.batch_size,
         "workers": all_params.num_workers,
+        "device": device,
+    }
+
+    modelparams = {
+        "atom_fea_dim": 64,
+        "bond_fea_dim": 64,
+        "angle_fea_dim": 64,
+        "composition_model": "MPtrj",
+        "num_radial": 31,
+        "num_angular": 31,
+        "n_conv": 4,
+        "atom_conv_hidden_dim": 64,
+        "update_bond": True,
+        "bond_conv_hidden_dim": 64,
+        "update_angle": True,
+        "angle_layer_hidden_dim": 0,
+        "conv_dropout": 0.0,
+        "read_out": "ave",
+        "gMLP_norm": "layer",
+        "readout_norm": "layer",
+        "mlp_hidden_dims": [64, 64, 64],
+        "mlp_first": True,
+        "is_intensive": True,
+        "non_linearity": "silu",
+        "atom_graph_cutoff": all_params.r_max,
+        "bond_graph_cutoff": 3.0,
+        "graph_converter_algorithm": "fast",
+        "cutoff_coeff": 8,
+        "learnable_rbf": True,
         "device": device,
     }
 
@@ -181,40 +217,8 @@ def main(all_params):
             for param in model.atom_conv_layers[-1].parameters():
                 param.requires_grad = True
     else:
-        logger.info("Training new CHGNet model")
-        model = CHGNetNFF(
-            atom_fea_dim=64,
-            bond_fea_dim=64,
-            angle_fea_dim=64,
-            composition_model="MPtrj",
-            num_radial=31,
-            num_angular=31,
-            n_conv=4,
-            atom_conv_hidden_dim=64,
-            update_bond=True,
-            bond_conv_hidden_dim=64,
-            update_angle=True,
-            angle_layer_hidden_dim=0,
-            conv_dropout=0,
-            read_out="ave",
-            gMLP_norm="layer",
-            readout_norm="layer",
-            mlp_hidden_dims=[64, 64, 64],
-            mlp_first=True,
-            is_intensive=True,
-            non_linearity="silu",
-            atom_graph_cutoff=all_params.r_max,
-            bond_graph_cutoff=3,
-            graph_converter_algorithm="fast",
-            cutoff_coeff=8,
-            learnable_rbf=True,
-            device=device,
-        )
+        model = get_model(modelparams, model_type=all_params.model_type)
 
-    # Turn composition model training on / off
-    # NOTE: these are extras for CHGNet
-    for param in model.composition_model.parameters():
-        param.requires_grad = True
     model.to(device)
     model.float()
 
@@ -233,15 +237,15 @@ def main(all_params):
 
     train_loader = DataLoader(
         train,
-        batch_size=params["batch_size"],
-        num_workers=params["workers"],
+        batch_size=trainingparams["batch_size"],
+        num_workers=trainingparams["workers"],
         collate_fn=collate_dicts,
     )
 
     val_loader = DataLoader(
         val,
-        batch_size=params["batch_size"],
-        num_workers=params["workers"],
+        batch_size=trainingparams["batch_size"],
+        num_workers=trainingparams["workers"],
         collate_fn=collate_dicts,
     )
 
@@ -254,7 +258,9 @@ def main(all_params):
     )
 
     optimizer = torch.optim.Adam(
-        model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"]
+        model.parameters(),
+        lr=trainingparams["lr"],
+        weight_decay=trainingparams["weight_decay"],
     )
 
     # monitor energy and force MAE
@@ -265,10 +271,10 @@ def main(all_params):
 
     train_hooks = [
         hooks.WarmRestartHook(
-            T0=params["n_epochs"],
+            T0=trainingparams["n_epochs"],
             Tmult=1,
-            lr_min=params["scheduler_decay_fraction"],
-            lr_factor=params["lr"],
+            lr_min=trainingparams["scheduler_decay_fraction"],
+            lr_factor=trainingparams["lr"],
             optimizer=optimizer,
         ),
         hooks.MaxEpochHook(all_params.max_num_epochs),
@@ -285,7 +291,7 @@ def main(all_params):
         hooks.ReduceLROnPlateauHook(
             optimizer=optimizer,
             patience=all_params.patience,
-            factor=params["lr"],
+            factor=trainingparams["lr"],
             min_lr=1e-7,
             window_length=1,
             stop_after_min=True,
@@ -304,7 +310,7 @@ def main(all_params):
         hooks=train_hooks,
     )
 
-    T.train(device=device, n_epochs=params["n_epochs"])
+    T.train(device=device, n_epochs=trainingparams["n_epochs"])
 
     log_train("model saved in " + save_path)
 
