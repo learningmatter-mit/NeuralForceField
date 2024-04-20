@@ -4,7 +4,7 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Union
+from typing import Dict, List, Union
 
 import torch
 from chgnet.data.dataset import collate_graphs
@@ -15,9 +15,6 @@ from torch import Tensor, nn
 
 from nff.io.chgnet import convert_data_batch
 from nff.utils.misc import cat_props
-
-if TYPE_CHECKING:
-    from chgnet import PredTask
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -56,6 +53,11 @@ class CHGNetNFF(CHGNet):
                 "crystal_fea": "embedding",
             }
             self.negate_keys = ("f",)
+
+        if hasattr(self, "composition_model"):
+            # Turn composition model training on
+            for param in self.composition_model.parameters():
+                param.requires_grad = True
 
     def forward(
         self, data_batch: Dict[str, List], **kwargs
@@ -103,18 +105,6 @@ class CHGNetNFF(CHGNet):
         output = cat_props(
             {self.key_mappings[k]: self.negate_value(k, v) for k, v in output.items()}
         )
-
-        # Convert Result
-        # TODO maybe convert from eV/atom to eV for energies
-        # factor = 1 if not self.model.is_intensive else structure.composition.num_atoms
-        # self.results.update(
-        #     energy=model_prediction["e"] * factor,
-        #     forces=model_prediction["f"],
-        #     free_energy=model_prediction["e"] * factor,
-        #     magmoms=model_prediction["m"],
-        #     stress=model_prediction["s"] * self.stress_weight,
-        #     crystal_fea=model_prediction["crystal_fea"],
-        # )
 
         return output
 
