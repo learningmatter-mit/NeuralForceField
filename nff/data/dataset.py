@@ -13,13 +13,13 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import torch
+from ase import Atoms
+from ase.neighborlist import neighbor_list
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle as skshuffle
 from torch.utils.data import Dataset as TorchDataset
 
 import nff.utils.constants as const
-from ase import Atoms
-from ase.neighborlist import neighbor_list
 from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
 from nff.data.features import add_morgan as external_morgan
 from nff.data.features import featurize_rdkit as external_rdkit
@@ -83,7 +83,11 @@ class Dataset(TorchDataset):
     """
 
     def __init__(
-        self, props: dict, units: str = "kcal/mol", check_props: bool = True, do_copy: bool = True
+        self,
+        props: dict,
+        units: str = "kcal/mol",
+        check_props: bool = True,
+        do_copy: bool = True,
     ) -> None:
         """Constructor for Dataset class.
 
@@ -179,7 +183,9 @@ class Dataset(TorchDataset):
 
             elif any(x is None for x in val):
                 bad_indices = [i for i, item in enumerate(val) if item is None]
-                good_indices = [index for index in range(len(val)) if index not in bad_indices]
+                good_indices = [
+                    index for index in range(len(val)) if index not in bad_indices
+                ]
                 if len(good_indices) == 0:
                     nan_list = np.array([float("NaN")]).tolist()
                 else:
@@ -191,7 +197,9 @@ class Dataset(TorchDataset):
 
             else:
                 assert len(val) == n_geoms, (
-                    f"length of {key} is not " f"compatible with {n_geoms} " "geometries"
+                    f"length of {key} is not "
+                    f"compatible with {n_geoms} "
+                    "geometries"
                 )
                 props[key] = to_tensor(val)
 
@@ -218,10 +226,12 @@ class Dataset(TorchDataset):
         """
         if "lattice" not in self.props:
             self.props[key] = [
-                get_neighbor_list(nxyz[:, 1:4], cutoff, undirected) for nxyz in self.props["nxyz"]
+                get_neighbor_list(nxyz[:, 1:4], cutoff, undirected)
+                for nxyz in self.props["nxyz"]
             ]
             self.props[offset_key] = [
-                torch.sparse.FloatTensor(nbrlist.shape[0], 3) for nbrlist in self.props[key]
+                torch.sparse.FloatTensor(nbrlist.shape[0], 3)
+                for nbrlist in self.props[key]
             ]
         else:
             self._get_periodic_neighbor_list(
@@ -399,7 +409,9 @@ class Dataset(TorchDataset):
         Returns:
             None
         """
-        featurize_parallel(self, num_procs=num_procs, bond_feats=bond_feats, atom_feats=atom_feats)
+        featurize_parallel(
+            self, num_procs=num_procs, bond_feats=bond_feats, atom_feats=atom_feats
+        )
 
     def add_morgan(self, vec_length: int) -> None:
         """Add Morgan fingerprints to each species in the dataset.
@@ -497,7 +509,12 @@ class Dataset(TorchDataset):
             z = self.props["nxyz"][i][:, 0]
             xyz = self.props["nxyz"][i][:, 1:4]
             bond_list = self.props["bonds"][i]
-            bond_len = (xyz[bond_list[:, 0]] - xyz[bond_list[:, 1]]).pow(2).sum(-1).sqrt()[:, None]
+            bond_len = (
+                (xyz[bond_list[:, 0]] - xyz[bond_list[:, 1]])
+                .pow(2)
+                .sum(-1)
+                .sqrt()[:, None]
+            )
 
             bond_type_list = torch.stack((z[bond_list[:, 0]], z[bond_list[:, 1]])).t()
             for i, bond in enumerate(bond_type_list):
@@ -508,7 +525,9 @@ class Dataset(TorchDataset):
                     bond_len_dict[bond].append(bond_len[i])
 
         # compute bond len averages
-        self.bond_len_dict = {key: torch.stack(bond_len_dict[key]).mean(0) for key in bond_len_dict}
+        self.bond_len_dict = {
+            key: torch.stack(bond_len_dict[key]).mean(0) for key in bond_len_dict
+        }
 
         return self.bond_len_dict
 
@@ -637,6 +656,7 @@ class Dataset(TorchDataset):
                 pbc="lattice" in self.props,
                 cutoff=cutoff,
                 directed=(not undirected),
+                dense_nbrs=False,
                 device=device,
             )
             nbrs, offs = atoms.update_nbr_list()
@@ -649,7 +669,9 @@ class Dataset(TorchDataset):
             )
             for key, val in atoms.props.items():
                 if isinstance(val, torch.Tensor):
-                    atoms.props[key] = torch.atleast_1d(val)  # make sure it's a 1D tensor min
+                    atoms.props[key] = torch.atleast_1d(
+                        val
+                    )  # make sure it's a 1D tensor min
             atoms.props["units"] = self.units
             atoms_batches.append(atoms)
         return atoms_batches
@@ -668,7 +690,9 @@ class Dataset(TorchDataset):
                     self.props[key] = self.props[key].float()
                 elif dtype == "double":
                     self.props[key] = self.props[key].double()
-            elif isinstance(self.props[key], list) and isinstance(self.props[key][0], torch.Tensor):
+            elif isinstance(self.props[key], list) and isinstance(
+                self.props[key][0], torch.Tensor
+            ):
                 for i, val in enumerate(self.props[key]):
                     if dtype == "float":
                         self.props[key][i] = val.float()
@@ -837,7 +861,9 @@ def concatenate_dict(*dicts):
     Returns:
         TYPE: Description
     """
-    assert all(isinstance(d, dict) for d in dicts), "all arguments have to be dictionaries"
+    assert all(
+        isinstance(d, dict) for d in dicts
+    ), "all arguments have to be dictionaries"
 
     # Old method
     # keys = set(sum([list(d.keys()) for d in dicts], []))
@@ -937,8 +963,12 @@ def binary_split(
     neg_idx = [i for i in range(len(dataset)) if i not in pos_idx]
 
     # split the positive and negative indices separately
-    pos_idx_train, pos_idx_test = train_test_split(pos_idx, test_size=test_size, random_state=seed)
-    neg_idx_train, neg_idx_test = train_test_split(neg_idx, test_size=test_size, random_state=seed)
+    pos_idx_train, pos_idx_test = train_test_split(
+        pos_idx, test_size=test_size, random_state=seed
+    )
+    neg_idx_train, neg_idx_test = train_test_split(
+        neg_idx, test_size=test_size, random_state=seed
+    )
 
     # combine the negative and positive test idx to get the test idx
     # do the same for train
@@ -973,17 +1003,25 @@ def stratified_split(
     label_counts = Counter(stratify_labels)
 
     # get labels with count less than min count
-    labels_to_remove = [label for label, count in label_counts.items() if count < min_count]
+    labels_to_remove = [
+        label for label, count in label_counts.items() if count < min_count
+    ]
 
     # remove labels with count less than min count
     idx_to_remove = []
     for bad_label in labels_to_remove:
-        idx_to_remove.extend([i for i, x in enumerate(stratify_labels) if x == bad_label])
+        idx_to_remove.extend(
+            [i for i, x in enumerate(stratify_labels) if x == bad_label]
+        )
 
     all_idx = [i for i in all_idx if i not in idx_to_remove]
-    stratify_labels = [x for i, x in enumerate(stratify_labels) if i not in idx_to_remove]
+    stratify_labels = [
+        x for i, x in enumerate(stratify_labels) if i not in idx_to_remove
+    ]
 
-    assert len(all_idx) == len(stratify_labels), "length of indices and labels do not match"
+    assert len(all_idx) == len(
+        stratify_labels
+    ), "length of indices and labels do not match"
 
     # use sklearn to split the indices
     idx_train, idx_test = train_test_split(
@@ -1034,7 +1072,9 @@ def split_train_test(
         )
     else:
         idx = list(range(len(dataset)))
-        idx_train, idx_test = train_test_split(idx, test_size=test_size, random_state=seed)
+        idx_train, idx_test = train_test_split(
+            idx, test_size=test_size, random_state=seed
+        )
 
     train = Dataset(
         props={key: [val[i] for i in idx_train] for key, val in dataset.props.items()},
@@ -1067,7 +1107,11 @@ def split_train_validation_test(
     Returns:
         tuple[Dataset, Dataset, Dataset]: train, validation and test datasets
     """
-    train, validation = split_train_test(dataset, test_size=val_size, seed=seed, **kwargs)
-    train, test = split_train_test(train, test_size=test_size / (1 - val_size), seed=seed, **kwargs)
+    train, validation = split_train_test(
+        dataset, test_size=val_size, seed=seed, **kwargs
+    )
+    train, test = split_train_test(
+        train, test_size=test_size / (1 - val_size), seed=seed, **kwargs
+    )
 
     return train, validation, test
