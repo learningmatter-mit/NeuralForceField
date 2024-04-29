@@ -13,9 +13,7 @@ from nff.utils.cuda import cuda_devices_sorted_by_free_mem
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Evaluate a MACE model on an NFF dataset."
-    )
+    parser = argparse.ArgumentParser(description="Evaluate an NFF model on a dataset.")
     parser.add_argument(
         "--model_path",
         type=str,
@@ -58,7 +56,7 @@ def main(
     device: str = "cpu",
     save_folder: str = "./",
 ):
-    """Evaluate a MACE model on an NFF dataset.
+    """Evaluate an NFF model on a dataset.
 
     Args:
         model_path (str): path to the model
