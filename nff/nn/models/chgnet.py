@@ -159,10 +159,11 @@ class CHGNetNFF(CHGNet):
             **kwargs,
         )
 
-    def to(self, *args, **kwargs):
-        self = super().to(*args, **kwargs)
+    def to(self, device, **kwargs):
+        self = super().to(device, **kwargs)
+        self.device = device
         if hasattr(self, "composition_model"):
-            self.composition_model = self.composition_model.to(*args, **kwargs)
+            self.composition_model = self.composition_model.to(device, **kwargs)
         return self
 
 
