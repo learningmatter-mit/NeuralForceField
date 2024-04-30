@@ -71,7 +71,7 @@ def main(
     save_path.mkdir(exist_ok=True)
 
     # Determine the device to use
-    if torch.cuda.is_available():
+    if device not in "cpu" and torch.cuda.is_available():
         device = "cuda"
     else:
         device = "cpu"
@@ -90,7 +90,9 @@ def main(
         test_data.to_units("eV")
     print(f"Using dataset units: {test_data.units}")
 
-    test_loader = DataLoader(test_data, batch_size=4, collate_fn=collate_dicts)
+    test_loader = DataLoader(
+        test_data, batch_size=4, collate_fn=collate_dicts, pin_memory=True
+    )
 
     loss_fn = loss.build_mse_loss(loss_coef={"energy": 0.05, "energy_grad": 1})
 
