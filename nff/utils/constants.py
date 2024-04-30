@@ -71,10 +71,10 @@ DEFAULT = {
 conversion_factors = {
     ("eV", "kcal/mol"): EV_TO_KCAL,
     ("eV", "atomic"): EV_TO_AU,
-    ("eV", "eV/atom"): 1,
+    ("eV", "eV/atom"): DEFAULT,
     ("eV/atom", "kcal/mol"): EV_TO_KCAL,
     ("eV/atom", "atomic"): EV_TO_AU,
-    ("eV/atom", "eV"): 1,
+    ("eV/atom", "eV"): DEFAULT,
     ("kcal/mol", "eV"): KCAL_TO_EV,
     ("kcal/mol", "eV/atom"): KCAL_TO_EV,
     ("kcal/mol", "atomic"): KCAL_TO_AU,
