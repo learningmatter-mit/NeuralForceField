@@ -3,12 +3,12 @@
 from typing import Dict
 
 import torch
+from chgnet.data.dataset import StructureData
+from pymatgen.io.ase import AseAtomsAdaptor
+
 from nff.data import Dataset
 from nff.io import AtomsBatch
 from nff.utils.cuda import batch_detach, batch_to, detach
-from pymatgen.io.ase import AseAtomsAdaptor
-
-from chgnet.data.dataset import StructureData
 
 
 def convert_nff_to_chgnet_structure_data(
@@ -45,10 +45,6 @@ def convert_nff_to_chgnet_structure_data(
     ]
 
     energies_per_atom = dataset.props["energy"]
-    # energies_per_atom = [
-    #     energy / len(structure)
-    #     for energy, structure in zip(energies, pymatgen_structures)
-    # ]
 
     energy_grads = dataset.props["energy_grad"]
     forces = (
@@ -122,24 +118,9 @@ def convert_data_batch(
         AseAtomsAdaptor.get_structure(atoms_batch) for atoms_batch in atoms_list
     ]
 
-    if "units" in data_batch.keys():
-        units = data_batch["units"]  # list of units
-        if len(set(units)) > 1:
-            raise ValueError("Units are not consistent")
-        else:
-            units = units[0]
-    else:
-        raise ValueError("Units not found in data_batch")
-
     energies = data_batch["energy"]
     if energies is not None and len(energies) > 0:
-        if "/atom" in units:
-            energies_per_atom = energies
-        else:
-            energies_per_atom = [
-                energy / len(structure)
-                for energy, structure in zip(energies, pymatgen_structures)
-            ]
+        energies_per_atom = energies
     else:
         # fake energies
         energies_per_atom = torch.Tensor([0.0] * len(pymatgen_structures))
