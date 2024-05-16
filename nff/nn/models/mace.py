@@ -17,9 +17,9 @@ from mace.data.utils import Configuration
 from mace.modules.models import MACE, ScaleShiftMACE
 from mace.modules.radial import BesselBasis, GaussianBasis
 from mace.tools import torch_tools
-
+# from mace.tools.torch_geometric.batch import Batch
 from nff.io.mace import (get_atomic_number_table_from_zs,
-                         get_init_kwargs_from_model, get_mace_mp_model_path)
+                         get_init_kwargs_from_model, get_mace_mp_model_path, NffBatch)
 
 
 class NffScaleMACE(ScaleShiftMACE):
@@ -46,9 +46,11 @@ class NffScaleMACE(ScaleShiftMACE):
         batch: dict,
         training: bool = False,  # retained to keep the same args as the original MACE model forward
         compute_force: bool = True,
+        requires_embedding=True,
+        requires_stress=False,
         compute_virials: bool = False,
-        compute_stress: bool = False,
         compute_displacement: bool = False,
+        **kwargs
     ) -> dict:  # noqa: W0221
         """Forward pass through the model
 
@@ -59,18 +61,23 @@ class NffScaleMACE(ScaleShiftMACE):
         Returns:
             dict: dict of output from the forward pass
         """
-        data = self.convert_batch_to_data(batch)
+        if isinstance(batch, dict):
+            data = self.convert_batch_to_data(batch)
+        else:
+            data = batch
         output = super().forward(
             data,
             training=training,  # set the training mode to the value of the wrapper
             compute_force=compute_force,
             compute_virials=compute_virials,
-            compute_stress=compute_stress,
+            compute_stress=requires_stress,
             compute_displacement=compute_displacement,
         )
         forces = output.pop("forces")
         node_features = output.pop("node_feats") # Node embedding
-        output.update({"energy_grad": -forces, "embedding": node_features})
+        if requires_embedding:
+            output.update({"embedding": node_features})
+        output.update({"energy_grad": -forces})
         return output
 
     def convert_batch_to_data(self, batch: dict) -> torch_geometric.data.Data:
@@ -103,13 +110,13 @@ class NffScaleMACE(ScaleShiftMACE):
 
         for i in range(num_atoms.shape[0]):
             node_idx = torch.arange(cum_idx_list[i], cum_idx_list[i + 1])
-            positions = props.get("nxyz")[node_idx, 1:].cpu().numpy()
-            numbers = props.get("nxyz")[node_idx, 0].long().cpu().numpy()
+            positions = props.get("nxyz")[node_idx, 1:].detach().cpu().numpy()
+            numbers = props.get("nxyz")[node_idx, 0].long().detach().cpu().numpy()
 
             if "cell" in props.keys():
-                cell = props["cell"][3 * i : 3 * i + 3].cpu().numpy()
+                cell = props["cell"][3 * i : 3 * i + 3].detach().cpu().numpy()
             elif "lattice" in props.keys():
-                cell = props["lattice"][3 * i : 3 * i + 3].cpu().numpy()
+                cell = props["lattice"][3 * i : 3 * i + 3].detach().cpu().numpy()
             else:
                 raise ValueError("No cell or lattice found in batch")
             config = Configuration(
@@ -122,17 +129,12 @@ class NffScaleMACE(ScaleShiftMACE):
                 r_max = self.r_max
             elif isinstance(self.r_max, torch.Tensor):
                 r_max = self.r_max.item()
+            atomic_data = AtomicData.from_config(config, z_table=z_table, cutoff=r_max)
+            atomic_data.elems = torch.tensor(numbers, dtype=torch.long)
             dataset.append(
-                AtomicData.from_config(config, z_table=z_table, cutoff=r_max)
+                atomic_data
             )
-
-        data_loader = torch_geometric.dataloader.DataLoader(
-            dataset=dataset,
-            batch_size=len(dataset),
-            shuffle=False,
-            drop_last=False,
-        )
-        data = next(iter(data_loader)).to(props["nxyz"].device)
+        data = NffBatch.from_data_list(dataset).to(props["nxyz"].device)
 
         return data
 
@@ -250,8 +252,21 @@ def reduce_foundations(
     num_products=2,
     num_contraction=2
 ) -> "NffScaleMACE":
-    """
-    Load the foundations of a model into a model for fine-tuning.
+    """Reducing the model by extracting elements of interests
+
+    Args:
+        model_foundations (NffScaleMACE): _description_
+        table (Union[List, AtomicNumberTable]): _description_
+        load_readout (bool, optional): _description_. Defaults to False.
+        use_shift (bool, optional): _description_. Defaults to True.
+        use_scale (bool, optional): _description_. Defaults to True.
+        max_L (int, optional): _description_. Defaults to 1.
+        num_conv_tp_weights (int, optional): _description_. Defaults to 4.
+        num_products (int, optional): _description_. Defaults to 2.
+        num_contraction (int, optional): _description_. Defaults to 2.
+
+    Returns:
+        NffScaleMACE: _description_
     """
     if isinstance(table, List):
         reduced_atomic_numbers = table
@@ -400,7 +415,7 @@ def restore_foundations(
         max_L (int, optional): product blocks contraction max L. Defaults to 2.
 
     Returns:
-        NffScaleMACE: _description_
+        NffScaleMACE: All atom MACE model with updated model parameters
     """
     assert model_foundations.r_max == model.r_max
     assert model_foundations.radial_embedding.out_dim == model.radial_embedding.out_dim

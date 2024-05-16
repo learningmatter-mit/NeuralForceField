@@ -1,13 +1,17 @@
 import os
 import urllib
-from typing import Iterable, Union, List
+from collections.abc import Sequence
+from typing import Iterable, List, Union
 
+import numpy as np
 import torch
 from mace.calculators.mace import get_model_dtype
 from mace.data.atomic_data import AtomicNumberTable
 from mace.modules.models import MACE, ScaleShiftMACE
 from mace.modules.radial import BesselBasis, GaussianBasis
-
+from mace.tools.torch_geometric.data import Data
+from mace.tools.torch_geometric.batch import Batch
+from torch import Tensor
 
 # get the path to NFF models dir, which is the parent directory of this file
 module_dir = os.path.abspath(
@@ -116,3 +120,61 @@ def get_atomic_number_table_from_zs(zs: Iterable[int]) -> AtomicNumberTable:
         z_set.add(z)
     return AtomicNumberTable(sorted(list(z_set)))
 
+
+class NffBatch(Batch):
+
+    def __init__(self, batch=None, ptr=None, **kwargs):
+        super().__init__(batch=batch, ptr=ptr, **kwargs)
+
+    def get_example(self, idx: int) -> Data:
+        r"""Reconstructs the :class:`torch_geometric.data.Data` object at index
+        :obj:`idx` from the batch object.
+        The batch object must have been created via :meth:`from_data_list` in
+        order to be able to reconstruct the initial objects."""
+
+        if self.__slices__ is None:
+            raise RuntimeError(
+                (
+                    "Cannot reconstruct data list from batch because the batch "
+                    "object was not created using `Batch.from_data_list()`."
+                )
+            )
+
+        data = {}
+        idx = self.num_graphs + idx if idx < 0 else idx
+
+        for key in self.__slices__.keys():
+            item = self[key]
+            if self.__cat_dims__[key] is None:
+                # The item was concatenated along a new batch dimension,
+                # so just index in that dimension:
+                item = item[idx]
+            else:
+                # Narrow the item based on the values in `__slices__`.
+                if isinstance(item, Tensor):
+                    dim = self.__cat_dims__[key]
+                    start = self.__slices__[key][idx]
+                    end = self.__slices__[key][idx + 1]
+                    item = item.narrow(dim, start, end - start)
+                else:
+                    start = self.__slices__[key][idx]
+                    end = self.__slices__[key][idx + 1]
+                    item = item[start:end]
+                    item = item[0] if len(item) == 1 else item
+
+            # Decrease its value by `cumsum` value:
+            cum = self.__cumsum__[key][idx]
+            if isinstance(item, Tensor):
+                if not isinstance(cum, int) or cum != 0:
+                    item = item - cum
+            elif isinstance(item, (int, float)):
+                item = item - cum
+
+            data[key] = item
+        elems = data.pop("elems")
+        data = Data(**data)
+        data.elems = elems
+        if self.__num_nodes_list__[idx] is not None:
+            data.num_nodes = self.__num_nodes_list__[idx]
+
+        return data
