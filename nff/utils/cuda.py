@@ -1,5 +1,7 @@
-"""Functions to deal with the GPU and the CUDA driver
-"""
+"""Functions to deal with the GPU and the CUDA driver"""
+
+from __future__ import annotations
+
 from typing import Dict, List, Union
 
 import numpy as np
@@ -8,8 +10,8 @@ import torch
 
 
 def batch_to(
-    batch: Dict[str, Union[List, torch.Tensor]], device: str
-) -> Dict[str, Union[List, torch.Tensor]]:
+    batch: Dict[str, list | torch.Tensor], device: str
+) -> Dict[str, List | torch.Tensor]:
     """Send batch to device
 
     Args:
@@ -21,14 +23,14 @@ def batch_to(
     """
     gpu_batch = dict()
     for key, val in batch.items():
-        gpu_batch[key] = val.to(device) if hasattr(val, 'to') else val
+        gpu_batch[key] = val.to(device) if hasattr(val, "to") else val
     return gpu_batch
 
 
 def detach(
     val: torch.Tensor, to_numpy: bool = False
 ) -> Union[torch.Tensor, np.ndarray]:
-    """detach GPU tensor
+    """Detach GPU tensor
 
     Args:
         val (tensor): tensor to detach
@@ -68,7 +70,7 @@ def batch_detach(
 
 
 def to_cpu(
-    batch: Dict[str, Union[List, torch.Tensor]]
+    batch: Dict[str, Union[List, torch.Tensor]],
 ) -> Dict[str, Union[List, torch.Tensor]]:
     """Send batch to CPU
 
@@ -80,7 +82,7 @@ def to_cpu(
     """
     cpu_batch = {}
     for key, val in batch.items():
-        cpu_batch[key] = val.detach().cpu() if hasattr(val, 'to') else val
+        cpu_batch[key] = val.detach().cpu() if hasattr(val, "to") else val
     return cpu_batch
 
 
