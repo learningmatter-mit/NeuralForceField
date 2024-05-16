@@ -6,13 +6,13 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Callable, List, Optional, Type, Union
+from typing import Any, Callable, List, Optional, Sequence, Type, Union
 
 import numpy as np
 import torch
 from e3nn import o3
-
 from mace.modules.blocks import InteractionBlock
+
 from nff.nn.models.chgnet import CHGNetNFF
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.models.cp3d import ChemProp3D, OnlyBondUpdateCP3D
@@ -406,11 +406,41 @@ PARAMS_TYPE = {
         "avg_num_neighbors": float,
         "atomic_numbers": List[int],
         "correlation": Union[int, List[int]],
+        "atomic_inter_scale": float,
+        "atomic_inter_shift": float,
         "gate": Optional[Callable],
+        "radial_MLP": Optional[List[int]],
+        "radial_type": Optional[str],
     },
-    "CHGNetNFF": {},
+    "CHGNetNFF": {  # denote not supported by ininstance
+        "atom_fea_dim": int,
+        "bond_fea_dim": int,
+        "angle_fea_dim": int,
+        # "composition_model": Union[torch.nn.Module, str],
+        "num_radial": int,
+        "num_angular": int,
+        "n_conv": int,
+        # "atom_conv_hidden_dim": Union[Sequence[int], int],
+        "update_bond": bool,
+        # "bond_conv_hidden_dim": Union[Sequence[int], int],
+        "update_angle": bool,
+        # "angle_layer_hidden_dim": Union[Sequence[int], int],
+        "conv_dropout": float,
+        "read_out": str,
+        "gMLP_norm": str,
+        "readout_norm": str,
+        # "mlp_hidden_dims": Union[Sequence[int], int],
+        "mlp_first": bool,
+        "is_intensive": bool,
+        "non_linearity": str,
+        "atom_graph_cutoff": float,
+        "bond_graph_cutoff": float,
+        "graph_converter_algorithm": str,
+        "cutoff_coeff": int,
+        "learnable_rbf": bool,
+        # "device": Union[int, str],
+    },
 }
-
 
 MODEL_DICT = {
     "SchNet": SchNet,
@@ -488,6 +518,10 @@ def get_model(params: dict, model_type: str = "SchNet", **kwargs):
         model (nff.nn.models)
     """
     check_parameters(PARAMS_TYPE[model_type], params)
+
+    if model_type in ["CHGNetNFF", "NffScaleMACE"]:
+        return MODEL_DICT[model_type](**params, **kwargs)
+
     return MODEL_DICT[model_type](params, **kwargs)
 
 
@@ -542,7 +576,9 @@ def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Mo
             try:
                 return MODEL_DICT[model_type].from_file(path, **kwargs)
             except IsADirectoryError:
-                return MODEL_DICT[model_type].from_file(os.path.join(path, "best_model"), **kwargs)
+                return MODEL_DICT[model_type].from_file(
+                    os.path.join(path, "best_model"), **kwargs
+                )
 
         if not kwargs:
             kwargs = DEFAULT_KWARGS[model_type]
@@ -565,7 +601,9 @@ def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Mo
         if os.path.isfile(param_path):
             params, model_type = load_params(param_path)
 
-        assert params is not None, "Must specify params if you want to load the state dict"
+        assert (
+            params is not None
+        ), "Must specify params if you want to load the state dict"
         assert (
             model_type is not None
         ), "Must specify the model type if you want to load the state dict"
@@ -573,7 +611,9 @@ def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Mo
         model = get_model(params, model_type=model_type, **kwargs)
 
         if os.path.isdir(path):
-            state_dict = torch.load(os.path.join(path, "best_model.pth.tar"), map_location="cpu")
+            state_dict = torch.load(
+                os.path.join(path, "best_model.pth.tar"), map_location="cpu"
+            )
         elif os.path.exists(path):
             state_dict = torch.load(path, map_location="cpu")
         else:

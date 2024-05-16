@@ -4,7 +4,7 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Union
+from typing import Dict, List, Union
 
 import torch
 from chgnet.data.dataset import collate_graphs
@@ -16,9 +16,6 @@ from torch import Tensor, nn
 from nff.io.chgnet import convert_data_batch
 from nff.utils.misc import cat_props
 
-if TYPE_CHECKING:
-    from chgnet import PredTask
-
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -28,13 +25,19 @@ class CHGNetNFF(CHGNet):
     def __init__(
         self,
         *args,
-        units: str = "eV",
+        units: str = "eV/atom",
+        is_intensive: bool = True,
+        cutoff: float = 5.0,
         key_mappings: Dict[str, str] = None,
         device: str = "cpu",
         requires_embedding: bool = False,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+
+        super().__init__(*args, is_intensive=is_intensive, **kwargs)
+        if is_intensive and "/atom" not in units:
+            units += "/atom"
+        self.cutoff = cutoff
         self.units = units
         self.device = device
         self.requires_embedding = requires_embedding
@@ -50,6 +53,11 @@ class CHGNetNFF(CHGNet):
                 "crystal_fea": "embedding",
             }
             self.negate_keys = ("f",)
+
+        if hasattr(self, "composition_model"):
+            # Turn composition model training on
+            for param in self.composition_model.parameters():
+                param.requires_grad = True
 
     def forward(
         self, data_batch: Dict[str, List], **kwargs
@@ -82,7 +90,10 @@ class CHGNetNFF(CHGNet):
                                       np.array([[0, 0, 0], [0.1, 0.2, 0.3]])],
                 }
         """
-        chgnet_data_batch = convert_data_batch(data_batch)
+        chgnet_data_batch = convert_data_batch(
+            data_batch, cutoff=self.cutoff, shuffle=False
+        )  # shuffle=False to keep the order of the structures
+
         graphs, targets = collate_graphs(chgnet_data_batch)
 
         graphs = [graph.to(self.device) for graph in graphs]
@@ -90,23 +101,10 @@ class CHGNetNFF(CHGNet):
         output = super().forward(
             graphs, task="ef", return_crystal_feas=self.requires_embedding
         )
-
         # convert to NFF keys and negate energy_grad
         output = cat_props(
             {self.key_mappings[k]: self.negate_value(k, v) for k, v in output.items()}
         )
-
-        # Convert Result
-        # TODO maybe convert from eV/atom to eV for energies
-        # factor = 1 if not self.model.is_intensive else structure.composition.num_atoms
-        # self.results.update(
-        #     energy=model_prediction["e"] * factor,
-        #     forces=model_prediction["f"],
-        #     free_energy=model_prediction["e"] * factor,
-        #     magmoms=model_prediction["m"],
-        #     stress=model_prediction["s"] * self.stress_weight,
-        #     crystal_fea=model_prediction["crystal_fea"],
-        # )
 
         return output
 
@@ -127,8 +125,9 @@ class CHGNetNFF(CHGNet):
     @classmethod
     def from_file(cls, path, **kwargs) -> CHGNetNFF:
         """Build a CHGNetNFF from a saved file."""
-        state = torch.load(path, map_location=torch.device("cpu"))
-        return CHGNetNFF.from_dict(state["model"], **kwargs)
+        device = kwargs.pop("device", "cpu")
+        state = torch.load(path, map_location=torch.device(device))
+        return CHGNetNFF.from_dict(state["model"], device=device, **kwargs)
 
     @classmethod
     def load(cls, model_name="0.3.0", **kwargs) -> CHGNetNFF:
@@ -159,6 +158,13 @@ class CHGNetNFF(CHGNet):
             version=model_name,
             **kwargs,
         )
+
+    def to(self, device, **kwargs):
+        self = super().to(device, **kwargs)
+        self.device = device
+        if hasattr(self, "composition_model"):
+            self.composition_model = self.composition_model.to(device, **kwargs)
+        return self
 
 
 @dataclass

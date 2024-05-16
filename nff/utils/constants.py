@@ -66,21 +66,15 @@ DEFAULT = {
     "_grad": 1.0,
 }
 
-KB_EV = 0.0000861731
-KB_AU = 3.166815e-6
-EV_TO_AU = 1 / 27.2114
-EV_A_TO_AU = 1 / 51.4221
-INV_CM_TO_AU = 4.5564e-6
-
 
 # conversion factors
 conversion_factors = {
     ("eV", "kcal/mol"): EV_TO_KCAL,
     ("eV", "atomic"): EV_TO_AU,
-    ("eV", "eV/atom"): 1,
+    ("eV", "eV/atom"): DEFAULT,
     ("eV/atom", "kcal/mol"): EV_TO_KCAL,
     ("eV/atom", "atomic"): EV_TO_AU,
-    ("eV/atom", "eV"): 1,
+    ("eV/atom", "eV"): DEFAULT,
     ("kcal/mol", "eV"): KCAL_TO_EV,
     ("kcal/mol", "eV/atom"): KCAL_TO_EV,
     ("kcal/mol", "atomic"): KCAL_TO_AU,
@@ -88,6 +82,13 @@ conversion_factors = {
     ("atomic", "eV"): AU_TO_EV,
     ("atomic", "eV/atom"): AU_TO_EV,
 }
+
+
+KB_EV = 0.0000861731
+KB_AU = 3.166815e-6
+EV_TO_AU = 1 / 27.2114
+EV_A_TO_AU = 1 / 51.4221
+INV_CM_TO_AU = 4.5564e-6
 
 # Coulomb's constant, in (kcal/mol) * (A / e^2),
 # where A is Angstroms and e is the electron charge
@@ -225,7 +226,9 @@ def exc_ev_to_hartree(props: dict, add_ground_energy: bool = False) -> dict:
     """
     assert "energy_0" in props
     exc_keys = [
-        key for key in props if key.startswith("energy") and "grad" not in key and key != "energy_0"
+        key
+        for key in props
+        if key.startswith("energy") and "grad" not in key and key != "energy_0"
     ]
     energy_0 = props["energy_0"]
     new_props = copy.deepcopy(props)
