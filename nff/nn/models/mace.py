@@ -253,20 +253,22 @@ def reduce_foundations(
     num_contraction=2
 ) -> "NffScaleMACE":
     """Reducing the model by extracting elements of interests
+    Refer to the original paper to understand the architecture:
+    "https://openreview.net/forum?id=YPpSngE-ZU"
 
     Args:
-        model_foundations (NffScaleMACE): _description_
-        table (Union[List, AtomicNumberTable]): _description_
-        load_readout (bool, optional): _description_. Defaults to False.
-        use_shift (bool, optional): _description_. Defaults to True.
-        use_scale (bool, optional): _description_. Defaults to True.
-        max_L (int, optional): _description_. Defaults to 1.
-        num_conv_tp_weights (int, optional): _description_. Defaults to 4.
-        num_products (int, optional): _description_. Defaults to 2.
-        num_contraction (int, optional): _description_. Defaults to 2.
+        model_foundations (NffScaleMACE): foundational model
+        table (Union[List, AtomicNumberTable]): List of elements reduced from all preodic elements.
+        load_readout (bool, optional): whether to restore the reduced model readouts. Defaults to False.
+        use_shift (bool, optional): whether to restore the reduced model shift. Defaults to True.
+        use_scale (bool, optional): whether to restore the reduced model scale. Defaults to True.
+        max_L (int, optional): product blocks contraction max L. Defaults to 1.
+        num_conv_tp_weights (int, optional): number of interactions. Defaults to 4.
+        num_products (int, optional): number of products. Defaults to 2.
+        num_contraction (int, optional): number of contraction. Defaults to 2.
 
     Returns:
-        NffScaleMACE: _description_
+        NffScaleMACE: reduced model
     """
     if isinstance(table, List):
         reduced_atomic_numbers = table
@@ -405,6 +407,8 @@ def restore_foundations(
     num_contraction=2
 ) -> "NffScaleMACE":
     """Restore back to foundational model from reduced model
+    Refer to the original paper to understand the architecture:
+    "https://openreview.net/forum?id=YPpSngE-ZU"
 
     Args:
         model (NffScaleMACE): reduced model
@@ -412,7 +416,7 @@ def restore_foundations(
         load_readout (bool, optional): whether to restore the reduced model readouts. Defaults to True.
         use_shift (bool, optional): whether to restore the reduced model shift. Defaults to True.
         use_scale (bool, optional): whether to restore the reduced model scale. Defaults to True.
-        max_L (int, optional): product blocks contraction max L. Defaults to 2.
+        max_L (int, optional): product blocks contraction max L. Defaults to 2 for medium accuracy mp-mace.
 
     Returns:
         NffScaleMACE: All atom MACE model with updated model parameters
