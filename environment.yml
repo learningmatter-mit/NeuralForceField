@@ -1,4 +1,4 @@
-name: test_nff
+name: nff
 channels:
   - pytorch
   - conda-forge
