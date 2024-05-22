@@ -1,0 +1,30 @@
+default_stages: [commit]
+
+default_install_hook_types: [pre-commit, commit-msg]
+
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.2.0
+    hooks:
+      - id: check-case-conflict
+        exclude: migrations/
+        exclude_types: [ jupyter, text, sh, yaml ]
+      - id: end-of-file-fixer
+        exclude: migrations/
+        exclude_types: [ jupyter, text, sh, yaml ]
+      - id: mixed-line-ending
+        exclude: migrations/
+      - id: trailing-whitespace
+        exclude: migrations/
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.2
+    hooks:
+      - id: ruff
+        types_or: [ python, pyi, jupyter ]
+        args: [ --fix ]
+        exclude: migrations/
+      - id: ruff-format
+        types_or: [ python, pyi, jupyter ]
+        exclude: migrations/

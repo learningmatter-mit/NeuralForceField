@@ -39,6 +39,8 @@ Thumbs.db
 # python/jupyter generated files
 .ipynb_checkpoints
 __pycache__
+*.egg-info
+.vscode/
 
 # data files #
 *.dat
@@ -54,7 +56,7 @@ __pycache__
 # slurm output files
 slurm*.out
 
-# directory 
+# directory
 log/
 debug/
 sandbox*/

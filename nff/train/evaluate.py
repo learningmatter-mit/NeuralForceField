@@ -20,7 +20,7 @@ def shrink_batch(batch):
 def get_results(batch, model, device, submodel, loss_fn, **kwargs):
     batch = batch_to(batch, device)
     model.to(device)
-    if submodel is not None:
+    if submodel is not None:  # noqa: SIM108
         results = getattr(model, submodel)(batch)
     else:
         results = model(batch, **kwargs)
@@ -79,7 +79,7 @@ def evaluate(
                     break
                 except RuntimeError as err:
                     if "CUDA out of memory" in str(err):
-                        print(("CUDA out of memory. Doing this batch " "on cpu."))
+                        print("CUDA out of memory. Doing this batch on cpu.")
                         use_device = "cpu"
                         torch.cuda.empty_cache()
                     else:

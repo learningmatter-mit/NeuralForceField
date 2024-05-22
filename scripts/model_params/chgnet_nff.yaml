@@ -1,0 +1,25 @@
+atom_fea_dim: 64
+bond_fea_dim: 64
+angle_fea_dim: 64
+composition_model: MPtrj
+num_radial: 31
+num_angular: 31
+n_conv: 4
+atom_conv_hidden_dim: 64
+update_bond: true
+bond_conv_hidden_dim: 64
+update_angle: true
+angle_layer_hidden_dim: 0
+conv_dropout: 0.0
+read_out: ave
+gMLP_norm: layer
+readout_norm: layer
+mlp_hidden_dims: [64, 64, 64]
+mlp_first: true
+is_intensive: true
+non_linearity: silu
+atom_graph_cutoff: 6.0
+bond_graph_cutoff: 3.0
+graph_converter_algorithm: fast
+cutoff_coeff: 8
+learnable_rbf: true
