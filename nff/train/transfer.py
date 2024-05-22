@@ -190,9 +190,22 @@ class MaceLayerFreezer(LayerFreezer):
         """
         interaction_linears = [
             f"interactions.{i}.linear.weight"
-            for i in range(len(model.num_interactions))
+            for i in range(model.num_interactions.item())
         ]
         self.custom_unfreeze(model, interaction_linears)
+
+    def unfreeze_mace_produce_linears(self, model: torch.nn.Module) -> None:
+        """Unfreeze the linear readout layer from the interaction blocks in
+        a MACE model.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+        """
+        product_linears = [
+            f"products.{i}.linear.weight"
+            for i in range(model.num_interactions.item())
+        ]
+        self.custom_unfreeze(model, product_linears)
 
     def unfreeze_mace_pooling(self, model: torch.nn.Module) -> None:
         """Unfreeze the pooling layers in a MACE model (called the products layer)
@@ -224,6 +237,8 @@ class MaceLayerFreezer(LayerFreezer):
         self,
         model: torch.nn.Module,
         freeze_gap_embedding: bool = False,  # unused for MACE
+        freeze_interactions: bool = True,
+        freeze_products: bool = False,
         freeze_pooling: bool = True,
         freeze_skip: bool = False,
         custom_layers: List[str] = [],
@@ -247,11 +262,14 @@ class MaceLayerFreezer(LayerFreezer):
         if custom_layers:
             self.custom_unfreeze(model, custom_layers)
         else:
-            self.unfreeze_mace_interaction_linears(model)
             self.unfreeze_mace_readout(model, freeze_skip=freeze_skip)
             unfreeze_pool = not freeze_pooling
             if unfreeze_pool:
                 self.unfreeze_mace_pooling(model)
+            if not freeze_interactions:
+                self.unfreeze_mace_interaction_linears(model)
+            if not freeze_products:
+                self.unfreeze_mace_produce_linears(model)
 
 
 class ChgnetLayerFreezer(LayerFreezer):
