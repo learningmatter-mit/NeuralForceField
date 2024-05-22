@@ -568,7 +568,7 @@ def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Mo
         torch.nn.Module: a Pytorch model
     """
     # For TL with pre-trained CHGNet and MACE, we pass no path
-    if model_type in ["CHGNetNFF", "NffScaleMACE"]:
+    if model_type in ["CHGNetNFF"]:
         # If path is not None, we load the model from the path (usually a
         # fine-tuned model that we want to test or use for calculations)
         if path:
@@ -588,7 +588,14 @@ def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Mo
         # both "" and None should evaluate to False
         print(f"Loading {model_type} with kwargs {kwargs}")
         return MODEL_DICT[model_type].load(**kwargs)
-
+    
+    elif model_type in ["NffScaleMACE"]:
+        if os.path.isdir(path):
+            model_path = os.path.join(path, "best_model")
+        elif os.path.exists(path):
+            model_path = path
+        return NffScaleMACE.from_file(model_path)
+    
     try:
         if os.path.isdir(path):
             model = torch.load(os.path.join(path, "best_model"), map_location="cpu")
