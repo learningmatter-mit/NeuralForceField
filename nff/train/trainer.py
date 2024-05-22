@@ -561,14 +561,18 @@ class Trainer:
             None
         """
         # try to save the model
-        try:
-            torch.save(model, self.best_model)
-        # Sometimes you can't pickle the model (e.g. dimenet)
-        # In that case just save the state dict, which can
-        # be pickled
-        except (AttributeError, pickle.PicklingError):
-            state_path = self.best_model + ".pth.tar"
-            torch.save(self.state_dict, state_path)
+        if hasattr(model, "save"):
+            # state_path = self.best_model + ".pth.tar"
+            model.save(self.best_model)
+        else:
+            try:
+                torch.save(model, self.best_model)
+            # Sometimes you can't pickle the model (e.g. dimenet)
+            # In that case just save the state dict, which can
+            # be pickled
+            except (AttributeError, pickle.PicklingError):
+                state_path = self.best_model + ".pth.tar"
+                torch.save(self.state_dict, state_path)
 
     def save_as_best(self):
         """
