@@ -490,6 +490,7 @@ class ParameterError(Exception):
 
 def check_parameters(params_type, params):
     """Check whether the parameters correspond to the specified types
+
     Args:
         params_type (dict): dictionary with the types of the parameters
         params (dict): dictionary with the parameters
@@ -507,10 +508,12 @@ def check_parameters(params_type, params):
 
 def get_model(params: dict, model_type: str = "SchNet", **kwargs):
     """Create new model with the given parameters.
+
     Args:
         params (dict): parameters used to construct the model
         model_type (str): name of the model to be used
         kwargs (dict): any additional arguments to pass to the model
+
     Returns:
         model (nff.nn.models)
     """
@@ -526,8 +529,10 @@ def load_params(param_path: str) -> tuple(dict, str):
     """Load parameters from a json file. If the parameters are nested
     in a dictionary, the function will look for the keys "details" or
     "modelparams" to find the parameters.
+
     Args:
         param_path (str): path to the params file
+
     Returns:
         tuple(dict, str): parameters and model type
     """
@@ -551,6 +556,7 @@ def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Mo
     """Load pretrained model from the path. If no epoch is specified,
     load the best model. For big pre-trained models like CHGNet and MACE,
     the model is loaded independent of the path or other params.
+
     Args:
         path (str): path where the model was trained.
         params (dict, optional): Any parameters you need to instantiate
