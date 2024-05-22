@@ -255,6 +255,8 @@ def reduce_foundations(
     """Reducing the model by extracting elements of interests
     Refer to the original paper to understand the architecture:
     "https://openreview.net/forum?id=YPpSngE-ZU"
+    Also original implementation in mace 
+    "https://github.com/ACEsuit/mace/blob/1acca3417ee2ba171e630a967feccb8b7242e6e5/mace/tools/utils.py#L179"
 
     Args:
         model_foundations (NffScaleMACE): foundational model
@@ -344,7 +346,7 @@ def reduce_foundations(
                 )[:, indices_weights, :]
                 .flatten()
                 .clone()
-                / (num_species_foundations / num_species) ** 0.5
+                / (num_species_foundations / num_species) ** 0.5 # Normalization factor for euquivariant Linear model
             )
 
     # Transferring products
