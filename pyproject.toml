@@ -39,7 +39,7 @@ classifiers = [
 test = ["pytest", "pytest-cov"]
 
 [project.urls]
-Homepage = "https://github.mit.edu/MLMat/htvs/"
+Homepage = "https://github.mit.edu/MLMat/NeuralForceField/"
 
 [tool.ruff]
 include = ["**/pyproject.toml", "*.ipynb", "*.py", "*.pyi"]
