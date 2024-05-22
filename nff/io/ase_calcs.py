@@ -227,7 +227,7 @@ class EnsembleNFF(Calculator):
     """Produces an ensemble of NFF calculators to predict the
     discrepancy between the properties"""
 
-    implemented_properties = ["energy", "forces", "stress"]
+    implemented_properties = ["energy", "forces", "stress", "energy_std", "forces_std", "stress_std"]
 
     def __init__(
         self,
