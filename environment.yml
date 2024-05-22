@@ -177,6 +177,7 @@ dependencies:
   - pixman=0.40.0=h36c2ea0_0
   - plotly=5.8.0=pyhd8ed1ab_1
   - pluggy=1.0.0=py39hf3d152e_3
+  - pre-commit
   - proj=9.0.0=h93bde94_1
   - prompt-toolkit=3.0.29=pyha770c72_0
   - psycopg2=2.9.2=py39h3811e60_0

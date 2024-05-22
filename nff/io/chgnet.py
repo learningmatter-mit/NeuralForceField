@@ -8,7 +8,7 @@ from pymatgen.io.ase import AseAtomsAdaptor
 
 from nff.data import Dataset
 from nff.io import AtomsBatch
-from nff.utils.cuda import batch_detach, batch_to, detach
+from nff.utils.cuda import batch_detach, detach
 
 
 def convert_nff_to_chgnet_structure_data(
@@ -31,7 +31,7 @@ def convert_nff_to_chgnet_structure_data(
     shuffle : bool
         The `shuffle` parameter is a boolean value that determines whether the dataset should be shuffled
 
-    Returns
+    Returns:
     -------
     a `chgnet_dataset` object of type `StructureData`.
 
@@ -40,20 +40,16 @@ def convert_nff_to_chgnet_structure_data(
     dataset.to_units("eV/atom")  # convert units to eV
     print(f"current units: {dataset.units}")
     atoms_batch_list = dataset.as_atoms_batches(cutoff=cutoff)
-    pymatgen_structures = [
-        AseAtomsAdaptor.get_structure(atoms_batch) for atoms_batch in atoms_batch_list
-    ]
+    pymatgen_structures = [AseAtomsAdaptor.get_structure(atoms_batch) for atoms_batch in atoms_batch_list]
 
     energies_per_atom = dataset.props["energy"]
 
     energy_grads = dataset.props["energy_grad"]
-    forces = (
-        [-x for x in energy_grads] if isinstance(energy_grads, list) else -energy_grads
-    )
+    forces = [-x for x in energy_grads] if isinstance(energy_grads, list) else -energy_grads
     stresses = dataset.props.get("stress", None)
     magmoms = dataset.props.get("magmoms", None)
 
-    chgnet_dataset = StructureData(
+    return StructureData(
         structures=pymatgen_structures,
         energies=energies_per_atom,
         forces=forces,
@@ -62,11 +58,9 @@ def convert_nff_to_chgnet_structure_data(
         shuffle=shuffle,
     )
 
-    return chgnet_dataset
-
 
 def convert_data_batch(
-    data_batch: Dict,
+    data_batch: Dict,  # noqa: FA100
     cutoff: float = 5.0,
     shuffle: bool = True,
 ):
@@ -94,7 +88,7 @@ def convert_data_batch(
     shuffle : bool
         The `shuffle` parameter is a boolean value that determines whether the dataset should be shuffled
 
-    Returns
+    Returns:
     -------
     a `chgnet_dataset` object of type `StructureData`.
 
@@ -105,37 +99,29 @@ def convert_data_batch(
         nxyz[:, 0].long(),
         props=detached_batch,
         positions=nxyz[:, 1:],
-        cell=(
-            detached_batch["lattice"][0] if "lattice" in detached_batch.keys() else None
-        ),
-        pbc="lattice" in detached_batch.keys(),
+        cell=(detached_batch["lattice"][0] if "lattice" in detached_batch else None),
+        pbc="lattice" in detached_batch,
         cutoff=cutoff,
         dense_nbrs=False,
     )
     atoms_list = atoms_batch.get_list_atoms()
 
-    pymatgen_structures = [
-        AseAtomsAdaptor.get_structure(atoms_batch) for atoms_batch in atoms_list
-    ]
+    pymatgen_structures = [AseAtomsAdaptor.get_structure(atoms_batch) for atoms_batch in atoms_list]
 
-    energies = data_batch["energy"]
+    energies = data_batch.get("energy")
     if energies is not None and len(energies) > 0:
         energies_per_atom = energies
     else:
         # fake energies
         energies_per_atom = torch.Tensor([0.0] * len(pymatgen_structures))
-    energy_grads = data_batch["energy_grad"]
+    energy_grads = data_batch.get("energy_grad")
 
     num_atoms = detach(data_batch["num_atoms"]).tolist()
-    stresses = data_batch.get("stress", None)
-    magmoms = data_batch.get("magmoms", None)
+    stresses = data_batch.get("stress")
+    magmoms = data_batch.get("magmoms")
 
     if energy_grads is not None and len(energy_grads) > 0:
-        forces = (
-            [-x for x in energy_grads]
-            if isinstance(energy_grads, list)
-            else -energy_grads
-        )
+        forces = [-x for x in energy_grads] if isinstance(energy_grads, list) else -energy_grads
     else:
         forces = None
 
@@ -144,17 +130,14 @@ def convert_data_batch(
         forces = torch.split(torch.atleast_2d(forces), num_atoms)
     else:
         # fake forces for NFF Calculator
-        forces = [
-            torch.zeros_like(torch.Tensor(atoms_batch.get_positions()))
-            for atoms_batch in atoms_list
-        ]
+        forces = [torch.zeros_like(torch.Tensor(atoms_batch.get_positions())) for atoms_batch in atoms_list]
 
     if stresses is not None and len(stresses) > 0:
         stresses = torch.split(torch.atleast_2d(stresses), num_atoms)
     if magmoms is not None and len(magmoms) > 0:
         magmoms = torch.split(torch.atleast_2d(magmoms), num_atoms)
 
-    chgnet_dataset = StructureData(
+    return StructureData(
         structures=pymatgen_structures,
         energies=energies_per_atom,
         forces=forces,
@@ -162,5 +145,3 @@ def convert_data_batch(
         magmoms=magmoms,
         shuffle=shuffle,
     )
-
-    return chgnet_dataset
