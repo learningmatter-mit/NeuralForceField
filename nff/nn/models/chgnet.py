@@ -62,8 +62,7 @@ class CHGNetNFF(CHGNet):
     def forward(
         self, data_batch: Dict[str, List], **kwargs
     ) -> Dict[str, Union[Tensor, List]]:
-        """
-        Convert data_batch to CHGNet format and run forward pass.
+        """Convert data_batch to CHGNet format and run forward pass.
 
         Parameters
         ----------
@@ -115,6 +114,12 @@ class CHGNetNFF(CHGNet):
             return -value
         return value
 
+    def save(self, path: str):
+        """Load a CHGNet model from a file or URL"""
+        state = {}
+        state['model'] = self.as_dict()
+        torch.save(state, path)
+
     @classmethod
     def from_dict(cls, dict, **kwargs) -> CHGNetNFF:
         """Build a CHGNetNFF from a saved dictionary."""
@@ -126,7 +131,7 @@ class CHGNetNFF(CHGNet):
     def from_file(cls, path, **kwargs) -> CHGNetNFF:
         """Build a CHGNetNFF from a saved file."""
         device = kwargs.pop("device", "cpu")
-        state = torch.load(path, map_location=torch.device(device))
+        state = torch.load(path, map_location=kwargs.pop("map_location", device))
         return CHGNetNFF.from_dict(state["model"], device=device, **kwargs)
 
     @classmethod
