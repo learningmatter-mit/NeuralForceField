@@ -396,21 +396,21 @@ PARAMS_TYPE = {
         "num_bessel": int,
         "num_polynomial_cutoff": int,
         "max_ell": int,
-        "interaction_cls": Type[InteractionBlock],
-        "interaction_cls_first": Type[InteractionBlock],
+        "interaction": str,
+        "interaction_first": str,
         "num_interactions": int,
         "num_elements": int,
-        "hidden_irreps": o3.Irreps,
-        "MLP_irreps": o3.Irreps,
+        "hidden_irreps": str,
+        "MLP_irreps": str,
         "atomic_energies": np.ndarray,
         "avg_num_neighbors": float,
-        "atomic_numbers": List[int],
-        "correlation": Union[int, List[int]],
+        "atomic_numbers": list,
+        # "correlation": Union[int, List[int]],
         "atomic_inter_scale": float,
         "atomic_inter_shift": float,
-        "gate": Optional[Callable],
-        "radial_MLP": Optional[List[int]],
-        "radial_type": Optional[str],
+        "gate": str,
+        "radial_MLP": list,
+        "radial_type": str,
     },
     "CHGNetNFF": {  # denote not supported by ininstance
         "atom_fea_dim": int,
@@ -568,7 +568,7 @@ def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Mo
         torch.nn.Module: a Pytorch model
     """
     # For TL with pre-trained CHGNet and MACE, we pass no path
-    if model_type in ["CHGNetNFF"]:
+    if model_type in ["CHGNetNFF", "NffScaleMACE"]:
         # If path is not None, we load the model from the path (usually a
         # fine-tuned model that we want to test or use for calculations)
         if path:
@@ -588,13 +588,6 @@ def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Mo
         # both "" and None should evaluate to False
         print(f"Loading {model_type} with kwargs {kwargs}")
         return MODEL_DICT[model_type].load(**kwargs)
-    
-    elif model_type in ["NffScaleMACE"]:
-        if os.path.isdir(path):
-            model_path = os.path.join(path, "best_model")
-        elif os.path.exists(path):
-            model_path = path
-        return NffScaleMACE.from_file(model_path)
     
     try:
         if os.path.isdir(path):

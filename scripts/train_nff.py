@@ -1,6 +1,5 @@
 import argparse
 import logging
-import os
 from pathlib import Path
 from typing import Iterable, Literal, Union
 
@@ -10,10 +9,10 @@ import yaml
 from torch.utils.data import DataLoader
 
 from nff.data import Dataset, collate_dicts
-from nff.nn.models.chgnet import CHGNetNFF
-from nff.train import Trainer, get_model, hooks, loss, metrics
+from nff.io.mace import update_mace_init_params
+from nff.train import Trainer, get_model, hooks, load_model, loss, metrics
 from nff.train.loss import mae_operation, mse_operation
-from nff.utils.cuda import cuda_devices_sorted_by_free_mem
+from nff.utils.cuda import cuda_devices_sorted_by_free_mem, detach
 from nff.utils.misc import log
 
 torch.set_printoptions(precision=3, sci_mode=False)
@@ -21,7 +20,6 @@ torch.set_printoptions(precision=3, sci_mode=False)
 logger = logging.getLogger(__name__)
 
 LOSS_OPERATIONS = {"MAE": mae_operation, "MSE": mse_operation}
-
 
 def build_default_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
@@ -37,7 +35,11 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--model_params_path", help="Path to model parameters", type=str
     )
-    # or perhaps model path
+    parser.add_argument(
+        "--model_path",
+        type=str,
+        help="Path to a trained model",
+    )
     parser.add_argument(
         "--fine_tune",
         help="Whether to fine-tune the model",
@@ -134,6 +136,7 @@ def main(
     name: str,
     model_type: str,
     model_params_path: Union[str, Path],
+    model_path: Union[str, Path],
     train_dir: Union[str, Path],
     train_file: Union[str, Path],
     val_file: Union[str, Path],
@@ -170,78 +173,41 @@ def main(
         device_with_most_available_memory = cuda_devices_sorted_by_free_mem()[-1]
         device = f"cuda:{device_with_most_available_memory}"
 
-    # MACE my original params
-    # --max_ell=1
-    # --max_L=1
-    # --correlation=2
-    # --num_interactions=3
-    # --num_channels=128
-    # --E0s='average'
-    # --r_max=5.0
-    # --num_radial_basis=20
-    # --num_cutoff_basis=6
+    # Datasets without per-atom offsets etc.
+    train = Dataset.from_file(train_file)
+    val = Dataset.from_file(val_file)
+    train.to_units("eV")
+    val.to_units("eV")
 
-    # MACE defaults
-    # --r_max=5.0
-    # --num_radial_basis 8
-    # --num_cutoff_basis 5
-    # --max_ell 3 # might not need 3
-    # --num_interactions 2
-    # --args.hidden_irreps "128x0e + 128x1o"
+    train_loader = DataLoader(
+        train,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        collate_fn=collate_dicts,
+        pin_memory=pin_memory,
+    )
 
-    # # MACE args
-    # r_max: float,
-    # num_bessel: int,
-    # num_polynomial_cutoff: int,
-    # max_ell: int,
-    # interaction_cls: Type[InteractionBlock],
-    # interaction_cls_first: Type[InteractionBlock],
-    # num_interactions: int,
-    # num_elements: int,
-    # hidden_irreps: o3.Irreps,
-    # MLP_irreps: o3.Irreps,
-    # atomic_energies: np.ndarray,
-    # avg_num_neighbors: float,
-    # atomic_numbers: List[int],
-    # correlation: Union[int, List[int]],
-    # gate: Optional[Callable],
-    # radial_MLP: Optional[List[int]] = None,
-    # radial_type: Optional[str] = "bessel",
+    val_loader = DataLoader(
+        val,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        collate_fn=collate_dicts,
+        pin_memory=pin_memory,
+    )
 
-    # # ScaleShiftMACE additional args
-    # atomic_inter_scale: float,
-    # atomic_inter_shift: float,
-
-    # model_config = dict(
-    #     r_max=args.r_max,
-    #     num_bessel=args.num_radial_basis,
-    #     num_polynomial_cutoff=args.num_cutoff_basis,
-    #     max_ell=args.max_ell,
-    #     interaction_cls=modules.interaction_classes[args.interaction],
-    #     num_interactions=args.num_interactions,
-    #     num_elements=len(z_table),
-    #     hidden_irreps=o3.Irreps(args.hidden_irreps),
-    #     atomic_energies=atomic_energies,
-    #     avg_num_neighbors=args.avg_num_neighbors,
-    #     atomic_numbers=z_table.zs,
-    # )
-
-    # MACE
-    # model = modules.ScaleShiftMACE(
-    #     **model_config,
-    #     correlation=args.correlation,
-    #     gate=modules.gate_dict[args.gate],
-    #     interaction_cls_first=modules.interaction_classes[args.interaction_first],
-    #     MLP_irreps=o3.Irreps(args.MLP_irreps),
-    #     atomic_inter_scale=std,
-    #     atomic_inter_shift=mean,
-    #     radial_MLP=ast.literal_eval(args.radial_MLP),
-    #     radial_type=args.radial_type,
-    # )
+    model_kwargs = {}
 
     if fine_tune:
         logger.info("Fine-tuning model")
-        model = CHGNetNFF.load(device=device)
+        # TODO make more general load model
+        # load_model(path: str, params=None, model_type=None, **kwargs)
+        # MACE is NffScaleMACE.load_foundations("medium", map_location="cpu", default_dtype="float32")
+        # need to fix for MACE
+        # load_foundations
+        # model_path is empty to load foundational models
+        model = load_model(model_path, model_type=model_type, map_location=device, device=device)
+        # model = CHGNetNFF.load(device=device)
+        
         # Optionally fix the weights of some layers
         if allow_grad == "ALL":
             for layer in [
@@ -272,7 +238,9 @@ def main(
             for param in model.atom_conv_layers[-1].parameters():
                 param.requires_grad = True
     else:
+
         # Load model params and save a copy
+        logger.info("Training model from scratch")
         try:
             with open(model_params_path, "r", encoding="utf-8") as f:
                 model_params = yaml.safe_load(f)
@@ -290,6 +258,9 @@ def main(
             )
         logger.info("Saved model params to save path %s", save_path)
 
+        if "NffScaleMACE" in model_type:
+            model_params = update_mace_init_params(train, val, train_loader, model_params, logger=logger) 
+        model_kwargs.update({"training": True, "compute_force": True}) # needs to be true for training
         model = get_model(model_params, model_type=model_type)
 
     model.to(device)
@@ -300,27 +271,8 @@ def main(
         sum([p.numel() for p in model.parameters() if p.requires_grad]),
     )
 
-    # Datasets without per-atom offsets etc.
-    train = Dataset.from_file(train_file)
-    val = Dataset.from_file(val_file)
     train.to_units(model.units)
     val.to_units(model.units)
-
-    train_loader = DataLoader(
-        train,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        collate_fn=collate_dicts,
-        pin_memory=pin_memory,
-    )
-
-    val_loader = DataLoader(
-        val,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        collate_fn=collate_dicts,
-        pin_memory=pin_memory,
-    )
 
     # define loss
     loss_fn = loss.build_general_loss(
@@ -379,6 +331,7 @@ def main(
         validation_loader=val_loader,
         checkpoint_interval=1,
         hooks=train_hooks,
+        model_kwargs=model_kwargs,
     )
 
     T.train(device=device, n_epochs=max_num_epochs)
@@ -392,6 +345,7 @@ if __name__ == "__main__":
         name=args.name,
         model_type=args.model_type,
         model_params_path=args.model_params_path,
+        model_path=args.model_path,
         train_dir=args.train_dir,
         train_file=args.train_file,
         val_file=args.val_file,

@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from nff.analysis import loss_plot, plot_parity
 from nff.data import Dataset, collate_dicts
 from nff.train import evaluate, loss
+from nff.train.builders.model import load_model
 from nff.utils.cuda import cuda_devices_sorted_by_free_mem
 
 
@@ -19,6 +20,9 @@ def parse_args():
         type=str,
         required=True,
         help="Path to the model",
+    )
+    parser.add_argument(
+        "--model_type", help="Name of model", type=str, default="CHGNetNFF"
     )
     parser.add_argument(
         "--data_path",
@@ -48,9 +52,9 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-
 def main(
     model_path: str,
+    model_type: str,
     data_path: str,
     train_log_path: str,
     device: str = "cpu",
@@ -60,6 +64,7 @@ def main(
 
     Args:
         model_path (str): path to the model
+        model_type (str): name of the model
         data_path (str): path to the data
         train_log_path (str): path to the training log
         device (str, optional): device to use. Defaults to "cpu".
@@ -80,7 +85,7 @@ def main(
         device_with_most_available_memory = cuda_devices_sorted_by_free_mem()[-1]
         device = f"cuda:{device_with_most_available_memory}"
 
-    model = torch.load(f=model_path, map_location=device)
+    model = load_model(model_path, model_type=model_type, map_location=device)
     model.to(device)
 
     test_data = Dataset.from_file(data_path)
@@ -100,6 +105,7 @@ def main(
     results, targets, val_loss = evaluate(model, test_loader, loss_fn, device=device)
 
     # plot parity
+    # TODO: fix units for MACE NFF
     parity_plot_path = save_path / f"{start_time}_parity_plot"
     print(f"Saving parity plot to {parity_plot_path}")
     mae_energy, mae_force = plot_parity(
@@ -126,6 +132,7 @@ if __name__ == "__main__":
     args = parse_args()
     main(
         model_path=args.model_path,
+        model_type=args.model_type,
         data_path=args.data_path,
         train_log_path=args.train_log_path,
         device=args.device,

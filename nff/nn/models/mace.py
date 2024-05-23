@@ -10,16 +10,22 @@ from __future__ import annotations
 from typing import List, Union
 
 import torch
+from e3nn import o3
+from mace import modules
 from mace.calculators.mace import get_model_dtype
-from mace.data.atomic_data import (AtomicData, AtomicNumberTable,
-                                   torch_geometric)
+from mace.data.atomic_data import AtomicData, AtomicNumberTable, torch_geometric
 from mace.data.utils import Configuration
-from mace.modules.models import MACE, ScaleShiftMACE
+from mace.modules.models import ScaleShiftMACE
 from mace.modules.radial import BesselBasis, GaussianBasis
 from mace.tools import torch_tools
+
 # from mace.tools.torch_geometric.batch import Batch
-from nff.io.mace import (get_atomic_number_table_from_zs,
-                         get_init_kwargs_from_model, get_mace_mp_model_path, NffBatch)
+from nff.io.mace import (
+    NffBatch,
+    get_atomic_number_table_from_zs,
+    get_init_kwargs_from_model,
+    get_mace_mp_model_path,
+)
 
 
 class NffScaleMACE(ScaleShiftMACE):
@@ -29,8 +35,8 @@ class NffScaleMACE(ScaleShiftMACE):
 
     def __init__(
         self,
-        atomic_inter_scale: float,
-        atomic_inter_shift: float,
+        units: str = "eV",
+        device: str = "cpu",
         **kwargs,
     ):
         """NFF compatible ScaleShiftMACE
@@ -39,7 +45,22 @@ class NffScaleMACE(ScaleShiftMACE):
             atomic_inter_scale (float): interaction energy scale
             atomic_inter_shift (float): interaction energy shift
         """
-        super().__init__(atomic_inter_scale, atomic_inter_shift, **kwargs)
+        self.units = units
+        self.device = device
+
+        interaction = kwargs.pop("interaction", "RealAgnosticResidualInteractionBlock")
+        interaction_first = kwargs.pop("interaction_first", "RealAgnosticResidualInteractionBlock")
+        # use setdefault to work with loading from checkpoint
+        kwargs.setdefault("interaction_cls", modules.interaction_classes[interaction])
+        kwargs.setdefault("interaction_cls_first", modules.interaction_classes[interaction_first])
+        kwargs.setdefault("hidden_irreps", o3.Irreps(kwargs.pop("hidden_irreps", "128x0e + 128x1o")))
+        kwargs.setdefault("MLP_irreps", o3.Irreps(kwargs.pop("MLP_irreps", "16x0e")))
+        gate = kwargs.pop("gate", "silu")
+        kwargs.setdefault("gate", modules.gate_dict[gate] if isinstance(gate, str) else gate)
+        kwargs.setdefault("radial_MLP", kwargs.pop("radial_MLP", [64, 64, 64]))
+
+        super().__init__(**kwargs)
+
 
     def forward(
         self,
@@ -201,16 +222,16 @@ class NffScaleMACE(ScaleShiftMACE):
         return model
 
     @classmethod
-    def from_file(cls, path: str) -> "NffScaleMACE":
+    def from_file(cls, path: str, map_location: str = None) -> "NffScaleMACE":
         """Load the model from checkpoint created by pytorch lightning.
 
         Args:
             path (str): Path to the checkpoint file.
+            map_location (str): The device to load the model on.
 
         Returns:
             InterAtomicPotential: The loaded model.
         """
-        map_location = None if torch.cuda.is_available() else "cpu"
         ckpt = torch.load(path, map_location=map_location)
         hparams = ckpt["init_params"]
         state_dict = ckpt["state_dict"]

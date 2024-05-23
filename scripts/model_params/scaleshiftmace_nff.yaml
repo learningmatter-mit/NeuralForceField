@@ -1,0 +1,13 @@
+r_max: 5.0
+num_bessel: 20
+num_polynomial_cutoff: 6
+max_ell: 2
+interaction: "RealAgnosticResidualInteractionBlock"
+interaction_first: "RealAgnosticResidualInteractionBlock"
+num_interactions: 3
+hidden_irreps: "128x0e + 128x1o"
+MLP_irreps: "16x0e"
+correlation: 2
+gate: "silu"
+radial_MLP: [64, 64, 64]
+radial_type: "bessel"
