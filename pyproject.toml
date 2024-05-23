@@ -45,7 +45,7 @@ Homepage = "https://github.mit.edu/MLMat/NeuralForceField/"
 include = ["**/pyproject.toml", "*.ipynb", "*.py", "*.pyi"]
 exclude = ["__init__.py", "migrations/*.py", "allxyz_lastgrad.py", "mopac_ints_rhf.py", "dbsettings.py"]
 line-length = 120
-src = [".", "djangochem"]
+src = [".", "nff"]
 
 [tool.ruff.format]
 docstring-code-format = true
