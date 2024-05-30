@@ -160,12 +160,8 @@ class NeuralFF(Calculator):
         # print(prediction.keys())
 
         # change energy and force to numpy array
-        conversion_factor: dict = const.conversion_factors.get(
-            (self.model_units, self.prediction_units), const.DEFAULT
-        )
-        prediction_numpy = batch_detach(
-            const.convert_units(prediction, conversion_factor), to_numpy=True
-        )
+        conversion_factor: dict = const.conversion_factors.get((self.model_units, self.prediction_units), const.DEFAULT)
+        prediction_numpy = batch_detach(const.convert_units(prediction, conversion_factor), to_numpy=True)
 
         # change energy and force to numpy array
         if "/atom" in self.model_units:
@@ -192,9 +188,7 @@ class NeuralFF(Calculator):
             else:
                 self.results["forces"] = prediction["forces"].detach().cpu().numpy()
             if "forces_disp" in prediction:
-                self.results["forces"] = (
-                    self.results["forces"] + prediction["forces_disp"]
-                )
+                self.results["forces"] = self.results["forces"] + prediction["forces_disp"]
 
         if requires_embedding:
             embedding = prediction["embedding"].detach().cpu().numpy()
@@ -207,17 +201,20 @@ class NeuralFF(Calculator):
             )
             self.results["stress"] = stress * (1 / atoms.get_volume())
             if "stress_disp" in prediction:
-                self.results["stress"] = (
-                    self.results["stress"] + prediction["stress_disp"]
-                )
+                self.results["stress"] = self.results["stress"] + prediction["stress_disp"]
             self.results["stress"] = full_3x3_to_voigt_6_stress(self.results["stress"])
+        atoms.results = self.results.copy()
 
     def get_embedding(self, atoms=None):
         return self.get_property("embedding", atoms)
 
     @classmethod
     def from_file(cls, model_path, device="cuda", **kwargs):
-        model = load_model(model_path, device=device, **kwargs)
+        # Remove the model_units and prediction_units from the kwargs
+        kwargs_wo_units = kwargs.copy()
+        kwargs_wo_units.pop("prediction_units", None)
+        kwargs_wo_units.pop("model_units", None)
+        model = load_model(model_path, device=device, **kwargs_wo_units)
         out = cls(model=model, device=device, **kwargs)
 
         return out
@@ -387,9 +384,7 @@ class EnsembleNFF(Calculator):
             conversion_factor: dict = const.conversion_factors.get(
                 (self.model_units, self.prediction_units), const.DEFAULT
             )
-            prediction_numpy = batch_detach(
-                const.convert_units(prediction, conversion_factor), to_numpy=True
-            )
+            prediction_numpy = batch_detach(const.convert_units(prediction, conversion_factor), to_numpy=True)
 
             if "/atom" in self.model_units:
                 energy = prediction_numpy["energy"] * len(atoms)
@@ -430,22 +425,16 @@ class EnsembleNFF(Calculator):
             self.results["forces"] = -gradients.mean(0).reshape(-1, 3)
             self.results["forces_std"] = gradients.std(0).reshape(-1, 3)
             if "forces_disp" in prediction:
-                self.results["forces"] = (
-                    self.results["forces"] + prediction["forces_disp"]
-                )
+                self.results["forces"] = self.results["forces"] + prediction["forces_disp"]
             if self.jobdir is not None:
                 forces_std = self.results["forces_std"][None, :, :]
-                self.log_ensemble(
-                    self.jobdir, "forces_nff_ensemble.npy", -1 * gradients
-                )
+                self.log_ensemble(self.jobdir, "forces_nff_ensemble.npy", -1 * gradients)
 
         if "stress" in properties:
             self.results["stress"] = stresses.mean(0)
             self.results["stress_std"] = stresses.std(0)
             if "stress_disp" in prediction:
-                self.results["stress"] = (
-                    self.results["stress"] + prediction["stress_disp"]
-                )
+                self.results["stress"] = self.results["stress"] + prediction["stress_disp"]
             if self.jobdir is not None:
                 stress_std = self.results["stress_std"][None, :, :]
                 self.log_ensemble(self.jobdir, "stress_nff_ensemble.npy", stresses)
@@ -509,9 +498,7 @@ class NeuralMetadynamics(NeuralFF):
         self.steps_from_old = []
 
         # only apply the bias to certain atoms
-        self.exclude_atoms = torch.LongTensor(
-            self.pushing_params.get("exclude_atoms", [])
-        )
+        self.exclude_atoms = torch.LongTensor(self.pushing_params.get("exclude_atoms", []))
         self.keep_idx = None
 
     def get_keep_idx(self, atoms):
@@ -521,9 +508,7 @@ class NeuralMetadynamics(NeuralFF):
             assert len(self.keep_idx) + len(self.exclude_atoms) == len(atoms)
             return self.keep_idx
 
-        keep_idx = torch.LongTensor(
-            [i for i in range(len(atoms)) if i not in self.exclude_atoms]
-        )
+        keep_idx = torch.LongTensor([i for i in range(len(atoms)) if i not in self.exclude_atoms])
         self.keep_idx = keep_idx
         return keep_idx
 
@@ -532,12 +517,7 @@ class NeuralMetadynamics(NeuralFF):
         # put the current atoms as the second dataset because that's the one
         # that gets its positions rotated and its gradient computed
         props_1 = {"nxyz": [torch.Tensor(atoms.get_nxyz())[keep_idx, :]]}
-        props_0 = {
-            "nxyz": [
-                torch.Tensor(old_atoms.get_nxyz())[keep_idx, :]
-                for old_atoms in self.old_atoms
-            ]
-        }
+        props_0 = {"nxyz": [torch.Tensor(old_atoms.get_nxyz())[keep_idx, :] for old_atoms in self.old_atoms]}
 
         dset_0 = Dataset(props_0, do_copy=False)
         dset_1 = Dataset(props_1, do_copy=False)
@@ -628,9 +608,7 @@ class NeuralMetadynamics(NeuralFF):
         if not any([isinstance(self.model, i) for i in UNDIRECTED]):
             check_directed(self.model, atoms)
 
-        super().calculate(
-            atoms=atoms, properties=properties, system_changes=system_changes
-        )
+        super().calculate(atoms=atoms, properties=properties, system_changes=system_changes)
 
         # Add metadynamics energy and forces
 
@@ -692,12 +670,7 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
         if self.query_nxyz is not None:
             return self.query_nxyz
 
-        query_nxyz = torch.stack(
-            [
-                torch.Tensor(old_atoms.get_nxyz())[keep_idx, :]
-                for old_atoms in self.old_atoms
-            ]
-        )
+        query_nxyz = torch.stack([torch.Tensor(old_atoms.get_nxyz())[keep_idx, :] for old_atoms in self.old_atoms])
         self.query_nxyz = query_nxyz
 
         return query_nxyz
@@ -733,9 +706,7 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
         return mol_idx
 
     def get_num_atoms_tensor(self, mol_idx, atoms):
-        num_atoms = torch.LongTensor(
-            [(mol_idx == i).nonzero().shape[0] for i in range(len(atoms.num_atoms))]
-        )
+        num_atoms = torch.LongTensor([(mol_idx == i).nonzero().shape[0] for i in range(len(atoms.num_atoms))])
 
         return num_atoms
 
@@ -770,9 +741,7 @@ class BatchNeuralMetadynamics(NeuralMetadynamics):
             store_grad=True,
         )
 
-        v_bias, f_bias = self.get_v_f_bias(
-            rmsd=rmsd, ref_xyz=ref_xyz, k_i=k_i, alpha_i=alpha_i, f_damp=f_damp
-        )
+        v_bias, f_bias = self.get_v_f_bias(rmsd=rmsd, ref_xyz=ref_xyz, k_i=k_i, alpha_i=alpha_i, f_damp=f_damp)
 
         final_f_bias = torch.zeros(len(atoms), 3)
         final_f_bias[keep_idx] = f_bias
@@ -812,15 +781,11 @@ class NeuralGAMD(NeuralFF):
         self.k_0 = k_0
         self.k = self.k_0 / (self.V_max - self.V_min)
 
-    def calculate(
-        self, atoms, properties=["energy", "forces"], system_changes=all_changes
-    ):
+    def calculate(self, atoms, properties=["energy", "forces"], system_changes=all_changes):
         if not any([isinstance(self.model, i) for i in UNDIRECTED]):
             check_directed(self.model, atoms)
 
-        super().calculate(
-            atoms=atoms, properties=properties, system_changes=system_changes
-        )
+        super().calculate(atoms=atoms, properties=properties, system_changes=system_changes)
 
         old_en = self.results["energy"]
         if old_en < self.V_max:
@@ -858,9 +823,7 @@ class ProjVectorCentroid:
         mol_pos = positions[self.mol_inds]
         reference_pos = positions[self.reference_inds]
         mol_centroid = mol_pos.mean(axis=0)  # mol center
-        reference_centroid = reference_pos.mean(
-            axis=0
-        )  # centroid of the whole structure
+        reference_centroid = reference_pos.mean(axis=0)  # centroid of the whole structure
 
         # position vector with respect to the structure centroid
         rel_mol_pos = mol_centroid - reference_centroid
@@ -1037,9 +1000,7 @@ class HarmonicRestraint:
                 mol_inds = [i - 1 for i in val["mol"]]
                 reference = [i - 1 for i in val["reference"]]
                 vector = [i - 1 for i in val["vector"]]
-                cv = ProjVectorCentroid(
-                    vector, mol_inds, reference, device=device
-                )  # z components
+                cv = ProjVectorCentroid(vector, mol_inds, reference, device=device)  # z components
             elif val["type"].lower() == "proj_ortho_vectors_plane":
                 mol_inds = [i - 1 for i in val["mol"]]  # caution check type
                 ring_inds = [i - 1 for i in val["ring"]]
@@ -1049,9 +1010,7 @@ class HarmonicRestraint:
                 sys.exit(1)
 
             self.cvs.append(cv)
-            steps, kappas, eq_values = self.create_time_dependec_arrays(
-                val["restraint"], max_steps
-            )
+            steps, kappas, eq_values = self.create_time_dependec_arrays(val["restraint"], max_steps)
             self.kappas.append(kappas)
             self.steps.append(steps)
             self.eq_values.append(eq_values)
@@ -1086,10 +1045,7 @@ class HarmonicRestraint:
             kappas += [restraint_list[n]["kappa"] for _ in templist]
             dcv = rd["eq_val"] - restraint_list[n]["eq_val"]
             cvstep = dcv / len(templist)  # get step increase
-            eq_vals += [
-                restraint_list[n]["eq_val"] + cvstep * tind
-                for tind, _ in enumerate(templist)
-            ]
+            eq_vals += [restraint_list[n]["eq_val"] + cvstep * tind for tind, _ in enumerate(templist)]
 
         # in case the last step is lesser than the max_step
         templist = list(range(restraint_list[-1]["step"], max_steps))
@@ -1235,20 +1191,14 @@ class NeuralRestraint(Calculator):
         if "forces" in self.properties:
             self.results["forces"] = -energy_grad.reshape(-1, 3)
         if requires_stress:
-            stress = prediction["stress_volume"].detach().cpu().numpy() * (
-                1 / const.EV_TO_KCAL_MOL
-            )
+            stress = prediction["stress_volume"].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
             self.results["stress"] = stress * (1 / atoms.get_volume())
 
         with open("colvar", "a") as f:
             f.write("{} ".format(self.step * 0.5))
             # ARREGLAR, SI YA ESTA CALCULADO PARA QUE RECALCULAR LA CVS
             for cv in self.hr.cvs:
-                curr_cv_val = float(
-                    cv.get_value(
-                        torch.tensor(atoms.get_positions(), device=self.device)
-                    )
-                )
+                curr_cv_val = float(cv.get_value(torch.tensor(atoms.get_positions(), device=self.device)))
                 f.write(" {:.6f} ".format(curr_cv_val))
             f.write("{:.6f} \n".format(float(bias_energy)))
 
