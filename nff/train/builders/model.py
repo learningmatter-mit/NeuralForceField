@@ -576,9 +576,7 @@ def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Mo
             try:
                 return MODEL_DICT[model_type].from_file(path, **kwargs)
             except IsADirectoryError:
-                return MODEL_DICT[model_type].from_file(
-                    os.path.join(path, "best_model"), **kwargs
-                )
+                return MODEL_DICT[model_type].from_file(os.path.join(path, "best_model"), **kwargs)
 
         if not kwargs:
             kwargs = DEFAULT_KWARGS[model_type]
@@ -588,7 +586,7 @@ def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Mo
         # both "" and None should evaluate to False
         print(f"Loading {model_type} with kwargs {kwargs}")
         return MODEL_DICT[model_type].load(**kwargs)
-    
+
     try:
         if os.path.isdir(path):
             model = torch.load(os.path.join(path, "best_model"), map_location="cpu")
@@ -601,19 +599,13 @@ def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Mo
         if os.path.isfile(param_path):
             params, model_type = load_params(param_path)
 
-        assert (
-            params is not None
-        ), "Must specify params if you want to load the state dict"
-        assert (
-            model_type is not None
-        ), "Must specify the model type if you want to load the state dict"
+        assert params is not None, "Must specify params if you want to load the state dict"
+        assert model_type is not None, "Must specify the model type if you want to load the state dict"
 
         model = get_model(params, model_type=model_type, **kwargs)
 
         if os.path.isdir(path):
-            state_dict = torch.load(
-                os.path.join(path, "best_model.pth.tar"), map_location="cpu"
-            )
+            state_dict = torch.load(os.path.join(path, "best_model.pth.tar"), map_location="cpu")
         elif os.path.exists(path):
             state_dict = torch.load(path, map_location="cpu")
         else:

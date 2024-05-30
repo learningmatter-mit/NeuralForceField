@@ -12,7 +12,7 @@ from nff.data import Dataset, collate_dicts
 from nff.io.mace import update_mace_init_params
 from nff.train import Trainer, get_model, hooks, load_model, loss, metrics
 from nff.train.loss import mae_operation, mse_operation
-from nff.utils.cuda import cuda_devices_sorted_by_free_mem, detach
+from nff.utils.cuda import cuda_devices_sorted_by_free_mem
 from nff.utils.misc import log
 
 torch.set_printoptions(precision=3, sci_mode=False)
@@ -20,6 +20,7 @@ torch.set_printoptions(precision=3, sci_mode=False)
 logger = logging.getLogger(__name__)
 
 LOSS_OPERATIONS = {"MAE": mae_operation, "MSE": mse_operation}
+
 
 def build_default_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
@@ -29,12 +30,8 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", help="random seed", type=int, default=1337)
 
     # Model params
-    parser.add_argument(
-        "--model_type", help="Name of model", type=str, default="CHGNetNFF"
-    )
-    parser.add_argument(
-        "--model_params_path", help="Path to model parameters", type=str
-    )
+    parser.add_argument("--model_type", help="Name of model", type=str, default="CHGNetNFF")
+    parser.add_argument("--model_params_path", help="Path to model parameters", type=str)
     parser.add_argument(
         "--model_path",
         type=str,
@@ -47,12 +44,8 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
     )
 
     # Dataset
-    parser.add_argument(
-        "--train_file", help="Training set pth.tar file", type=str, required=True
-    )
-    parser.add_argument(
-        "--val_file", help="Validation set pth.tar file", type=str, required=False
-    )
+    parser.add_argument("--train_file", help="Training set pth.tar file", type=str, required=True)
+    parser.add_argument("--val_file", help="Validation set pth.tar file", type=str, required=False)
     parser.add_argument(
         "--test_file",
         help="Test set pth.tar file",
@@ -86,15 +79,9 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         choices=["MSE", "MAE", "Huber"],  # TODO, build huber loss
     )
     parser.add_argument("--batch_size", help="batch size", type=int, default=16)
-    parser.add_argument(
-        "--lr", help="Starting learning rate of optimizer", type=float, default=1e-3
-    )
-    parser.add_argument(
-        "--min_lr", help="Minimum rate of optimizer", type=float, default=1e-6
-    )
-    parser.add_argument(
-        "--max_num_epochs", help="Maximum number of epochs", type=int, default=500
-    )
+    parser.add_argument("--lr", help="Starting learning rate of optimizer", type=float, default=1e-3)
+    parser.add_argument("--min_lr", help="Minimum rate of optimizer", type=float, default=1e-6)
+    parser.add_argument("--max_num_epochs", help="Maximum number of epochs", type=int, default=500)
     parser.add_argument(
         "--patience",
         help="Maximum number of consecutive epochs of increasing loss",
@@ -207,7 +194,7 @@ def main(
         # model_path is empty to load foundational models
         model = load_model(model_path, model_type=model_type, map_location=device, device=device)
         # model = CHGNetNFF.load(device=device)
-        
+
         # Optionally fix the weights of some layers
         if allow_grad == "ALL":
             for layer in [
@@ -238,7 +225,6 @@ def main(
             for param in model.atom_conv_layers[-1].parameters():
                 param.requires_grad = True
     else:
-
         # Load model params and save a copy
         logger.info("Training model from scratch")
         try:
@@ -259,8 +245,8 @@ def main(
         logger.info("Saved model params to save path %s", save_path)
 
         if "NffScaleMACE" in model_type:
-            model_params = update_mace_init_params(train, val, train_loader, model_params, logger=logger) 
-        model_kwargs.update({"training": True, "compute_force": True}) # needs to be true for training
+            model_params = update_mace_init_params(train, val, train_loader, model_params, logger=logger)
+        model_kwargs.update({"training": True, "compute_force": True})  # needs to be true for training
         model = get_model(model_params, model_type=model_type)
 
     model.to(device)

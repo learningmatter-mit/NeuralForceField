@@ -33,7 +33,6 @@ class CHGNetNFF(CHGNet):
         requires_embedding: bool = False,
         **kwargs,
     ):
-
         super().__init__(*args, is_intensive=is_intensive, **kwargs)
         if is_intensive and "/atom" not in units:
             units += "/atom"
@@ -59,9 +58,7 @@ class CHGNetNFF(CHGNet):
             for param in self.composition_model.parameters():
                 param.requires_grad = True
 
-    def forward(
-        self, data_batch: Dict[str, List], **kwargs
-    ) -> Dict[str, Union[Tensor, List]]:
+    def forward(self, data_batch: Dict[str, List], **kwargs) -> Dict[str, Union[Tensor, List]]:
         """Convert data_batch to CHGNet format and run forward pass.
 
         Parameters
@@ -97,13 +94,9 @@ class CHGNetNFF(CHGNet):
 
         graphs = [graph.to(self.device) for graph in graphs]
 
-        output = super().forward(
-            graphs, task="ef", return_crystal_feas=self.requires_embedding
-        )
+        output = super().forward(graphs, task="ef", return_crystal_feas=self.requires_embedding)
         # convert to NFF keys and negate energy_grad
-        output = cat_props(
-            {self.key_mappings[k]: self.negate_value(k, v) for k, v in output.items()}
-        )
+        output = cat_props({self.key_mappings[k]: self.negate_value(k, v) for k, v in output.items()})
 
         return output
 
@@ -117,7 +110,7 @@ class CHGNetNFF(CHGNet):
     def save(self, path: str):
         """Load a CHGNet model from a file or URL"""
         state = {}
-        state['model'] = self.as_dict()
+        state["model"] = self.as_dict()
         torch.save(state, path)
 
     @classmethod
@@ -131,8 +124,9 @@ class CHGNetNFF(CHGNet):
     def from_file(cls, path, **kwargs) -> CHGNetNFF:
         """Build a CHGNetNFF from a saved file."""
         device = kwargs.pop("device", "cpu")
-        state = torch.load(path, map_location=kwargs.pop("map_location", device))
-        return CHGNetNFF.from_dict(state["model"], device=device, **kwargs)
+        map_location = torch.device(kwargs.pop("map_location", device))
+        state = torch.load(path, map_location=map_location)
+        return CHGNetNFF.from_dict(state["model"], device=map_location, **kwargs)
 
     @classmethod
     def load(cls, model_name="0.3.0", **kwargs) -> CHGNetNFF:
@@ -144,7 +138,6 @@ class CHGNetNFF(CHGNet):
         Raises:
             ValueError: On unknown model_name.
         """
-
         try:
             checkpoint_path = {
                 "0.3.0": "../../../models/foundation_models/chgnet/0.3.0/chgnet_0.3.0_e29f68s314m37.pth.tar",
@@ -252,9 +245,7 @@ class BatchedGraph:
             # Lattice
             if compute_stress:
                 strain = graph.lattice.new_zeros([3, 3], requires_grad=True)
-                lattice = graph.lattice @ (
-                    torch.eye(3, dtype=datatype).to(strain.device) + strain
-                )
+                lattice = graph.lattice @ (torch.eye(3, dtype=datatype).to(strain.device) + strain)
             else:
                 strain = None
                 lattice = graph.lattice
@@ -283,12 +274,8 @@ class BatchedGraph:
             # keep only the undirected graph index in the bond_graph,
             # So the number of columns in bond_graph reduce from 5 to 3
             if len(graph.bond_graph) != 0:
-                bond_vecs_i = torch.index_select(
-                    bond_vectors, 0, graph.bond_graph[:, 2]
-                )
-                bond_vecs_j = torch.index_select(
-                    bond_vectors, 0, graph.bond_graph[:, 4]
-                )
+                bond_vecs_i = torch.index_select(bond_vectors, 0, graph.bond_graph[:, 2])
+                bond_vecs_j = torch.index_select(bond_vectors, 0, graph.bond_graph[:, 4])
                 angle_basis = angle_basis_expansion(bond_vecs_i, bond_vecs_j)
                 angle_bases.append(angle_basis)
 
@@ -306,17 +293,13 @@ class BatchedGraph:
         atomic_numbers = torch.cat(atomic_numbers, dim=0)
         bond_bases_ag = torch.cat(bond_bases_ag, dim=0)
         bond_bases_bg = torch.cat(bond_bases_bg, dim=0)
-        angle_bases = (
-            torch.cat(angle_bases, dim=0) if len(angle_bases) != 0 else torch.tensor([])
-        )
+        angle_bases = torch.cat(angle_bases, dim=0) if len(angle_bases) != 0 else torch.tensor([])
         batched_atom_graph = torch.cat(batched_atom_graph, dim=0)
         if batched_bond_graph != []:
             batched_bond_graph = torch.cat(batched_bond_graph, dim=0)
         else:  # when bond graph is empty or disabled
             batched_bond_graph = torch.tensor([])
-        atom_owners = (
-            torch.cat(atom_owners, dim=0).type(torch.int32).to(atomic_numbers.device)
-        )
+        atom_owners = torch.cat(atom_owners, dim=0).type(torch.int32).to(atomic_numbers.device)
         directed2undirected = torch.cat(directed2undirected, dim=0)
         volumes = torch.tensor(volumes, dtype=datatype, device=atomic_numbers.device)
 
