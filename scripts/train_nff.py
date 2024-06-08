@@ -10,10 +10,10 @@ from torch.utils.data import DataLoader
 
 from nff.data import Dataset, collate_dicts
 from nff.io.mace import update_mace_init_params
-from nff.train import Trainer, get_model, hooks, load_model, loss, metrics
+from nff.nn.models.mace import reduce_foundations
+from nff.train import Trainer, get_layer_freezer, get_model, hooks, load_model, loss, metrics
 from nff.train.loss import mae_operation, mse_operation
 from nff.utils.cuda import cuda_devices_sorted_by_free_mem
-from nff.utils.misc import log
 
 torch.set_printoptions(precision=3, sci_mode=False)
 
@@ -40,6 +40,11 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--fine_tune",
         help="Whether to fine-tune the model",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--trim_embeddings",
+        help="Whether to reduce the size of MACE foundational model by resizing the embedding layers",
         action="store_true",
     )
 
@@ -114,11 +119,6 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def log_train(msg):
-    pass
-    log("train", msg)
-
-
 def main(
     name: str,
     model_type: str,
@@ -128,7 +128,7 @@ def main(
     train_file: Union[str, Path],
     val_file: Union[str, Path],
     fine_tune: bool = False,
-    allow_grad: Literal["ALL", "LAST"] = "LAST",
+    trim_embeddings: bool = False,
     targets: Iterable[str] = ["energy", "energy_grad"],
     loss_weights: Iterable[float] = [0.05, 1.0],
     criterion: Literal["MSE", "MAE"] = "MSE",
@@ -182,48 +182,18 @@ def main(
         pin_memory=pin_memory,
     )
 
-    model_kwargs = {}
+    model_kwargs = {"training": True, "compute_force": True} if "NffScaleMACE" in model_type else {}
 
     if fine_tune:
         logger.info("Fine-tuning model")
-        # TODO make more general load model
-        # load_model(path: str, params=None, model_type=None, **kwargs)
-        # MACE is NffScaleMACE.load_foundations("medium", map_location="cpu", default_dtype="float32")
-        # need to fix for MACE
-        # load_foundations
-        # model_path is empty to load foundational models
         model = load_model(model_path, model_type=model_type, map_location=device, device=device)
-        # model = CHGNetNFF.load(device=device)
+        if "NffScaleMACE" in model_type and trim_embeddings:
+            atomic_numbers = np.unique(train[0]["nxyz"][:, 0]).astype(int).tolist()
+            logger.info("Trimming embeddings with MACE model and atomic numbers %s", atomic_numbers)
+            model = reduce_foundations(model, atomic_numbers, load_readout=True)
+        model_freezer = get_layer_freezer(model_type)
+        model_freezer.model_tl(model)  # TODO: add custom options for freezing layers
 
-        # Optionally fix the weights of some layers
-        if allow_grad == "ALL":
-            for layer in [
-                model.atom_embedding,
-                model.bond_embedding,
-                model.angle_embedding,
-                model.bond_basis_expansion,
-                model.angle_basis_expansion,
-                model.atom_conv_layers[:],
-                model.bond_conv_layers,
-                model.angle_layers,
-            ]:
-                for param in layer.parameters():
-                    param.requires_grad = True
-        elif allow_grad == "LAST":
-            for layer in [
-                model.atom_embedding,
-                model.bond_embedding,
-                model.angle_embedding,
-                model.bond_basis_expansion,
-                model.angle_basis_expansion,
-                model.atom_conv_layers[:-1],
-                model.bond_conv_layers,
-                model.angle_layers,
-            ]:
-                for param in layer.parameters():
-                    param.requires_grad = False
-            for param in model.atom_conv_layers[-1].parameters():
-                param.requires_grad = True
     else:
         # Load model params and save a copy
         logger.info("Training model from scratch")
@@ -246,11 +216,11 @@ def main(
 
         if "NffScaleMACE" in model_type:
             model_params = update_mace_init_params(train, val, train_loader, model_params, logger=logger)
-        model_kwargs.update({"training": True, "compute_force": True})  # needs to be true for training
         model = get_model(model_params, model_type=model_type)
 
     model.to(device)
-    model.float()
+
+    logger.info("Total number of parameters: %s", sum(p.numel() for p in model.parameters()))
 
     logger.info(
         "Num trainable parameters: %s",
@@ -336,7 +306,7 @@ if __name__ == "__main__":
         train_file=args.train_file,
         val_file=args.val_file,
         fine_tune=args.fine_tune,
-        allow_grad=args.allow_grad,
+        trim_embeddings=args.trim_embeddings,
         targets=args.targets,
         loss_weights=args.loss_weights,
         criterion=args.criterion,
