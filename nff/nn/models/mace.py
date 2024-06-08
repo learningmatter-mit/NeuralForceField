@@ -1,13 +1,14 @@
 ####################################################################################################
 # A wrapper for MACE models
-# Authors: Hoje Chun, Juno Nam, Alex Hoffman
+# Authors: Hoje Chun, Juno Nam, Alex Hoffman, Xiaochen Du
 # Distributed under the MIT license.
 # See LICENSE for more info
 ####################################################################################################
 
 from __future__ import annotations
 
-from typing import List, Union
+from pathlib import Path
+from typing import List, Literal, Union
 
 import torch
 from e3nn import o3
@@ -29,9 +30,7 @@ from nff.io.mace import (
 
 
 class NffScaleMACE(ScaleShiftMACE):
-    """Wrapper for the ScaleShiftMACE model that allows for direct
-    forward passes in NFF
-    """
+    """Wrapper for the ScaleShiftMACE model that allows for direct forward passes in NFF"""
 
     def __init__(
         self,
@@ -42,8 +41,8 @@ class NffScaleMACE(ScaleShiftMACE):
         """NFF compatible ScaleShiftMACE
 
         Args:
-            atomic_inter_scale (float): interaction energy scale
-            atomic_inter_shift (float): interaction energy shift
+            units (str, optional): Energy units. Defaults to "eV".
+            device (str, optional): Device to run the model on. Defaults to "cpu".
         """
         self.units = units
         self.device = device
@@ -72,14 +71,19 @@ class NffScaleMACE(ScaleShiftMACE):
         compute_displacement: bool = False,
         **kwargs,
     ) -> dict:  # noqa: W0221
-        """Forward pass through the model
+        """Forward pass through the model and ouput in NFF format
 
         Args:
             batch (dict): dictionary of Geom properties (energy, energy_grad, stress, etc.)
-            kwargs: additional keyword arguments for the super().forward() function from MACE
+            training (bool, optional): whether in training mode. Defaults to False.
+            compute_force (bool, optional): compute forces. Defaults to True.
+            requires_embedding (bool, optional): whether to return the node embedding. Defaults to True.
+            requires_stress (bool, optional): whether to compute stress. Defaults to False.
+            compute_virials (bool, optional): whether to compute virials. Defaults to False.
+            compute_displacement (bool, optional): whether to compute displacement. Defaults to False.
 
         Returns:
-            dict: dict of output from the forward pass
+            dict: dict of output from the forward pass in NFF format
         """
         if isinstance(batch, dict):
             data = self.convert_batch_to_data(batch)
@@ -152,12 +156,10 @@ class NffScaleMACE(ScaleShiftMACE):
             atomic_data = AtomicData.from_config(config, z_table=z_table, cutoff=r_max)
             atomic_data.elems = torch.tensor(numbers, dtype=torch.long)
             dataset.append(atomic_data)
-        data = NffBatch.from_data_list(dataset).to(props["nxyz"].device)
-
-        return data
+        return NffBatch.from_data_list(dataset).to(props["nxyz"].device)
 
     @property
-    def num_params(self):
+    def num_params(self) -> int:
         """Count the number of parameters in the model.
 
         Returns:
@@ -166,22 +168,26 @@ class NffScaleMACE(ScaleShiftMACE):
         return sum(p.numel() for p in self.parameters())
 
     @property
-    def num_trainable_params(self):
-        """Count the number of parameters in the model.
+    def num_trainable_params(self) -> int:
+        """Count the number of trainable parameters in the model.
 
         Returns:
-            int: Number of parameters.
+            int: Number of trainable parameters.
         """
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
     def get_init_kwargs(self) -> dict:
-        """Get the initialization arguments from the model"""
+        """Get the initialization arguments from the model
+
+        Returns:
+            dict: dictionary of initialization arguments
+        """
         if isinstance(self.radial_embedding.bessel_fn, BesselBasis):
             radial_type = "bessel"
         elif isinstance(self.radial_embedding.bessel_fn, GaussianBasis):
             radial_type = "gaussian"
 
-        init_kwargs = {
+        return {
             "atomic_inter_scale": self.scale_shift.scale,
             "atomic_inter_shift": self.scale_shift.shift,
             "r_max": self.r_max.item(),
@@ -202,16 +208,28 @@ class NffScaleMACE(ScaleShiftMACE):
             "radial_MLP": self.interactions[0].conv_tp_weights.hs[1:-1],
             "radial_type": radial_type,
         }
-        return init_kwargs
 
-    def save(self, path: str):
-        """Load a MACE model from a file or URL"""
+    def save(self, path: str) -> None:
+        """Save MACE model to a file or URL.
+
+        Args:
+            path (str): Path to the file or URL.
+        """
         hparams = self.get_init_kwargs()
         state_dict = self.state_dict()
         torch.save({"init_params": hparams, "state_dict": state_dict}, path)
 
     @classmethod
-    def load(cls, state_dict, **hparams):
+    def from_dict(cls, state_dict: dict, **hparams) -> NffScaleMACE:
+        """Build a ScaleShiftMACE model from a dictionary of parameters.
+
+        Args:
+            state_dict (dict): The state dictionary of the model.
+            **hparams: The hyperparameters of the model.
+
+        Returns:
+            NffScaleMACE: The model built from the dictionary.
+        """
         model = cls(**hparams)
         model.load_state_dict(state_dict=state_dict)
         return model
@@ -233,11 +251,25 @@ class NffScaleMACE(ScaleShiftMACE):
         hparams = ckpt["init_params"]
         state_dict = ckpt["state_dict"]
 
-        model = cls.load(state_dict, **hparams, **kwargs)
-        return model
+        return cls.from_dict(state_dict, **hparams, **kwargs)
 
     @classmethod
-    def load_foundations(cls, model: str = "medium", map_location: str = "cpu", default_dtype: str = ""):
+    def load_foundations(
+        cls,
+        model: Literal["small", "medium", "large"] = "medium",
+        map_location: str = "cpu",
+        default_dtype: Literal["", "float32", "float64"] = "float32",
+    ) -> NffScaleMACE:
+        """Load MACE foundational model.
+
+        Args:
+            model (Literal["small", "medium", "large"], optional): model size. Defaults to "medium".
+            map_location (str, optional): The device to load the model on. Defaults to "cpu".
+            default_dtype (Literal["", "float32", "float64"], optional): float type of the model. Defaults to "float32".
+
+        Returns:
+            NffScaleMACE: NffScaleMACE foundational model.
+        """
         mace_model_path = get_mace_mp_model_path(model)
         mace_model = torch.load(mace_model_path, map_location=map_location)
         init_params = get_init_kwargs_from_model(mace_model)
@@ -255,7 +287,31 @@ class NffScaleMACE(ScaleShiftMACE):
                 mace_model.float()
         torch_tools.set_default_dtype(default_dtype)
 
-        return cls.load(mace_model.state_dict(), **init_params)
+        return cls.from_dict(mace_model.state_dict(), **init_params)
+
+    @classmethod
+    def load(
+        cls,
+        model_name: str = "medium",
+        map_location: str = None,
+        **kwargs,
+    ) -> NffScaleMACE:
+        """Load the model from checkpoint created by pytorch lightning.
+
+        Args:
+            model_name (str): The name of the model to load.
+            map_location (str): The device to load the model on.
+
+        Returns:
+            NffScaleMACE: The model loaded from the checkpoint.
+        """
+        device = kwargs.pop("device", "cpu")
+        map_location = torch.device(map_location if map_location else device)
+        if model_name in ("small", "medium", "large"):
+            return cls.load_foundations(model_name, map_location)
+        if Path(model_name).is_file():
+            return cls.from_file(model_name, map_location=map_location, **kwargs)
+        raise FileNotFoundError(f"Model {model_name} not found.")
 
 
 def reduce_foundations(
@@ -277,7 +333,7 @@ def reduce_foundations(
 
     Args:
         model_foundations (NffScaleMACE): foundational model
-        table (Union[List, AtomicNumberTable]): List of elements reduced from all preodic elements.
+        table (Union[List, AtomicNumberTable]): List of elements reduced from all periodic table elements.
         load_readout (bool, optional): whether to restore the reduced model readouts. Defaults to False.
         use_shift (bool, optional): whether to restore the reduced model shift. Defaults to True.
         use_scale (bool, optional): whether to restore the reduced model scale. Defaults to True.
