@@ -7,8 +7,9 @@ or best models using the Trainer class.
 Last refactored 2024-03-07 by Alex Hoffman
 """
 
-import torch
 from typing import List
+
+import torch
 
 
 class LayerFreezer:
