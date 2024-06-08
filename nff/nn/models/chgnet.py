@@ -33,6 +33,16 @@ class CHGNetNFF(CHGNet):
         requires_embedding: bool = False,
         **kwargs,
     ):
+        """Initialize CHGNetNFF model.
+
+        Args:
+            units (str, optional): Energy units. Defaults to "eV/atom".
+            is_intensive (bool, optional): Whether energy is intensive. Defaults to True.
+            cutoff (float, optional): Neighbor cutoff distance. Defaults to 5.0.
+            key_mappings (Dict[str, str], optional): Mapping from CHGNet keys to NFF keys. Defaults to None.
+            device (str, optional): Device to run the model on. Defaults to "cpu".
+            requires_embedding (bool, optional): Whether to return the node embeddings/features. Defaults to True.
+        """
         super().__init__(*args, is_intensive=is_intensive, **kwargs)
         if is_intensive and "/atom" not in units:
             units += "/atom"
@@ -61,29 +71,24 @@ class CHGNetNFF(CHGNet):
     def forward(self, data_batch: Dict[str, List], **kwargs) -> Dict[str, Union[Tensor, List]]:
         """Convert data_batch to CHGNet format and run forward pass.
 
-        Parameters
-        ----------
-        data_batch : Dict
-            A dictionary of properties for each structure in the batch.
-            Basically the props in NFF Dataset
+        Args:
+            data_batch (Dict[str, List]): A dictionary of properties for each structure in the batch.
             Example:
-                props = {
+                data_batch = {
                     'nxyz': [np.array([[1, 0, 0, 0], [1, 1.1, 0, 0]]),
-                             np.array([[1, 3, 0, 0], [1, 1.1, 5, 0]])],
+                                np.array([[1, 3, 0, 0], [1, 1.1, 5, 0]])],
                     'lattice': [np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]],
                                 np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])],
                     'num_atoms': [2, 2],
                 }
 
-        Returns
-        -------
-        output : Dict
-            A dictionary of predicted properties for each structure in the batch.
+        Returns:
+            dict: A dictionary of predicted properties for each structure in the batch.
             Example:
                 props = {
                     'energy': [1, 1.2],
                     'energy_grad': [np.array([[0, 0, 0], [0.1, 0.2, 0.3]]),
-                                      np.array([[0, 0, 0], [0.1, 0.2, 0.3]])],
+                                        np.array([[0, 0, 0], [0.1, 0.2, 0.3]])],
                 }
         """
         chgnet_data_batch = convert_data_batch(
@@ -96,11 +101,18 @@ class CHGNetNFF(CHGNet):
 
         output = super().forward(graphs, task="ef", return_crystal_feas=self.requires_embedding)
         # convert to NFF keys and negate energy_grad
-        output = cat_props({self.key_mappings[k]: self.negate_value(k, v) for k, v in output.items()})
-
-        return output
+        return cat_props({self.key_mappings[k]: self.negate_value(k, v) for k, v in output.items()})
 
     def negate_value(self, key: str, value: Union[list, Tensor]) -> Union[list, Tensor]:
+        """Negate the value if key is in negate_keys.
+
+        Args:
+            key (str): Key to check if it should be negated.
+            value (Union[list, Tensor]): Value to negate.
+
+        Returns:
+            Union[list, Tensor]: Negated value if key is in negate_keys.
+        """
         if key in self.negate_keys:
             if isinstance(value, list):
                 return [-x for x in value]
@@ -108,28 +120,46 @@ class CHGNetNFF(CHGNet):
         return value
 
     def save(self, path: str):
-        """Load a CHGNet model from a file or URL"""
+        """Load a CHGNet model from a file or URL.
+
+        Args:
+            path (str): Path to save the model.
+        """
         state = {}
         state["model"] = self.as_dict()
         torch.save(state, path)
 
     @classmethod
-    def from_dict(cls, dict, **kwargs) -> CHGNetNFF:
-        """Build a CHGNetNFF from a saved dictionary."""
-        chgnet = CHGNetNFF(**dict["model_args"], **kwargs)
-        chgnet.load_state_dict(dict["state_dict"])
+    def from_dict(cls, state_dict: dict, **kwargs) -> CHGNetNFF:
+        """Load a CHGNetNFF from a saved dictionary.
+
+        Args:
+            state_dict (dict): Dictionary containing the model state.
+
+        Returns:
+            CHGNetNFF: CHGNetNFF model.
+        """
+        chgnet = CHGNetNFF(**state_dict["model_args"], **kwargs)
+        chgnet.load_state_dict(state_dict["state_dict"])
         return chgnet
 
     @classmethod
-    def from_file(cls, path, **kwargs) -> CHGNetNFF:
-        """Build a CHGNetNFF from a saved file."""
+    def from_file(cls, path: str, **kwargs) -> CHGNetNFF:
+        """Load a CHGNetNFF from a saved file.
+
+        Args:
+            path (str): Path to the saved model.
+
+        Returns:
+            CHGNetNFF: CHGNetNFF model loaded from checkpoint.
+        """
         device = kwargs.pop("device", "cpu")
         map_location = torch.device(kwargs.pop("map_location", device))
         state = torch.load(path, map_location=map_location)
-        return CHGNetNFF.from_dict(state["model"], device=map_location, **kwargs)
+        return cls.from_dict(state["model"], device=map_location, **kwargs)
 
     @classmethod
-    def load(cls, model_name="0.3.0", **kwargs) -> CHGNetNFF:
+    def load(cls, model_name: str = "0.3.0", **kwargs) -> CHGNetNFF:
         """Load pretrained CHGNetNFF model.
 
         Args:
@@ -137,6 +167,9 @@ class CHGNetNFF(CHGNet):
 
         Raises:
             ValueError: On unknown model_name.
+
+        Returns:
+            CHGNetNFF: CHGNetNFF foundational model.
         """
         try:
             checkpoint_path = {
@@ -157,7 +190,16 @@ class CHGNetNFF(CHGNet):
             **kwargs,
         )
 
-    def to(self, device, **kwargs):
+    def to(self, device: str, **kwargs) -> CHGNetNFF:
+        """
+        Move the model to the specified device.
+
+        Args:
+            device (str): Device to move the model to.
+
+        Returns:
+            CHGNetNFF: Model moved to the specified device.
+        """
         self = super().to(device, **kwargs)
         self.device = device
         if hasattr(self, "composition_model"):
