@@ -21,9 +21,7 @@ def parse_args():
         required=True,
         help="Path to the model",
     )
-    parser.add_argument(
-        "--model_type", help="Name of model", type=str, default="CHGNetNFF"
-    )
+    parser.add_argument("--model_type", help="Name of model", type=str, default="CHGNetNFF")
     parser.add_argument(
         "--data_path",
         type=str,
@@ -51,6 +49,7 @@ def parse_args():
 
     args = parser.parse_args()
     return args
+
 
 def main(
     model_path: str,
@@ -90,22 +89,20 @@ def main(
 
     test_data = Dataset.from_file(data_path)
     if hasattr(model, "units"):
-        test_data.to_units(model.units)
+        units = model.units
     else:
-        test_data.to_units("eV")
+        units = "eV"
+    test_data.to_units(units)
     print(f"Using dataset units: {test_data.units}")
 
-    test_loader = DataLoader(
-        test_data, batch_size=4, collate_fn=collate_dicts, pin_memory=True
-    )
+    test_loader = DataLoader(test_data, batch_size=4, collate_fn=collate_dicts, pin_memory=True)
 
     loss_fn = loss.build_mse_loss(loss_coef={"energy": 0.05, "energy_grad": 1})
 
     print("Evaluating ...")
     results, targets, val_loss = evaluate(model, test_loader, loss_fn, device=device)
 
-    # plot parity
-    # TODO: fix units for MACE NFF
+    # plot parity plot
     parity_plot_path = save_path / f"{start_time}_parity_plot"
     print(f"Saving parity plot to {parity_plot_path}")
     mae_energy, mae_force = plot_parity(
@@ -115,7 +112,7 @@ def main(
         plot_type="reg",
         energy_key="energy",
         force_key="energy_grad",
-        units={"energy_grad": "eV/Å", "energy": "eV/atom"},
+        units={"energy_grad": "eV/Å", "energy": units},
     )
 
     # plot loss curves
