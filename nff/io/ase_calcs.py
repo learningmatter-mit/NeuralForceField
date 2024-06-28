@@ -255,6 +255,7 @@ class EnsembleNFF(Calculator):
         self.to(device)
         self.jobdir = jobdir
         self.offset_data = {}
+        self.offset_units = kwargs.get("offset_units", "atomic")
         self.properties = properties
         self.model_kwargs = model_kwargs
         self.model_units = model_units
@@ -280,8 +281,10 @@ class EnsembleNFF(Calculator):
         for ele, num in ads_count.items():
             ref_en += num * stoidict.get(ele, 0.0)
         ref_en += stoidict.get("offset", 0.0)
-
-        energy += ref_en * HARTREE_TO_EV
+        if self.offset_units == "atomic":
+            energy += ref_en * HARTREE_TO_EV
+        else:
+            energy += ref_en
         return energy
 
     def log_ensemble(self, jobdir, log_filename, props):
