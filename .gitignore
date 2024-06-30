@@ -5,6 +5,7 @@
 *.dll
 *.exe
 *.o
+*.pyc
 *.so
 
 # Packages #

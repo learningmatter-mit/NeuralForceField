@@ -16,7 +16,7 @@ dependencies = [
     "rdkit",
     "scikit-learn",
     "scipy",
-    "torch>=2.2.0",
+    "torch>=2.1.0",
     "tqdm",
     "mace-torch>=0.3.4",
     "chgnet>=0.3.5",
@@ -31,7 +31,9 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Machine Learning",
     "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Materials Science",
     "Topic :: Scientific/Engineering :: Physics",
 ]
 
@@ -41,9 +43,12 @@ test = ["pytest", "pytest-cov"]
 [project.urls]
 Homepage = "https://github.mit.edu/MLMat/NeuralForceField/"
 
+[tool.setuptools]
+packages = ["nff"]
+
 [tool.ruff]
 include = ["**/pyproject.toml", "*.ipynb", "*.py", "*.pyi"]
-exclude = ["__init__.py", "migrations/*.py", "allxyz_lastgrad.py", "mopac_ints_rhf.py", "dbsettings.py"]
+exclude = ["__init__.py"]
 line-length = 120
 src = [".", "nff"]
 
