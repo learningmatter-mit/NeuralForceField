@@ -452,10 +452,12 @@ class EnsembleNFF(Calculator):
 
         The special keyword 'parameters' can be used to read
         parameters from a file."""
-        Calculator.set(self, **kwargs)
+        changed_params = Calculator.set(self, **kwargs)
         if "offset_data" in self.parameters.keys():
             self.offset_data = self.parameters["offset_data"]
             print(f"offset data: {self.offset_data} is set from parameters")
+
+        return changed_params
 
     @classmethod
     def from_files(cls, model_paths: list, device="cuda", **kwargs):
