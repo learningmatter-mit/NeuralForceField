@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from ase import Atoms, units
 from ase.neighborlist import neighbor_list
+from typing_extensions import Self
 
 import nff.utils.constants as const
 from nff.data.sparse import sparsify_array
@@ -449,10 +450,60 @@ class AtomsBatch(Atoms):
         props = kwargs.pop("props", {})
         return cls(
             atoms,
-            positions=atoms.positions,
-            numbers=atoms.numbers,
             props=props,
             **kwargs,
+        )
+
+    def copy(self) -> Self:
+        """Copy the current object.
+
+        Returns:
+            AtomsBatch: A copy of the current object.
+        """
+        return self.__class__.from_atoms(
+            self,
+            props=self.props,
+            cutoff=self.cutoff,
+            directed=self.directed,
+            requires_large_offsets=self.requires_large_offsets,
+            cutoff_skin=self.cutoff_skin,
+            dense_nbrs=self.mol_nbrs is not None and self.mol_idx is not None,
+            device=self.device,
+        )
+
+    def todict(self, update_props=True) -> dict:
+        """Serialize the object to a dictionary. Calls the parent class todict method.
+
+        Args:
+            update_props (bool, optional): Whether to update the properties of the object. Defaults to True.
+
+        Returns:
+            dict: A dictionary representation of the object.
+        """
+        ase_dict = super().todict()  # basic ASE representation
+        return {
+            **ase_dict,
+            "props": self.get_batch() if update_props else self.props,
+            "cutoff": self.cutoff,
+            "directed": self.directed,
+            "requires_large_offsets": self.requires_large_offsets,
+            "cutoff_skin": self.cutoff_skin,
+            "dense_nbrs": self.mol_nbrs is not None and self.mol_idx is not None,
+            "device": self.device,
+        }
+
+    @classmethod
+    def fromdict(cls, dct) -> Self:
+        """Rebuild atoms object from dictionary representation (todict).
+
+        Args:
+            dct (dict): dictionary representation of the object.
+
+        Returns:
+            AtomsBatch: Rebuilt atoms object.
+        """
+        return cls(
+            **dct,
         )
 
 
