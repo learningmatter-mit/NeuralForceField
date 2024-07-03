@@ -16,7 +16,7 @@ dependencies = [
     "rdkit",
     "scikit-learn",
     "scipy",
-    "torch>=2.1.0",
+    "torch>=2.2.0",
     "tqdm",
     "mace-torch>=0.3.4",
     "chgnet>=0.3.5",
@@ -44,13 +44,13 @@ test = ["pytest", "pytest-cov"]
 Homepage = "https://github.mit.edu/MLMat/NeuralForceField/"
 
 [tool.setuptools]
-packages = ["nff"]
+packages.find = { where = ["."], include = ["nff*"] }
 
 [tool.ruff]
 include = ["**/pyproject.toml", "*.ipynb", "*.py", "*.pyi"]
-exclude = ["__init__.py"]
+exclude = ["__init__.py", "migrations/*.py", "allxyz_lastgrad.py", "mopac_ints_rhf.py", "dbsettings.py"]
 line-length = 120
-src = [".", "nff"]
+src = [".", "djangochem"]
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -92,6 +92,8 @@ select = [
 # also consider ignoring "C901", for high mccabe function complexity
 # also consider ignoring "ERA001", for found commented out code
 ignore = [
+    "RET504",  # return statement in finally block
+    "B006",    # Do not use mutable data structures for argument defaults
     "ANN003",  # missing type annotations for kwargs
     "B019",    # Use of functools.lru_cache on methods can lead to memory leaks
     "C408",    # unnecessary-collection-call
