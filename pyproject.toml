@@ -20,7 +20,8 @@ dependencies = [
     "tqdm",
     "mace-torch>=0.3.4",
     "chgnet>=0.3.5",
-    "pre-commit"
+    "pre-commit",
+    "e3fp",
 ]
 classifiers = [
     "Intended Audience :: Science/Research",
