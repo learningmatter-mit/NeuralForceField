@@ -49,9 +49,9 @@ packages.find = { where = ["."], include = ["nff*"] }
 
 [tool.ruff]
 include = ["**/pyproject.toml", "*.ipynb", "*.py", "*.pyi"]
-exclude = ["__init__.py", "migrations/*.py", "allxyz_lastgrad.py", "mopac_ints_rhf.py", "dbsettings.py"]
+exclude = ["__init__.py"]
 line-length = 120
-src = [".", "djangochem"]
+src = [".", "nff"]
 
 [tool.ruff.format]
 docstring-code-format = true
