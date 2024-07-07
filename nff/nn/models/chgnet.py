@@ -41,7 +41,7 @@ class CHGNetNFF(CHGNet):
             cutoff (float, optional): Neighbor cutoff distance. Defaults to 5.0.
             key_mappings (Dict[str, str], optional): Mapping from CHGNet keys to NFF keys. Defaults to None.
             device (str, optional): Device to run the model on. Defaults to "cpu".
-            requires_embedding (bool, optional): Whether to return the node embeddings/features. Defaults to True.
+            requires_embedding (bool, optional): Whether to return the node embeddings/features. Defaults to False.
         """
         super().__init__(*args, is_intensive=is_intensive, **kwargs)
         if is_intensive and "/atom" not in units:
@@ -99,7 +99,11 @@ class CHGNetNFF(CHGNet):
 
         graphs = [graph.to(self.device) for graph in graphs]
 
-        output = super().forward(graphs, task="ef", return_crystal_feas=self.requires_embedding)
+        output = super().forward(
+            graphs,
+            task="ef",
+            return_crystal_feas=self.requires_embedding or kwargs.get("requires_embedding", False),
+        )
         # convert to NFF keys and negate energy_grad
         return cat_props({self.key_mappings[k]: self.negate_value(k, v) for k, v in output.items()})
 

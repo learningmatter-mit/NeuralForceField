@@ -9,9 +9,7 @@ import nvidia_smi
 import torch
 
 
-def batch_to(
-    batch: Dict[str, list | torch.Tensor], device: str
-) -> Dict[str, List | torch.Tensor]:
+def batch_to(batch: Dict[str, list | torch.Tensor], device: str) -> Dict[str, List | torch.Tensor]:
     """Send batch to device
 
     Args:
@@ -27,9 +25,7 @@ def batch_to(
     return gpu_batch
 
 
-def detach(
-    val: torch.Tensor, to_numpy: bool = False
-) -> Union[torch.Tensor, np.ndarray]:
+def detach(val: torch.Tensor, to_numpy: bool = False) -> Union[torch.Tensor, np.ndarray]:
     """Detach GPU tensor
 
     Args:
@@ -106,3 +102,17 @@ def cuda_devices_sorted_by_free_mem() -> list[int]:
     nvidia_smi.nvmlShutdown()
 
     return sorted(range(len(free_memories)), key=lambda x: free_memories[x])
+
+
+def get_final_device(device: str) -> str:
+    """Get final device to use
+
+    Args:
+        device (str): device to use
+
+    Returns:
+        str: final device to use
+    """
+    if device == "cuda":
+        return f"cuda:{cuda_devices_sorted_by_free_mem()[-1]}"
+    return "cpu"

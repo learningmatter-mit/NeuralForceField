@@ -146,8 +146,10 @@ class NeuralFF(Calculator):
         batch[grad_key] = []
 
         kwargs = {}
+
         requires_stress = "stress" in self.properties
         requires_embedding = "embedding" in self.properties
+
         if requires_embedding:
             kwargs["requires_embedding"] = True
         if requires_stress:
