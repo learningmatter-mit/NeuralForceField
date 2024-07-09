@@ -1,5 +1,5 @@
-import numpy as np
 import networkx as nx
+import numpy as np
 import torch
 from ase import Atoms
 from tqdm import tqdm
@@ -216,9 +216,7 @@ def adjdistmat(atoms, threshold=DISTANCETHRESHOLDICT_Z, unwrap=True):
 
     dmat = get_dist_mat(xyz, box_len, unwrap=unwrap).numpy()
 
-    thresholdmat = np.array(
-        [[threshold.get(tuple(sorted((i, j))), 2.0) for i in atomicnums] for j in atomicnums]
-    )
+    thresholdmat = np.array([[threshold.get(tuple(sorted((i, j))), 2.0) for i in atomicnums] for j in atomicnums])
     adjmat = (dmat < thresholdmat).astype(int)
 
     np.fill_diagonal(adjmat, 0)
@@ -473,13 +471,9 @@ def add_ji_kj(angle_lists, nbr_lists):
     kj_idx_list = []
     for i, nbr_list in tqdm_enum(nbr_lists):
         angle_list = angle_lists[i]
-        ji_idx = m_idx_of_angles(
-            angle_list=angle_list, nbr_list=nbr_list, angle_start=1, angle_end=0
-        )
+        ji_idx = m_idx_of_angles(angle_list=angle_list, nbr_list=nbr_list, angle_start=1, angle_end=0)
 
-        kj_idx = m_idx_of_angles(
-            angle_list=angle_list, nbr_list=nbr_list, angle_start=2, angle_end=1
-        )
+        kj_idx = m_idx_of_angles(angle_list=angle_list, nbr_list=nbr_list, angle_start=2, angle_end=1)
         ji_idx_list.append(ji_idx)
         kj_idx_list.append(kj_idx)
 

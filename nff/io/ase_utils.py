@@ -1,17 +1,15 @@
-import numpy as np
-import torch
 import time
 
+import numpy as np
+import torch
 from ase.constraints import FixConstraint
-from ase.geometry import get_dihedrals_derivatives, get_angles_derivatives
+from ase.geometry import get_angles_derivatives, get_dihedrals_derivatives
 from ase.optimize import BFGS, LBFGS
 
 from nff.utils.scatter import scatter_add
 
 
-def get_dihed_derivs(atoms,
-                     idx):
-
+def get_dihed_derivs(atoms, idx):
     pos = atoms.get_positions()
 
     a0s = pos[idx[:, 0]]
@@ -24,17 +22,12 @@ def get_dihed_derivs(atoms,
     v1 = a2s - a1s
     v2 = a3s - a2s
 
-    derivs = get_dihedrals_derivatives(v0, v1, v2,
-                                       cell=atoms.cell,
-                                       pbc=atoms.pbc)
+    derivs = get_dihedrals_derivatives(v0, v1, v2, cell=atoms.cell, pbc=atoms.pbc)
 
     return derivs
 
 
-def get_dihed_forces(atoms,
-                     idx,
-                     k,
-                     dihed_0):
+def get_dihed_forces(atoms, idx, k, dihed_0):
     """
     `dihed_0` in radians
     """
@@ -42,8 +35,7 @@ def get_dihed_forces(atoms,
     # TODO: we should catch anything close to 0 like in xTB
     # and set it to 1e-8
 
-    dihed_derivs = np.radians(get_dihed_derivs(atoms=atoms,
-                                               idx=idx))
+    dihed_derivs = np.radians(get_dihed_derivs(atoms=atoms, idx=idx))
 
     diheds = np.radians(atoms.get_dihedrals(idx))
 
@@ -59,9 +51,7 @@ def get_dihed_forces(atoms,
     return total_forces
 
 
-def get_angle_derivs(atoms,
-                     idx):
-
+def get_angle_derivs(atoms, idx):
     pos = atoms.get_positions()
 
     a1s = pos[idx[:, 0]]
@@ -71,25 +61,19 @@ def get_angle_derivs(atoms,
     v12 = a1s - a2s
     v32 = a3s - a2s
 
-    derivs = get_angles_derivatives(v12, v32,
-                                    cell=atoms.cell,
-                                    pbc=atoms.pbc)
+    derivs = get_angles_derivatives(v12, v32, cell=atoms.cell, pbc=atoms.pbc)
 
     return derivs
 
     return derivs
 
 
-def get_angle_forces(atoms,
-                     idx,
-                     k,
-                     angle_0):
+def get_angle_forces(atoms, idx, k, angle_0):
     """
     `angle_0` in radians
     """
 
-    angle_derivs = np.radians(get_angle_derivs(atoms=atoms,
-                                               idx=idx))
+    angle_derivs = np.radians(get_angle_derivs(atoms=atoms, idx=idx))
     angles = np.radians(atoms.get_angles(idx))
     const = k.reshape(-1, 1, 1)
 
@@ -103,17 +87,11 @@ def get_angle_forces(atoms,
     return total_forces
 
 
-def get_bond_forces(atoms,
-                    idx,
-                    k,
-                    length_0):
-
-    deltas = (atoms.get_positions()[idx[:, 0]] -
-              atoms.get_positions()[idx[:, 1]])
+def get_bond_forces(atoms, idx, k, length_0):
+    deltas = atoms.get_positions()[idx[:, 0]] - atoms.get_positions()[idx[:, 1]]
     bond_lens = np.linalg.norm(deltas, axis=-1)
 
-    forces_0 = -2 * k.reshape(-1, 1) * deltas * ((-length_0 + bond_lens) /
-                                                 bond_lens).reshape(-1, 1)
+    forces_0 = -2 * k.reshape(-1, 1) * deltas * ((-length_0 + bond_lens) / bond_lens).reshape(-1, 1)
     forces_1 = -forces_0
 
     total_forces = np.zeros_like(atoms.get_positions())
@@ -124,21 +102,15 @@ def get_bond_forces(atoms,
 
 
 class ConstrainAngles(FixConstraint):
-
-    def __init__(self,
-                 idx,
-                 atoms,
-                 force_consts,
-                 targ_angles=None):
-
+    def __init__(self, idx, atoms, force_consts, targ_angles=None):
         self.idx = np.asarray(idx)
 
         if targ_angles is not None:
-            self.targ_angles = np.radians(targ_angles).astype('float')
+            self.targ_angles = np.radians(targ_angles).astype("float")
         else:
             self.targ_angles = np.radians(atoms.get_angles(self.idx))
 
-        if (isinstance(force_consts, float) or isinstance(force_consts, int)):
+        if isinstance(force_consts, float) or isinstance(force_consts, int):
             self.force_consts = np.array([float(force_consts)] * len(self.idx))
         else:
             assert len(force_consts) == len(self.idx)
@@ -148,10 +120,8 @@ class ConstrainAngles(FixConstraint):
         # set the angle to 179.5 or 180.5 depending on which side of 180
         # it's on
 
-        lower_idx = ((abs(np.degrees(self.targ_angles) - 180) < 0.5) *
-                     (np.degrees(self.targ_angles) < 180))
-        upper_idx = ((abs(np.degrees(self.targ_angles) - 180) < 0.5) *
-                     (np.degrees(self.targ_angles) > 180))
+        lower_idx = (abs(np.degrees(self.targ_angles) - 180) < 0.5) * (np.degrees(self.targ_angles) < 180)
+        upper_idx = (abs(np.degrees(self.targ_angles) - 180) < 0.5) * (np.degrees(self.targ_angles) > 180)
 
         self.targ_angles[lower_idx] = np.radians(179.5)
         self.targ_angles[upper_idx] = np.radians(180.5)
@@ -165,10 +135,7 @@ class ConstrainAngles(FixConstraint):
         return
 
     def adjust_forces(self, atoms, forces):
-        new_forces = get_angle_forces(atoms=atoms,
-                                      idx=self.idx,
-                                      k=self.force_consts,
-                                      angle_0=self.targ_angles)
+        new_forces = get_angle_forces(atoms=atoms, idx=self.idx, k=self.force_consts, angle_0=self.targ_angles)
 
         forces += new_forces
 
@@ -181,28 +148,22 @@ class ConstrainAngles(FixConstraint):
         idx_str = str(self.idx)
         val_str = str(np.degrees(self.targ_angles))
 
-        return 'Constrain angles (indices=%s, values (deg.)=%s)' % (idx_str, val_str)
+        return "Constrain angles (indices=%s, values (deg.)=%s)" % (idx_str, val_str)
 
 
 class ConstrainDihedrals(FixConstraint):
-
-    def __init__(self,
-                 idx,
-                 atoms,
-                 force_consts,
-                 targ_diheds=None):
-
+    def __init__(self, idx, atoms, force_consts, targ_diheds=None):
         self.idx = np.asarray(idx)
 
         if targ_diheds is not None:
-            self.targ_diheds = np.radians(targ_diheds).astype('float')
+            self.targ_diheds = np.radians(targ_diheds).astype("float")
             # use the same convention as ASE for dihedrals - anything less than 0
             # gets 2 Pi added to it
             self.targ_diheds[self.targ_diheds < 0] += 2 * np.pi
         else:
             self.targ_diheds = np.radians(atoms.get_dihedrals(self.idx))
 
-        if (isinstance(force_consts, float) or isinstance(force_consts, int)):
+        if isinstance(force_consts, float) or isinstance(force_consts, int):
             self.force_consts = np.array([float(force_consts)] * len(self.idx))
         else:
             assert len(force_consts) == len(self.idx)
@@ -217,10 +178,7 @@ class ConstrainDihedrals(FixConstraint):
         return
 
     def adjust_forces(self, atoms, forces):
-        new_forces = get_dihed_forces(atoms=atoms,
-                                      idx=self.idx,
-                                      k=self.force_consts,
-                                      dihed_0=self.targ_diheds)
+        new_forces = get_dihed_forces(atoms=atoms, idx=self.idx, k=self.force_consts, dihed_0=self.targ_diheds)
 
         forces += new_forces
 
@@ -233,27 +191,20 @@ class ConstrainDihedrals(FixConstraint):
         idx_str = str(self.idx)
         val_str = str(np.degrees(self.targ_diheds))
 
-        return 'Constrain dihedrals (indices=%s, values (deg.)=%s)' % (idx_str, val_str)
+        return "Constrain dihedrals (indices=%s, values (deg.)=%s)" % (idx_str, val_str)
 
 
 class ConstrainBonds(FixConstraint):
-
-    def __init__(self,
-                 idx,
-                 atoms,
-                 force_consts,
-                 targ_lengths=None):
-
+    def __init__(self, idx, atoms, force_consts, targ_lengths=None):
         self.idx = np.asarray(idx)
 
         if targ_lengths is not None:
             self.targ_lengths = np.array(targ_lengths).reshape(-1)
         else:
-            deltas = (atoms.get_positions()[idx[:, 0]] -
-                      atoms.get_positions()[idx[:, 1]])
+            deltas = atoms.get_positions()[idx[:, 0]] - atoms.get_positions()[idx[:, 1]]
             self.targ_lengths = np.linalg.norm(deltas, axis=-1)
 
-        if (isinstance(force_consts, float) or isinstance(force_consts, int)):
+        if isinstance(force_consts, float) or isinstance(force_consts, int):
             self.force_consts = np.array([float(force_consts)] * len(self.idx))
         else:
             assert len(force_consts) == len(self.idx)
@@ -268,10 +219,7 @@ class ConstrainBonds(FixConstraint):
         return
 
     def adjust_forces(self, atoms, forces):
-        new_forces = get_bond_forces(atoms=atoms,
-                                     idx=self.idx,
-                                     k=self.force_consts,
-                                     length_0=self.targ_lengths)
+        new_forces = get_bond_forces(atoms=atoms, idx=self.idx, k=self.force_consts, length_0=self.targ_lengths)
 
         forces += new_forces
 
@@ -284,7 +232,7 @@ class ConstrainBonds(FixConstraint):
         idx_str = str(self.idx)
         val_str = str(self.targ_lengths)
 
-        return 'Constrain bonds (indices=%s, values=%s)' % (idx_str, val_str)
+        return "Constrain bonds (indices=%s, values=%s)" % (idx_str, val_str)
 
 
 def split(array, num_atoms):
@@ -300,20 +248,17 @@ def split(array, num_atoms):
 
 
 class BatchedBFGS(BFGS):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.num_atoms = self.atoms.num_atoms.numpy().astype('int')
+        self.num_atoms = self.atoms.num_atoms.numpy().astype("int")
         self.save = kwargs.get("save", False)
 
         self.split_h0()
 
     def determine_step(self, dr, steplengths, f):
-
         # scale steps of different batches separately
 
-        steplength_by_batch = split(array=steplengths,
-                                    num_atoms=self.num_atoms)
+        steplength_by_batch = split(array=steplengths, num_atoms=self.num_atoms)
         dr_by_batch = split(dr, self.num_atoms)
         maxsteplengths = [np.max(i) for i in steplength_by_batch]
 
@@ -324,10 +269,9 @@ class BatchedBFGS(BFGS):
 
         # don't update any batch that has f <= self.fmax
 
-        f_by_batch = split(array=f,
-                           num_atoms=self.num_atoms)
+        f_by_batch = split(array=f, num_atoms=self.num_atoms)
         for i, this_f in enumerate(f_by_batch):
-            this_f_max = ((this_f ** 2).sum(axis=1) ** 0.5).max()
+            this_f_max = ((this_f**2).sum(axis=1) ** 0.5).max()
             if this_f_max < self.fmax:
                 dr_by_batch[i] *= 0
 
@@ -349,20 +293,18 @@ class BatchedBFGS(BFGS):
         start = 0
 
         for i, H in enumerate(self.H):
-
             num_atoms = self.num_atoms[i]
             delta = num_atoms * 3
             stop = start + delta
 
             omega, V = np.linalg.eigh(H)
-            this_dr = np.dot(V, np.dot(f[start: stop], V) /
-                             np.fabs(omega)).reshape((-1, 3))
+            this_dr = np.dot(V, np.dot(f[start:stop], V) / np.fabs(omega)).reshape((-1, 3))
             drs.append(this_dr)
 
             start += delta
 
         dr = np.concatenate(drs)
-        steplengths = (dr**2).sum(1)**0.5
+        steplengths = (dr**2).sum(1) ** 0.5
         dr = self.determine_step(dr, steplengths, f)
         atoms.set_positions(r + dr)
         self.r0 = r.flat.copy()
@@ -373,7 +315,6 @@ class BatchedBFGS(BFGS):
             self.dump((self.H, self.r0, self.f0, self.maxstep))
 
     def split_h0(self):
-
         new_h = []
         counter = 0
         for num in self.num_atoms:
@@ -381,14 +322,13 @@ class BatchedBFGS(BFGS):
             delta = 3 * num
             stop = start + delta
 
-            new_h.append(self.H0[start: stop, start: stop])
+            new_h.append(self.H0[start:stop, start:stop])
 
             counter += delta
 
         self.H0 = new_h
 
     def update(self, r, f, r0, f0):
-
         # copied from original, but with modification for test of np.abs(dr).max()
         if self.H is None:
             self.H = self.H0
@@ -400,7 +340,6 @@ class BatchedBFGS(BFGS):
         split_r0 = split(r0, self.num_atoms)
 
         for i, this_r in enumerate(split_r):
-
             this_r0 = split_r0[i]
             this_f = split_f[i]
             this_f0 = split_f0[i]
@@ -414,12 +353,9 @@ class BatchedBFGS(BFGS):
             dg = np.dot(self.H[i], this_dr)
             b = np.dot(this_dr, dg)
 
-            self.H[i] -= (np.outer(df, df) /
-                          a + np.outer(dg, dg) / b)
+            self.H[i] -= np.outer(df, df) / a + np.outer(dg, dg) / b
 
-    def converged(self,
-                  forces=None):
-
+    def converged(self, forces=None):
         if forces is None:
             forces = self.atoms.get_forces()
 
@@ -429,21 +365,16 @@ class BatchedBFGS(BFGS):
         forces[np.bitwise_not(np.isfinite(forces))] = 0
 
         if hasattr(self.atoms, "get_curvature"):
-            return (forces ** 2).sum(
-                axis=1
-            ).max() < self.fmax ** 2 and self.atoms.get_curvature() < 0.0
-        return (forces ** 2).sum(axis=1).max() < self.fmax ** 2
+            return (forces**2).sum(axis=1).max() < self.fmax**2 and self.atoms.get_curvature() < 0.0
+        return (forces**2).sum(axis=1).max() < self.fmax**2
 
     def log(self, forces=None):
         if forces is None:
             forces = self.atoms.get_forces()
 
-        fmax = [np.sqrt((i ** 2).sum(axis=1).max())
-                for i in split(forces, self.num_atoms)]
+        fmax = [np.sqrt((i**2).sum(axis=1).max()) for i in split(forces, self.num_atoms)]
 
-        e = self.atoms.get_potential_energy(
-            force_consistent=self.force_consistent
-        )
+        e = self.atoms.get_potential_energy(force_consistent=self.force_consistent)
 
         t = time.localtime()
 
@@ -452,7 +383,6 @@ class BatchedBFGS(BFGS):
             num_batches = len(self.num_atoms)
 
             if self.nsteps == 0:
-
                 args = [" " * len(name), "Step", "Time"]
                 args += ["Energy %d" % (i + 1) for i in range(num_batches)]
                 args += ["fmax %d" % (i + 1) for i in range(num_batches)]
@@ -466,7 +396,7 @@ class BatchedBFGS(BFGS):
                 msg = msg % args
                 self.logfile.write(msg)
 
-            ast = ''
+            ast = ""
             args = [name, self.nsteps, t[3], t[4], t[5]]
             args += e.tolist()
             args += [ast]
@@ -495,7 +425,7 @@ class BatchedLBFGS(LBFGS):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.num_atoms = self.atoms.num_atoms.numpy().astype('int')
+        self.num_atoms = self.atoms.num_atoms.numpy().astype("int")
         self.mol_idx = self.make_mol_idx()
         self.save = kwargs.get("save", False)
         self.memory = kwargs.get("memory", 30)
@@ -508,8 +438,7 @@ class BatchedLBFGS(LBFGS):
 
         return mol_idx
 
-    def step(self,
-             f=None):
+    def step(self, f=None):
         """
         Take a single step
 
@@ -537,10 +466,9 @@ class BatchedLBFGS(LBFGS):
         q = -f.reshape(-1)
 
         for i in range(loopmax - 1, -1, -1):
-            dot = scatter_add(src=torch.Tensor(s[i] * q),
-                              index=self.mol_idx,
-                              dim=0,
-                              dim_size=int(self.mol_idx.max() + 1)).numpy()
+            dot = scatter_add(
+                src=torch.Tensor(s[i] * q), index=self.mol_idx, dim=0, dim_size=int(self.mol_idx.max() + 1)
+            ).numpy()
 
             a[i] = rho[i] * dot
             prod = np.repeat(a[i], self.num_atoms * 3) * y[i]
@@ -549,17 +477,16 @@ class BatchedLBFGS(LBFGS):
         z = h0 * q
 
         for i in range(loopmax):
-            dot = scatter_add(src=torch.Tensor(y[i] * z),
-                              index=self.mol_idx,
-                              dim=0,
-                              dim_size=int(self.mol_idx.max() + 1)).numpy()
+            dot = scatter_add(
+                src=torch.Tensor(y[i] * z), index=self.mol_idx, dim=0, dim_size=int(self.mol_idx.max() + 1)
+            ).numpy()
 
             b = rho[i] * dot
             delta = a[i] - b
             prod = np.repeat(delta, self.num_atoms * 3) * s[i]
             z += prod
 
-        self.p = - z.reshape((-1, 3))
+        self.p = -z.reshape((-1, 3))
 
         g = -f
         if self.use_line_search:
@@ -567,10 +494,8 @@ class BatchedLBFGS(LBFGS):
         else:
             self.force_calls += 1
             self.function_calls += 1
-            steplengths = (self.p ** 2).sum(1) ** 0.5
-            dr = self.determine_step(dr=self.p,
-                                     steplengths=steplengths,
-                                     f=f) * self.damping
+            steplengths = (self.p**2).sum(1) ** 0.5
+            dr = self.determine_step(dr=self.p, steplengths=steplengths, f=f) * self.damping
 
         self.atoms.set_positions(r + dr)
 
@@ -579,14 +504,10 @@ class BatchedLBFGS(LBFGS):
         self.f0 = -g
 
         if self.save:
-            self.dump((self.iteration, self.s, self.y,
-                       self.rho, self.r0, self.f0, self.e0, self.task))
+            self.dump((self.iteration, self.s, self.y, self.rho, self.r0, self.f0, self.e0, self.task))
 
     def determine_step(self, dr, steplengths, f):
-        return BatchedBFGS.determine_step(self=self,
-                                          dr=dr,
-                                          steplengths=steplengths,
-                                          f=f)
+        return BatchedBFGS.determine_step(self=self, dr=dr, steplengths=steplengths, f=f)
 
     def update(self, r, f, r0, f0):
         """
@@ -600,10 +521,9 @@ class BatchedLBFGS(LBFGS):
             y0 = f0.reshape(-1) - f.reshape(-1)
             self.y.append(y0)
 
-            dot = scatter_add(src=torch.Tensor(y0 * s0),
-                              index=self.mol_idx,
-                              dim=0,
-                              dim_size=int(self.mol_idx.max() + 1)).numpy()
+            dot = scatter_add(
+                src=torch.Tensor(y0 * s0), index=self.mol_idx, dim=0, dim_size=int(self.mol_idx.max() + 1)
+            ).numpy()
 
             # for anything that's converged and hence not updated
             # (so y0 and s0 are both 0)
@@ -618,8 +538,7 @@ class BatchedLBFGS(LBFGS):
             self.y.pop(0)
             self.rho.pop(0)
 
-    def converged(self,
-                  forces=None):
+    def converged(self, forces=None):
         return BatchedBFGS.converged(self, forces)
 
     def log(self, forces=None):

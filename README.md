@@ -1,11 +1,9 @@
 # Neural Force Field
-
 The Neural Force Field (NFF) code is an API based on SchNet [1-4], DimeNet [5], PaiNN [6-7], DANN [8], CHGNet [9], and MACE [10,11]. It provides an interface to train and evaluate neural networks (NNs) for force fields. It can also be used as a property predictor that uses both 3D geometries and 2D graph information [12]. NFF also allows the usage of NN ensembles to perform uncertainty quantification and adversarial sampling of geometries. The complete tutorials on how to perform such analysis is available at the [Atomistic Adversarial Attacks repository](https://github.com/learningmatter-mit/Atomistic-Adversarial-Attacks), and the theory behind this differentiable sampling strategy is available at [our paper](https://www.nature.com/articles/s41467-021-25342-8) [13].
 
-This code repository is developed in the Learning Matter Lab (led by Prof. Rafael Gomez-Bombarelli) at MIT.
+This code repository is developed in the [Learning Matter Lab](http://gomezbombarelli.mit.edu) (led by Prof. Rafael Gomez-Bombarelli) at MIT.
 
 ## Conda environment
-
 We highly recommend creating a `conda` environment to run the code. To do that, use the following command to create the `nff` conda environment:
 
 ```bash
@@ -19,30 +17,22 @@ python -m ipykernel install --user --name nff --display-name "Python [conda env:
 ```
 
 ## Installation
-
-If you would like to install NFF as a package, you can do so by running
-
+If you would like to use NFF as a package (no development), you can do so by running the following command in the root directory of the repository:
 ```bash
 pip install .
 ```
 
-Otherwise you can put NFF in your python path by adding the following lines to `~/.bashrc` (linux) or `~/.bash_profile` (mac):
+Use the `-e` flag if you want to install it in editable mode:
 ```bash
-export NFFDIR=<path to NFF>
-export PYTHONPATH=$NFFDIR:$PYTHONPATH
+pip install -e .
 ```
 
-This is useful if you'll be modifying the NFF code, because modifications in the download folder won't change anything in the conda directory where it's been installed. 
-
-
 ## Usage
-
 For those just getting started, we recommend referring to the [wiki](https://github.mit.edu/MLMat/NeuralForceField/wiki) or advanced users can just jump right in. A Jupyter notebook interface or a command-line interface can be used with NFF. There is also a high-throughput option for using NFF, where you use HTVS to run simulations or perform calculations with NFF.
 
 A set of pre-trained models can be found in [`models`](https://github.mit.edu/MLMat/NeuralForceField/tree/master/models). To take take an under-the-hood look at the architecture of all the models available with NFF, go to [`nff/nn/models`](https://github.mit.edu/MLMat/NeuralForceField/tree/master/nff/nn/models), and see the underlying modules with supporting functions in [`nff/nn/modules`](https://github.mit.edu/MLMat/NeuralForceField/tree/master/nff/nn/modules).
 
 ### Jupyter notebooks interface
-
 Please refer to the [tutorials](https://github.mit.edu/MLMat/NeuralForceField/tree/master/tutorials) to see how to set up a Jupyter notebook interface with NFF.
 
 ### Command-line interface
@@ -62,10 +52,11 @@ NFF also contains modules that predict properties from 3D geometries of conforme
 
 Please refer to the [wiki](https://github.mit.edu/MLMat/NeuralForceField/wiki/HTVS-interface-with-NFF) to see how to use NFF through HTVS.
 
+### Adversarial Attacks
 
+NFF allows the usage of NN ensembles to perform uncertainty quantification and adversarial sampling of geometries. The complete tutorials on how to perform such analysis is available at the [Atomistic Adversarial Attacks repository](https://github.com/learningmatter-mit/Atomistic-Adversarial-Attacks), and the theory behind this differentiable sampling strategy is available at [our paper](https://www.nature.com/articles/s41467-021-25342-8) [13].
 
 ## References
-
 * [1] K.T. Schütt. F. Arbabzadah. S. Chmiela, K.-R. Müller, A. Tkatchenko.  
 *Quantum-chemical insights from deep tensor neural networks.*
 Nature Communications **8**. 13890 (2017)   

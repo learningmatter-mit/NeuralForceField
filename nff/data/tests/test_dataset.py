@@ -4,6 +4,7 @@ from collections import Counter
 
 import numpy as np
 import torch
+
 from nff.data.dataset import (
     Dataset,
     concatenate_dict,

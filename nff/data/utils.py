@@ -1,8 +1,9 @@
-import sys
 import os
 import shutil
+import sys
 import tempfile
 from urllib import request as request
+
 import numpy as np
 
 from nff.data import Dataset
@@ -35,9 +36,7 @@ def get_md17_dataset(molecule, cutoff=5.0):
     }
 
     if molecule not in smiles_dict.keys():
-        raise ValueError(
-            "Incorrect value for molecule. Must be one of: ", list(smiles_dict.keys())
-        )
+        raise ValueError("Incorrect value for molecule. Must be one of: ", list(smiles_dict.keys()))
 
     # make tmpdir to save npz file
     tmpdir = tempfile.mkdtemp("MD")

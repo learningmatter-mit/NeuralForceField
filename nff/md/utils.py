@@ -1,30 +1,18 @@
-import csv
 import copy
-
-from ase import units
-from ase.md import MDLogger
-from ase.utils import IOContext
+import csv
 import weakref
-from ase.parallel import world
 
 import numpy as np
+from ase import units
+from ase.md import MDLogger
+from ase.parallel import world
+from ase.utils import IOContext
 
 import nff.utils.constants as const
 
 
 class NeuralMDLogger(MDLogger):
-    def __init__(
-        self,
-        dyn,
-        atoms,
-        logfile,
-        header=True,
-        stress=False,
-        peratom=False,
-        mode="a",
-        verbose=True,
-        **kwargs
-    ):
+    def __init__(self, dyn, atoms, logfile, header=True, stress=False, peratom=False, mode="a", verbose=True, **kwargs):
         if hasattr(dyn, "get_time"):
             self.dyn = weakref.proxy(dyn)
         else:
@@ -67,9 +55,7 @@ class NeuralMDLogger(MDLogger):
                 digits = 1
             self.fmt += 3 * ("%%12.%df " % (digits,)) + " %6.1f"
         if self.stress:
-            self.hdr += (
-                "      ---------------------- stress [GPa] " "------------------------"
-            )
+            self.hdr += "      ---------------------- stress [GPa] " "------------------------"
             self.fmt += 6 * " %10.3f"
             self.hdr += "   %10s" % ("hydP[GPa]")
             self.fmt += "   %10.7f"
@@ -132,9 +118,7 @@ class NeuralFFLogger(MDLogger):
 
     def __call__(self):
         if "embedding" in self.atoms.calc.properties:
-            self.atoms.calc.log_embedding(
-                self.atoms.calc.jobdir, self.logfile, self.atoms.get_embedding()
-            )
+            self.atoms.calc.log_embedding(self.atoms.calc.jobdir, self.logfile, self.atoms.get_embedding())
 
 
 class BiasedNeuralMDLogger(IOContext):
@@ -152,9 +136,7 @@ class BiasedNeuralMDLogger(IOContext):
     mode="a":      How the file is opened if logfile is a filename.
     """
 
-    def __init__(
-        self, dyn, atoms, logfile, header=True, peratom=False, verbose=False, mode="a"
-    ):
+    def __init__(self, dyn, atoms, logfile, header=True, peratom=False, verbose=False, mode="a"):
         if hasattr(dyn, "get_time"):
             self.dyn = weakref.proxy(dyn)
         else:
@@ -275,38 +257,11 @@ def write_traj(filename, frames):
         for atom in frame:
             if atom.shape[0] == 4:
                 try:
-                    file.write(
-                        str(int(atom[0]))
-                        + " "
-                        + str(atom[1])
-                        + " "
-                        + str(atom[2])
-                        + " "
-                        + str(atom[3])
-                        + "\n"
-                    )
+                    file.write(str(int(atom[0])) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
                 except:
-                    file.write(
-                        str(atom[0])
-                        + " "
-                        + str(atom[1])
-                        + " "
-                        + str(atom[2])
-                        + " "
-                        + str(atom[3])
-                        + "\n"
-                    )
+                    file.write(str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
             elif atom.shape[0] == 3:
-                file.write(
-                    "1"
-                    + " "
-                    + str(atom[0])
-                    + " "
-                    + str(atom[1])
-                    + " "
-                    + str(atom[2])
-                    + "\n"
-                )
+                file.write("1" + " " + str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + "\n")
             else:
                 raise ValueError("wrong format")
     file.close()

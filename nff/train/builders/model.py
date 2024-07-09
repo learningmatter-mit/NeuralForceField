@@ -6,12 +6,9 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Callable, List, Optional, Sequence, Type, Union
 
 import numpy as np
 import torch
-from e3nn import o3
-from mace.modules.blocks import InteractionBlock
 
 from nff.nn.models.chgnet import CHGNetNFF
 from nff.nn.models.conformers import WeightedConformers

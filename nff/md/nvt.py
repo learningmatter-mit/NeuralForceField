@@ -1,45 +1,47 @@
-import os
-import numpy as np
 import copy
 import math
+import os
 import pickle
 
-from tqdm import tqdm
-from ase.optimize.optimize import Dynamics
-from ase.md.md import MolecularDynamics
-from ase.md.logger import MDLogger
+import numpy as np
 from ase import units
-from ase.md.velocitydistribution import (MaxwellBoltzmannDistribution,
-                                         Stationary, ZeroRotation)
+from ase.md.logger import MDLogger
+from ase.md.md import MolecularDynamics
+from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
+from ase.optimize.optimize import Dynamics
+from tqdm import tqdm
 
 from nff.io.ase import AtomsBatch
 
 
 class NoseHoover(MolecularDynamics):
-    def __init__(self,
-                 atoms,
-                 timestep,
-                 temperature,
-                 ttime,
-                 maxwell_temp=None,
-                 trajectory=None,
-                 logfile=None,
-                 loginterval=1,
-                 max_steps=None,
-                 nbr_update_period=20,
-                 append_trajectory=True,
-                 **kwargs):
-
+    def __init__(
+        self,
+        atoms,
+        timestep,
+        temperature,
+        ttime,
+        maxwell_temp=None,
+        trajectory=None,
+        logfile=None,
+        loginterval=1,
+        max_steps=None,
+        nbr_update_period=20,
+        append_trajectory=True,
+        **kwargs,
+    ):
         if os.path.isfile(str(trajectory)):
             os.remove(trajectory)
 
-        MolecularDynamics.__init__(self,
-                                   atoms=atoms,
-                                   timestep=timestep * units.fs,
-                                   trajectory=trajectory,
-                                   logfile=logfile,
-                                   loginterval=loginterval,
-                                   append_trajectory=append_trajectory)
+        MolecularDynamics.__init__(
+            self,
+            atoms=atoms,
+            timestep=timestep * units.fs,
+            trajectory=trajectory,
+            logfile=logfile,
+            loginterval=loginterval,
+            append_trajectory=append_trajectory,
+        )
 
         # Initialize simulation parameters
         # convert units
@@ -54,7 +56,7 @@ class NoseHoover(MolecularDynamics):
         # is 1/2 (3N - 6) kT
         self.targeEkin = 0.5 * (3.0 * self.Natom - 6) * self.T
 
-        self.Q = (3.0 * self.Natom - 6) * self.T * (self.ttime * self.dt)**2
+        self.Q = (3.0 * self.Natom - 6) * self.T * (self.ttime * self.dt) ** 2
         self.zeta = 0.0
         self.num_steps = max_steps
         self.n_steps = 0
@@ -80,16 +82,19 @@ class NoseHoover(MolecularDynamics):
         fixed_idx = []
         for constraint in constraints:
             has_keys = False
-            keys = ['idx', 'indices', 'index']
+            keys = ["idx", "indices", "index"]
             for key in keys:
                 if hasattr(constraint, key):
-                    val = np.array(getattr(constraint, key)
-                                   ).reshape(-1).tolist()
+                    val = np.array(getattr(constraint, key)).reshape(-1).tolist()
                     fixed_idx += val
                     has_keys = True
             if not has_keys:
-                print(("WARNING: velocity not set to zero for any atoms in constraint "
-                       "%s; do not know how to find its fixed indices." % constraint))
+                print(
+                    (
+                        "WARNING: velocity not set to zero for any atoms in constraint "
+                        "%s; do not know how to find its fixed indices." % constraint
+                    )
+                )
 
         if not fixed_idx:
             return
@@ -100,17 +105,14 @@ class NoseHoover(MolecularDynamics):
         self.atoms.set_velocities(vel)
 
     def step(self):
-
         # get current acceleration and velocity:
 
-        accel = (self.atoms.get_forces() /
-                 self.atoms.get_masses().reshape(-1, 1))
+        accel = self.atoms.get_forces() / self.atoms.get_masses().reshape(-1, 1)
 
         vel = self.atoms.get_velocities()
 
         # make full step in position
-        x = self.atoms.get_positions() + vel * self.dt + \
-            (accel - self.zeta * vel) * (0.5 * self.dt ** 2)
+        x = self.atoms.get_positions() + vel * self.dt + (accel - self.zeta * vel) * (0.5 * self.dt**2)
 
         self.atoms.set_positions(x)
 
@@ -127,23 +129,19 @@ class NoseHoover(MolecularDynamics):
         accel = f / self.atoms.get_masses().reshape(-1, 1)
 
         # make a half step in self.zeta
-        self.zeta = self.zeta + 0.5 * self.dt * \
-            (1 / self.Q) * (KE_0 - self.targeEkin)
+        self.zeta = self.zeta + 0.5 * self.dt * (1 / self.Q) * (KE_0 - self.targeEkin)
 
         # make another halfstep in self.zeta
-        self.zeta = self.zeta + 0.5 * self.dt * \
-            (1 / self.Q) * (self.atoms.get_kinetic_energy() - self.targeEkin)
+        self.zeta = self.zeta + 0.5 * self.dt * (1 / self.Q) * (self.atoms.get_kinetic_energy() - self.targeEkin)
 
         # make another half step in velocity
-        vel = (self.atoms.get_velocities() + 0.5 * self.dt * accel) / \
-            (1 + 0.5 * self.dt * self.zeta)
+        vel = (self.atoms.get_velocities() + 0.5 * self.dt * accel) / (1 + 0.5 * self.dt * self.zeta)
 
         self.atoms.set_velocities(vel)
 
         return f
 
     def run(self, steps=None):
-
         if steps is None:
             steps = self.num_steps
 
@@ -152,7 +150,7 @@ class NoseHoover(MolecularDynamics):
         steps_per_epoch = int(steps / epochs)
         # maximum number of steps starts at `steps_per_epoch`
         # and increments after every nbr list update
-        #self.max_steps = 0
+        # self.max_steps = 0
         self.atoms.update_nbr_list()
 
         for _ in tqdm(range(epochs)):
@@ -162,97 +160,94 @@ class NoseHoover(MolecularDynamics):
 
 
 class NoseHooverChain(NoseHoover):
-    def __init__(self,
-                 atoms,
-                 timestep,
-                 temperature,
-                 ttime = 20.0,
-                 num_chains = 5,
-                 maxwell_temp=None,
-                 trajectory=None,
-                 logfile=None,
-                 loginterval=1,
-                 max_steps=None,
-                 nbr_update_period=20,
-                 append_trajectory=True,
-                 **kwargs):
-        
+    def __init__(
+        self,
+        atoms,
+        timestep,
+        temperature,
+        ttime=20.0,
+        num_chains=5,
+        maxwell_temp=None,
+        trajectory=None,
+        logfile=None,
+        loginterval=1,
+        max_steps=None,
+        nbr_update_period=20,
+        append_trajectory=True,
+        **kwargs,
+    ):
         """Docstring
-           Args: 
-               ttime (float): factor to be multiplied with time step to 
-                              give the evolution time of the bath, 
-                              default is now 20 (7/14/22)
-               num_chains (int): number of coupled extended DoFs, 
-                                 it's known that two chains are not enough
-                                 default is now 5 (7/14/22)
-        
+        Args:
+            ttime (float): factor to be multiplied with time step to
+                           give the evolution time of the bath,
+                           default is now 20 (7/14/22)
+            num_chains (int): number of coupled extended DoFs,
+                              it's known that two chains are not enough
+                              default is now 5 (7/14/22)
+
         """
 
-        NoseHoover.__init__(self,
-                            atoms=atoms,
-                            timestep=timestep,
-                            temperature=temperature,
-                            ttime=ttime,
-                            maxwell_temp=maxwell_temp,
-                            trajectory=trajectory,
-                            logfile=logfile,
-                            loginterval=loginterval,
-                            max_steps=max_steps,
-                            nbr_update_period=nbr_update_period,
-                            append_trajectory=append_trajectory,
-                            **kwargs)
+        NoseHoover.__init__(
+            self,
+            atoms=atoms,
+            timestep=timestep,
+            temperature=temperature,
+            ttime=ttime,
+            maxwell_temp=maxwell_temp,
+            trajectory=trajectory,
+            logfile=logfile,
+            loginterval=loginterval,
+            max_steps=max_steps,
+            nbr_update_period=nbr_update_period,
+            append_trajectory=append_trajectory,
+            **kwargs,
+        )
 
         self.N_dof = 3.0 * self.Natom - 6
-        q_0 = self.N_dof * self.T * (self.ttime * self.dt)**2
-        q_n = self.T * (self.ttime * self.dt)**2
+        q_0 = self.N_dof * self.T * (self.ttime * self.dt) ** 2
+        q_n = self.T * (self.ttime * self.dt) ** 2
 
-        self.Q = 2 * np.array([q_0, *([q_n] * (num_chains-1))])
-        self.p_zeta = np.array([0.0]*num_chains)
+        self.Q = 2 * np.array([q_0, *([q_n] * (num_chains - 1))])
+        self.p_zeta = np.array([0.0] * num_chains)
 
-    
     def get_time_derivatives(self):
-        momenta = (self.atoms.get_velocities() * 
-                   self.atoms.get_masses().reshape(-1, 1))
-        forces  = self.atoms.get_forces()
+        momenta = self.atoms.get_velocities() * self.atoms.get_masses().reshape(-1, 1)
+        forces = self.atoms.get_forces()
         coupled_forces = self.p_zeta[0] * momenta / self.Q[0]
-        
-        accel   = ((forces - coupled_forces) / 
-                   self.atoms.get_masses().reshape(-1, 1))
-        
-        
-        current_ke = 0.5 * (np.power(momenta, 2) / 
-                            self.atoms.get_masses().reshape(-1, 1)).sum() 
+
+        accel = (forces - coupled_forces) / self.atoms.get_masses().reshape(-1, 1)
+
+        current_ke = 0.5 * (np.power(momenta, 2) / self.atoms.get_masses().reshape(-1, 1)).sum()
         dpzeta_dt = np.zeros(shape=self.p_zeta.shape)
-        dpzeta_dt[0]   = 2 * (current_ke - self.targeEkin) - \
-                         self.p_zeta[0]*self.p_zeta[1]/self.Q[1]
-        dpzeta_dt[1:-1]= (np.power(self.p_zeta[:-2], 2) / self.Q[:-2] - self.T) - \
-                          self.p_zeta[1:-1] * self.p_zeta[2:] / self.Q[2:]
-        dpzeta_dt[-1]  = np.power(self.p_zeta[-2], 2) / self.Q[-2] - self.T
-        
+        dpzeta_dt[0] = 2 * (current_ke - self.targeEkin) - self.p_zeta[0] * self.p_zeta[1] / self.Q[1]
+        dpzeta_dt[1:-1] = (np.power(self.p_zeta[:-2], 2) / self.Q[:-2] - self.T) - self.p_zeta[1:-1] * self.p_zeta[
+            2:
+        ] / self.Q[2:]
+        dpzeta_dt[-1] = np.power(self.p_zeta[-2], 2) / self.Q[-2] - self.T
+
         return accel, dpzeta_dt
 
     def step(self):
-        
         accel, dpzeta_dt = self.get_time_derivatives()
         # half step update for velocities and bath
-        vel = self.atoms.get_velocities() 
+        vel = self.atoms.get_velocities()
         vel += 0.5 * accel * self.dt
         self.atoms.set_velocities(vel)
-        self.p_zeta  += 0.5 * dpzeta_dt * self.dt
-        
+        self.p_zeta += 0.5 * dpzeta_dt * self.dt
+
         # full step in coordinates
-        new_positions  = self.atoms.get_positions() + vel * self.dt
+        new_positions = self.atoms.get_positions() + vel * self.dt
         self.atoms.set_positions(new_positions)
 
         accel, dpzeta_dt = self.get_time_derivatives()
         # half step update for velocities and bath
-        vel = self.atoms.get_velocities() 
+        vel = self.atoms.get_velocities()
         vel += 0.5 * accel * self.dt
         self.atoms.set_velocities(vel)
-        self.p_zeta  += 0.5 * dpzeta_dt * self.dt
-        
-        
-# Does anyone use this?        
+        self.p_zeta += 0.5 * dpzeta_dt * self.dt
+
+
+# Does anyone use this?
 # class NoseHooverChainsBiased(NoseHooverChain):
 #     def __init__(self,
 #                  atoms,
@@ -297,12 +292,12 @@ class NoseHooverChain(NoseHoover):
 #             self.step()
 #             self.nsteps += 1
 #             self.update_bias()
-            
+
 #             # log the step
 #             self.log()
 #             self.call_observers()
 
-        
+
 #     def run(self, steps=None):
 #         if steps is None:
 #             steps = self.num_steps
@@ -314,36 +309,37 @@ class NoseHooverChain(NoseHoover):
 #         # and increments after every nbr list update
 
 #         self.atoms.update_nbr_list()
-        
+
 #         # compute initial structure and log the first step
 #         if self.nsteps == 0:
 #             self.update_bias()
 #             self.atoms.get_forces()
 #             self.log()
 #             self.call_observers()
-            
+
 #         for _ in tqdm(range(epochs)):
 #             self.max_steps += steps_per_epoch
 #             self.irun()
 #             self.atoms.update_nbr_list()
 
-            
-class Langevin(MolecularDynamics):
-    def __init__(self,
-                 atoms,
-                 timestep: float,
-                 temperature: float,
-                 friction_per_ps: float = 1.0,
-                 maxwell_temp: float = None,
-                 random_seed = None,
-                 trajectory=None,
-                 logfile=None,
-                 loginterval=1,
-                 max_steps=None,
-                 nbr_update_period=20,
-                 append_trajectory=True,
-                 **kwargs):
 
+class Langevin(MolecularDynamics):
+    def __init__(
+        self,
+        atoms,
+        timestep: float,
+        temperature: float,
+        friction_per_ps: float = 1.0,
+        maxwell_temp: float = None,
+        random_seed=None,
+        trajectory=None,
+        logfile=None,
+        loginterval=1,
+        max_steps=None,
+        nbr_update_period=20,
+        append_trajectory=True,
+        **kwargs,
+    ):
         # Random Number Generator
         if random_seed == None:
             random_seed = np.random.randint(2147483647)
@@ -354,34 +350,35 @@ class Langevin(MolecularDynamics):
             try:
                 np.random.set_state(random_seed)
             except:
-                raise ValueError(
-                    "\tThe provided seed was neither an int nor a state of numpy random"
-                )
-        
+                raise ValueError("\tThe provided seed was neither an int nor a state of numpy random")
+
         if os.path.isfile(str(trajectory)):
             os.remove(trajectory)
 
-        MolecularDynamics.__init__(self,
-                                   atoms=atoms,
-                                   timestep=timestep * units.fs,
-                                   trajectory=trajectory,
-                                   logfile=logfile,
-                                   loginterval=loginterval,
-                                   append_trajectory=append_trajectory)
+        MolecularDynamics.__init__(
+            self,
+            atoms=atoms,
+            timestep=timestep * units.fs,
+            trajectory=trajectory,
+            logfile=logfile,
+            loginterval=loginterval,
+            append_trajectory=append_trajectory,
+        )
 
         # Initialize simulation parameters
         # convert units
         self.dt = timestep * units.fs
-        self.T  = temperature 
-        
-        self.friction  = friction_per_ps * 1.0e-3 / units.fs
-        self.rand_push = (np.sqrt(self.T * self.friction * self.dt * units.kB / 2.0e0) / 
-                            np.sqrt(self.atoms.get_masses().reshape(-1,1)))
-        self.prefac1   = 2.0 / (2.0 + self.friction * self.dt)
-        self.prefac2   = (2.0e0 - self.friction * self.dt) / (2.0e0 + self.friction * self.dt)
+        self.T = temperature
+
+        self.friction = friction_per_ps * 1.0e-3 / units.fs
+        self.rand_push = np.sqrt(self.T * self.friction * self.dt * units.kB / 2.0e0) / np.sqrt(
+            self.atoms.get_masses().reshape(-1, 1)
+        )
+        self.prefac1 = 2.0 / (2.0 + self.friction * self.dt)
+        self.prefac2 = (2.0e0 - self.friction * self.dt) / (2.0e0 + self.friction * self.dt)
 
         self.num_steps = max_steps
-        self.n_steps   = 0
+        self.n_steps = 0
         self.max_steps = 0
 
         self.nbr_update_period = nbr_update_period
@@ -404,16 +401,19 @@ class Langevin(MolecularDynamics):
         fixed_idx = []
         for constraint in constraints:
             has_keys = False
-            keys = ['idx', 'indices', 'index']
+            keys = ["idx", "indices", "index"]
             for key in keys:
                 if hasattr(constraint, key):
-                    val = np.array(getattr(constraint, key)
-                                   ).reshape(-1).tolist()
+                    val = np.array(getattr(constraint, key)).reshape(-1).tolist()
                     fixed_idx += val
                     has_keys = True
             if not has_keys:
-                print(("WARNING: velocity not set to zero for any atoms in constraint "
-                       "%s; do not know how to find its fixed indices." % constraint))
+                print(
+                    (
+                        "WARNING: velocity not set to zero for any atoms in constraint "
+                        "%s; do not know how to find its fixed indices." % constraint
+                    )
+                )
 
         if not fixed_idx:
             return
@@ -424,21 +424,19 @@ class Langevin(MolecularDynamics):
         self.atoms.set_velocities(vel)
 
     def step(self):
-        
-        vel    = self.atoms.get_velocities()
-        masses = self.atoms.get_masses().reshape(-1,1)
-        
-        self.rand_gauss = np.random.randn(self.atoms.get_positions().shape[0],
-                                          self.atoms.get_positions().shape[1]) 
+        vel = self.atoms.get_velocities()
+        masses = self.atoms.get_masses().reshape(-1, 1)
 
-        vel +=  self.rand_push * self.rand_gauss
+        self.rand_gauss = np.random.randn(self.atoms.get_positions().shape[0], self.atoms.get_positions().shape[1])
+
+        vel += self.rand_push * self.rand_gauss
         vel += 0.5e0 * self.dt * self.atoms.get_forces() / masses
-        
+
         self.atoms.set_velocities(vel)
         self.remove_constrained_vel(self.atoms)
-        
-        vel  = self.atoms.get_velocities()
-        x    = self.atoms.get_positions() + self.prefac1 * self.dt * vel
+
+        vel = self.atoms.get_velocities()
+        x = self.atoms.get_positions() + self.prefac1 * self.dt * vel
 
         # update positions
         self.atoms.set_positions(x)
@@ -451,7 +449,6 @@ class Langevin(MolecularDynamics):
         self.remove_constrained_vel(self.atoms)
 
     def run(self, steps=None):
-
         if steps is None:
             steps = self.num_steps
 
@@ -465,41 +462,42 @@ class Langevin(MolecularDynamics):
         for _ in tqdm(range(epochs)):
             self.max_steps += steps_per_epoch
             Dynamics.run(self)
-            
+
             x = self.atoms.get_positions(wrap=True)
             self.atoms.set_positions(x)
-            
+
             self.atoms.update_nbr_list()
             Stationary(self.atoms)
             ZeroRotation(self.atoms)
-        
-        with open('random_state.pickle', 'wb') as f:
+
+        with open("random_state.pickle", "wb") as f:
             pickle.dump(np.random.get_state(), f)
-            
+
         # load random state for restart as
-        #with open('random_state.pickle', 'rb') as f:
+        # with open('random_state.pickle', 'rb') as f:
         #     state = pickle.load(f)
-        
+
 
 class BatchLangevin(MolecularDynamics):
-    def __init__(self,
-                 atoms,
-                 timestep: float,
-                 temperature: float,
-                 friction_per_ps: float = 1.0,
-                 maxwell_temp: float = None,
-                 random_seed = None,
-                 trajectory=None,
-                 logfile=None,
-                 loginterval=1,
-                 max_steps=None,
-                 nbr_update_period=20,
-                 append_trajectory=True,
-                 **kwargs):
-
+    def __init__(
+        self,
+        atoms,
+        timestep: float,
+        temperature: float,
+        friction_per_ps: float = 1.0,
+        maxwell_temp: float = None,
+        random_seed=None,
+        trajectory=None,
+        logfile=None,
+        loginterval=1,
+        max_steps=None,
+        nbr_update_period=20,
+        append_trajectory=True,
+        **kwargs,
+    ):
         if os.path.isfile(str(trajectory)):
             os.remove(trajectory)
-            
+
         # Random Number Generator
         if random_seed == None:
             random_seed = np.random.randint(2147483647)
@@ -510,41 +508,42 @@ class BatchLangevin(MolecularDynamics):
             try:
                 np.random.set_state(random_seed)
             except:
-                raise ValueError(
-                    "\tThe provided seed was neither an int nor a state of numpy random"
-                )
+                raise ValueError("\tThe provided seed was neither an int nor a state of numpy random")
 
-        MolecularDynamics.__init__(self,
-                                   atoms=atoms,
-                                   timestep=timestep * units.fs,
-                                   trajectory=trajectory,
-                                   logfile=logfile,
-                                   loginterval=loginterval,
-                                   append_trajectory=append_trajectory)
+        MolecularDynamics.__init__(
+            self,
+            atoms=atoms,
+            timestep=timestep * units.fs,
+            trajectory=trajectory,
+            logfile=logfile,
+            loginterval=loginterval,
+            append_trajectory=append_trajectory,
+        )
 
         # Initialize simulation parameters
         # convert units
         self.dt = timestep * units.fs
-        self.T  = temperature 
+        self.T = temperature
         self.Natom = len(atoms)
-        
+
         batch = atoms.get_batch()
 
         # Check for number of virtual variables
-        if batch.get('num_atoms', None) is not None:
-            self.Natom = batch.get('num_atoms', None).numpy()
+        if batch.get("num_atoms", None) is not None:
+            self.Natom = batch.get("num_atoms", None).numpy()
             self.n_sys = self.Natom.shape[0]
         else:
             self.n_sys = 1
-        
-        self.friction  = friction_per_ps * 1.0e-3 / units.fs
-        self.rand_push = (np.sqrt(self.T * self.friction * self.dt * units.kB / 2.0e0) / 
-                            np.sqrt(self.atoms.get_masses().reshape(-1,1)))
-        self.prefac1   = 2.0 / (2.0 + self.friction * self.dt)
-        self.prefac2   = (2.0e0 - self.friction * self.dt) / (2.0e0 + self.friction * self.dt)
+
+        self.friction = friction_per_ps * 1.0e-3 / units.fs
+        self.rand_push = np.sqrt(self.T * self.friction * self.dt * units.kB / 2.0e0) / np.sqrt(
+            self.atoms.get_masses().reshape(-1, 1)
+        )
+        self.prefac1 = 2.0 / (2.0 + self.friction * self.dt)
+        self.prefac2 = (2.0e0 - self.friction * self.dt) / (2.0e0 + self.friction * self.dt)
 
         self.num_steps = max_steps
-        self.n_steps   = 0
+        self.n_steps = 0
         self.max_steps = 0
 
         self.nbr_update_period = nbr_update_period
@@ -560,8 +559,7 @@ class BatchLangevin(MolecularDynamics):
         # split AtomsBatch into separate Atoms objects
         for atoms in self.atoms.get_list_atoms():
             # set MaxwellBoltzmannDistribution for each Atoms objects separately
-            MaxwellBoltzmannDistribution(atoms,
-                                         temperature_K=maxwell_temp)
+            MaxwellBoltzmannDistribution(atoms, temperature_K=maxwell_temp)
             Stationary(atoms)  # zero linear momentum
             ZeroRotation(atoms)
             self.remove_constrained_vel(atoms)
@@ -580,16 +578,19 @@ class BatchLangevin(MolecularDynamics):
         fixed_idx = []
         for constraint in constraints:
             has_keys = False
-            keys = ['idx', 'indices', 'index']
+            keys = ["idx", "indices", "index"]
             for key in keys:
                 if hasattr(constraint, key):
-                    val = np.array(getattr(constraint, key)
-                                   ).reshape(-1).tolist()
+                    val = np.array(getattr(constraint, key)).reshape(-1).tolist()
                     fixed_idx += val
                     has_keys = True
             if not has_keys:
-                print(("WARNING: velocity not set to zero for any atoms in constraint "
-                       "%s; do not know how to find its fixed indices." % constraint))
+                print(
+                    (
+                        "WARNING: velocity not set to zero for any atoms in constraint "
+                        "%s; do not know how to find its fixed indices." % constraint
+                    )
+                )
 
         if not fixed_idx:
             return
@@ -600,37 +601,35 @@ class BatchLangevin(MolecularDynamics):
         self.atoms.set_velocities(vel)
 
     def step(self):
-        
-        vel    = self.atoms.get_velocities()
-        masses = self.atoms.get_masses().reshape(-1,1)
-        
-        self.rand_gauss = np.random.randn(self.atoms.get_positions().shape[0],
-                                          self.atoms.get_positions().shape[1]) 
+        vel = self.atoms.get_velocities()
+        masses = self.atoms.get_masses().reshape(-1, 1)
 
-        vel +=  self.rand_push * self.rand_gauss
+        self.rand_gauss = np.random.randn(self.atoms.get_positions().shape[0], self.atoms.get_positions().shape[1])
+
+        vel += self.rand_push * self.rand_gauss
         vel += 0.5e0 * self.dt * self.atoms.get_forces() / masses
-        vel*=self.prefac1
+        vel *= self.prefac1
         self.atoms.set_velocities(vel)
-        
+
         momenta = []
         for atoms in self.atoms.get_list_atoms():
             self.remove_constrained_vel(atoms)
             momenta.append(atoms.get_momenta())
         momenta = np.concatenate(momenta)
         self.atoms.set_momenta(momenta)
-        
-        vel  = self.atoms.get_velocities()
-        x    = self.atoms.get_positions() + self.dt * vel
+
+        vel = self.atoms.get_velocities()
+        x = self.atoms.get_positions() + self.dt * vel
 
         # update positions
         self.atoms.set_positions(x)
 
-        vel *= (self.prefac2/self.prefac1)
+        vel *= self.prefac2 / self.prefac1
         vel += self.rand_push * self.rand_gauss
         vel += 0.5e0 * self.dt * self.atoms.get_forces() / masses
 
         self.atoms.set_velocities(vel)
-        
+
         momenta = []
         for atoms in self.atoms.get_list_atoms():
             self.remove_constrained_vel(atoms)
@@ -639,7 +638,6 @@ class BatchLangevin(MolecularDynamics):
         self.atoms.set_momenta(momenta)
 
     def run(self, steps=None):
-
         if steps is None:
             steps = self.num_steps
 
@@ -654,7 +652,7 @@ class BatchLangevin(MolecularDynamics):
             self.max_steps += steps_per_epoch
             Dynamics.run(self)
             self.atoms.update_nbr_list()
-            
+
             momenta = []
             for atoms in self.atoms.get_list_atoms():
                 Stationary(atoms)
@@ -666,26 +664,28 @@ class BatchLangevin(MolecularDynamics):
 
 class VRescale(MolecularDynamics):
     """
-        V-Rescale thermostat (default in GROMACS)
-        Extension of the Berendsen thermostat, ensures correct kinetic dristibution through random force
-        Giovanni Bussi, Davide Donadio, and Michele Parrinello "Canonical sampling through velocity rescaling", 
-        Journal of Chemical Physics 126 014101 (2007)
+    V-Rescale thermostat (default in GROMACS)
+    Extension of the Berendsen thermostat, ensures correct kinetic dristibution through random force
+    Giovanni Bussi, Davide Donadio, and Michele Parrinello "Canonical sampling through velocity rescaling",
+    Journal of Chemical Physics 126 014101 (2007)
     """
-    def __init__(self,
-                 atoms,
-                 timestep: float,
-                 temperature: float,
-                 relaxation_const: float = 100.0,
-                 maxwell_temp: float = None,
-                 random_seed = None,
-                 trajectory=None,
-                 logfile=None,
-                 loginterval=1,
-                 max_steps=None,
-                 nbr_update_period=20,
-                 append_trajectory=True,
-                 **kwargs):
 
+    def __init__(
+        self,
+        atoms,
+        timestep: float,
+        temperature: float,
+        relaxation_const: float = 100.0,
+        maxwell_temp: float = None,
+        random_seed=None,
+        trajectory=None,
+        logfile=None,
+        loginterval=1,
+        max_steps=None,
+        nbr_update_period=20,
+        append_trajectory=True,
+        **kwargs,
+    ):
         # Random Number Generator
         if random_seed == None:
             random_seed = np.random.randint(2147483647)
@@ -696,32 +696,31 @@ class VRescale(MolecularDynamics):
             try:
                 np.random.set_state(random_seed)
             except:
-                raise ValueError(
-                    "\tThe provided seed was neither an int nor a state of numpy random"
-                )
-        
+                raise ValueError("\tThe provided seed was neither an int nor a state of numpy random")
+
         if os.path.isfile(str(trajectory)):
             os.remove(trajectory)
 
-        MolecularDynamics.__init__(self,
-                                   atoms=atoms,
-                                   timestep=timestep * units.fs,
-                                   trajectory=trajectory,
-                                   logfile=logfile,
-                                   loginterval=loginterval,
-                                   append_trajectory=append_trajectory)
+        MolecularDynamics.__init__(
+            self,
+            atoms=atoms,
+            timestep=timestep * units.fs,
+            trajectory=trajectory,
+            logfile=logfile,
+            loginterval=loginterval,
+            append_trajectory=append_trajectory,
+        )
 
         # Initialize simulation parameters
         # convert units
         self.dt = timestep * units.fs
-        self.T  = temperature 
-        
-        self.free_DoFs = 3.0*len(atoms) - (6. + len(atoms.constraints))
-        self.t_relax  = relaxation_const * units.fs
-        
+        self.T = temperature
+
+        self.free_DoFs = 3.0 * len(atoms) - (6.0 + len(atoms.constraints))
+        self.t_relax = relaxation_const * units.fs
 
         self.num_steps = max_steps
-        self.n_steps   = 0
+        self.n_steps = 0
         self.max_steps = 0
 
         self.nbr_update_period = nbr_update_period
@@ -734,8 +733,8 @@ class VRescale(MolecularDynamics):
         Stationary(self.atoms)
         ZeroRotation(self.atoms)
         self.remove_constrained_vel(atoms)
-        
-        self.masses = self.atoms.get_masses().reshape(-1,1)
+
+        self.masses = self.atoms.get_masses().reshape(-1, 1)
 
     def remove_constrained_vel(self, atoms):
         """
@@ -746,16 +745,19 @@ class VRescale(MolecularDynamics):
         fixed_idx = []
         for constraint in constraints:
             has_keys = False
-            keys = ['idx', 'indices', 'index']
+            keys = ["idx", "indices", "index"]
             for key in keys:
                 if hasattr(constraint, key):
-                    val = np.array(getattr(constraint, key)
-                                   ).reshape(-1).tolist()
+                    val = np.array(getattr(constraint, key)).reshape(-1).tolist()
                     fixed_idx += val
                     has_keys = True
             if not has_keys:
-                print(("WARNING: velocity not set to zero for any atoms in constraint "
-                       "%s; do not know how to find its fixed indices." % constraint))
+                print(
+                    (
+                        "WARNING: velocity not set to zero for any atoms in constraint "
+                        "%s; do not know how to find its fixed indices." % constraint
+                    )
+                )
 
         if not fixed_idx:
             return
@@ -766,45 +768,44 @@ class VRescale(MolecularDynamics):
         self.atoms.set_velocities(vel)
 
     def step(self):
-        
         # Velocity Verlet
-        vel    = self.atoms.get_velocities()
+        vel = self.atoms.get_velocities()
         vel += 0.5e0 * self.dt * self.atoms.get_forces() / self.masses
-        
+
         self.atoms.set_velocities(vel)
         self.remove_constrained_vel(self.atoms)
-        
-        vel  = self.atoms.get_velocities()
-        x    = self.atoms.get_positions() + self.dt * vel
+
+        vel = self.atoms.get_velocities()
+        x = self.atoms.get_positions() + self.dt * vel
         self.atoms.set_positions(x)
 
         vel += 0.5e0 * self.dt * self.atoms.get_forces() / self.masses
-        
-        # apply thermostat
-        ekin = 0.5 * np.vdot(vel*self.masses, vel)
-        temp = ekin * 2.0 / (units.kB * self.free_DoFs)
-        
-#         if temp < 1.0e-5:
-#             scale_fac = 1.0
-#         else:
-        factor  = self.T / temp
-        exp1    = np.exp( -self.dt / self.t_relax )
-        rate    = (1.0 - exp1 ) * factor / self.free_DoFs
 
-        noise = np.power(np.random.randn(int(self.free_DoFs)-1), 2).sum()
+        # apply thermostat
+        ekin = 0.5 * np.vdot(vel * self.masses, vel)
+        temp = ekin * 2.0 / (units.kB * self.free_DoFs)
+
+        #         if temp < 1.0e-5:
+        #             scale_fac = 1.0
+        #         else:
+        factor = self.T / temp
+        exp1 = np.exp(-self.dt / self.t_relax)
+        rate = (1.0 - exp1) * factor / self.free_DoFs
+
+        noise = np.power(np.random.randn(int(self.free_DoFs) - 1), 2).sum()
 
         rand = np.random.randn(1)
 
-        scale_fac = np.sqrt( exp1 + rate * (noise + np.power(rand, 2))  + 2.0*rand*np.sqrt(exp1*rate) )
-        if (rand + np.sqrt(exp1/rate)) < 0.0: scale_fac *= -1.0
-                
+        scale_fac = np.sqrt(exp1 + rate * (noise + np.power(rand, 2)) + 2.0 * rand * np.sqrt(exp1 * rate))
+        if (rand + np.sqrt(exp1 / rate)) < 0.0:
+            scale_fac *= -1.0
+
         vel *= scale_fac
-        
+
         self.atoms.set_velocities(vel)
         self.remove_constrained_vel(self.atoms)
 
     def run(self, steps=None):
-
         if steps is None:
             steps = self.num_steps
 
@@ -821,38 +822,41 @@ class VRescale(MolecularDynamics):
             self.atoms.update_nbr_list()
             Stationary(self.atoms)
             ZeroRotation(self.atoms)
-        
-        with open('random_state.pickle', 'wb') as f:
+
+        with open("random_state.pickle", "wb") as f:
             pickle.dump(np.random.get_state(), f)
-            
+
         # load random state for restart as
-        #with open('random_state.pickle', 'rb') as f:
+        # with open('random_state.pickle', 'rb') as f:
         #     state = pickle.load(f)
 
 
 class NoseHooverMetadynamics(NoseHoover):
-    def __init__(self,
-                 atomsbatch,
-                 timestep,
-                 temperature,
-                 ttime,
-                 geom_add_time,
-                 max_steps=None,
-                 trajectory="mtd.trj",
-                 logfile="mtd.log",
-                 loginterval=1,
-                 **kwargs):
-
-        NoseHoover.__init__(self,
-                            atoms=atomsbatch,
-                            timestep=timestep,
-                            temperature=temperature,
-                            ttime=ttime,
-                            trajectory=trajectory,
-                            logfile=logfile,
-                            loginterval=loginterval,
-                            max_steps=max_steps,
-                            **kwargs)
+    def __init__(
+        self,
+        atomsbatch,
+        timestep,
+        temperature,
+        ttime,
+        geom_add_time,
+        max_steps=None,
+        trajectory="mtd.trj",
+        logfile="mtd.log",
+        loginterval=1,
+        **kwargs,
+    ):
+        NoseHoover.__init__(
+            self,
+            atoms=atomsbatch,
+            timestep=timestep,
+            temperature=temperature,
+            ttime=ttime,
+            trajectory=trajectory,
+            logfile=logfile,
+            loginterval=loginterval,
+            max_steps=max_steps,
+            **kwargs,
+        )
 
         self.geom_add_time = geom_add_time * units.fs
         self.max_steps = 0
@@ -874,8 +878,7 @@ class NoseHooverMetadynamics(NoseHoover):
         # No need to set other attributes equal to those of `self.atoms`, since (1)
         # it's unnecessary, and (2) it leads to `new_atoms` being updated every time
         # `self.atoms` is (not sure why)
-        new_atoms = AtomsBatch(numbers=self.atoms.get_atomic_numbers(),
-                               positions=self.atoms.get_positions())
+        new_atoms = AtomsBatch(numbers=self.atoms.get_atomic_numbers(), positions=self.atoms.get_positions())
 
         self.atoms.calc.append_atoms(new_atoms)
 
@@ -916,30 +919,33 @@ class NoseHooverMetadynamics(NoseHoover):
 
 
 class BatchNoseHoover(MolecularDynamics):
-    def __init__(self,
-                 atoms,
-                 timestep,
-                 temperature,
-                 ttime,
-                 T_init=None,
-                 trajectory=None,
-                 logfile=None,
-                 loginterval=1,
-                 max_steps=None,
-                 nbr_update_period=20,
-                 append_trajectory=True,
-                 **kwargs):
-
+    def __init__(
+        self,
+        atoms,
+        timestep,
+        temperature,
+        ttime,
+        T_init=None,
+        trajectory=None,
+        logfile=None,
+        loginterval=1,
+        max_steps=None,
+        nbr_update_period=20,
+        append_trajectory=True,
+        **kwargs,
+    ):
         if os.path.isfile(str(trajectory)):
             os.remove(trajectory)
 
-        MolecularDynamics.__init__(self,
-                                   atoms=atoms,
-                                   timestep=timestep * units.fs,
-                                   trajectory=trajectory,
-                                   logfile=logfile,
-                                   loginterval=loginterval,
-                                   append_trajectory=append_trajectory)
+        MolecularDynamics.__init__(
+            self,
+            atoms=atoms,
+            timestep=timestep * units.fs,
+            trajectory=trajectory,
+            logfile=logfile,
+            loginterval=loginterval,
+            append_trajectory=append_trajectory,
+        )
 
         # Initialize simulation parameters
 
@@ -962,15 +968,14 @@ class BatchNoseHoover(MolecularDynamics):
         batch = atoms.get_batch()
 
         # Check for number of virtual variables
-        if batch.get('num_atoms', None) is not None:
-            self.Natom = batch.get('num_atoms', None).numpy()
+        if batch.get("num_atoms", None) is not None:
+            self.Natom = batch.get("num_atoms", None).numpy()
             self.n_sys = self.Natom.shape[0]
             self.targeEkin = 0.5 * (3.0 * self.Natom - 6) * self.T
         else:
             self.n_sys = 1
 
-        self.Q = np.array(
-            (3.0 * self.Natom - 6) * self.T * (self.ttime * self.dt)**2)
+        self.Q = np.array((3.0 * self.Natom - 6) * self.T * (self.ttime * self.dt) ** 2)
         self.zeta = np.array([0.0] * self.n_sys)
 
         if T_init is None:
@@ -983,8 +988,7 @@ class BatchNoseHoover(MolecularDynamics):
         for atoms in self.atoms.get_list_atoms():
             # set MaxwellBoltzmannDistribution for each Atoms objects separately
 
-            MaxwellBoltzmannDistribution(atoms,
-                                         temperature_K=T_init)
+            MaxwellBoltzmannDistribution(atoms, temperature_K=T_init)
             Stationary(atoms)  # zero linear momentum
             ZeroRotation(atoms)
 
@@ -995,17 +999,14 @@ class BatchNoseHoover(MolecularDynamics):
         self.atoms.set_momenta(momenta)
 
     def step(self):
-
         # get current acceleration and velocity
-        accel = (self.atoms.get_forces() /
-                 self.atoms.get_masses().reshape(-1, 1))
+        accel = self.atoms.get_forces() / self.atoms.get_masses().reshape(-1, 1)
         vel = self.atoms.get_velocities()
         zeta_vel = np.repeat(self.zeta, 3 * self.Natom).reshape(-1, 3) * vel
         visc = accel - zeta_vel
 
         # make full step in position
-        x = self.atoms.get_positions() + vel * self.dt + \
-            visc * (0.5 * self.dt ** 2)
+        x = self.atoms.get_positions() + vel * self.dt + visc * (0.5 * self.dt**2)
         self.atoms.set_positions(x)
 
         # record current velocities
@@ -1020,27 +1021,22 @@ class BatchNoseHoover(MolecularDynamics):
         accel = f / self.atoms.get_masses().reshape(-1, 1)
 
         # make a half step in self.zeta
-        self.zeta = self.zeta + 0.5 * self.dt * \
-            (1 / self.Q) * (KE_0 - self.targeEkin)
+        self.zeta = self.zeta + 0.5 * self.dt * (1 / self.Q) * (KE_0 - self.targeEkin)
 
         # make another halfstep in self.zeta
-        self.zeta = (self.zeta + 0.5 * self.dt * (1 / self.Q) *
-                     (self.atoms.get_batch_kinetic_energy() -
-                      self.targeEkin))
+        self.zeta = self.zeta + 0.5 * self.dt * (1 / self.Q) * (self.atoms.get_batch_kinetic_energy() - self.targeEkin)
 
         # make another half step in velocity
-        scal = (1 + 0.5 * self.dt * self.zeta)
+        scal = 1 + 0.5 * self.dt * self.zeta
 
         vel = self.atoms.get_velocities()
-        vel = ((vel + 0.5 * self.dt * accel) /
-               np.repeat(scal, 3 * self.Natom).reshape(-1, 3))
+        vel = (vel + 0.5 * self.dt * accel) / np.repeat(scal, 3 * self.Natom).reshape(-1, 3)
 
         self.atoms.set_velocities(vel.reshape(-1, 3))
 
         return f
 
     def run(self, steps=None):
-
         if steps is None:
             steps = self.num_steps
 
@@ -1059,14 +1055,9 @@ class BatchNoseHoover(MolecularDynamics):
 
 
 class BatchMDLogger(MDLogger):
-    def __init__(self,
-                 *args,
-                 **kwargs):
-
-        kwargs['header'] = False
-        MDLogger.__init__(self,
-                          *args,
-                          **kwargs)
+    def __init__(self, *args, **kwargs):
+        kwargs["header"] = False
+        MDLogger.__init__(self, *args, **kwargs)
 
         if self.dyn is not None:
             self.hdr = "%-9s " % ("Time[ps]",)
@@ -1112,20 +1103,20 @@ class BatchMDLogger(MDLogger):
         self.logfile.flush()
 
 
-class BatchNoseHooverMetadynamics(BatchNoseHoover,
-                                  NoseHooverMetadynamics):
-    def __init__(self,
-                 atomsbatch,
-                 timestep,
-                 temperature,
-                 ttime,
-                 geom_add_time,
-                 max_steps=None,
-                 trajectory="mtd.trj",
-                 logfile="mtd.log",
-                 loginterval=1,
-                 **kwargs):
-
+class BatchNoseHooverMetadynamics(BatchNoseHoover, NoseHooverMetadynamics):
+    def __init__(
+        self,
+        atomsbatch,
+        timestep,
+        temperature,
+        ttime,
+        geom_add_time,
+        max_steps=None,
+        trajectory="mtd.trj",
+        logfile="mtd.log",
+        loginterval=1,
+        **kwargs,
+    ):
         # follow Nose-Hoover here and default to 2 * T
 
         if kwargs.get("maxwell_temp") is not None:
@@ -1133,24 +1124,24 @@ class BatchNoseHooverMetadynamics(BatchNoseHoover,
         else:
             kwargs["T_init"] = 2 * temperature
 
-        BatchNoseHoover.__init__(self,
-                                 atoms=atomsbatch,
-                                 timestep=timestep,
-                                 temperature=temperature,
-                                 ttime=ttime,
-                                 trajectory=trajectory,
-                                 logfile=None,
-                                 loginterval=loginterval,
-                                 max_steps=max_steps,
-                                 **kwargs)
+        BatchNoseHoover.__init__(
+            self,
+            atoms=atomsbatch,
+            timestep=timestep,
+            temperature=temperature,
+            ttime=ttime,
+            trajectory=trajectory,
+            logfile=None,
+            loginterval=loginterval,
+            max_steps=max_steps,
+            **kwargs,
+        )
 
         self.geom_add_time = geom_add_time * units.fs
         self.max_steps = 0
 
         if logfile:
-            logger = BatchMDLogger(dyn=self,
-                                   atoms=atomsbatch,
-                                   logfile=logfile)
+            logger = BatchMDLogger(dyn=self, atoms=atomsbatch, logfile=logfile)
             self.attach(logger, loginterval)
 
     def run(self, steps=None):

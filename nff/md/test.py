@@ -1,19 +1,17 @@
+import unittest
+
+from nff.data import Dataset
 from nff.io.ase import AtomsBatch
 from nff.io.ase_calcs import NeuralFF
-from nff.data import Dataset
+from nff.md.nve import DEFAULTNVEPARAMS, Dynamics
 from nff.train import get_model
-from nff.md.nve import Dynamics, DEFAULTNVEPARAMS
-
-import unittest
 
 
 class TestModules(unittest.TestCase):
     def testDynamics(self):
         dataset = Dataset.from_file("../../examples/dataset.pth.tar")
         props = dataset[0]
-        atoms = AtomsBatch(
-            positions=props["nxyz"][:, 1:], numbers=props["nxyz"][:, 0], props=props
-        )
+        atoms = AtomsBatch(positions=props["nxyz"][:, 1:], numbers=props["nxyz"][:, 0], props=props)
 
         # initialize models
         params = {
