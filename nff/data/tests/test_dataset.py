@@ -1,6 +1,7 @@
 import os
 import unittest
 from collections import Counter
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -12,9 +13,9 @@ from nff.data.dataset import (
     stratified_split,
 )
 
-NFF_PATH = "../../../"
-DATASET_PATH = os.path.join(NFF_PATH, "tutorials/data/dataset.pth.tar")
-PEROVSKITE_DATA_PATH = "./data/SrIrO3_bulk_55_nff_all_dataset.pth.tar"
+current_path = Path(__file__).parent
+DATASET_PATH = current_path / "../../../tutorials/data/dataset.pth.tar"
+PEROVSKITE_DATA_PATH = current_path / "./data/SrIrO3_bulk_55_nff_all_dataset.pth.tar"
 TARG_NAME = "formula"
 VAL_SIZE = 0.1
 TEST_SIZE = 0.1
