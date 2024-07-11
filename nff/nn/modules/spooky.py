@@ -198,9 +198,6 @@ class NuclearEmbedding(nn.Module):
         self.z_embed = nn.Embedding(max_z, feat_dim, padding_idx=0)
 
     def forward(self, z):
-        import pdb
-
-        pdb.set_trace()
         self.elec_config = self.elec_config.to(z.device)
         d_z = self.elec_config[z.long()].to(z.device)
         if torch.isnan(d_z).any():
