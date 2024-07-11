@@ -1,14 +1,14 @@
+import copy
+
 import numpy as np
 import torch
 from torch import nn
-import copy
 
-from nff.nn.modules.dimenet import (EmbeddingBlock, InteractionBlock,
-                                    OutputBlock)
-from nff.nn.modules.schnet import sum_and_grad
-from nff.nn.modules.diabat import DiabaticReadout
 from nff.nn.layers import DimeNetRadialBasis as RadialBasis
 from nff.nn.layers import DimeNetSphericalBasis as SphericalBasis
+from nff.nn.modules.diabat import DiabaticReadout
+from nff.nn.modules.dimenet import EmbeddingBlock, InteractionBlock, OutputBlock
+from nff.nn.modules.schnet import sum_and_grad
 from nff.utils.scatter import compute_grad
 
 
@@ -40,7 +40,6 @@ def compute_angle(xyz, angle_list):
 
 
 class DimeNet(nn.Module):
-
     """DimeNet implementation.
     Source code (Tensorflow): https://github.com/klicperajo/dimenet
     Pytorch implementation: https://github.com/akirasosa/pytorch-dimenet
@@ -97,44 +96,54 @@ class DimeNet(nn.Module):
         super().__init__()
 
         self.radial_basis = RadialBasis(
-            n_rbf=modelparams["n_rbf"],
-            cutoff=modelparams["cutoff"],
-            envelope_p=modelparams["envelope_p"])
+            n_rbf=modelparams["n_rbf"], cutoff=modelparams["cutoff"], envelope_p=modelparams["envelope_p"]
+        )
 
         self.spherical_basis = SphericalBasis(
             n_spher=modelparams["n_spher"],
             l_spher=modelparams["l_spher"],
             cutoff=modelparams["cutoff"],
-            envelope_p=modelparams["envelope_p"])
+            envelope_p=modelparams["envelope_p"],
+        )
 
         self.embedding_block = EmbeddingBlock(
-            n_rbf=modelparams["n_rbf"],
-            embed_dim=modelparams["embed_dim"],
-            activation=modelparams["activation"])
+            n_rbf=modelparams["n_rbf"], embed_dim=modelparams["embed_dim"], activation=modelparams["activation"]
+        )
 
-        self.interaction_blocks = nn.ModuleList([
-            InteractionBlock(embed_dim=modelparams["embed_dim"],
-                             n_rbf=modelparams["n_rbf"],
-                             activation=modelparams["activation"],
-                             n_spher=modelparams["n_spher"],
-                             l_spher=modelparams["l_spher"],
-                             n_bilinear=modelparams.get("n_bilinear"),
-                             int_dim=modelparams.get("int_dim"),
-                             basis_emb_dim=modelparams.get("basis_emb_dim"),
-                             use_pp=modelparams.get("use_pp", False))
-            for _ in range(modelparams["n_convolutions"])
-        ])
+        self.interaction_blocks = nn.ModuleList(
+            [
+                InteractionBlock(
+                    embed_dim=modelparams["embed_dim"],
+                    n_rbf=modelparams["n_rbf"],
+                    activation=modelparams["activation"],
+                    n_spher=modelparams["n_spher"],
+                    l_spher=modelparams["l_spher"],
+                    n_bilinear=modelparams.get("n_bilinear"),
+                    int_dim=modelparams.get("int_dim"),
+                    basis_emb_dim=modelparams.get("basis_emb_dim"),
+                    use_pp=modelparams.get("use_pp", False),
+                )
+                for _ in range(modelparams["n_convolutions"])
+            ]
+        )
 
         self.output_blocks = nn.ModuleDict(
-            {key: nn.ModuleList([
-                OutputBlock(embed_dim=modelparams["embed_dim"],
+            {
+                key: nn.ModuleList(
+                    [
+                        OutputBlock(
+                            embed_dim=modelparams["embed_dim"],
                             n_rbf=modelparams["n_rbf"],
                             activation=modelparams["activation"],
                             use_pp=modelparams.get("use_pp"),
-                            out_dim=modelparams.get("out_dim"))
-                for _ in range(modelparams["n_convolutions"] + 1)
-            ])
-                for key in modelparams["output_keys"]})
+                            out_dim=modelparams.get("out_dim"),
+                        )
+                        for _ in range(modelparams["n_convolutions"] + 1)
+                    ]
+                )
+                for key in modelparams["output_keys"]
+            }
+        )
 
         self.out_keys = modelparams["output_keys"]
         self.grad_keys = modelparams["grad_keys"]
@@ -174,8 +183,7 @@ class DimeNet(nn.Module):
         kj_idx = batch["kj_idx"]
 
         # compute distances
-        d = torch.norm(xyz[nbr_list[:, 0]] - xyz[nbr_list[:, 1]],
-                       dim=-1).reshape(-1, 1)
+        d = torch.norm(xyz[nbr_list[:, 0]] - xyz[nbr_list[:, 1]], dim=-1).reshape(-1, 1)
 
         # compute angles
         alpha = compute_angle(xyz, angle_list)
@@ -186,8 +194,7 @@ class DimeNet(nn.Module):
         # put the distances and angles in the spherical basis
         a_sbf = self.spherical_basis(d, alpha, kj_idx)
 
-        return (xyz, e_rbf, a_sbf, nbr_list, angle_list, num_atoms,
-                z, kj_idx, ji_idx)
+        return (xyz, e_rbf, a_sbf, nbr_list, angle_list, num_atoms, z, kj_idx, ji_idx)
 
     def atomwise(self, batch, xyz=None):
         """
@@ -199,43 +206,31 @@ class DimeNet(nn.Module):
             xyz (torch.Tensor): atom coordinates
         """
 
-        (new_xyz, e_rbf, a_sbf, nbr_list, angle_list,
-         num_atoms, z, kj_idx, ji_idx) = self.get_prelims(batch, xyz)
+        (new_xyz, e_rbf, a_sbf, nbr_list, angle_list, num_atoms, z, kj_idx, ji_idx) = self.get_prelims(batch, xyz)
 
         if xyz is None:
             xyz = new_xyz
 
         # embed edge vectors
-        m_ji = self.embedding_block(e_rbf=e_rbf,
-                                    z=z,
-                                    nbr_list=nbr_list)
+        m_ji = self.embedding_block(e_rbf=e_rbf, z=z, nbr_list=nbr_list)
 
         # initialize the output dictionary with the first
         # of the output blocks acting on m_ji
-        out = {key: self.output_blocks[key][0](m_ji=m_ji,
-                                               e_rbf=e_rbf,
-                                               nbr_list=nbr_list,
-                                               num_atoms=num_atoms)
-               for key in self.out_keys}
+        out = {
+            key: self.output_blocks[key][0](m_ji=m_ji, e_rbf=e_rbf, nbr_list=nbr_list, num_atoms=num_atoms)
+            for key in self.out_keys
+        }
 
         # cycle through the interaction blocks
         for i, int_block in enumerate(self.interaction_blocks):
-
             # update the edge vector
-            m_ji = int_block(m_ji=m_ji,
-                             e_rbf=e_rbf,
-                             a_sbf=a_sbf,
-                             kj_idx=kj_idx,
-                             ji_idx=ji_idx)
+            m_ji = int_block(m_ji=m_ji, e_rbf=e_rbf, a_sbf=a_sbf, kj_idx=kj_idx, ji_idx=ji_idx)
 
             # add to the output by putting m_ji through
             # an output block
             for key in self.out_keys:
                 out_block = self.output_blocks[key][i + 1]
-                out[key] += out_block(m_ji=m_ji,
-                                      e_rbf=e_rbf,
-                                      nbr_list=nbr_list,
-                                      num_atoms=num_atoms)
+                out[key] += out_block(m_ji=m_ji, e_rbf=e_rbf, nbr_list=nbr_list, num_atoms=num_atoms)
 
         return out, xyz
 
@@ -248,32 +243,27 @@ class DimeNet(nn.Module):
             results (dict): dictionary of predictions
         """
 
-        offsets = batch.get('offsets')
-        
+        offsets = batch.get("offsets")
+
         if offsets is None:
             periodic = False
         elif isinstance(offsets, torch.Tensor):
             if offsets.is_sparse:
-                periodic = (offsets.coalesce().indices().shape[1] != 0)
+                periodic = offsets.coalesce().indices().shape[1] != 0
             else:
                 periodic = bool(offsets.abs().max() != 0)
         else:
-            raise Exception("Don't know how to interpret offsets of type {}"
-                            .format(type(offsets)))
+            raise Exception("Don't know how to interpret offsets of type {}".format(type(offsets)))
 
         if periodic:
             raise NotImplementedError("DimeNet not implemented for PBC.")
 
         out, xyz = self.atomwise(batch, xyz)
-        results = sum_and_grad(batch=batch,
-                               xyz=xyz,
-                               atomwise_output=out,
-                               grad_keys=self.grad_keys)
+        results = sum_and_grad(batch=batch, xyz=xyz, atomwise_output=out, grad_keys=self.grad_keys)
         return results
 
 
 class DimeNetDiabat(DimeNet):
-
     def __init__(self, modelparams):
         """
         `diabat_keys` has the shape of a 2x2 matrix
@@ -281,48 +271,36 @@ class DimeNetDiabat(DimeNet):
 
         energy_keys = modelparams["output_keys"]
         diabat_keys = modelparams["diabat_keys"]
-        new_out_keys = list(set(np.array(diabat_keys).reshape(-1)
-                                .tolist()))
+        new_out_keys = list(set(np.array(diabat_keys).reshape(-1).tolist()))
 
         new_modelparams = copy.deepcopy(modelparams)
         new_modelparams.update({"output_keys": new_out_keys})
         super().__init__(new_modelparams)
 
         self.diabatic_readout = DiabaticReadout(
-            diabat_keys=diabat_keys,
-            grad_keys=modelparams["grad_keys"],
-            energy_keys=energy_keys)
+            diabat_keys=diabat_keys, grad_keys=modelparams["grad_keys"], energy_keys=energy_keys
+        )
 
-    def forward(self,
-                batch,
-                xyz=None,
-                add_nacv=False,
-                add_grad=True,
-                add_gap=True,
-                extra_grads=None):
-
+    def forward(self, batch, xyz=None, add_nacv=False, add_grad=True, add_gap=True, extra_grads=None):
         output, xyz = self.atomwise(batch, xyz)
-        results = self.diabatic_readout(batch=batch,
-                                        output=output,
-                                        xyz=xyz,
-                                        add_nacv=add_nacv,
-                                        add_grad=add_grad,
-                                        add_gap=add_gap,
-                                        extra_grads=extra_grads)
+        results = self.diabatic_readout(
+            batch=batch,
+            output=output,
+            xyz=xyz,
+            add_nacv=add_nacv,
+            add_grad=add_grad,
+            add_gap=add_gap,
+            extra_grads=extra_grads,
+        )
 
         return results
 
 
 class DimeNetDiabatDelta(DimeNetDiabat):
-
     def __init__(self, modelparams):
         super().__init__(modelparams)
 
-    def forward(self,
-                batch,
-                xyz=None,
-                add_nacv=False):
-
+    def forward(self, batch, xyz=None, add_nacv=False):
         out, xyz = self.atomwise(batch, xyz)
         N = batch["num_atoms"].detach().cpu().tolist()
         results = {}
@@ -347,7 +325,6 @@ class DimeNetDiabatDelta(DimeNetDiabat):
 
 
 class DimeNetDelta(DimeNet):
-
     def __init__(self, modelparams):
         super().__init__(modelparams)
 
@@ -369,8 +346,7 @@ class DimeNetDelta(DimeNet):
 
         for key in self.grad_keys:
             output = results[key.replace("_grad", "")]
-            grad = compute_grad(output=output,
-                                inputs=xyz)
+            grad = compute_grad(output=output, inputs=xyz)
             results[key] = grad
 
         return results
