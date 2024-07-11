@@ -20,8 +20,10 @@ dependencies = [
     "tqdm",
     "mace-torch>=0.3.4",
     "chgnet>=0.3.5",
-    "pre-commit",
     "e3fp",
+    "nglview",
+    "ipykernel",
+    "ipywidgets",
 ]
 classifiers = [
     "Intended Audience :: Science/Research",
@@ -39,7 +41,11 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest", "pytest-cov"]
+dev = [
+    "pre-commit",
+    "pytest", 
+    "pytest-cov"
+]
 
 [project.urls]
 Homepage = "https://github.mit.edu/MLMat/NeuralForceField/"
