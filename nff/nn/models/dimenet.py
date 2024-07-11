@@ -8,7 +8,7 @@ from nff.nn.layers import DimeNetRadialBasis as RadialBasis
 from nff.nn.layers import DimeNetSphericalBasis as SphericalBasis
 from nff.nn.modules.diabat import DiabaticReadout
 from nff.nn.modules.dimenet import EmbeddingBlock, InteractionBlock, OutputBlock
-from nff.nn.modules.schnet import sum_and_grad
+from nff.nn.modules.schnet import get_rij, sum_and_grad
 from nff.utils.scatter import compute_grad
 
 
@@ -242,8 +242,8 @@ class DimeNet(nn.Module):
         Returns:
             results (dict): dictionary of predictions
         """
-
         offsets = batch.get("offsets")
+        nbrs = batch.get("nbr_list")
 
         if offsets is None:
             periodic = False
@@ -259,7 +259,11 @@ class DimeNet(nn.Module):
             raise NotImplementedError("DimeNet not implemented for PBC.")
 
         out, xyz = self.atomwise(batch, xyz)
-        results = sum_and_grad(batch=batch, xyz=xyz, atomwise_output=out, grad_keys=self.grad_keys)
+        cutoff = self.radial_basis.cutoff  # both radial_basis and spherical_basis have the cutoffs
+        r_ij, nbrs = get_rij(xyz, batch, nbrs, cutoff)
+        results = sum_and_grad(
+            batch=batch, xyz=xyz, r_ij=r_ij, nbrs=nbrs, atomwise_output=out, grad_keys=self.grad_keys
+        )
         return results
 
 

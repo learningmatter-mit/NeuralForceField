@@ -1079,9 +1079,9 @@ class MeanPool(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, batch, xyz, atomwise_output, grad_keys, out_keys=None):
+    def forward(self, batch, xyz, r_ij, nbrs, atomwise_output, grad_keys, out_keys=None):
         results = sum_and_grad(
-            batch=batch, xyz=xyz, atomwise_output=atomwise_output, grad_keys=grad_keys, out_keys=out_keys, mean=True
+            batch, xyz, r_ij, nbrs, atomwise_output=atomwise_output, grad_keys=grad_keys, out_keys=out_keys, mean=True
         )
         return results
 
