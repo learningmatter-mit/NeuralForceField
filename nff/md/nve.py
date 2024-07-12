@@ -31,6 +31,7 @@ class Dynamics:
         atomsbatch,
         mdparam=DEFAULTNVEPARAMS,
         atomsbatch_to_log=None,
+        check_restart: bool = False,
     ):
         # initialize the atoms batch system
         self.atomsbatch = atomsbatch
@@ -56,7 +57,8 @@ class Dynamics:
             self.integrator = integrator(self.atomsbatch, **self.mdparam["thermostat_params"], **self.mdparam)
 
         self.steps = int(self.mdparam["steps"])
-        self.steps = self.check_restart()
+        if check_restart:
+            self.steps = self.check_restart()
 
         if self.steps == int(self.mdparam["steps"]):
             # attach trajectory dump
