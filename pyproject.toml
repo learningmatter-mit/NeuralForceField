@@ -11,7 +11,7 @@ requires-python = ">=3.6"
 readme = "README.md"
 license = { text = "MIT" }
 dependencies = [
-    "ase",
+    "ase<=3.22.1",
     "pymatgen>=2023.3.10",
     "rdkit",
     "scikit-learn",
