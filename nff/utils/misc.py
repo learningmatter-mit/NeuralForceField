@@ -302,17 +302,12 @@ def prop_split(max_specs, dataset_type, props, sample_dic, seed):
     random.seed(seed)
 
     if max_specs is not None and dataset_type == "classification":
-
         msg = "Not implemented for multiclass"
         assert len(props) == 1, msg
 
         prop = props[0]
-        pos_smiles = [
-            key for key, sub_dic in sample_dic.items() if sub_dic.get(prop) == 1
-        ]
-        neg_smiles = [
-            key for key, sub_dic in sample_dic.items() if sub_dic.get(prop) == 0
-        ]
+        pos_smiles = [key for key, sub_dic in sample_dic.items() if sub_dic.get(prop) == 1]
+        neg_smiles = [key for key, sub_dic in sample_dic.items() if sub_dic.get(prop) == 0]
 
         # find the underrepresnted and overrepresented class
         if len(pos_smiles) < len(neg_smiles):
@@ -334,7 +329,6 @@ def prop_split(max_specs, dataset_type, props, sample_dic, seed):
             random.shuffle(overrep)
             keep_smiles = underrep[: max_specs // 2] + overrep[max_specs // 2 :]
     else:
-
         keep_smiles = list(sample_dic.keys())
 
         # if setting a maximum, need to shuffle in order
@@ -427,9 +421,7 @@ def apply_metric(metric, pred, actual):
         if max(pred) == 0:
             score = 0
         else:
-            precision, recall, _ = precision_recall_curve(
-                y_true=actual, probas_pred=pred
-            )
+            precision, recall, _ = precision_recall_curve(y_true=actual, probas_pred=pred)
             score = auc(recall, precision)
     elif metric == "mse":
         score = ((np.array(pred) - np.array(actual)) ** 2).mean()
@@ -473,9 +465,7 @@ def avg_distances(dset):
 
     for i, batch in enumerate(dset):
         xyz = batch["nxyz"][:, 1:]
-        all_distances[i] = (
-            (xyz[all_nbrs[:, 0]] - xyz[all_nbrs[:, 1]]).pow(2).sum(1).sqrt()
-        )
+        all_distances[i] = (xyz[all_nbrs[:, 0]] - xyz[all_nbrs[:, 1]]).pow(2).sum(1).sqrt()
 
     weights = dset.props["weights"].reshape(-1, 1)
     avg_d = (all_distances * weights).sum(0)
@@ -484,7 +474,6 @@ def avg_distances(dset):
 
 
 def cat_props(props):
-
     new_props = {}
     for key, val in props.items():
         if isinstance(val, list):
@@ -521,16 +510,13 @@ def load_defaults(direc, arg_path):
 
 
 def parse_args_from_json(arg_path, direc):
-
     default_args = load_defaults(arg_path=arg_path, direc=direc)
     description = default_args["description"]
 
     parser = argparse.ArgumentParser(description=description)
     default_args.pop("description")
 
-    required = parser.add_argument_group(
-        ("required arguments (either in " "the command line or the config " "file)")
-    )
+    required = parser.add_argument_group(("required arguments (either in " "the command line or the config " "file)"))
     optional = parser.add_argument_group("optional arguments")
 
     for name, info in default_args.items():

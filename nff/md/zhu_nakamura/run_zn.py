@@ -2,20 +2,20 @@
 Script to run neural Zhu Nakamura
 """
 
-import os
-import pdb
-
-import torch
 import argparse
 import json
+import os
+import pdb
 import time
+
+import torch
 from ase import Atoms
 from rdkit import Chem
 
-from nff.io.ase_ax import NeuralFF, AtomsBatch
-from nff.md.zhu_nakamura.dynamics import CombinedZhuNakamura
-from nff.md.tully.dynamics import MODEL_KWARGS
 from nff.data import Dataset
+from nff.io.ase_ax import AtomsBatch, NeuralFF
+from nff.md.tully.dynamics import MODEL_KWARGS
+from nff.md.zhu_nakamura.dynamics import CombinedZhuNakamura
 
 DEFAULT_PARAMS_FILE = "job_info.json"
 ANGLE_MODELS = ["DimeNet", "DimeNetDiabat", "DimeNetDiabatDelta"]
@@ -47,18 +47,15 @@ def make_dataset(nxyz, all_params):
         dataset (nff.data.dataset): dataset
     """
 
-    props = {
-        'nxyz': nxyz
-    }
+    props = {"nxyz": nxyz}
 
     cutoff = all_params["ground_params"]["cutoff"]
 
-    dataset = Dataset(props.copy(), units='kcal/mol')
-    dataset.generate_neighbor_list(cutoff=cutoff,
-                                   undirected=False)
+    dataset = Dataset(props.copy(), units="kcal/mol")
+    dataset.generate_neighbor_list(cutoff=cutoff, undirected=False)
 
     model_type = all_params.get("model_type")
-    needs_angles = (model_type in ANGLE_MODELS)
+    needs_angles = model_type in ANGLE_MODELS
     if needs_angles:
         dataset.generate_angle_list()
 
@@ -67,8 +64,7 @@ def make_dataset(nxyz, all_params):
     return dataset
 
 
-def make_trj(all_params,
-             dataset):
+def make_trj(all_params, dataset):
     """
     Make an instance of the `CombinedZhuNakamura` class.
     Args:
@@ -83,14 +79,13 @@ def make_trj(all_params,
     zhu_params = all_params["zhu_params"]
     batched_params = all_params["batched_params"]
     ground_params = all_params["ground_params"]
-    if 'en_key' not in ground_params:
-        ground_params['en_key'] = 'energy_0'
+    if "en_key" not in ground_params:
+        ground_params["en_key"] = "energy_0"
 
     if "model_path" in all_params:
         weight_path = all_params["model_path"]
     else:
-        weight_path = os.path.join(all_params['weightpath'],
-                                   str(all_params["nnid"]))
+        weight_path = os.path.join(all_params["weightpath"], str(all_params["nnid"]))
     batched_params.update({"weight_path": weight_path})
 
     nxyz = torch.cat(dataset.props["nxyz"])
@@ -108,9 +103,9 @@ def make_trj(all_params,
     # # during the MD run
     # batched_props.pop('nbr_list')
 
-    model_type = all_params.get('model_type')
-    needs_angles = (model_type in ANGLE_MODELS)
-    device = all_params.get('device', 'cuda')
+    model_type = all_params.get("model_type")
+    needs_angles = model_type in ANGLE_MODELS
+    device = all_params.get("device", "cuda")
 
     # this is where we probably want to set model.grad_keys = ['energy_0_grad']
     # in the model so it doesn't calculate any excited state gradients
@@ -118,34 +113,38 @@ def make_trj(all_params,
     nff_ase = NeuralFF.from_file(
         model_path=weight_path,
         device=device,
-        output_keys=[ground_params['en_key']],
+        output_keys=[ground_params["en_key"]],
         conversion="ev",
         params=all_params,
         model_type=model_type,
         needs_angles=needs_angles,
         dataset_props=batched_props,
-        model_kwargs=MODEL_KWARGS
+        model_kwargs=MODEL_KWARGS,
     )
 
     # get the cutoff and skin
 
-    atomsbatch = AtomsBatch.from_atoms(atoms=atoms,
-                                       props=batched_props,
-                                       needs_angles=needs_angles,
-                                       device=device,
-                                       undirected=False,
-                                       cutoff=batched_params["cutoff"],
-                                       cutoff_skin=batched_params["cutoff_skin"])
+    atomsbatch = AtomsBatch.from_atoms(
+        atoms=atoms,
+        props=batched_props,
+        needs_angles=needs_angles,
+        device=device,
+        undirected=False,
+        cutoff=batched_params["cutoff"],
+        cutoff_skin=batched_params["cutoff_skin"],
+    )
 
     atomsbatch.set_calculator(nff_ase)
-    zn = CombinedZhuNakamura(atoms=atomsbatch,
-                             zhu_params=zhu_params,
-                             batched_params=batched_params,
-                             ground_params=ground_params,
-                             props=dataset.props,
-                             model_type=model_type,
-                             needs_angles=needs_angles,
-                             modelparams=all_params)
+    zn = CombinedZhuNakamura(
+        atoms=atomsbatch,
+        zhu_params=zhu_params,
+        batched_params=batched_params,
+        ground_params=ground_params,
+        props=dataset.props,
+        model_type=model_type,
+        needs_angles=needs_angles,
+        modelparams=all_params,
+    )
 
     return zn
 
@@ -153,7 +152,7 @@ def make_trj(all_params,
 def coords_to_xyz(coords):
     nxyz = []
     for dic in coords:
-        directions = ['x', 'y', 'z']
+        directions = ["x", "y", "z"]
         n = float(PERIODICTABLE.GetAtomicNumber(dic["element"]))
         xyz = [dic[i] for i in directions]
         nxyz.append([n, *xyz])
@@ -161,16 +160,12 @@ def coords_to_xyz(coords):
 
 
 def main():
-
     parser = argparse.ArgumentParser(description="Runs neural ZN")
-    parser.add_argument('paramsfile', type=str, default=DEFAULT_PARAMS_FILE,
-                        help="file containing all parameters")
+    parser.add_argument("paramsfile", type=str, default=DEFAULT_PARAMS_FILE, help="file containing all parameters")
     args = parser.parse_args()
     job_params = load_params(args.paramsfile)
     details = job_params.get("details", {})
-    all_params = {**details,
-                  **{key: val for key, val in job_params.items()
-                     if key != "details"}}
+    all_params = {**details, **{key: val for key, val in job_params.items() if key != "details"}}
 
     if "coords" in all_params:
         coords = all_params["coords"]
@@ -180,14 +175,13 @@ def main():
     else:
         raise Exception("No coordinates found")
 
-    print('loading models')
+    print("loading models")
 
     dataset = make_dataset(nxyz=nxyz, all_params=all_params)
 
-    print('running ground state + Zhu-Nakamura dynamics')
+    print("running ground state + Zhu-Nakamura dynamics")
 
-    zn = make_trj(all_params=all_params,
-                  dataset=dataset)
+    zn = make_trj(all_params=all_params, dataset=dataset)
 
     zn.run()
 

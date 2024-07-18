@@ -113,6 +113,6 @@ def get_final_device(device: str) -> str:
     Returns:
         str: final device to use
     """
-    if device == "cuda":
+    if "cuda" in device and torch.cuda.is_available():
         return f"cuda:{cuda_devices_sorted_by_free_mem()[-1]}"
     return "cpu"

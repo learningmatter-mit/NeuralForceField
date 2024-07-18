@@ -1,7 +1,4 @@
-"""
-Module to deal with statistics of the datasets, removal of outliers
-and other statistical functions.
-"""
+"""Module to deal with statistics of the datasets, removal of outliers and other statistical functions."""
 
 import logging
 from typing import Dict, List, Tuple, Union
@@ -23,8 +20,7 @@ def remove_outliers(
     reference_std: float = None,
     max_value: float = np.inf,
 ) -> Tuple[np.ndarray, np.ndarray, float, float]:
-    """
-    Remove outliers from given array using both a number of standard
+    """Remove outliers from given array using both a number of standard
         deviations and a hard cutoff.
 
     Args:
@@ -52,9 +48,7 @@ def remove_outliers(
         stats_array = torch.cat(array, dim=0).flatten().cpu().numpy()
         # take the maximum absolute value in the list of tensors
         max_idx = [torch.argmax(torch.abs(ten.flatten())) for ten in array]
-        max_values = np.array(
-            [array[i].flatten()[max_idx[i]].cpu().numpy() for i in range(len(array))]
-        )
+        max_values = np.array([array[i].flatten()[max_idx[i]].cpu().numpy() for i in range(len(array))])
     else:
         stats_array = array.copy()
         max_values = stats_array.copy()  # used for outlier removal
@@ -67,9 +61,7 @@ def remove_outliers(
         std = np.std(stats_array)
     else:
         std = reference_std
-    non_outlier = np.bitwise_and(
-        np.abs(max_values - mean) < std_away * std, max_values < max_value
-    )
+    non_outlier = np.bitwise_and(np.abs(max_values - mean) < std_away * std, max_values < max_value)
 
     non_outlier = np.arange(len(array))[non_outlier]
     logging.info("removed %d outliers", len(array) - len(non_outlier))
@@ -89,8 +81,7 @@ def remove_dataset_outliers(
     std_away: float = 3.0,
     max_value: float = np.inf,
 ) -> Tuple[Dataset, float, float]:
-    """
-    Remove outliers from given dataset using both a number of standard
+    """Remove outliers from given dataset using both a number of standard
         deviations and a hard cutoff.
 
     Args:
@@ -132,8 +123,7 @@ def remove_dataset_outliers(
 def center_dataset(
     dset: Dataset, reference_key: str = "energy", reference_value: float = None
 ) -> Tuple[Dataset, float]:
-    """
-    Center a dataset by subtracting the mean of the reference key.
+    """Center a dataset by subtracting the mean of the reference key.
 
     Args:
         dset (nff.data.Dataset): dataset to be centered.
@@ -223,9 +213,7 @@ def reg_atom_count(formula: str, atoms: List[str]) -> np.ndarray:
     return count_array
 
 
-def get_stoich_dict(
-    dset: Dataset, formula_key: str = "formula", energy_key: str = "energy"
-) -> Dict[str, float]:
+def get_stoich_dict(dset: Dataset, formula_key: str = "formula", energy_key: str = "energy") -> Dict[str, float]:
     """Linear regression to find the per atom energy for each element in the dataset.
 
     Parameters
@@ -253,17 +241,14 @@ def get_stoich_dict(
     logging.debug("unique formulas: %s", unique_formulas)
     # find the ground state energy for each formula/stoichiometry
     ground_en = [
-        min([energies[i] for i in range(len(formulas)) if formulas[i] == formula])
-        for formula in unique_formulas
+        min([energies[i] for i in range(len(formulas)) if formulas[i] == formula]) for formula in unique_formulas
     ]
     unique_atoms = all_atoms(unique_formulas)
 
     logging.debug("ground_en: %s", ground_en)
     logging.debug("unique atoms: %s", unique_atoms)
 
-    x_in = np.stack(
-        [reg_atom_count(formula, unique_atoms) for formula in unique_formulas]
-    )
+    x_in = np.stack([reg_atom_count(formula, unique_atoms) for formula in unique_formulas])
 
     y_out = np.array(ground_en)
 

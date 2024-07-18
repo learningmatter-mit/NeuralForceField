@@ -1,19 +1,21 @@
+import unittest
+from pathlib import Path
+
+from nff.data import Dataset
 from nff.io.ase import AtomsBatch
 from nff.io.ase_calcs import NeuralFF
-from nff.data import Dataset
+from nff.md.nve import DEFAULTNVEPARAMS, Dynamics
 from nff.train import get_model
-from nff.md.nve import Dynamics, DEFAULTNVEPARAMS
+from nff.utils.cuda import get_final_device
 
-import unittest
+current_path = Path(__file__).parent
 
 
 class TestModules(unittest.TestCase):
     def testDynamics(self):
-        dataset = Dataset.from_file("../../examples/dataset.pth.tar")
+        dataset = Dataset.from_file(current_path / "../../tutorials/data/dataset.pth.tar")
         props = dataset[0]
-        atoms = AtomsBatch(
-            positions=props["nxyz"][:, 1:], numbers=props["nxyz"][:, 0], props=props
-        )
+        atoms = AtomsBatch(positions=props["nxyz"][:, 1:], numbers=props["nxyz"][:, 0], props=props)
 
         # initialize models
         params = {
@@ -27,9 +29,10 @@ class TestModules(unittest.TestCase):
 
         model = get_model(params)
 
-        nff_ase = NeuralFF(model=model, device="cuda:1")
+        nff_ase = NeuralFF(model=model, device=get_final_device("cuda"))
         atoms.set_calculator(nff_ase)
 
+        DEFAULTNVEPARAMS["steps"] = 200
         nve = Dynamics(atoms, DEFAULTNVEPARAMS)
         nve.run()
 

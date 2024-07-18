@@ -1,25 +1,21 @@
-from datetime import datetime
-import numpy as np
-import random
-import torch
 import copy
+import random
+from datetime import datetime
 
-from torch.multiprocessing import set_start_method
-
-
-from torch.utils.data import DataLoader
+import numpy as np
+import torch
 from ase.io.trajectory import Trajectory
+from torch.multiprocessing import set_start_method
+from torch.utils.data import DataLoader
 
-from nff.md.utils_ax import mol_dot, mol_norm, ZhuNakamuraLogger, atoms_to_nxyz
-from nff.md.nvt_ax import NoseHoover, NoseHooverChain
-from nff.md.nms import nms_sample
-from nff.utils.constants import BOHR_RADIUS, FS_TO_AU, AMU_TO_AU, ASE_TO_FS
 from nff.data import Dataset, collate_dicts
-from nff.utils.cuda import batch_to
-from nff.utils.constants import KCAL_TO_AU, KB_AU
+from nff.md.nms import nms_sample
+from nff.md.nvt_ax import NoseHoover, NoseHooverChain
+from nff.md.utils_ax import ZhuNakamuraLogger, atoms_to_nxyz, mol_dot, mol_norm
 from nff.nn.utils import single_spec_nbrs
-from nff.train import load_model, batch_detach
-
+from nff.train import batch_detach, load_model
+from nff.utils.constants import AMU_TO_AU, ASE_TO_FS, BOHR_RADIUS, FS_TO_AU, KB_AU, KCAL_TO_AU
+from nff.utils.cuda import batch_to
 
 HBAR = 1
 OUT_FILE = "trj.csv"
@@ -28,14 +24,10 @@ DEF_EXPLICIT_DIABAT = False
 DEF_MAX_GAP_HOP = float("inf")
 DEFAULT_SKIN = 1.0
 
-METHOD_DIC = {
-    "nosehoover": NoseHoover,
-    "nosehooverchain": NoseHooverChain
-}
+METHOD_DIC = {"nosehoover": NoseHoover, "nosehooverchain": NoseHooverChain}
 
 
 class ZhuNakamuraDynamics(ZhuNakamuraLogger):
-
     """
     Class for running Zhu-Nakamura surface-hopping dynamics. This method follows the description in
     Yu et. al, "Trajectory based nonadiabatic molecular dynamics without calculating nonadiabatic
@@ -64,12 +56,12 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         _energies (numpy.ndarray): array of shape (num_states). There is one energy for each state.
         _surf (int): current electronic state that the system is in
         _in_trj (bool): whether or not the current frame is "in the trajectory". The frame may not
-            be in the trajectory in the following example. If an avoided crossing is found, and a 
-            hop occurs, then the last two frames are "removed" from the trajectory and replaced 
-            with a new frame. The new frame has the position of the second last frame, but a new 
+            be in the trajectory in the following example. If an avoided crossing is found, and a
+            hop occurs, then the last two frames are "removed" from the trajectory and replaced
+            with a new frame. The new frame has the position of the second last frame, but a new
             surface and new re-scaled velocities. In this case the last two frames are not considered
             to be in the trajectory.
-        _hopping_probabilities (list): A list of dictionaries with the Zhu a, b and p parameters. 
+        _hopping_probabilities (list): A list of dictionaries with the Zhu a, b and p parameters.
             Each dictionary has information for hopping between different pairs of states.
 
         position_list (list): list of _positions at all past times in the trajectory
@@ -88,45 +80,47 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         zhu_difference (float): Zhu difference parameter, used for calculating hopping probability
         zhu_product (float): Zhu product parameter, used for calculating hopping probability
         zhu_sign (int): Zhu sign parameter (+/- 1), used for calculating hopping probability
-        n_vector (numpy.ndarray): Zhu n-vector, of shape (num_atoms, 3), used for calculating 
+        n_vector (numpy.ndarray): Zhu n-vector, of shape (num_atoms, 3), used for calculating
             hopping probability
         v_parallel (numpy.ndarray): Component of the velocity parallel to the hopping direction. Has
             shape (num_atoms), and is used for calculating hopping probability.
         ke_parallel (float): Kinetic energy associated with v_parallel.
         ke (float): Total kinetic energy
-        hopping_probabilities (list): A list of dictionaries with the Zhu a, b and p parameters. 
+        hopping_probabilities (list): A list of dictionaries with the Zhu a, b and p parameters.
             Each dictionary has information for hopping between different pairs of states.
 
     Properties:
 
-        positions: returns self._positions. Updating positions updates self._positions, 
+        positions: returns self._positions. Updating positions updates self._positions,
             self.positions_list, and positions of self.atoms.
-        velocities: returns self._velocities. Updating positions updates self._velocities, 
+        velocities: returns self._velocities. Updating positions updates self._velocities,
             self.velocities_list and velocities of self.atoms.
-        forces: returns self._forces. Updating forces updates self._forces, self.forces_list 
+        forces: returns self._forces. Updating forces updates self._forces, self.forces_list
             and forces of self.atoms.
-        energies: returns self._energies. Updating energies updates self._energies, 
+        energies: returns self._energies. Updating energies updates self._energies,
             self.energy_list and energies of self.atoms.
         surf: returns self._surf. Updating surf updates self._surf and self.surf_list.
         in_trj: returns self._in_trj. Updating in_trj updates self._in_trj and self.
         time: returns self._time. Updating time updates self.time_list.
-        hopping_probabilities: returns self._hopping_probabilities. Updating hopping_probabilities 
+        hopping_probabilities: returns self._hopping_probabilities. Updating hopping_probabilities
             updates self.hopping_probability_list
     """
 
-    def __init__(self,
-                 atoms,
-                 timestep,
-                 max_time,
-                 explicit_diabat=DEF_EXPLICIT_DIABAT,
-                 max_gap_hop=DEF_MAX_GAP_HOP,
-                 initial_time=0.0,
-                 initial_surf=1,
-                 num_states=2,
-                 out_file=OUT_FILE,
-                 log_file=LOG_FILE,
-                 save_period=None,
-                 **kwargs):
+    def __init__(
+        self,
+        atoms,
+        timestep,
+        max_time,
+        explicit_diabat=DEF_EXPLICIT_DIABAT,
+        max_gap_hop=DEF_MAX_GAP_HOP,
+        initial_time=0.0,
+        initial_surf=1,
+        num_states=2,
+        out_file=OUT_FILE,
+        log_file=LOG_FILE,
+        save_period=None,
+        **kwargs,
+    ):
         """
         Initializes a ZhuNakamura instance.
 
@@ -160,14 +154,12 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         self.out_file = out_file
         self.log_file = log_file
-        self.save_period = (save_period if save_period is
-                            not None else self.dt / FS_TO_AU)
+        self.save_period = save_period if save_period is not None else self.dt / FS_TO_AU
         self.setup_logging()
 
         # everything in a.u. other than positions (which are in angstrom)
         self._positions = atoms.get_positions()
-        self._velocities = (atoms.get_velocities()
-                            / BOHR_RADIUS / (ASE_TO_FS * FS_TO_AU))
+        self._velocities = atoms.get_velocities() / BOHR_RADIUS / (ASE_TO_FS * FS_TO_AU)
 
         self._forces = None
         self._energies = None
@@ -197,9 +189,16 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.ke_parallel = 0.0
         self.ke = 0.0
 
-        save_keys = ["position_list", "velocity_list", "force_list",
-                     "energy_list", "surf_list", "in_trj_list",
-                     "hopping_probability_list", "time_list"]
+        save_keys = [
+            "position_list",
+            "velocity_list",
+            "force_list",
+            "energy_list",
+            "surf_list",
+            "in_trj_list",
+            "hopping_probability_list",
+            "time_list",
+        ]
 
         super().__init__(save_keys=save_keys, **self.__dict__)
 
@@ -366,7 +365,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         Returns:
             self.atoms.get_masses() (numpy.ndarray): masses
         """
-        return self.atoms.get_masses()*AMU_TO_AU
+        return self.atoms.get_masses() * AMU_TO_AU
 
     def get_accel(self):
         """
@@ -378,11 +377,10 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         # the force is force acting on the current state
 
         force = self.forces[self.surf]
-        accel = (force / self.get_masses().reshape(-1, 1))
+        accel = force / self.get_masses().reshape(-1, 1)
         return accel
 
     def position_step(self):
-
         # get current acceleration and velocity
         accel = self.get_accel()
         self.old_accel = accel
@@ -392,15 +390,11 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         # Note also that we don't use += here, because that causes problems
         # with setters.
 
-        self.positions = (self.positions + (self.velocities * self.dt
-                                            + 1 / 2 * accel * self.dt ** 2
-                                            ) * BOHR_RADIUS)
+        self.positions = self.positions + (self.velocities * self.dt + 1 / 2 * accel * self.dt**2) * BOHR_RADIUS
 
     def velocity_step(self, do_log=True):
-
         new_accel = self.get_accel()
-        self.velocities = self.velocities + 1 / 2 * \
-            (new_accel + self.old_accel) * self.dt
+        self.velocities = self.velocities + 1 / 2 * (new_accel + self.old_accel) * self.dt
         # assume the current frame is in the trajectory until
         # finding out otherwise
         self.in_trj = True
@@ -408,9 +402,8 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.surf = self.surf
         self.time = self.time + self.dt
 
-        step = int(self.time/self.dt)
-        rel_ens = ", ".join(((self.energies - self.energies[0]) * 27.2
-                             ).reshape(-1).astype("str").tolist())
+        step = int(self.time / self.dt)
+        rel_ens = ", ".join(((self.energies - self.energies[0]) * 27.2).reshape(-1).astype("str").tolist())
 
         if do_log:
             self.log(f"Completed step {step}. Currently in state {self.surf}.")
@@ -434,7 +427,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
             None
         Returns:
             at_crossing (bool): whether we're at an avoided crossing for any combination of states
-            new_surfs (list): list of surfaces that are at an avoided crossing with the current 
+            new_surfs (list): list of surfaces that are at an avoided crossing with the current
                 surface.
         """
 
@@ -460,8 +453,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
             if i == self.surf:
                 continue
             # list of energy gaps
-            gaps = [abs(energies[i] - energies[self.surf])
-                    for energies in self.energy_list[-3:]]
+            gaps = [abs(energies[i] - energies[self.surf]) for energies in self.energy_list[-3:]]
             # whether or not the middle gap is the smallest of the three
             gap_min = gaps[0] > gaps[1] and gaps[2] > gaps[1]
             if gap_min:
@@ -470,10 +462,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         return at_crossing, new_surfs
 
-    def get_diabat_engrads(self,
-                           lower_state,
-                           upper_state):
-
+    def get_diabat_engrads(self, lower_state, upper_state):
         # update diabatic forces. Start with the r_{ij} parameters
         # from the ZN paper units for r_{ij} don't matter since
         # they only get called in ratios
@@ -483,22 +472,19 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         r_12 = self.position_list[-2] - self.position_list[-1]
 
         # diabatic forecs on the lower state
-        lower_diabatic_forces = -(-self.force_list[-1][lower_state] * r_10 +
-                                  self.force_list[-3][upper_state] * r_12
-                                  ) / r_20
+        lower_diabatic_forces = (
+            -(-self.force_list[-1][lower_state] * r_10 + self.force_list[-3][upper_state] * r_12) / r_20
+        )
         # diabatic forces on the upper state
-        upper_diabatic_forces = -(-self.force_list[-1][upper_state] * r_10 +
-                                  self.force_list[-3][lower_state] * r_12
-                                  ) / r_20
+        upper_diabatic_forces = (
+            -(-self.force_list[-1][upper_state] * r_10 + self.force_list[-3][lower_state] * r_12) / r_20
+        )
 
         # array of forces on the lower and upper diabatic states
-        diabatic_forces = np.append([lower_diabatic_forces],
-                                    [upper_diabatic_forces], axis=0)
+        diabatic_forces = np.append([lower_diabatic_forces], [upper_diabatic_forces], axis=0)
 
         # update diabatic coupling
-        diabatic_coupling = (
-            self.energy_list[-2][upper_state].item()
-            - self.energy_list[-2][lower_state].item()) / 2
+        diabatic_coupling = (self.energy_list[-2][upper_state].item() - self.energy_list[-2][lower_state].item()) / 2
 
         return diabatic_forces, diabatic_coupling
 
@@ -516,22 +502,19 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         if self.explicit_diabat:
             if self.diabat_ens is None:
                 raise Exception("Diabatic quantities haven't been updated")
-            self.diabatic_coupling = abs(self.diabat_ens[lower_state,
-                                                         upper_state])
+            self.diabatic_coupling = abs(self.diabat_ens[lower_state, upper_state])
             state_array = np.array([lower_state, upper_state])
             self.diabatic_forces = self.diabat_forces[state_array, :]
 
         else:
-            d_forces, d_coupling = self.get_diabat_engrads(
-                lower_state=lower_state,
-                upper_state=upper_state)
+            d_forces, d_coupling = self.get_diabat_engrads(lower_state=lower_state, upper_state=upper_state)
 
             self.diabatic_forces = d_forces
             self.diabatic_coupling = d_coupling
 
         # update Zhu difference parameter
         norm_vec = mol_norm(self.diabatic_forces[1] - self.diabatic_forces[0])
-        self.zhu_difference = np.sum(norm_vec ** 2 / self.get_masses()) ** 0.5
+        self.zhu_difference = np.sum(norm_vec**2 / self.get_masses()) ** 0.5
 
         # update Zhu product parameter and the Zhu sign parameter
         prods = self.diabatic_forces[0] * self.diabatic_forces[1]
@@ -541,16 +524,13 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         # get parallel component of velocity and the associated KE
         # First normalize s-vector to give n-vector
-        s = (self.diabatic_forces[1] - self.diabatic_forces[0]
-             ) / self.get_masses().reshape(-1, 1) ** 0.5
+        s = (self.diabatic_forces[1] - self.diabatic_forces[0]) / self.get_masses().reshape(-1, 1) ** 0.5
         self.n_vector = s / mol_norm(s).reshape(-1, 1)
 
         # Then get ke's
         self.v_parallel = mol_dot(self.velocity_list[-2], self.n_vector)
-        self.ke_parallel = np.sum(
-            self.get_masses() * (self.v_parallel ** 2) / 2)
-        self.ke = np.sum(self.get_masses() *
-                         mol_norm(self.velocity_list[-2]) ** 2 / 2)
+        self.ke_parallel = np.sum(self.get_masses() * (self.v_parallel**2) / 2)
+        self.ke = np.sum(self.get_masses() * mol_norm(self.velocity_list[-2]) ** 2 / 2)
 
     def rescale_v(self, old_surf, new_surf):
         """
@@ -569,15 +549,13 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         v_par_vec = self.n_vector * (self.v_parallel).reshape(-1, 1)
         # the scaling factor for the velocities
 
-        scale_arg = (((energy[old_surf] + (self.ke_parallel)) -
-                      energy[new_surf]) / (self.ke_parallel))
+        scale_arg = ((energy[old_surf] + (self.ke_parallel)) - energy[new_surf]) / (self.ke_parallel)
 
         if scale_arg < 0 or np.isnan(scale_arg):
             return "err"
 
-        scale = scale_arg ** 0.5
-        velocities = scale * v_par_vec + \
-            (self.velocity_list[-2] - v_par_vec)
+        scale = scale_arg**0.5
+        velocities = scale * v_par_vec + (self.velocity_list[-2] - v_par_vec)
 
         if np.isnan(velocities).any():
             return "err"
@@ -597,13 +575,11 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
             return
 
         # if the molecule's exploded then move on
-        if ('nan' in self.positions.astype("str")
-                or 'nan' in self.forces.astype("str")):
+        if "nan" in self.positions.astype("str") or "nan" in self.forces.astype("str"):
             self.hopping_probabilities = hopping_probabilities
             return
 
         for new_surf in new_surfs:
-
             # get the upper and lower state by sorting the current
             # surface and the new one
             lower_state, upper_state = sorted((self.surf, new_surf))
@@ -613,14 +589,10 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
             # diabatic coupling, because that's not the case if
             # we use explicit diabatic states
 
-            gap = abs(self.energy_list[-2][upper_state].item()
-                      - self.energy_list[-2][lower_state].item())
+            gap = abs(self.energy_list[-2][upper_state].item() - self.energy_list[-2][lower_state].item())
 
             if gap > self.max_gap_hop:
-                hopping_probabilities.append({"zhu_a": 0,
-                                              "zhu_b": 0,
-                                              "zhu_p": 0,
-                                              "new_surf": new_surf})
+                hopping_probabilities.append({"zhu_a": 0, "zhu_b": 0, "zhu_p": 0, "new_surf": new_surf})
                 continue
 
             # another place it might fail with nan
@@ -630,43 +602,34 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
                 return
 
             # use context manager to ignore any divide by 0's
-            with np.errstate(divide='ignore', invalid='ignore'):
-
+            with np.errstate(divide="ignore", invalid="ignore"):
                 # calculate the zhu a parameter
-                a_numerator = (HBAR ** 2 / 2 * self.zhu_product
-                               * self.zhu_difference)
+                a_numerator = HBAR**2 / 2 * self.zhu_product * self.zhu_difference
                 a_denominator = (2 * self.diabatic_coupling) ** 3
-                zhu_a = np.nan_to_num(
-                    np.divide(a_numerator, a_denominator) ** 0.5)
+                zhu_a = np.nan_to_num(np.divide(a_numerator, a_denominator) ** 0.5)
 
                 # calculate the zhu b parameter, starting with Et and Ex
                 et = self.ke_parallel + self.energy_list[-2][self.surf].item()
-                ex = (self.energy_list[-2][upper_state].item() +
-                      self.energy_list[-2][lower_state].item()) / 2
-                b_numerator = (et - ex) * self.zhu_difference / \
-                    self.zhu_product
+                ex = (self.energy_list[-2][upper_state].item() + self.energy_list[-2][lower_state].item()) / 2
+                b_numerator = (et - ex) * self.zhu_difference / self.zhu_product
                 b_denominator = 2 * self.diabatic_coupling
-                zhu_b = np.nan_to_num(
-                    np.divide(b_numerator, b_denominator) ** 0.5)
+                zhu_b = np.nan_to_num(np.divide(b_numerator, b_denominator) ** 0.5)
 
                 # calculating the hopping probability
                 zhu_p = np.nan_to_num(
-                    np.exp(-np.pi / 4 / zhu_a *
-                           (2 / (zhu_b ** 2 +
-                                 (abs((zhu_b ** 4) + (self.zhu_sign) * 1.0))
-                                 ** 0.5)) ** 0.5))
+                    np.exp(
+                        -np.pi / 4 / zhu_a * (2 / (zhu_b**2 + (abs((zhu_b**4) + (self.zhu_sign) * 1.0)) ** 0.5)) ** 0.5
+                    )
+                )
 
                 # add this info to the list of hopping probabilities
 
-                hopping_probabilities.append({"zhu_a": zhu_a,
-                                              "zhu_b": zhu_b,
-                                              "zhu_p": zhu_p,
-                                              "new_surf": new_surf})
+                hopping_probabilities.append({"zhu_a": zhu_a, "zhu_b": zhu_b, "zhu_p": zhu_p, "new_surf": new_surf})
 
         self.hopping_probabilities = hopping_probabilities
 
     def should_hop(self, zhu_p):
-        """ 
+        """
         Decide whether or not to hop based on the zhu a, b and p parameters.
         Args:
             zhu_a (float): Zhu a parameter
@@ -678,7 +641,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         """
 
         rnd = np.random.rand()
-        will_hop = (zhu_p > rnd)
+        will_hop = zhu_p > rnd
 
         return will_hop
 
@@ -715,9 +678,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.time = self.time - self.dt
         self.modify_save()
 
-    def full_step(self,
-                  compute_internal_forces=True,
-                  do_log=True):
+    def full_step(self, compute_internal_forces=True, do_log=True):
         """
 
         Take a time step.
@@ -749,8 +710,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
             old_surf = copy.deepcopy(self.surf)
 
             if do_log:
-                self.log(f"Attempting hop from state {old_surf} to state "
-                         f"{new_surf}. Probability is {zhu_p}.")
+                self.log(f"Attempting hop from state {old_surf} to state " f"{new_surf}. Probability is {zhu_p}.")
 
             # decide whether or not to hop based on Zhu a, b, and p
             will_hop = self.should_hop(zhu_p)
@@ -760,16 +720,13 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
                 out = self.hop(new_surf)
                 if out != "err":
                     if do_log:
-                        self.log(f"Hopped from state {old_surf} "
-                                 f"to state {new_surf}.")
+                        self.log(f"Hopped from state {old_surf} " f"to state {new_surf}.")
                     return
             else:
                 if do_log:
-                    self.log(f"Did not hop from state {old_surf} "
-                             f"to state {new_surf}.")
+                    self.log(f"Did not hop from state {old_surf} " f"to state {new_surf}.")
 
     def run(self):
-
         # save intitial conditions
 
         self.update_energies()
@@ -777,8 +734,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         self.save()
         time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        rel_ens = ", ".join(((self.energies - self.energies[0]) * 27.2
-                             ).reshape(-1).astype("str").tolist())
+        rel_ens = ", ".join(((self.energies - self.energies[0]) * 27.2).reshape(-1).astype("str").tolist())
 
         self.log(f"Beginning surface hopping at {time_str}.")
         self.log(f"Relative energies are {rel_ens} eV")
@@ -793,40 +749,31 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
 
 class NoseHooverZN(ZhuNakamuraDynamics):
-    def __init__(self,
-                 temperature,
-                 ttime,
-                 **kwargs):
-
+    def __init__(self, temperature, ttime, **kwargs):
         ZhuNakamuraDynamics.__init__(self, **kwargs)
         self.zeta = 0.0
         self.ttime = ttime
         self.temp = temperature * KB_AU
         n_atom = len(self.atoms)
-        self.n_dof = (3.0 * n_atom - 6)
+        self.n_dof = 3.0 * n_atom - 6
         self.targe_ekin = 0.5 * self.n_dof * self.temp
         self.Q = self.n_dof * self.temp * (self.ttime * self.dt) ** 2
 
-    def get_kinetic_energy(self,
-                           vel=None):
+    def get_kinetic_energy(self, vel=None):
         if vel is None:
             vel = self.velocities
         ke = np.sum(self.get_masses() * mol_norm(vel) ** 2 / 2)
         return ke
 
     def position_step(self):
-
         # get current acceleration and velocity
         accel = self.get_accel()
         self.old_accel = accel
 
-        delta_pos = (self.velocities * self.dt
-                     + (accel - self.zeta * self.velocities)
-                     * 0.5 * self.dt ** 2) * BOHR_RADIUS
+        delta_pos = (self.velocities * self.dt + (accel - self.zeta * self.velocities) * 0.5 * self.dt**2) * BOHR_RADIUS
         self.positions = self.positions + delta_pos
 
     def velocity_step(self, do_log=True):
-
         # NVT stuff
 
         # ke before half velocity step
@@ -836,22 +783,18 @@ class NoseHooverZN(ZhuNakamuraDynamics):
         # (don't update v yet because it will mess up the "append to
         # velocity list" part of the velocity setter)
 
-        v_half = (self.velocities + 0.5 * self.dt *
-                  (self.old_accel - self.zeta * self.velocities))
+        v_half = self.velocities + 0.5 * self.dt * (self.old_accel - self.zeta * self.velocities)
 
         # make a half step in zeta
-        z_half = (self.zeta + 0.5 * self.dt /
-                  self.Q * (ke_0 - self.targe_ekin))
+        z_half = self.zeta + 0.5 * self.dt / self.Q * (ke_0 - self.targe_ekin)
 
         # make another half step in zeta
         ke_1 = self.get_kinetic_energy(v_half)
-        self.zeta = (z_half + 0.5 * self.dt /
-                     self.Q * (ke_1 - self.targe_ekin))
+        self.zeta = z_half + 0.5 * self.dt / self.Q * (ke_1 - self.targe_ekin)
 
         # make another half step in velocity
         new_accel = self.get_accel()
-        self.velocities = ((v_half + 0.5 * self.dt * new_accel) /
-                           (1 + 0.5 * self.dt * self.zeta))
+        self.velocities = (v_half + 0.5 * self.dt * new_accel) / (1 + 0.5 * self.dt * self.zeta)
 
         # temp = self.get_kinetic_energy() / (1 / 2 * self.n_dof) / KB_AU
         # print("Temperature = %.2f K" % temp)
@@ -864,9 +807,8 @@ class NoseHooverZN(ZhuNakamuraDynamics):
         self.surf = self.surf
         self.time = self.time + self.dt
 
-        step = int(self.time/self.dt)
-        rel_ens = ", ".join(((self.energies - self.energies[0]) * 27.2
-                             ).reshape(-1).astype("str").tolist())
+        step = int(self.time / self.dt)
+        rel_ens = ", ".join(((self.energies - self.energies[0]) * 27.2).reshape(-1).astype("str").tolist())
 
         if do_log:
             self.log(f"Completed step {step}. Currently in state {self.surf}.")
@@ -874,10 +816,9 @@ class NoseHooverZN(ZhuNakamuraDynamics):
 
 
 class BatchedZhuNakamura:
-
     """
-    A class for running several Zhu Nakamura trajectories at once. This is done by taking a half 
-    step for each trajectory, combining all the xyz's into a dataset and batching it for the 
+    A class for running several Zhu Nakamura trajectories at once. This is done by taking a half
+    step for each trajectory, combining all the xyz's into a dataset and batching it for the
     network, and then de-batching to put the forces and energies
     back in the trajectories.
 
@@ -895,18 +836,13 @@ class BatchedZhuNakamura:
         cutoff (float): neighbor list cutoff in schnet
         cutoff_skin (float): extra amount of distance to add to cutoff
             to deal with atoms becoming neighbors between neighbor list
-            updates 
+            updates
 
     """
 
-    def __init__(self,
-                 atoms_list,
-                 props,
-                 batched_params,
-                 zhu_params,
-                 modelparams=None,
-                 model_type=None,
-                 needs_angles=False):
+    def __init__(
+        self, atoms_list, props, batched_params, zhu_params, modelparams=None, model_type=None, needs_angles=False
+    ):
         """
         Initialize.
         Args:
@@ -918,37 +854,31 @@ class BatchedZhuNakamura:
 
         self.num_trj = batched_params["num_trj"]
         self.zhu_trjs = self.make_zhu_trjs(atoms_list, zhu_params)
-        self.explicit_diabat = zhu_params.get("explicit_diabat",
-                                              DEF_EXPLICIT_DIABAT)
+        self.explicit_diabat = zhu_params.get("explicit_diabat", DEF_EXPLICIT_DIABAT)
         self.max_time = self.zhu_trjs[0].max_time
-        if 'en_key_list' not in zhu_params:
-            self.energy_keys = [f"energy_{i}" for i in
-                                range(self.zhu_trjs[0].num_states)]
+        if "en_key_list" not in zhu_params:
+            self.energy_keys = [f"energy_{i}" for i in range(self.zhu_trjs[0].num_states)]
         else:
-            self.energy_keys = zhu_params['en_key_list']
+            self.energy_keys = zhu_params["en_key_list"]
         if len(self.energy_keys) != self.zhu_trjs[0].num_states:
             raise ValueError
-            
+
         self.grad_keys = [f"{key}_grad" for key in self.energy_keys]
 
         self.props = self.duplicate_props(props)
         self.nbr_update_period = batched_params["nbr_update_period"]
         self.device = batched_params["device"]
-        self.model = load_model(batched_params["weight_path"],
-                                params=modelparams,
-                                model_type=model_type)
+        self.model = load_model(batched_params["weight_path"], params=modelparams, model_type=model_type)
         self.model.eval()
         self.model.to(self.device)
 
         self.batch_size = batched_params["batch_size"]
         self.cutoff = batched_params["cutoff"]
-        self.cutoff_skin = batched_params.get("cutoff_skin",
-                                              DEFAULT_SKIN)
+        self.cutoff_skin = batched_params.get("cutoff_skin", DEFAULT_SKIN)
         self.needs_angles = needs_angles
 
         # for saving at intervals
-        self.save_period = min([trj.save_period for trj in
-                                self.zhu_trjs])
+        self.save_period = min([trj.save_period for trj in self.zhu_trjs])
         self.dt = min([trj.dt for trj in self.zhu_trjs])
 
     def make_zhu_trjs(self, atoms_list, zhu_params):
@@ -969,14 +899,12 @@ class BatchedZhuNakamura:
         zhu_trjs = []
 
         for i, atoms in enumerate(atoms_list):
-
             these_params = copy.deepcopy(zhu_params)
             these_params["out_file"] = f"{base_out_name}_{i}.csv"
             these_params["log_file"] = f"{base_log_name}_{i}.log"
 
             thermostat = these_params.get("thermostat", "none").lower()
-            class_dic = {"none": ZhuNakamuraDynamics,
-                         "nosehoover": NoseHooverZN}
+            class_dic = {"none": ZhuNakamuraDynamics, "nosehoover": NoseHooverZN}
             zn_class = class_dic[thermostat]
             zhu_trjs.append(zn_class(atoms=atoms, **these_params))
 
@@ -1001,15 +929,12 @@ class BatchedZhuNakamura:
             else:
                 raise Exception
 
-        new_props.update({key: None for key in
-                          [*self.energy_keys, *self.grad_keys]})
+        new_props.update({key: None for key in [*self.energy_keys, *self.grad_keys]})
         new_props["num_atoms"] = new_props["num_atoms"].long()
 
         return new_props
 
-    def update_energies_forces(self,
-                               trjs,
-                               get_new_neighbors):
+    def update_energies_forces(self, trjs, get_new_neighbors):
         """
         Update the energies and forces for the molecules of each trajectory.
         Args:
@@ -1020,23 +945,17 @@ class BatchedZhuNakamura:
         """
 
         nxyz_data = [torch.Tensor(atoms_to_nxyz(trj.atoms)) for trj in trjs]
-        props = {"nxyz": nxyz_data,
-                 "nbr_list": self.props["nbr_list"],
-                 "num_atoms": self.props['num_atoms']}
-        dataset = Dataset(props=props,
-                          units='kcal/mol',
-                          check_props=False)
+        props = {"nxyz": nxyz_data, "nbr_list": self.props["nbr_list"], "num_atoms": self.props["num_atoms"]}
+        dataset = Dataset(props=props, units="kcal/mol", check_props=False)
 
         if get_new_neighbors:
             # can stack the nxyz's and generate the neighbor list
             # accordingly because all geoms correspond to the
             # same molecule
-            nbrs = single_spec_nbrs(dset=dataset,
-                                    cutoff=(self.cutoff +
-                                            self.cutoff_skin),
-                                    device=self.device,
-                                    directed=True)
-            dataset.props['nbr_list'] = nbrs
+            nbrs = single_spec_nbrs(
+                dset=dataset, cutoff=(self.cutoff + self.cutoff_skin), device=self.device, directed=True
+            )
+            dataset.props["nbr_list"] = nbrs
 
             # dataset.generate_neighbor_list(self.cutoff)
 
@@ -1045,9 +964,7 @@ class BatchedZhuNakamura:
 
         dataset.props["num_atoms"] = dataset.props["num_atoms"].long()
         self.props = dataset.props
-        loader = DataLoader(dataset,
-                            batch_size=self.batch_size,
-                            collate_fn=collate_dicts)
+        loader = DataLoader(dataset, batch_size=self.batch_size, collate_fn=collate_dicts)
 
         for i, batch in enumerate(loader):
             batch = batch_to(batch, self.device)
@@ -1060,17 +977,17 @@ class BatchedZhuNakamura:
 
             current_trj = i * self.batch_size
 
-            for j, trj in enumerate(trjs[current_trj:
-                                         current_trj + self.batch_size]):
+            for j, trj in enumerate(trjs[current_trj : current_trj + self.batch_size]):
                 energies = []
                 forces = []
                 for key in self.energy_keys:
-                    energy = (results[key][j].item())*KCAL_TO_AU["energy"]
+                    energy = (results[key][j].item()) * KCAL_TO_AU["energy"]
 
                     force = (
-                        (-results[key + "_grad"][j]).detach(
-                        ).cpu().numpy()
-                    ) * KCAL_TO_AU["energy"]*KCAL_TO_AU["_grad"]
+                        ((-results[key + "_grad"][j]).detach().cpu().numpy())
+                        * KCAL_TO_AU["energy"]
+                        * KCAL_TO_AU["_grad"]
+                    )
 
                     energies.append(energy)
                     forces.append(force)
@@ -1096,9 +1013,7 @@ class BatchedZhuNakamura:
         # create a dataset and limit to only the trajectories you
         # care about
 
-        dataset = Dataset(props=self.props.copy(),
-                          units='kcal/mol',
-                          check_props=False)
+        dataset = Dataset(props=self.props.copy(), units="kcal/mol", check_props=False)
         diabat_idx = torch.LongTensor(diabat_idx)
         dataset.change_idx(diabat_idx)
 
@@ -1109,7 +1024,7 @@ class BatchedZhuNakamura:
         for i, xyz in enumerate(xyz_data):
             z_arr = diabat_trjs[i].atoms.get_atomic_numbers()
             nxyz = np.concatenate([z_arr.reshape(-1, 1), xyz], axis=-1)
-            dataset.props['nxyz'][i] = torch.Tensor(nxyz)
+            dataset.props["nxyz"][i] = torch.Tensor(nxyz)
 
         # technically not generating neighbors here isn't totally consistent,
         # because it's possible that neighbors were generated at the subsequent
@@ -1119,9 +1034,7 @@ class BatchedZhuNakamura:
         # updated frequently enough that this doesn't affect the engrads too
         # much, we shouldn't have to worry about it
 
-        loader = DataLoader(dataset,
-                            batch_size=self.batch_size,
-                            collate_fn=collate_dicts)
+        loader = DataLoader(dataset, batch_size=self.batch_size, collate_fn=collate_dicts)
 
         for i, batch in enumerate(loader):
             batch = batch_to(batch, self.device)
@@ -1137,8 +1050,7 @@ class BatchedZhuNakamura:
             current_trj = i * self.batch_size
             end_trj = current_trj + self.batch_size
 
-            for j, trj in enumerate(diabat_trjs[current_trj: end_trj]):
-
+            for j, trj in enumerate(diabat_trjs[current_trj:end_trj]):
                 num_states = diabat_keys.shape[0]
 
                 # store the diabatic energies as a matrix
@@ -1149,7 +1061,6 @@ class BatchedZhuNakamura:
 
                 for l in range(num_states):
                     for m in range(num_states):
-
                         d_key = diabat_keys[l, m]
                         diabat_en_kcal = results[d_key][j].item()
                         diabat_en_au = diabat_en_kcal * KCAL_TO_AU["energy"]
@@ -1157,11 +1068,8 @@ class BatchedZhuNakamura:
                         diabat_ens[l, m] = diabat_en_au
 
                         if l == m:
-                            diabat_force_kcal = -(results[f"{d_key}_grad"][j]
-                                                  .detach().cpu().numpy())
-                            diabat_force_au = (diabat_force_kcal
-                                               * KCAL_TO_AU["energy"]
-                                               * KCAL_TO_AU["_grad"])
+                            diabat_force_kcal = -(results[f"{d_key}_grad"][j].detach().cpu().numpy())
+                            diabat_force_au = diabat_force_kcal * KCAL_TO_AU["energy"] * KCAL_TO_AU["_grad"]
                             diabat_forces[l, :] = diabat_force_au
 
                 trj.diabat_ens = diabat_ens
@@ -1178,9 +1086,7 @@ class BatchedZhuNakamura:
         if trj.time < self.max_time:
             trj.save()
 
-    def step(self,
-             get_new_neighbors,
-             do_save=True):
+    def step(self, get_new_neighbors, do_save=True):
         """
         Take a step for each trajectory
         Args:
@@ -1200,8 +1106,7 @@ class BatchedZhuNakamura:
         # pool.imap_unordered(self.single_pos_step, range(num_trjs))
 
         # update the energies and forces
-        self.update_energies_forces(trjs=self.zhu_trjs,
-                                    get_new_neighbors=get_new_neighbors)
+        self.update_energies_forces(trjs=self.zhu_trjs, get_new_neighbors=get_new_neighbors)
 
         for trj in self.zhu_trjs:
             # take a velocity step
@@ -1214,8 +1119,7 @@ class BatchedZhuNakamura:
             # take a "full_step" with compute_internal_forces=False,
             # which just amounts to checking if you're at a crossing and
             # potentially hopping
-            trj.full_step(compute_internal_forces=False,
-                          do_log=do_save)
+            trj.full_step(compute_internal_forces=False, do_log=do_save)
 
         for trj in self.zhu_trjs:
             if trj.time < self.max_time and do_save:
@@ -1243,25 +1147,21 @@ class BatchedZhuNakamura:
         """
 
         # initial energy and force calculation to get things started
-        self.update_energies_forces(trjs=self.zhu_trjs,
-                                    get_new_neighbors=True)
+        self.update_energies_forces(trjs=self.zhu_trjs, get_new_neighbors=True)
         complete = False
         num_steps = 0
         save_steps = int(self.save_period / (self.dt / FS_TO_AU))
 
         while not complete:
-            get_new_neighbors = np.mod(num_steps,
-                                       self.nbr_update_period) == 0
+            get_new_neighbors = np.mod(num_steps, self.nbr_update_period) == 0
             do_save = np.mod(num_steps, save_steps) == 0
 
-            self.step(get_new_neighbors=get_new_neighbors,
-                      do_save=do_save)
+            self.step(get_new_neighbors=get_new_neighbors, do_save=do_save)
 
             if do_save:
                 print(f"Completed step {num_steps}")
 
-            complete = all([trj.time >= self.max_time
-                            for trj in self.zhu_trjs])
+            complete = all([trj.time >= self.max_time for trj in self.zhu_trjs])
             num_steps += 1
 
         print("Neural ZN terminated normally.")
@@ -1271,7 +1171,6 @@ class BatchedZhuNakamura:
 
 
 class CombinedZhuNakamura:
-
     """
     Class for combining an initial ground state MD simulation with BatchedZhuNakamura.
     Attributes:
@@ -1286,15 +1185,17 @@ class CombinedZhuNakamura:
         ground_params (dict): parameters for ground state MD
     """
 
-    def __init__(self,
-                 atoms,
-                 zhu_params,
-                 batched_params,
-                 ground_params,
-                 props,
-                 modelparams=None,
-                 model_type=None,
-                 needs_angles=False):
+    def __init__(
+        self,
+        atoms,
+        zhu_params,
+        batched_params,
+        ground_params,
+        props,
+        modelparams=None,
+        model_type=None,
+        needs_angles=False,
+    ):
         """
         Initialize:
             atoms: ase Atoms objects
@@ -1340,31 +1241,27 @@ class CombinedZhuNakamura:
         """
 
         if self.nms:
-            temp = self.ground_params.get(
-                "temperature", self.ground_params.get("T_init"))
+            temp = self.ground_params.get("temperature", self.ground_params.get("T_init"))
             actual_states = nms_sample(
                 params=self.ground_params,
                 classical=self.ground_params["classical"],
                 num_samples=self.num_trj,
                 kt=25.7 / 1000 / 27.2 * temp / 300,
-                hb=1)
+                hb=1,
+            )
 
             return actual_states
 
-        steps = int(self.ground_params["max_time"] /
-                    self.ground_params["timestep"])
-        equil_steps = int(self.ground_params["equil_time"] /
-                          self.ground_params["timestep"])
+        steps = int(self.ground_params["max_time"] / self.ground_params["timestep"])
+        equil_steps = int(self.ground_params["equil_time"] / self.ground_params["timestep"])
 
         self.ground_dynamics.run(steps=steps)
         trj = Trajectory(self.ground_savefile)
 
         loginterval = self.ground_params.get("loginterval", 1)
         logged_equil = int(equil_steps / loginterval)
-        possible_states = [trj[index] for index in
-                           range(logged_equil, len(trj))]
-        random_indices = random.sample(range(len(possible_states)),
-                                       self.num_trj)
+        possible_states = [trj[index] for index in range(logged_equil, len(trj))]
+        random_indices = random.sample(range(len(possible_states)), self.num_trj)
         actual_states = [possible_states[index] for index in random_indices]
 
         return actual_states
@@ -1374,7 +1271,7 @@ class CombinedZhuNakamura:
         Run a ground state trajectory followed by a set of parallel Zhu Nakamura trajectories.
         """
 
-        set_start_method('spawn')
+        set_start_method("spawn")
 
         atoms_list = self.sample_ground_geoms()
 
@@ -1384,12 +1281,14 @@ class CombinedZhuNakamura:
 
         # mp.set_start_method('spawn')
 
-        batched_zn = BatchedZhuNakamura(atoms_list=atoms_list,
-                                        props=self.props,
-                                        batched_params=self.batched_params,
-                                        zhu_params=self.zhu_params,
-                                        modelparams=self.modelparams,
-                                        model_type=self.model_type,
-                                        needs_angles=self.needs_angles)
+        batched_zn = BatchedZhuNakamura(
+            atoms_list=atoms_list,
+            props=self.props,
+            batched_params=self.batched_params,
+            zhu_params=self.zhu_params,
+            modelparams=self.modelparams,
+            model_type=self.model_type,
+            needs_angles=self.needs_angles,
+        )
 
         batched_zn.run()

@@ -219,7 +219,6 @@ class AtomsBatch(Atoms):
     def get_nxyz(self):
         """Gets the atomic number and the positions of the atoms
            inside the unit cell of the system.
-
         Returns:
             nxyz (np.array): atomic numbers + cartesian coordinates
                              of the atoms.
@@ -545,7 +544,6 @@ class BulkPhaseMaterials(Atoms):
     def get_nxyz(self):
         """Gets the atomic number and the positions of the atoms
            inside the unit cell of the system.
-
         Returns:
                 nxyz (np.array): atomic numbers + cartesian coordinates
                                                  of the atoms.

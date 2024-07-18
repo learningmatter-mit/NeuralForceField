@@ -1,0 +1,19 @@
+{
+    "batch_size": 1,
+    "device": 1,
+    "dset_folder": "/home/saxelrod/rgb_nfs/models/cov_2_cl",
+    "feat_save_folder": "/home/saxelrod/Repo/projects/public_nff/NeuralForceField/tutorials/cov_2_cl_feats",
+    "metric": "auc",
+    "metrics": [
+        "binary_cross_entropy",
+        "prc-auc",
+        "auc"
+    ],
+    "model_folder": "/home/saxelrod/Repo/projects/public_nff/NeuralForceField/tutorials/test",
+    "prop": "sars_cov_two_cl_protease_active",
+    "slurm_parallel": false,
+    "sub_batch_size": 1,
+    "test_only": false,
+    "train_only": false,
+    "val_only": false
+}

@@ -1,7 +1,7 @@
 from ase import units
-from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
-from ase.md.langevin import Langevin
 from ase.io import Trajectory
+from ase.md.langevin import Langevin
+from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 
 from nff.md.utils import NeuralMDLogger
 
@@ -62,9 +62,7 @@ class TI:
         # set thermostats
         integrator = self.mdparam["thermostat"]
 
-        self.integrator = integrator(
-            self.atomsbatch, **self.mdparam["thermostat_params"]
-        )
+        self.integrator = integrator(self.atomsbatch, **self.mdparam["thermostat_params"])
 
         # attach trajectory dump
         self.traj = Trajectory(self.mdparam["traj_filename"], "w", self.atomsbatch)

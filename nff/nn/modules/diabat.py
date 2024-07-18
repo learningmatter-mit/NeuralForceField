@@ -1,29 +1,29 @@
-import torch
-import torch.nn as nn
-import numpy as np
-from torch.nn import Sequential
 import copy
 
-from nff.nn.layers import StochasticIncrease
-from nff.utils.scatter import compute_grad
-from nff.nn.layers import (Diagonalize, PainnRadialBasis, Dense,
-                           Gaussian)
+import numpy as np
+import torch
+import torch.nn as nn
+from torch.nn import Sequential
+
+from nff.nn.layers import Dense, Diagonalize, Gaussian, PainnRadialBasis, StochasticIncrease
 from nff.nn.tensorgrad import general_batched_hessian
-from nff.utils.tools import layer_types
 from nff.utils import constants as const
+from nff.utils.scatter import compute_grad
+from nff.utils.tools import layer_types
 
 
 class DiabaticReadout(nn.Module):
-    def __init__(self,
-                 diabat_keys,
-                 grad_keys,
-                 energy_keys,
-                 others_to_eig=None,
-                 delta=False,
-                 stochastic_dic=None,
-                 cross_talk_dic=None,
-                 hellmann_feynman=True):
-
+    def __init__(
+        self,
+        diabat_keys,
+        grad_keys,
+        energy_keys,
+        others_to_eig=None,
+        delta=False,
+        stochastic_dic=None,
+        cross_talk_dic=None,
+        hellmann_feynman=True,
+    ):
         nn.Module.__init__(self)
 
         self.diag = Diagonalize()
@@ -40,26 +40,28 @@ class DiabaticReadout(nn.Module):
         if cross_talk_dic is None:
             return
 
-        cross_talk = CrossTalk(diabat_keys=self.diabat_keys,
-                               energy_keys=self.energy_keys,
-                               modes=cross_talk_dic["modes"],
-                               pool_method=cross_talk_dic["pool_method"])
+        cross_talk = CrossTalk(
+            diabat_keys=self.diabat_keys,
+            energy_keys=self.energy_keys,
+            modes=cross_talk_dic["modes"],
+            pool_method=cross_talk_dic["pool_method"],
+        )
         return cross_talk
 
     def make_stochastic(self, stochastic_dic):
         """
-        E.g. stochastic_layers = {"energy_1": 
+        E.g. stochastic_layers = {"energy_1":
                                     {"name": "stochasticincrease",
                                     "param": {"exp_coef": 3,
                                              "order": 4,
                                              "rate": 0.5},
-                                "lam": 
+                                "lam":
                                     {"name": "stochasticincrease",
                                     "param": {"exp_coef": 3,
                                              "order": 4,
                                              "rate": 0.25}
                                     },
-                                 "d1": 
+                                 "d1":
                                     {"name": "stochasticincrease",
                                     "param": {"exp_coef": 3,
                                              "order": 4,
@@ -89,19 +91,14 @@ class DiabaticReadout(nn.Module):
 
         return stochastic_modules
 
-    def quant_to_mat(self,
-                     num_atoms,
-                     results,
-                     diabat_keys):
+    def quant_to_mat(self, num_atoms, results, diabat_keys):
         num_states = len(diabat_keys)
 
         test_result = results[diabat_keys[0][0]]
         shape = test_result.shape
         device = test_result.device
 
-        mat = torch.zeros(*shape,
-                          num_states,
-                          num_states).to(device)
+        mat = torch.zeros(*shape, num_states, num_states).to(device)
 
         for i in range(num_states):
             for j in range(num_states):
@@ -111,17 +108,11 @@ class DiabaticReadout(nn.Module):
         return mat
 
     def results_to_dmat(self, results, num_atoms):
-
-        d_mat = self.quant_to_mat(num_atoms=num_atoms,
-                                  results=results,
-                                  diabat_keys=self.diabat_keys)
+        d_mat = self.quant_to_mat(num_atoms=num_atoms, results=results, diabat_keys=self.diabat_keys)
 
         return d_mat
 
-    def compute_eig(self,
-                    d_mat,
-                    train):
-
+    def compute_eig(self, d_mat, train):
         dim = d_mat.shape[-1]
         # do analytically if possible to avoid sign ambiguity
         # in the eigenvectors, which leads to worse training
@@ -139,41 +130,31 @@ class DiabaticReadout(nn.Module):
                 d_mat[nan_idx, :, :] = 0
 
             # diagonalize
-            ad_energies, u = torch.symeig(d_mat, True)
+            # ORIGINAL:
+            # ad_energies, u = torch.symeig(d_mat, True)
+            # L, V = torch.symeig(A, eigenvectors=True) should be replaced with:
+
+            # NEW:
+
+            ad_energies, u = torch.linalg.eigh(d_mat, UPLO="U")
 
         return ad_energies, u, nan_idx
 
-    def add_diag(self,
-                 results,
-                 num_atoms,
-                 train):
-
+    def add_diag(self, results, num_atoms, train):
         d_mat = self.results_to_dmat(results, num_atoms)
         # ad_energies, u = torch.symeig(d_mat, True)
-        ad_energies, u, nan_idx = self.compute_eig(d_mat,
-                                                   train=train)
+        ad_energies, u, nan_idx = self.compute_eig(d_mat, train=train)
         # results.update({key: ad_energies[:, i].reshape(-1, 1)
         #                 for i, key in enumerate(self.energy_keys)})
 
-        results.update({f'energy_{i}': ad_energies[:, i].reshape(-1, 1)
-                        for i in range(ad_energies.shape[1])})
+        results.update({f"energy_{i}": ad_energies[:, i].reshape(-1, 1) for i in range(ad_energies.shape[1])})
 
         return results, u, nan_idx
 
-    def get_diabat_grads(self,
-                         results,
-                         xyz,
-                         num_atoms,
-                         inference):
-
+    def get_diabat_grads(self, results, xyz, num_atoms, inference):
         num_states = len(self.diabat_keys)
         total_atoms = sum(num_atoms)
-        diabat_grads = torch.zeros(
-            num_states,
-            num_states,
-            total_atoms,
-            3
-        ).to(xyz.device)
+        diabat_grads = torch.zeros(num_states, num_states, total_atoms, 3).to(xyz.device)
 
         for i in range(num_states):
             for j in range(num_states):
@@ -182,9 +163,7 @@ class DiabaticReadout(nn.Module):
                 if grad_key in results:
                     grad = results[grad_key]
                 else:
-                    grad = compute_grad(inputs=xyz,
-                                        output=results[diabat_key],
-                                        allow_unused=True)
+                    grad = compute_grad(inputs=xyz, output=results[diabat_key], allow_unused=True)
 
                 if inference:
                     grad = grad.detach()
@@ -192,40 +171,29 @@ class DiabaticReadout(nn.Module):
                 diabat_grads[i, j, :, :] = grad
         return results, diabat_grads
 
-    def add_all_grads(self,
-                      xyz,
-                      results,
-                      num_atoms,
-                      u,
-                      inference):
-
-        results, diabat_grads = self.get_diabat_grads(results=results,
-                                                      xyz=xyz,
-                                                      num_atoms=num_atoms,
-                                                      inference=inference)
-        split_grads = torch.split(diabat_grads,
-                                  num_atoms, dim=2)
+    def add_all_grads(self, xyz, results, num_atoms, u, inference):
+        results, diabat_grads = self.get_diabat_grads(
+            results=results, xyz=xyz, num_atoms=num_atoms, inference=inference
+        )
+        split_grads = torch.split(diabat_grads, num_atoms, dim=2)
 
         add_keys = []
 
         for k, this_grad in enumerate(split_grads):
             this_u = u[k]
-            ad_grad = torch.einsum('ki, klnm, lj -> ijnm',
-                                   this_u, this_grad, this_u)
+            ad_grad = torch.einsum("ki, klnm, lj -> ijnm", this_u, this_grad, this_u)
 
             num_states = ad_grad.shape[0]
             for i in range(num_states):
                 for j in range(num_states):
-                    key = (f"energy_{i}_grad" if (i == j)
-                           else f"force_nacv_{i}{j}")
+                    key = f"energy_{i}_grad" if (i == j) else f"force_nacv_{i}{j}"
                     if key not in results:
                         results[key] = []
                         add_keys.append(key)
                     results[key].append(ad_grad[i, j])
 
                     if i != j:
-                        if not all([f"energy_{i}" in results,
-                                    f"energy_{j}" in results]):
+                        if not all([f"energy_{i}" in results, f"energy_{j}" in results]):
                             continue
                         gap = results[f"energy_{j}"] - results[f"energy_{i}"]
                         nacv = ad_grad[i, j] / gap[k]
@@ -240,10 +208,7 @@ class DiabaticReadout(nn.Module):
 
         return results
 
-    def quants_to_eig(self,
-                      num_atoms,
-                      results,
-                      u):
+    def quants_to_eig(self, num_atoms, results, u):
         """
         Convert other quantities (e.g. diabatic dipole
         moments) into the adiabatic basis.
@@ -257,17 +222,13 @@ class DiabaticReadout(nn.Module):
         """
 
         for other_keys in self.others_to_eig:
-
             # mat has shape num_mols x num_states x num_states for a scalar,
             # and num_mols x 3 x num_states x num_states for vector
 
-            mat = self.quant_to_mat(num_atoms=num_atoms,
-                                    results=results,
-                                    diabat_keys=other_keys)
+            mat = self.quant_to_mat(num_atoms=num_atoms, results=results, diabat_keys=other_keys)
             # u has shape num_mols x num_states x num_states
 
-            to_eig = torch.einsum('nki, n...kl, nlj -> n...ij',
-                                  u, mat, u)
+            to_eig = torch.einsum("nki, n...kl, nlj -> n...ij", u, mat, u)
 
             base_key = other_keys[0][0].split("_")[0]
             num_states = len(other_keys)
@@ -284,30 +245,20 @@ class DiabaticReadout(nn.Module):
 
             return results
 
-    def add_adiabat_grads(self,
-                          xyz,
-                          results,
-                          inference,
-                          en_keys_for_grad):
-
+    def add_adiabat_grads(self, xyz, results, inference, en_keys_for_grad):
         if en_keys_for_grad is None:
             en_keys_for_grad = copy.deepcopy(self.energy_keys)
 
         for key in en_keys_for_grad:
             val = results[key]
-            grad = compute_grad(inputs=xyz,
-                                output=val,
-                                allow_unused=True)
+            grad = compute_grad(inputs=xyz, output=val, allow_unused=True)
             if inference:
                 grad = grad.detach()
             results[key + "_grad"] = grad
 
         return results
 
-    def add_gap(self,
-                results,
-                add_grad):
-
+    def add_gap(self, results, add_grad):
         # diabatic gap
 
         bottom_key = self.diabat_keys[0][0]
@@ -336,15 +287,12 @@ class DiabaticReadout(nn.Module):
                     if not all([i in results for i in grad_keys]):
                         continue
 
-                    gap_grad = results[upper_grad_key] - \
-                        results[lower_grad_key]
-                    results.update({f"{upper_key}_{lower_key}_delta_grad":
-                                    gap_grad})
+                    gap_grad = results[upper_grad_key] - results[lower_grad_key]
+                    results.update({f"{upper_key}_{lower_key}_delta_grad": gap_grad})
 
         return results
 
     def add_stochastic(self, results):
-
         # any deltas that you want to decrease, whether adiabatic
         # or diabatic
 
@@ -353,8 +301,7 @@ class DiabaticReadout(nn.Module):
         diag_diabat_keys = np.array(self.diabat_keys).diagonal()
         num_states = diabat_keys.shape[0]
 
-        diag_adiabat_incr = [i for i in module_keys if i
-                             not in diabat_keys.reshape(-1)]
+        diag_adiabat_incr = [i for i in module_keys if i not in diabat_keys.reshape(-1)]
         odiag_diabat_incr = []
         diag_diabat_incr = []
 
@@ -400,61 +347,43 @@ class DiabaticReadout(nn.Module):
 
         return results
 
-    def idx_to_grad_idx(self,
-                        num_atoms,
-                        nan_idx):
-
+    def idx_to_grad_idx(self, num_atoms, nan_idx):
         if isinstance(num_atoms, torch.Tensor):
             atom_tens = num_atoms
         else:
             atom_tens = torch.LongTensor(num_atoms)
 
         end_idx = torch.cumsum(atom_tens, dim=0)
-        start_idx = torch.cat([torch.tensor([0]).to(end_idx.device),
-                               end_idx[:-1]])
+        start_idx = torch.cat([torch.tensor([0]).to(end_idx.device), end_idx[:-1]])
         start_end = torch.stack([start_idx, end_idx], dim=-1)
         nan_start_end = start_end[nan_idx]
 
         return nan_start_end
 
     def get_all_keys(self):
-
         num_states = len(self.diabat_keys)
-        unique_diabats = list(
-            set(
-                np.array(self.diabat_keys)
-                .reshape(-1).tolist()
-            )
-        )
-        adiabat_keys = [f'energy_{i}' for i in range(num_states)]
+        unique_diabats = list(set(np.array(self.diabat_keys).reshape(-1).tolist()))
+        adiabat_keys = [f"energy_{i}" for i in range(num_states)]
 
         en_keys = unique_diabats + adiabat_keys
         grad_keys = [i + "_grad" for i in en_keys]
-        grad_keys += [f"force_nacv_{i}{j}" for i in range(num_states)
-                      for j in range(num_states)]
-        grad_keys += [f"nacv_{i}{j}" for i in range(num_states)
-                      for j in range(num_states)]
+        grad_keys += [f"force_nacv_{i}{j}" for i in range(num_states) for j in range(num_states)]
+        grad_keys += [f"nacv_{i}{j}" for i in range(num_states) for j in range(num_states)]
 
         return en_keys, grad_keys
 
-    def add_nans(self,
-                 batch,
-                 results,
-                 nan_idx,
-                 train):
-
+    def add_nans(self, batch, results, nan_idx, train):
         en_keys, grad_keys = self.get_all_keys()
-        nan_grad_idx = self.idx_to_grad_idx(num_atoms=batch['num_atoms'],
-                                            nan_idx=nan_idx)
+        nan_grad_idx = self.idx_to_grad_idx(num_atoms=batch["num_atoms"], nan_idx=nan_idx)
 
-        for key in [*en_keys, 'U']:
+        for key in [*en_keys, "U"]:
             if key not in results:
                 continue
 
             if train:
                 continue
 
-            results[key][nan_idx] *= float('nan')
+            results[key][nan_idx] *= float("nan")
 
         for key in grad_keys:
             if key not in results:
@@ -462,21 +391,21 @@ class DiabaticReadout(nn.Module):
             for idx in nan_grad_idx:
                 if train:
                     continue
-                results[key][idx[0]: idx[1]] = (results[key][idx[0]: idx[1]]
-                                                * float('nan'))
+                results[key][idx[0] : idx[1]] = results[key][idx[0] : idx[1]] * float("nan")
 
-    def forward(self,
-                batch,
-                xyz,
-                results,
-                add_nacv=False,
-                add_grad=True,
-                add_gap=True,
-                add_u=False,
-                inference=False,
-                do_nan=True,
-                en_keys_for_grad=None):
-
+    def forward(
+        self,
+        batch,
+        xyz,
+        results,
+        add_nacv=False,
+        add_grad=True,
+        add_gap=True,
+        add_u=False,
+        inference=False,
+        do_nan=True,
+        en_keys_for_grad=None,
+    ):
         if not hasattr(self, "delta"):
             self.delta = False
 
@@ -501,38 +430,26 @@ class DiabaticReadout(nn.Module):
 
         # calculation of adiabats and their gradients
 
-        results, u, nan_idx = self.add_diag(results=results,
-                                            num_atoms=num_atoms,
-                                            train=(not inference))
+        results, u, nan_idx = self.add_diag(results=results, num_atoms=num_atoms, train=(not inference))
 
         if add_u:
             results["U"] = u
 
         if add_grad and add_nacv:
-            results = self.add_all_grads(xyz=xyz,
-                                         results=results,
-                                         num_atoms=num_atoms,
-                                         u=u,
-                                         inference=inference)
+            results = self.add_all_grads(xyz=xyz, results=results, num_atoms=num_atoms, u=u, inference=inference)
         elif add_grad:
-            results = self.add_adiabat_grads(xyz=xyz,
-                                             results=results,
-                                             inference=inference,
-                                             en_keys_for_grad=en_keys_for_grad)
+            results = self.add_adiabat_grads(
+                xyz=xyz, results=results, inference=inference, en_keys_for_grad=en_keys_for_grad
+            )
 
         # add back any nan's that were originally set to zeros
         # to avoid an error in diagonalization
 
         if do_nan:
-            self.add_nans(batch=batch,
-                          results=results,
-                          nan_idx=nan_idx,
-                          train=(not inference))
+            self.add_nans(batch=batch, results=results, nan_idx=nan_idx, train=(not inference))
 
         if getattr(self, "others_to_eig", None):
-            results = self.quants_to_eig(num_atoms=num_atoms,
-                                         results=results,
-                                         u=u)
+            results = self.quants_to_eig(num_atoms=num_atoms, results=results, u=u)
 
         if add_gap:
             results = self.add_gap(results, add_grad=add_grad)
@@ -544,12 +461,7 @@ class DiabaticReadout(nn.Module):
 
 
 class GapCouplingProduct(nn.Module):
-    def __init__(self,
-                 n_rbf,
-                 cutoff,
-                 coupling_key,
-                 diag_keys,
-                 **kwargs):
+    def __init__(self, n_rbf, cutoff, coupling_key, diag_keys, **kwargs):
         """
         Args:
             n_rbf (int): number of basis functions for gap
@@ -559,27 +471,17 @@ class GapCouplingProduct(nn.Module):
         """
         super().__init__()
 
-        basis = PainnRadialBasis(n_rbf=n_rbf,
-                                 cutoff=cutoff,
-                                 learnable_k=False)
+        basis = PainnRadialBasis(n_rbf=n_rbf, cutoff=cutoff, learnable_k=False)
 
-        activation = Gaussian(mean=0,
-                              sigma=0.1,
-                              learnable_mean=False,
-                              learnable_sigma=False,
-                              normalize=False)
+        activation = Gaussian(mean=0, sigma=0.1, learnable_mean=False, learnable_sigma=False, normalize=False)
 
-        dense = Dense(in_features=n_rbf,
-                      out_features=1,
-                      bias=False,
-                      activation=activation)
+        dense = Dense(in_features=n_rbf, out_features=1, bias=False, activation=activation)
 
         self.gap_network = Sequential(basis, dense)
         self.coupling_key = coupling_key
         self.diag_keys = diag_keys
 
     def forward(self, results):
-
         d1 = results[self.diag_keys[1]]
         d0 = results[self.diag_keys[0]]
         coupling = results[self.coupling_key]
@@ -593,11 +495,7 @@ class GapCouplingProduct(nn.Module):
 
 
 class ShiftedSigmoid(nn.Module):
-    def __init__(self,
-                 x_shift,
-                 y_shift,
-                 slope):
-
+    def __init__(self, x_shift, y_shift, slope):
         super().__init__()
 
         self.y_shift = y_shift
@@ -612,11 +510,7 @@ class ShiftedSigmoid(nn.Module):
 
 
 class GapCouplingProductFixed(nn.Module):
-    def __init__(self,
-                 params,
-                 coupling_key,
-                 diag_keys,
-                 **kwargs):
+    def __init__(self, params, coupling_key, diag_keys, **kwargs):
         """
         Example:
            params = {"name": "sigmoid",
@@ -641,21 +535,18 @@ class GapCouplingProductFixed(nn.Module):
 
         name = params["name"]
 
-        if name.lower() == 'sigmoid':
+        if name.lower() == "sigmoid":
             y_shift = params.get("y_shift", 0)
             x_shift = params.get("x_shift", 0)
             slope = params.get("slope", 1)
 
-            smoothing_func = ShiftedSigmoid(x_shift=x_shift,
-                                            y_shift=y_shift,
-                                            slope=slope)
+            smoothing_func = ShiftedSigmoid(x_shift=x_shift, y_shift=y_shift, slope=slope)
         else:
             raise NotImplementedError
 
         return smoothing_func
 
     def forward(self, results):
-
         d0 = results[self.diag_keys[0]]
         d1 = results[self.diag_keys[1]]
         coupling = results[self.coupling_key]
@@ -670,57 +561,45 @@ class GapCouplingProductFixed(nn.Module):
 
 
 class GapCouplingConcat(nn.Module):
-    def __init__(self,
-                 num_hidden,
-                 num_feat_layers,
-                 activation,
-                 feat_dim,
-                 coupling_key,
-                 diag_keys,
-                 softplus=None,
-                 beta=None,
-                 **kwargs):
-
+    def __init__(
+        self,
+        num_hidden,
+        num_feat_layers,
+        activation,
+        feat_dim,
+        coupling_key,
+        diag_keys,
+        softplus=None,
+        beta=None,
+        **kwargs,
+    ):
         super().__init__()
 
         feat_layers = []
         for layer in range(num_feat_layers):
-            act_func = layer_types[activation]() if (
-                layer != (num_feat_layers - 1)) else None
+            act_func = layer_types[activation]() if (layer != (num_feat_layers - 1)) else None
             in_features = 1 if (layer == 0) else num_hidden
 
-            featurizer = Dense(in_features=in_features,
-                               out_features=num_hidden,
-                               bias=True,
-                               activation=act_func)
+            featurizer = Dense(in_features=in_features, out_features=num_hidden, bias=True, activation=act_func)
             feat_layers.append(featurizer)
 
         self.featurizer = Sequential(*feat_layers)
 
-        new_dim = (feat_dim + num_hidden)
+        new_dim = feat_dim + num_hidden
         final_act = nn.Softplus(beta=beta) if softplus else None
 
         self.readout = Sequential(
-            Dense(in_features=new_dim,
-                  out_features=new_dim//2,
-                  bias=True,
-                  activation=layer_types[activation]()),
-
+            Dense(in_features=new_dim, out_features=new_dim // 2, bias=True, activation=layer_types[activation]()),
             # softplus to make the coupling always positive
             # and give the inputs lots of ways to
             # turn into 0
-
-            Dense(in_features=new_dim//2,
-                  out_features=1,
-                  bias=True,
-                  activation=final_act)
+            Dense(in_features=new_dim // 2, out_features=1, bias=True, activation=final_act),
         )
 
         self.coupling_key = coupling_key
         self.diag_keys = diag_keys
 
     def forward(self, results):
-
         coupling = results[self.coupling_key]
         # this is a bit hacky and a waste of compute
         # but I'm not sure the best way to do it
@@ -743,30 +622,24 @@ class GapCouplingConcat(nn.Module):
 
 
 class GapCouplingProdConcat(nn.Module):
-    def __init__(self,
-                 num_hidden,
-                 num_feat_layers,
-                 activation,
-                 feat_dim,
-                 product_params,
-                 coupling_key,
-                 diag_keys,
-                 **kwargs):
+    def __init__(
+        self, num_hidden, num_feat_layers, activation, feat_dim, product_params, coupling_key, diag_keys, **kwargs
+    ):
         super().__init__()
 
-        self.concat_module = GapCouplingConcat(num_hidden=num_hidden,
-                                               num_feat_layers=num_feat_layers,
-                                               activation=activation,
-                                               feat_dim=feat_dim,
-                                               coupling_key=coupling_key,
-                                               diag_keys=diag_keys)
-        self.product_module = GapCouplingProductFixed(
-            params=product_params,
+        self.concat_module = GapCouplingConcat(
+            num_hidden=num_hidden,
+            num_feat_layers=num_feat_layers,
+            activation=activation,
+            feat_dim=feat_dim,
             coupling_key=coupling_key,
-            diag_keys=diag_keys)
+            diag_keys=diag_keys,
+        )
+        self.product_module = GapCouplingProductFixed(
+            params=product_params, coupling_key=coupling_key, diag_keys=diag_keys
+        )
 
     def forward(self, results):
-
         results = self.concat_module(results)
         results = self.product_module(results)
 
@@ -779,11 +652,7 @@ class CrossTalk(nn.Module):
     each other
     """
 
-    def __init__(self,
-                 diabat_keys,
-                 energy_keys,
-                 modes,
-                 pool_method):
+    def __init__(self, diabat_keys, energy_keys, modes, pool_method):
         """
         Example:
             modes = {"gap_coupling_product": [
@@ -839,28 +708,15 @@ class CrossTalk(nn.Module):
                 coupling_key = self.diabat_keys[states[0], states[1]]
 
                 if name.lower() == "gap_coupling_product":
-                    module = GapCouplingProduct(coupling_key=coupling_key,
-                                                diag_keys=diag_keys,
-                                                **params)
+                    module = GapCouplingProduct(coupling_key=coupling_key, diag_keys=diag_keys, **params)
 
                 elif name.lower() == "gap_coupling_concat":
-
-                    module = GapCouplingConcat(
-                        coupling_key=coupling_key,
-                        diag_keys=diag_keys,
-                        **params
-                    )
+                    module = GapCouplingConcat(coupling_key=coupling_key, diag_keys=diag_keys, **params)
                 elif name.lower() == "gap_coupling_prod_concat":
-
-                    module = GapCouplingProdConcat(
-                        coupling_key=coupling_key,
-                        diag_keys=diag_keys,
-                        **params)
+                    module = GapCouplingProdConcat(coupling_key=coupling_key, diag_keys=diag_keys, **params)
 
                 elif name.lower() == "gap_coupling_product_fixed":
-                    module = GapCouplingProductFixed(params=params,
-                                                     coupling_key=coupling_key,
-                                                     diag_keys=diag_keys)
+                    module = GapCouplingProductFixed(params=params, coupling_key=coupling_key, diag_keys=diag_keys)
 
                 else:
                     raise NotImplementedError
@@ -898,11 +754,7 @@ class CrossTalk(nn.Module):
 
 
 class AdiabaticReadout(nn.Module):
-    def __init__(self,
-                 output_keys,
-                 grad_keys,
-                 abs_name):
-
+    def __init__(self, output_keys, grad_keys, abs_name):
         super().__init__()
 
         self.abs_fn = self.get_abs(abs_name)
@@ -919,12 +771,8 @@ class AdiabaticReadout(nn.Module):
         else:
             raise NotImplementedError
 
-    def forward(self,
-                results,
-                xyz):
-
-        ordered_keys = sorted(self.output_keys, key=lambda x:
-                              int(x.split("_")[-1]))
+    def forward(self, results, xyz):
+        ordered_keys = sorted(self.output_keys, key=lambda x: int(x.split("_")[-1]))
 
         for i, key in enumerate(ordered_keys):
             if i == 0:
@@ -934,20 +782,14 @@ class AdiabaticReadout(nn.Module):
 
         for key in self.grad_keys:
             output = results[key.replace("_grad", "")]
-            grad = compute_grad(output=output,
-                                inputs=xyz,
-                                allow_unused=True)
+            grad = compute_grad(output=output, inputs=xyz, allow_unused=True)
             results[key] = grad
 
         return results
 
 
 class AdiabaticNacv(nn.Module):
-    def __init__(self,
-                 model,
-                 coupled_states=None,
-                 gap_threshold=0.5):
-
+    def __init__(self, model, coupled_states=None, gap_threshold=0.5):
         super().__init__()
         self.model = model
         self.output_keys = self.model.output_keys
@@ -957,8 +799,7 @@ class AdiabaticNacv(nn.Module):
         self.delta_keys = self.get_delta_keys()
         self.gap_threshold = gap_threshold * const.EV_TO_KCAL_MOL
 
-    def get_coupled_states(self,
-                           coupled_states):
+    def get_coupled_states(self, coupled_states):
         if coupled_states is not None:
             return coupled_states
 
@@ -967,8 +808,7 @@ class AdiabaticNacv(nn.Module):
             for j, e_j in enumerate(self.output_keys):
                 if j >= i:
                     continue
-                needs_grad = [key + "_grad" in self.grad_keys
-                              for key in [e_i, e_j]]
+                needs_grad = [key + "_grad" in self.grad_keys for key in [e_i, e_j]]
 
                 if all(needs_grad):
                     coupled_states.append([i, j])
@@ -986,11 +826,7 @@ class AdiabaticNacv(nn.Module):
                 keys.append(key)
         return keys
 
-    def process_hess(self,
-                     batch,
-                     results,
-                     states):
-
+    def process_hess(self, batch, results, states):
         e_i = self.output_keys[min(states)]
         e_j = self.output_keys[max(states)]
 
@@ -1007,18 +843,11 @@ class AdiabaticNacv(nn.Module):
 
         return gap, gap_hess
 
-    def nacv_from_hess(self,
-                       batch,
-                       results,
-                       states):
-
-        gaps, gap_hess = self.process_hess(batch=batch,
-                                           results=results,
-                                           states=states)
+    def nacv_from_hess(self, batch, results, states):
+        gaps, gap_hess = self.process_hess(batch=batch, results=results, states=states)
         nacvs = []
 
         for gap, hess in zip(gaps, gap_hess):
-
             # Return 0 if the gap is > threshold
             # This is very inefficient right now because the
             # Hessian is computed even if it doesn't get used
@@ -1026,8 +855,7 @@ class AdiabaticNacv(nn.Module):
             dim = int((hess.reshape(-1).shape[0]) ** 0.5)
 
             if gap > self.gap_threshold:
-                nacv = (torch.zeros(dim // 3, 3)
-                        .to(gap.device))
+                nacv = torch.zeros(dim // 3, 3).to(gap.device)
                 nacvs.append(nacv)
                 continue
 
@@ -1040,7 +868,7 @@ class AdiabaticNacv(nn.Module):
             argmax = eigs.argmax()
             lam = eigs[argmax]
             v = vecs[:, argmax]
-            nacv = v * (lam ** 0.5)
+            nacv = v * (lam**0.5)
 
             nacvs.append(nacv.reshape(-1, 3))
 
@@ -1048,14 +876,9 @@ class AdiabaticNacv(nn.Module):
 
         return nacvs
 
-    def nacv_add(self,
-                 batch,
-                 results):
-
+    def nacv_add(self, batch, results):
         for states in self.coupled_states:
-            nacv = self.nacv_from_hess(batch=batch,
-                                       results=results,
-                                       states=states)
+            nacv = self.nacv_from_hess(batch=batch, results=results, states=states)
             i = states[0]
             j = states[1]
             key = f"force_nacv_{i}{j}"
@@ -1064,10 +887,8 @@ class AdiabaticNacv(nn.Module):
 
         return results
 
-    def fix_pad(self,
-                batch,
-                results):
-        num_atoms = batch['num_atoms']
+    def fix_pad(self, batch, results):
+        num_atoms = batch["num_atoms"]
         if not isinstance(num_atoms, list):
             num_atoms = num_atoms.tolist()
 
@@ -1076,8 +897,7 @@ class AdiabaticNacv(nn.Module):
 
         for key in self.grad_keys:
             real = []
-            split = list(torch.split(results[key],
-                                     pad_num_atoms))
+            split = list(torch.split(results[key], pad_num_atoms))
             for val, num in zip(split, num_atoms):
                 real.append(val[:num])
             real = torch.cat(real)
@@ -1086,26 +906,17 @@ class AdiabaticNacv(nn.Module):
 
         return results
 
-    def forward(self,
-                batch,
-                report_hess=False,
-                **kwargs):
-
-        device = batch['nxyz'].device
-        results = general_batched_hessian(batch=batch,
-                                          keys=self.delta_keys,
-                                          device=device,
-                                          model=self.model,
-                                          forward=None,
-                                          **kwargs)
-        results = self.nacv_add(batch=batch,
-                                results=results)
-        results = self.fix_pad(batch=batch,
-                               results=results)
+    def forward(self, batch, report_hess=False, **kwargs):
+        device = batch["nxyz"].device
+        results = general_batched_hessian(
+            batch=batch, keys=self.delta_keys, device=device, model=self.model, forward=None, **kwargs
+        )
+        results = self.nacv_add(batch=batch, results=results)
+        results = self.fix_pad(batch=batch, results=results)
 
         if not report_hess:
             for key in list(results.keys()):
-                if 'hess' in key:
+                if "hess" in key:
                     results.pop(key)
 
         return results

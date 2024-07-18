@@ -1,8 +1,9 @@
-import sys
 import os
 import shutil
+import sys
 import tempfile
 from urllib import request as request
+
 import numpy as np
 
 from nff.data import Dataset
@@ -21,29 +22,28 @@ def get_md17_dataset(molecule, cutoff=5.0):
 
     """
 
+    # updated as of 2024-07-10
     smiles_dict = {
-        "aspirin": "CC(=O)OC1=CC=CC=C1C(=O)O",
-        "benzene": "C1=CC=CC=C1",
-        "ethanol": "CCO",
-        "malonaldehyde": "O=CCC=O",
-        "naphthalene": "C1=CC=C2C=CC=CC2=C1",
-        "salicylic": "O=C(O)C1=CC=CC=C1O",
-        "toluene": "CC1=CC=CC=C1",
-        "uracil": "O=C1C=CNC(=O)N1",
-        "paracetamol": "CC(=O)NC1=CC=C(O)C=C1",
-        "azobenzene": "C1=CC=C(N=NC2=CC=CC=C2)C=C1",
+        "md17_aspirin": "CC(=O)OC1=CC=CC=C1C(=O)O",
+        "benzene2018_dft": "C1=CC=CC=C1",
+        "md17_ethanol": "CCO",
+        "md17_malonaldehyde": "O=CCC=O",
+        "md17_naphthalene": "C1=CC=C2C=CC=CC2=C1",
+        "md17_salicylic": "O=C(O)C1=CC=CC=C1O",
+        "md17_toluene": "CC1=CC=CC=C1",
+        "md17_uracil": "O=C1C=CNC(=O)N1",
+        "paracetamol_dft": "CC(=O)NC1=CC=C(O)C=C1",
+        "azobenzene_dft": "C1=CC=C(N=NC2=CC=CC=C2)C=C1",
     }
 
     if molecule not in smiles_dict.keys():
-        raise ValueError(
-            "Incorrect value for molecule. Must be one of: ", list(smiles_dict.keys())
-        )
+        raise ValueError("Incorrect value for molecule. Must be one of: ", list(smiles_dict.keys()))
 
     # make tmpdir to save npz file
     tmpdir = tempfile.mkdtemp("MD")
     rawpath = os.path.join(tmpdir, molecule)
-    url = "http://www.quantum-machine.org/gdml/data/npz/" + f"{molecule}_dft.npz"
-
+    url = "http://www.quantum-machine.org/gdml/data/npz/" + f"{molecule}.npz"
+    print(f"Retrieving data from {url}")
     request.urlretrieve(url, rawpath)
     data = np.load(rawpath)
     shutil.rmtree(tmpdir)

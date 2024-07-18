@@ -4,8 +4,9 @@ import numpy as np
 import sympy as sym
 import torch
 import torch.nn as nn
-from nff.utils import bessel_basis, real_sph_harm
 from torch.nn.init import constant_, xavier_uniform_
+
+from nff.utils import bessel_basis, real_sph_harm
 
 zeros_initializer = partial(constant_, val=0.0)
 DEFAULT_DROPOUT_RATE = 0.0
@@ -13,7 +14,6 @@ EPS = 1e-15
 
 
 def gaussian_smearing(distances, offset, widths, centered=False):
-
     if not centered:
         # Compute width of Gaussians (using an overlap of 1 STDDEV)
         # widths = offset[1] - offset[0]
@@ -52,16 +52,10 @@ class GaussianSmearing(nn.Module):
               is False.
     """
 
-    def __init__(self,
-                 start,
-                 stop,
-                 n_gaussians,
-                 centered=False,
-                 trainable=False):
+    def __init__(self, start, stop, n_gaussians, centered=False, trainable=False):
         super().__init__()
         offset = torch.linspace(start, stop, n_gaussians)
-        widths = torch.FloatTensor(
-            (offset[1] - offset[0]) * torch.ones_like(offset))
+        widths = torch.FloatTensor((offset[1] - offset[0]) * torch.ones_like(offset))
         if trainable:
             self.width = nn.Parameter(widths)
             self.offsets = nn.Parameter(offset)
@@ -79,15 +73,13 @@ class GaussianSmearing(nn.Module):
             torch.Tensor: Tensor of convolved distances.
 
         """
-        result = gaussian_smearing(
-            distances, self.offsets, self.width, centered=self.centered
-        )
+        result = gaussian_smearing(distances, self.offsets, self.width, centered=self.centered)
 
         return result
 
 
 class Dense(nn.Linear):
-    """ Applies a dense layer with activation: :math:`y = activation(Wx + b)`
+    """Applies a dense layer with activation: :math:`y = activation(Wx + b)`
 
     Args:
         in_features (int): number of input feature
@@ -108,7 +100,6 @@ class Dense(nn.Linear):
         weight_init=xavier_uniform_,
         bias_init=zeros_initializer,
     ):
-
         self.weight_init = weight_init
         self.bias_init = bias_init
 
@@ -119,7 +110,7 @@ class Dense(nn.Linear):
 
     def reset_parameters(self):
         """
-            Reinitialize model parameters.
+        Reinitialize model parameters.
         """
         self.weight_init(self.weight)
         if self.bias is not None:
@@ -148,6 +139,7 @@ class Dense(nn.Linear):
 
 def to_module(activation):
     from nff.utils.tools import layer_types
+
     return layer_types[activation]()
 
 
@@ -162,7 +154,6 @@ class PreActivation(nn.Linear):
         weight_init=xavier_uniform_,
         bias_init=zeros_initializer,
     ):
-
         self.weight_init = weight_init
         self.bias_init = bias_init
 
@@ -176,7 +167,7 @@ class PreActivation(nn.Linear):
 
     def reset_parameters(self):
         """
-            Reinitialize model parameters.
+        Reinitialize model parameters.
         """
         self.weight_init(self.weight)
         if self.bias is not None:
@@ -193,7 +184,7 @@ class PreActivation(nn.Linear):
 
         weights = self.weight.to(inputs.device)
         y = self.activation(inputs)
-        y = torch.einsum('ij,kj->ki', weights, y)
+        y = torch.einsum("ij,kj->ki", weights, y)
 
         if self.bias is not None:
             y = y + self.bias.to(y.device)
@@ -207,8 +198,8 @@ class PreActivation(nn.Linear):
 class BatchedPreActivation(nn.Conv1d):
     """
     Pre-activation layer that can convert an input to multiple different
-    outputs in parallel. This is equivalent to generating N preactivation 
-    layers and applying them in series to the input to generate N outputs, 
+    outputs in parallel. This is equivalent to generating N preactivation
+    layers and applying them in series to the input to generate N outputs,
     but done in parallel instead.
     """
 
@@ -223,28 +214,28 @@ class BatchedPreActivation(nn.Conv1d):
         weight_init=xavier_uniform_,
         bias_init=zeros_initializer,
     ):
-
         self.weight_init = weight_init
         self.bias_init = bias_init
 
-        super().__init__(in_channels=num_out,
-                         out_channels=(num_out * out_features),
-                         kernel_size=in_features,
-                         groups=num_out,
-                         bias=bias)
+        super().__init__(
+            in_channels=num_out,
+            out_channels=(num_out * out_features),
+            kernel_size=in_features,
+            groups=num_out,
+            bias=bias,
+        )
 
         # separate activations in case they're learnable
         if activation is None:
             self.activations = None
         else:
-            self.activations = nn.ModuleList([to_module(activation)
-                                              for _ in range(num_out)])
+            self.activations = nn.ModuleList([to_module(activation) for _ in range(num_out)])
         self.dropout = nn.Dropout(p=dropout_rate)
         self.num_out = num_out
 
     def reset_parameters(self):
         """
-            Reinitialize model parameters.
+        Reinitialize model parameters.
         """
         self.weight_init(self.weight)
         if self.bias is not None:
@@ -262,8 +253,7 @@ class BatchedPreActivation(nn.Conv1d):
         if self.activations is None:
             y = inputs.clone()
         else:
-            y = torch.stack([act(i) for i, act in
-                             zip(inputs, self.activations)])
+            y = torch.stack([act(i) for i, act in zip(inputs, self.activations)])
 
         # switch ordering from (num_channels, num_samples, F)
         # to (num_samples, num_channels, F)
@@ -277,8 +267,7 @@ class BatchedPreActivation(nn.Conv1d):
         # to (num_channels, num_samples, F)
         num_channels, num_samples, feat_dim = inputs.shape
 
-        y = (y.reshape(num_samples, num_channels, feat_dim)
-             .transpose(0, 1))
+        y = y.reshape(num_samples, num_channels, feat_dim).transpose(0, 1)
 
         # channel = 2
         # sample = 7
@@ -322,9 +311,7 @@ class Envelope(nn.Module):
             u (torch.Tensor): polynomial of the distances
         """
         p = self.p
-        u = 1 - (p + 1) * (p + 2) / 2 * d ** p \
-            + p * (p + 2) * d ** (p + 1) \
-            - p * (p + 1) / 2 * d ** (p + 2)
+        u = 1 - (p + 1) * (p + 2) / 2 * d**p + p * (p + 2) * d ** (p + 1) - p * (p + 1) / 2 * d ** (p + 2)
         return u
 
 
@@ -333,11 +320,7 @@ class DimeNetSphericalBasis(nn.Module):
     Spherical basis layer for DimeNet.
     """
 
-    def __init__(self,
-                 l_spher,
-                 n_spher,
-                 cutoff,
-                 envelope_p):
+    def __init__(self, l_spher, n_spher, cutoff, envelope_p):
         """
         Args:
             l_spher (int): maximum l value in the spherical
@@ -368,21 +351,17 @@ class DimeNetSphericalBasis(nn.Module):
         # create differentiable Torch functions through
         # sym.lambdify
 
-        x = sym.symbols('x')
-        theta = sym.symbols('theta')
-        modules = {'sin': torch.sin, 'cos': torch.cos}
+        x = sym.symbols("x")
+        theta = sym.symbols("theta")
+        modules = {"sin": torch.sin, "cos": torch.cos}
         for i in range(l_spher):
             if i == 0:
-                first_sph = sym.lambdify(
-                    [theta], self.sph_harm_formulas[i][0], modules)(0)
-                self.sph_funcs.append(
-                    lambda tensor: torch.zeros_like(tensor) + first_sph)
+                first_sph = sym.lambdify([theta], self.sph_harm_formulas[i][0], modules)(0)
+                self.sph_funcs.append(lambda tensor: torch.zeros_like(tensor) + first_sph)
             else:
-                self.sph_funcs.append(sym.lambdify(
-                    [theta], self.sph_harm_formulas[i][0], modules))
+                self.sph_funcs.append(sym.lambdify([theta], self.sph_harm_formulas[i][0], modules))
             for j in range(n_spher):
-                self.bessel_funcs.append(sym.lambdify(
-                    [x], self.bessel_formulas[i][j], modules))
+                self.bessel_funcs.append(sym.lambdify([x], self.bessel_formulas[i][j], modules))
 
     def forward(self, d, angles, kj_idx):
         """
@@ -407,8 +386,7 @@ class DimeNetSphericalBasis(nn.Module):
         # so they align with the kj indices of `angles`
 
         rbf_env = rbf_env[kj_idx.long()]
-        rbf_env = rbf_env.reshape(*torch.tensor(
-            rbf_env.shape[:2]).tolist())
+        rbf_env = rbf_env.reshape(*torch.tensor(rbf_env.shape[:2]).tolist())
 
         # get the angular functions
         cbf = [f(angles) for f in self.sph_funcs]
@@ -426,10 +404,7 @@ class DimeNetRadialBasis(nn.Module):
     Radial basis layer for DimeNet.
     """
 
-    def __init__(self,
-                 n_rbf,
-                 cutoff,
-                 envelope_p):
+    def __init__(self, n_rbf, cutoff, envelope_p):
         """
         Args:
             n_rbf (int): number of radial basis functions
@@ -459,7 +434,6 @@ class DimeNetRadialBasis(nn.Module):
 
 
 class Diagonalize(nn.Module):
-
     def __init__(self):
         super().__init__()
 
@@ -471,34 +445,26 @@ class Diagonalize(nn.Module):
         return d0, d1, lam
 
     def compute_v(self, d0, d1, lam, e0, state):
-
         term_1 = -d0 + d1
-        term_2 = (d0 ** 2 - 2 * d0 * d1 + d1 ** 2 + 4 * lam ** 2 + EPS) ** 0.5
+        term_2 = (d0**2 - 2 * d0 * d1 + d1**2 + 4 * lam**2 + EPS) ** 0.5
         denom = 2 * lam
 
-        if state == 'lower':
+        if state == "lower":
             v_element_0 = -(term_1 + term_2) / denom
-        elif state == 'upper':
+        elif state == "upper":
             v_element_0 = -(term_1 - term_2) / denom
 
         v_element_0 = v_element_0.reshape(*e0.shape)
-        v_crude = torch.stack([v_element_0,
-                               torch.ones_like(v_element_0)],
-                              dim=-1)
+        v_crude = torch.stack([v_element_0, torch.ones_like(v_element_0)], dim=-1)
         v_norm = torch.norm(v_crude, dim=-1).reshape(-1, 1)
         v = v_crude / v_norm
 
         return v
 
     def compute_U(self, d0, d1, lam, e0):
-
         v_list = []
-        for state in ['lower', 'upper']:
-            v = self.compute_v(d0=d0,
-                               d1=d1,
-                               lam=lam,
-                               e0=e0,
-                               state=state)
+        for state in ["lower", "upper"]:
+            v = self.compute_v(d0=d0, d1=d1, lam=lam, e0=e0, state=state)
             v_list.append(v)
 
         U_inv = torch.cat([v_list[0], v_list[1]], dim=-1).reshape(-1, 2, 2)
@@ -506,18 +472,13 @@ class Diagonalize(nn.Module):
 
         return U
 
-    def forward(self,
-                d_mat):
-
+    def forward(self, d_mat):
         d0, d1, lam = self._generate_inputs(d_mat)
-        e0 = 1 / 2 * (d0 + d1 - ((d0 - d1) ** 2 + 4 * lam ** 2 + EPS) ** 0.5)
-        e1 = 1 / 2 * (d0 + d1 + ((d0 - d1) ** 2 + 4 * lam ** 2 + EPS) ** 0.5)
+        e0 = 1 / 2 * (d0 + d1 - ((d0 - d1) ** 2 + 4 * lam**2 + EPS) ** 0.5)
+        e1 = 1 / 2 * (d0 + d1 + ((d0 - d1) ** 2 + 4 * lam**2 + EPS) ** 0.5)
 
         eigs = torch.stack([e0, e1], dim=-1)
-        U = self.compute_U(d0=d0,
-                           d1=d1,
-                           lam=lam,
-                           e0=e0)
+        U = self.compute_U(d0=d0, d1=d1, lam=lam, e0=e0)
 
         return eigs, U
 
@@ -530,7 +491,6 @@ class CosineEnvelope(nn.Module):
         self.cutoff = cutoff
 
     def forward(self, d):
-
         output = 0.5 * (torch.cos((np.pi * d / self.cutoff)) + 1)
         exclude = d >= self.cutoff
         output[exclude] = 0
@@ -539,10 +499,7 @@ class CosineEnvelope(nn.Module):
 
 
 class PainnRadialBasis(nn.Module):
-    def __init__(self,
-                 n_rbf,
-                 cutoff,
-                 learnable_k):
+    def __init__(self, n_rbf, cutoff, learnable_k):
         super().__init__()
 
         self.n = torch.arange(1, n_rbf + 1).float()
@@ -564,32 +521,22 @@ class PainnRadialBasis(nn.Module):
 
         # replace divide by 0 with limit of sinc function
 
-        denom = torch.where(shape_d == 0,
-                            torch.tensor(1.0, device=device),
-                            shape_d)
-        num = torch.where(shape_d == 0,
-                          coef,
-                          torch.sin(coef * shape_d))
+        denom = torch.where(shape_d == 0, torch.tensor(1.0, device=device), shape_d)
+        num = torch.where(shape_d == 0, coef, torch.sin(coef * shape_d))
 
-        output = torch.where(shape_d >= self.cutoff,
-                             torch.tensor(0.0, device=device),
-                             num / denom)
+        output = torch.where(shape_d >= self.cutoff, torch.tensor(0.0, device=device), num / denom)
 
         return output
 
 
 class ExpNormalBasis(nn.Module):
-    def __init__(self,
-                 n_rbf,
-                 cutoff,
-                 learnable_mu,
-                 learnable_beta):
+    def __init__(self, n_rbf, cutoff, learnable_mu, learnable_beta):
         super().__init__()
 
         self.mu = torch.linspace(np.exp(-cutoff), 1, n_rbf)
 
         init_beta = (2 / n_rbf * (1 - np.exp(-cutoff))) ** (-2)
-        self.beta = (torch.ones_like(self.mu) * init_beta)
+        self.beta = torch.ones_like(self.mu) * init_beta
 
         if learnable_mu:
             self.mu = nn.Parameter(self.mu)
@@ -623,18 +570,13 @@ class StochasticIncrease(nn.Module):
     so that it can account for the stochastic increases.
     """
 
-    def __init__(self,
-                 exp_coef,
-                 order,
-                 rate):
-
+    def __init__(self, exp_coef, order, rate):
         super().__init__()
         self.exp_coef = exp_coef
         self.order = order
         self.rate = rate
 
     def forward(self, output):
-
         rnd = np.random.rand()
         do_increase = rnd < self.rate
         if do_increase:
@@ -646,13 +588,7 @@ class StochasticIncrease(nn.Module):
 
 
 class Gaussian(nn.Module):
-    def __init__(self,
-                 mean,
-                 sigma,
-                 learnable_mean,
-                 learnable_sigma,
-                 normalize):
-
+    def __init__(self, mean, sigma, learnable_mean, learnable_sigma, normalize):
         super().__init__()
 
         self.mean = mean
@@ -665,7 +601,7 @@ class Gaussian(nn.Module):
             self.sigma = torch.nn.Parameter(torch.Tensor([self.sigma]))
 
     def forward(self, inp):
-        out = torch.exp(-(inp - self.mean) ** 2 / (2 * self.sigma ** 2))
+        out = torch.exp(-((inp - self.mean) ** 2) / (2 * self.sigma**2))
         if self.normalize:
             denom = self.sigma * (2 * np.pi) ** 0.5
             out = out / denom

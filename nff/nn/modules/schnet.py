@@ -1,34 +1,36 @@
-
-import torch
-import numpy as np
-import torch.nn as nn
-from torch.nn import Sequential, Linear, ReLU, LeakyReLU, ModuleDict
-from torch.nn import Softmax
-from torch.nn.functional import softmax
-
 import unittest
 
-from nff.nn.layers import Dense, GaussianSmearing
-from nff.utils.scatter import scatter_add, compute_grad
+import numpy as np
+import torch
+import torch.nn as nn
+from torch.nn import LeakyReLU, Linear, ModuleDict, ReLU, Sequential, Softmax
+from torch.nn.functional import softmax
+
 from nff.nn.activations import shifted_softplus
 from nff.nn.graphconv import (
-    MessagePassingModule,
     EdgeUpdateModule,
+    MessagePassingModule,
 )
-from nff.nn.utils import (construct_sequential, construct_module_dict,
-                          chemprop_msg_update, chemprop_msg_to_node,
-                          remove_bias)
-from nff.utils.tools import layer_types
+from nff.nn.layers import Dense, GaussianSmearing
 
 # for backwards compatability
 from nff.nn.modules.diabat import DiabaticReadout
+from nff.nn.utils import (
+    chemprop_msg_to_node,
+    chemprop_msg_update,
+    construct_module_dict,
+    construct_sequential,
+    remove_bias,
+)
+from nff.utils.scatter import compute_grad, scatter_add
+from nff.utils.tools import layer_types
 
 EPSILON = 1e-15
 DEFAULT_BONDPRIOR_PARAM = {"k": 20.0}
 
 
 def get_offsets(batch, key):
-    nxyz = batch['nxyz']
+    nxyz = batch["nxyz"]
     zero = torch.Tensor([0]).to(nxyz.device)
     offsets = batch.get(key, zero)
     if isinstance(offsets, torch.Tensor) and offsets.is_sparse:
@@ -36,12 +38,8 @@ def get_offsets(batch, key):
     return offsets
 
 
-def get_rij(xyz,
-            batch,
-            nbrs,
-            cutoff):
-
-    offsets = get_offsets(batch, 'offsets')
+def get_rij(xyz, batch, nbrs, cutoff):
+    offsets = get_offsets(batch, "offsets")
     # + offsets not - offsets because it's r_j - r_i,
     # whereas for schnet we've coded it as r_i - r_j
     r_ij = xyz[nbrs[:, 1]] - xyz[nbrs[:, 0]] + offsets
@@ -53,7 +51,7 @@ def get_rij(xyz,
 
     if type(cutoff) == torch.Tensor:
         dist = dist.to(cutoff.device)
-    use_nbrs = (dist <= cutoff)
+    use_nbrs = dist <= cutoff
 
     r_ij = r_ij[use_nbrs]
     nbrs = nbrs[use_nbrs]
@@ -61,43 +59,31 @@ def get_rij(xyz,
     return r_ij, nbrs
 
 
-def add_embedding(atomwise_out,
-                  all_results):
-
-    all_results['embedding'] = atomwise_out['features']
+def add_embedding(atomwise_out, all_results):
+    all_results["embedding"] = atomwise_out["features"]
 
     return all_results
 
 
-def add_stress(batch,
-               all_results,
-               nbrs,
-               r_ij):
+def add_stress(batch, all_results, nbrs, r_ij):
     """
-    Add stress as output. Needs to be divided by lattice volume to get actual stress. 
+    Add stress as output. Needs to be divided by lattice volume to get actual stress.
     For batching for loop seemed unavoidable. will change later.
-    stress considers both for crystal and molecules. 
-    For crystals need to divide by lattice volume. 
+    stress considers both for crystal and molecules.
+    For crystals need to divide by lattice volume.
     r_ij considers offsets which is different for molecules and crystals.
     """
-    Z = compute_grad(output=all_results['energy'],
-                     inputs=r_ij)
-    if batch['num_atoms'].shape[0] == 1:
-        all_results['stress_volume'] = torch.matmul(Z.t(), r_ij)
+    Z = compute_grad(output=all_results["energy"], inputs=r_ij)
+    if batch["num_atoms"].shape[0] == 1:
+        all_results["stress_volume"] = torch.matmul(Z.t(), r_ij)
     else:
         allstress = []
-        for j in range(batch['nxyz'].shape[0]):
-            allstress.append(
-                torch.matmul(
-                    Z[torch.where(nbrs[:, 0] == j)].t(),
-                    r_ij[torch.where(nbrs[:, 0] == j)]
-                )
-            )
+        for j in range(batch["nxyz"].shape[0]):
+            allstress.append(torch.matmul(Z[torch.where(nbrs[:, 0] == j)].t(), r_ij[torch.where(nbrs[:, 0] == j)]))
         allstress = torch.stack(allstress)
         N = batch["num_atoms"].detach().cpu().tolist()
         split_val = torch.split(allstress, N)
-        all_results['stress_volume'] = torch.stack([i.sum(0)
-                                                    for i in split_val])
+        all_results["stress_volume"] = torch.stack([i.sum(0) for i in split_val])
     return all_results
 
 
@@ -121,9 +107,7 @@ class SchNetEdgeUpdate(EdgeUpdateModule):
         )
 
     def aggregate(self, message, neighborlist):
-        aggregated_edge_feature = torch.cat(
-            (message[neighborlist[:, 0]], message[neighborlist[:, 1]]), 1
-        )
+        aggregated_edge_feature = torch.cat((message[neighborlist[:, 0]], message[neighborlist[:, 1]]), 1)
         return aggregated_edge_feature
 
     def update(self, e):
@@ -131,14 +115,7 @@ class SchNetEdgeUpdate(EdgeUpdateModule):
 
 
 class SchNetEdgeFilter(nn.Module):
-    def __init__(self,
-                 cutoff,
-                 n_gaussians,
-                 trainable_gauss,
-                 n_filters,
-                 dropout_rate,
-                 activation='shifted_softplus'):
-
+    def __init__(self, cutoff, n_gaussians, trainable_gauss, n_filters, dropout_rate, activation="shifted_softplus"):
         super(SchNetEdgeFilter, self).__init__()
 
         self.filter = Sequential(
@@ -158,14 +135,14 @@ class SchNetEdgeFilter(nn.Module):
                 in_features=n_gaussians,
                 out_features=n_filters,
                 dropout_rate=dropout_rate,
-            ))
+            ),
+        )
 
     def forward(self, e):
         return self.filter(e)
 
 
 class SchNetConv(MessagePassingModule):
-
     """The convolution layer with filter.
 
     Attributes:
@@ -225,7 +202,7 @@ class SchNetConv(MessagePassingModule):
         )
 
     def message(self, r, e, a, aggr_wgt=None):
-        """The message function for SchNet convoltuions 
+        """The message function for SchNet convoltuions
         Args:
             r (TYPE): node inputs
             e (TYPE): edge inputs
@@ -245,8 +222,7 @@ class SchNetConv(MessagePassingModule):
             r = r * aggr_wgt
 
         # combine node and edge info
-        message = r[a[:, 0]] * e, r[a[:, 1]] * \
-            e  # (ri [] eij) -> rj, []: *, +, (,)
+        message = r[a[:, 0]] * e, r[a[:, 1]] * e  # (ri [] eij) -> rj, []: *, +, (,)
         return message
 
     def update(self, r):
@@ -279,21 +255,11 @@ class GraphAttention(MessagePassingModule):
             TYPE: Description
         """
         # i -> j
-        weight_ij = torch.exp(
-            self.activation(
-                torch.cat((r[a[:, 0]], r[a[:, 1]]), dim=1) * self.weight
-            ).sum(-1)
-        )
+        weight_ij = torch.exp(self.activation(torch.cat((r[a[:, 0]], r[a[:, 1]]), dim=1) * self.weight).sum(-1))
         # j -> i
-        weight_ji = torch.exp(
-            self.activation(
-                torch.cat((r[a[:, 1]], r[a[:, 0]]), dim=1) * self.weight
-            ).sum(-1)
-        )
+        weight_ji = torch.exp(self.activation(torch.cat((r[a[:, 1]], r[a[:, 0]]), dim=1) * self.weight).sum(-1))
 
-        weight_ii = torch.exp(
-            self.activation(torch.cat((r, r), dim=1) * self.weight).sum(-1)
-        )
+        weight_ii = torch.exp(self.activation(torch.cat((r, r), dim=1) * self.weight).sum(-1))
 
         normalization = (
             scatter_add(weight_ij, a[:, 0], dim_size=r.shape[0])
@@ -301,12 +267,8 @@ class GraphAttention(MessagePassingModule):
             + weight_ii
         )
 
-        a_ij = (
-            weight_ij / normalization[a[:, 0]]
-        )  # the importance of node j’s features to node i
-        a_ji = (
-            weight_ji / normalization[a[:, 1]]
-        )  # the importance of node i’s features to node j
+        a_ij = weight_ij / normalization[a[:, 0]]  # the importance of node j’s features to node i
+        a_ji = weight_ji / normalization[a[:, 1]]  # the importance of node i’s features to node j
         a_ii = weight_ii / normalization  # self-attention
 
         message = (
@@ -336,30 +298,30 @@ class GraphAttention(MessagePassingModule):
 class NodeMultiTaskReadOut(nn.Module):
     """Stack Multi Task outputs
 
-        example multitaskdict:
+    example multitaskdict:
 
-        multitaskdict = {
-            'myenergy_0': [
-                {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
-                {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
-            ],
-            'myenergy_1': [
-                {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
-                {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
-            ],
-            'muliken_charges': [
-                {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
-                {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
-            ]
-        }
+    multitaskdict = {
+        'myenergy_0': [
+            {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+            {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+        ],
+        'myenergy_1': [
+            {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+            {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+        ],
+        'muliken_charges': [
+            {'name': 'linear', 'param' : { 'in_features': 5, 'out_features': 20}},
+            {'name': 'linear', 'param' : { 'in_features': 20, 'out_features': 1}}
+        ]
+    }
 
-        example post_readout:
+    example post_readout:
 
-        def post_readout(predict_dict, readoutdict):
-            sorted_keys = sorted(list(readoutdict.keys()))
-            sorted_ens = torch.sort(torch.stack([predict_dict[key] for key in sorted_keys]))[0]
-            sorted_dic = {key: val for key, val in zip(sorted_keys, sorted_ens) }
-            return sorted_dic
+    def post_readout(predict_dict, readoutdict):
+        sorted_keys = sorted(list(readoutdict.keys()))
+        sorted_ens = torch.sort(torch.stack([predict_dict[key] for key in sorted_keys]))[0]
+        sorted_dic = {key: val for key, val in zip(sorted_keys, sorted_ens) }
+        return sorted_dic
     """
 
     def __init__(self, multitaskdict, post_readout=None):
@@ -379,8 +341,7 @@ class NodeMultiTaskReadOut(nn.Module):
 
         # for backwards compatability
         if not hasattr(self, "readout"):
-            self.readout = construct_module_dict(
-                self.multitaskdict['atom_readout'])
+            self.readout = construct_module_dict(self.multitaskdict["atom_readout"])
             self.readout.to(r.device)
 
         for key in self.readout:
@@ -403,7 +364,6 @@ class BondPrior(torch.nn.Module):
         self.k = modelparams["k"]
 
     def forward(self, batch):
-
         result = {}
 
         num_bonds = batch["num_bonds"].tolist()
@@ -418,8 +378,7 @@ class BondPrior(torch.nn.Module):
 
         e = self.k * (r - r_0).pow(2)
 
-        E = torch.stack([e.sum(0).reshape(1)
-                         for e in torch.split(e, num_bonds)])
+        E = torch.stack([e.sum(0).reshape(1) for e in torch.split(e, num_bonds)])
 
         result["energy"] = E
         result["energy_grad"] = compute_grad(inputs=xyz, output=E)
@@ -428,20 +387,12 @@ class BondPrior(torch.nn.Module):
 
 
 class MixedSchNetConv(MessagePassingModule):
-
     """
     SchNet convolution applied to edge features from both
-    distances and bond features. 
+    distances and bond features.
     """
 
-    def __init__(
-        self,
-        n_atom_hidden,
-        n_filters,
-        dropout_rate,
-        n_bond_hidden,
-        activation='shifted_softplus'
-    ):
+    def __init__(self, n_atom_hidden, n_filters, dropout_rate, n_bond_hidden, activation="shifted_softplus"):
         """
         Args:
             n_atom_hidden (int): hidden dimension of the atom
@@ -461,7 +412,6 @@ class MixedSchNetConv(MessagePassingModule):
         super(MixedSchNetConv, self).__init__()
         self.moduledict = ModuleDict(
             {
-
                 # convert the atom features to the dimension
                 # of cat(hidden_distance, hidden_bond)
                 "message_node_filter": Dense(
@@ -489,7 +439,7 @@ class MixedSchNetConv(MessagePassingModule):
         )
 
     def message(self, r, e, a):
-        """The message function for SchNet convoltuions 
+        """The message function for SchNet convoltuions
         Args:
             r (torch.Tensor): node inputs
             e (torch.Tensor): edge inputs
@@ -510,7 +460,6 @@ class MixedSchNetConv(MessagePassingModule):
         return self.moduledict["update_function"](r)
 
     def forward(self, r, e, a):
-
         graph_size = r.shape[0]
         rij = self.message(r, e, a)
         r = self.aggregate(rij, a[:, 1], graph_size)
@@ -525,12 +474,7 @@ class ConfAttention(nn.Module):
     fingerprint.
     """
 
-    def __init__(self,
-                 mol_basis,
-                 boltz_basis,
-                 final_act,
-                 equal_weights=False,
-                 prob_func='softmax'):
+    def __init__(self, mol_basis, boltz_basis, final_act, equal_weights=False, prob_func="softmax"):
         """
         Args:
             mol_basis (int): dimension of the molecular fingerprint
@@ -566,8 +510,7 @@ class ConfAttention(nn.Module):
             self.boltz_lin = torch.nn.Linear(1, boltz_basis)
             self.boltz_act = Softmax(dim=1)
 
-            self.fp_linear = torch.nn.Linear(
-                mol_basis + boltz_basis, mol_basis, bias=False)
+            self.fp_linear = torch.nn.Linear(mol_basis + boltz_basis, mol_basis, bias=False)
 
         self.equal_weights = equal_weights
 
@@ -579,17 +522,14 @@ class ConfAttention(nn.Module):
             nn.init.xavier_uniform_(self.att_weight, gain=1.414)
 
         # linear layer
-        self.W = torch.nn.Linear(in_features=mol_basis,
-                                 out_features=mol_basis)
+        self.W = torch.nn.Linear(in_features=mol_basis, out_features=mol_basis)
         nn.init.xavier_uniform_(self.W.weight, gain=1.414)
 
         self.final_act = layer_types[final_act]()
         self.activation = LeakyReLU(inplace=False)
         self.prob_func = prob_func
 
-    def forward(self,
-                conf_fps,
-                boltzmann_weights):
+    def forward(self, conf_fps, boltzmann_weights):
         """
         Args:
             conf_fps (torch.Tensor): conformer fingerprints for a species
@@ -607,7 +547,7 @@ class ConfAttention(nn.Module):
         if not hasattr(self, "equal_weights"):
             self.equal_weights = False
         if not hasattr(self, "prob_func"):
-            self.prob_func = 'softmax'
+            self.prob_func = "softmax"
 
         if self.embed_boltz:
             # increase dimensionality of Boltzmann weight
@@ -621,13 +561,12 @@ class ConfAttention(nn.Module):
             new_fps = conf_fps
 
         # directed "neighbor list" that links every fingerprint to each other
-        a = torch.LongTensor([[i, j] for i in range(new_fps.shape[0])
-                              for j in range(new_fps.shape[0])]
-                             ).to(conf_fps.device)
+        a = torch.LongTensor([[i, j] for i in range(new_fps.shape[0]) for j in range(new_fps.shape[0])]).to(
+            conf_fps.device
+        )
 
         # make cat(h_i, h_j)
-        cat_ij = torch.cat((self.W(new_fps[a[:, 0]]),
-                            self.W(new_fps[a[:, 1]])), dim=1)
+        cat_ij = torch.cat((self.W(new_fps[a[:, 0]]), self.W(new_fps[a[:, 1]])), dim=1)
 
         # number of conformers
         n_confs = new_fps.shape[0]
@@ -640,18 +579,13 @@ class ConfAttention(nn.Module):
         # otherwise proceed with regular attention
 
         else:
-            output = self.activation(
-                torch.matmul(
-                    self.att_weight, cat_ij.transpose(0, 1)
-                )
-            )
+            output = self.activation(torch.matmul(self.att_weight, cat_ij.transpose(0, 1)))
 
-            if self.prob_func == 'softmax':
-                alpha_ij = softmax(output.reshape(n_confs, n_confs),
-                                   dim=1).reshape(-1, 1) / n_confs
+            if self.prob_func == "softmax":
+                alpha_ij = softmax(output.reshape(n_confs, n_confs), dim=1).reshape(-1, 1) / n_confs
 
-            elif self.prob_func == 'square':
-                out_reshape = (output ** 2).reshape(n_confs, n_confs)
+            elif self.prob_func == "square":
+                out_reshape = (output**2).reshape(n_confs, n_confs)
                 norm = out_reshape.sum(dim=1).reshape(-1, 1)
                 non_norm_prob = out_reshape / norm
                 alpha_ij = non_norm_prob.reshape(-1, 1) / n_confs
@@ -671,16 +605,11 @@ class ConfAttention(nn.Module):
 class LinearConfAttention(ConfAttention):
     """
     Similar to ConfAttention, but instead of concatenating each pair
-    of fingerprints to learn the importance of one to the other, 
+    of fingerprints to learn the importance of one to the other,
     just uses each fingerprint alone to learn its importance.
     """
 
-    def __init__(self,
-                 mol_basis,
-                 boltz_basis,
-                 final_act,
-                 equal_weights=False,
-                 prob_func='softmax'):
+    def __init__(self, mol_basis, boltz_basis, final_act, equal_weights=False, prob_func="softmax"):
         """
         Args:
             mol_basis (int): dimension of the molecular fingerprint
@@ -696,10 +625,7 @@ class LinearConfAttention(ConfAttention):
             None
         """
 
-        super(LinearConfAttention, self).__init__(mol_basis,
-                                                  boltz_basis,
-                                                  final_act,
-                                                  equal_weights)
+        super(LinearConfAttention, self).__init__(mol_basis, boltz_basis, final_act, equal_weights)
 
         # has dimension mol_basis instead of 2 * mol_basis because we're not
         # comparing fingerprint pairs
@@ -710,9 +636,7 @@ class LinearConfAttention(ConfAttention):
 
         self.prob_func = prob_func
 
-    def forward(self,
-                conf_fps,
-                boltzmann_weights):
+    def forward(self, conf_fps, boltzmann_weights):
         """
         Args:
             conf_fps (torch.Tensor): conformer fingerprints for a species
@@ -730,7 +654,7 @@ class LinearConfAttention(ConfAttention):
         if not hasattr(self, "equal_weights"):
             self.equal_weights = False
         if not hasattr(self, "prob_func"):
-            self.prob_func = 'softmax'
+            self.prob_func = "softmax"
 
         if self.embed_boltz:
             # increase dimensionality of Boltzmann weight
@@ -754,16 +678,12 @@ class LinearConfAttention(ConfAttention):
         # otherwise apply attention to each fingerprint individually
 
         else:
-            output = self.activation(
-                torch.matmul(
-                    self.att_weight, self.W(new_fps).transpose(0, 1)
-                )
-            )
+            output = self.activation(torch.matmul(self.att_weight, self.W(new_fps).transpose(0, 1)))
 
-            if self.prob_func == 'softmax':
+            if self.prob_func == "softmax":
                 alpha_i = softmax(output, dim=1).reshape(-1, 1)
-            elif self.prob_func == 'square':
-                alpha_i = (output ** 2 / (output ** 2).sum()).reshape(-1, 1)
+            elif self.prob_func == "square":
+                alpha_i = (output**2 / (output**2).sum()).reshape(-1, 1)
 
         prod = alpha_i * self.W(new_fps)
 
@@ -777,16 +697,11 @@ class LinearConfAttention(ConfAttention):
 
 
 class ChemPropConv(MessagePassingModule):
-
     """
     ChemProp convolution module.
     """
 
-    def __init__(self,
-                 n_edge_hidden,
-                 dropout_rate,
-                 activation,
-                 **kwargs):
+    def __init__(self, n_edge_hidden, dropout_rate, activation, **kwargs):
         """
         Args:
             n_edge_hidden: dimension of the hidden edge vector
@@ -809,19 +724,10 @@ class ChemPropConv(MessagePassingModule):
         # ChemProp bond features. We don't want
         # these zeros contributing to the output.
 
-        self.dense = Dense(
-            in_features=n_edge_hidden,
-            out_features=n_edge_hidden,
-            dropout_rate=dropout_rate,
-            bias=False
-        )
+        self.dense = Dense(in_features=n_edge_hidden, out_features=n_edge_hidden, dropout_rate=dropout_rate, bias=False)
         self.activation = layer_types[activation]()
 
-    def message(self,
-                h_new,
-                nbrs,
-                ji_idx=None,
-                kj_idx=None):
+    def message(self, h_new, nbrs, ji_idx=None, kj_idx=None):
         """
         Get the chemprop MPNN message.
         Args:
@@ -835,10 +741,7 @@ class ChemPropConv(MessagePassingModule):
             msg (torch.Tensor): message from nearby atoms
         """
 
-        msg = chemprop_msg_update(h=h_new,
-                                  nbrs=nbrs,
-                                  ji_idx=ji_idx,
-                                  kj_idx=kj_idx)
+        msg = chemprop_msg_update(h=h_new, nbrs=nbrs, ji_idx=ji_idx, kj_idx=kj_idx)
         return msg
 
     def update(self, msg, h_0):
@@ -861,12 +764,7 @@ class ChemPropConv(MessagePassingModule):
 
         return update_feats
 
-    def forward(self,
-                h_0,
-                h_new,
-                nbrs,
-                ji_idx=None,
-                kj_idx=None):
+    def forward(self, h_0, h_new, nbrs, ji_idx=None, kj_idx=None):
         """
         Apply a convolution layer.
         Args:
@@ -883,12 +781,8 @@ class ChemPropConv(MessagePassingModule):
                 features after convolution.
         """
 
-        msg = self.message(h_new=h_new,
-                           nbrs=nbrs,
-                           ji_idx=ji_idx,
-                           kj_idx=kj_idx)
-        update_feats = self.update(msg=msg,
-                                   h_0=h_0)
+        msg = self.message(h_new=h_new, nbrs=nbrs, ji_idx=ji_idx, kj_idx=kj_idx)
+        update_feats = self.update(msg=msg, h_0=h_0)
 
         return update_feats
 
@@ -896,7 +790,7 @@ class ChemPropConv(MessagePassingModule):
 class CpSchNetConv(ChemPropConv):
     """
     Module for combining a ChemProp convolution with non-convolved
-    distance features. 
+    distance features.
     """
 
     def __init__(
@@ -910,8 +804,7 @@ class CpSchNetConv(ChemPropConv):
         n_filters,
         schnet_dropout,
         activation,
-        **kwargs
-
+        **kwargs,
     ):
         """
         Args:
@@ -931,10 +824,7 @@ class CpSchNetConv(ChemPropConv):
             None
         """
 
-        ChemPropConv.__init__(self,
-                              n_edge_hidden=n_bond_hidden,
-                              dropout_rate=cp_dropout,
-                              activation=activation)
+        ChemPropConv.__init__(self, n_edge_hidden=n_bond_hidden, dropout_rate=cp_dropout, activation=activation)
 
         self.n_bond_hidden = n_bond_hidden
         self.moduledict = ModuleDict({})
@@ -954,7 +844,8 @@ class CpSchNetConv(ChemPropConv):
                 out_features=n_filters,
                 dropout_rate=schnet_dropout,
             ),
-            layer_types[activation]())
+            layer_types[activation](),
+        )
 
         self.moduledict["edge_filter"] = edge_filter
 
@@ -964,7 +855,7 @@ class CpSchNetConv(ChemPropConv):
         features.
         Args:
             e (torch.Tensor): distance features
-            h_new (torch.Tensor): updated bond features 
+            h_new (torch.Tensor): updated bond features
         Returns:
             new_msg (torch.Tensor): concatenation of
                 bond and distance edge features.
@@ -977,15 +868,7 @@ class CpSchNetConv(ChemPropConv):
 
         return new_msg
 
-    def forward(self,
-                h_0,
-                h_new,
-                all_nbrs,
-                bond_nbrs,
-                bond_idx,
-                e,
-                ji_idx=None,
-                kj_idx=None):
+    def forward(self, h_0, h_new, all_nbrs, bond_nbrs, bond_idx, e, ji_idx=None, kj_idx=None):
         """
         Update the edge features.
         Args:
@@ -1012,29 +895,24 @@ class CpSchNetConv(ChemPropConv):
         # then select only the non-zero indices at `bond_idx`, to get the
         # latest ChemProp edge vector
 
-        cp_h = h_new[:, :self.n_bond_hidden][bond_idx]
+        cp_h = h_new[:, : self.n_bond_hidden][bond_idx]
 
         # `h_0` is only a ChemProp vector, but padded with zeros
         h0_bond = h_0[bond_idx]
 
         # get the ChemProp message and update the ChemProp `h`
-        cp_msg = self.message(h_new=cp_h,
-                              nbrs=bond_nbrs,
-                              ji_idx=ji_idx,
-                              kj_idx=kj_idx)
+        cp_msg = self.message(h_new=cp_h, nbrs=bond_nbrs, ji_idx=ji_idx, kj_idx=kj_idx)
 
-        h_new_bond = self.update(msg=cp_msg,
-                                 h_0=h0_bond)
+        h_new_bond = self.update(msg=cp_msg, h_0=h0_bond)
 
         # pad it back with zeros for non-bonded atoms
         nbr_dim = all_nbrs.shape[0]
-        h_new = torch.zeros((nbr_dim,  self.n_bond_hidden))
+        h_new = torch.zeros((nbr_dim, self.n_bond_hidden))
         h_new = h_new.to(bond_idx.device)
         h_new[bond_idx] = h_new_bond
 
         # concatenate with SchNet distance features
-        final_h = self.add_schnet_feats(e=e,
-                                        h_new=h_new)
+        final_h = self.add_schnet_feats(e=e, h_new=h_new)
 
         return final_h
 
@@ -1052,7 +930,7 @@ class ChemPropMsgToNode(nn.Module):
                 initial node features get concatenated with
                 the edge-turned-node updated features.
         Returns:
-            None 
+            None
         """
         nn.Module.__init__(self)
 
@@ -1073,9 +951,7 @@ class ChemPropMsgToNode(nn.Module):
                 features.
         """
         num_nodes = r.shape[0]
-        msg_to_node = chemprop_msg_to_node(h=h,
-                                           nbrs=nbrs,
-                                           num_nodes=num_nodes)
+        msg_to_node = chemprop_msg_to_node(h=h, nbrs=nbrs, num_nodes=num_nodes)
         cat_node = torch.cat((r, msg_to_node), dim=1)
         new_node_feats = self.output(cat_node)
 
@@ -1095,7 +971,7 @@ class ChemPropInit(nn.Module):
                 making the input layers applied to the node
                 and edge features.
         Returns:
-            None 
+            None
         """
         nn.Module.__init__(self)
 
@@ -1114,22 +990,13 @@ class ChemPropInit(nn.Module):
         Returns:
             hidden_feats (torch.Tensor): hidden edge features
         """
-        cat_feats = torch.cat((r[bond_nbrs[:, 0]], bond_feats),
-                              dim=1)
+        cat_feats = torch.cat((r[bond_nbrs[:, 0]], bond_feats), dim=1)
         hidden_feats = self.input(cat_feats)
 
         return hidden_feats
 
 
-def sum_and_grad(batch,
-                 xyz,
-                 r_ij,
-                 nbrs,
-                 atomwise_output,
-                 grad_keys,
-                 out_keys=None,
-                 mean=False):
-
+def sum_and_grad(batch, xyz, r_ij, nbrs, atomwise_output, grad_keys, out_keys=None, mean=False):
     N = batch["num_atoms"].detach().cpu().tolist()
     results = {}
     if out_keys is None:
@@ -1139,8 +1006,7 @@ def sum_and_grad(batch,
         if key not in out_keys:
             continue
 
-        mol_idx = torch.arange(len(N)).repeat_interleave(
-            torch.LongTensor(N)).to(val.device)
+        mol_idx = torch.arange(len(N)).repeat_interleave(torch.LongTensor(N)).to(val.device)
         dim_size = mol_idx.max() + 1
 
         if val.reshape(-1).shape[0] == mol_idx.shape[0]:
@@ -1151,12 +1017,9 @@ def sum_and_grad(batch,
             use_val = val.sum(-1)
 
         else:
-            raise Exception(("Don't know how to handle val shape "
-                             "{} for key {}" .format(val.shape, key)))
+            raise Exception(("Don't know how to handle val shape " "{} for key {}".format(val.shape, key)))
 
-        pooled_result = scatter_add(use_val,
-                                    mol_idx,
-                                    dim_size=dim_size)
+        pooled_result = scatter_add(use_val, mol_idx, dim_size=dim_size)
         if mean:
             pooled_result = pooled_result / torch.Tensor(N).to(val.device)
 
@@ -1164,38 +1027,31 @@ def sum_and_grad(batch,
 
     # compute gradients
     for key in grad_keys:
-        
         # pooling has already been done to add to total props for each system
         # but batch still contains multiple systems
         # so need to be careful to do things in batched fashion
-        if key == 'stress':
-            output = results['energy']
-            grad_ = compute_grad(output=output,
-                                 inputs=r_ij)
+        if key == "stress":
+            output = results["energy"]
+            grad_ = compute_grad(output=output, inputs=r_ij)
             allstress = []
-            for i in range(batch['nxyz'].shape[0]):
+            for i in range(batch["nxyz"].shape[0]):
                 allstress.append(
-                    torch.matmul(
-                        grad_[torch.where(nbrs[:, 0] == i)].t(),
-                        r_ij[torch.where(nbrs[:, 0] == i)]
-                    )
+                    torch.matmul(grad_[torch.where(nbrs[:, 0] == i)].t(), r_ij[torch.where(nbrs[:, 0] == i)])
                 )
             allstress = torch.stack(allstress)
             split_val = torch.split(allstress, N)
             grad_ = torch.stack([i.sum(0) for i in split_val])
-            if 'cell' in batch.keys():
-                cell = torch.stack(torch.split(batch['cell'], 3, dim=0))
-            elif 'lattice' in batch.keys():
-                cell = torch.stack(torch.split(batch['lattice'], 3, dim=0))
-            volume = (torch.Tensor(np.abs(np.linalg.det(cell.cpu().numpy())))
-                                                        .to(grad_.get_device()))
-            grad = grad_*(1/volume[:,None,None])
+            if "cell" in batch.keys():
+                cell = torch.stack(torch.split(batch["cell"], 3, dim=0))
+            elif "lattice" in batch.keys():
+                cell = torch.stack(torch.split(batch["lattice"], 3, dim=0))
+            volume = torch.Tensor(np.abs(np.linalg.det(cell.cpu().numpy()))).to(grad_.get_device())
+            grad = grad_ * (1 / volume[:, None, None])
             grad = torch.flatten(grad, start_dim=0, end_dim=1)
 
         else:
             output = results[key.replace("_grad", "")]
-            grad = compute_grad(output=output,
-                                inputs=xyz)
+            grad = compute_grad(output=output, inputs=xyz)
 
         results[key] = grad
 
@@ -1206,21 +1062,16 @@ class SumPool(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self,
-                batch,
-                xyz,
-                r_ij,
-                nbrs,
-                atomwise_output,
-                grad_keys,
-                out_keys=None):
-        results = sum_and_grad(batch=batch,
-                               xyz=xyz,
-                               r_ij=r_ij,
-                               nbrs=nbrs,
-                               atomwise_output=atomwise_output,
-                               grad_keys=grad_keys,
-                               out_keys=out_keys)
+    def forward(self, batch, xyz, r_ij, nbrs, atomwise_output, grad_keys, out_keys=None):
+        results = sum_and_grad(
+            batch=batch,
+            xyz=xyz,
+            r_ij=r_ij,
+            nbrs=nbrs,
+            atomwise_output=atomwise_output,
+            grad_keys=grad_keys,
+            out_keys=out_keys,
+        )
         return results
 
 
@@ -1228,30 +1079,24 @@ class MeanPool(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self,
-                batch,
-                xyz,
-                atomwise_output,
-                grad_keys,
-                out_keys=None):
-        results = sum_and_grad(batch=batch,
-                               xyz=xyz,
-                               atomwise_output=atomwise_output,
-                               grad_keys=grad_keys,
-                               out_keys=out_keys,
-                               mean=True)
+    def forward(self, batch, xyz, r_ij, nbrs, atomwise_output, grad_keys, out_keys=None):
+        results = sum_and_grad(
+            batch, xyz, r_ij, nbrs, atomwise_output=atomwise_output, grad_keys=grad_keys, out_keys=out_keys, mean=True
+        )
         return results
 
 
 def att_readout_probs(name):
     if name.lower() == "softmax":
+
         def func(output):
             weights = softmax(output, dim=0)
             return weights
 
     elif name.lower() == "square":
+
         def func(output):
-            weights = ((output ** 2 / (output ** 2).sum()))
+            weights = output**2 / (output**2).sum()
             return weights
     else:
         raise NotImplementedError
@@ -1274,22 +1119,11 @@ class AttentionPool(nn.Module):
     This one uses `mol_fp`, since it seems more expressive (?)
     """
 
-    def __init__(self,
-                 prob_func,
-                 feat_dim,
-                 att_act,
-                 mol_fp_act,
-                 num_out_layers,
-                 out_dim,
-                 **kwargs):
-        """
-
-        """
+    def __init__(self, prob_func, feat_dim, att_act, mol_fp_act, num_out_layers, out_dim, **kwargs):
+        """ """
         super().__init__()
 
-        self.w_mat = nn.Linear(in_features=feat_dim,
-                               out_features=feat_dim,
-                               bias=False)
+        self.w_mat = nn.Linear(in_features=feat_dim, out_features=feat_dim, bias=False)
 
         self.att_weight = torch.nn.Parameter(torch.rand(1, feat_dim))
         nn.init.xavier_uniform_(self.att_weight, gain=1.414)
@@ -1297,30 +1131,22 @@ class AttentionPool(nn.Module):
         self.att_act = layer_types[att_act]()
 
         # reduce the number of features by the same factor in each layer
-        feat_num = [int(feat_dim / num_out_layers ** m)
-                    for m in range(num_out_layers)]
+        feat_num = [int(feat_dim / num_out_layers**m) for m in range(num_out_layers)]
 
         # make layers followed by an activation for all but the last
         # layer
-        mol_fp_layers = [Dense(in_features=feat_num[i],
-                               out_features=feat_num[i+1],
-                               activation=layer_types[mol_fp_act]())
-                         for i in range(num_out_layers - 1)]
+        mol_fp_layers = [
+            Dense(in_features=feat_num[i], out_features=feat_num[i + 1], activation=layer_types[mol_fp_act]())
+            for i in range(num_out_layers - 1)
+        ]
 
         # use no activation for the last layer
-        mol_fp_layers.append(Dense(in_features=feat_num[-1],
-                                   out_features=out_dim,
-                                   activation=None))
+        mol_fp_layers.append(Dense(in_features=feat_num[-1], out_features=out_dim, activation=None))
 
         # put together in readout network
         self.mol_fp_nn = Sequential(*mol_fp_layers)
 
-    def forward(self,
-                batch,
-                xyz,
-                atomwise_output,
-                grad_keys,
-                out_keys):
+    def forward(self, batch, xyz, atomwise_output, grad_keys, out_keys):
         """
         Args:
             feats (torch.Tensor): n_atom x feat_dim atomic features,
@@ -1331,8 +1157,7 @@ class AttentionPool(nn.Module):
         results = {}
 
         for key in out_keys:
-
-            batched_feats = atomwise_output['features']
+            batched_feats = atomwise_output["features"]
 
             # split the outputs into those of each molecule
             split_feats = torch.split(batched_feats, N)
@@ -1342,11 +1167,7 @@ class AttentionPool(nn.Module):
             learned_feats = []
 
             for feats in split_feats:
-                weights = self.prob_func(
-                    self.att_act(
-                        (self.att_weight * self.w_mat(feats)).sum(-1)
-                    )
-                )
+                weights = self.prob_func(self.att_act((self.att_weight * self.w_mat(feats)).sum(-1)))
 
                 mol_fp = (weights.reshape(-1, 1) * self.w_mat(feats)).sum(0)
 
@@ -1359,48 +1180,33 @@ class AttentionPool(nn.Module):
 
         for key in grad_keys:
             output = results[key.replace("_grad", "")]
-            grad = compute_grad(output=output,
-                                inputs=xyz)
+            grad = compute_grad(output=output, inputs=xyz)
             results[key] = grad
 
         return results
 
 
 class MolFpPool(nn.Module):
-    def __init__(self,
-                 feat_dim,
-                 mol_fp_act,
-                 num_out_layers,
-                 out_dim,
-                 **kwargs):
-
+    def __init__(self, feat_dim, mol_fp_act, num_out_layers, out_dim, **kwargs):
         super().__init__()
 
         # reduce the number of features by the same factor in each layer
-        feat_num = [int(feat_dim / num_out_layers ** m)
-                    for m in range(num_out_layers)]
+        feat_num = [int(feat_dim / num_out_layers**m) for m in range(num_out_layers)]
 
         # make layers followed by an activation for all but the last
         # layer
-        mol_fp_layers = [Dense(in_features=feat_num[i],
-                               out_features=feat_num[i+1],
-                               activation=layer_types[mol_fp_act]())
-                         for i in range(num_out_layers - 1)]
+        mol_fp_layers = [
+            Dense(in_features=feat_num[i], out_features=feat_num[i + 1], activation=layer_types[mol_fp_act]())
+            for i in range(num_out_layers - 1)
+        ]
 
         # use no activation for the last layer
-        mol_fp_layers.append(Dense(in_features=feat_num[-1],
-                                   out_features=out_dim,
-                                   activation=None))
+        mol_fp_layers.append(Dense(in_features=feat_num[-1], out_features=out_dim, activation=None))
 
         # put together in readout network
         self.mol_fp_nn = Sequential(*mol_fp_layers)
 
-    def forward(self,
-                batch,
-                xyz,
-                atomwise_output,
-                grad_keys,
-                out_keys):
+    def forward(self, batch, xyz, atomwise_output, grad_keys, out_keys):
         """
         Args:
             feats (torch.Tensor): n_atom x feat_dim atomic features,
@@ -1411,8 +1217,7 @@ class MolFpPool(nn.Module):
         results = {}
 
         for key in out_keys:
-
-            batched_feats = atomwise_output['features']
+            batched_feats = atomwise_output["features"]
 
             # split the outputs into those of each molecule
             split_feats = torch.split(batched_feats, N)
@@ -1432,15 +1237,13 @@ class MolFpPool(nn.Module):
 
         for key in grad_keys:
             output = results[key.replace("_grad", "")]
-            grad = compute_grad(output=output,
-                                inputs=xyz)
+            grad = compute_grad(output=output, inputs=xyz)
             results[key] = grad
 
         return results
 
 
 class ScaleShift(nn.Module):
-
     r"""Scale and shift layer for standardization.
     .. math::
        y = x \times \sigma + \mu
@@ -1449,9 +1252,7 @@ class ScaleShift(nn.Module):
         stddev (dict): dictionary of standard deviations
     """
 
-    def __init__(self,
-                 means=None,
-                 stddevs=None):
+    def __init__(self, means=None, stddevs=None):
         super(ScaleShift, self).__init__()
 
         means = means if (means is not None) else {}
@@ -1525,80 +1326,75 @@ class TestModules(unittest.TestCase):
             n_gaussians,
             cutoff=2.0,
             trainable_gauss=False,
+            dropout_rate=0.2,
         )
 
         r_out = model(r_in, e, a)
 
-        self.assertEqual(
-            r_in.shape, r_out.shape,
-            "The node feature dimensions should be same."
-        )
+        self.assertEqual(r_in.shape, r_out.shape, "The node feature dimensions should be same.")
 
-    def testDoubleNodeConv(self):
+    """
+    Deprecated
+    """
+    # def testDoubleNodeConv(self):
+    #     # contruct a graph
+    #     a = torch.LongTensor([[0, 1], [2, 3], [1, 3], [4, 5], [3, 4]])
+    #     num_nodes = 6
+    #     num_features = 12
 
-        # contruct a graph
-        a = torch.LongTensor([[0, 1], [2, 3], [1, 3], [4, 5], [3, 4]])
-        num_nodes = 6
-        num_features = 12
+    #     update_layers = [
+    #         {
+    #             "name": "linear",
+    #             "param": {
+    #                 "in_features": 2 * num_features,
+    #                 "out_features": num_features,
+    #             },
+    #         },
+    #         {"name": "shifted_softplus", "param": {}},
+    #         {
+    #             "name": "linear",
+    #             "param": {"in_features": num_features, "out_features": num_features},
+    #         },
+    #         {"name": "shifted_softplus", "param": {}},
+    #     ]
 
-        update_layers = [
-            {
-                "name": "linear",
-                "param": {
-                    "in_features": 2 * num_features,
-                    "out_features": num_features,
-                },
-            },
-            {"name": "shifted_softplus", "param": {}},
-            {
-                "name": "linear",
-                "param": {"in_features": num_features,
-                          "out_features": num_features},
-            },
-            {"name": "shifted_softplus", "param": {}},
-        ]
+    #     r_in = torch.rand(num_nodes, num_features)
+    #     model = DoubleNodeConv(update_layers)
+    #     r_out = model(r=r_in, e=None, a=a)
 
-        r_in = torch.rand(num_nodes, num_features)
-        model = DoubleNodeConv(update_layers)
-        r_out = model(r=r_in, e=None, a=a)
+    #     self.assertEqual(r_in.shape, r_out.shape, "The node feature dimensions should be same.")
 
-        self.assertEqual(
-            r_in.shape, r_out.shape,
-            "The node feature dimensions should be same."
-        )
+    """
+    Deprecated
+    """
+    # def testSingleNodeConv(self):
+    #     # contruct a graph
+    #     a = torch.LongTensor([[0, 1], [2, 3], [1, 3], [4, 5], [3, 4]])
+    #     num_nodes = 6
+    #     num_features = 12
 
-    def testSingleNodeConv(self):
+    #     update_layers = [
+    #         {
+    #             "name": "linear",
+    #             "param": {"in_features": num_features, "out_features": num_features},
+    #         },
+    #         {"name": "shifted_softplus", "param": {}},
+    #         {
+    #             "name": "linear",
+    #             "param": {"in_features": num_features, "out_features": num_features},
+    #         },
+    #         {"name": "shifted_softplus", "param": {}},
+    #     ]
 
-        # contruct a graph
-        a = torch.LongTensor([[0, 1], [2, 3], [1, 3], [4, 5], [3, 4]])
-        num_nodes = 6
-        num_features = 12
+    #     r_in = torch.rand(num_nodes, num_features)
+    #     model = SingleNodeConv(update_layers)
+    #     r_out = model(r=r_in, e=None, a=a)
 
-        update_layers = [
-            {
-                "name": "linear",
-                "param": {"in_features": num_features,
-                          "out_features": num_features},
-            },
-            {"name": "shifted_softplus", "param": {}},
-            {
-                "name": "linear",
-                "param": {"in_features": num_features,
-                          "out_features": num_features},
-            },
-            {"name": "shifted_softplus", "param": {}},
-        ]
-
-        r_in = torch.rand(num_nodes, num_features)
-        model = SingleNodeConv(update_layers)
-        r_out = model(r=r_in, e=None, a=a)
-
-        self.assertEqual(
-            r_in.shape,
-            r_out.shape,
-            ("The node feature dimensions should be same for the "
-             "SchNet Convolution case"),
-        )
+    #     self.assertEqual(
+    #         r_in.shape,
+    #         r_out.shape,
+    #         ("The node feature dimensions should be same for the " "SchNet Convolution case"),
+    #     )
 
     def testSchNetEdgeUpdate(self):
         # contruct a graph
@@ -1616,8 +1412,7 @@ class TestModules(unittest.TestCase):
         self.assertEqual(
             e_in.shape,
             e_out.shape,
-            ("The edge feature dimensions should be same for the SchNet "
-             "Edge Update case"),
+            ("The edge feature dimensions should be same for the SchNet " "Edge Update case"),
         )
 
     def testGAT(self):
@@ -1639,23 +1434,17 @@ class TestModules(unittest.TestCase):
 
         multitaskdict = {
             "myenergy0": [
-                {"name": "Dense", "param": {"in_features": 5,
-                                            "out_features": 20}},
+                {"name": "Dense", "param": {"in_features": 5, "out_features": 20}},
                 {"name": "shifted_softplus", "param": {}},
-                {"name": "Dense", "param": {"in_features": 20,
-                                            "out_features": 1}},
+                {"name": "Dense", "param": {"in_features": 20, "out_features": 1}},
             ],
             "myenergy1": [
-                {"name": "linear", "param": {"in_features": 5,
-                                             "out_features": 20}},
-                {"name": "Dense", "param": {"in_features": 20,
-                                            "out_features": 1}},
+                {"name": "linear", "param": {"in_features": 5, "out_features": 20}},
+                {"name": "Dense", "param": {"in_features": 20, "out_features": 1}},
             ],
             "Muliken charges": [
-                {"name": "linear", "param": {"in_features": 5,
-                                             "out_features": 20}},
-                {"name": "linear", "param": {"in_features": 20,
-                                             "out_features": 1}},
+                {"name": "linear", "param": {"in_features": 5, "out_features": 20}},
+                {"name": "linear", "param": {"in_features": 20, "out_features": 1}},
             ],
         }
 
