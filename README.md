@@ -22,9 +22,9 @@ If you would like to use NFF as a package (no development), you can do so by run
 pip install .
 ```
 
-Use the `-e` flag if you want to install it in editable mode:
+Use the `-e` flag if you want to develop NFF:
 ```bash
-pip install -e .
+pip install -e '.[dev]'
 ```
 
 ## Usage
