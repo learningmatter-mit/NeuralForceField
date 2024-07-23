@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Union
 
+import chgnet
 import torch
 from chgnet.data.dataset import collate_graphs
 from chgnet.graph import CrystalGraph
@@ -175,17 +176,19 @@ class CHGNetNFF(CHGNet):
         Returns:
             CHGNetNFF: CHGNetNFF foundational model.
         """
+        chgnet_path = Path(chgnet.__file__).parent
+
         try:
             checkpoint_path = {
-                "0.3.0": "../../../models/foundation_models/chgnet/0.3.0/chgnet_0.3.0_e29f68s314m37.pth.tar",
-                "0.2.0": "../../..models/foundation_models/chgnet/0.2.0/chgnet_0.2.0_e30f77s348m32.pth.tar",
+                "0.3.0": chgnet_path / "pretrained/0.3.0/chgnet_0.3.0_e29f68s314m37.pth.tar",
+                "0.2.0": chgnet_path / "pretrained/0.2.0/chgnet_0.2.0_e30f77s348m32.pth.tar",
             }[model_name]
 
-        except KeyError:
+        except KeyError as e:
             if Path(checkpoint_path).is_file():
                 checkpoint_path = model_name
             elif checkpoint_path is None:
-                raise ValueError(f"Unknown {model_name=}")
+                raise ValueError(f"Unknown {model_name=}") from e
 
         return cls.from_file(
             os.path.join(module_dir, checkpoint_path),
@@ -195,8 +198,7 @@ class CHGNetNFF(CHGNet):
         )
 
     def to(self, device: str, **kwargs) -> CHGNetNFF:
-        """
-        Move the model to the specified device.
+        """Move the model to the specified device.
 
         Args:
             device (str): Device to move the model to.
