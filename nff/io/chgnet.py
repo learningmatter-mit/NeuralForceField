@@ -143,5 +143,4 @@ def convert_data_batch(
         forces=forces,
         stresses=stresses,
         magmoms=magmoms,
-        shuffle=shuffle,
     )
