@@ -131,6 +131,8 @@ class NeuralFF(Calculator):
             self.properties = properties
 
         Calculator.calculate(self, atoms, self.properties, system_changes)
+        # TODO: update atoms only when necessary
+        atoms.update_nbr_list(update_atoms=True)
 
         # run model
         # atomsbatch = AtomsBatch(atoms)
