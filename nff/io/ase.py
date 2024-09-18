@@ -449,11 +449,14 @@ class AtomsBatch(Atoms):
             An instance of the class initialized with the properties of the ASE Atoms object.
         """
         props = kwargs.pop("props", {})
-        return cls(
+        atoms_batch = cls(
             atoms,
             props=props,
             **kwargs,
         )
+        atoms_batch.arrays = copy.deepcopy(atoms.arrays)
+        atoms_batch.constraints = copy.deepcopy(atoms.constraints)
+        return atoms_batch
 
     def copy(self) -> Self:
         """Copy the current object.
