@@ -94,6 +94,12 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         default=25,
     )
     parser.add_argument(
+        "--lr_decay",
+        help="Factor to reduce learning rate by at each step. lr = lr * lr_decay",
+        type=float,
+        default=0.5,
+    )
+    parser.add_argument(
         "--weight_decay",
         help="Fraction to reduce weights by at each step",
         type=float,
@@ -137,6 +143,7 @@ def main(
     min_lr: float = 1e-6,
     max_num_epochs: int = 200,
     patience: int = 25,
+    lr_decay: float = 0.5,
     weight_decay: float = 0.0,
     num_workers: int = 1,
     pin_memory: bool = True,
@@ -227,8 +234,9 @@ def main(
         sum([p.numel() for p in model.parameters() if p.requires_grad]),
     )
 
-    train.to_units(model.units)
-    val.to_units(model.units)
+    model_units = model.units if hasattr(model, "units") else "kcal/mol"
+    train.to_units(model_units)
+    val.to_units(model_units)
 
     # define loss
     loss_fn = loss.build_general_loss(
@@ -270,7 +278,7 @@ def main(
         hooks.ReduceLROnPlateauHook(
             optimizer=optimizer,
             patience=patience,
-            factor=lr,
+            factor=lr_decay,
             min_lr=min_lr,
             window_length=1,
             stop_after_min=True,
@@ -315,6 +323,7 @@ if __name__ == "__main__":
         min_lr=args.min_lr,
         max_num_epochs=args.max_num_epochs,
         patience=args.patience,
+        lr_decay=args.lr_decay,
         weight_decay=args.weight_decay,
         num_workers=args.num_workers,
         pin_memory=args.pin_memory,
