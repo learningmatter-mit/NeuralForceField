@@ -9,7 +9,11 @@ from typing import Dict, List, Union
 import torch
 from chgnet.data.dataset import collate_graphs
 from chgnet.graph import CrystalGraph
-from chgnet.graph.crystalgraph import datatype
+
+try:
+    from chgnet.graph.crystalgraph import datatype
+except ImportError:
+    datatype = torch.float32
 from chgnet.model import CHGNet
 from torch import Tensor, nn
 
