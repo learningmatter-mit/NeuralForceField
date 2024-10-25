@@ -141,7 +141,8 @@ def get_init_kwargs_from_model(model: Union[ScaleShiftMACE, MACE]) -> dict:
         "radial_type": radial_type,
         "heads": heads
     }
-    if isinstance(model, ScaleShiftMACE):
+    if type(model).__name__ == "ScaleShiftMACE":
+    # if isinstance(model, ScaleShiftMACE):
         init_kwargs.update({"atomic_inter_scale":model.scale_shift.scale, "atomic_inter_shift": model.scale_shift.shift})
 
     return init_kwargs
