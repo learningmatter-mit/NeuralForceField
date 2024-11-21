@@ -32,6 +32,7 @@ from nff.utils.constants import EV_TO_KCAL_MOL, HARTREE_TO_KCAL_MOL
 from nff.utils.cuda import batch_detach, batch_to
 from nff.utils.geom import batch_compute_distance, compute_distances
 from nff.utils.scatter import compute_grad
+from nff.nn.models.mace import NffScaleMACE
 
 HARTREE_TO_EV = HARTREE_TO_KCAL_MOL / EV_TO_KCAL_MOL
 
@@ -84,6 +85,18 @@ class NeuralFF(Calculator):
         self.model_kwargs = model_kwargs
         self.model_units = model_units
         self.prediction_units = prediction_units
+
+        print("Requested properties:", self.properties)
+        
+        # Unit conversion factors
+        self.energy_units_to_eV = 1.0  # assuming default model outputs energy in eV
+        self.length_units_to_A = 1.0   # assuming default model uses A**3 for length
+
+        # Adjust conversion factors if the model uses different units
+        if self.model_units == "kcal/mol":
+            self.energy_units_to_eV = 0.0433641  # kcal/mol -> eV
+        if self.prediction_units == "nm":
+            self.length_units_to_A = 10.0  # nm -> AA*3
 
     def to(self, device):
         self.device = device
@@ -146,10 +159,8 @@ class NeuralFF(Calculator):
         batch[grad_key] = []
 
         kwargs = {}
-
         requires_stress = "stress" in self.properties
         requires_embedding = "embedding" in self.properties
-
         if requires_embedding:
             kwargs["requires_embedding"] = True
         if requires_stress:
@@ -158,6 +169,8 @@ class NeuralFF(Calculator):
         if getattr(self, "model_kwargs", None) is not None:
             kwargs.update(self.model_kwargs)
 
+
+        
         prediction = self.model(batch, **kwargs)
         # print(prediction.keys())
 
@@ -197,15 +210,27 @@ class NeuralFF(Calculator):
             self.results["embedding"] = embedding
 
         if requires_stress:
-            stress = prediction["stress_volume"].detach().cpu().numpy() * (
-                1 / const.EV_TO_KCAL_MOL
-                # TODO change to more general prediction
-            )
-            self.results["stress"] = stress * (1 / atoms.get_volume())
+            if isinstance(self.model, NffScaleMACE):#the implementation of stress calculation in MACE is a bit different and hence this is needed (ASE_suit: mace/mace/calculators/mace.py)
+               # print(f"Original stress shape: {prediction['stress'].shape}")
+                if prediction["stress"].ndim==1:
+                    try:
+                        prediction["stress"] = prediction["stress"].reshape(3, 3)
+                       # print("Reshaped stress to 3*3:", prediction["stress"])
+                    except ValueError as e:
+                        raise ValueError(f"Error reshaping stress tensor: {e}, shape: {prediction['stress'].shape}")
+
+               # print("The current dimensions of the stress tensor is:", prediction["stress"].ndim)
+                
+                self.results["stress"] = full_3x3_to_voigt_6_stress(
+                    torch.mean(prediction["stress"], dim=0).cpu().numpy()*self.energy_units_to_eV/1.0)#1.0 as volume is in A**3, but conversion for energy is needed
+            else:  #for other models
+                stress = prediction["stress_volume"].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL) # TODO change to more general prediction
+                self.results["stress"] = stress * (1 / atoms.get_volume())
             if "stress_disp" in prediction:
                 self.results["stress"] = self.results["stress"] + prediction["stress_disp"]
-            self.results["stress"] = full_3x3_to_voigt_6_stress(self.results["stress"])
+            #self.results["stress"] = full_3x3_to_voigt_6_stress(self.results["stress"])#for mace model, this line is already implemented above, for other models uncomment this line
         atoms.results = self.results.copy()
+        #print("Final stress tensor:", self.results["stress"])
 
     def get_embedding(self, atoms=None):
         return self.get_property("embedding", atoms)
@@ -257,7 +282,6 @@ class EnsembleNFF(Calculator):
         self.to(device)
         self.jobdir = jobdir
         self.offset_data = {}
-        self.offset_units = kwargs.get("offset_units", "atomic")
         self.properties = properties
         self.model_kwargs = model_kwargs
         self.model_units = model_units
@@ -283,10 +307,8 @@ class EnsembleNFF(Calculator):
         for ele, num in ads_count.items():
             ref_en += num * stoidict.get(ele, 0.0)
         ref_en += stoidict.get("offset", 0.0)
-        if self.offset_units == "atomic":
-            energy += ref_en * HARTREE_TO_EV
-        else:
-            energy += ref_en
+
+        energy += ref_en * HARTREE_TO_EV
         return energy
 
     def log_ensemble(self, jobdir, log_filename, props):
@@ -454,12 +476,10 @@ class EnsembleNFF(Calculator):
 
         The special keyword 'parameters' can be used to read
         parameters from a file."""
-        changed_params = Calculator.set(self, **kwargs)
+        Calculator.set(self, **kwargs)
         if "offset_data" in self.parameters.keys():
             self.offset_data = self.parameters["offset_data"]
             print(f"offset data: {self.offset_data} is set from parameters")
-
-        return changed_params
 
     @classmethod
     def from_files(cls, model_paths: list, device="cuda", **kwargs):
