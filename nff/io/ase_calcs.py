@@ -212,7 +212,7 @@ class NeuralFF(Calculator):
             if "stress_disp" in prediction:
                 self.results["stress"] = self.results["stress"] + prediction["stress_disp"]
             self.results["stress"] = full_3x3_to_voigt_6_stress(self.results["stress"])
-            print(self.results["stress"])
+    
         atoms.results = self.results.copy()
 
     def get_embedding(self, atoms=None):
@@ -408,7 +408,6 @@ class EnsembleNFF(Calculator):
                 # TODO: implement unit conversion for stress with prediction_numpy
                 stresses.append(
                     prediction["stress_volume"].detach().cpu().numpy()
-                    * (1 / const.EV_TO_KCAL_MOL)
                     * (1 / atoms.get_volume())
                 )
 
