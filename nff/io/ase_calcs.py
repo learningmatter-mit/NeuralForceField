@@ -265,6 +265,7 @@ class EnsembleNFF(Calculator):
         self.to(device)
         self.jobdir = jobdir
         self.offset_data = {}
+        self.offset_units = kwargs.get("offset_units", "atomic")
         self.properties = properties
         self.model_kwargs = model_kwargs
         self.model_units = model_units
@@ -291,7 +292,10 @@ class EnsembleNFF(Calculator):
             ref_en += num * stoidict.get(ele, 0.0)
         ref_en += stoidict.get("offset", 0.0)
 
-        energy += ref_en * HARTREE_TO_EV
+        if self.offset_units == "atomic":
+             energy += ref_en * HARTREE_TO_EV
+        else:
+            energy += ref_en
         return energy
 
     def log_ensemble(self, jobdir, log_filename, props):
@@ -458,10 +462,12 @@ class EnsembleNFF(Calculator):
 
         The special keyword 'parameters' can be used to read
         parameters from a file."""
-        Calculator.set(self, **kwargs)
+        changed_params = Calculator.set(self, **kwargs)
         if "offset_data" in self.parameters.keys():
             self.offset_data = self.parameters["offset_data"]
             print(f"offset data: {self.offset_data} is set from parameters")
+            
+        return changed_params
 
     @classmethod
     def from_files(cls, model_paths: list, device="cuda", **kwargs):
