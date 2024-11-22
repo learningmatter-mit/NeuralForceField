@@ -36,11 +36,6 @@ from nff.nn.models.mace import NffScaleMACE
 
 HARTREE_TO_EV = HARTREE_TO_KCAL_MOL / EV_TO_KCAL_MOL
 
-# Unit conversion factors
-        
-self.energy_units_to_eV = 1.0  # if model units is in eV
-if self.model_units == "kcal/mol":
-    self.energy_units_to_eV = 0.0433641  # kcal/mol -> eV
 
 
 UNDIRECTED = [SchNet, SchNetDiabat, HybridGraphConv, SchNetFeatures, OnlyBondUpdateCP3D]
@@ -92,6 +87,11 @@ class NeuralFF(Calculator):
         self.model_units = model_units
         self.prediction_units = prediction_units
 
+        # Unit conversion factors
+        self.energy_units_to_eV = 1.0  # if model units is in eV
+        if self.model_units == "kcal/mol":
+            self.energy_units_to_eV = 0.0433641  # kcal/mol -> eV
+        
         print("Requested properties:", self.properties)      
 
     def to(self, device):
@@ -206,15 +206,16 @@ class NeuralFF(Calculator):
             self.results["embedding"] = embedding
 
         if requires_stress:
-            if isinstance(self.model, NffScaleMACE):#the implementation of stress calculation in MACE is a bit different and hence this is needed (ASE_suit: mace/mace/calculators/mace.py)
+            if isinstance(self.model, NffScaleMACE):#the implementation of stress calculation in MACE is a bit different
+                #and hence this is required (ASE_suit: mace/mace/calculators/mace.py)
         
                 if prediction["stress"].ndim==1:
                     try:
                         prediction["stress"] = prediction["stress"].reshape(3, 3)
                     except ValueError as e:
                         raise ValueError(f"Error reshaping stress tensor: {e}, shape: {prediction['stress'].shape}")
-                self.results["stress"] = 
-                    torch.mean(prediction["stress"], dim=0).cpu().numpy()*self.energy_units_to_eV #converting to eV/Angstrom^3
+                self.results["stress"] =( 
+                    torch.mean(prediction["stress"], dim=0).cpu().numpy()*self.energy_units_to_eV) #converting to eV/Angstrom^3
             else:  #for other models
                 stress = prediction["stress_volume"].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL) # TODO change to more general prediction
                 self.results["stress"] = stress * (1 / atoms.get_volume())
