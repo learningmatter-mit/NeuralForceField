@@ -36,6 +36,12 @@ from nff.nn.models.mace import NffScaleMACE
 
 HARTREE_TO_EV = HARTREE_TO_KCAL_MOL / EV_TO_KCAL_MOL
 
+# Unit conversion factors
+        
+self.energy_units_to_eV = 1.0  # if model units is in eV
+if self.model_units == "kcal/mol":
+    self.energy_units_to_eV = 0.0433641  # kcal/mol -> eV
+
 
 UNDIRECTED = [SchNet, SchNetDiabat, HybridGraphConv, SchNetFeatures, OnlyBondUpdateCP3D]
 
@@ -86,17 +92,7 @@ class NeuralFF(Calculator):
         self.model_units = model_units
         self.prediction_units = prediction_units
 
-        print("Requested properties:", self.properties)
-        
-        # Unit conversion factors
-        self.energy_units_to_eV = 1.0  # assuming default model outputs energy in eV
-        self.length_units_to_A = 1.0   # assuming default model uses A**3 for length
-
-        # Adjust conversion factors if the model uses different units
-        if self.model_units == "kcal/mol":
-            self.energy_units_to_eV = 0.0433641  # kcal/mol -> eV
-        if self.prediction_units == "nm":
-            self.length_units_to_A = 10.0  # nm -> AA*3
+        print("Requested properties:", self.properties)      
 
     def to(self, device):
         self.device = device
@@ -211,26 +207,21 @@ class NeuralFF(Calculator):
 
         if requires_stress:
             if isinstance(self.model, NffScaleMACE):#the implementation of stress calculation in MACE is a bit different and hence this is needed (ASE_suit: mace/mace/calculators/mace.py)
-               # print(f"Original stress shape: {prediction['stress'].shape}")
+        
                 if prediction["stress"].ndim==1:
                     try:
                         prediction["stress"] = prediction["stress"].reshape(3, 3)
-                       # print("Reshaped stress to 3*3:", prediction["stress"])
                     except ValueError as e:
                         raise ValueError(f"Error reshaping stress tensor: {e}, shape: {prediction['stress'].shape}")
-
-               # print("The current dimensions of the stress tensor is:", prediction["stress"].ndim)
-                
-                self.results["stress"] = full_3x3_to_voigt_6_stress(
-                    torch.mean(prediction["stress"], dim=0).cpu().numpy()*self.energy_units_to_eV/1.0)#1.0 as volume is in A**3, but conversion for energy is needed
+                self.results["stress"] = 
+                    torch.mean(prediction["stress"], dim=0).cpu().numpy()*self.energy_units_to_eV #converting to eV/Angstrom^3
             else:  #for other models
                 stress = prediction["stress_volume"].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL) # TODO change to more general prediction
                 self.results["stress"] = stress * (1 / atoms.get_volume())
             if "stress_disp" in prediction:
                 self.results["stress"] = self.results["stress"] + prediction["stress_disp"]
-            #self.results["stress"] = full_3x3_to_voigt_6_stress(self.results["stress"])#for mace model, this line is already implemented above, for other models uncomment this line
+            self.results["stress"] = full_3x3_to_voigt_6_stress(self.results["stress"])
         atoms.results = self.results.copy()
-        #print("Final stress tensor:", self.results["stress"])
 
     def get_embedding(self, atoms=None):
         return self.get_property("embedding", atoms)
