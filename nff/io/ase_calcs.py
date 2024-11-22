@@ -87,11 +87,6 @@ class NeuralFF(Calculator):
         self.model_units = model_units
         self.prediction_units = prediction_units
 
-        # Unit conversion factors
-        self.energy_units_to_eV = 1.0  # if model units is in eV
-        if self.model_units == "kcal/mol":
-            self.energy_units_to_eV = 0.0433641  # kcal/mol -> eV
-        
         print("Requested properties:", self.properties)      
 
     def to(self, device):
@@ -209,19 +204,15 @@ class NeuralFF(Calculator):
             if isinstance(self.model, NffScaleMACE):#the implementation of stress calculation in MACE is a bit different
                 #and hence this is required (ASE_suit: mace/mace/calculators/mace.py)
         
-                if prediction["stress"].ndim==1:
-                    try:
-                        prediction["stress"] = prediction["stress"].reshape(3, 3)
-                    except ValueError as e:
-                        raise ValueError(f"Error reshaping stress tensor: {e}, shape: {prediction['stress'].shape}")
                 self.results["stress"] =( 
-                    torch.mean(prediction["stress"], dim=0).cpu().numpy()*self.energy_units_to_eV) #converting to eV/Angstrom^3
+                    torch.mean(prediction["stress"], dim=0).cpu().numpy()) #converting to eV/Angstrom^3
             else:  #for other models
-                stress = prediction["stress_volume"].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL) # TODO change to more general prediction
+                stress = prediction["stress_volume"].detach().cpu().numpy() 
                 self.results["stress"] = stress * (1 / atoms.get_volume())
             if "stress_disp" in prediction:
                 self.results["stress"] = self.results["stress"] + prediction["stress_disp"]
             self.results["stress"] = full_3x3_to_voigt_6_stress(self.results["stress"])
+            print(self.results["stress"])
         atoms.results = self.results.copy()
 
     def get_embedding(self, atoms=None):
