@@ -61,6 +61,57 @@ KCAL_TO_EV = {
     "_grad": 1.0,
 }
 
+
+AU_TO_KCAL = {
+    "energy": HARTREE_TO_KCAL_MOL,
+    "_grad": 1.0 / BOHR_RADIUS,
+    "stress": HARTREE_TO_KCAL_MOL*((1.0/BOHR_RADIUS)**3),
+    "_volume": 1/((1.0/BOHR_RADIUS)**3),
+}
+
+
+AU_TO_EV = {
+    "energy": HARTREE_TO_EV,
+    "_grad": 1.0 / BOHR_RADIUS,
+    "stress": HARTREE_TO_EV*((1.0/BOHR_RADIUS)**3),
+    "_volume": 1/((1.0/BOHR_RADIUS)**3),
+}
+
+
+EV_TO_AU = {
+    "energy": 1.0 / HARTREE_TO_EV,
+    "_grad": BOHR_RADIUS,
+    "stress": (1.0/HARTREE_TO_EV)*(BOHR_RADIUS**3),
+    "_volume": 1/(BOHR_RADIUS**3),
+}
+
+
+EV_TO_KCAL = {
+    "energy": EV_TO_KCAL_MOL,
+    "_grad": 1.0,
+    "stress": EV_TO_KCAL_MOL*(1.0**3),
+    "_volume": 1/(1.0**3),
+}
+
+
+KCAL_TO_AU = {
+    "energy": 1.0 / HARTREE_TO_KCAL_MOL,
+    "_grad": BOHR_RADIUS,
+    "stress": (1.0/HARTREE_TO_KCAL_MOL)*(BOHR_RADIUS**3),
+    "_volume": 1/(BOHR_RADIUS**3),
+}
+
+
+KCAL_TO_EV = {
+    "energy": 1.0 / EV_TO_KCAL_MOL,
+    "_grad": 1.0,
+    "stress": (1.0/EV_TO_KCAL_MOL)*(1.0**3),
+    "_volume": 1/(1.0**3),
+}
+
+
+
+
 DEFAULT = {
     "energy": 1.0,
     "_grad": 1.0,
