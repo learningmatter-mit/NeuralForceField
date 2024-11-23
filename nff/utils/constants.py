@@ -31,36 +31,6 @@ ATOMIC_MASS = {
     16: 32.06,
 }
 
-AU_TO_KCAL = {
-    "energy": HARTREE_TO_KCAL_MOL,
-    "_grad": 1.0 / BOHR_RADIUS,
-}
-
-AU_TO_EV = {
-    "energy": HARTREE_TO_EV,
-    "_grad": 1.0 / BOHR_RADIUS,
-}
-
-EV_TO_AU = {
-    "energy": 1.0 / HARTREE_TO_EV,
-    "_grad": BOHR_RADIUS,
-}
-
-EV_TO_KCAL = {
-    "energy": EV_TO_KCAL_MOL,
-    "_grad": 1.0,
-}
-
-KCAL_TO_AU = {
-    "energy": 1.0 / HARTREE_TO_KCAL_MOL,
-    "_grad": BOHR_RADIUS,
-}
-
-KCAL_TO_EV = {
-    "energy": 1.0 / EV_TO_KCAL_MOL,
-    "_grad": 1.0,
-}
-
 
 AU_TO_KCAL = {
     "energy": HARTREE_TO_KCAL_MOL,
