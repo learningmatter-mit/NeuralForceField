@@ -293,7 +293,7 @@ class EnsembleNFF(Calculator):
         ref_en += stoidict.get("offset", 0.0)
 
         if self.offset_units == "atomic":
-             energy += ref_en * HARTREE_TO_EV
+            energy += ref_en * HARTREE_TO_EV
         else:
             energy += ref_en
         return energy
