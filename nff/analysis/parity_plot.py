@@ -48,14 +48,14 @@ def plot_parity(
     targets = cuda.batch_detach(targets)
 
     for ax, key in zip(ax_fig, units.keys()):
-        pred = to_tensor(results[key], stack=True)
-        targ = to_tensor(targets[key], stack=True)
+        pred = to_tensor(results[key], stack=True).numpy()
+        targ = to_tensor(targets[key], stack=True).numpy()
 
         mae = abs(pred - targ).mean()
         mae_save[key] = mae
 
-        lim_min = min(torch.min(pred), torch.min(targ))
-        lim_max = max(torch.max(pred), torch.max(targ))
+        lim_min = min(np.min(pred), np.min(targ))
+        lim_max = max(np.max(pred), np.max(targ))
 
         if lim_min < 0:
             lim_min *= 1.1
@@ -66,7 +66,6 @@ def plot_parity(
             lim_max *= 0.9
         else:
             lim_max *= 1.1
-
         if plot_type.lower() == "hexbin":
             hb = ax.hexbin(
                 pred,
@@ -164,11 +163,7 @@ def plot_err_var(
     x = pd.Series(var)
     y = pd.Series(err)
 
-    kernel = gaussian_kde(
-        np.vstack(
-            [x.sample(n=len(x), random_state=2), y.sample(n=len(y), random_state=2)]
-        )
-    )
+    kernel = gaussian_kde(np.vstack([x.sample(n=len(x), random_state=2), y.sample(n=len(y), random_state=2)]))
     c = kernel(np.vstack([x, y]))
     hb = ax.scatter(
         var,
