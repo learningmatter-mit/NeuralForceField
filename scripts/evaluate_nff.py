@@ -41,6 +41,12 @@ def parse_args():
         help="Folder to save output figures.",
     )
     parser.add_argument(
+        "--plot_type",
+        choices=["hexbin", "scatter"],
+        default="hexbin",
+        help="Type of plot to use",
+    )
+    parser.add_argument(
         "--device",
         choices=["cpu", "cuda"],
         default="cuda",
@@ -56,6 +62,7 @@ def main(
     model_type: str,
     data_path: str,
     train_log_path: str,
+    plot_type: str = "hexbin",
     device: str = "cpu",
     save_folder: str = "./",
 ):
@@ -66,6 +73,7 @@ def main(
         model_type (str): name of the model
         data_path (str): path to the data
         train_log_path (str): path to the training log
+        plot_type (str, optional): type of plot to use. Defaults to "hexbin".
         device (str, optional): device to use. Defaults to "cpu".
         save_folder (str, optional): folder to save the results. Defaults to "./".
     """
@@ -101,6 +109,7 @@ def main(
 
     print("Evaluating ...")
     results, targets, val_loss = evaluate(model, test_loader, loss_fn, device=device)
+    breakpoint()
 
     # plot parity plot
     parity_plot_path = save_path / f"{start_time}_parity_plot"
@@ -109,7 +118,7 @@ def main(
         results,
         targets,
         parity_plot_path,
-        plot_type="reg",
+        plot_type=plot_type,
         energy_key="energy",
         force_key="energy_grad",
         units={"energy_grad": "eV/Å", "energy": units},
@@ -132,6 +141,7 @@ if __name__ == "__main__":
         model_type=args.model_type,
         data_path=args.data_path,
         train_log_path=args.train_log_path,
+        plot_type=args.plot_type,
         device=args.device,
         save_folder=args.save_folder,
     )
