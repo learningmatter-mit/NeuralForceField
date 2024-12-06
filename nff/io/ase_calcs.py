@@ -32,8 +32,10 @@ from nff.utils.constants import EV_TO_KCAL_MOL, HARTREE_TO_KCAL_MOL
 from nff.utils.cuda import batch_detach, batch_to
 from nff.utils.geom import batch_compute_distance, compute_distances
 from nff.utils.scatter import compute_grad
+from nff.nn.models.mace import NffScaleMACE
 
 HARTREE_TO_EV = HARTREE_TO_KCAL_MOL / EV_TO_KCAL_MOL
+
 
 
 UNDIRECTED = [SchNet, SchNetDiabat, HybridGraphConv, SchNetFeatures, OnlyBondUpdateCP3D]
@@ -84,6 +86,8 @@ class NeuralFF(Calculator):
         self.model_kwargs = model_kwargs
         self.model_units = model_units
         self.prediction_units = prediction_units
+
+        print("Requested properties:", self.properties)      
 
     def to(self, device):
         self.device = device
@@ -146,10 +150,8 @@ class NeuralFF(Calculator):
         batch[grad_key] = []
 
         kwargs = {}
-
         requires_stress = "stress" in self.properties
         requires_embedding = "embedding" in self.properties
-
         if requires_embedding:
             kwargs["requires_embedding"] = True
         if requires_stress:
@@ -158,6 +160,8 @@ class NeuralFF(Calculator):
         if getattr(self, "model_kwargs", None) is not None:
             kwargs.update(self.model_kwargs)
 
+
+        
         prediction = self.model(batch, **kwargs)
         # print(prediction.keys())
 
@@ -197,14 +201,18 @@ class NeuralFF(Calculator):
             self.results["embedding"] = embedding
 
         if requires_stress:
-            stress = prediction["stress_volume"].detach().cpu().numpy() * (
-                1 / const.EV_TO_KCAL_MOL
-                # TODO change to more general prediction
-            )
-            self.results["stress"] = stress * (1 / atoms.get_volume())
+            if isinstance(self.model, NffScaleMACE):#the implementation of stress calculation in MACE is a bit different
+                #and hence this is required (ASE_suit: mace/mace/calculators/mace.py)
+        
+                self.results["stress"] =( 
+                    torch.mean(prediction["stress"], dim=0).cpu().numpy()) #converting to eV/Angstrom^3
+            else:  #for other models
+                stress = prediction["stress_volume"].detach().cpu().numpy() 
+                self.results["stress"] = stress * (1 / atoms.get_volume())
             if "stress_disp" in prediction:
                 self.results["stress"] = self.results["stress"] + prediction["stress_disp"]
             self.results["stress"] = full_3x3_to_voigt_6_stress(self.results["stress"])
+    
         atoms.results = self.results.copy()
 
     def get_embedding(self, atoms=None):
@@ -283,6 +291,7 @@ class EnsembleNFF(Calculator):
         for ele, num in ads_count.items():
             ref_en += num * stoidict.get(ele, 0.0)
         ref_en += stoidict.get("offset", 0.0)
+
         if self.offset_units == "atomic":
             energy += ref_en * HARTREE_TO_EV
         else:
@@ -403,7 +412,6 @@ class EnsembleNFF(Calculator):
                 # TODO: implement unit conversion for stress with prediction_numpy
                 stresses.append(
                     prediction["stress_volume"].detach().cpu().numpy()
-                    * (1 / const.EV_TO_KCAL_MOL)
                     * (1 / atoms.get_volume())
                 )
 
@@ -458,7 +466,7 @@ class EnsembleNFF(Calculator):
         if "offset_data" in self.parameters.keys():
             self.offset_data = self.parameters["offset_data"]
             print(f"offset data: {self.offset_data} is set from parameters")
-
+            
         return changed_params
 
     @classmethod
