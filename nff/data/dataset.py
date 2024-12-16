@@ -40,7 +40,8 @@ from nff.data.parallel import (
     featurize_parallel,
 )
 
-from nff.io.ase import AtomsBatch
+if TYPE_CHECKING:
+    from nff.io.ase import AtomsBatch
 
 
 class Dataset(TorchDataset):
@@ -277,6 +278,8 @@ class Dataset(TorchDataset):
         offset_key: str = "offsets",
         nbr_key: str = "nbr_list",
     ) -> None:
+        from nff.io.ase import AtomsBatch
+
         nbrlist = []
         offsets = []
         for nxyz, lattice in zip(self.props["nxyz"], self.props["lattice"]):
@@ -434,6 +437,8 @@ class Dataset(TorchDataset):
         Args:
             mol_dic (dict): dictionary of nodes of each disconnected subgraphs
         """
+        from nff.io.ase import AtomsBatch
+
         for i in range(len(self.props["nxyz"])):
             # makes atoms object
 
@@ -509,6 +514,7 @@ class Dataset(TorchDataset):
         Raises:
             TypeError: _description_
         """
+        from nff.io.ase import AtomsBatch
 
         if not self.props:
             raise TypeError("the dataset has no data yet")
@@ -610,6 +616,8 @@ class Dataset(TorchDataset):
         Returns:
             List[AtomsBatch]: list of AtomsBatch objects
         """
+        from nff.io.ase import AtomsBatch
+
         atoms_batches = []
         num_batches = len(self.props["nxyz"])
         for i in range(num_batches):

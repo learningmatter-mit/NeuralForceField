@@ -16,8 +16,8 @@ from nff.data.dataset import (
 )
 
 current_path = Path(__file__).parent
-DATASET_PATH = current_path / "../../../tutorials/data/dataset.pth.tar"
-PEROVSKITE_DATA_PATH = current_path / "./data/SrIrO3_bulk_55_nff_all_dataset.pth.tar"
+DATASET_PATH = os.path.join(current_path, "..", "..", "..", "tutorials", "data", "dataset.pth.tar")
+PEROVSKITE_DATA_PATH = os.path.join(current_path, "data", "SrIrO3_bulk_55_nff_all_dataset.pth.tar")
 TARG_NAME = "formula"
 VAL_SIZE = 0.1
 TEST_SIZE = 0.1
