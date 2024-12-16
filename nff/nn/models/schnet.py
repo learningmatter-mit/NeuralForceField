@@ -62,7 +62,7 @@ class SchNet(nn.Module):
                 'n_convolutions': 4,
                 'cutoff': 5.0,
                 'trainable_gauss': True,
-                'readoutdict': readoutdict,    
+                'readoutdict': readoutdict,
                 'dropout_rate': 0.2
             }
 
@@ -142,7 +142,7 @@ class SchNet(nn.Module):
 
         if xyz is None:
             xyz = batch["nxyz"][:, 1:4]
-            if xyz.requires_grad == False:
+            if not xyz.requires_grad:
                 xyz.requires_grad = True
 
         r = batch["nxyz"][:, 0]

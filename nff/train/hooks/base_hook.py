@@ -3,6 +3,7 @@ Copyright: SchNetPack, 2019
 Retrieved from https://github.com/atomistic-machine-learning/schnetpack/tree/dev/src/schnetpack/train/hooks
 """
 
+
 class Hook:
     """Base class for hooks."""
 

@@ -237,7 +237,7 @@ class Classifier(Metric):
 
 class FalsePositives(Classifier):
     """
-    Percentage of claimed positives that are actually wrong for a 
+    Percentage of claimed positives that are actually wrong for a
     binary classifier.
     """
 
@@ -272,7 +272,7 @@ class FalsePositives(Classifier):
 class FalseNegatives(Classifier):
 
     """
-    Percentage of claimed negatives that are actually wrong for a 
+    Percentage of claimed negatives that are actually wrong for a
     binary classifier.
     """
 
@@ -306,7 +306,7 @@ class FalseNegatives(Classifier):
 class TruePositives(Classifier):
 
     """
-    Percentage of claimed positives that are actually right for a 
+    Percentage of claimed positives that are actually right for a
     binary classifier.
     """
 
@@ -341,7 +341,7 @@ class TruePositives(Classifier):
 class TrueNegatives(Classifier):
 
     """
-    Percentage of claimed negatives that are actually right for a 
+    Percentage of claimed negatives that are actually right for a
     binary classifier.
     """
 

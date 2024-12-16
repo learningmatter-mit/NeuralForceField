@@ -7,7 +7,7 @@ from ..functional import softplus_inverse
 # backwards compatibility with older versions of torch
 try:
     from torch import sinc
-except:
+except BaseException:
 
     def sinc(x):
         x = x * math.pi

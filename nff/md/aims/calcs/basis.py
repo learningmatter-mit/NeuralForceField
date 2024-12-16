@@ -553,7 +553,7 @@ def nuc_ke(r_j,
     prefactor = ((2) ** 0.5 * (expand_alpha_i * expand_alpha_j) ** 0.25
                  * (-hbar ** 2) / (2 * expand_mj))
 
-    main_term = (1 / (4 * F ** (5/2))
+    main_term = (1 / (4 * F ** (5 / 2))
                  * np.exp(D + E ** 2 / (4 * F))
                  * (C * E ** 2 + 2 * (C + B * E) * F + 4 * A * F ** 2))
 
@@ -627,7 +627,7 @@ def construct_ham(r_list,
                       max_basis, max_basis).numpy()
 
     h_ad = torch.zeros(num_states, num_states,
-                       max_basis,  max_basis).numpy()
+                       max_basis, max_basis).numpy()
 
     for key, sub_dic in couple_dic.items():
 
@@ -731,7 +731,7 @@ def diabat_spawn_criterion(states,
         Returns:
                 thresh_dic (dict): dictionary with keys for each state,
                         the value of which is a subdictionary. The subdictionary
-                        contains keys for each other state. Say we're looking at 
+                        contains keys for each other state. Say we're looking at
                         main key i and subdictionary key j. Then thresh_dic[i][j]
                         is a boolean tensor of dimension N_I. For each Gaussian
                         basis function in state i, it tells you whether you should
@@ -785,7 +785,7 @@ def adiabat_spawn_criterion(states,
         Returns:
                 thresh_dic (dict): dictionary with keys for each state,
                         the value of which is a subdictionary. The subdictionary
-                        contains keys for each other state. Say we're looking at 
+                        contains keys for each other state. Say we're looking at
                         main key i and subdictionary key j. Then thresh_dic[i][j]
                         is a boolean tensor of dimension N_I. For each Gaussian
                         basis function in state i, it tells you whether you should

@@ -7,7 +7,7 @@ import argparse
 
 def get_main_parser():
     """ Setup parser for command line arguments """
-    ## command-specific
+    # command-specific
     cmd_parser = argparse.ArgumentParser(add_help=False)
     cmd_parser.add_argument(
         "--device",
@@ -30,7 +30,7 @@ def get_main_parser():
 
 
 def add_subparsers(cmd_parser, defaults={}):
-    ## training
+    # training
     train_parser = argparse.ArgumentParser(add_help=False, parents=[cmd_parser])
     train_parser.add_argument("data_path", help="Dataset to use")
     train_parser.add_argument("model_path", help="Destination for models and logs")
@@ -111,7 +111,7 @@ def add_subparsers(cmd_parser, defaults={}):
         default='{"energy": 0.1, "energy_grad": 1.0}',
     )
 
-    ## evaluation
+    # evaluation
     eval_parser = argparse.ArgumentParser(add_help=False, parents=[cmd_parser])
     eval_parser.add_argument("data_path", help="Dataset to use")
     eval_parser.add_argument("model_path", help="Path of stored model")
@@ -164,7 +164,7 @@ def add_subparsers(cmd_parser, defaults={}):
         help="Dropout rate for SchNet convolutions (default: %(default)s)",
     )
 
-    ## setup subparser structure
+    # setup subparser structure
     cmd_subparsers = cmd_parser.add_subparsers(
         dest="mode", help="Command-specific arguments"
     )

@@ -270,13 +270,13 @@ class UpdateBlock(nn.Module):
         self.v_mat = Dense(in_features=feat_dim,
                            out_features=feat_dim,
                            bias=False)
-        self.s_dense = nn.Sequential(Dense(in_features=2*feat_dim,
+        self.s_dense = nn.Sequential(Dense(in_features=2 * feat_dim,
                                            out_features=feat_dim,
                                            bias=True,
                                            dropout_rate=dropout,
                                            activation=to_module(activation)),
                                      Dense(in_features=feat_dim,
-                                           out_features=3*feat_dim,
+                                           out_features=3 * feat_dim,
                                            bias=True,
                                            dropout_rate=dropout))
 
@@ -378,36 +378,36 @@ class GatedEquivariantBlock(nn.Module):
                  feat_dim,
                  activation,
                  dropout_rate):
-        
+
         super().__init__()
         self.W1 = Dense(in_features=feat_dim,
-                           out_features=feat_dim,
-                           bias=False)
+                        out_features=feat_dim,
+                        bias=False)
         self.W2 = Dense(in_features=feat_dim,
-                           out_features=feat_dim,
-                           bias=False)
-        self.s_dense = nn.Sequential(Dense(in_features=2*feat_dim,
+                        out_features=feat_dim,
+                        bias=False)
+        self.s_dense = nn.Sequential(Dense(in_features=2 * feat_dim,
                                            out_features=feat_dim,
                                            bias=True,
                                            dropout_rate=dropout_rate,
                                            activation=to_module(activation)),
                                      Dense(in_features=feat_dim,
-                                           out_features=2*feat_dim,
+                                           out_features=2 * feat_dim,
                                            bias=True,
                                            dropout_rate=dropout_rate))
 
     def forward(self,
                 sv_tuple):
-        
+
         s_i, v_i = sv_tuple
 
         v_tranpose = v_i.transpose(1, 2).reshape(-1, v_i.shape[1])
         num_feats = v_i.shape[1]
-        
+
         W1_v = (self.W1(v_tranpose).reshape(-1, 3, num_feats)
-               .transpose(1, 2))
+                .transpose(1, 2))
         W2_v = (self.W2(v_tranpose).reshape(-1, 3, num_feats)
-               .transpose(1, 2))
+                .transpose(1, 2))
 
         W2_v_norm = norm(W2_v)
         s_stack = torch.cat([s_i, W2_v_norm], dim=-1)
@@ -422,8 +422,8 @@ class GatedEquivariantBlock(nn.Module):
         new_s = split[:, 1, :]
 
         return (new_s, new_v)
-    
-    
+
+
 class ReadoutBlock(nn.Module):
     def __init__(self,
                  feat_dim,
@@ -437,11 +437,11 @@ class ReadoutBlock(nn.Module):
         self.readoutdict = nn.ModuleDict(
             {key: nn.Sequential(
                 Dense(in_features=feat_dim,
-                      out_features=feat_dim//2,
+                      out_features=feat_dim // 2,
                       bias=True,
                       dropout_rate=dropout,
                       activation=to_module(activation)),
-                Dense(in_features=feat_dim//2,
+                Dense(in_features=feat_dim // 2,
                       out_features=1,
                       bias=True,
                       dropout_rate=dropout))
@@ -464,7 +464,7 @@ class ReadoutBlock(nn.Module):
             results[key] = output
 
         return results
-    
+
 
 class ReadoutBlock_Tuple(nn.Module):
     def __init__(self,
@@ -475,27 +475,27 @@ class ReadoutBlock_Tuple(nn.Module):
                  means=None,
                  stddevs=None):
         super().__init__()
-        
+
         self.output_keys = output_keys
 
         self.readoutdict = nn.ModuleDict(
             {key_tuple: nn.Sequential(
                 Dense(in_features=feat_dim,
-                      out_features=feat_dim//2,
+                      out_features=feat_dim // 2,
                       bias=True,
                       dropout_rate=dropout,
                       activation=to_module(activation)),
-                Dense(in_features=feat_dim//2,
-                      out_features=feat_dim//4,
+                Dense(in_features=feat_dim // 2,
+                      out_features=feat_dim // 4,
                       bias=True,
                       dropout_rate=dropout,
                       activation=to_module(activation)),
-                Dense(in_features=feat_dim//4,
-                      out_features=feat_dim//8,
+                Dense(in_features=feat_dim // 4,
+                      out_features=feat_dim // 8,
                       bias=True,
                       dropout_rate=dropout,
                       activation=to_module(activation)),
-                Dense(in_features=feat_dim//8,
+                Dense(in_features=feat_dim // 8,
                       out_features=len(key_tuple.split("+")),
                       bias=True,
                       dropout_rate=dropout))
@@ -534,11 +534,11 @@ class ReadoutBlock_Complex(nn.Module):
         self.readoutdict = nn.ModuleDict(
             {key: nn.Sequential(
                 Dense(in_features=feat_dim,
-                      out_features=feat_dim//2,
+                      out_features=feat_dim // 2,
                       bias=True,
                       dropout_rate=dropout,
                       activation=to_module(activation)),
-                Dense(in_features=feat_dim//2,
+                Dense(in_features=feat_dim // 2,
                       out_features=2,
                       bias=True,
                       dropout_rate=dropout))
@@ -585,7 +585,7 @@ class ReadoutBlock_Vec(nn.Module):
         )
 
         self.sdense_dict = nn.ModuleDict(
-            {key: nn.Sequential(Dense(in_features=2*feat_dim,
+            {key: nn.Sequential(Dense(in_features=2 * feat_dim,
                                       out_features=feat_dim,
                                       bias=True,
                                       dropout_rate=dropout,
@@ -647,7 +647,7 @@ class ReadoutBlock_Vec(nn.Module):
             new_v_i = u_v * a_vv  # (num_atoms, num_feats, 3)
             new_v_i = new_v_i.transpose(1, 2)  # (num_atoms, 3, num_feats)
 
-            output = readoutdict(new_v_i).sum(dim=2) # (num_atoms, 3, 1) -> (num_atoms, 3)
+            output = readoutdict(new_v_i).sum(dim=2)  # (num_atoms, 3, 1) -> (num_atoms, 3)
             results[key] = output
 
         return results
@@ -668,11 +668,11 @@ class ReadoutBlock_Vec2(nn.Module):
 
         self.gated_dict = nn.ModuleDict(
             {key: nn.Sequential(GatedEquivariantBlock(feat_dim=feat_dim,
-                                      dropout_rate=dropout,
-                                      activation=activation),
+                                                      dropout_rate=dropout,
+                                                      activation=activation),
                                 GatedEquivariantBlock(feat_dim=feat_dim,
-                                      dropout_rate=dropout,
-                                      activation=activation))
+                                                      dropout_rate=dropout,
+                                                      activation=activation))
              for key in output_keys}
         )
 
@@ -699,7 +699,7 @@ class ReadoutBlock_Vec2(nn.Module):
 
             new_s_i, new_v_i = self.gated_dict[key]((s_i, v_i))
             new_v_i = new_v_i.transpose(1, 2)  # (num_atoms, 3, num_feats)
-            output = readoutdict(new_v_i).sum(dim=2) # (num_atoms, 3, 1) -> (num_atoms, 3)
+            output = readoutdict(new_v_i).sum(dim=2)  # (num_atoms, 3, 1) -> (num_atoms, 3)
             results[key] = output
 
         return results
@@ -755,7 +755,7 @@ class ReadoutBlock_Vec2(nn.Module):
 #             new_s_i, new_v_i = self.gated_dict[key]((s_i, v_i))
 #             new_v_i = new_v_i.transpose(1, 2)  # (num_atoms, 3, num_feats)
 #             nu = readoutdict(new_v_i).sum(dim=2) # (num_atoms, 3, 1) -> (num_atoms, 3)
-#             output = (torch.outer(r_i.reshape(-1), nu.reshape(-1)) 
+#             output = (torch.outer(r_i.reshape(-1), nu.reshape(-1))
 #                       + torch.outer(nu.reshape(-1), r_i.reshape(-1)))
 #             results[key] = output
 

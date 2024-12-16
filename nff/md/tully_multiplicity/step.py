@@ -9,7 +9,6 @@ import numpy as np
 import torch
 
 
-
 def verlet_step_1(forces,
                   surfs,
                   vel,
@@ -123,7 +122,6 @@ def get_p_hop(hop_eqn='sharc',
     return p
 
 
-
 def get_sharc_p(old_c,
                 new_c,
                 P,
@@ -174,7 +172,7 @@ def get_sharc_p(old_c,
 
     num = np.real(c_alpha_dt * np.conj(P_alpha_beta) * np.conj(c_beta_t))
     denom = np.power(np.abs(c_beta_t), 2) - np.real(c_beta_dt * np.conj(P_beta_beta)
-                                         * np.conj(c_beta_t))
+                                                    * np.conj(c_beta_t))
     pref = 1. - np.power(np.abs(c_beta_dt), 2) / (np.power(np.abs(c_beta_t), 2) + 1.e-8)
 
     h = np.zeros((num_samples, num_states))
@@ -274,8 +272,8 @@ def rescale(energy,
     """
     Velocity re-scaling, from:
 
-    Landry, B.R. and Subotnik, J.E., 2012. How to recover Marcus theory with 
-    fewest switches surface hopping: Add just a touch of decoherence. The 
+    Landry, B.R. and Subotnik, J.E., 2012. How to recover Marcus theory with
+    fewest switches surface hopping: Add just a touch of decoherence. The
     Journal of chemical physics, 137(22), p.22A513.
 
     If no NACV is available, the KE is simply rescaled to conserve energy.
@@ -402,9 +400,9 @@ def truhlar_decoherence(c,
     num[num < 0] = 0
 
     c_m_prime = c_m * np.sqrt(
-                        num.reshape(-1, 1)
-                        / np.power(np.abs(c_m), 2)
-                    )
+        num.reshape(-1, 1)
+        / np.power(np.abs(c_m), 2)
+    )
 
     new_c = np.zeros_like(c)
     np.put_along_axis(new_c,

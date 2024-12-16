@@ -341,7 +341,7 @@ class Langevin(MolecularDynamics):
         **kwargs,
     ):
         # Random Number Generator
-        if random_seed == None:
+        if random_seed is None:
             random_seed = np.random.randint(2147483647)
         if type(random_seed) is int:
             np.random.seed(random_seed)
@@ -349,7 +349,7 @@ class Langevin(MolecularDynamics):
         else:
             try:
                 np.random.set_state(random_seed)
-            except:
+            except BaseException:
                 raise ValueError("\tThe provided seed was neither an int nor a state of numpy random")
 
         if os.path.isfile(str(trajectory)):
@@ -499,7 +499,7 @@ class BatchLangevin(MolecularDynamics):
             os.remove(trajectory)
 
         # Random Number Generator
-        if random_seed == None:
+        if random_seed is None:
             random_seed = np.random.randint(2147483647)
         if type(random_seed) is int:
             np.random.seed(radnom_seed)
@@ -507,7 +507,7 @@ class BatchLangevin(MolecularDynamics):
         else:
             try:
                 np.random.set_state(random_seed)
-            except:
+            except BaseException:
                 raise ValueError("\tThe provided seed was neither an int nor a state of numpy random")
 
         MolecularDynamics.__init__(
@@ -687,7 +687,7 @@ class VRescale(MolecularDynamics):
         **kwargs,
     ):
         # Random Number Generator
-        if random_seed == None:
+        if random_seed is None:
             random_seed = np.random.randint(2147483647)
         if type(random_seed) is int:
             np.random.seed(random_seed)
@@ -695,7 +695,7 @@ class VRescale(MolecularDynamics):
         else:
             try:
                 np.random.set_state(random_seed)
-            except:
+            except BaseException:
                 raise ValueError("\tThe provided seed was neither an int nor a state of numpy random")
 
         if os.path.isfile(str(trajectory)):

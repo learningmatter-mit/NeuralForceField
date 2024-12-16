@@ -101,7 +101,7 @@ def scatter_mol(atomwise,
     """
     Add atomic contributions in a batch to their respective
     geometries. A simple sum is much faster than doing scatter_add
-    because it takes a very long time to make the indices that 
+    because it takes a very long time to make the indices that
     map atom index to molecule.
     """
 
@@ -119,7 +119,7 @@ def scatter_pairwise(pairwise,
                      nbrs):
     """
     Add pair-wise contributions in a batch to their respective
-    geometries 
+    geometries
     """
 
     # mol_idx = []

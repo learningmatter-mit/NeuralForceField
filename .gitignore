@@ -66,5 +66,13 @@ dist/
 sandbox_excited/
 build/
 
+# Editor files
+# vim
+*.swp
+*.swo
+
+# pycharm
+.idea/
+
 # required exceptions
 !tutorials/models/ammonia/Ammonia.xyz

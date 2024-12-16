@@ -401,12 +401,12 @@ def clean(molecule):
     molecule = re.sub('Cl', '[#17]', molecule)
     molecule = re.sub('C', '[#6]', molecule)
     molecule = re.sub('c', '[#6]', molecule)
-    molecule = re.sub('\[N-\]', '[#7-]', molecule)
+    molecule = re.sub('\\[N-\\]', '[#7-]', molecule)
     molecule = re.sub('N', '[#7]', molecule)
     molecule = re.sub('n', '[#7]', molecule)
-    molecule = re.sub('\[\[', '[', molecule)
-    molecule = re.sub('\]\]', ']', molecule)
-    molecule = re.sub('\]H\]', 'H]', molecule)
+    molecule = re.sub('\\[\\[', '[', molecule)
+    molecule = re.sub('\\]\\]', ']', molecule)
+    molecule = re.sub('\\]H\\]', 'H]', molecule)
     molecule = re.sub('=', '~', molecule)
 
     return molecule
@@ -438,7 +438,7 @@ def minimize(output,
     output.write(("Minimisation complete, generated conformations "
                   "with the following energies:\n"))
     output.write("\n".join([str(energy[1])
-                            for energy in confgen.conf_energies])+"\n")
+                            for energy in confgen.conf_energies]) + "\n")
     msg = (f"Clustering structures using an energy window of "
            f"{e_window}  and an rms tolerance of {rms_tol} and a "
            f"Report Energy Window of {rep_e_window}\n")
@@ -683,7 +683,7 @@ def one_species_confs(molecule,
     smiles = copy.deepcopy(molecule)
     with open(log, "w") as output:
         output.write("The smiles strings that will be run are:\n")
-        output.write("\n".join([molecule])+"\n")
+        output.write("\n".join([molecule]) + "\n")
 
         if any([element in molecule for element in UFF_ELEMENTS]):
             output.write(("Switching to UFF, since MMFF94 does "

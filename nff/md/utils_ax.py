@@ -29,7 +29,7 @@ def get_energy(atoms):
     # ekin = (0.5 * (vel * 1e-10 * fs * 1e15).pow(2).sum(1) * (mass * 1.66053904e-27) * 6.241509e+18).sum()
     # ekin = ekin.item() #* ev_to_kcal
 
-    #ekin = ekin.detach().numpy()
+    # ekin = ekin.detach().numpy()
 
     print(('Energy per atom: Epot = %.2fkcal/mol  '
            'Ekin = %.2fkcal/mol (T=%3.0fK)  '
@@ -43,7 +43,7 @@ def get_energy(atoms):
 def write_traj(filename, frames):
     '''
         Write trajectory dataframes into .xyz format for VMD visualization
-        to do: include multiple atom types 
+        to do: include multiple atom types
 
         example:
             path = "../../sim/topotools_ethane/ethane-nvt_unwrap.xyz"
@@ -54,13 +54,13 @@ def write_traj(filename, frames):
     atom_no = frames.shape[1]
     for i, frame in enumerate(frames):
         file.write(str(atom_no) + '\n')
-        file.write('Atoms. Timestep: ' + str(i)+'\n')
+        file.write('Atoms. Timestep: ' + str(i) + '\n')
         for atom in frame:
             if atom.shape[0] == 4:
                 try:
                     file.write(str(int(atom[0])) + " " + str(atom[1]) +
                                " " + str(atom[2]) + " " + str(atom[3]) + "\n")
-                except:
+                except BaseException:
                     file.write(str(atom[0]) + " " + str(atom[1]) +
                                " " + str(atom[2]) + " " + str(atom[3]) + "\n")
             elif atom.shape[0] == 3:
@@ -72,9 +72,9 @@ def write_traj(filename, frames):
 
 
 def mol_dot(vec1, vec2):
-    """ Say we have two vectors, each of which has the form 
+    """ Say we have two vectors, each of which has the form
     [[fx1, fy1, fz1], [fx2, fy2, fz2], ...].
-    mol_dot returns an array of dot products between each 
+    mol_dot returns an array of dot products between each
     element of the two vectors. """
     v1 = np.array(vec1)
     v2 = np.array(vec2)
@@ -229,11 +229,11 @@ class NeuralMDLogger(MDLogger):
             epot /= self.natoms
             ekin /= self.natoms
         if self.dyn is not None:
-            t = self.dyn.get_time() / (1000*units.fs)
+            t = self.dyn.get_time() / (1000 * units.fs)
             dat = (t,)
         else:
             dat = ()
-        dat += (epot+ekin, epot, ekin, temp)
+        dat += (epot + ekin, epot, ekin, temp)
         if self.stress:
             dat += tuple(self.atoms.get_stress() / units.GPa)
         self.logfile.write(self.fmt % dat)

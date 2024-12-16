@@ -53,6 +53,15 @@ Homepage = "https://github.mit.edu/MLMat/NeuralForceField/"
 [tool.setuptools]
 packages.find = { where = ["."], include = ["nff*"] }
 
+[tool.autopep8]
+max_line_length = 120
+in-place = true
+recursive = true
+aggressive = 2
+
+[tool.flake8]
+max_line_length = 120
+
 [tool.ruff]
 include = ["**/pyproject.toml", "*.ipynb", "*.py", "*.pyi"]
 exclude = ["__init__.py"]

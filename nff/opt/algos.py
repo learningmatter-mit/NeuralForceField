@@ -6,13 +6,12 @@ import numpy as np
 from warnings import warn
 
 
-
 class Converged(Exception):
     pass
 
+
 class OptimizerConvergenceError(Exception):
     pass
-
 
 
 class NeuralCG(SciPyFminCG):
@@ -37,14 +36,14 @@ class NeuralCG(SciPyFminCG):
                 'due to precision loss')
 
     def run(self, fmax=0.05, steps=100000000):
-        
+
         if self.force_consistent is None:
             self.set_force_consistent()
         self.fmax = fmax
         try:
             # want to update the neighbor list every step
             self.atoms.update_nbr_list()
-            
+
             # As SciPy does not log the zeroth iteration, we do that manually
             self.callback(None)
 
@@ -52,13 +51,12 @@ class NeuralCG(SciPyFminCG):
             self.call_fmin(fmax / self.H0, steps)
         except Converged:
             pass
-
 
 
 class NeuralBFGS(SciPyFminBFGS):
 
     def run(self, fmax=0.05, steps=100000000):
-        
+
         if self.force_consistent is None:
             self.set_force_consistent()
         self.fmax = fmax
@@ -72,7 +70,6 @@ class NeuralBFGS(SciPyFminBFGS):
             self.call_fmin(fmax / self.H0, steps)
         except Converged:
             pass
-
 
 
 class NeuralAseBFGS(BFGS):

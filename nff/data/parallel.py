@@ -110,9 +110,9 @@ def rd_parallel(datasets, check_smiles=False):
     Args:
         datasets (list): list of smaller datasets
         check_smiles (bool): exclude any species whose
-            SMILES strings aren't the same as the 
+            SMILES strings aren't the same as the
     Returns:
-        results_dsets (list): list of datasets with 
+        results_dsets (list): list of datasets with
             RDKit mols.
     """
 
@@ -127,14 +127,14 @@ def rd_parallel(datasets, check_smiles=False):
 
 def bonds_parallel(datasets, feat_types):
     """
-    Generate bond lists and bond features for the dataset 
+    Generate bond lists and bond features for the dataset
     in parallel.
     Args:
         datasets (list): list of smaller datasets
         feat_types (list[str]): types of bond features to
-            use 
+            use
     Returns:
-        results_dsets (list): list of datasets with 
+        results_dsets (list): list of datasets with
             bond lists and features.
     """
 
@@ -148,14 +148,14 @@ def bonds_parallel(datasets, feat_types):
 
 def atoms_parallel(datasets, feat_types):
     """
-    Generate atom features for the dataset 
+    Generate atom features for the dataset
     in parallel.
     Args:
         datasets (list): list of smaller datasets
         feat_types (list[str]): types of atom features to
-            use 
+            use
     Returns:
-        results_dsets (list): list of datasets with 
+        results_dsets (list): list of datasets with
             atom features.
     """
 
@@ -175,7 +175,7 @@ def e3fp_parallel(datasets, fp_length):
         datasets (list): list of smaller datasets
         fp_length (int): fingerprint length
     Returns:
-        results_dsets (list): list of datasets with 
+        results_dsets (list): list of datasets with
             E3FP fingerprints.
     """
     kwargs_list = [{"rd_dataset": dataset, "fp_length": fp_length} for
@@ -229,7 +229,7 @@ def featurize_parallel(dataset,
                        bond_feats=BOND_FEAT_TYPES,
                        atom_feats=ATOM_FEAT_TYPES):
     """
-    Add RDKit mols, atom features and bond features to a dataset in 
+    Add RDKit mols, atom features and bond features to a dataset in
     parallel.
     Args:
          dataset (nff.data.dataset): NFF dataset

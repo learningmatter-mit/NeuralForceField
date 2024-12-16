@@ -26,7 +26,7 @@ class Stack(nn.Module):
                 **kwargs):
 
         # run models
-        result_list = [self.models[key](batch,  **kwargs)
+        result_list = [self.models[key](batch, **kwargs)
                        for key in self.models.keys()]
 
         # perform further operations

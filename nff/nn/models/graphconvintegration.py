@@ -13,7 +13,7 @@ from nff.nn.utils import get_default_readout
 class GraphConvIntegration(nn.Module):
 
     """SchNet with optional aggr_weight for thermodynamic intergration
-    
+
     Attributes:
         atom_embed (torch.nn.Embedding): Convert atomic number into an
             embedding vector of size n_atom_basis
@@ -27,10 +27,10 @@ class GraphConvIntegration(nn.Module):
             {name: mod_list}, where name is the name of a property object and mod_list
             is a ModuleList of layers to predict that property.
     """
-    
+
     def __init__(self, modelparams):
         """Constructs a SchNet model.
-        
+
         Args:
             modelparams (TYPE): Description
         """
@@ -46,32 +46,31 @@ class GraphConvIntegration(nn.Module):
 
         # default predict var
         readoutdict = modelparams.get('readoutdict', get_default_readout(n_atom_basis))
-        post_readout =  modelparams.get('post_readout', None)
+        post_readout = modelparams.get('post_readout', None)
 
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
 
         self.convolutions = nn.ModuleList([
             SchNetConv(n_atom_basis=n_atom_basis,
-                             n_filters=n_filters,
-                             n_gaussians=n_gaussians, 
-                             cutoff=cutoff,
-                             trainable_gauss=trainable_gauss)
+                       n_filters=n_filters,
+                       n_gaussians=n_gaussians,
+                       cutoff=cutoff,
+                       trainable_gauss=trainable_gauss)
             for _ in range(n_convolutions)
         ])
 
         # ReadOut
-        self.atomwisereadout = NodeMultiTaskReadOut(multitaskdict=readoutdict, post_readout=post_readout)        
+        self.atomwisereadout = NodeMultiTaskReadOut(multitaskdict=readoutdict, post_readout=post_readout)
         self.device = None
 
     def forward(self, batch, **kwargs):
-
         """Summary
-        
+
         Args:
             batch (dict): dictionary of props
-        
+
         Returns:
-            dict: dionary of results 
+            dict: dionary of results
         """
         r = batch['nxyz'][:, 0]
         xyz = batch['nxyz'][:, 1:4]
@@ -98,5 +97,5 @@ class GraphConvIntegration(nn.Module):
 
         r = self.atomwisereadout(r)
         results = batch_and_sum(r, N, list(batch.keys()), xyz)
-        
-        return results 
+
+        return results

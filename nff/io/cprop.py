@@ -44,7 +44,7 @@ def cp_hyperopt(cp_folder,
         `hyp_folder` already exists and has the completion file
         `best_params.json`.
     Returns:
-      best_params (dict): best parameters from hyperparameter 
+      best_params (dict): best parameters from hyperparameter
         optimization
     """
 
@@ -243,7 +243,7 @@ def get_smiles(smiles_folder, name):
       smiles_folder (str): folder with the csvs
       name (str): csv file name
     Returns:
-      smiles_list (list[str]): SMILES strings 
+      smiles_list (list[str]): SMILES strings
     """
 
     path = os.path.join(smiles_folder, name)
@@ -345,7 +345,7 @@ def save_hyperopt(feat_folder,
       metric (str): metric with which you're evaluating the model performance
       smiles_folder (str): folder with the csvs
       cp_save_folder (str): folder in which you're saving features for chemprop use
-      dset_size (int, optional): maximum size of the entire dataset to use in hyperparameter 
+      dset_size (int, optional): maximum size of the entire dataset to use in hyperparameter
         optimization.
     Returns:
       hyp_np_path (str): path of npz features file for hyperparameter optimization

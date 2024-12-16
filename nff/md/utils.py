@@ -258,7 +258,7 @@ def write_traj(filename, frames):
             if atom.shape[0] == 4:
                 try:
                     file.write(str(int(atom[0])) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
-                except:
+                except BaseException:
                     file.write(str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
             elif atom.shape[0] == 3:
                 file.write("1" + " " + str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + "\n")

@@ -224,7 +224,6 @@ def assign_clusters(ref_idx,
     # to that cluster
     min_rmsds[torch.isnan(min_rmsds)] = float("inf")
 
-
     clusters = min_rmsds.argmin(-1)
 
     if extra_category:
@@ -237,8 +236,6 @@ def assign_clusters(ref_idx,
 
     for spec_idx, cluster in enumerate(clusters):
         cluster_dic[cluster.item()].append(spec_idx)
-
-
 
     return cluster_dic, min_rmsds
 
@@ -319,7 +316,6 @@ def per_spec_config_weights(spec_nxyz,
 
     # return normalized weights
     geom_weights /= geom_weights.sum()
-
 
     return geom_weights, cluster_rmsds, cluster_dic
 

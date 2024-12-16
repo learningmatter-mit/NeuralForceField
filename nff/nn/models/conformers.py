@@ -17,7 +17,7 @@ from nff.utils.confs import split_batch
 class WeightedConformers(nn.Module):
     """
     Model that uses a representation of a molecule in terms of different 3D
-    conformers to predict properties. The fingerprints of each conformer are 
+    conformers to predict properties. The fingerprints of each conformer are
     generated using the SchNet model.
     """
 
@@ -209,8 +209,8 @@ class WeightedConformers(nn.Module):
 
     def add_features(self, batch, **kwargs):
         """
-        Get any extra per-species features that were requested for 
-        the dataset. 
+        Get any extra per-species features that were requested for
+        the dataset.
         Args:
             batch (dict): batched sample of species
         Returns:
@@ -355,14 +355,14 @@ class WeightedConformers(nn.Module):
                         batch,
                         n_conf_list):
         """
-        Get any extra 3D per-conformer features that were requested for 
-        the dataset. 
+        Get any extra 3D per-conformer features that were requested for
+        the dataset.
         Args:
             batch (dict): batched sample of species
-            n_conf_list (list[int]): list of number of conformers in each 
+            n_conf_list (list[int]): list of number of conformers in each
                 species.
         Returns:
-            split_extra (list): list of stacked per-cofnormer feature tensors 
+            split_extra (list): list of stacked per-cofnormer feature tensors
                 for each species.
         """
 
@@ -403,7 +403,7 @@ class WeightedConformers(nn.Module):
             mol_size (int): Number of atoms in the molecule
             batch (dict): batched sample of species
             split_extra (list): extra 3D fingerprints split by
-                species 
+                species
             idx (int): index of the current species in the batch.
         """
 
@@ -571,8 +571,8 @@ class WeightedConformers(nn.Module):
         Here, the atomic fingerprints for each geometry get converted
         into a molecular fingerprint. Then, the molecular
         fingerprints for the different conformers of a given species
-        get multiplied by the Boltzmann weights or learned weights of 
-        those conformers and added together to make a final fingerprint 
+        get multiplied by the Boltzmann weights or learned weights of
+        those conformers and added together to make a final fingerprint
         for the species.
 
         Args:

@@ -327,7 +327,7 @@ def prop_split(max_specs, dataset_type, props, sample_dic, seed):
         else:
             random.shuffle(underrep)
             random.shuffle(overrep)
-            keep_smiles = underrep[: max_specs // 2] + overrep[max_specs // 2 :]
+            keep_smiles = underrep[: max_specs // 2] + overrep[max_specs // 2:]
     else:
         keep_smiles = list(sample_dic.keys())
 

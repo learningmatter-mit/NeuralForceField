@@ -167,11 +167,11 @@ def smiles_from_mol(mol):
     """
     Get the canonical smiles from an rdkit mol.
     Args:
-        mol (rdkit.Chem.rdchem.Mol): rdkit Mol 
+        mol (rdkit.Chem.rdchem.Mol): rdkit Mol
     Returns:
         new_smiles (str): canonicial smiles
         new_mol (rdkit.Chem.rdchem.Mol): rdkit Mol created
-            from the canonical smiles. 
+            from the canonical smiles.
     """
 
     new_smiles = Chem.MolToSmiles(mol)
@@ -184,11 +184,11 @@ def smiles_from_mol(mol):
 def get_undirected_bonds(mol):
     """
     Get an undirected bond list from an RDKit mol. This
-    means that bonds between atoms 1 and 0 are stored as 
+    means that bonds between atoms 1 and 0 are stored as
     [0, 1], whereas in a directed list they would be stored as
     both [0, 1] and [1, 0].
     Args:
-        mol (rdkit.Chem.rdchem.Mol): rdkit Mol 
+        mol (rdkit.Chem.rdchem.Mol): rdkit Mol
     Returns:
         bond_list (list): undirected bond list
     """
@@ -213,7 +213,7 @@ def undirected_bond_atoms(mol):
     Get a list of the atomic numbers comprising a bond
     in each bond of an undirected bond list.
     Args:
-        mol (rdkit.Chem.rdchem.Mol): rdkit Mol 
+        mol (rdkit.Chem.rdchem.Mol): rdkit Mol
     Returns:
         atom_num_list (list): list of the form [[num__00, num_01],
         [num_10, num_11], [num_20, num_21], ...], where the `num_ij`
@@ -239,8 +239,8 @@ def check_connectivity(mol_0, mol_1):
     """
     Check if the atom connectivity in two mol objects is the same.
     Args:
-        mol_0 (rdkit.Chem.rdchem.Mol): first rdkit Mol 
-        mol_1 (rdkit.Chem.rdchem.Mol): second rdkit Mol 
+        mol_0 (rdkit.Chem.rdchem.Mol): first rdkit Mol
+        mol_1 (rdkit.Chem.rdchem.Mol): second rdkit Mol
     Returns:
         same (bool): whether or not the connectivity is the same
     """
@@ -257,7 +257,7 @@ def verify_smiles(rd_mol, smiles):
     Verify that an RDKit mol has the same smiles as the original smiles
     that made it.
     Args:
-        rd_mol (rdkit.Chem.rdchem.Mol): rdkit Mol 
+        rd_mol (rdkit.Chem.rdchem.Mol): rdkit Mol
         smiles (str): claimed smiles
     Returns:
         None
@@ -307,7 +307,7 @@ def verify_smiles(rd_mol, smiles):
 
 def log_failure(bad_idx, i):
     """
-    Log how many smiles have conformers that you've successfully converted 
+    Log how many smiles have conformers that you've successfully converted
     to RDKit mols.
     Args:
         bad_idx (list[int]): indices to get rid of in the dataset
@@ -502,7 +502,7 @@ def bond_feat_to_vec(feat_type, feat):
         feat_type (int): what type of feature it is
         feat (Union[floa, int]): feaure value
     Returns:
-        one_hot (torch.Tensor): one-hot encoding of 
+        one_hot (torch.Tensor): one-hot encoding of
             the feature.
     """
 
@@ -599,7 +599,7 @@ def atom_feat_to_vec(feat_type, feat):
         feat_type (int): what type of feature it is
         feat (Union[floa, int]): feaure value
     Returns:
-        one_hot (torch.Tensor): one-hot encoding of 
+        one_hot (torch.Tensor): one-hot encoding of
             the feature.
     """
 
@@ -718,7 +718,7 @@ def get_all_bond_feats(bond, feat_types):
         bond (rdkit.Chem.rdchem.Bond): bond object
         feat_types (list[str]): list of feature types
     Returns:
-        feat_dic (dict): dictionary of the form 
+        feat_dic (dict): dictionary of the form
             {feat_type: bond_feat_vector} for all
             feature types.
     """
@@ -740,7 +740,7 @@ def get_all_atom_feats(atom, feat_types):
         atom (rdkit.Chem.rdchem.Atom): atom object
         feat_types (list[str]): list of feature types
     Returns:
-        feat_dic (dict): dictionary of the form 
+        feat_dic (dict): dictionary of the form
             {feat_type: atom_feat_vector} for all
             feature types.
     """
@@ -923,7 +923,7 @@ def decode_atomic(features, meta_data=META_DATA):
     Args:
         features (torch.Tensor): feature vector
         meta_data (dict): dictionary that tells you the
-            atom and bond feature types 
+            atom and bond feature types
     Returns:
         dic (dict): dictionary of feature values
     """
@@ -963,7 +963,7 @@ def decode_bond(features, meta_data=META_DATA):
     Args:
         features (torch.Tensor): feature vector
         meta_data (dict): dictionary that tells you the
-            atom and bond feature types 
+            atom and bond feature types
     Returns:
         dic (dict): dictionary of feature values
     """
@@ -996,7 +996,7 @@ def featurize_dataset(dataset,
                       bond_feats=BOND_FEAT_TYPES,
                       atom_feats=ATOM_FEAT_TYPES):
     """
-    Add RDKit mols, atomic features and bond features to 
+    Add RDKit mols, atomic features and bond features to
     a dataset. Note that this has been superseded by the parallel
     version in data/parallel.py.
     Args:
@@ -1028,8 +1028,8 @@ def featurize_dataset(dataset,
 def add_morgan(dataset, vec_length):
     """
     Add Morgan fingerprints to the dataset. Note that this uses
-    the smiles of each species to get one fingerprint per species, 
-    as opposed to getting the graph of each conformer and its 
+    the smiles of each species to get one fingerprint per species,
+    as opposed to getting the graph of each conformer and its
     fingerprint.
 
     Args:

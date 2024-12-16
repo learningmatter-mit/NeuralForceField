@@ -1,32 +1,11 @@
-import sys
-
-sys.path.append("/home/saxelrod/htvs-ax/htvs")
-
-import os
-
-import django
-
-os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
-django.setup()
-
-# Shell Plus Model Imports
-
-
-import copy
-import json
-import pdb
-import random
-
-import numpy as np
-from ase import Atoms, optimize, units
-from ase.calculators.calculator import Calculator
-from ase.io.trajectory import Trajectory as AseTrajectory
-from ase.md.verlet import VelocityVerlet
-from django.contrib.auth.models import Group
-from django.contrib.contenttypes.models import ContentType
-from django.utils import timezone
-from jobs.models import Job, JobConfig
-from neuralnet.utils import vib
+from nff.utils.cuda import batch_to
+from nff.utils import constants as const
+from nff.train import load_model
+from nff.nn.tensorgrad import get_schnet_hessians
+from nff.io.ase_ax import AtomsBatch, NeuralFF
+from nff.data import Dataset, collate_dicts
+from torch.utils.data import DataLoader
+from rdkit import Chem
 from pgmols.models import (
     AtomBasis,
     Geom,
@@ -50,17 +29,34 @@ from pgmols.models import (
     Stoichiometry,
     Trajectory,
 )
-from rdkit import Chem
-from torch.utils.data import DataLoader
+from neuralnet.utils import vib
+from jobs.models import Job, JobConfig
+from django.utils import timezone
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.auth.models import Group
+from ase.md.verlet import VelocityVerlet
+from ase.io.trajectory import Trajectory as AseTrajectory
+from ase.calculators.calculator import Calculator
+from ase import Atoms, optimize, units
+import numpy as np
+import random
+import pdb
+import json
+import copy
+import django
+import os
+import sys
 
-from nff.data import Dataset, collate_dicts
+sys.path.append("/home/saxelrod/htvs-ax/htvs")
+
+
+os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
+django.setup()
+
+# Shell Plus Model Imports
+
 
 # from nff.nn.models import PostProcessModel
-from nff.io.ase_ax import AtomsBatch, NeuralFF
-from nff.nn.tensorgrad import get_schnet_hessians
-from nff.train import load_model
-from nff.utils import constants as const
-from nff.utils.cuda import batch_to
 
 KT = 0.000944853
 FS_TO_AU = 41.341374575751

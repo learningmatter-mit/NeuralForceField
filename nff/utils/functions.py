@@ -1,6 +1,6 @@
 """
 Special functions for DimeNet and SpookyNet.
-Dimenet functions taken directly from 
+Dimenet functions taken directly from
 https://github.com/klicperajo/
 dimenet/blob/master/dimenet/model/
 layers/basis_utils.py.
@@ -24,7 +24,7 @@ def Jn(r, n):
     """
     numerical spherical bessel functions of order n
     """
-    return np.sqrt(np.pi/(2*r)) * sp.jv(n+0.5, r)
+    return np.sqrt(np.pi / (2 * r)) * sp.jv(n + 0.5, r)
 
 
 def Jn_zeros(n, k):
@@ -51,11 +51,11 @@ def spherical_bessel_formulas(n):
     """
     x = sym.symbols('x')
 
-    f = [sym.sin(x)/x]
-    a = sym.sin(x)/x
+    f = [sym.sin(x) / x]
+    a = sym.sin(x) / x
     for i in range(1, n):
-        b = sym.diff(a, x)/x
-        f += [sym.simplify(b*(-x)**i)]
+        b = sym.diff(a, x) / x
+        f += [sym.simplify(b * (-x)**i)]
         a = sym.simplify(b)
     return f
 
@@ -71,8 +71,8 @@ def bessel_basis(n, k):
     for order in range(n):
         normalizer_tmp = []
         for i in range(k):
-            normalizer_tmp += [0.5*Jn(zeros[order, i], order+1)**2]
-        normalizer_tmp = 1/np.array(normalizer_tmp)**0.5
+            normalizer_tmp += [0.5 * Jn(zeros[order, i], order + 1)**2]
+        normalizer_tmp = 1 / np.array(normalizer_tmp)**0.5
         normalizer += [normalizer_tmp]
 
     f = spherical_bessel_formulas(n)
@@ -82,8 +82,8 @@ def bessel_basis(n, k):
         bess_basis_tmp = []
         for i in range(k):
             bess_basis_tmp += [sym.simplify(normalizer[order]
-                                            [i]*f[order].subs(
-                                                x, zeros[order, i]*x))]
+                                            [i] * f[order].subs(
+                                                x, zeros[order, i] * x))]
         bess_basis += [bess_basis_tmp]
     return bess_basis
 
@@ -95,8 +95,8 @@ def sph_harm_prefactor(l, m):
     l: int, l>=0
     m: int, -l<=m<=l
     """
-    return ((2*l+1) * np.math.factorial(l-abs(m))
-            / (4*np.pi*np.math.factorial(l+abs(m))))**0.5
+    return ((2 * l + 1) * np.math.factorial(l - abs(m))
+            / (4 * np.pi * np.math.factorial(l + abs(m))))**0.5
 
 
 def associated_legendre_polynomials(l, zero_m_only=True):
@@ -104,7 +104,7 @@ def associated_legendre_polynomials(l, zero_m_only=True):
     Computes sympy formulas of the associated legendre polynomials up to order l (excluded).
     """
     z = sym.symbols('z')
-    P_l_m = [[0]*(j+1) for j in range(l)]
+    P_l_m = [[0] * (j + 1) for j in range(l)]
 
     P_l_m[0][0] = 1
     if l > 0:
@@ -112,16 +112,16 @@ def associated_legendre_polynomials(l, zero_m_only=True):
 
         for j in range(2, l):
             P_l_m[j][0] = sym.simplify(
-                ((2*j-1)*z*P_l_m[j-1][0] - (j-1)*P_l_m[j-2][0])/j)
+                ((2 * j - 1) * z * P_l_m[j - 1][0] - (j - 1) * P_l_m[j - 2][0]) / j)
         if not zero_m_only:
             for i in range(1, l):
-                P_l_m[i][i] = sym.simplify((1-2*i)*P_l_m[i-1][i-1])
+                P_l_m[i][i] = sym.simplify((1 - 2 * i) * P_l_m[i - 1][i - 1])
                 if i + 1 < l:
-                    P_l_m[i+1][i] = sym.simplify((2*i+1)*z*P_l_m[i][i])
+                    P_l_m[i + 1][i] = sym.simplify((2 * i + 1) * z * P_l_m[i][i])
                 for j in range(i + 2, l):
                     P_l_m[j][i] = sym.simplify(
-                        ((2*j-1) * z * P_l_m[j-1][i]
-                            - (i+j-1) * P_l_m[j-2][i]) / (j - i))
+                        ((2 * j - 1) * z * P_l_m[j - 1][i]
+                            - (i + j - 1) * P_l_m[j - 2][i]) / (j - i))
 
     return P_l_m
 
@@ -139,8 +139,8 @@ def real_sph_harm(l,
         for i in range(1, l):
             x = sym.symbols('x')
             y = sym.symbols('y')
-            S_m += [x*S_m[i-1] + y*C_m[i-1]]
-            C_m += [x*C_m[i-1] - y*S_m[i-1]]
+            S_m += [x * S_m[i - 1] + y * C_m[i - 1]]
+            C_m += [x * C_m[i - 1] - y * S_m[i - 1]]
 
     P_l_m = associated_legendre_polynomials(l, zero_m_only)
     if spherical_coordinates:
@@ -148,18 +148,18 @@ def real_sph_harm(l,
         z = sym.symbols('z')
         for i in range(len(P_l_m)):
             for j in range(len(P_l_m[i])):
-                if type(P_l_m[i][j]) != int:
+                if not isinstance(P_l_m[i][j], int):
                     P_l_m[i][j] = P_l_m[i][j].subs(z, sym.cos(theta))
         if not zero_m_only:
             phi = sym.symbols('phi')
             for i in range(len(S_m)):
                 S_m[i] = S_m[i].subs(x, sym.sin(
-                    theta)*sym.cos(phi)).subs(y, sym.sin(theta)*sym.sin(phi))
+                    theta) * sym.cos(phi)).subs(y, sym.sin(theta) * sym.sin(phi))
             for i in range(len(C_m)):
                 C_m[i] = C_m[i].subs(x, sym.sin(
-                    theta)*sym.cos(phi)).subs(y, sym.sin(theta)*sym.sin(phi))
+                    theta) * sym.cos(phi)).subs(y, sym.sin(theta) * sym.sin(phi))
 
-    Y_func_l_m = [['0']*(2*j + 1) for j in range(l)]
+    Y_func_l_m = [['0'] *(2 *j + 1) for j in range(l)]
     for i in range(l):
         Y_func_l_m[i][0] = sym.simplify(sph_harm_prefactor(i, 0) * P_l_m[i][0])
 
@@ -223,7 +223,7 @@ def c_plm(p, l, m):
 def make_c_table(l_max):
     c_table = {}
     for l in range(l_max + 1):
-        for m in range(-l, l+1):
+        for m in range(-l, l +1):
             for p in range(0, math.floor((l - m) / 2) + 1):
                 c_table[(p, l, m)] = c_plm(p, l, m)
     return c_table
@@ -320,7 +320,7 @@ def b_k(x,
     binoms = (torch.Tensor([sp.binom(bern_k - 1, int(k))
                             for k in k_vals])
               .to(device))
-    out = binoms * (x ** k_vals) * (1-x) ** (bern_k - 1 - k_vals)
+    out = binoms * (x ** k_vals) * (1 -x) ** (bern_k - 1 - k_vals)
     return out
 
 

@@ -62,9 +62,9 @@ def run_models(models: List,
                batch,
                device: Union[str, int]):
     """
-        Gets a list of models, which contains X models that 
+        Gets a list of models, which contains X models that
         collectively predict Energies/Forces, NACVs, SOCs
-        
+
         Args:
             models (list): list of torch models
             batch: torch batch to do inference for
@@ -72,13 +72,13 @@ def run_models(models: List,
     """
 
     batch = batch_to(batch, device)
-    
+
     results = {}
     for model in models:
         result = model(batch,
-                        inference=True)
+                       inference=True)
         result = batch_detach(result)
-        
+
         # merge dictionaries
         for key in result.keys():
             results[key] = result[key]
@@ -107,14 +107,14 @@ def concat_and_conv(results_list,
             val = val.reshape(*grad_shape)
         elif 'energy' in key:
             val *= conv['energy']
-        elif ('nacv' in key or 'NACV' in key) and 'grad' in key: 
+        elif ('nacv' in key or 'NACV' in key) and 'grad' in key:
             val *= conv['_grad']
             val = val.reshape(*grad_shape)
         elif 'NACP' in key and 'grad' in key:
             val *= conv['_grad']
             val = val.reshape(*grad_shape)
         elif 'soc' in key or 'SOC' in key:
-            val *= 0.0000045563353 # cm-1 to Ha
+            val *= 0.0000045563353  # cm-1 to Ha
         # else:
         #     msg = f"{key} has no known conversion"
         #     raise NotImplementedError(msg)
@@ -148,8 +148,8 @@ def get_results(models,
     results_list = []
     for batch in loader:
         results = run_models(models=models,
-                               batch=batch,
-                               device=device)
+                             batch=batch,
+                             device=device)
         results_list.append(results)
 
     all_results = concat_and_conv(results_list=results_list,
@@ -220,7 +220,7 @@ def add_calculator(atomsbatch,
                    model_type,
                    device,
                    batched_props,
-                   output_keys = ["energy_0"]):
+                   output_keys=["energy_0"]):
 
     needs_angles = (model_type in ANGLE_MODELS)
 
@@ -268,9 +268,6 @@ def get_atoms(ground_params,
                    model_type=ground_params["model_type"],
                    device=device,
                    batched_props=batched_props,
-                   output_keys = [ground_params['energy_key']])
+                   output_keys=[ground_params['energy_key']])
 
     return atomsbatch
-
-
-

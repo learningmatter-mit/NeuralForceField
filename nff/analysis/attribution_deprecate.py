@@ -50,7 +50,7 @@ def get_molecules(atom: AtomsBatch, bond_length: dict = None, mode: str = "bond"
         oxy_neighbors = []
         if mode == "bond":
             for t in types:
-                if bond_length.get("%s-%s" % (ty, t)) != None:
+                if bond_length.get("%s-%s" % (ty, t)) is not None:
                     oxy_neighbors.extend(
                         list(
                             np.where(atom.numbers == t)[0][
@@ -111,7 +111,7 @@ def reconstruct_atoms(atomsobject: AtomsBatch, mol_idx: list[np.array], centre: 
         mol_xyz = sys_xyz[idx]
         if any(atomsobject.pbc):
             center = mol_xyz.shape[0] // 2
-            if centre != None:
+            if centre is not None:
                 center = centre  # changes the central atom to atom in focus
             intra_dmat = (mol_xyz[None, :, ...] - mol_xyz[:, None, ...])[center]
             if np.count_nonzero(atomsobject.cell.T - np.diag(np.diagonal(atomsobject.cell.T))) != 0:

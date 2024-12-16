@@ -19,7 +19,7 @@ DEFAULT_CUTOFF = 5.0
 DEFAULT_SKIN = 1.0
 DEFAULT_DIRECTED = False
 CONVERSION_DIC = {"ev": 1 / const.EV_TO_KCAL_MOL,
-                  "au":  const.KCAL_TO_AU["energy"]}
+                  "au": const.KCAL_TO_AU["energy"]}
 
 UNDIRECTED = [SchNet,
               SchNetDiabat,
@@ -213,11 +213,11 @@ class NeuralFF(Calculator):
 
         Args:
             model (TYPE): Description
-            device (str): device on which the calculations will be performed 
+            device (str): device on which the calculations will be performed
             **kwargs: Description
             model (one of nff.nn.models)
             output_keys (list): values outputted by neural network (not including gradients)
-            conversion (str): conversion of output energies and forces from kcal/mol  
+            conversion (str): conversion of output energies and forces from kcal/mol
             dataset_props (dict): dataset.props from an initial dataset
         """
 

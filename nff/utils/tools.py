@@ -31,7 +31,7 @@ layer_types = {
     "sigmoid": torch.nn.Sigmoid,
     "Dropout": torch.nn.Dropout,
     "LeakyReLU": torch.nn.LeakyReLU,
-    "ELU":  torch.nn.ELU,
+    "ELU": torch.nn.ELU,
     "swish": Swish,
     "learnable_swish": LearnableSwish,
     "softplus": torch.nn.Softplus
@@ -39,20 +39,20 @@ layer_types = {
 
 
 def construct_Sequential(layers):
-    """Construct a sequential model from list of params 
+    """Construct a sequential model from list of params
 
     Args:
-        layers (list): list to describe the stacked layer params 
+        layers (list): list to describe the stacked layer params
                         example:    [
                                         {'name': 'linear', 'param' : {'in_features': 10, 'out_features': 20}},
                                         {'name': 'linear', 'param' : {'in_features': 10, 'out_features': 1}}
                                     ]
 
     Returns:
-        Sequential: Stacked Sequential Model 
+        Sequential: Stacked Sequential Model
     """
 
-    return Sequential(collections.OrderedDict([layer['name']+str(i),
+    return Sequential(collections.OrderedDict([layer['name'] + str(i),
                                                layer_types[layer['name']](
                                                    **layer['param'])
                                                ] for i, layer in enumerate(layers)))
@@ -157,6 +157,7 @@ def make_directed(nbr_list):
     new_nbrs = torch.cat([nbr_list, nbr_list.flip(1)], dim=0)
     return new_nbrs, directed
 
+
 def make_undirected(nbr_list):
     gtr_ij = (nbr_list[:, 0] > nbr_list[:, 1]).any().item()
     gtr_ji = (nbr_list[:, 1] > nbr_list[:, 0]).any().item()
@@ -165,5 +166,5 @@ def make_undirected(nbr_list):
     if not directed:
         return nbr_list, directed
     nbrs = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
-    
+
     return nbrs, directed

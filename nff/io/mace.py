@@ -41,6 +41,7 @@ def _check_non_zero(std):
         std = 1.0
     return std
 
+
 def get_mace_mp_model_path(model: str = None) -> str:
     """Get the default MACE MP model. Replicated from the MACE codebase,
     Copyright (c) 2022 ACEsuit/mace and licensed under the MIT license.
@@ -98,7 +99,7 @@ def get_init_kwargs_from_model(model: Union[ScaleShiftMACE, MACE]) -> dict:
         radial_type = "bessel"
     elif isinstance(model.radial_embedding.bessel_fn, GaussianBasis):
         radial_type = "gaussian"
-    
+
     init_kwargs = {
         "r_max": model.r_max.item(),
         "num_bessel": model.radial_embedding.out_dim,
@@ -121,7 +122,8 @@ def get_init_kwargs_from_model(model: Union[ScaleShiftMACE, MACE]) -> dict:
         "radial_type": radial_type
     }
     if isinstance(model, ScaleShiftMACE):
-        init_kwargs.update({"atomic_inter_scale":model.scale_shift.scale, "atomic_inter_shift": model.scale_shift.shift})
+        init_kwargs.update({"atomic_inter_scale": model.scale_shift.scale,
+                           "atomic_inter_shift": model.scale_shift.shift})
 
     return init_kwargs
 
@@ -139,6 +141,7 @@ def get_atomic_number_table_from_zs(zs: Iterable[int]) -> AtomicNumberTable:
     for z in zs:
         z_set.add(z)
     return AtomicNumberTable(sorted(z_set))
+
 
 def compute_average_E0s(
     train_dset: Dataset, z_table: AtomicNumberTable, desired_units: str = "eV"
@@ -177,9 +180,10 @@ def compute_average_E0s(
         atomic_energies_dict = {}
         for i, z in enumerate(z_table.zs):
             atomic_energies_dict[z] = 0.0
-    
+
     train_dset.to_units(original_units)
     return atomic_energies_dict
+
 
 def compute_mean_rms_energy_forces(
     data_loader: torch.utils.data.DataLoader,
@@ -209,7 +213,7 @@ def compute_mean_rms_energy_forces(
             one_hot_zs[i, z_table.z_to_index(z)] = 1
         # compute atomic energies
         node_e0 = atomic_energies_fn(one_hot_zs)
-        graph_sizes = batch['num_atoms'] # list of num atoms
+        graph_sizes = batch['num_atoms']  # list of num atoms
 
         # given graph_sizes, transform to list of indices
         # index starts from 0, denoting the first graph
@@ -219,7 +223,7 @@ def compute_mean_rms_energy_forces(
         for i, size in enumerate(graph_sizes):
             batch_indices[counter:counter + size] = i
             counter += size
-        
+
         # get the graph energy
         graph_e0s = scatter_sum(
             src=node_e0, index=batch_indices, dim=-1, dim_size=len(graph_sizes)
@@ -237,6 +241,7 @@ def compute_mean_rms_energy_forces(
     rms = _check_non_zero(rms)
     return mean, rms
 
+
 def compute_avg_num_neighbors(data_loader: torch.utils.data.DataLoader) -> float:
     """Compute the average number of neighbors in a dataset.
 
@@ -249,7 +254,7 @@ def compute_avg_num_neighbors(data_loader: torch.utils.data.DataLoader) -> float
     num_neighbors = []
 
     for batch in data_loader:
-        unique_neighbors_list = torch.unique(batch['nbr_list'], dim=0) # remove repeated neighbors
+        unique_neighbors_list = torch.unique(batch['nbr_list'], dim=0)  # remove repeated neighbors
         receivers = unique_neighbors_list[:, 1]
 
         _, counts = torch.unique(receivers, return_counts=True)
@@ -261,7 +266,15 @@ def compute_avg_num_neighbors(data_loader: torch.utils.data.DataLoader) -> float
     return detach(avg_num_neighbors, to_numpy=True).item()
 
 
-def update_mace_init_params(train: Dataset, val: Dataset, train_loader: torch.utils.data.DataLoader, model_params: Dict, logger: logging.Logger = None) -> Dict[str, Union[int, float, np.ndarray, List[int]]]:
+def update_mace_init_params(train: Dataset,
+                            val: Dataset,
+                            train_loader: torch.utils.data.DataLoader,
+                            model_params: Dict,
+                            logger: logging.Logger = None) -> Dict[str,
+                                                                   Union[int,
+                                                                         float,
+                                                                         np.ndarray,
+                                                                         List[int]]]:
     """Update the MACE model initialization parameters based values obtained from training and validation datasets.
 
     Args:
@@ -276,9 +289,10 @@ def update_mace_init_params(train: Dataset, val: Dataset, train_loader: torch.ut
     """
     if not logger:
         logger = logging.getLogger(__name__)
-        
+
     # z_table
-    z_table = get_atomic_number_table_from_zs([int(z) for data_split in (train, val) for data in data_split for z in detach(data["nxyz"][:, 0], to_numpy=True)])
+    z_table = get_atomic_number_table_from_zs([int(z) for data_split in (train, val)
+                                              for data in data_split for z in detach(data["nxyz"][:, 0], to_numpy=True)])
     logger.info("Z Table %s", z_table.zs)
 
     # avg_num_neighbors
@@ -291,7 +305,7 @@ def update_mace_init_params(train: Dataset, val: Dataset, train_loader: torch.ut
     # {8: -4.930998234144857, 38: -5.8572783662579795, 77: -8.316066722236071}
     atomic_energies_dict = compute_average_E0s(train, z_table)
     atomic_energies: np.ndarray = np.array(
-    [atomic_energies_dict[z] for z in z_table.zs]
+        [atomic_energies_dict[z] for z in z_table.zs]
     )
     logger.info("Atomic energies: %s", atomic_energies.tolist())
 
@@ -308,6 +322,7 @@ def update_mace_init_params(train: Dataset, val: Dataset, train_loader: torch.ut
     model_params["atomic_numbers"] = z_table.zs
 
     return model_params
+
 
 class NffBatch(Batch):
     def __init__(self, batch=None, ptr=None, **kwargs):

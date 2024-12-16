@@ -709,7 +709,7 @@ def decorate_plot(labels,
     """
 
     max_x = len(labels)
-    x_range = np.arange(-0.5, max_x, max_x/100)
+    x_range = np.arange(-0.5, max_x, max_x / 100)
     plt.plot(x_range, [0] * len(x_range),
              '-',
              color='black',

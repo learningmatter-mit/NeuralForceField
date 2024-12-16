@@ -11,6 +11,7 @@ workaround, input values for all branches must be chosen such that division by
 unnecessary, but they are crucial for autograd to work properly.
 """
 
+
 def shifted_softplus(x: torch.Tensor) -> torch.Tensor:
     """ Shifted softplus activation function. """
     return torch.nn.functional.softplus(x) - math.log(2)
@@ -44,7 +45,7 @@ def switch_function(x: torch.Tensor, cuton: float, cutoff: float) -> torch.Tenso
     f(x) = 1 and for x >= cutoff, f(x) = 0. This switch function has infinitely
     many smooth derivatives.
     NOTE: The implementation with the "_switch_component" function is
-    numerically more stable than a simplified version, it is not recommended 
+    numerically more stable than a simplified version, it is not recommended
     to change this!
     """
     x = (x - cuton) / (cutoff - cuton)

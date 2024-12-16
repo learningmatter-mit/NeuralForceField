@@ -9,6 +9,7 @@ from nff.utils.cuda import detach
 
 class CombinedLossNFF(CombinedLoss):
     """Wrapper for the combined loss function that maps keys from NFF to CHGNet keys."""
+
     def __init__(self, *args, key_mappings=None, **kwargs):
         super().__init__(*args, **kwargs)
         if not key_mappings:
@@ -37,11 +38,17 @@ class CombinedLossNFF(CombinedLoss):
             raise ValueError("key_style must be either 'nff' or 'chgnet'")
 
         targets = {k: self.split_props(k, v, detach(targets["num_atoms"]).tolist()) for k, v in targets.items()}
-        predictions = {k: self.split_props(k, v, detach(predictions["num_atoms"]).tolist()) for k, v in predictions.items()}
+        predictions = {
+            k: self.split_props(
+                k,
+                v,
+                detach(
+                    predictions["num_atoms"]).tolist()) for k,
+            v in predictions.items()}
 
         if key_style == "nff":
-            targets = {self.key_mappings.get(k, k):  self.negate_value(k, v) for k, v in targets.items()}
-            predictions = {self.key_mappings.get(k, k):  self.negate_value(k, v) for k, v in predictions.items()}
+            targets = {self.key_mappings.get(k, k): self.negate_value(k, v) for k, v in targets.items()}
+            predictions = {self.key_mappings.get(k, k): self.negate_value(k, v) for k, v in predictions.items()}
 
         out = super().forward(targets, predictions)
         loss = out["loss"]

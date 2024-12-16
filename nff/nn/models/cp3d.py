@@ -300,7 +300,7 @@ class OnlyBondUpdateCP3D(ChemProp3D):
             bond_nbrs (torch.LongTensor): bonded neighbor list
             bond_idx (torch.LongTensor): indices that map
                 an element of `bond_nbrs` to the corresponding
-                element in `nbr_list`. 
+                element in `nbr_list`.
         """
 
         # get the directed bond list and bond features
@@ -323,7 +323,7 @@ class OnlyBondUpdateCP3D(ChemProp3D):
         # (including bonded ones), to zero
 
         nbr_dim = nbr_list.shape[0]
-        h_0 = torch.zeros((nbr_dim,  self.n_bond_hidden))
+        h_0 = torch.zeros((nbr_dim, self.n_bond_hidden))
         h_0 = h_0.to(device)
 
         # set the features of bonded edges equal to the bond
@@ -392,10 +392,10 @@ class OnlyBondUpdateCP3D(ChemProp3D):
 
             # don't use any kj_idx or ji_idx
             # because they are only relevant when
-            # you're doing updates with all neighbors, 
+            # you're doing updates with all neighbors,
             # not with just the bonded neighbors like
             # we do here
-            
+
             h_new = conv(h_0=h_0,
                          h_new=h_new,
                          all_nbrs=a,

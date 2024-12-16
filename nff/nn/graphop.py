@@ -177,7 +177,7 @@ def get_atoms_inside_cell(r, N, pbc):
     N = N.to(torch.long).tolist()
 
     # make N a list if it is a int
-    if type(N) == int:
+    if isinstance(N, int):
         N = [N]
 
     # selecting only the atoms inside the unit cell

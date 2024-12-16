@@ -214,7 +214,7 @@ class Painn(nn.Module):
         for key, pool_obj in self.pool_dic.items():
             grad_key = f"{key}_grad"
             grad_keys = [grad_key] if (grad_key in self.grad_keys) else []
-            if "stress" in self.grad_keys and not "stress" in all_results:
+            if "stress" in self.grad_keys and "stress" not in all_results:
                 grad_keys.append("stress")
             results = pool_obj(
                 batch=batch,
@@ -659,7 +659,7 @@ class Painn_VecOut(Painn):
 
         return results, xyz, r_ij, nbrs
 
-      
+
 class Painn_VecOut2(Painn_VecOut):
     # unlike Painn_VecOut this uses 2 equivariant blocks for each output
     def __init__(self,
@@ -678,7 +678,7 @@ class Painn_VecOut2(Painn_VecOut):
         readout_dropout = modelparams.get("readout_dropout", 0)
         means = modelparams.get("means")
         stddevs = modelparams.get("stddevs")
-        
+
         self.output_vec_keys = output_vec_keys
         # no skip connection in original paper
         self.skip_vec = modelparams.get("skip_vec_connection",
@@ -689,15 +689,15 @@ class Painn_VecOut2(Painn_VecOut):
                             else 1)
         self.readout_vec_blocks = nn.ModuleList(
             [ReadoutBlock_Vec2(feat_dim=feat_dim,
-                              output_keys=output_vec_keys,
-                              activation=activation,
-                              dropout=readout_dropout,
-                              means=means,
-                              stddevs=stddevs)
+                               output_keys=output_vec_keys,
+                               activation=activation,
+                               dropout=readout_dropout,
+                               means=means,
+                               stddevs=stddevs)
              for _ in range(num_vec_readouts)]
         )
-        
-        
+
+
 class Painn_NAC_OuterProd(Painn_VecOut2):
     # This model attempts to learn non-adiabatic coupling vectors
     # as suggested by Jeremy Richardson, as eigenvector
@@ -711,25 +711,25 @@ class Painn_NAC_OuterProd(Painn_VecOut2):
         """
 
         super().__init__(modelparams)
-        
+
     def get_nac(self,
                 all_results,
                 batch,
                 xyz):
-        
+
         N = batch["num_atoms"].detach().cpu().tolist()
         xyz_s = torch.split(xyz, N)
-            
+
         for key in self.output_vec_keys:
-            
+
             mats = []
             nacs = []
             nu_s = torch.split(all_results[key], N)
             for nu, r in zip(nu_s, xyz_s):
-                mat = (torch.outer(r.reshape(-1), nu.reshape(-1)) 
-                      + torch.outer(nu.reshape(-1), r.reshape(-1)))
+                mat = (torch.outer(r.reshape(-1), nu.reshape(-1))
+                       + torch.outer(nu.reshape(-1), r.reshape(-1)))
                 mats.append(mat)
-            
+
                 eigvals, eigvecs = torch.linalg.eigh(mat)
                 real_vals = torch.abs(eigvals)
                 phase = eigvals[0] / real_vals[0]
@@ -738,12 +738,12 @@ class Painn_NAC_OuterProd(Painn_VecOut2):
                 max_idx = torch.argmax(real_vals)
                 nac = real_vecs[:, max_idx] * torch.sqrt(real_vals[max_idx])
                 nacs.append(nac.reshape(-1, 3))
-                
+
             all_results[key] = torch.cat(nacs)
-            all_results[key+"_mat"] = tuple(mats)
-                    
+            all_results[key + "_mat"] = tuple(mats)
+
         return all_results, xyz
-        
+
     def run(self,
             batch,
             xyz=None,
@@ -752,7 +752,7 @@ class Painn_NAC_OuterProd(Painn_VecOut2):
             inference=False):
 
         from nff.train import batch_detach
-                               
+
         atomwise_out, xyz, r_ij, nbrs = self.atomwise(batch=batch,
                                                       xyz=xyz)
 
@@ -763,12 +763,12 @@ class Painn_NAC_OuterProd(Painn_VecOut2):
                 atomwise_out[key] += r_ex
 
         pooled_results, xyz = self.pool(batch=batch,
-                                     atomwise_out=atomwise_out,
-                                     xyz=xyz,
-                                     r_ij=r_ij,
-                                     nbrs=nbrs,
-                                     inference=False)
-                               
+                                        atomwise_out=atomwise_out,
+                                        xyz=xyz,
+                                        r_ij=r_ij,
+                                        nbrs=nbrs,
+                                        inference=False)
+
         all_results, xyz = self.get_nac(all_results=pooled_results,
                                         batch=batch,
                                         xyz=xyz)
@@ -785,7 +785,7 @@ class Painn_NAC_OuterProd(Painn_VecOut2):
 
         if getattr(self, "compute_delta", False):
             all_results = self.add_delta(all_results)
-                               
+
         if inference:
             batch_detach(all_results)
 
@@ -1128,7 +1128,7 @@ class Painn_wCP(Painn_Tuple):
                     output = all_results[key]
                     grad = compute_grad(output=output, inputs=xyz)
                     all_results[grad_key] = grad
-                    
+
         return all_results, xyz
 
     def run(

@@ -46,7 +46,7 @@ class EmbeddingBlock(nn.Module):
                                                rbf=rbf,
                                                bias=False)
 
-        self.concat_dense = Dense(in_features=2*feat_dim,
+        self.concat_dense = Dense(in_features=2 * feat_dim,
                                   out_features=feat_dim,
                                   dropout_rate=dropout,
                                   activation=None)

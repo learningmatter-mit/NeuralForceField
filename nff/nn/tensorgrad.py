@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 
 def compute_jacobian(inputs, output, device):
     """
-    Compute Jacobians 
+    Compute Jacobians
 
     Args:
         inputs (torch.Tensor): size (N_in, )
@@ -88,7 +88,7 @@ def compute_hess(inputs, output, device):
 
 
 def get_schnet_hessians(batch, model, device=0):
-    """Get Hessians from schnet models 
+    """Get Hessians from schnet models
 
     Args:
         batch (dict): batch of data
@@ -106,9 +106,10 @@ def get_schnet_hessians(batch, model, device=0):
 
     return hess
 
+
 def get_painn_hessians(batch, model, device=0):
     """Get Hessians from painn models. Hessian is returned in kcal/mol/A**2.
-    Use this method for painn models instead of hess from atoms. Tested both with 
+    Use this method for painn models instead of hess from atoms. Tested both with
     molecular data (water) and periodic structures (quartz).
 
     Args:
@@ -121,10 +122,10 @@ def get_painn_hessians(batch, model, device=0):
     xyz_reshape.requires_grad = True
     xyz_input = xyz_reshape.reshape(N_atom, 3)
 
-    results = model(batch,xyz=xyz_input)
+    results = model(batch, xyz=xyz_input)
     energy = results["energy"]
 
-    hess=compute_hess(xyz_reshape, energy, device=device)
+    hess = compute_hess(xyz_reshape, energy, device=device)
     return hess
 
 

@@ -60,13 +60,12 @@ def collate_dicts(dicts):
         for i, d in enumerate(dicts):
             d[key] += i
 
-
     # batching the data
     batch = {}
     for key, val in dicts[0].items():
         if key in IGNORE_KEYS:
             continue
-        if type(val) == str:
+        if isinstance(val, str):
             batch[key] = [data[key] for data in dicts]
         elif hasattr(val, 'shape') and len(val.shape) > 0:
             batch[key] = torch.cat([

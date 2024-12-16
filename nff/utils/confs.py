@@ -44,7 +44,7 @@ def get_batch_dic(batch,
             statistical weight will be used.
         num_confs (int): Number of conformers to keep
     Returns:
-        info_dic (dict): Dictionary with extra conformer 
+        info_dic (dict): Dictionary with extra conformer
             information about the batch
 
     """
@@ -86,7 +86,7 @@ def to_xyz_idx(batch_dic):
     Get the indices of the nxyz corresponding to atoms in conformers
     we want to keep.
     Args:
-        batch_dic (dict): Dictionary with extra conformer 
+        batch_dic (dict): Dictionary with extra conformer
             information about the batch
     Returns:
         xyz_conf_all_idx (torch.LongTensor): nxyz indices of atoms
@@ -126,13 +126,13 @@ def split_nbrs(nbrs,
                confs_in_batch,
                conf_idx):
     """
-    Get the indices of the neighbor list that correspond to conformers 
+    Get the indices of the neighbor list that correspond to conformers
     we're keeping.
     Args:
         nbrs (torch.LongTensor): neighbor list
         mol_size (int): Number of atoms in each conformer
         confs_in_batch (int): Total number of conformers in the batch
-        conf_idx (list[int]): Indices of the conformers we're keeping 
+        conf_idx (list[int]): Indices of the conformers we're keeping
     Returns:
         tens_idx (torch.LongTensor): nbr indices of conformers we're
             keeping.
@@ -166,12 +166,12 @@ def to_nbr_idx(batch_dic, nbrs):
     """
     Apply `split_nbrs` given `batch_dic`
     Args:
-        batch_dic (dict): Dictionary with extra conformer 
+        batch_dic (dict): Dictionary with extra conformer
             information about the batch
         nbrs (torch.LongTensor): neighbor list
     Returns:
         split_nbr_idx (torch.LongTensor): nbr indices of conformers we're
-            keeping. 
+            keeping.
     """
 
     mol_size = batch_dic["mol_size"]
@@ -190,7 +190,7 @@ def update_weights(batch, batch_dic):
     """
     Readjust weights so they sum to 1.
     Args:
-        batch_dic (dict): Dictionary with extra conformer 
+        batch_dic (dict): Dictionary with extra conformer
             information about the batch
         batch (dict): Batch dictionary
     Returns:
@@ -263,7 +263,7 @@ def update_dset(batch, batch_dic, dataset, i):
     number of conformers, for species at index i.
     Args:
         batch (dict): Batch dictionary
-        batch_dic (dict): Dictionary with extra conformer 
+        batch_dic (dict): Dictionary with extra conformer
             information about the batch
         dataset (nff.data.dataset): NFF dataset
         i (int): index of the species whose info we're updating
@@ -330,9 +330,9 @@ def trim_confs(dataset,
             of the conformers you want to keep. If not specified,
             then the top `num_confs` conformers with the highest
             statistical weight will be used.
-        enum_func (callable, optional): a function with which to 
+        enum_func (callable, optional): a function with which to
             enumerate the dataset. If not given, we use tqdm
-            to track progress. 
+            to track progress.
     Returns:
         dataset (nff.data.dataset): updated NFF dataset
     """
@@ -367,10 +367,10 @@ def make_split_nbrs(nbr_list,
         confs_per_split (list[int]): number of conformers in each
             sub-batch.
     Returns:
-        all_grouped_nbrs (list[torch.LongTensor]): list of 
+        all_grouped_nbrs (list[torch.LongTensor]): list of
             neighbor lists for each sub-batch.
-        nbr_masks (list(torch.BoolTensor))): masks that tell you which  
-            indices of the combined neighbor list are being used for the  
+        nbr_masks (list(torch.BoolTensor))): masks that tell you which
+            indices of the combined neighbor list are being used for the
             neighbor list of each sub-batch.
     """
 
@@ -429,8 +429,8 @@ def add_split_nbrs(batch,
     Returns:
         sub_batches (list[dict]): list of sub_batches updated with
             their neighbor lists.
-        nbr_masks (list(torch.BoolTensor))): masks that tell you which  
-            indices of the combined neighbor list are being used for the  
+        nbr_masks (list(torch.BoolTensor))): masks that tell you which
+            indices of the combined neighbor list are being used for the
             neighbor list of each sub-batch.
     """
 
@@ -496,8 +496,8 @@ def fix_nbr_idx(batch,
     and `ji_idx`).
     Args:
         batch (dict): batched sample of species
-        masks (list(torch.BoolTensor))): masks that tell you which  
-            indices of the combined neighbor list are being used for the  
+        masks (list(torch.BoolTensor))): masks that tell you which
+            indices of the combined neighbor list are being used for the
             neighbor list of each sub-batch.
         sub_batches (list[dict]): sub batches of the batch
     Returns:

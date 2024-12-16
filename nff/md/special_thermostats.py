@@ -45,7 +45,7 @@ class TempRamp(MolecularDynamics):
 
         self.dt = timestep * units.fs
         self.Natom = len(atoms)
-        
+
         if self.atoms.pbc:
             self.activeDoF = (3 * self.Natom) - len(self.atoms.constraints)
         else:
@@ -66,14 +66,14 @@ class TempRamp(MolecularDynamics):
             self.start_temp = maxwell_temp
         else:
             self.start_temp = (2 * self.atoms.get_kinetic_energy()) / (units.kB * self.activeDoF)
-        
+
         self.num_epochs = int(np.ceil(self.num_steps / self.nbr_update_period))
-        self.ramp_targets = np.linspace(self.start_temp, target_temp, 
-                                        num = self.num_epochs + 1, endpoint=True)[1:]
+        self.ramp_targets = np.linspace(self.start_temp, target_temp,
+                                        num=self.num_epochs + 1, endpoint=True)[1:]
         self.max_steps = 0
         print(f"Info: Temperature is adjusted {self.num_epochs} times"
               "in {self.ramp_targets[1] - self.ramp_targets[0]}K increments.")
-        
+
         self.remove_constrained_vel(atoms)
         Stationary(self.atoms)
         ZeroRotation(self.atoms)
@@ -112,12 +112,12 @@ class TempRamp(MolecularDynamics):
         accel = (self.atoms.get_forces() /
                  self.atoms.get_masses().reshape(-1, 1))
         vel = self.atoms.get_velocities()
-        
+
         # make half a step in velocity
         vel_half = vel + 0.5 * self.dt * accel
 
         # make full step in position
-        x = self.atoms.get_positions() + vel_half * self.dt 
+        x = self.atoms.get_positions() + vel_half * self.dt
         self.atoms.set_positions(x)
 
         # new accelerations
@@ -125,7 +125,7 @@ class TempRamp(MolecularDynamics):
         accel = f / self.atoms.get_masses().reshape(-1, 1)
 
         # make another half step in velocity
-        vel = vel_half + 0.5 * self.dt * accel 
+        vel = vel_half + 0.5 * self.dt * accel
 
         self.atoms.set_velocities(vel)
         self.remove_constrained_vel(self.atoms)
@@ -139,12 +139,12 @@ class TempRamp(MolecularDynamics):
         for ii in tqdm(range(self.num_epochs)):
             self.max_steps += self.nbr_update_period
             Dynamics.run(self)
-            
-            curr_temp = (2.*self.atoms.get_kinetic_energy() /
+
+            curr_temp = (2. * self.atoms.get_kinetic_energy() /
                          (units.kB * self.activeDoF))
             curr_target = self.ramp_targets[ii]
-            rescale_fac = np.sqrt(curr_target/curr_temp)
+            rescale_fac = np.sqrt(curr_target / curr_temp)
             new_vel = rescale_fac * self.atom.get_velocities()
             self.atoms.set_velocities(new_vel)
-            
+
             self.atoms.update_nbr_list()

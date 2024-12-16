@@ -7,6 +7,7 @@ from sklearn.neighbors import BallTree
 from .spookynet import SpookyNet
 from .spookynet_ensemble import SpookyNetEnsemble
 
+
 class SpookyNetCalculator(Calculator):
     """
     This module defines an ASE interface for SpookyNet.

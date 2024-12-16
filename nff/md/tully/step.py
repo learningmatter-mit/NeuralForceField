@@ -295,8 +295,8 @@ def rescale(energy,
     """
     Velocity re-scaling, from:
 
-    Landry, B.R. and Subotnik, J.E., 2012. How to recover Marcus theory with 
-    fewest switches surface hopping: Add just a touch of decoherence. The 
+    Landry, B.R. and Subotnik, J.E., 2012. How to recover Marcus theory with
+    fewest switches surface hopping: Add just a touch of decoherence. The
     Journal of chemical physics, 137(22), p.22A513.
 
     If no NACV is available, the KE is simply rescaled to conserve energy.
@@ -1077,8 +1077,8 @@ def add_decoherence(c,
                     forces,
                     mass):
     """
-    Landry, B.R. and Subotnik, J.E., 2012. How to recover Marcus theory with 
-    fewest switches surface hopping: Add just a touch of decoherence. The 
+    Landry, B.R. and Subotnik, J.E., 2012. How to recover Marcus theory with
+    fewest switches surface hopping: Add just a touch of decoherence. The
     Journal of chemical physics, 137(22), p.22A513.
     """
 

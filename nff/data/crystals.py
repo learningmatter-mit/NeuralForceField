@@ -30,4 +30,3 @@ def get_crystal_graph(crystal, cutoff):
     pbc = torch.LongTensor(pbc)
 
     return nxyz, pbc
-

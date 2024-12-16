@@ -88,7 +88,7 @@ def init_calculator(atoms, params):
         params (dict): dictionary of parameters
     Returns:
         model (nn.Module): nnpotential model
-        en_key (str): energy key 
+        en_key (str): energy key
     """
 
     opt_state = params.get("iroot", 0)
@@ -378,7 +378,7 @@ def get_opt_and_modes(params):
 
 
 def get_orca_form(cc_mat, cc_freqs, n_atoms):
-    """ Converts cclib version of Orca's (almost orthogonalizing) matrix 
+    """ Converts cclib version of Orca's (almost orthogonalizing) matrix
     and mode frequencies back into the original
     Orca forms. Also converts frequencies from cm^{-1}
      into atomic units (Hartree)."""
@@ -386,12 +386,12 @@ def get_orca_form(cc_mat, cc_freqs, n_atoms):
     pure_matrix = np.asarray(cc_mat)
     pure_freqs = np.asarray(cc_freqs)
     n_modes = len(pure_matrix[:, 0])
-    n_inactive = n_atoms*3 - len(pure_matrix[:, 0])
+    n_inactive = n_atoms * 3 - len(pure_matrix[:, 0])
     n_tot = n_modes + n_inactive
 
     for i in range(len(pure_matrix)):
 
-        new_col = pure_matrix[i].reshape(3*len(pure_matrix[i]))
+        new_col = pure_matrix[i].reshape(3 * len(pure_matrix[i]))
         if i == 1:
             new_mat = np.column_stack((old_col, new_col))
         elif i > 1:
@@ -400,7 +400,7 @@ def get_orca_form(cc_mat, cc_freqs, n_atoms):
 
     matrix = np.asarray(new_mat[:]).reshape(n_tot, n_modes)
 
-    zero_col = np.asarray([[0]]*len(matrix))
+    zero_col = np.asarray([[0]] * len(matrix))
     for i in range(0, n_inactive):
         matrix = np.insert(matrix, [0], zero_col, axis=1)
     freqs = np.asarray(pure_freqs[:])
@@ -411,12 +411,12 @@ def get_orca_form(cc_mat, cc_freqs, n_atoms):
 
 
 def get_orth(mass_vec, matrix):
-    """Makes orthogonalizing matrix given the outputted 
-        (non-orthogonal) matrix from Orca. The mass_vec variable 
+    """Makes orthogonalizing matrix given the outputted
+        (non-orthogonal) matrix from Orca. The mass_vec variable
         is a list of the masses of the atoms in the molecule (must be)
         in the order given to Orca when it calculated normal modes).
        Note that this acts directly on the matrix outputted from Orca,
-       not on the cclib version that divides columns into sets of 
+       not on the cclib version that divides columns into sets of
        three entries for each atom."""
 
     m = np.array([[mass] for mass in mass_vec])
@@ -449,7 +449,7 @@ def get_n_in(matrix):
 
 
 def get_disp(mass_vec, matrix, freqs, q, p, hb=1):
-    """Makes position and momentum displacements from 
+    """Makes position and momentum displacements from
     unitless harmonic oscillator displacements and unitless momenta.
     Uses atomic units (hbar = 1). For different units change the value of hbar."""
 
@@ -472,18 +472,18 @@ def get_disp(mass_vec, matrix, freqs, q, p, hb=1):
 
 
 def wigner_sample(w, kt=25.7 / 1000 / 27.2, hb=1):
-    """ Sample unitless x and unitless p from a Wigner distribution. 
+    """ Sample unitless x and unitless p from a Wigner distribution.
     Takes frequency and temperature in au as inputs.
     Default temperature is 300 K."""
 
-    sigma = (1/np.tanh((hb*w)/(2*kt)))**0.5/2**0.5
+    sigma = (1 / np.tanh((hb * w) / (2 * kt)))**0.5 / 2**0.5
     cov = [[sigma**2, 0], [0, sigma**2]]
     mean = (0, 0)
     x, p = np.random.multivariate_normal(mean, cov)
     return x, p
 
 
-def classical_sample(w,  kt=25.7 / 1000 / 27.2, hb=1):
+def classical_sample(w, kt=25.7 / 1000 / 27.2, hb=1):
     sigma = (kt / (hb * w)) ** 0.5
     cov = [[sigma**2, 0], [0, sigma**2]]
     mean = (0, 0)
@@ -535,9 +535,9 @@ def make_dx_dp(mass_vec,
 
 def split_convert_xyz(xyz):
     """ Splits xyz into Z, coordinates in au, and masses in au """
-    coords = [(np.array(element[1:])*ANGS_2_AU).tolist() for element in xyz]
+    coords = [(np.array(element[1:]) * ANGS_2_AU).tolist() for element in xyz]
     mass_vec = [PERIODICTABLE.GetAtomicWeight(
-        int(element[0]))*AMU_2_AU for element in xyz]
+        int(element[0])) * AMU_2_AU for element in xyz]
     Z = [element[0] for element in xyz]
     return Z, coords, mass_vec
 
@@ -558,11 +558,11 @@ def make_wigner_init(init_atoms,
                      kt=25.7 / 1000 / 27.2,
                      hb=1,
                      classical=False):
-    """Generates Wigner-sampled coordinates and velocities. 
+    """Generates Wigner-sampled coordinates and velocities.
     xyz is the xyz array at the optimized
-    geometry. xyz is in Angstrom, so xyz is first converted to 
+    geometry. xyz is in Angstrom, so xyz is first converted to
     au, added to Wigner dx, and then
-    converted back to Angstrom. Velocity is in au. 
+    converted back to Angstrom. Velocity is in au.
     vibdisps and vibfreqs are the CClib quantities
     found in the database."""
 
@@ -578,7 +578,7 @@ def make_wigner_init(init_atoms,
         Z, opt_coords, mass_vec = split_convert_xyz(xyz)
         dx, dp = make_dx_dp(mass_vec, vibdisps, vibfreqs,
                             kt, hb, classical=classical)
-        wigner_coords = ((np.asarray(opt_coords) + dx)/ANGS_2_AU).tolist()
+        wigner_coords = ((np.asarray(opt_coords) + dx) / ANGS_2_AU).tolist()
 
         nxyz = np.array(join_xyz(Z, wigner_coords))
         velocity = (dp / np.array([[m] for m in mass_vec])).tolist()

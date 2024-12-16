@@ -9,10 +9,10 @@ def compute_grad(inputs,
 
     Args:
         inputs (torch.Tensor): torch tensor, requires_grad=True
-        output (torch.Tensor): scalar output 
+        output (torch.Tensor): scalar output
 
     Returns:
-        torch.Tensor: gradients with respect to each input component 
+        torch.Tensor: gradients with respect to each input component
     """
 
     assert inputs.requires_grad

@@ -38,17 +38,17 @@ from rdkit.Chem.rdchem import EditableMol
 
 global __ATOM_LIST__
 __ATOM_LIST__ = \
-    ['h',  'he',
-     'li', 'be', 'b',  'c',  'n',  'o',  'f',  'ne',
-     'na', 'mg', 'al', 'si', 'p',  's',  'cl', 'ar',
-     'k',  'ca', 'sc', 'ti', 'v ', 'cr', 'mn', 'fe', 'co', 'ni', 'cu',
+    ['h', 'he',
+     'li', 'be', 'b', 'c', 'n', 'o', 'f', 'ne',
+     'na', 'mg', 'al', 'si', 'p', 's', 'cl', 'ar',
+     'k', 'ca', 'sc', 'ti', 'v ', 'cr', 'mn', 'fe', 'co', 'ni', 'cu',
      'zn', 'ga', 'ge', 'as', 'se', 'br', 'kr',
-     'rb', 'sr', 'y',  'zr', 'nb', 'mo', 'tc', 'ru', 'rh', 'pd', 'ag',
-     'cd', 'in', 'sn', 'sb', 'te', 'i',  'xe',
+     'rb', 'sr', 'y', 'zr', 'nb', 'mo', 'tc', 'ru', 'rh', 'pd', 'ag',
+     'cd', 'in', 'sn', 'sb', 'te', 'i', 'xe',
      'cs', 'ba', 'la', 'ce', 'pr', 'nd', 'pm', 'sm', 'eu', 'gd', 'tb', 'dy',
-     'ho', 'er', 'tm', 'yb', 'lu', 'hf', 'ta', 'w',  're', 'os', 'ir', 'pt',
+     'ho', 'er', 'tm', 'yb', 'lu', 'hf', 'ta', 'w', 're', 'os', 'ir', 'pt',
      'au', 'hg', 'tl', 'pb', 'bi', 'po', 'at', 'rn',
-     'fr', 'ra', 'ac', 'th', 'pa', 'u',  'np', 'pu']
+     'fr', 'ra', 'ac', 'th', 'pa', 'u', 'np', 'pu']
 
 
 global atomic_valence
@@ -172,11 +172,11 @@ def BO_is_OK(BO, AC, charge, DU, atomic_valence_electrons, atoms, valances,
         BO -
         AC -
         charge -
-        DU - 
+        DU -
 
 
     optional
-        allow_charges_fragments - 
+        allow_charges_fragments -
 
 
     returns:
@@ -671,7 +671,7 @@ def xyz2AC_huckel(atomicNumList, xyz, charge):
     tri[np.tril(np.ones((num_atoms, num_atoms), dtype=bool))
         ] = opop  # lower triangular to square matrix
     for i in range(num_atoms):
-        for j in range(i+1, num_atoms):
+        for j in range(i + 1, num_atoms):
             pair_pop = abs(tri[j, i])
             if pair_pop >= 0.15:  # arbitry cutoff for bond. May need adjustment
                 AC[i, j] = 1

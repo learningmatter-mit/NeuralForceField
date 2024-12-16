@@ -8,7 +8,7 @@ from typing import Tuple, Optional
 # backwards compatibility with old versions of pytorch
 try:
     from torch.linalg import norm
-except:
+except BaseException:
     from torch import norm
 
 
@@ -36,7 +36,7 @@ class SpookyNet(nn.Module):
         num_modules (int):
             Number of modules (iterations) for constructing atomic features.
         num_residual_electron (int):
-            Number of residual blocks applied to features encoding the electronic 
+            Number of residual blocks applied to features encoding the electronic
             state.
         num_residual_pre (int):
             Number of residual blocks applied to atomic features in each module
@@ -45,16 +45,16 @@ class SpookyNet(nn.Module):
             Number of residual blocks applied to atomic features after
             interaction with neighbouring atoms (per module).
         num_residual_pre_local_x (int):
-            Number of residual blocks (per module) applied to atomic features in 
+            Number of residual blocks (per module) applied to atomic features in
             local interaction.
         num_residual_pre_local_s (int):
-            Number of residual blocks (per module) applied to s-type interaction features 
+            Number of residual blocks (per module) applied to s-type interaction features
             in local interaction.
         num_residual_pre_local_p (int):
-            Number of residual blocks (per module) applied to p-type interaction features 
+            Number of residual blocks (per module) applied to p-type interaction features
             in local interaction.
         num_residual_pre_local_d (int):
-            Number of residual blocks (per module) applied to d-type interaction features 
+            Number of residual blocks (per module) applied to d-type interaction features
             in local interaction.
         num_residual_post (int):
             Number of residual blocks applied to atomic features in each module
@@ -969,7 +969,7 @@ class SpookyNet(nn.Module):
         Returns:
             energy (FloatTensor [B]):
                 Potential energy of each molecule in the batch.
-            
+
             (+ all return values of atomic_properties)
         """
         if batch_seg is None:  # assume a single batch
@@ -1104,7 +1104,7 @@ class SpookyNet(nn.Module):
                 Hessian matrix. If more than one molecule is in the batch,
                 the appropriate entries need to be collected from the matrix
                 manually for each molecule.
-            
+
             (+ all return values of atomic_properties)
         """
         (

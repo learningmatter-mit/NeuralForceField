@@ -32,10 +32,10 @@ def get_loaders(args, logging=None):
             val_size=args.split[0],
             test_size=args.split[1]
         )
-    
+
         if logging is not None:
             logging.info("load data...")
-    
+
         train_loader = DataLoader(
             train,
             batch_size=args.batch_size,
@@ -55,5 +55,5 @@ def get_loaders(args, logging=None):
             num_workers=args.workers,
             collate_fn=collate_dicts
         )
-    
+
         return train_loader, val_loader, test_loader

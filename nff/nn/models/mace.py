@@ -138,9 +138,9 @@ class NffScaleMACE(ScaleShiftMACE):
             numbers = props.get("nxyz")[node_idx, 0].long().detach().cpu().numpy()
 
             if "cell" in props.keys():
-                cell = props["cell"][3 * i : 3 * i + 3].detach().cpu().numpy()
+                cell = props["cell"][3 * i: 3 * i + 3].detach().cpu().numpy()
             elif "lattice" in props.keys():
-                cell = props["lattice"][3 * i : 3 * i + 3].detach().cpu().numpy()
+                cell = props["lattice"][3 * i: 3 * i + 3].detach().cpu().numpy()
             else:
                 raise ValueError("No cell or lattice found in batch")
             config = Configuration(
@@ -510,7 +510,8 @@ def restore_foundations(
             model.interactions[i].linear.weight.clone()
         )
         # Assuming 'model' and 'model_foundations' are instances of some torch.nn.Module
-        # And assuming the other variables (num_channels_foundation, num_species_foundations, etc.) are correctly defined
+        # And assuming the other variables (num_channels_foundation,
+        # num_species_foundations, etc.) are correctly defined
 
         if model.interactions[i].__class__.__name__ == "RealAgnosticResidualInteractionBlock":
             for k, index in enumerate(indices_weights):

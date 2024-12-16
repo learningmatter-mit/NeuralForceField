@@ -391,7 +391,7 @@ class DiabaticReadout(nn.Module):
             for idx in nan_grad_idx:
                 if train:
                     continue
-                results[key][idx[0] : idx[1]] = results[key][idx[0] : idx[1]] * float("nan")
+                results[key][idx[0]: idx[1]] = results[key][idx[0]: idx[1]] * float("nan")
 
     def forward(
         self,
