@@ -6,6 +6,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
+import pytest
+
 from nff.data.dataset import (
     Dataset,
     concatenate_dict,
@@ -223,6 +225,7 @@ class TestConcatenate(unittest.TestCase):
         self.assertEqual(ab, expected)
 
 
+@pytest.mark.usefixtures("device")  # Ensure the fixture is accessible
 class TestPeriodicDataset(unittest.TestCase):
     def setUp(self):
         self.quartz = {
@@ -248,7 +251,12 @@ class TestPeriodicDataset(unittest.TestCase):
             ),
         }
 
-        self.qtz_dataset = Dataset(concatenate_dict(*[self.quartz] * 3))
+        self.qtz_dataset = Dataset(concatenate_dict(*[self.quartz] * 3), device=self._test_fixture_device)
+
+    @pytest.fixture(autouse=True)
+    def inject_device(self, device):
+        # Automatically set the fixture value to an attribute
+        self._test_fixture_device = device
 
     def test_neighbor_list(self):
         nbrs, offs = self.qtz_dataset.generate_neighbor_list(cutoff=5)

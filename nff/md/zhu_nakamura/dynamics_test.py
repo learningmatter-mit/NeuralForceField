@@ -15,8 +15,8 @@ from ase.md.md import MolecularDynamics
 from ase.io.trajectory import Trajectory
 from ase import Atoms
 
-from nff.md.utils import mol_dot, mol_norm, ZhuNakamuraLogger, atoms_to_nxyz
-from nff.md.nvt_test import NoseHoover, NoseHooverChain
+from nff.md.utils_ax import mol_dot, mol_norm, ZhuNakamuraLogger, atoms_to_nxyz
+from nff.md.nvt_ax import NoseHoover, NoseHooverChain
 from nff.utils.constants import BOHR_RADIUS, FS_TO_AU, AMU_TO_AU, FS_TO_ASE, ASE_TO_FS, EV_TO_AU
 from nff.data import Dataset, collate_dicts
 from nff.utils.cuda import batch_to

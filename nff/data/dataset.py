@@ -40,8 +40,7 @@ from nff.data.parallel import (
     featurize_parallel,
 )
 
-if TYPE_CHECKING:
-    from nff.io.ase import AtomsBatch
+from nff.io.ase import AtomsBatch
 
 
 class Dataset(TorchDataset):
@@ -86,6 +85,7 @@ class Dataset(TorchDataset):
         units: str = "kcal/mol",
         check_props: bool = True,
         do_copy: bool = True,
+        device: str = "cuda"
     ) -> None:
         """Constructor for Dataset class.
 
@@ -108,6 +108,7 @@ class Dataset(TorchDataset):
             self.props = props
         self.units = units
         self.to_units(units)
+        self.device = device
 
     def __len__(self) -> int:
         """Length of the dataset.
@@ -276,8 +277,6 @@ class Dataset(TorchDataset):
         offset_key: str = "offsets",
         nbr_key: str = "nbr_list",
     ) -> None:
-        from nff.io.ase import AtomsBatch
-
         nbrlist = []
         offsets = []
         for nxyz, lattice in zip(self.props["nxyz"], self.props["lattice"]):
@@ -289,6 +288,7 @@ class Dataset(TorchDataset):
                 pbc=True,
                 cutoff=cutoff,
                 directed=(not undirected),
+                device=self.device,
             )
             nbrs, offs = atoms.update_nbr_list()
             nbrlist.append(nbrs)
@@ -434,8 +434,6 @@ class Dataset(TorchDataset):
         Args:
             mol_dic (dict): dictionary of nodes of each disconnected subgraphs
         """
-        from nff.io.ase import AtomsBatch
-
         for i in range(len(self.props["nxyz"])):
             # makes atoms object
 
@@ -444,6 +442,7 @@ class Dataset(TorchDataset):
                 numbers=self.props["nxyz"][i][:, 0],
                 cell=self.props["cell"][i],
                 pbc=True,
+                device=self.device
             )
 
             # recontruct coordinates based on subgraphs index
@@ -510,7 +509,6 @@ class Dataset(TorchDataset):
         Raises:
             TypeError: _description_
         """
-        from nff.io.ase import AtomsBatch
 
         if not self.props:
             raise TypeError("the dataset has no data yet")
@@ -577,6 +575,7 @@ class Dataset(TorchDataset):
                 "cutoff": cutoff,
                 "cell": cell,
                 "nbr_torch": False,
+                "device": self.device
             }
 
             # the coordinates have been unwrapped and try to results offsets
@@ -611,8 +610,6 @@ class Dataset(TorchDataset):
         Returns:
             List[AtomsBatch]: list of AtomsBatch objects
         """
-        from nff.io.ase import AtomsBatch
-
         atoms_batches = []
         num_batches = len(self.props["nxyz"])
         for i in range(num_batches):

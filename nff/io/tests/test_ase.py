@@ -5,6 +5,8 @@ import networkx as nx
 import numpy as np
 from ase import Atoms
 
+import pytest
+
 from nff.io.ase import AtomsBatch
 
 
@@ -19,6 +21,8 @@ def compare_dicts(d1: dict, d2: dict):
     for key, value in d1.items():
         if isinstance(value, dict):
             compare_dicts(value, d2[key])
+        elif isinstance(value, str):
+            assert value == d2[key]
         elif isinstance(value, Iterable):
             assert np.allclose(value, d2[key])
         else:
@@ -47,10 +51,17 @@ def get_ethanol():
     return Atoms(nxyz[:, 0].astype(int), positions=nxyz[:, 1:])
 
 
-# @ut.skip("skip this for now")
+@pytest.mark.usefixtures("device")  # Ensure the fixture is accessible
 class TestAtomsBatch(ut.TestCase):
     def setUp(self):
         self.ethanol = get_ethanol()
+        # Access the device value from the pytest fixture
+        self.device = self._test_fixture_device
+
+    @pytest.fixture(autouse=True)
+    def inject_device(self, device):
+        # Automatically set the fixture value to an attribute
+        self._test_fixture_device = device
 
     @ut.skip("skip this for now")
     def test_AtomsBatch(self):
@@ -111,7 +122,7 @@ class TestAtomsBatch(ut.TestCase):
             ]
         )
 
-        atoms_batch = AtomsBatch(self.ethanol, cutoff=2.5)
+        atoms_batch = AtomsBatch(self.ethanol, cutoff=2.5, device=self.device)
         atoms_batch.update_nbr_list()
 
         G1 = nx.from_edgelist(expected_nbrlist_cutoff_2dot5)
@@ -120,13 +131,13 @@ class TestAtomsBatch(ut.TestCase):
         assert nx.is_isomorphic(G1, G2)
 
     def test_get_batch(self):
-        atoms_batch = AtomsBatch(self.ethanol, cutoff=5)
+        atoms_batch = AtomsBatch(self.ethanol, cutoff=5, device=self.device)
         batch = atoms_batch.get_batch()
 
         assert "nxyz" in batch
 
     def test_from_atoms(self):
-        atoms_batch = AtomsBatch.from_atoms(self.ethanol, cutoff=2.5)
+        atoms_batch = AtomsBatch.from_atoms(self.ethanol, cutoff=2.5, device=self.device)
 
         # ensure atomic numbers, positions, and cell are the same
         assert np.allclose(atoms_batch.get_atomic_numbers(), self.ethanol.get_atomic_numbers())
@@ -134,7 +145,7 @@ class TestAtomsBatch(ut.TestCase):
         assert np.allclose(atoms_batch.get_cell(), self.ethanol.get_cell())
 
     def test_copy(self):
-        atoms_batch = AtomsBatch(self.ethanol, cutoff=2.5)
+        atoms_batch = AtomsBatch(self.ethanol, cutoff=2.5, device=self.device)
         atoms_batch.get_batch()  # update props
         atoms_batch_copy = atoms_batch.copy()
 
@@ -154,7 +165,7 @@ class TestAtomsBatch(ut.TestCase):
         assert atoms_batch.requires_large_offsets == atoms_batch_copy.requires_large_offsets
 
     def test_fromdict(self):
-        atoms_batch = AtomsBatch(self.ethanol, cutoff=2.5)
+        atoms_batch = AtomsBatch(self.ethanol, cutoff=2.5, device=self.device)
         ab_dict = atoms_batch.todict(update_props=True)
         ab_from_dict = AtomsBatch.fromdict(ab_dict)
 
@@ -183,6 +194,7 @@ class TestAtomsBatch(ut.TestCase):
         compare_dicts(ab_dict_props, ab_dict_again_props)
 
 
+@pytest.mark.usefixtures("device")  # Ensure the fixture is loaded
 class TestPeriodic(ut.TestCase):
     def setUp(self):
         nxyz = np.array(
@@ -205,9 +217,15 @@ class TestPeriodic(ut.TestCase):
                 [0.0, 0.0, 5.51891759],
             ]
         )
-        self.quartz = AtomsBatch(nxyz[:, 0].astype(int), positions=nxyz[:, 1:], cell=lattice, pbc=True)
+        self.quartz = AtomsBatch(nxyz[:, 0].astype(int), positions=nxyz[:, 1:], cell=lattice, pbc=True,
+                                 device=self._test_fixture_device)
+        
+    @pytest.fixture(autouse=True)
+    def inject_device(self, device):
+        # Automatically set the fixture value to an attribute
+        self._test_fixture_device = device
 
-    def test_ase(self):
+    def test_print(self):
         print(self.quartz)
 
     def test_nbrlist(self):
