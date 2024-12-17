@@ -8,7 +8,6 @@ from ase import units
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
 
 
-
 class TempRamp(MolecularDynamics):
     def __init__(
         self,

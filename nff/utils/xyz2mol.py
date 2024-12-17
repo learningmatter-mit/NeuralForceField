@@ -20,7 +20,6 @@ import os
 import signal
 
 
-
 try:
     from rdkit.Chem import rdEHTTools  # requires RDKit 2019.9.1 or later
 except ImportError:
