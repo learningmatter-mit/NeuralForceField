@@ -49,7 +49,7 @@ def check_directed(model, atoms):
 class NeuralFF(Calculator):
     """ASE calculator using a pretrained NeuralFF model"""
 
-    implemented_properties = ["energy", "forces", "stress", "embedding"]
+    implemented_properties = ["energy", "forces", "stress", "embedding"]  # noqa
 
     def __init__(
         self,
@@ -97,19 +97,17 @@ class NeuralFF(Calculator):
         sampling after calling NFF on geometries."""
 
         log_file = os.path.join(jobdir, log_filename)
+        # ruff: noqa: SIM108
         if os.path.exists(log_file):
             log = np.load(log_file)
         else:
             log = None
-
         if log is not None:
             log = np.append(log, props[None, :, :, :], axis=0)
         else:
             log = props[None, :, :, :]
 
         np.save(log_filename, log)
-
-        return
 
     def calculate(
         self,
@@ -126,7 +124,7 @@ class NeuralFF(Calculator):
         system_changes (default from ase)
         """
 
-        if not any([isinstance(self.model, i) for i in UNDIRECTED]):
+        if not any(isinstance(self.model, i) for i in UNDIRECTED):
             check_directed(self.model, atoms)
 
         # for backwards compatability
@@ -174,10 +172,7 @@ class NeuralFF(Calculator):
         else:
             energy = prediction_numpy[self.en_key]
 
-        if grad_key in prediction_numpy:
-            energy_grad = prediction_numpy[grad_key]
-        else:
-            energy_grad = None
+        energy_grad = prediction_numpy.get(grad_key, None)
 
         # TODO: implement unit conversion with prediction_numpy
         self.results = {"energy": energy.reshape(-1)}
@@ -234,7 +229,7 @@ class EnsembleNFF(Calculator):
     """Produces an ensemble of NFF calculators to predict the
     discrepancy between the properties"""
 
-    implemented_properties = ["energy", "forces", "stress", "energy_std", "forces_std", "stress_std"]
+    implemented_properties = ["energy", "forces", "stress", "energy_std", "forces_std", "stress_std"]  # noqa
 
     def __init__(
         self,
@@ -336,7 +331,7 @@ class EnsembleNFF(Calculator):
         """
 
         for model in self.models:
-            if not any([isinstance(model, i) for i in UNDIRECTED]):
+            if not any(isinstance(model, i) for i in UNDIRECTED):
                 check_directed(model, atoms)
 
         if getattr(self, "properties", None) is None:
@@ -437,7 +432,7 @@ class EnsembleNFF(Calculator):
             if "forces_disp" in prediction:
                 self.results["forces"] = self.results["forces"] + prediction["forces_disp"]
             if self.jobdir is not None:
-                forces_std = self.results["forces_std"][None, :, :]
+                forces_std = self.results["forces_std"][None, :, :]  # noqa
                 self.log_ensemble(self.jobdir, "forces_nff_ensemble.npy", -1 * gradients)
 
         if "stress" in properties:
@@ -446,7 +441,7 @@ class EnsembleNFF(Calculator):
             if "stress_disp" in prediction:
                 self.results["stress"] = self.results["stress"] + prediction["stress_disp"]
             if self.jobdir is not None:
-                stress_std = self.results["stress_std"][None, :, :]
+                stress_std = self.results["stress_std"][None, :, :]  # noqa
                 self.log_ensemble(self.jobdir, "stress_nff_ensemble.npy", stresses)
 
         atoms.results = self.results.copy()
@@ -460,7 +455,7 @@ class EnsembleNFF(Calculator):
         The special keyword 'parameters' can be used to read
         parameters from a file."""
         changed_params = Calculator.set(self, **kwargs)
-        if "offset_data" in self.parameters.keys():
+        if "offset_data" in self.parameters:
             self.offset_data = self.parameters["offset_data"]
             print(f"offset data: {self.offset_data} is set from parameters")
 
@@ -480,7 +475,7 @@ class NeuralOptimizer:
     def run(self, fmax=0.2, steps=1000):
         epochs = steps // self.update_freq
 
-        for step in range(epochs):
+        for _ in range(epochs):
             self.optimizer.run(fmax=fmax, steps=self.update_freq)
             self.optimizer.atoms.update_nbr_list()
 
@@ -617,7 +612,7 @@ class NeuralMetadynamics(NeuralFF):
         system_changes=all_changes,
         add_steps=True,
     ):
-        if not any([isinstance(self.model, i) for i in UNDIRECTED]):
+        if not any(isinstance(self.model, i) for i in UNDIRECTED):
             check_directed(self.model, atoms)
 
         super().calculate(atoms=atoms, properties=properties, system_changes=system_changes)
@@ -784,7 +779,7 @@ class NeuralGAMD(NeuralFF):
             model=model,
             device=device,
             en_key=en_key,
-            directed=DEFAULT_DIRECTED,
+            directed=directed,
             **kwargs,
         )
         self.V_min = V_min
@@ -794,7 +789,7 @@ class NeuralGAMD(NeuralFF):
         self.k = self.k_0 / (self.V_max - self.V_min)
 
     def calculate(self, atoms, properties=["energy", "forces"], system_changes=all_changes):
-        if not any([isinstance(self.model, i) for i in UNDIRECTED]):
+        if not any(isinstance(self.model, i) for i in UNDIRECTED):
             check_directed(self.model, atoms)
 
         super().calculate(atoms=atoms, properties=properties, system_changes=system_changes)
@@ -1003,7 +998,7 @@ class HarmonicRestraint:
             max_steps (int): maximum number of steps of the MD simulation
             device: device
         """
-        for cvname, val in cvdic.items():
+        for val in cvdic.values():
             if val["type"].lower() == "proj_vec_plane":
                 mol_inds = [i - 1 for i in val["mol"]]  # caution check type
                 ring_inds = [i - 1 for i in val["ring"]]
@@ -1105,7 +1100,7 @@ class HarmonicRestraint:
 class NeuralRestraint(Calculator):
     """ASE calculator to run Neural restraint MD simulations"""
 
-    implemented_properties = ["energy", "forces", "stress"]
+    implemented_properties = ["energy", "forces", "stress"]  # noqa
 
     def __init__(
         self,
@@ -1160,7 +1155,7 @@ class NeuralRestraint(Calculator):
         # print("calculating ...")
         self.step += 1
         # print("step ", self.step, self.step*0.0005)
-        if not any([isinstance(self.model, i) for i in UNDIRECTED]):
+        if not any(isinstance(self.model, i) for i in UNDIRECTED):
             check_directed(self.model, atoms)
 
         # for backwards compatability

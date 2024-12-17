@@ -118,7 +118,7 @@ def get_neighbor_list(xyz, cutoff=5, undirected=True):
             indices of connected atoms.
     """
 
-    if torch.is_tensor(xyz) == False:
+    if not torch.is_tensor(xyz):
         xyz = torch.Tensor(xyz)
     n = xyz.size(0)
 
@@ -243,7 +243,7 @@ def generate_subgraphs(atomsobject, unwrap=True, get_edge=False):
     edge_list = []
     partitions = []
 
-    for i, sg in enumerate(sub_graphs):
+    for sg in sub_graphs:
         partitions.append(list(sg.nodes))
         if get_edge:
             edge_list.append(list(sg.edges))
@@ -280,7 +280,7 @@ def reconstruct_atoms(atomsobject, mol_idx):
 def list2adj(bond_list, size=None):
     E = bond_list
     if size is None:
-        size = max(set([n for e in E for n in e])) + 1
+        size = max({n for e in E for n in e}) + 1
     # make an empty adjacency list
     adjacency = [[0] * size for _ in range(size)]
     # populate the list for each edge

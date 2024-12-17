@@ -110,7 +110,7 @@ class ConstrainAngles(FixConstraint):
         else:
             self.targ_angles = np.radians(atoms.get_angles(self.idx))
 
-        if isinstance(force_consts, float) or isinstance(force_consts, int):
+        if isinstance(force_consts, (float, int)):
             self.force_consts = np.array([float(force_consts)] * len(self.idx))
         else:
             assert len(force_consts) == len(self.idx)
@@ -163,7 +163,7 @@ class ConstrainDihedrals(FixConstraint):
         else:
             self.targ_diheds = np.radians(atoms.get_dihedrals(self.idx))
 
-        if isinstance(force_consts, float) or isinstance(force_consts, int):
+        if isinstance(force_consts, (float, int)):
             self.force_consts = np.array([float(force_consts)] * len(self.idx))
         else:
             assert len(force_consts) == len(self.idx)
@@ -204,7 +204,7 @@ class ConstrainBonds(FixConstraint):
             deltas = atoms.get_positions()[idx[:, 0]] - atoms.get_positions()[idx[:, 1]]
             self.targ_lengths = np.linalg.norm(deltas, axis=-1)
 
-        if isinstance(force_consts, float) or isinstance(force_consts, int):
+        if isinstance(force_consts, (float, int)):
             self.force_consts = np.array([float(force_consts)] * len(self.idx))
         else:
             assert len(force_consts) == len(self.idx)
@@ -238,7 +238,7 @@ class ConstrainBonds(FixConstraint):
 def split(array, num_atoms):
     shape = [-1]
     total_atoms = num_atoms.sum()
-    if not all([i == total_atoms for i in np.array(array).shape]):
+    if not all(i == total_atoms for i in np.array(array).shape):
         shape = [-1, 3]
 
     split_idx = np.cumsum(num_atoms)

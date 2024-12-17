@@ -293,7 +293,7 @@ def parse_json(pred_path, target, split):
         pred_dic = json.load(f_open)
 
     # int keys for different seeds
-    int_keys = list([i for i in pred_dic.keys() if i.isdigit()])
+    int_keys = [i for i in pred_dic if i.isdigit()]
 
     # get the predictions of each seed
     preds = []

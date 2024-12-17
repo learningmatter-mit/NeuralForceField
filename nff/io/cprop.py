@@ -112,11 +112,7 @@ def make_feat_paths(feat_path):
       paths (list): list of paths
     """
 
-    if feat_path is not None:
-        paths = [feat_path]
-    else:
-        paths = None
-    return paths
+    return [feat_path] if feat_path is not None else None
 
 
 def modify_config(

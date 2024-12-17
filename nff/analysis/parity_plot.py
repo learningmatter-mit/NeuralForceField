@@ -92,13 +92,13 @@ def plot_parity(
 
         label = key
         ax.set_title(label.upper())
-        ax.set_xlabel("Predicted %s [%s]" % (label, units[key]))
-        ax.set_ylabel("Target %s [%s]" % (label, units[key]))
+        ax.set_xlabel(f"Predicted {label} [{units[key]}]")
+        ax.set_ylabel(f"Target {label} [{units[key]}]")
 
         ax.text(
             0.1,
             0.9,
-            "MAE: %.2f %s" % (mae, units[key]),
+            f"MAE: {mae:.2f} {units[key]}",
             transform=ax.transAxes,
         )
 
@@ -192,7 +192,7 @@ def plot_err_var(
         label="Avg. best fit",
         zorder=1,
     )
-    min_text = ax.text(
+    ax.text(
         0.6,
         0.9,
         rf"$R^2$: {res.rvalue**2:.3f}",

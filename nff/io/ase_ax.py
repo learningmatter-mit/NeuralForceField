@@ -79,7 +79,7 @@ class AtomsBatch(Atoms):
 
         return nxyz
 
-    def get_batch(self, device="cpu"):
+    def get_batch(self):
         """Uses the properties of Atoms to create a batch
             to be sent to the model.
 
@@ -132,7 +132,7 @@ class AtomsBatch(Atoms):
             nbr_list = self.nbr_list
 
             if any(self.pbc):
-                offsets = offsets[self.nbr_list[:, 0], self.nbr_list[:, 1], :].detach().to("cpu").numpy()
+                offsets = self.offsets[self.nbr_list[:, 0], self.nbr_list[:, 1], :].detach().to("cpu").numpy()
             else:
                 offsets = np.zeros((self.nbr_list.shape[0], 3))
 
@@ -148,13 +148,13 @@ class AtomsBatch(Atoms):
 
         return nbr_list, offsets
 
-    def batch_properties():
+    def batch_properties(self):
         pass
 
-    def batch_kinetic_energy():
+    def batch_kinetic_energy(self):
         pass
 
-    def batch_virial():
+    def batch_virial(self):
         pass
 
     @classmethod
@@ -170,7 +170,7 @@ class AtomsBatch(Atoms):
 class NeuralFF(Calculator):
     """ASE calculator using a pretrained NeuralFF model"""
 
-    implemented_properties = ["energy", "forces"]
+    implemented_properties = ["energy", "forces"]  # noqa
 
     def __init__(
         self,
@@ -229,7 +229,7 @@ class NeuralFF(Calculator):
             system_changes (default from ase)
         """
 
-        if not any([isinstance(self.model, i) for i in UNDIRECTED]):
+        if not any(isinstance(self.model, i) for i in UNDIRECTED):
             check_directed(self.model, atomsbatch)
 
         Calculator.calculate(self, atomsbatch, properties, system_changes)

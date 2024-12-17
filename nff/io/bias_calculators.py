@@ -1,4 +1,4 @@
-from typing import Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 from ase import units
@@ -29,7 +29,7 @@ class BiasBase(NeuralFF):
         equil_temp: float temperature of the simulation (important for extended system dynamics)
     """
 
-    implemented_properties = [
+    implemented_properties = [  # noqa
         "energy",
         "forces",
         "stress",
@@ -52,7 +52,7 @@ class BiasBase(NeuralFF):
         device="cpu",
         en_key="energy",
         directed=DEFAULT_DIRECTED,
-        extra_constraints: list[dict] = None,
+        extra_constraints: Optional[List[Dict]] = None,
         **kwargs,
     ):
         NeuralFF.__init__(self, model=model, device=device, en_key=en_key, directed=directed, **kwargs)
@@ -78,29 +78,26 @@ class BiasBase(NeuralFF):
         self.conf_k = np.zeros(shape=(self.num_cv, 1))
 
         for ii, cv in enumerate(self.cv_defs):
-            if "range" in cv.keys():
+            if "range" in cv:
                 self.ext_coords[ii] = cv["range"][0]
                 self.ranges[ii] = cv["range"]
             else:
                 raise KeyError("range")
 
-            if "margin" in cv.keys():
+            if "margin" in cv:
                 self.margins[ii] = cv["margin"]
 
-            if "conf_k" in cv.keys():
+            if "conf_k" in cv:
                 self.conf_k[ii] = cv["conf_k"]
 
-            if "ext_k" in cv.keys():
+            if "ext_k" in cv:
                 self.ext_k[ii] = cv["ext_k"]
-            elif "ext_sigma" in cv.keys():
+            elif "ext_sigma" in cv:
                 self.ext_k[ii] = (units.kB * self.equil_temp) / (cv["ext_sigma"] * cv["ext_sigma"])
             else:
                 raise KeyError("ext_k/ext_sigma")
 
-            if "type" not in cv.keys():
-                self.cv_defs[ii]["type"] = "not_angle"
-            else:
-                self.cv_defs[ii]["type"] = cv["type"]
+            self.cv_defs[ii]["type"] = cv.get("type", "not_angle")
 
         self.constraints = None
         self.num_const = 0
@@ -112,17 +109,14 @@ class BiasBase(NeuralFF):
                 self.constraints[-1]["func"] = CV(cv["definition"])
 
                 self.constraints[-1]["pos"] = cv["pos"]
-                if "k" in cv.keys():
+                if "k" in cv:
                     self.constraints[-1]["k"] = cv["k"]
-                elif "sigma" in cv.keys():
+                elif "sigma" in cv:
                     self.constraints[-1]["k"] = (units.kB * self.equil_temp) / (cv["sigma"] * cv["sigma"])
                 else:
                     raise KeyError("k/sigma")
 
-                if "type" not in cv.keys():
-                    self.constraints[-1]["type"] = "not_angle"
-                else:
-                    self.constraints[-1]["type"] = cv["type"]
+                self.constraints[-1]["type"] = cv.get("type", "not_angle")
 
             self.num_const = len(self.constraints)
 
@@ -275,7 +269,7 @@ class BiasBase(NeuralFF):
         system_changes (default from ase)
         """
 
-        if not any([isinstance(self.model, i) for i in UNDIRECTED]):
+        if not any(isinstance(self.model, i) for i in UNDIRECTED):
             check_directed(self.model, atoms)
 
         # for backwards compatability
@@ -323,7 +317,7 @@ class BiasBase(NeuralFF):
         cv_grad_lens = np.zeros(shape=(self.num_cv, 1))
         cv_invmass = np.zeros(shape=(self.num_cv, 1))
         cv_dot_PES = np.zeros(shape=(self.num_cv, 1))
-        for ii, cv_def in enumerate(self.cv_defs):
+        for ii, _ in enumerate(self.cv_defs):
             xi, xi_grad = self.the_cv[ii](atoms)
             cvs[ii] = xi
             cv_grads[ii] = xi_grad
@@ -387,7 +381,8 @@ class eABF(BiasBase):
             [["cv_type", [atom_indices], np.array([minimum, maximum]), bin_width], [possible second dimension]]
         equil_temp: float temperature of the simulation (important for extended system dynamics)
         dt: time step of the extended dynamics (has to be equal to that of the real system dyn!)
-        friction_per_ps: friction for the Lagevin dyn of extended system (has to be equal to that of the real system dyn!)
+        friction_per_ps: friction for the Lagevin dyn of extended system
+        (has to be equal to that of the real system dyn!)
         nfull: numer of samples need for full application of bias force
     """
 
@@ -419,20 +414,20 @@ class eABF(BiasBase):
         self.nfull = nfull
 
         for ii, cv in enumerate(self.cv_defs):
-            if "bin_width" in cv.keys():
+            if "bin_width" in cv:
                 self.ext_binwidth[ii] = cv["bin_width"]
-            elif "ext_sigma" in cv.keys():
+            elif "ext_sigma" in cv:
                 self.ext_binwidth[ii] = cv["ext_sigma"]
             else:
                 raise KeyError("bin_width")
 
-            if "ext_pos" in cv.keys():
+            if "ext_pos" in cv:
                 # set initial position
                 self.ext_coords[ii] = cv["ext_pos"]
             else:
                 raise KeyError("ext_pos")
 
-            if "ext_mass" in cv.keys():
+            if "ext_mass" in cv:
                 self.ext_masses[ii] = cv["ext_mass"]
             else:
                 raise KeyError("ext_mass")
@@ -567,7 +562,8 @@ class aMDeABF(eABF):
                     "SaMD: apply Sigmoid accelerated MD
         equil_temp: float temperature of the simulation (important for extended system dynamics)
         dt: time step of the extended dynamics (has to be equal to that of the real system dyn!)
-        friction_per_ps: friction for the Lagevin dyn of extended system (has to be equal to that of the real system dyn!)
+        friction_per_ps: friction for the Lagevin dyn of extended system
+        (has to be equal to that of the real system dyn!)
         nfull: numer of samples need for full application of bias force
     """
 
@@ -794,7 +790,8 @@ class WTMeABF(eABF):
             [["cv_type", [atom_indices], np.array([minimum, maximum]), bin_width], [possible second dimension]]
         equil_temp: float temperature of the simulation (important for extended system dynamics)
         dt: time step of the extended dynamics (has to be equal to that of the real system dyn!)
-        friction_per_ps: friction for the Lagevin dyn of extended system (has to be equal to that of the real system dyn!)
+        friction_per_ps: friction for the Lagevin dyn of extended system
+        (has to be equal to that of the real system dyn!)
         nfull: numer of samples need for full application of bias force
         hill_height: unscaled height of the MetaD Gaussian hills in eV
         hill_drop_freq: #steps between depositing Gaussians
@@ -840,7 +837,7 @@ class WTMeABF(eABF):
         self.center = []
 
         for ii, cv in enumerate(self.cv_defs):
-            if "hill_std" in cv.keys():
+            if "hill_std" in cv:
                 self.hill_std[ii] = cv["hill_std"]
                 self.hill_var[ii] = cv["hill_std"] * cv["hill_std"]
             else:
@@ -936,11 +933,8 @@ class WTMeABF(eABF):
         ind = np.ma.indices((len(self.center),))[0]
         ind = np.ma.masked_array(ind)
 
-        dist_to_centers = []
-        for ii in range(self.num_cv):
-            dist_to_centers.append(self.diff(xi[ii], np.asarray(self.center)[:, ii], self.cv_defs[ii]["type"]))
-
-        dist_to_centers = np.asarray(dist_to_centers)
+        dist_to_centers = np.array([self.diff(xi[ii], np.asarray(self.center)[:, ii], self.cv_defs[ii]["type"])
+                                    for ii in range(self.num_cv)])
 
         if self.num_cv > 1:
             ind[(abs(dist_to_centers) > 3 * self.hill_std.reshape(-1, 1)).all(axis=0)] = np.ma.masked
@@ -969,7 +963,7 @@ class AttractiveBias(NeuralFF):
         gamma: coupling strength, regulates strength of attraction
     """
 
-    implemented_properties = [
+    implemented_properties = [  # noqa
         "energy",
         "forces",
         "stress",
@@ -992,7 +986,7 @@ class AttractiveBias(NeuralFF):
         device="cpu",
         en_key="energy",
         directed=DEFAULT_DIRECTED,
-        extra_constraints: list[dict] = None,
+        extra_constraints: Optional[List[Dict]] = None,
         **kwargs,
     ):
         NeuralFF.__init__(self, model=model, device=device, en_key=en_key, directed=directed, **kwargs)
@@ -1010,22 +1004,19 @@ class AttractiveBias(NeuralFF):
         self.conf_k = np.zeros(shape=(self.num_cv, 1))
 
         for ii, cv in enumerate(self.cv_defs):
-            if "range" in cv.keys():
+            if "range" in cv:
                 self.ext_coords[ii] = cv["range"][0]
                 self.ranges[ii] = cv["range"]
             else:
                 raise KeyError("range")
 
-            if "margin" in cv.keys():
+            if "margin" in cv:
                 self.margins[ii] = cv["margin"]
 
-            if "conf_k" in cv.keys():
+            if "conf_k" in cv:
                 self.conf_k[ii] = cv["conf_k"]
 
-            if "type" not in cv.keys():
-                self.cv_defs[ii]["type"] = "not_angle"
-            else:
-                self.cv_defs[ii]["type"] = cv["type"]
+            self.cv_defs[ii]["type"] = cv.get("type", "not_angle")
 
         self.constraints = None
         self.num_const = 0
@@ -1037,17 +1028,14 @@ class AttractiveBias(NeuralFF):
                 self.constraints[-1]["func"] = CV(cv["definition"])
 
                 self.constraints[-1]["pos"] = cv["pos"]
-                if "k" in cv.keys():
+                if "k" in cv:
                     self.constraints[-1]["k"] = cv["k"]
-                elif "sigma" in cv.keys():
+                elif "sigma" in cv:
                     self.constraints[-1]["k"] = (units.kB * self.equil_temp) / (cv["sigma"] * cv["sigma"])
                 else:
                     raise KeyError("k/sigma")
 
-                if "type" not in cv.keys():
-                    self.constraints[-1]["type"] = "not_angle"
-                else:
-                    self.constraints[-1]["type"] = cv["type"]
+                self.constraints[-1]["type"] = cv.get("type", "not_angle")
 
             self.num_const = len(self.constraints)
 
@@ -1170,7 +1158,7 @@ class AttractiveBias(NeuralFF):
         system_changes (default from ase)
         """
 
-        if not any([isinstance(self.model, i) for i in UNDIRECTED]):
+        if not any(isinstance(self.model, i) for i in UNDIRECTED):
             check_directed(self.model, atoms)
 
         # for backwards compatability
@@ -1218,7 +1206,7 @@ class AttractiveBias(NeuralFF):
         cv_grad_lens = np.zeros(shape=(self.num_cv, 1))
         cv_invmass = np.zeros(shape=(self.num_cv, 1))
         cv_dot_PES = np.zeros(shape=(self.num_cv, 1))
-        for ii, cv_def in enumerate(self.cv_defs):
+        for ii, _ in enumerate(self.cv_defs):
             xi, xi_grad = self.the_cv[ii](atoms)
             cvs[ii] = xi
             cv_grads[ii] = xi_grad

@@ -1,4 +1,4 @@
-from typing import Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import openmm as omm
@@ -15,6 +15,9 @@ nonbondedMethod = {
     "NonPeriodic": app.CutoffNonPeriodic,
 }
 
+class PropertyNotPresent(Exception):
+    pass
+
 
 class BiasBase(Calculator):
     """Basic Calculator class with neural force field
@@ -26,7 +29,7 @@ class BiasBase(Calculator):
         equil_temp: float temperature of the simulation (important for extended system dynamics)
     """
 
-    implemented_properties = [
+    implemented_properties = [  # noqa
         "energy",
         "forces",
         "energy_unbiased",
@@ -41,14 +44,15 @@ class BiasBase(Calculator):
     ]
 
     def __init__(
-        self, mmparms, cv_defs: list[dict], equil_temp: float = 300.0, extra_constraints: list[dict] = None, **kwargs
+        self, mmparms, cv_defs: List[Dict], equil_temp: float = 300.0, extra_constraints: Optional[List[Dict]] = None,
+            **kwargs
     ):
         Calculator.__init__(self, **kwargs)
 
         # OpenMM setup
-        if "prmtop" in mmparms.keys():
+        if "prmtop" in mmparms:
             parm = pmd.load_file(mmparms["prmtop"])
-        elif "parm7" in mmparms.keys():
+        elif "parm7" in mmparms:
             # for a list with parm7 and rst7
             parm = pmd.load_file(mmparms["parm7"], mmparms["rst7"])
         else:
@@ -87,29 +91,26 @@ class BiasBase(Calculator):
         self.conf_k = np.zeros(shape=(self.num_cv, 1))
 
         for ii, cv in enumerate(self.cv_defs):
-            if "range" in cv.keys():
+            if "range" in cv:
                 self.ext_coords[ii] = cv["range"][0]
                 self.ranges[ii] = cv["range"]
             else:
                 raise PropertyNotPresent("range")
 
-            if "margin" in cv.keys():
+            if "margin" in cv:
                 self.margins[ii] = cv["margin"]
 
-            if "conf_k" in cv.keys():
+            if "conf_k" in cv:
                 self.conf_k[ii] = cv["conf_k"]
 
-            if "ext_k" in cv.keys():
+            if "ext_k" in cv:
                 self.ext_k[ii] = cv["ext_k"]
-            elif "ext_sigma" in cv.keys():
+            elif "ext_sigma" in cv:
                 self.ext_k[ii] = (units.kB * self.equil_temp) / (cv["ext_sigma"] * cv["ext_sigma"])
             else:
                 raise PropertyNotPresent("ext_k/ext_sigma")
 
-            if "type" not in cv.keys():
-                self.cv_defs[ii]["type"] = "not_angle"
-            else:
-                self.cv_defs[ii]["type"] = cv["type"]
+            self.cv_defs[ii]["type"] = cv.get("type", "not_angle")
 
         self.constraints = None
         self.num_const = 0
@@ -121,17 +122,14 @@ class BiasBase(Calculator):
                 self.constraints[-1]["func"] = CV(cv["definition"])
 
                 self.constraints[-1]["pos"] = cv["pos"]
-                if "k" in cv.keys():
+                if "k" in cv:
                     self.constraints[-1]["k"] = cv["k"]
-                elif "sigma" in cv.keys():
+                elif "sigma" in cv:
                     self.constraints[-1]["k"] = (units.kB * self.equil_temp) / (cv["sigma"] * cv["sigma"])
                 else:
                     raise PropertyNotPresent("k/sigma")
 
-                if "type" not in cv.keys():
-                    self.constraints[-1]["type"] = "not_angle"
-                else:
-                    self.constraints[-1]["type"] = cv["type"]
+                self.constraints[-1]["type"] = cv.get("type", "not_angle")
 
             self.num_const = len(self.constraints)
 
@@ -294,7 +292,7 @@ class BiasBase(Calculator):
         inv_masses = 1.0 / atoms.get_masses()
         M_inv = np.diag(np.repeat(inv_masses, 3).flatten())
 
-        for ii, cv_def in enumerate(self.cv_defs):
+        for ii, _ in enumerate(self.cv_defs):
             xi, xi_grad = self.the_cv[ii](atoms)
             self.cvs[ii] = xi
             self.cv_grads[ii] = xi_grad
@@ -345,7 +343,8 @@ class eABF(BiasBase):
             [["cv_type", [atom_indices], np.array([minimum, maximum]), bin_width], [possible second dimension]]
         equil_temp: float temperature of the simulation (important for extended system dynamics)
         dt: time step of the extended dynamics (has to be equal to that of the real system dyn!)
-        friction_per_ps: friction for the Lagevin dyn of extended system (has to be equal to that of the real system dyn!)
+        friction_per_ps: friction for the Lagevin dyn of extended system
+        (has to be equal to that of the real system dyn!)
         nfull: numer of samples need for full application of bias force
     """
 
@@ -365,20 +364,20 @@ class eABF(BiasBase):
         self.nfull = nfull
 
         for ii, cv in enumerate(self.cv_defs):
-            if "bin_width" in cv.keys():
+            if "bin_width" in cv:
                 self.ext_binwidth[ii] = cv["bin_width"]
-            elif "ext_sigma" in cv.keys():
+            elif "ext_sigma" in cv:
                 self.ext_binwidth[ii] = cv["ext_sigma"]
             else:
                 raise PropertyNotPresent("bin_width")
 
-            if "ext_pos" in cv.keys():
+            if "ext_pos" in cv:
                 # set initial position
                 self.ext_coords[ii] = cv["ext_pos"]
             else:
                 raise PropertyNotPresent("ext_pos")
 
-            if "ext_mass" in cv.keys():
+            if "ext_mass" in cv:
                 self.ext_masses[ii] = cv["ext_mass"]
             else:
                 raise PropertyNotPresent("ext_mass")
@@ -496,7 +495,8 @@ class WTMeABF(eABF):
             [["cv_type", [atom_indices], np.array([minimum, maximum]), bin_width], [possible second dimension]]
         equil_temp: float temperature of the simulation (important for extended system dynamics)
         dt: time step of the extended dynamics (has to be equal to that of the real system dyn!)
-        friction_per_ps: friction for the Lagevin dyn of extended system (has to be equal to that of the real system dyn!)
+        friction_per_ps: friction for the Langevin dyn of extended system
+        (has to be equal to that of the real system dyn!)
         nfull: numer of samples need for full application of bias force
         hill_height: unscaled height of the MetaD Gaussian hills in eV
         hill_drop_freq: #steps between depositing Gaussians
@@ -529,14 +529,14 @@ class WTMeABF(eABF):
 
         self.hill_height = hill_height
         self.hill_drop_freq = hill_drop_freq
-        self.hill_std = np.zeros(shape=(self.num_cv))
-        self.hill_var = np.zeros(shape=(self.num_cv))
+        self.hill_std = np.zeros(self.num_cv)
+        self.hill_var = np.zeros(self.num_cv)
         self.well_tempered_temp = well_tempered_temp
         self.call_count = 0
         self.center = []
 
         for ii, cv in enumerate(self.cv_defs):
-            if "hill_std" in cv.keys():
+            if "hill_std" in cv:
                 self.hill_std[ii] = cv["hill_std"]
                 self.hill_var[ii] = cv["hill_std"] * cv["hill_std"]
             else:
@@ -632,11 +632,8 @@ class WTMeABF(eABF):
         ind = np.ma.indices((len(self.center),))[0]
         ind = np.ma.masked_array(ind)
 
-        dist_to_centers = []
-        for ii in range(self.num_cv):
-            dist_to_centers.append(self.diff(xi[ii], np.asarray(self.center)[:, ii], self.cv_defs[ii]["type"]))
-
-        dist_to_centers = np.asarray(dist_to_centers)
+        dist_to_centers = np.array([self.diff(xi[ii], np.asarray(self.center)[:, ii], self.cv_defs[ii]["type"])
+                                    for ii in range(self.num_cv)])
 
         if self.num_cv > 1:
             ind[(abs(dist_to_centers) > 3 * self.hill_std.reshape(-1, 1)).all(axis=0)] = np.ma.masked

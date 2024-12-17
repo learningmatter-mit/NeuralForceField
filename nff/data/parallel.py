@@ -230,7 +230,7 @@ def featurize_parallel(dataset, num_procs, bond_feats=BOND_FEAT_TYPES, atom_feat
     datasets = split_dataset(dataset=dataset, num=num_procs)
 
     # add RDKit mols if they're not already in the dataset
-    has_rdmols = all(["rd_mols" in dset.props for dset in datasets])
+    has_rdmols = all("rd_mols" in dset.props for dset in datasets)
     if not has_rdmols:
         fprint("Converting xyz to RDKit mols...")
         datasets = rd_parallel(datasets)

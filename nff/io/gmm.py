@@ -330,7 +330,7 @@ def _compute_precision_cholesky(covariances, covariance_type):
     -------
     precisions_cholesky : array-like
         The cholesky decomposition of sample precisions of the current
-        components. The shape depends of the covariance_type.
+        components. The shape depends on the covariance_type.
     """
     estimate_precision_error_message = (
         "Fitting the mixture model failed because some components have "
@@ -345,15 +345,15 @@ def _compute_precision_cholesky(covariances, covariance_type):
         for k, covariance in enumerate(covariances):
             try:
                 cov_chol = linalg.cholesky(covariance, lower=True)
-            except linalg.LinAlgError:
-                raise ValueError(estimate_precision_error_message)
+            except linalg.LinAlgError as e:
+                raise ValueError(estimate_precision_error_message) from e
             precisions_chol[k] = linalg.solve_triangular(cov_chol, np.eye(n_features), lower=True).T
     elif covariance_type == "tied":
         _, n_features = covariances.shape
         try:
             cov_chol = linalg.cholesky(covariances, lower=True)
-        except linalg.LinAlgError:
-            raise ValueError(estimate_precision_error_message)
+        except linalg.LinAlgError as e:
+            raise ValueError(estimate_precision_error_message) from e
         precisions_chol = linalg.solve_triangular(cov_chol, np.eye(n_features), lower=True).T
     else:
         if np.any(np.less_equal(covariances, 0.0)):

@@ -1,7 +1,7 @@
 import os
 import shutil
 import tempfile
-from urllib import request as request
+from urllib import request
 
 import numpy as np
 

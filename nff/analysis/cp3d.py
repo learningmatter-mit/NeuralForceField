@@ -40,8 +40,8 @@ def get_pred_files(model_path):
         # should have the form <split>_pred_<metric>.pickle
         # or pred_<metric>.pickle
         splits = ["train", "val", "test"]
-        starts_split = any([file.startswith(f"{split}_pred") for split in splits])
-        starts_pred = any([file.startswith("pred") for split in splits])
+        starts_split = any(file.startswith(f"{split}_pred") for split in splits)
+        starts_pred = file.startswith("pred")
         if (not starts_split) and (not starts_pred):
             continue
         if not file.endswith("pickle"):
@@ -125,10 +125,7 @@ def annotate_confs(dic):
     num_heads, is_linear = get_att_type(dic)
     for sub_dic in dic.values():
         num_confs = sub_dic["boltz_weights"].shape[0]
-        if is_linear:
-            split_sizes = [num_confs] * num_heads
-        else:
-            split_sizes = [num_confs**2] * num_heads
+        split_sizes = [num_confs] * num_heads if is_linear else [num_confs ** 2] * num_heads
 
         learned = torch.Tensor(sub_dic["learned_weights"])
         head_weights = torch.split(learned, split_sizes)
@@ -420,9 +417,9 @@ def report_delta(bare_dic):
         delta_delta_mean = delta_att_mean - delta_rand_mean
         delta_delta_std = (np.var(delta_att) + np.var(delta_rand)) ** 0.5 / (len(delta_att)) ** 0.5
 
-        fprint("Delta att: %.4f +/- %.4f" % (delta_att_mean, delta_att_std))
-        fprint("Delta rand: %.4f +/- %.4f" % (delta_rand_mean, delta_rand_std))
-        fprint("Delta delta: %.4f +/- %.4f" % (delta_delta_mean, delta_delta_std))
+        fprint(f"Delta att: {delta_att_mean:.4f} +/- {delta_att_std:.4f}")
+        fprint(f"Delta rand: {delta_rand_mean:.4f} +/- {delta_rand_std:.4f}")
+        fprint(f"Delta delta: {delta_delta_mean:.4f} +/- {delta_delta_std:.4f}")
         fprint("\n")
 
 
@@ -516,7 +513,7 @@ def get_scores(path, avg_metrics=["auc", "prc-auc"]):
         true = [sub_dic["true"] for sub_dic in dic.values()]
 
         # then it's not a binary classification problem
-        if any([i not in [0, 1] for i in true]):
+        if any(i not in [0, 1] for i in true):
             return None
 
         auc_score = roc_auc_score(y_true=true, y_score=pred)

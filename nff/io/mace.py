@@ -2,7 +2,7 @@ import logging
 import os
 import urllib
 from collections.abc import Iterable
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -37,7 +37,7 @@ def _check_non_zero(std):
     return std
 
 
-def get_mace_mp_model_path(model: str = None) -> str:
+def get_mace_mp_model_path(model: Optional[str] = None) -> str:
     """Get the default MACE MP model. Replicated from the MACE codebase,
     Copyright (c) 2022 ACEsuit/mace and licensed under the MIT license.
 
@@ -158,7 +158,7 @@ def compute_average_E0s(train_dset: Dataset, z_table: AtomicNumberTable, desired
     except np.linalg.LinAlgError:
         logging.warning("Failed to compute E0s using least squares regression, using the same for all atoms")
         atomic_energies_dict = {}
-        for i, z in enumerate(z_table.zs):
+        for z in z_table.zs:
             atomic_energies_dict[z] = 0.0
 
     train_dset.to_units(original_units)
@@ -245,7 +245,7 @@ def update_mace_init_params(
     val: Dataset,
     train_loader: torch.utils.data.DataLoader,
     model_params: Dict,
-    logger: logging.Logger = None,
+    logger: Optional[logging.Logger] = None,
 ) -> Dict[str, Union[int, float, np.ndarray, List[int]]]:
     """Update the MACE model initialization parameters based values obtained from training and validation datasets.
 
@@ -321,7 +321,7 @@ class NffBatch(Batch):
         data = {}
         idx = self.num_graphs + idx if idx < 0 else idx
 
-        for key in self.__slices__.keys():
+        for key in self.__slices__:
             item = self[key]
             if self.__cat_dims__[key] is None:
                 # The item was concatenated along a new batch dimension,

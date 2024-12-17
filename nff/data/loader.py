@@ -42,7 +42,7 @@ def collate_dicts(dicts):
             if key in d:
                 d[key] = d[key] + int(n)
 
-    if all(["nbr_list" in d for d in dicts]):
+    if all("nbr_list" in d for d in dicts):
         # same idea, but for quantities whose maximum value is the length of
         # the nbr list in each batch
         cumulative_nbrs = np.cumsum([0] + [len(d["nbr_list"]) for d in dicts])[:-1]
@@ -214,8 +214,7 @@ class BalancedBatchedSpecies(BatchSampler):
             # by using `these_weights`
             add_idx = torch.multinomial(these_weights, self.batch_size, replacement=True)
 
-            for idx in add_idx:
-                batch.append(idx)
+            batch.extend(add_idx.tolist().copy())
 
             yield batch
             batch = []

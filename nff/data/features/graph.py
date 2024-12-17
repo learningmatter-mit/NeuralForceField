@@ -90,7 +90,7 @@ def remove_bad_idx(dataset, smiles_list, bad_idx, verbose=True):
         None
     """
 
-    bad_idx = sorted(list(set(bad_idx)))
+    bad_idx = list(set(bad_idx))
     new_props = {}
     for key, values in dataset.props.items():
         new_props[key] = [val for i, val in enumerate(values) if i not in bad_idx]
@@ -314,11 +314,7 @@ def get_enum_func(track):
             tqdm if track == True.
     """
 
-    if track:
-        func = tqdm_enum
-    else:
-        func = enumerate
-    return func
+    return tqdm_enum if track else enumerate
 
 
 def make_rd_mols(dataset, verbose=True, check_smiles=False, track=True):
@@ -364,8 +360,7 @@ def make_rd_mols(dataset, verbose=True, check_smiles=False, track=True):
         missing_e = []
 
         # go through each conformer nxyz
-
-        for j, nxyz in enumerate(nxyz_list):
+        for nxyz in nxyz_list:
             # if a conformer in the species has already failed
             # to produce an RDKit mol, then don't bother converting
             # any of the other conformers for that species
@@ -374,7 +369,6 @@ def make_rd_mols(dataset, verbose=True, check_smiles=False, track=True):
                 continue
 
             # coordinates and atomic numbers
-
             xyz = nxyz[:, 1:].tolist()
             atoms = nxyz[:, 0].numpy().astype("int").tolist()
 
@@ -501,6 +495,7 @@ def bond_feat_to_vec(feat_type, feat):
         options = STEREO_OPTIONS
         one_hot = make_one_hot(options=options, result=stereo)
         return one_hot
+    return ValueError(f"Unrecognized feature type {feat_type}")
 
 
 def get_bond_features(bond, feat_type):
@@ -596,6 +591,7 @@ def atom_feat_to_vec(feat_type, feat):
         result = torch.Tensor([feat / 100])
 
         return result
+    return ValueError(f"Unrecognized feature type {feat_type}")
 
 
 def get_atom_features(atom, feat_type):
@@ -743,7 +739,7 @@ def featurize_bonds(dataset, feat_types=BOND_FEAT_TYPES, track=True):
 
                 # add to the features `all_props`, which contains
                 # the bond features of all the conformers of this species
-                for key, feat in feat_dic.items():
+                for feat in feat_dic.values():
                     all_props[-1] = torch.cat((all_props[-1], feat))
 
             # shift the bond list for each conformer to take into account
@@ -782,7 +778,7 @@ def featurize_atoms(dataset, feat_types=ATOM_FEAT_TYPES, track=True):
     enum = get_enum_func(track)
 
     # go through each set of RDKit mols for each species
-    for i, rd_mols in enum(dataset.props["rd_mols"]):
+    for _, rd_mols in enum(dataset.props["rd_mols"]):
         # initialize a list of features for each atom
 
         all_props = []
@@ -797,7 +793,7 @@ def featurize_atoms(dataset, feat_types=ATOM_FEAT_TYPES, track=True):
                 # get the atomic features
                 feat_dic = get_all_atom_feats(atom=atom, feat_types=feat_types)
 
-                for key, feat in feat_dic.items():
+                for feat in feat_dic.values():
                     all_props[-1] = torch.cat((all_props[-1], feat))
 
         # stack the atomic features
@@ -827,12 +823,7 @@ def decode_one_hot(options, vector):
     # otherwise return the option at the nonzero index
     # (or None if it's the last index or everything is 0)
     index = vector.nonzero()
-    if len(index) == 0 or index >= len(options):
-        result = None
-    else:
-        result = options[index]
-
-    return result
+    return None if len(index) == 0 or index >= len(options) else options[index]
 
 
 def decode_atomic(features, meta_data=META_DATA):
@@ -957,10 +948,7 @@ def add_morgan(dataset, vec_length):
     dataset.props["morgan"] = []
     for smiles in dataset.props["smiles"]:
         mol = Chem.MolFromSmiles(smiles)
-        if vec_length != 0:
-            morgan = AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=vec_length)
-        else:
-            morgan = []
+        morgan = AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=vec_length) if vec_length != 0 else []
 
         arr_morgan = np.array(list(morgan)).astype("float32")
         morgan_tens = torch.tensor(arr_morgan)
