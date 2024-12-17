@@ -19,7 +19,6 @@ from nff.train import batch_to, batch_detach
 from nff.nn.utils import single_spec_nbrs
 from nff.data import Dataset, collate_dicts
 from nff.utils import constants as const
-from nff.utils.scatter import compute_grad
 from nff.io.ase_ax import NeuralFF, AtomsBatch
 
 PERIODICTABLE = Chem.GetPeriodicTable()

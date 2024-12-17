@@ -2,8 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .residual_mlp import ResidualMLP
-from .shifted_softplus import ShiftedSoftplus
-from .swish import Swish
 from typing import Optional
 
 

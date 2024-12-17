@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import numpy as np
-from ..functional import softplus_inverse
 
 
 class BernsteinPolynomials(nn.Module):

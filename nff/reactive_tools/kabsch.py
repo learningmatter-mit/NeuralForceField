@@ -3,7 +3,6 @@ import io
 
 try:
     from alog import Logger
-    from acore import settings
     import acore as ac
 except ModuleNotFoundError:
     print("You need to install the group's fork of aRMSD and put it in your path " "https://github.mit.edu/MLMat/aRMSD")

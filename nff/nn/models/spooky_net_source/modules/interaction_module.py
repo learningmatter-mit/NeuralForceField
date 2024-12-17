@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from .residual_stack import ResidualStack
 from .local_interaction import LocalInteraction
 from .nonlocal_interaction import NonlocalInteraction

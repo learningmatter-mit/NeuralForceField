@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 # from pymatgen.core.structure import Structure
 
 

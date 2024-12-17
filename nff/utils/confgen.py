@@ -20,7 +20,6 @@ from rdkit.Chem.AllChem import (
 from rdkit.Chem.rdmolops import RemoveHs, GetFormalCharge
 
 from nff.utils.misc import read_csv, tqdm_enum
-from nff.data.parallel import gen_parallel
 
 PERIODICTABLE = GetPeriodicTable()
 

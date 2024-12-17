@@ -20,7 +20,6 @@ import os
 import signal
 
 
-from rdkit.Chem import rdmolops
 
 try:
     from rdkit.Chem import rdEHTTools  # requires RDKit 2019.9.1 or later
@@ -33,7 +32,7 @@ import numpy as np
 import networkx as nx
 
 from rdkit import Chem
-from rdkit.Chem import AllChem, rdmolops, GetPeriodicTable
+from rdkit.Chem import AllChem, GetPeriodicTable
 from rdkit.Chem.rdchem import EditableMol
 
 

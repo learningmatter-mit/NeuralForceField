@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from nff.utils.scatter import scatter_add, compute_grad
+from nff.utils.scatter import scatter_add
 from nff.utils.tools import layer_types
 from nff.nn.layers import Dense
 

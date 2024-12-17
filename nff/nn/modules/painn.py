@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 from nff.utils.tools import layer_types
-from nff.nn.layers import PainnRadialBasis, CosineEnvelope, ExpNormalBasis, Dense
+from nff.nn.layers import PainnRadialBasis, CosineEnvelope, Dense
 from nff.utils.scatter import scatter_add
 from nff.nn.modules.schnet import ScaleShift
 from nff.nn.modules.torchmd_net import MessageBlock as MDMessage

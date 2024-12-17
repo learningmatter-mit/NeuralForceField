@@ -6,10 +6,8 @@ import itertools as itertools
 import numpy as np
 import torch
 
-from ase import Atoms
-from nff.io.ase import AtomsBatch
 from nff.utils.scatter import compute_grad
-from nff.train import load_model, evaluate
+from nff.train import load_model
 from nff.utils.cuda import batch_to
 
 

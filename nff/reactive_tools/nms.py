@@ -1,7 +1,6 @@
-import scipy
 import numpy as np
 from scipy.stats import rv_discrete
-from ase.units import Bohr, Rydberg, kJ, kB, fs, Hartree, mol, kcal, second
+from ase.units import Bohr
 
 CM_2_AU = 4.5564e-6
 ANGS_2_AU = 1.8897259886

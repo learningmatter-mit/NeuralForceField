@@ -4,7 +4,6 @@ Retrieved from https://github.com/atomistic-machine-learning/schnetpack/tree/dev
 """
 
 import numpy as np
-import torch
 from torch.optim.lr_scheduler import (
     CosineAnnealingLR,
     ReduceLROnPlateau,

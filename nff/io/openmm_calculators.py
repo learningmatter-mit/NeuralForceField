@@ -1,9 +1,6 @@
 import numpy as np
-import torch
 from typing import Union, Tuple
 
-from ase import Atoms
-from ase.neighborlist import neighbor_list
 from ase.calculators.calculator import Calculator, all_changes
 from ase import units
 

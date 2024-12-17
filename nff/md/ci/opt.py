@@ -7,27 +7,8 @@ from nff.data import Dataset, collate_dicts
 from torch.utils.data import DataLoader
 from rdkit import Chem
 from pgmols.models import (
-    AtomBasis,
     Geom,
-    Hessian,
-    Jacobian,
-    MDFrame,
-    Mechanism,
     Method,
-    Mol,
-    MolGroupObjectPermission,
-    MolSet,
-    MolUserObjectPermission,
-    PathImage,
-    ProductLink,
-    ReactantLink,
-    Reaction,
-    ReactionPath,
-    ReactionType,
-    SinglePoint,
-    Species,
-    Stoichiometry,
-    Trajectory,
 )
 from neuralnet.utils import vib
 from jobs.models import Job, JobConfig
@@ -36,8 +17,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.models import Group
 from ase.md.verlet import VelocityVerlet
 from ase.io.trajectory import Trajectory as AseTrajectory
-from ase.calculators.calculator import Calculator
-from ase import Atoms, optimize, units
+from ase import optimize, units
 import numpy as np
 import pdb
 import json

@@ -15,7 +15,6 @@ import copy
 import json
 import random
 import math
-import argparse
 from functools import partial
 import shutil
 
@@ -36,7 +35,6 @@ from nff.md.tully_multiplicity.step import (
     verlet_step_2,
     truhlar_decoherence,
     adiabatic_c,
-    compute_T,
     get_p_hop,
 )
 
@@ -299,13 +297,13 @@ class NeuralTully:
             state1 = self.statenum_to_spinadiabatic[state_n1]
             splits = state1.split("_")
             adiabat1 = splits[0]
-            spin_ms1 = splits[1]
+            splits[1]
 
             for state_n2 in range(self.num_states):
                 state2 = self.statenum_to_spinadiabatic[state_n2]
                 splits = state2.split("_")
                 adiabat2 = splits[0]
-                spin_ms2 = splits[1]
+                splits[1]
 
                 if adiabat1 == adiabat2:
                     continue
@@ -711,7 +709,7 @@ class NeuralTully:
             # check eq B11
             epsilon = 0.1  # hardcoded for now
             diagonals = np.einsum("ijj->ij", np.einsum("ijk,ikl->ijl", self.U.conj().transpose((0, 2, 1)), self.U_old))
-            anti_hermitian = ((1 - epsilon) < diagonals).all()
+            ((1 - epsilon) < diagonals).all()
             # if not anti_hermitian:
             #     print("WARNING: Time step likely too large! At least one new unitary matrix ",
             #           "does not fulfill anti-hermicity!")
@@ -755,12 +753,12 @@ class NeuralTully:
         self.c_hmc = self.get_c_hmc()
 
     def step(self, needs_nbrs):
-        old_V = copy.deepcopy(self.pot_V)
-        old_H_hmc = copy.deepcopy(self.H_hmc)
+        copy.deepcopy(self.pot_V)
+        copy.deepcopy(self.H_hmc)
         old_H_plus_nacv = copy.deepcopy(self.H_plus_nacv)
         old_U = copy.deepcopy(self.U)
 
-        old_c_hmc = copy.deepcopy(self.c_hmc)
+        copy.deepcopy(self.c_hmc)
         old_c_diag = copy.deepcopy(self.c_diag)
 
         # xyz converted to a.u. for the step and then

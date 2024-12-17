@@ -14,7 +14,6 @@ from nff.nn.graphconv import (
 from nff.nn.layers import Dense, GaussianSmearing
 
 # for backwards compatability
-from nff.nn.modules.diabat import DiabaticReadout
 from nff.nn.utils import (
     chemprop_msg_to_node,
     chemprop_msg_update,

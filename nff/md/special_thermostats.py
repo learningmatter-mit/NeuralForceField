@@ -4,11 +4,9 @@ import numpy as np
 from tqdm import tqdm
 from ase.optimize.optimize import Dynamics
 from ase.md.md import MolecularDynamics
-from ase.md.logger import MDLogger
 from ase import units
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
 
-from nff.io.ase import AtomsBatch
 
 
 class TempRamp(MolecularDynamics):

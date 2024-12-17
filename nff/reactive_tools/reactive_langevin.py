@@ -1,7 +1,6 @@
 from ase.io import Trajectory
 from ase.md.langevin import *
-from ase import Atoms
-from ase.units import Bohr, Rydberg, kJ, kB, fs, Hartree, mol, kcal, second, Ang
+from ase.units import kB, fs, second, Ang
 from nff.md.utils import NeuralMDLogger, write_traj
 
 

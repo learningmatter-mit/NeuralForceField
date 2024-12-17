@@ -7,7 +7,6 @@ import os
 import json
 
 import nff
-import torch
 from torch.optim import Adam
 
 

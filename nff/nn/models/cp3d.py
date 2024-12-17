@@ -1,12 +1,10 @@
 from torch import nn
 import torch
-import numpy as np
 from nff.data.graphs import get_bond_idx
 
 from nff.nn.models.conformers import WeightedConformers
 from nff.nn.modules import ChemPropConv, ChemPropMsgToNode, ChemPropInit, SchNetEdgeFilter, CpSchNetConv
 from nff.utils.tools import make_directed
-from nff.utils.confs import split_batch
 
 REINDEX_KEYS = ["nbr_list", "bonded_nbr_list"]
 

@@ -5,12 +5,9 @@ import json
 import copy
 
 
-import ase
-from ase import Atoms, units
+from ase import units
 from ase.md import MDLogger
 
-from nff.utils.scatter import compute_grad
-from nff.data.graphs import *
 import nff.utils.constants as const
 
 
