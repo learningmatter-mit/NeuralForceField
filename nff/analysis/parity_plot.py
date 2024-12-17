@@ -146,7 +146,7 @@ def plot_err_var(
     idx = np.arange(len(var))
     np.random.seed(2)
     sample_idx = np.random.choice(idx, size=int(len(idx) * sample_frac), replace=False)
-    n_samples = len(sample_idx)
+    len(sample_idx)
 
     var = var.flatten()[sample_idx]
     err = err.flatten()[sample_idx]
@@ -164,11 +164,7 @@ def plot_err_var(
     x = pd.Series(var)
     y = pd.Series(err)
 
-    kernel = gaussian_kde(
-        np.vstack(
-            [x.sample(n=len(x), random_state=2), y.sample(n=len(y), random_state=2)]
-        )
-    )
+    kernel = gaussian_kde(np.vstack([x.sample(n=len(x), random_state=2), y.sample(n=len(y), random_state=2)]))
     c = kernel(np.vstack([x, y]))
     hb = ax.scatter(
         var,

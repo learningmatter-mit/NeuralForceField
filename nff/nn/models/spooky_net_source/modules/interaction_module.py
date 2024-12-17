@@ -57,7 +57,7 @@ class InteractionModule(nn.Module):
         num_residual_output: int,
         activation: str = "swish",
     ) -> None:
-        """ Initializes the InteractionModule class. """
+        """Initializes the InteractionModule class."""
         super(InteractionModule, self).__init__()
         # initialize modules
         self.local_interaction = LocalInteraction(
@@ -79,14 +79,11 @@ class InteractionModule(nn.Module):
         )
         self.residual_pre = ResidualStack(num_features, num_residual_pre, activation)
         self.residual_post = ResidualStack(num_features, num_residual_post, activation)
-        self.resblock = ResidualMLP(
-            num_features, num_residual_output, activation=activation
-        )
+        self.resblock = ResidualMLP(num_features, num_residual_output, activation=activation)
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ For compatibility with other modules. """
-        pass
+        """For compatibility with other modules."""
 
     def forward(
         self,

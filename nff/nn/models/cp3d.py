@@ -1,13 +1,10 @@
 from torch import nn
 import torch
 import numpy as np
-import math
 from nff.data.graphs import get_bond_idx
 
 from nff.nn.models.conformers import WeightedConformers
-from nff.nn.modules import (ChemPropConv, ChemPropMsgToNode,
-                            ChemPropInit, SchNetEdgeFilter,
-                            CpSchNetConv)
+from nff.nn.modules import ChemPropConv, ChemPropMsgToNode, ChemPropInit, SchNetEdgeFilter, CpSchNetConv
 from nff.utils.tools import make_directed
 from nff.utils.confs import split_batch
 
@@ -60,7 +57,8 @@ class ChemProp3D(WeightedConformers):
             trainable_gauss=modelparams["trainable_gauss"],
             n_filters=modelparams["n_filters"],
             dropout_rate=modelparams["dropout_rate"],
-            activation=modelparams["activation"])
+            activation=modelparams["activation"],
+        )
 
     def make_convs(self, modelparams):
         """
@@ -75,16 +73,11 @@ class ChemProp3D(WeightedConformers):
         modelparams.update({"n_edge_hidden": modelparams["mol_basis"]})
 
         # call `CpSchNetConv` to make the convolution layers
-        convs = nn.ModuleList([ChemPropConv(**modelparams)
-                               for _ in range(num_conv)])
+        convs = nn.ModuleList([ChemPropConv(**modelparams) for _ in range(num_conv)])
 
         return convs
 
-    def get_distance_feats(self,
-                           batch,
-                           xyz,
-                           offsets,
-                           bond_nbrs):
+    def get_distance_feats(self, batch, xyz, offsets, bond_nbrs):
         """
         Get distance features.
         Args:
@@ -102,8 +95,7 @@ class ChemProp3D(WeightedConformers):
         # get directed neighbor list
         nbr_list, nbr_was_directed = make_directed(batch["nbr_list"])
         # distances
-        distances = (xyz[nbr_list[:, 0]] - xyz[nbr_list[:, 1]] -
-                     offsets).pow(2).sum(1).sqrt()[:, None]
+        distances = (xyz[nbr_list[:, 0]] - xyz[nbr_list[:, 1]] - offsets).pow(2).sum(1).sqrt()[:, None]
         # put through Gaussian filter and dense layer to get features
         distance_feats = self.edge_filter(distances)
 
@@ -114,18 +106,13 @@ class ChemProp3D(WeightedConformers):
             bond_idx = batch["bond_idx"]
             if not nbr_was_directed:
                 nbr_dim = nbr_list.shape[0]
-                bond_idx = torch.cat([bond_idx,
-                                      bond_idx + nbr_dim // 2])
+                bond_idx = torch.cat([bond_idx, bond_idx + nbr_dim // 2])
         else:
             bond_idx = get_bond_idx(bond_nbrs, nbr_list)
 
         return nbr_list, distance_feats, bond_idx
 
-    def make_h(self,
-               batch,
-               r,
-               xyz,
-               offsets):
+    def make_h(self, batch, r, xyz, offsets):
         """
         Initialize the hidden edge features.
         Args:
@@ -149,17 +136,13 @@ class ChemProp3D(WeightedConformers):
 
         # get the distance-based edge features
         nbr_list, distance_feats, bond_idx = self.get_distance_feats(
-            batch=batch,
-            xyz=xyz,
-            offsets=offsets,
-            bond_nbrs=bond_nbrs)
+            batch=batch, xyz=xyz, offsets=offsets, bond_nbrs=bond_nbrs
+        )
 
         # combine node and bonded edge features to get the bond component
         # of h_0
 
-        cp_bond_feats = self.W_i_cp(r=r,
-                                    bond_feats=bond_feats,
-                                    bond_nbrs=bond_nbrs)
+        cp_bond_feats = self.W_i_cp(r=r, bond_feats=bond_feats, bond_nbrs=bond_nbrs)
         h_0_bond = torch.zeros((nbr_list.shape[0], cp_bond_feats.shape[1]))
         h_0_bond = h_0_bond.to(device)
         h_0_bond[bond_idx] = cp_bond_feats
@@ -167,9 +150,7 @@ class ChemProp3D(WeightedConformers):
         # combine node and distance edge features to get the schnet component
         # of h_0
 
-        h_0_distance = self.W_i_schnet(r=r,
-                                       bond_feats=distance_feats,
-                                       bond_nbrs=nbr_list)
+        h_0_distance = self.W_i_schnet(r=r, bond_feats=distance_feats, bond_nbrs=nbr_list)
 
         # concatenate the two together
 
@@ -177,10 +158,7 @@ class ChemProp3D(WeightedConformers):
 
         return h_0
 
-    def convolve_sub_batch(self,
-                           batch,
-                           xyz=None,
-                           xyz_grad=False):
+    def convolve_sub_batch(self, batch, xyz=None, xyz_grad=False):
         """
         Apply the convolution layers to a sub-batch.
         Args:
@@ -206,34 +184,24 @@ class ChemProp3D(WeightedConformers):
         # offsets for periodic boundary conditions
         offsets = batch.get("offsets", 0)
         # to deal with any shape mismatches
-        if hasattr(offsets, 'max') and offsets.max() == 0:
+        if hasattr(offsets, "max") and offsets.max() == 0:
             offsets = 0
 
         # initialize hidden bond features
-        h_0 = self.make_h(batch=batch,
-                          r=r,
-                          xyz=xyz,
-                          offsets=offsets)
+        h_0 = self.make_h(batch=batch, r=r, xyz=xyz, offsets=offsets)
         h_new = h_0.clone()
 
         # update edge features
         for conv in self.convolutions:
-            h_new = conv(h_0=h_0,
-                         h_new=h_new,
-                         nbrs=a,
-                         kj_idx=batch.get("kj_idx"),
-                         ji_idx=batch.get("ji_idx"))
+            h_new = conv(h_0=h_0, h_new=h_new, nbrs=a, kj_idx=batch.get("kj_idx"), ji_idx=batch.get("ji_idx"))
 
         # convert back to node features
-        new_node_feats = self.W_o(r=r,
-                                  h=h_new,
-                                  nbrs=a)
+        new_node_feats = self.W_o(r=r, h=h_new, nbrs=a)
 
         return new_node_feats, xyz
 
 
 class OnlyBondUpdateCP3D(ChemProp3D):
-
     def __init__(self, modelparams):
         """
         Initialize model.
@@ -253,8 +221,7 @@ class OnlyBondUpdateCP3D(ChemProp3D):
 
         self.W_i = ChemPropInit(input_layers=input_layers)
         self.convolutions = self.make_convs(modelparams)
-        self.W_o = ChemPropMsgToNode(
-            output_layers=output_layers)
+        self.W_o = ChemPropMsgToNode(output_layers=output_layers)
 
         # dimension of the hidden bond vector
         self.n_bond_hidden = modelparams["n_bond_hidden"]
@@ -272,8 +239,7 @@ class OnlyBondUpdateCP3D(ChemProp3D):
         same_filters = modelparams["same_filters"]
 
         # call `CpSchNetConv` to make the convolution layers
-        convs = nn.ModuleList([CpSchNetConv(**modelparams)
-                               for _ in range(num_conv)])
+        convs = nn.ModuleList([CpSchNetConv(**modelparams) for _ in range(num_conv)])
 
         # if you want to use the same filters for every convolution, repeat
         # the initial network and delete all the others
@@ -282,11 +248,7 @@ class OnlyBondUpdateCP3D(ChemProp3D):
 
         return convs
 
-    def make_h(self,
-               batch,
-               nbr_list,
-               r,
-               nbr_was_directed):
+    def make_h(self, batch, nbr_list, r, nbr_was_directed):
         """
         Initialize the hidden bond features.
         Args:
@@ -315,9 +277,7 @@ class OnlyBondUpdateCP3D(ChemProp3D):
 
         # initialize hidden bond features
 
-        h_0_bond = self.W_i(r=r,
-                            bond_feats=bond_feats,
-                            bond_nbrs=bond_nbrs)
+        h_0_bond = self.W_i(r=r, bond_feats=bond_feats, bond_nbrs=bond_nbrs)
 
         # initialize `h_0`, the features of all edges
         # (including bonded ones), to zero
@@ -333,8 +293,7 @@ class OnlyBondUpdateCP3D(ChemProp3D):
             bond_idx = batch["bond_idx"]
             if not nbr_was_directed:
                 nbr_dim = nbr_list.shape[0]
-                bond_idx = torch.cat([bond_idx,
-                                      bond_idx + nbr_dim // 2])
+                bond_idx = torch.cat([bond_idx, bond_idx + nbr_dim // 2])
         else:
             bond_idx = get_bond_idx(bond_nbrs, nbr_list)
             bond_idx = bond_idx.to(device)
@@ -343,10 +302,7 @@ class OnlyBondUpdateCP3D(ChemProp3D):
 
         return h_0, bond_nbrs, bond_idx
 
-    def convolve_sub_batch(self,
-                           batch,
-                           xyz=None,
-                           xyz_grad=False):
+    def convolve_sub_batch(self, batch, xyz=None, xyz_grad=False):
         """
         Apply the convolution layers to a sub-batch.
         Args:
@@ -374,41 +330,28 @@ class OnlyBondUpdateCP3D(ChemProp3D):
             offsets = 0
 
         # get the distances between neighbors
-        e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
-             offsets).pow(2).sum(1).sqrt()[:, None]
+        e = (xyz[a[:, 0]] - xyz[a[:, 1]] - offsets).pow(2).sum(1).sqrt()[:, None]
 
         # initialize hidden bond features
-        h_0, bond_nbrs, bond_idx = self.make_h(
-            batch=batch,
-            nbr_list=a,
-            r=r,
-            nbr_was_directed=nbr_was_directed)
+        h_0, bond_nbrs, bond_idx = self.make_h(batch=batch, nbr_list=a, r=r, nbr_was_directed=nbr_was_directed)
 
         h_new = h_0.clone()
 
         # update edge features
 
         for conv in self.convolutions:
-
             # don't use any kj_idx or ji_idx
             # because they are only relevant when
             # you're doing updates with all neighbors,
             # not with just the bonded neighbors like
             # we do here
 
-            h_new = conv(h_0=h_0,
-                         h_new=h_new,
-                         all_nbrs=a,
-                         bond_nbrs=bond_nbrs,
-                         bond_idx=bond_idx,
-                         e=e,
-                         kj_idx=None,
-                         ji_idx=None)
+            h_new = conv(
+                h_0=h_0, h_new=h_new, all_nbrs=a, bond_nbrs=bond_nbrs, bond_idx=bond_idx, e=e, kj_idx=None, ji_idx=None
+            )
 
         # convert back to node features
 
-        new_node_feats = self.W_o(r=r,
-                                  h=h_new,
-                                  nbrs=a)
+        new_node_feats = self.W_o(r=r, h=h_new, nbrs=a)
 
         return new_node_feats, xyz

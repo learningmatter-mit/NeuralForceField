@@ -2,6 +2,7 @@
 
 Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/utils/script_utils/training.py
 """
+
 import os
 import json
 

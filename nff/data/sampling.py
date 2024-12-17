@@ -28,8 +28,7 @@ def get_spec_dic(props):
 
     spec_dic = {}
     for i, spec in enumerate(props["smiles"]):
-        no_stereo_spec = (spec.replace("\\", "")
-                          .replace("/", ""))
+        no_stereo_spec = spec.replace("\\", "").replace("/", "")
         if no_stereo_spec not in spec_dic:
             spec_dic[no_stereo_spec] = []
         spec_dic[no_stereo_spec].append(i)
@@ -40,8 +39,7 @@ def get_spec_dic(props):
     return spec_dic
 
 
-def compute_zhu(props,
-                zhu_kwargs):
+def compute_zhu(props, zhu_kwargs):
     """
     Compute the approximate Zhu-Nakamura hopping probabilities for
     each geom in the dataset.
@@ -58,18 +56,19 @@ def compute_zhu(props,
     expec_gap_kcal = zhu_kwargs["expec_gap"] * const.AU_TO_KCAL["energy"]
     func_type = zhu_kwargs["func_type"]
 
-    zhu_p = batch_zhu_p(batch=cat_props(props),
-                        upper_key=upper_key,
-                        lower_key=lower_key,
-                        expec_gap=expec_gap_kcal,
-                        func_type=func_type,
-                        gap_shape=None)
+    zhu_p = batch_zhu_p(
+        batch=cat_props(props),
+        upper_key=upper_key,
+        lower_key=lower_key,
+        expec_gap=expec_gap_kcal,
+        func_type=func_type,
+        gap_shape=None,
+    )
 
     return zhu_p
 
 
-def balanced_spec_zhu(spec_dic,
-                      zhu_p):
+def balanced_spec_zhu(spec_dic, zhu_p):
     """
     Get the Zhu weights assigned to each geom, such that
     the probability of getting a geom in species A
@@ -92,7 +91,6 @@ def balanced_spec_zhu(spec_dic,
     all_weights = torch.zeros(num_geoms)
 
     for lst_idx in spec_dic.values():
-
         idx = torch.LongTensor(lst_idx)
         this_zhu = zhu_p[idx]
         sum_zhu = this_zhu.sum()
@@ -131,13 +129,7 @@ def imbalanced_spec_zhu(zhu_p):
     return all_weights
 
 
-def assign_clusters(ref_idx,
-                    spec_nxyz,
-                    ref_nxyzs,
-                    device,
-                    num_clusters,
-                    extra_category,
-                    extra_rmsd):
+def assign_clusters(ref_idx, spec_nxyz, ref_nxyzs, device, num_clusters, extra_category, extra_rmsd):
     """
     Assign each geom to a cluster.
 
@@ -205,9 +197,7 @@ def assign_clusters(ref_idx,
     dset_0 = Dataset(props=props_0)
     dset_1 = Dataset(props=props_1)
 
-    rmsds, _ = compute_distances(dataset=dset_0,
-                                 device=device,
-                                 dataset_1=dset_1)
+    rmsds, _ = compute_distances(dataset=dset_0, device=device, dataset_1=dset_1)
 
     # take the minimum rmsd with respect to the set of reference
     # nxyz's in each cluster. Put infinity if a species is missing a
@@ -231,8 +221,7 @@ def assign_clusters(ref_idx,
         clusters[in_extra] = num_clusters
 
     # record clusters in `cluster_dic`
-    cluster_dic = {i: [] for i in
-                   range(num_clusters + int(extra_category))}
+    cluster_dic = {i: [] for i in range(num_clusters + int(extra_category))}
 
     for spec_idx, cluster in enumerate(clusters):
         cluster_dic[cluster.item()].append(spec_idx)
@@ -240,13 +229,7 @@ def assign_clusters(ref_idx,
     return cluster_dic, min_rmsds
 
 
-def per_spec_config_weights(spec_nxyz,
-                            ref_nxyzs,
-                            ref_idx,
-                            num_clusters,
-                            extra_category,
-                            extra_rmsd,
-                            device='cpu'):
+def per_spec_config_weights(spec_nxyz, ref_nxyzs, ref_idx, num_clusters, extra_category, extra_rmsd, device="cpu"):
     """
     Get weights to evenly sample different regions of phase
     space for a given species
@@ -291,13 +274,15 @@ def per_spec_config_weights(spec_nxyz,
     """
 
     # a dictionary that tells you which geoms are in each cluster
-    cluster_dic, cluster_rmsds = assign_clusters(ref_idx=ref_idx,
-                                                 spec_nxyz=spec_nxyz,
-                                                 ref_nxyzs=ref_nxyzs,
-                                                 device=device,
-                                                 num_clusters=num_clusters,
-                                                 extra_category=extra_category,
-                                                 extra_rmsd=extra_rmsd)
+    cluster_dic, cluster_rmsds = assign_clusters(
+        ref_idx=ref_idx,
+        spec_nxyz=spec_nxyz,
+        ref_nxyzs=ref_nxyzs,
+        device=device,
+        num_clusters=num_clusters,
+        extra_category=extra_category,
+        extra_rmsd=extra_rmsd,
+    )
 
     # assign weights to each geom equal to 1 / (num geoms in cluster),
     # so that the probability of sampling any one cluster is equal to
@@ -320,12 +305,7 @@ def per_spec_config_weights(spec_nxyz,
     return geom_weights, cluster_rmsds, cluster_dic
 
 
-def all_spec_config_weights(props,
-                            ref_nxyz_dic,
-                            spec_dic,
-                            device,
-                            extra_category,
-                            extra_rmsd):
+def all_spec_config_weights(props, ref_nxyz_dic, spec_dic, device, extra_category, extra_rmsd):
     """
     Get the "configuration weights" for each geom, i.e.
     the weights chosen to evenly sample each cluster
@@ -359,18 +339,17 @@ def all_spec_config_weights(props,
     """
 
     weight_dic = {}
-    num_geoms = len(props['nxyz'])
-    num_clusters = max([len(ref_dic['nxyz']) for
-                        ref_dic in ref_nxyz_dic.values()])
+    num_geoms = len(props["nxyz"])
+    num_clusters = max([len(ref_dic["nxyz"]) for ref_dic in ref_nxyz_dic.values()])
 
     cluster_rmsds = torch.zeros(num_geoms, num_clusters)
     cluster_assgn = torch.zeros(num_geoms)
 
     for spec in tqdm(list(spec_dic.keys())):
         idx = spec_dic[spec]
-        ref_nxyzs = ref_nxyz_dic[spec]['nxyz']
-        ref_idx = ref_nxyz_dic[spec]['idx']
-        spec_nxyz = [props['nxyz'][i] for i in idx]
+        ref_nxyzs = ref_nxyz_dic[spec]["nxyz"]
+        ref_idx = ref_nxyz_dic[spec]["idx"]
+        spec_nxyz = [props["nxyz"][i] for i in idx]
         geom_weights, these_rmsds, cluster_dic = per_spec_config_weights(
             spec_nxyz=spec_nxyz,
             ref_nxyzs=ref_nxyzs,
@@ -378,7 +357,8 @@ def all_spec_config_weights(props,
             num_clusters=num_clusters,
             device=device,
             extra_category=extra_category,
-            extra_rmsd=extra_rmsd)
+            extra_rmsd=extra_rmsd,
+        )
 
         # assign weights to each species
         weight_dic[spec] = geom_weights
@@ -394,8 +374,7 @@ def all_spec_config_weights(props,
     return weight_dic, cluster_rmsds, cluster_assgn
 
 
-def balanced_spec_config(weight_dic,
-                         spec_dic):
+def balanced_spec_config(weight_dic, spec_dic):
     """
     Generate weights for geoms such that there is balance with respect
     to species [p(A) = p(B)], and with respect to clusters in each
@@ -421,20 +400,19 @@ def balanced_spec_config(weight_dic,
     return all_weights
 
 
-def imbalanced_spec_config(weight_dic,
-                           spec_dic):
+def imbalanced_spec_config(weight_dic, spec_dic):
     """
-        Generate weights for geoms such that there is no balance with respect
-        to species [p(A) != p(B)], but there is with respect to clusters in
-        each species [p(A, c1) = p(A, c2), where c1 and c2 are two different
-        clusters in species A].
-        Args:
-            spec_dic (dict): dictionary with indices of geoms in each species.
-            weight_dic (dict): dictionary of the form {smiles: geom_weights},
-                    where geom_weights are the set of normalized weights for
-                    each geometry in that species.
-            Returns:
-                    all_weights (torch.Tensor): normalized set of weights
+    Generate weights for geoms such that there is no balance with respect
+    to species [p(A) != p(B)], but there is with respect to clusters in
+    each species [p(A, c1) = p(A, c2), where c1 and c2 are two different
+    clusters in species A].
+    Args:
+        spec_dic (dict): dictionary with indices of geoms in each species.
+        weight_dic (dict): dictionary of the form {smiles: geom_weights},
+                where geom_weights are the set of normalized weights for
+                each geometry in that species.
+        Returns:
+                all_weights (torch.Tensor): normalized set of weights
     """
 
     num_geoms = sum([i.shape[0] for i in weight_dic.values()])
@@ -482,15 +460,17 @@ def get_rand_weights(spec_dic):
     return balanced_spec_weights, imbalanced_spec_weights
 
 
-def combine_weights(balanced_config,
-                    imbalanced_config,
-                    balanced_zhu,
-                    imbalanced_zhu,
-                    balanced_rand,
-                    imbalanced_rand,
-                    spec_weight,
-                    config_weight,
-                    zhu_weight):
+def combine_weights(
+    balanced_config,
+    imbalanced_config,
+    balanced_zhu,
+    imbalanced_zhu,
+    balanced_rand,
+    imbalanced_rand,
+    spec_weight,
+    config_weight,
+    zhu_weight,
+):
     """
     Combine config weights, Zhu-Nakamura weights, and random
     weights to get the final weights for each geom.
@@ -526,20 +506,19 @@ def combine_weights(balanced_config,
     # combination of zhu weights that are balanced and imbalanced with respect
     # to species
 
-    weighted_zhu = (balanced_zhu * zhu_weight * spec_weight
-                    + imbalanced_zhu * zhu_weight * (1 - spec_weight))
+    weighted_zhu = balanced_zhu * zhu_weight * spec_weight + imbalanced_zhu * zhu_weight * (1 - spec_weight)
 
     # combination of config weights that are balanced and imbalanced with
     # respect to species
-    weighted_config = (balanced_config * config_weight * spec_weight
-                       + imbalanced_config * config_weight * (1 - spec_weight))
+    weighted_config = balanced_config * config_weight * spec_weight + imbalanced_config * config_weight * (
+        1 - spec_weight
+    )
 
     # combination of random weights that are balanced and imbalanced with
     # respect to species
 
-    rand_weight = (1 - zhu_weight - config_weight)
-    weighted_rand = (balanced_rand * rand_weight * spec_weight
-                     + imbalanced_rand * rand_weight * (1 - spec_weight))
+    rand_weight = 1 - zhu_weight - config_weight
+    weighted_rand = balanced_rand * rand_weight * spec_weight + imbalanced_rand * rand_weight * (1 - spec_weight)
 
     # final weights
 
@@ -548,15 +527,17 @@ def combine_weights(balanced_config,
     return final_weights
 
 
-def spec_config_zhu_balance(props,
-                            ref_nxyz_dic,
-                            zhu_kwargs,
-                            spec_weight,
-                            config_weight,
-                            zhu_weight,
-                            extra_category=False,
-                            extra_rmsd=None,
-                            device='cpu'):
+def spec_config_zhu_balance(
+    props,
+    ref_nxyz_dic,
+    zhu_kwargs,
+    spec_weight,
+    config_weight,
+    zhu_weight,
+    extra_category=False,
+    extra_rmsd=None,
+    device="cpu",
+):
     """
     Generate weights that combine balancing of species,
     configurations, and Zhu-Nakamura hopping rates.
@@ -597,28 +578,22 @@ def spec_config_zhu_balance(props,
         spec_dic=spec_dic,
         device=device,
         extra_category=extra_category,
-        extra_rmsd=extra_rmsd)
+        extra_rmsd=extra_rmsd,
+    )
 
-    balanced_config = balanced_spec_config(
-        weight_dic=config_weight_dic,
-        spec_dic=spec_dic)
+    balanced_config = balanced_spec_config(weight_dic=config_weight_dic, spec_dic=spec_dic)
 
-    imbalanced_config = imbalanced_spec_config(
-        weight_dic=config_weight_dic,
-        spec_dic=spec_dic)
+    imbalanced_config = imbalanced_spec_config(weight_dic=config_weight_dic, spec_dic=spec_dic)
 
     # get the species-balanced and species-imbalanced
     # zhu weights
 
-    zhu_p = compute_zhu(props=props,
-                        zhu_kwargs=zhu_kwargs)
-    balanced_zhu = balanced_spec_zhu(spec_dic=spec_dic,
-                                     zhu_p=zhu_p)
+    zhu_p = compute_zhu(props=props, zhu_kwargs=zhu_kwargs)
+    balanced_zhu = balanced_spec_zhu(spec_dic=spec_dic, zhu_p=zhu_p)
     imbalanced_zhu = imbalanced_spec_zhu(zhu_p=zhu_p)
 
     # get the random weights
-    balanced_rand, imbalanced_rand = get_rand_weights(
-        spec_dic=spec_dic)
+    balanced_rand, imbalanced_rand = get_rand_weights(spec_dic=spec_dic)
 
     # combine them all together
 
@@ -631,11 +606,10 @@ def spec_config_zhu_balance(props,
         imbalanced_rand=imbalanced_rand,
         spec_weight=spec_weight,
         config_weight=config_weight,
-        zhu_weight=zhu_weight)
+        zhu_weight=zhu_weight,
+    )
 
     # put relevant info in a dictionary
-    results = {"weights": final_weights,
-               "cluster_rmsds": cluster_rmsds,
-               "clusters": cluster_assgn}
+    results = {"weights": final_weights, "cluster_rmsds": cluster_rmsds, "clusters": cluster_assgn}
 
     return results

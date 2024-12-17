@@ -2,12 +2,7 @@ import torch
 import torch.nn as nn
 
 from nff.nn.layers import DEFAULT_DROPOUT_RATE
-from nff.nn.modules import (
-    SchNetConv,
-    NodeMultiTaskReadOut,
-    ConfAttention,
-    LinearConfAttention
-)
+from nff.nn.modules import SchNetConv, NodeMultiTaskReadOut, ConfAttention, LinearConfAttention
 from nff.nn.graphop import conf_pool
 from nff.nn.utils import construct_sequential
 from nff.utils.scatter import compute_grad
@@ -176,7 +171,6 @@ class WeightedConformers(nn.Module):
         # network for each of the number of heads
 
         elif "attention" in boltzmann_dict["type"]:
-
             if boltzmann_dict["type"] == "attention":
                 module = ConfAttention
             elif boltzmann_dict["type"] == "linear_attention":
@@ -190,20 +184,23 @@ class WeightedConformers(nn.Module):
             # (useful for ablation studies)
             equal_weights = boltzmann_dict.get("equal_weights", False)
             # what function to use to convert the alpha_ij to probabilities
-            prob_func = boltzmann_dict.get("prob_func", 'softmax')
+            prob_func = boltzmann_dict.get("prob_func", "softmax")
 
             # add a network for each head
             for _ in range(num_heads):
-
                 mol_basis = boltzmann_dict["mol_basis"]
                 boltz_basis = boltzmann_dict["boltz_basis"]
                 final_act = boltzmann_dict["final_act"]
 
-                networks.append(module(mol_basis=mol_basis,
-                                       boltz_basis=boltz_basis,
-                                       final_act=final_act,
-                                       equal_weights=equal_weights,
-                                       prob_func=prob_func))
+                networks.append(
+                    module(
+                        mol_basis=mol_basis,
+                        boltz_basis=boltz_basis,
+                        final_act=final_act,
+                        equal_weights=equal_weights,
+                        prob_func=prob_func,
+                    )
+                )
 
         return networks
 
@@ -232,7 +229,6 @@ class WeightedConformers(nn.Module):
         # go through each extra per-species feature
 
         for feat_name, feat_type in zip(self.extra_feats, self.ext_feat_types):
-
             if feat_type == "conformer":
                 continue
 
@@ -241,8 +237,7 @@ class WeightedConformers(nn.Module):
             # split the batched features up by species and add them
             # to the list
             splits = [feat_len] * num_mols
-            feat = torch.stack(list(
-                torch.split(batch[feat_name], splits)))
+            feat = torch.stack(list(torch.split(batch[feat_name], splits)))
             feats.append(feat)
 
         # concatenate the features
@@ -250,11 +245,7 @@ class WeightedConformers(nn.Module):
 
         return feats
 
-    def convolve_sub_batch(self,
-                           batch,
-                           xyz=None,
-                           xyz_grad=False,
-                           **kwargs):
+    def convolve_sub_batch(self, batch, xyz=None, xyz_grad=False, **kwargs):
         """
 
         Apply the convolutional layers to a sub-batch.
@@ -284,14 +275,13 @@ class WeightedConformers(nn.Module):
         # offsets take care of periodic boundary conditions
         offsets = batch.get("offsets", 0)
         # to deal with any shape mismatches
-        if hasattr(offsets, 'max') and offsets.max() == 0:
+        if hasattr(offsets, "max") and offsets.max() == 0:
             offsets = 0
 
         if "distances" in batch:
             e = batch["distances"][:, None]
         else:
-            e = (xyz[a[:, 0]] - xyz[a[:, 1]] -
-                 offsets).pow(2).sum(1).sqrt()[:, None]
+            e = (xyz[a[:, 0]] - xyz[a[:, 1]] - offsets).pow(2).sum(1).sqrt()[:, None]
 
         # ensuring image atoms have the same vectors of their corresponding
         # atom inside the unit cell
@@ -304,11 +294,7 @@ class WeightedConformers(nn.Module):
 
         return r, xyz
 
-    def convolve(self,
-                 batch,
-                 sub_batch_size=None,
-                 xyz=None,
-                 xyz_grad=False):
+    def convolve(self, batch, sub_batch_size=None, xyz=None, xyz_grad=False):
         """
         Apply the convolution layers to the batch.
         Args:
@@ -340,9 +326,7 @@ class WeightedConformers(nn.Module):
         xyz_list = []
 
         for sub_batch in sub_batches:
-
-            new_node_feats, xyz = self.convolve_sub_batch(
-                sub_batch, xyz, xyz_grad)
+            new_node_feats, xyz = self.convolve_sub_batch(sub_batch, xyz, xyz_grad)
             new_node_feat_list.append(new_node_feats)
             xyz_list.append(xyz)
 
@@ -351,9 +335,7 @@ class WeightedConformers(nn.Module):
 
         return new_node_feats, xyz
 
-    def get_external_3d(self,
-                        batch,
-                        n_conf_list):
+    def get_external_3d(self, batch, n_conf_list):
         """
         Get any extra 3D per-conformer features that were requested for
         the dataset.
@@ -369,15 +351,13 @@ class WeightedConformers(nn.Module):
         # if you didn't ask for any extra features, or none of the requested
         # features are per-conformer features, return empty tensors
 
-        if (self.extra_feats is None or
-                "conformer" not in self.ext_feat_types):
+        if self.extra_feats is None or "conformer" not in self.ext_feat_types:
             return
 
         # get all the features and split them up by species
 
         extra_conf_fps = []
-        for feat_name, feat_type in zip(self.extra_feats,
-                                        self.ext_feat_types):
+        for feat_name, feat_type in zip(self.extra_feats, self.ext_feat_types):
             if feat_type == "conformer":
                 extra_conf_fps.append(batch[feat_name])
 
@@ -386,12 +366,7 @@ class WeightedConformers(nn.Module):
 
         return split_extra
 
-    def get_conf_fps(self,
-                     smiles_fp,
-                     mol_size,
-                     batch,
-                     split_extra,
-                     idx):
+    def get_conf_fps(self, smiles_fp, mol_size, batch, split_extra, idx):
         """
         Get per-conformer fingerprints.
         Args:
@@ -420,9 +395,9 @@ class WeightedConformers(nn.Module):
         # split the atomic fingerprints up by conformer
         for atomic_fps in torch.split(smiles_fp, N):
             # sum them and then convert to molecular fp
-            if self.pool_type == 'sum':
+            if self.pool_type == "sum":
                 summed_atomic_fps = atomic_fps.sum(dim=0)
-            elif self.pool_type == 'mean':
+            elif self.pool_type == "mean":
                 summed_atomic_fps = atomic_fps.mean(dim=0)
             else:
                 raise NotImplementedError
@@ -443,11 +418,7 @@ class WeightedConformers(nn.Module):
 
         return conf_fps
 
-    def post_process(self,
-                     batch,
-                     r,
-                     xyz,
-                     **kwargs):
+    def post_process(self, batch, r, xyz, **kwargs):
         """
         Split various items up by species, convert atomic fingerprints
         to molecular fingerprints, and incorporate non-learnable features.
@@ -465,17 +436,14 @@ class WeightedConformers(nn.Module):
         # split the fingerprints by species
         fps_by_smiles = torch.split(r, N)
         # get extra 3D fingerprints
-        split_extra = self.get_external_3d(batch,
-                                           num_confs)
+        split_extra = self.get_external_3d(batch, num_confs)
 
         # get all the conformer fingerprints for each species
         conf_fps_by_smiles = []
         for i, smiles_fp in enumerate(fps_by_smiles):
-            conf_fps = self.get_conf_fps(smiles_fp=smiles_fp,
-                                         mol_size=mol_sizes[i],
-                                         batch=batch,
-                                         split_extra=split_extra,
-                                         idx=i)
+            conf_fps = self.get_conf_fps(
+                smiles_fp=smiles_fp, mol_size=mol_sizes[i], batch=batch, split_extra=split_extra, idx=i
+            )
 
             conf_fps_by_smiles.append(conf_fps)
 
@@ -486,13 +454,15 @@ class WeightedConformers(nn.Module):
         extra_feats = self.add_features(batch=batch, **kwargs)
 
         # return everything in a dictionary
-        outputs = dict(r=r,
-                       N=N,
-                       xyz=xyz,
-                       conf_fps_by_smiles=conf_fps_by_smiles,
-                       boltzmann_weights=boltzmann_weights,
-                       mol_sizes=mol_sizes,
-                       extra_feats=extra_feats)
+        outputs = dict(
+            r=r,
+            N=N,
+            xyz=xyz,
+            conf_fps_by_smiles=conf_fps_by_smiles,
+            boltzmann_weights=boltzmann_weights,
+            mol_sizes=mol_sizes,
+            extra_feats=extra_feats,
+        )
 
         return outputs
 
@@ -514,24 +484,22 @@ class WeightedConformers(nn.Module):
         n_conf_list = (torch.tensor(N) / torch.tensor(mol_sizes)).tolist()
 
         # get the conformer fps for each smiles
-        conf_fps_by_smiles = self.get_external_3d(batch,
-                                                  n_conf_list)
+        conf_fps_by_smiles = self.get_external_3d(batch, n_conf_list)
 
         # add any per-species fingerprints
         boltzmann_weights = torch.split(batch["weights"], n_conf_list)
         extra_feats = self.add_features(batch=batch, **kwargs)
 
-        outputs = {"conf_fps_by_smiles": conf_fps_by_smiles,
-                   "boltzmann_weights": boltzmann_weights,
-                   "mol_sizes": mol_sizes,
-                   "extra_feats": extra_feats}
+        outputs = {
+            "conf_fps_by_smiles": conf_fps_by_smiles,
+            "boltzmann_weights": boltzmann_weights,
+            "mol_sizes": mol_sizes,
+            "extra_feats": extra_feats,
+        }
 
         return outputs
 
-    def make_embeddings(self,
-                        batch,
-                        xyz=None,
-                        **kwargs):
+    def make_embeddings(self, batch, xyz=None, **kwargs):
         """
         Make all conformer fingerprints.
         Args:
@@ -549,13 +517,8 @@ class WeightedConformers(nn.Module):
         # if using an MPNN, apply the convolution layers
         # and then post-process
         if self.use_mpnn:
-            r, xyz = self.convolve(batch=batch,
-                                   xyz=xyz,
-                                   **kwargs)
-            outputs = self.post_process(batch=batch,
-                                        r=r,
-                                        xyz=xyz,
-                                        **kwargs)
+            r, xyz = self.convolve(batch=batch, xyz=xyz, **kwargs)
+            outputs = self.post_process(batch=batch, r=r, xyz=xyz, **kwargs)
 
         # otherwise just use the non-learnable features
         else:
@@ -614,7 +577,8 @@ class WeightedConformers(nn.Module):
                 mol_fp_nn=self.mol_fp_nn,
                 boltz_nns=self.boltz_nns,
                 conf_fps=conf_fps,
-                head_pool=self.head_pool)
+                head_pool=self.head_pool,
+            )
 
             # add extra features if there are any
             if extra_feats is not None:
@@ -648,15 +612,11 @@ class WeightedConformers(nn.Module):
             # these keys, then compute its predicted value
             if key in result_grad_keys:
                 base_result = results[key.replace("_grad", "")]
-                results[key] = compute_grad(inputs=xyz,
-                                            output=base_result)
+                results[key] = compute_grad(inputs=xyz, output=base_result)
 
         return results
 
-    def forward(self,
-                batch,
-                xyz=None,
-                **kwargs):
+    def forward(self, batch, xyz=None, **kwargs):
         """
         Call the model.
         Args:

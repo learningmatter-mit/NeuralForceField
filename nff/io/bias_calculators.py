@@ -57,9 +57,7 @@ class BiasBase(NeuralFF):
         extra_constraints: list[dict] = None,
         **kwargs,
     ):
-        NeuralFF.__init__(
-            self, model=model, device=device, en_key=en_key, directed=directed, **kwargs
-        )
+        NeuralFF.__init__(self, model=model, device=device, en_key=en_key, directed=directed, **kwargs)
 
         self.cv_defs = cv_defs
         self.num_cv = len(cv_defs)
@@ -97,9 +95,7 @@ class BiasBase(NeuralFF):
             if "ext_k" in cv.keys():
                 self.ext_k[ii] = cv["ext_k"]
             elif "ext_sigma" in cv.keys():
-                self.ext_k[ii] = (units.kB * self.equil_temp) / (
-                    cv["ext_sigma"] * cv["ext_sigma"]
-                )
+                self.ext_k[ii] = (units.kB * self.equil_temp) / (cv["ext_sigma"] * cv["ext_sigma"])
             else:
                 raise KeyError("ext_k/ext_sigma")
 
@@ -121,9 +117,7 @@ class BiasBase(NeuralFF):
                 if "k" in cv.keys():
                     self.constraints[-1]["k"] = cv["k"]
                 elif "sigma" in cv.keys():
-                    self.constraints[-1]["k"] = (units.kB * self.equil_temp) / (
-                        cv["sigma"] * cv["sigma"]
-                    )
+                    self.constraints[-1]["k"] = (units.kB * self.equil_temp) / (cv["sigma"] * cv["sigma"])
                 else:
                     raise KeyError("k/sigma")
 
@@ -147,9 +141,7 @@ class BiasBase(NeuralFF):
         in_bounds = (xi <= self.ranges[:, 1]).all() and (xi >= self.ranges[:, 0]).all()
         return in_bounds
 
-    def diff(
-        self, a: Union[np.ndarray, float], b: Union[np.ndarray, float], cv_type: str
-    ) -> Union[np.ndarray, float]:
+    def diff(self, a: Union[np.ndarray, float], b: Union[np.ndarray, float], cv_type: str) -> Union[np.ndarray, float]:
         """get difference of elements of numbers or arrays
         in range(-inf, inf) if is_angle is False or in range(-pi, pi) if is_angle is True
         Args:
@@ -252,9 +244,7 @@ class BiasBase(NeuralFF):
         constr_ener = 0.0
 
         for i in range(self.num_const):
-            dxi = self.diff(
-                xi[i], self.constraints[i]["pos"], self.constraints[i]["type"]
-            )
+            dxi = self.diff(xi[i], self.constraints[i]["pos"], self.constraints[i]["type"])
             constr_grad += self.constraints[i]["k"] * dxi * grad_xi[i]
             constr_ener += 0.5 * self.constraints[i]["k"] * dxi**2
 
@@ -314,14 +304,10 @@ class BiasBase(NeuralFF):
         prediction = self.model(batch, **kwargs)
 
         # change energy and force to numpy array and eV
-        model_energy = prediction[self.en_key].detach().cpu().numpy() * (
-            1 / const.EV_TO_KCAL_MOL
-        )
+        model_energy = prediction[self.en_key].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
 
         if grad_key in prediction:
-            model_grad = prediction[grad_key].detach().cpu().numpy() * (
-                1 / const.EV_TO_KCAL_MOL
-            )
+            model_grad = prediction[grad_key].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
         else:
             raise KeyError(grad_key)
 
@@ -344,9 +330,7 @@ class BiasBase(NeuralFF):
             cvs[ii] = xi
             cv_grads[ii] = xi_grad
             cv_grad_lens[ii] = np.linalg.norm(xi_grad)
-            cv_invmass[ii] = np.einsum(
-                "i,ii,i", xi_grad.flatten(), M_inv, xi_grad.flatten()
-            )
+            cv_invmass[ii] = np.einsum("i,ii,i", xi_grad.flatten(), M_inv, xi_grad.flatten())
             cv_dot_PES[ii] = np.dot(xi_grad.flatten(), model_grad.flatten())
 
         self.results = {
@@ -391,9 +375,7 @@ class BiasBase(NeuralFF):
             self.results["const_vals"] = consts
 
         if requires_stress:
-            stress = prediction["stress_volume"].detach().cpu().numpy() * (
-                1 / const.EV_TO_KCAL_MOL
-            )
+            stress = prediction["stress_volume"].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
             self.results["stress"] = stress * (1 / atoms.get_volume())
 
 
@@ -459,32 +441,18 @@ class eABF(BiasBase):
 
         # initialize extended system at target temp of MD simulation
         for i in range(self.num_cv):
-            self.ext_vel[i] = np.random.randn() * np.sqrt(
-                self.equil_temp * units.kB / self.ext_masses[i]
-            )
+            self.ext_vel[i] = np.random.randn() * np.sqrt(self.equil_temp * units.kB / self.ext_masses[i])
 
         self.friction = friction_per_ps * 1.0e-3 / units.fs
-        self.rand_push = np.sqrt(
-            self.equil_temp
-            * self.friction
-            * self.ext_dt
-            * units.kB
-            / (2.0e0 * self.ext_masses)
-        )
+        self.rand_push = np.sqrt(self.equil_temp * self.friction * self.ext_dt * units.kB / (2.0e0 * self.ext_masses))
         self.prefac1 = 2.0 / (2.0 + self.friction * self.ext_dt)
-        self.prefac2 = (2.0e0 - self.friction * self.ext_dt) / (
-            2.0e0 + self.friction * self.ext_dt
-        )
+        self.prefac2 = (2.0e0 - self.friction * self.ext_dt) / (2.0e0 + self.friction * self.ext_dt)
 
         # set up all grid accumulators for ABF
         self.nbins_per_dim = np.array([1 for i in range(self.num_cv)])
         self.grid = []
         for i in range(self.num_cv):
-            self.nbins_per_dim[i] = int(
-                np.ceil(
-                    np.abs(self.ranges[i, 1] - self.ranges[i, 0]) / self.ext_binwidth[i]
-                )
-            )
+            self.nbins_per_dim[i] = int(np.ceil(np.abs(self.ranges[i, 1] - self.ranges[i, 0]) / self.ext_binwidth[i]))
             self.grid.append(
                 np.arange(
                     self.ranges[i, 0] + self.ext_binwidth[i] / 2,
@@ -513,9 +481,7 @@ class eABF(BiasBase):
         """
         bin_x = np.zeros(shape=xi.shape, dtype=np.int64)
         for i in range(self.num_cv):
-            bin_x[i] = int(
-                np.floor(np.abs(xi[i] - self.ranges[i, 0]) / self.ext_binwidth[i])
-            )
+            bin_x[i] = int(np.floor(np.abs(xi[i] - self.ranges[i, 0]) / self.ext_binwidth[i]))
         return tuple(bin_x.reshape(1, -1)[0])
 
     def _update_bias(self, xi: np.ndarray):
@@ -524,11 +490,7 @@ class eABF(BiasBase):
             self.ext_hist[bink] += 1
 
             # linear ramp function
-            ramp = (
-                1.0
-                if self.ext_hist[bink] > self.nfull
-                else self.ext_hist[bink] / self.nfull
-            )
+            ramp = 1.0 if self.ext_hist[bink] > self.nfull else self.ext_hist[bink] / self.nfull
 
             for i in range(self.num_cv):
                 # apply bias force on extended system
@@ -540,8 +502,7 @@ class eABF(BiasBase):
                     self.ext_hist[bink],
                     self.bias[i][bink],
                     self.m2_force[i][bink],
-                    self.ext_k[i]
-                    * self.diff(xi[i], self.ext_coords[i], self.cv_defs[i]["type"]),
+                    self.ext_k[i] * self.diff(xi[i], self.ext_coords[i], self.cv_defs[i]["type"]),
                 )
                 self.ext_forces[i] -= ramp * self.bias[i][bink]
 
@@ -659,9 +620,7 @@ class aMDeABF(eABF):
         ], f"Unknown aMD method {self.amd_method}"
 
         if self.amd_method == "amd":
-            print(
-                " >>> Warning: Please use GaMD or SaMD to obtain accurate free energy estimates!\n"
-            )
+            print(" >>> Warning: Please use GaMD or SaMD to obtain accurate free energy estimates!\n")
 
         self.pot_count = 0
         self.pot_var = 0.0
@@ -745,8 +704,7 @@ class aMDeABF(eABF):
         if self.amd_method == "amd":
             amd_pot = np.square(self.E - epot) / (self.parameter + (self.E - epot))
             boost_grad = (
-                ((epot - self.E) * (epot - 2.0 * self.parameter - self.E))
-                / np.square(epot - self.parameter - self.E)
+                ((epot - self.E) * (epot - 2.0 * self.parameter - self.E)) / np.square(epot - self.parameter - self.E)
             ) * self.amd_forces
 
         elif self.amd_method == "samd":
@@ -761,17 +719,7 @@ class aMDeABF(eABF):
                 )
             )
             boost_grad = (
-                -(
-                    1.0
-                    / (
-                        np.exp(
-                            -self.k * (epot - self.pot_min) + np.log((1 / self.c0) - 1)
-                        )
-                        + 1
-                    )
-                    - 1
-                )
-                * self.amd_forces
+                -(1.0 / (np.exp(-self.k * (epot - self.pot_min) + np.log((1 / self.c0) - 1)) + 1) - 1) * self.amd_forces
             )
 
         else:
@@ -790,9 +738,7 @@ class aMDeABF(eABF):
         self.pot_min = np.min([epot, self.pot_min])
         self.pot_max = np.max([epot, self.pot_max])
         self.pot_count += 1
-        self.pot_avg, self.pot_m2, self.pot_var = welford_var(
-            self.pot_count, self.pot_avg, self.pot_m2, epot
-        )
+        self.pot_avg, self.pot_m2, self.pot_var = welford_var(self.pot_count, self.pot_avg, self.pot_m2, epot)
         self.pot_std = np.sqrt(self.pot_var)
 
     def _calc_E_k0(self):
@@ -803,9 +749,7 @@ class aMDeABF(eABF):
         """
         if self.amd_method == "gamd_lower":
             self.E = self.pot_max
-            ko = (self.amd_parameter / self.pot_std) * (
-                (self.pot_max - self.pot_min) / (self.pot_max - self.pot_avg)
-            )
+            ko = (self.amd_parameter / self.pot_std) * ((self.pot_max - self.pot_min) / (self.pot_max - self.pot_avg))
 
             self.k0 = np.min([1.0, ko])
 
@@ -820,9 +764,7 @@ class aMDeABF(eABF):
             self.E = self.pot_min + (self.pot_max - self.pot_min) / self.k0
 
         elif self.amd_method == "samd":
-            ko = (self.amd_parameter / self.pot_std) * (
-                (self.pot_max - self.pot_min) / (self.pot_max - self.pot_avg)
-            )
+            ko = (self.amd_parameter / self.pot_std) * ((self.pot_max - self.pot_min) / (self.pot_max - self.pot_avg))
 
             self.k0 = np.min([1.0, ko])
             if (self.pot_std / self.amd_parameter) <= 1.0:
@@ -831,10 +773,7 @@ class aMDeABF(eABF):
                 self.k1 = np.max(
                     [
                         0,
-                        (
-                            np.log(self.c)
-                            + np.log((self.pot_std) / (self.amd_parameter) - 1)
-                        )
+                        (np.log(self.c) + np.log((self.pot_std) / (self.amd_parameter) - 1))
                         / (self.pot_avg - self.pot_min),
                     ]
                 )
@@ -922,11 +861,7 @@ class WTMeABF(eABF):
             self.ext_hist[bink] += 1
 
             # linear ramp function
-            ramp = (
-                1.0
-                if self.ext_hist[bink] > self.nfull
-                else self.ext_hist[bink] / self.nfull
-            )
+            ramp = 1.0 if self.ext_hist[bink] > self.nfull else self.ext_hist[bink] / self.nfull
 
             for i in range(self.num_cv):
                 # apply bias force on extended system
@@ -938,8 +873,7 @@ class WTMeABF(eABF):
                     self.ext_hist[bink],
                     self.bias[i][bink],
                     self.m2_force[i][bink],
-                    self.ext_k[i]
-                    * self.diff(xi[i], self.ext_coords[i], self.cv_defs[i]["type"]),
+                    self.ext_k[i] * self.diff(xi[i], self.ext_coords[i], self.cv_defs[i]["type"]),
                 )
                 self.ext_forces[i] -= ramp * self.bias[i][bink] + mtd_forces[i]
 
@@ -974,9 +908,7 @@ class WTMeABF(eABF):
 
         bink = self.get_index(xi)
         if self.call_count % self.hill_drop_freq == 0:
-            w = self.hill_height * np.exp(
-                -self.metapot[bink] / (units.kB * self.well_tempered_temp)
-            )
+            w = self.hill_height * np.exp(-self.metapot[bink] / (units.kB * self.well_tempered_temp))
 
             dx = self.diff(self.grid[0], xi[0], self.cv_defs[0]["type"]).reshape(
                 -1,
@@ -1008,32 +940,20 @@ class WTMeABF(eABF):
 
         dist_to_centers = []
         for ii in range(self.num_cv):
-            dist_to_centers.append(
-                self.diff(
-                    xi[ii], np.asarray(self.center)[:, ii], self.cv_defs[ii]["type"]
-                )
-            )
+            dist_to_centers.append(self.diff(xi[ii], np.asarray(self.center)[:, ii], self.cv_defs[ii]["type"]))
 
         dist_to_centers = np.asarray(dist_to_centers)
 
         if self.num_cv > 1:
-            ind[
-                (abs(dist_to_centers) > 3 * self.hill_std.reshape(-1, 1)).all(axis=0)
-            ] = np.ma.masked
+            ind[(abs(dist_to_centers) > 3 * self.hill_std.reshape(-1, 1)).all(axis=0)] = np.ma.masked
         else:
-            ind[
-                (abs(dist_to_centers) > 3 * self.hill_std.reshape(-1, 1)).all(axis=0)
-            ] = np.ma.masked
+            ind[(abs(dist_to_centers) > 3 * self.hill_std.reshape(-1, 1)).all(axis=0)] = np.ma.masked
 
         # can get slow in long run, so only iterate over significant elements
         for i in np.nditer(ind.compressed(), flags=["zerosize_ok"]):
-            w = self.hill_height * np.exp(
-                -local_pot / (units.kB * self.well_tempered_temp)
-            )
+            w = self.hill_height * np.exp(-local_pot / (units.kB * self.well_tempered_temp))
 
-            epot = w * np.exp(
-                -np.power(dist_to_centers[:, i] / self.hill_std, 2).sum() / 2.0
-            )
+            epot = w * np.exp(-np.power(dist_to_centers[:, i] / self.hill_std, 2).sum() / 2.0)
             local_pot += epot
             bias_force -= epot * dist_to_centers[:, i] / self.hill_var
 
@@ -1077,9 +997,7 @@ class AttractiveBias(NeuralFF):
         extra_constraints: list[dict] = None,
         **kwargs,
     ):
-        NeuralFF.__init__(
-            self, model=model, device=device, en_key=en_key, directed=directed, **kwargs
-        )
+        NeuralFF.__init__(self, model=model, device=device, en_key=en_key, directed=directed, **kwargs)
 
         self.gamma = gamma
         self.cv_defs = cv_defs
@@ -1124,9 +1042,7 @@ class AttractiveBias(NeuralFF):
                 if "k" in cv.keys():
                     self.constraints[-1]["k"] = cv["k"]
                 elif "sigma" in cv.keys():
-                    self.constraints[-1]["k"] = (units.kB * self.equil_temp) / (
-                        cv["sigma"] * cv["sigma"]
-                    )
+                    self.constraints[-1]["k"] = (units.kB * self.equil_temp) / (cv["sigma"] * cv["sigma"])
                 else:
                     raise KeyError("k/sigma")
 
@@ -1137,9 +1053,7 @@ class AttractiveBias(NeuralFF):
 
             self.num_const = len(self.constraints)
 
-    def diff(
-        self, a: Union[np.ndarray, float], b: Union[np.ndarray, float], cv_type: str
-    ) -> Union[np.ndarray, float]:
+    def diff(self, a: Union[np.ndarray, float], b: Union[np.ndarray, float], cv_type: str) -> Union[np.ndarray, float]:
         """get difference of elements of numbers or arrays
         in range(-inf, inf) if is_angle is False or in range(-pi, pi) if is_angle is True
         Args:
@@ -1225,9 +1139,7 @@ class AttractiveBias(NeuralFF):
         constr_ener = 0.0
 
         for i in range(self.num_const):
-            dxi = self.diff(
-                xi[i], self.constraints[i]["pos"], self.constraints[i]["type"]
-            )
+            dxi = self.diff(xi[i], self.constraints[i]["pos"], self.constraints[i]["type"])
             constr_grad += self.constraints[i]["k"] * dxi * grad_xi[i]
             constr_ener += 0.5 * self.constraints[i]["k"] * dxi**2
 
@@ -1287,14 +1199,10 @@ class AttractiveBias(NeuralFF):
         prediction = self.model(batch, **kwargs)
 
         # change energy and force to numpy array and eV
-        model_energy = prediction[self.en_key].detach().cpu().numpy() * (
-            1 / const.EV_TO_KCAL_MOL
-        )
+        model_energy = prediction[self.en_key].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
 
         if grad_key in prediction:
-            model_grad = prediction[grad_key].detach().cpu().numpy() * (
-                1 / const.EV_TO_KCAL_MOL
-            )
+            model_grad = prediction[grad_key].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
         else:
             raise KeyError(grad_key)
 
@@ -1317,9 +1225,7 @@ class AttractiveBias(NeuralFF):
             cvs[ii] = xi
             cv_grads[ii] = xi_grad
             cv_grad_lens[ii] = np.linalg.norm(xi_grad)
-            cv_invmass[ii] = np.einsum(
-                "i,ii,i", xi_grad.flatten(), M_inv, xi_grad.flatten()
-            )
+            cv_invmass[ii] = np.einsum("i,ii,i", xi_grad.flatten(), M_inv, xi_grad.flatten())
             cv_dot_PES[ii] = np.dot(xi_grad.flatten(), model_grad.flatten())
 
         self.results = {
@@ -1364,15 +1270,11 @@ class AttractiveBias(NeuralFF):
             self.results["const_vals"] = consts
 
         if requires_stress:
-            stress = prediction["stress_volume"].detach().cpu().numpy() * (
-                1 / const.EV_TO_KCAL_MOL
-            )
+            stress = prediction["stress_volume"].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
             self.results["stress"] = stress * (1 / atoms.get_volume())
 
 
-def welford_var(
-    count: float, mean: float, M2: float, newValue: float
-) -> Tuple[float, float, float]:
+def welford_var(count: float, mean: float, M2: float, newValue: float) -> Tuple[float, float, float]:
     """On-the-fly estimate of sample variance by Welford's online algorithm
     Args:
         count: current number of samples (with new one)

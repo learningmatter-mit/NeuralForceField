@@ -39,7 +39,6 @@ from ase.io.trajectory import Trajectory as AseTrajectory
 from ase.calculators.calculator import Calculator
 from ase import Atoms, optimize, units
 import numpy as np
-import random
 import pdb
 import json
 import copy
@@ -344,7 +343,6 @@ def test():
     # weightpath = "/home/saxelrod/engaging/models/971"
     weightpath = "/home/saxelrod/engaging/models/953"
     nxyz = BASE_NXYZ
-    penalty = 0.5
     # atoms = opt_ci(weightpath=weightpath, nxyz=nxyz,
     # 			   penalty=penalty)
 

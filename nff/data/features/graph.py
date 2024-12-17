@@ -20,44 +20,26 @@ CHARGED_FRAGMENTS = True
 
 # default feature types and options
 
-BOND_FEAT_TYPES = ["bond_type",
-                   "conjugated",
-                   "in_ring",
-                   "stereo",
-                   "in_ring_size"]
+BOND_FEAT_TYPES = ["bond_type", "conjugated", "in_ring", "stereo", "in_ring_size"]
 
-ATOM_FEAT_TYPES = ["atom_type",
-                   "num_bonds",
-                   "formal_charge",
-                   "chirality",
-                   "num_bonded_h",
-                   "hybrid",
-                   "aromaticity",
-                   "mass"]
+ATOM_FEAT_TYPES = [
+    "atom_type",
+    "num_bonds",
+    "formal_charge",
+    "chirality",
+    "num_bonded_h",
+    "hybrid",
+    "aromaticity",
+    "mass",
+]
 
-CHIRAL_OPTIONS = ["chi_unspecified",
-                  "chi_tetrahedral_cw",
-                  "chi_tetrahedral_ccw",
-                  "chi_other"]
+CHIRAL_OPTIONS = ["chi_unspecified", "chi_tetrahedral_cw", "chi_tetrahedral_ccw", "chi_other"]
 
-HYBRID_OPTIONS = ["s",
-                  "sp",
-                  "sp2",
-                  "sp3",
-                  "sp3d",
-                  "sp3d2"]
+HYBRID_OPTIONS = ["s", "sp", "sp2", "sp3", "sp3d", "sp3d2"]
 
-BOND_OPTIONS = ["single",
-                "double",
-                "triple",
-                "aromatic"]
+BOND_OPTIONS = ["single", "double", "triple", "aromatic"]
 
-STEREO_OPTIONS = ["stereonone",
-                  "stereoany",
-                  "stereoz",
-                  "stereoe",
-                  "stereocis",
-                  "stereotrans"]
+STEREO_OPTIONS = ["stereonone", "stereoany", "stereoz", "stereoe", "stereocis", "stereotrans"]
 
 AT_NUM = list(range(1, 100))
 FORMAL_CHARGES = [-2, -1, 0, 1, 2]
@@ -68,46 +50,31 @@ RING_SIZE = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 # dictionary with feature names, their options, type,
 # and size when stored as a vector
 
-FEAT_DIC = {"bond_type": {"options": BOND_OPTIONS,
-                          "num": len(BOND_OPTIONS) + 1},
-            "conjugated": {"options": [bool],
-                           "num": 1},
-            "in_ring": {"options": [bool],
-                        "num": 1},
-            "stereo": {"options": STEREO_OPTIONS,
-                       "num": len(STEREO_OPTIONS) + 1},
-            "in_ring_size": {"options": RING_SIZE,
-                             "num": len(RING_SIZE) + 1},
-            "atom_type": {"options": AT_NUM,
-                          "num": len(AT_NUM) + 1},
-            "num_bonds": {"options": BONDS,
-                          "num": len(BONDS) + 1},
-            "formal_charge": {"options": FORMAL_CHARGES,
-                              "num": len(FORMAL_CHARGES) + 1},
-            "chirality": {"options": CHIRAL_OPTIONS,
-                          "num": len(CHIRAL_OPTIONS) + 1},
-            "num_bonded_h": {"options": NUM_H,
-                             "num": len(NUM_H) + 1},
-            "hybrid": {"options": HYBRID_OPTIONS,
-                       "num": len(HYBRID_OPTIONS) + 1},
-            "aromaticity": {"options": [bool],
-                            "num": 1},
-            "mass": {"options": [float],
-                     "num": 1}}
+FEAT_DIC = {
+    "bond_type": {"options": BOND_OPTIONS, "num": len(BOND_OPTIONS) + 1},
+    "conjugated": {"options": [bool], "num": 1},
+    "in_ring": {"options": [bool], "num": 1},
+    "stereo": {"options": STEREO_OPTIONS, "num": len(STEREO_OPTIONS) + 1},
+    "in_ring_size": {"options": RING_SIZE, "num": len(RING_SIZE) + 1},
+    "atom_type": {"options": AT_NUM, "num": len(AT_NUM) + 1},
+    "num_bonds": {"options": BONDS, "num": len(BONDS) + 1},
+    "formal_charge": {"options": FORMAL_CHARGES, "num": len(FORMAL_CHARGES) + 1},
+    "chirality": {"options": CHIRAL_OPTIONS, "num": len(CHIRAL_OPTIONS) + 1},
+    "num_bonded_h": {"options": NUM_H, "num": len(NUM_H) + 1},
+    "hybrid": {"options": HYBRID_OPTIONS, "num": len(HYBRID_OPTIONS) + 1},
+    "aromaticity": {"options": [bool], "num": 1},
+    "mass": {"options": [float], "num": 1},
+}
 
-META_DATA = {"bond_features": BOND_FEAT_TYPES,
-             "atom_features": ATOM_FEAT_TYPES,
-             "details": FEAT_DIC}
+META_DATA = {"bond_features": BOND_FEAT_TYPES, "atom_features": ATOM_FEAT_TYPES, "details": FEAT_DIC}
 
 # default number of atom features
 
-NUM_ATOM_FEATS = sum([val["num"] for key, val in FEAT_DIC.items()
-                      if key in ATOM_FEAT_TYPES])
+NUM_ATOM_FEATS = sum([val["num"] for key, val in FEAT_DIC.items() if key in ATOM_FEAT_TYPES])
 
 # default number of bond features
 
-NUM_BOND_FEATS = sum([val["num"] for key, val in FEAT_DIC.items()
-                      if key in BOND_FEAT_TYPES])
+NUM_BOND_FEATS = sum([val["num"] for key, val in FEAT_DIC.items() if key in BOND_FEAT_TYPES])
 
 
 def remove_bad_idx(dataset, smiles_list, bad_idx, verbose=True):
@@ -125,8 +92,7 @@ def remove_bad_idx(dataset, smiles_list, bad_idx, verbose=True):
     bad_idx = sorted(list(set(bad_idx)))
     new_props = {}
     for key, values in dataset.props.items():
-        new_props[key] = [val for i, val in enumerate(
-            values) if i not in bad_idx]
+        new_props[key] = [val for i, val in enumerate(values) if i not in bad_idx]
         if not new_props[key]:
             continue
         if type(values) is torch.Tensor:
@@ -139,9 +105,7 @@ def remove_bad_idx(dataset, smiles_list, bad_idx, verbose=True):
     conv_pct = good_len / total_len * 100
 
     if verbose:
-        print(("Converted %d of %d "
-               "species (%.2f%%)" % (
-                   good_len, total_len, conv_pct)))
+        print(("Converted %d of %d " "species (%.2f%%)" % (good_len, total_len, conv_pct)))
 
 
 def smiles_from_smiles(smiles):
@@ -197,7 +161,6 @@ def get_undirected_bonds(mol):
     bonds = mol.GetBonds()
 
     for bond in bonds:
-
         start = bond.GetBeginAtomIdx()
         end = bond.GetEndAtomIdx()
         lower = min((start, end))
@@ -224,7 +187,6 @@ def undirected_bond_atoms(mol):
     bonds = mol.GetBonds()
 
     for bond in bonds:
-
         start = bond.GetBeginAtom().GetAtomicNum()
         end = bond.GetEndAtom().GetAtomicNum()
         lower = min((start, end))
@@ -247,7 +209,7 @@ def check_connectivity(mol_0, mol_1):
 
     bonds_0 = undirected_bond_atoms(mol_0)
     bonds_1 = undirected_bond_atoms(mol_1)
-    same = (bonds_0 == bonds_1)
+    same = bonds_0 == bonds_1
 
     return same
 
@@ -286,22 +248,23 @@ def verify_smiles(rd_mol, smiles):
 
     # try checking bond connectivity
 
-    good_con = check_connectivity(mol_0=new_rd_mol,
-                                  mol_1=db_mol)
+    good_con = check_connectivity(mol_0=new_rd_mol, mol_1=db_mol)
 
     if good_con:
-        msg = (("WARNING: xyz2mol SMILES is {} "
-                "and database SMILES is {}. "
-                "However, the connectivity is the same. "
-                "Check to make sure the SMILES are resonances "
-                "structures.".format(rd_smiles, db_smiles)))
+        msg = (
+            "WARNING: xyz2mol SMILES is {} "
+            "and database SMILES is {}. "
+            "However, the connectivity is the same. "
+            "Check to make sure the SMILES are resonances "
+            "structures.".format(rd_smiles, db_smiles)
+        )
         return
 
     # otherwise raise an exception
 
-    msg = (("SMILES created by xyz2mol is {}, "
-            "which doesn't match the database "
-            "SMILES {}.".format(rd_smiles, db_smiles)))
+    msg = "SMILES created by xyz2mol is {}, " "which doesn't match the database " "SMILES {}.".format(
+        rd_smiles, db_smiles
+    )
     raise Exception(msg)
 
 
@@ -322,9 +285,7 @@ def log_failure(bad_idx, i):
     good_len = i - len(bad_idx)
     conv_pct = good_len / i * 100
 
-    print(("Converted %d of %d "
-           "species (%.2f%%)" % (
-               good_len, i, conv_pct)))
+    print(("Converted %d of %d " "species (%.2f%%)" % (good_len, i, conv_pct)))
 
 
 def log_missing(missing_e):
@@ -341,8 +302,7 @@ def log_missing(missing_e):
         print("No elements are missing from xyz2mol")
     else:
         missing_e = list(set(missing_e))
-        print("Elements {} are missing from xyz2mol".format(
-            ", ".join(missing_e)))
+        print("Elements {} are missing from xyz2mol".format(", ".join(missing_e)))
 
 
 def get_enum_func(track):
@@ -362,10 +322,7 @@ def get_enum_func(track):
     return func
 
 
-def make_rd_mols(dataset,
-                 verbose=True,
-                 check_smiles=False,
-                 track=True):
+def make_rd_mols(dataset, verbose=True, check_smiles=False, track=True):
     """
     Use xyz2mol to add RDKit mols to a dataset that contains
     molecule coordinates.
@@ -382,7 +339,7 @@ def make_rd_mols(dataset,
 
     """
 
-    num_atoms = dataset.props['num_atoms']
+    num_atoms = dataset.props["num_atoms"]
     # number of atoms in each conformer
     mol_size = dataset.props.get("mol_size", num_atoms).tolist()
     smiles_list = dataset.props["smiles"]
@@ -396,7 +353,6 @@ def make_rd_mols(dataset,
     enum = get_enum_func(track)
 
     for i, smiles in enum(smiles_list):
-
         # split the nxyz of each species into the component
         # nxyz of each conformer
 
@@ -411,7 +367,6 @@ def make_rd_mols(dataset,
         # go through each conformer nxyz
 
         for j, nxyz in enumerate(nxyz_list):
-
             # if a conformer in the species has already failed
             # to produce an RDKit mol, then don't bother converting
             # any of the other conformers for that species
@@ -422,25 +377,24 @@ def make_rd_mols(dataset,
             # coordinates and atomic numbers
 
             xyz = nxyz[:, 1:].tolist()
-            atoms = nxyz[:, 0].numpy().astype('int').tolist()
+            atoms = nxyz[:, 0].numpy().astype("int").tolist()
 
             try:
-
-                mol = xyz2mol(atoms=atoms,
-                              coordinates=xyz,
-                              charge=charge,
-                              use_graph=QUICK,
-                              allow_charged_fragments=CHARGED_FRAGMENTS,
-                              embed_chiral=EMBED_CHIRAL,
-                              use_huckel=USE_HUCKEL)
+                mol = xyz2mol(
+                    atoms=atoms,
+                    coordinates=xyz,
+                    charge=charge,
+                    use_graph=QUICK,
+                    allow_charged_fragments=CHARGED_FRAGMENTS,
+                    embed_chiral=EMBED_CHIRAL,
+                    use_huckel=USE_HUCKEL,
+                )
                 if check_smiles:
                     # check the smiles if requested
                     verify_smiles(rd_mol=mol, smiles=smiles)
 
             except Exception as e:
-
-                print(("xyz2mol failed "
-                       "with error '{}' ".format(e)))
+                print(("xyz2mol failed " "with error '{}' ".format(e)))
                 print("Removing smiles {}".format(smiles))
                 bad_idx.append(i)
 
@@ -463,10 +417,7 @@ def make_rd_mols(dataset,
 
     # remove any species with missing RDKit mols
 
-    remove_bad_idx(dataset=dataset,
-                   smiles_list=smiles_list,
-                   bad_idx=bad_idx,
-                   verbose=verbose)
+    remove_bad_idx(dataset=dataset, smiles_list=smiles_list, bad_idx=bad_idx, verbose=verbose)
 
     if verbose:
         log_missing(missing_e)
@@ -516,12 +467,10 @@ def bond_feat_to_vec(feat_type, feat):
         # select from `BOND_OPTIONS`
         options = BOND_OPTIONS
         bond_type = feat
-        one_hot = make_one_hot(options=options,
-                               result=bond_type)
+        one_hot = make_one_hot(options=options, result=bond_type)
         return one_hot
 
     elif feat_type == "in_ring_size":
-
         # This is already a one-hot encoded vector,
         # because RDKit tests if the bond is in a
         # ring of a specific size, so the feature we
@@ -537,8 +486,7 @@ def bond_feat_to_vec(feat_type, feat):
                 ring_size = option
                 break
 
-        one_hot = make_one_hot(options=options,
-                               result=ring_size)
+        one_hot = make_one_hot(options=options, result=ring_size)
 
         return one_hot
 
@@ -552,8 +500,7 @@ def bond_feat_to_vec(feat_type, feat):
         # select from `STEREO_OPTIONS`
         stereo = feat
         options = STEREO_OPTIONS
-        one_hot = make_one_hot(options=options,
-                               result=stereo)
+        one_hot = make_one_hot(options=options, result=stereo)
         return one_hot
 
 
@@ -605,46 +552,37 @@ def atom_feat_to_vec(feat_type, feat):
 
     if feat_type == "atom_type":
         options = AT_NUM
-        one_hot = make_one_hot(options=options,
-                               result=feat)
+        one_hot = make_one_hot(options=options, result=feat)
 
         return one_hot
 
     elif feat_type == "num_bonds":
         options = BONDS
-        one_hot = make_one_hot(options=options,
-                               result=feat)
+        one_hot = make_one_hot(options=options, result=feat)
 
         return one_hot
 
     elif feat_type == "formal_charge":
-
         options = FORMAL_CHARGES
-        one_hot = make_one_hot(options=options,
-                               result=feat)
+        one_hot = make_one_hot(options=options, result=feat)
 
         return one_hot
 
     elif feat_type == "chirality":
         options = CHIRAL_OPTIONS
-        one_hot = make_one_hot(options=options,
-                               result=feat)
+        one_hot = make_one_hot(options=options, result=feat)
 
         return one_hot
 
     elif feat_type == "num_bonded_h":
-
         options = NUM_H
-        one_hot = make_one_hot(options=options,
-                               result=feat)
+        one_hot = make_one_hot(options=options, result=feat)
 
         return one_hot
 
     elif feat_type == "hybrid":
-
         options = HYBRID_OPTIONS
-        one_hot = make_one_hot(options=options,
-                               result=feat)
+        one_hot = make_one_hot(options=options, result=feat)
 
         return one_hot
 
@@ -680,21 +618,16 @@ def get_atom_features(atom, feat_type):
         feat = atom.GetTotalDegree()
 
     elif feat_type == "formal_charge":
-
         feat = atom.GetFormalCharge()
 
     elif feat_type == "chirality":
         feat = atom.GetChiralTag().name.lower()
 
     elif feat_type == "num_bonded_h":
-
-        neighbors = [at.GetAtomicNum() for at
-                     in atom.GetNeighbors()]
-        feat = len([i for i in neighbors if
-                    i == 1])
+        neighbors = [at.GetAtomicNum() for at in atom.GetNeighbors()]
+        feat = len([i for i in neighbors if i == 1])
 
     elif feat_type == "hybrid":
-
         feat = atom.GetHybridization().name.lower()
 
     elif feat_type == "aromaticity":
@@ -705,8 +638,7 @@ def get_atom_features(atom, feat_type):
 
     # convert to a feature vector
 
-    vec = atom_feat_to_vec(feat_type=feat_type,
-                           feat=feat)
+    vec = atom_feat_to_vec(feat_type=feat_type, feat=feat)
 
     return vec
 
@@ -726,8 +658,7 @@ def get_all_bond_feats(bond, feat_types):
     feat_dic = {}
 
     for feat_type in feat_types:
-        feature = get_bond_features(bond=bond,
-                                    feat_type=feat_type)
+        feature = get_bond_features(bond=bond, feat_type=feat_type)
         feat_dic[feat_type] = feature
 
     return feat_dic
@@ -748,16 +679,13 @@ def get_all_atom_feats(atom, feat_types):
     feat_dic = {}
 
     for feat_type in feat_types:
-        feature = get_atom_features(atom=atom,
-                                    feat_type=feat_type)
+        feature = get_atom_features(atom=atom, feat_type=feat_type)
         feat_dic[feat_type] = feature
 
     return feat_dic
 
 
-def featurize_bonds(dataset,
-                    feat_types=BOND_FEAT_TYPES,
-                    track=True):
+def featurize_bonds(dataset, feat_types=BOND_FEAT_TYPES, track=True):
     """
     Add the bond feature vectors of each species and conformer
     to the dataset.
@@ -779,14 +707,13 @@ def featurize_bonds(dataset,
     # number of bonds in a species
     props["num_bonds"] = []
 
-    num_atoms = dataset.props['num_atoms']
+    num_atoms = dataset.props["num_atoms"]
     mol_size = dataset.props.get("mol_size", num_atoms).tolist()
     enum = get_enum_func(track)
 
     # go through each set of RDKit mols
 
     for i, rd_mols in enum(dataset.props["rd_mols"]):
-
         num_confs = (num_atoms[i] // mol_size[i]).item()
         split_sizes = [mol_size[i]] * num_confs
 
@@ -798,12 +725,10 @@ def featurize_bonds(dataset,
         # go through each RDKit mol
 
         for j, rd_mol in enumerate(rd_mols):
-
             bonds = rd_mol.GetBonds()
             bond_list = []
 
             for bond in bonds:
-
                 all_props.append(torch.tensor([]))
 
                 start = bond.GetBeginAtomIdx()
@@ -815,8 +740,7 @@ def featurize_bonds(dataset,
                 bond_list.append([lower, upper])
 
                 # get the bond features
-                feat_dic = get_all_bond_feats(bond=bond,
-                                              feat_types=feat_types)
+                feat_dic = get_all_bond_feats(bond=bond, feat_types=feat_types)
 
                 # add to the features `all_props`, which contains
                 # the bond features of all the conformers of this species
@@ -829,8 +753,7 @@ def featurize_bonds(dataset,
             other_atoms = sum(split_sizes[:j])
             shifted_bond_list = np.array(bond_list) + other_atoms
 
-            props["bond_list"][-1].append(torch.LongTensor(
-                shifted_bond_list))
+            props["bond_list"][-1].append(torch.LongTensor(shifted_bond_list))
             props["num_bonds"][-1].append(len(bonds))
 
         # convert everything into a tensor after looping through each conformer
@@ -841,9 +764,7 @@ def featurize_bonds(dataset,
     return dataset
 
 
-def featurize_atoms(dataset,
-                    feat_types=ATOM_FEAT_TYPES,
-                    track=True):
+def featurize_atoms(dataset, feat_types=ATOM_FEAT_TYPES, track=True):
     """
     Add the atom feature vectors of each species and conformer
     to the dataset.
@@ -863,7 +784,6 @@ def featurize_atoms(dataset,
 
     # go through each set of RDKit mols for each species
     for i, rd_mols in enum(dataset.props["rd_mols"]):
-
         # initialize a list of features for each atom
 
         all_props = []
@@ -876,8 +796,7 @@ def featurize_atoms(dataset,
                 all_props.append(torch.tensor([]))
 
                 # get the atomic features
-                feat_dic = get_all_atom_feats(atom=atom,
-                                              feat_types=feat_types)
+                feat_dic = get_all_atom_feats(atom=atom, feat_types=feat_types)
 
                 for key, feat in feat_dic.items():
                     all_props[-1] = torch.cat((all_props[-1], feat))
@@ -946,8 +865,7 @@ def decode_atomic(features, meta_data=META_DATA):
         options = options_list[i]
         name = feat_names[i]
 
-        result = decode_one_hot(options=options,
-                                vector=vector)
+        result = decode_one_hot(options=options, vector=vector)
         dic[name] = result
 
         # multiply by 100 if it's the mass
@@ -985,16 +903,13 @@ def decode_bond(features, meta_data=META_DATA):
         options = options_list[i]
         name = feat_names[i]
 
-        result = decode_one_hot(options=options,
-                                vector=vector)
+        result = decode_one_hot(options=options, vector=vector)
         dic[name] = result
 
     return dic
 
 
-def featurize_dataset(dataset,
-                      bond_feats=BOND_FEAT_TYPES,
-                      atom_feats=ATOM_FEAT_TYPES):
+def featurize_dataset(dataset, bond_feats=BOND_FEAT_TYPES, atom_feats=ATOM_FEAT_TYPES):
     """
     Add RDKit mols, atomic features and bond features to
     a dataset. Note that this has been superseded by the parallel
@@ -1041,14 +956,13 @@ def add_morgan(dataset, vec_length):
     """
 
     dataset.props["morgan"] = []
-    for smiles in dataset.props['smiles']:
+    for smiles in dataset.props["smiles"]:
         mol = Chem.MolFromSmiles(smiles)
         if vec_length != 0:
-            morgan = AllChem.GetMorganFingerprintAsBitVect(
-                mol, radius=2, nBits=vec_length)
+            morgan = AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=vec_length)
         else:
             morgan = []
 
-        arr_morgan = np.array(list(morgan)).astype('float32')
+        arr_morgan = np.array(list(morgan)).astype("float32")
         morgan_tens = torch.tensor(arr_morgan)
         dataset.props["morgan"].append(morgan_tens)

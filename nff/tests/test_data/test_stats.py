@@ -1,4 +1,3 @@
-import os
 import unittest
 from pathlib import Path
 
@@ -53,7 +52,7 @@ class TestStats(unittest.TestCase):
         new_array = new_dset.props[TEST_KEY].cpu().numpy()
 
         ref_std = np.std(array)
-        ref_mean = np.mean(array)
+        np.mean(array)
 
         assert np.max(new_array) - np.min(new_array) <= 2 * STD_AWAY * ref_std, "range is not working"
 
@@ -68,7 +67,7 @@ class TestStats(unittest.TestCase):
         stats_array = torch.cat(array, dim=0).flatten().cpu().numpy()
 
         ref_std = np.std(stats_array)
-        ref_mean = np.mean(stats_array)
+        np.mean(stats_array)
 
         new_stats_array = torch.cat(new_array, dim=0).flatten().cpu().numpy()
 

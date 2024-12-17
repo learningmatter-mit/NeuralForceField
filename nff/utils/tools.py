@@ -1,6 +1,7 @@
 """Assorted tools in the package.
 Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/utils/spk_utils.py
 """
+
 import json
 import logging
 import collections
@@ -10,8 +11,7 @@ import numpy as np
 import torch
 
 from torch.nn import ModuleDict, Sequential
-from nff.nn.activations import (shifted_softplus, Swish,
-                                LearnableSwish)
+from nff.nn.activations import shifted_softplus, Swish, LearnableSwish
 from nff.nn.layers import Dense
 
 
@@ -34,7 +34,7 @@ layer_types = {
     "ELU": torch.nn.ELU,
     "swish": Swish,
     "learnable_swish": LearnableSwish,
-    "softplus": torch.nn.Softplus
+    "softplus": torch.nn.Softplus,
 }
 
 
@@ -52,10 +52,11 @@ def construct_Sequential(layers):
         Sequential: Stacked Sequential Model
     """
 
-    return Sequential(collections.OrderedDict([layer['name'] + str(i),
-                                               layer_types[layer['name']](
-                                                   **layer['param'])
-                                               ] for i, layer in enumerate(layers)))
+    return Sequential(
+        collections.OrderedDict(
+            [layer["name"] + str(i), layer_types[layer["name"]](**layer["param"])] for i, layer in enumerate(layers)
+        )
+    )
 
 
 def construct_ModuleDict(moduledict):
@@ -146,7 +147,6 @@ def read_from_json(jsonpath):
 
 
 def make_directed(nbr_list):
-
     gtr_ij = (nbr_list[:, 0] > nbr_list[:, 1]).any().item()
     gtr_ji = (nbr_list[:, 1] > nbr_list[:, 0]).any().item()
     directed = gtr_ij and gtr_ji

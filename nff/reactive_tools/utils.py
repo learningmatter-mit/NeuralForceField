@@ -56,9 +56,7 @@ def xyz_to_ase_atoms(xyz_file):
 
 def moi_tensor(massvec, expmassvec, xyz):
     # Center of Mass
-    com = np.sum(expmassvec.reshape(-1, 3) * xyz.reshape(-1, 3), axis=0) / np.sum(
-        massvec
-    )
+    com = np.sum(expmassvec.reshape(-1, 3) * xyz.reshape(-1, 3), axis=0) / np.sum(massvec)
 
     # xyz shifted to COM
     xyz_com = xyz.reshape(-1, 3) - com
@@ -111,24 +109,18 @@ def trans_rot_vec(massvec, xyz_com, moi_eigvec):
     big_p = np.matmul(xyz_com, moi_eigvec)
 
     d4 = (
-        np.repeat(big_p[:, 1], 3).reshape(-1)
-        * np.tile(moi_eigvec[:, 2], len(massvec)).reshape(-1)
-        - np.repeat(big_p[:, 2], 3).reshape(-1)
-        * np.tile(moi_eigvec[:, 1], len(massvec)).reshape(-1)
+        np.repeat(big_p[:, 1], 3).reshape(-1) * np.tile(moi_eigvec[:, 2], len(massvec)).reshape(-1)
+        - np.repeat(big_p[:, 2], 3).reshape(-1) * np.tile(moi_eigvec[:, 1], len(massvec)).reshape(-1)
     ) * expsqrtmassvec
 
     d5 = (
-        np.repeat(big_p[:, 2], 3).reshape(-1)
-        * np.tile(moi_eigvec[:, 0], len(massvec)).reshape(-1)
-        - np.repeat(big_p[:, 0], 3).reshape(-1)
-        * np.tile(moi_eigvec[:, 2], len(massvec)).reshape(-1)
+        np.repeat(big_p[:, 2], 3).reshape(-1) * np.tile(moi_eigvec[:, 0], len(massvec)).reshape(-1)
+        - np.repeat(big_p[:, 0], 3).reshape(-1) * np.tile(moi_eigvec[:, 2], len(massvec)).reshape(-1)
     ) * expsqrtmassvec
 
     d6 = (
-        np.repeat(big_p[:, 0], 3).reshape(-1)
-        * np.tile(moi_eigvec[:, 1], len(massvec)).reshape(-1)
-        - np.repeat(big_p[:, 1], 3).reshape(-1)
-        * np.tile(moi_eigvec[:, 0], len(massvec)).reshape(-1)
+        np.repeat(big_p[:, 0], 3).reshape(-1) * np.tile(moi_eigvec[:, 1], len(massvec)).reshape(-1)
+        - np.repeat(big_p[:, 1], 3).reshape(-1) * np.tile(moi_eigvec[:, 0], len(massvec)).reshape(-1)
     ) * expsqrtmassvec
 
     d1_norm = d1 / np.linalg.norm(d1)
@@ -148,12 +140,7 @@ def vib_analy(r, xyz, hessian):
     # xyz is the cartesian coordinates in Angstrom
     # Hessian elements in atomic units (Ha/bohr^2)
 
-    massvec = np.array(
-        [
-            PT.GetAtomicWeight(i.item()) * AMU2KG
-            for i in list(np.array(r.reshape(-1)).astype(int))
-        ]
-    )
+    massvec = np.array([PT.GetAtomicWeight(i.item()) * AMU2KG for i in list(np.array(r.reshape(-1)).astype(int))])
     expmassvec = np.repeat(massvec, 3)
     sqrtinvmassvec = np.divide(1.0, np.sqrt(expmassvec))
     hessian_mwc = np.einsum("i,ij,j->ij", sqrtinvmassvec, hessian, sqrtinvmassvec)
@@ -178,9 +165,7 @@ def vib_analy(r, xyz, hessian):
 
     hessian_eigval_abs = np.abs(hessian_eigval)
 
-    pre_vib_freq_cm_1 = np.sqrt(hessian_eigval_abs * HA2J * 10e19) / (
-        SPEEDOFLIGHT * 2 * np.pi * BOHRS2ANG * 100
-    )
+    pre_vib_freq_cm_1 = np.sqrt(hessian_eigval_abs * HA2J * 10e19) / (SPEEDOFLIGHT * 2 * np.pi * BOHRS2ANG * 100)
 
     vib_freq_cm_1 = pre_vib_freq_cm_1.copy()
 
@@ -193,9 +178,7 @@ def vib_analy(r, xyz, hessian):
         if np.abs(freq) < 1.0:
             trans_rot_elms.append(i)
 
-    force_constants_J_m_2 = np.delete(
-        hessian_eigval * HA2J * 1e20 / (BOHRS2ANG**2) * AMU2KG, trans_rot_elms
-    )
+    force_constants_J_m_2 = np.delete(hessian_eigval * HA2J * 1e20 / (BOHRS2ANG**2) * AMU2KG, trans_rot_elms)
 
     proj_vib_freq_cm_1 = np.delete(vib_freq_cm_1, trans_rot_elms)
     proj_hessian_eigvec = np.delete(hessian_eigvec.T, trans_rot_elms, 0)

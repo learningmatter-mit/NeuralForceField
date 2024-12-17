@@ -55,16 +55,12 @@ class Uncertainty:
         if getattr(self, "umin") is None:
             self.umin = min_uncertainty
         elif force:
-            warnings.warn(
-                f"Uncertainty: min_uncertainty already set to {self.umin}. Overwriting."
-            )
+            warnings.warn(f"Uncertainty: min_uncertainty already set to {self.umin}. Overwriting.")
             self.umin = min_uncertainty
         else:
             raise Exception(f"Uncertainty: min_uncertainty already set to {self.umin}")
 
-    def scale_to_min_uncertainty(
-        self, uncertainty: Union[np.ndarray, torch.Tensor]
-    ) -> Union[np.ndarray, torch.Tensor]:
+    def scale_to_min_uncertainty(self, uncertainty: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         """
         Scale the uncertainty to the minimum value.
         """
@@ -99,9 +95,7 @@ class Uncertainty:
 
         return cp_uncertainty
 
-    def get_system_uncertainty(
-        self, uncertainty: torch.Tensor, num_atoms: List[int]
-    ) -> torch.Tensor:
+    def get_system_uncertainty(self, uncertainty: torch.Tensor, num_atoms: List[int]) -> torch.Tensor:
         """
         Get the uncertainty for the entire system.
         """
@@ -109,9 +103,7 @@ class Uncertainty:
 
         assert len(uncertainty) == len(num_atoms), "Number of systems do not match"
 
-        assert all(
-            [len(u) == n for u, n in zip(uncertainty, num_atoms)]
-        ), "Number of atoms in each system do not match"
+        assert all([len(u) == n for u, n in zip(uncertainty, num_atoms)]), "Number of atoms in each system do not match"
 
         if self.order == "system_sum":
             uncertainty = uncertainty.sum(dim=-1)
@@ -155,9 +147,7 @@ class ConformalPrediction:
         scores = np.array(scores)
 
         n = len(residuals_calib)
-        qhat = torch.quantile(
-            torch.from_numpy(scores), np.ceil((n + 1) * (1 - self.alpha)) / n
-        )
+        qhat = torch.quantile(torch.from_numpy(scores), np.ceil((n + 1) * (1 - self.alpha)) / n)
         qhat_value = np.float64(qhat.numpy()).item()
         self.qhat = qhat_value
 
@@ -198,9 +188,7 @@ class EnsembleUncertainty(Uncertainty):
         self.targ_unit = targ_unit
         self.std_or_var = std_or_var
 
-    def convert_units(
-        self, value: Union[float, np.ndarray], orig_unit: str, targ_unit: str
-    ):
+    def convert_units(self, value: Union[float, np.ndarray], orig_unit: str, targ_unit: str):
         """
         Convert the energy/forces units of the value from orig_unit to targ_unit.
         """
@@ -224,9 +212,7 @@ class EnsembleUncertainty(Uncertainty):
         Get the uncertainty for the energy.
         """
         if self.orig_unit is not None and self.targ_unit is not None:
-            results[self.q] = self.convert_units(
-                results[self.q], orig_unit=self.orig_unit, targ_unit=self.targ_unit
-            )
+            results[self.q] = self.convert_units(results[self.q], orig_unit=self.orig_unit, targ_unit=self.targ_unit)
 
         if self.std_or_var == "std":
             val = results[self.q].std(-1)
@@ -244,9 +230,7 @@ class EnsembleUncertainty(Uncertainty):
         Get the uncertainty for the forces.
         """
         if self.orig_unit is not None and self.targ_unit is not None:
-            results[self.q] = self.convert_units(
-                results[self.q], orig_unit=self.orig_unit, targ_unit=self.targ_unit
-            )
+            results[self.q] = self.convert_units(results[self.q], orig_unit=self.orig_unit, targ_unit=self.targ_unit)
 
         splits = torch.split(results[self.q], list(num_atoms))
         stack_split = torch.stack(splits, dim=0)
@@ -263,9 +247,7 @@ class EnsembleUncertainty(Uncertainty):
 
         return val
 
-    def get_uncertainty(
-        self, results: dict, num_atoms: Union[List[int], None] = None, *args, **kwargs
-    ):
+    def get_uncertainty(self, results: dict, num_atoms: Union[List[int], None] = None, *args, **kwargs):
         if self.q == "energy":
             val = self.get_energy_uncertainty(results=results)
         elif self.q in ["energy_grad", "forces"]:
@@ -308,9 +290,7 @@ class EvidentialUncertainty(Uncertainty):
         self.shared_v = shared_v
         self.source = source
 
-    def check_params(
-        self, results: dict, num_atoms=None
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def check_params(self, results: dict, num_atoms=None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Check if the parameters are present in the results, if the shapes are
         correct. If the order is "atomic" and shared_v is True, then the v
@@ -332,9 +312,7 @@ class EvidentialUncertainty(Uncertainty):
 
         return v, alpha, beta
 
-    def get_uncertainty(
-        self, results: dict, num_atoms: Union[List[int], None] = None, *args, **kwargs
-    ) -> torch.Tensor:
+    def get_uncertainty(self, results: dict, num_atoms: Union[List[int], None] = None, *args, **kwargs) -> torch.Tensor:
         v, alpha, beta = self.check_params(results=results, num_atoms=num_atoms)
 
         if self.source == "aleatoric":
@@ -348,9 +326,7 @@ class EvidentialUncertainty(Uncertainty):
             splits = torch.split(uncertainty, list(num_atoms))
             stack_split = torch.stack(splits, dim=0)
 
-            uncertainty = self.get_system_uncertainty(
-                uncertainty=stack_split, num_atoms=num_atoms
-            )
+            uncertainty = self.get_system_uncertainty(uncertainty=stack_split, num_atoms=num_atoms)
 
         uncertainty = self.scale_to_min_uncertainty(uncertainty)
 
@@ -378,9 +354,7 @@ class MVEUncertainty(Uncertainty):
         self.vkey = variance_key
         self.q = quantity
 
-    def get_uncertainty(
-        self, results: dict, num_atoms: Union[List[int], None] = None, *args, **kwargs
-    ) -> torch.Tensor:
+    def get_uncertainty(self, results: dict, num_atoms: Union[List[int], None] = None, *args, **kwargs) -> torch.Tensor:
         var = results[self.vkey].squeeze()
         assert results[self.q].shape[0] == var.shape[0]
 
@@ -388,9 +362,7 @@ class MVEUncertainty(Uncertainty):
             splits = torch.split(var, list(num_atoms))
             stack_split = torch.stack(splits, dim=0)
 
-            var = self.get_system_uncertainty(
-                uncertainty=stack_split, num_atoms=num_atoms
-            )
+            var = self.get_system_uncertainty(uncertainty=stack_split, num_atoms=num_atoms)
 
         var = self.scale_to_min_uncertainty(var)
 
@@ -503,9 +475,7 @@ class GMMUncertainty(Uncertainty):
             raise Exception("GMMUncertainty: GMM does not exist/is not fitted")
 
         self.means = self._check_tensor(self.gm_model.means_)
-        self.precisions_cholesky = self._check_tensor(
-            self.gm_model.precisions_cholesky_
-        )
+        self.precisions_cholesky = self._check_tensor(self.gm_model.precisions_cholesky_)
         self.weights = self._check_tensor(self.gm_model.weights_)
 
     def estimate_log_prob(self, X: torch.Tensor) -> torch.Tensor:
@@ -518,9 +488,7 @@ class GMMUncertainty(Uncertainty):
         n_clusters, _ = self.means.shape
 
         log_det = torch.sum(
-            torch.log(
-                self.precisions_cholesky.reshape(n_clusters, -1)[:, :: n_features + 1]
-            ),
+            torch.log(self.precisions_cholesky.reshape(n_clusters, -1)[:, :: n_features + 1]),
             dim=1,
         )
 
@@ -552,9 +520,7 @@ class GMMUncertainty(Uncertainty):
         # below, the calculation below makes it stable
         # log(sum_i(a_i)) = log(exp(a_max) * sum_i(exp(a_i - a_max))) = a_max + log(sum_i(exp(a_i - a_max)))
         wlp_stable = weighted_log_prob - weighted_log_prob_max.reshape(-1, 1)
-        logsumexp = weighted_log_prob_max + torch.log(
-            torch.sum(torch.exp(wlp_stable), dim=1)
-        )
+        logsumexp = weighted_log_prob_max + torch.log(torch.sum(torch.exp(wlp_stable), dim=1))
 
         return logsumexp
 
@@ -599,9 +565,7 @@ class GMMUncertainty(Uncertainty):
             splits = torch.split(uncertainty, list(num_atoms))
             stack_split = torch.stack(splits, dim=0)
 
-            uncertainty = self.get_system_uncertainty(
-                uncertainty=stack_split, num_atoms=num_atoms
-            ).squeeze()
+            uncertainty = self.get_system_uncertainty(uncertainty=stack_split, num_atoms=num_atoms).squeeze()
 
         uncertainty = self.scale_to_min_uncertainty(uncertainty)
 

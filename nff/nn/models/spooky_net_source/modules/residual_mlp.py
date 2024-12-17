@@ -16,9 +16,7 @@ class ResidualMLP(nn.Module):
         zero_init: bool = False,
     ) -> None:
         super(ResidualMLP, self).__init__()
-        self.residual = ResidualStack(
-            num_features, num_residual, activation=activation, bias=bias, zero_init=True
-        )
+        self.residual = ResidualStack(num_features, num_residual, activation=activation, bias=bias, zero_init=True)
         # initialize activation function
         if activation == "ssp":
             self.activation = ShiftedSoftplus(num_features)

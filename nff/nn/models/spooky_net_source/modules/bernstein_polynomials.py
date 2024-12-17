@@ -21,7 +21,7 @@ class BernsteinPolynomials(nn.Module):
     """
 
     def __init__(self, num_basis_functions: int, cutoff: float) -> None:
-        """ Initializes the BernsteinPolynomials class. """
+        """Initializes the BernsteinPolynomials class."""
         super(BernsteinPolynomials, self).__init__()
         # compute values to initialize buffers
         logfactorial = np.zeros((num_basis_functions))
@@ -38,8 +38,7 @@ class BernsteinPolynomials(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ For compatibility with other modules. """
-        pass
+        """For compatibility with other modules."""
 
     def forward(self, r: torch.Tensor, cutoff_values: torch.Tensor) -> torch.Tensor:
         """

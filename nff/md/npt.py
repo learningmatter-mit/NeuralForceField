@@ -412,7 +412,7 @@ class NoseHooverChainsNPT_Hydrostatic(MolecularDynamics):
         scale_coords = np.exp(delta_eps)
         scale_volume = np.exp(self.d * delta_eps)
 
-        V_t = V * scale_volume
+        V * scale_volume
         h_t = h * scale_coords
 
         # half time for all velocities

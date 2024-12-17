@@ -123,7 +123,7 @@ def reconstruct_atoms(atomsobject: AtomsBatch, mol_idx: list[np.array], centre: 
                 offsets = -torch.floor(f + 0.5).view(M, 3)
                 traj_unwrap = mol_xyz + torch.matmul(offsets, torch.Tensor(atomsobject.cell))
             else:
-                sub = (intra_dmat > 0.5 * box_len).to(torch.float) * box_len
+                (intra_dmat > 0.5 * box_len).to(torch.float) * box_len
                 add = (intra_dmat <= -0.5 * box_len).to(torch.float) * box_len
                 shift = torch.round(torch.divide(intra_dmat, box_len))
                 offsets = -shift

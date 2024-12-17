@@ -145,7 +145,7 @@ class SpookyNet(nn.Module):
         zero_init=True,
         **kwargs,
     ) -> None:
-        """ Initializes the SpookyNet class. """
+        """Initializes the SpookyNet class."""
         super(SpookyNet, self).__init__()
 
         # load state from a file (if load_from is not None) and overwrite
@@ -234,14 +234,10 @@ class SpookyNet(nn.Module):
 
         # declare modules and parameters
         # element specific energy and charge bias
-        self.register_parameter(
-            "element_bias", nn.Parameter(torch.Tensor(self.Zmax, 2))
-        )
+        self.register_parameter("element_bias", nn.Parameter(torch.Tensor(self.Zmax, 2)))
 
         # embeddings
-        self.nuclear_embedding = NuclearEmbedding(
-            self.num_features, self.Zmax, zero_init=zero_init
-        )
+        self.nuclear_embedding = NuclearEmbedding(self.num_features, self.Zmax, zero_init=zero_init)
         if self.use_nonlinear_embedding:
             self.charge_embedding = NonlinearElectronicEmbedding(
                 self.num_features, self.num_residual_electron, activation
@@ -273,17 +269,11 @@ class SpookyNet(nn.Module):
                 self.num_basis_functions, exp_weighting=self.exp_weighting
             )
         elif self.basis_functions == "gaussian":
-            self.radial_basis_functions = GaussianFunctions(
-                self.num_basis_functions, self.cutoff
-            )
+            self.radial_basis_functions = GaussianFunctions(self.num_basis_functions, self.cutoff)
         elif self.basis_functions == "bernstein":
-            self.radial_basis_functions = BernsteinPolynomials(
-                self.num_basis_functions, self.cutoff
-            )
+            self.radial_basis_functions = BernsteinPolynomials(self.num_basis_functions, self.cutoff)
         elif self.basis_functions == "sinc":
-            self.radial_basis_functions = SincFunctions(
-                self.num_basis_functions, self.cutoff
-            )
+            self.radial_basis_functions = SincFunctions(self.num_basis_functions, self.cutoff)
         else:
             raise ValueError(
                 "Argument 'basis_functions' may only take the "
@@ -347,9 +337,7 @@ class SpookyNet(nn.Module):
             # runtime exception may happen if state_dict was saved with an older
             # version of the code, but it should be possible to convert it
             except RuntimeError:
-                self.load_state_dict(
-                    self._convert_state_dict(saved_state["state_dict"])
-                )
+                self.load_state_dict(self._convert_state_dict(saved_state["state_dict"]))
             if use_d4_dispersion:
                 self.d4_dispersion_energy._compute_refc6()
 
@@ -357,7 +345,7 @@ class SpookyNet(nn.Module):
         self.build_requires_grad_dict()
 
     def reset_parameters(self) -> None:
-        """ Initialize parameters randomly. """
+        """Initialize parameters randomly."""
         nn.init.orthogonal_(self.output.weight)
         nn.init.zeros_(self.element_bias)
 
@@ -374,22 +362,22 @@ class SpookyNet(nn.Module):
 
     @property
     def dtype(self) -> torch.dtype:
-        """ Return torch.dtype of parameters (input tensors must match). """
+        """Return torch.dtype of parameters (input tensors must match)."""
         return self.nuclear_embedding.element_embedding.dtype
 
     @property
     def device(self) -> torch.device:
-        """ Return torch.device of parameters (input tensors must match). """
+        """Return torch.device of parameters (input tensors must match)."""
         return self.nuclear_embedding.element_embedding.device
 
     def train(self, mode: bool = True) -> None:
-        """ Turn on training mode. """
+        """Turn on training mode."""
         super(SpookyNet, self).train(mode=mode)
         for name, param in self.named_parameters():
             param.requires_grad = self.requires_grad_dict[name]
 
     def eval(self) -> None:
-        """ Turn on evaluation mode (smaller memory footprint)."""
+        """Turn on evaluation mode (smaller memory footprint)."""
         super(SpookyNet, self).eval()
         for name, param in self.named_parameters():
             param.requires_grad = False
@@ -454,8 +442,9 @@ class SpookyNet(nn.Module):
         Helper function to convert a state_dict saved with an old version of the
         code to the current version.
         """
+
         def prefix_postfix(string, pattern, prefix="resblock", sep=".", presep="_"):
-            """ Helper function for converting keys """
+            """Helper function for converting keys"""
             parts = string.split(sep)
             for i, part in enumerate(parts):
                 if pattern + presep in part:
@@ -467,19 +456,11 @@ class SpookyNet(nn.Module):
             if old_key == "idx" or old_key == "mul":
                 continue
 
-            if (
-                "local_interaction.residual_" in old_key
-                or "embedding.residual_" in old_key
-            ):
+            if "local_interaction.residual_" in old_key or "embedding.residual_" in old_key:
                 new_key = prefix_postfix(old_key, "residual")
-            elif (
-                "local_interaction.activation_" in old_key
-                or "embedding.activation_" in old_key
-            ):
+            elif "local_interaction.activation_" in old_key or "embedding.activation_" in old_key:
                 new_key = prefix_postfix(old_key, "activation")
-            elif (
-                "local_interaction.linear_" in old_key or "embedding.linear_" in old_key
-            ):
+            elif "local_interaction.linear_" in old_key or "embedding.linear_" in old_key:
                 if "embedding.linear_q" in old_key:
                     new_key = old_key
                 else:
@@ -511,7 +492,7 @@ class SpookyNet(nn.Module):
         return new_state_dict
 
     def get_number_of_parameters(self) -> int:
-        """ Returns the total number of parameters. """
+        """Returns the total number of parameters."""
         num = 0
         for param in self.parameters():
             num += param.numel()
@@ -567,9 +548,7 @@ class SpookyNet(nn.Module):
         else:  # gathering is faster on GPUs
             Ri = torch.gather(R, 0, idx_i.view(-1, 1).expand(-1, 3))
             Rj = torch.gather(R, 0, idx_j.view(-1, 1).expand(-1, 3))
-        if (
-            cell is not None and cell_offsets is not None and batch_seg is not None
-        ):  # apply PBCs
+        if cell is not None and cell_offsets is not None and batch_seg is not None:  # apply PBCs
             if cell.device.type == "cpu":  # indexing is faster on CPUs
                 cells = cell[batch_seg][idx_i]
             else:  # gathering is faster on GPUs
@@ -630,8 +609,7 @@ class SpookyNet(nn.Module):
                     self._sqrt3 * pij[:, 0] * pij[:, 2],  # xz
                     self._sqrt3 * pij[:, 1] * pij[:, 2],  # yz
                     0.5 * (3 * pij[:, 2] * pij[:, 2] - 1.0),  # z2
-                    self._sqrt3half
-                    * (pij[:, 0] * pij[:, 0] - pij[:, 1] * pij[:, 1]),  # x2-y2
+                    self._sqrt3half * (pij[:, 0] * pij[:, 0] - pij[:, 1] * pij[:, 1]),  # x2-y2
                 ],
                 dim=-1,
             )
@@ -653,9 +631,7 @@ class SpookyNet(nn.Module):
 
         # mask for efficient attention
         if num_batch > 1 and batch_seg is not None:
-            one_hot = nn.functional.one_hot(batch_seg).to(
-                dtype=R.dtype, device=R.device
-            )
+            one_hot = nn.functional.one_hot(batch_seg).to(dtype=R.dtype, device=R.device)
             mask = one_hot @ one_hot.transpose(-1, -2)
         else:
             mask = None
@@ -714,11 +690,7 @@ class SpookyNet(nn.Module):
         # initialize feature vectors
         z = self.nuclear_embedding(Z)
         if num_batch > 1:
-            electronic_mask = (
-                nn.functional.one_hot(batch_seg)
-                .to(dtype=rij.dtype, device=rij.device)
-                .transpose(-1, -2)
-            )
+            electronic_mask = nn.functional.one_hot(batch_seg).to(dtype=rij.dtype, device=rij.device).transpose(-1, -2)
         else:
             electronic_mask = None
         q = self.charge_embedding(z, Q, num_batch, batch_seg, electronic_mask)
@@ -731,9 +703,7 @@ class SpookyNet(nn.Module):
         # perform iterations over modules
         f = x.new_zeros(x.size())  # initialize output features to zero
         for module in self.module:
-            x, y = module(
-                x, rbf, pij, dij, sr_idx_i, sr_idx_j, num_batch, batch_seg, mask
-            )
+            x, y = module(x, rbf, pij, dij, sr_idx_i, sr_idx_j, num_batch, batch_seg, mask)
             # apply dropout mask
             if self.training and self.module_keep_prob < 1.0:
                 y = y * dropout_mask[batch_seg]
@@ -773,16 +743,12 @@ class SpookyNet(nn.Module):
 
         # compute ZBL inspired short-range repulsive contributions
         if self.use_zbl_repulsion:
-            ea_rep = self.zbl_repulsion_energy(
-                N, Z.to(self.dtype), sr_rij, cutoff_values, sr_idx_i, sr_idx_j
-            )
+            ea_rep = self.zbl_repulsion_energy(N, Z.to(self.dtype), sr_rij, cutoff_values, sr_idx_i, sr_idx_j)
         else:
             ea_rep = ea.new_zeros(N)
 
         # optimization when lr_cutoff is used
-        if self.lr_cutoff is not None and (
-            self.use_electrostatics or self.use_d4_dispersion
-        ):
+        if self.lr_cutoff is not None and (self.use_electrostatics or self.use_d4_dispersion):
             mask = rij < self.lr_cutoff  # select all entries below lr_cutoff
             rij = rij[mask]
             idx_i = idx_i[mask]
@@ -790,16 +756,12 @@ class SpookyNet(nn.Module):
 
         # compute electrostatic contributions
         if self.use_electrostatics:
-            ea_ele = self.electrostatic_energy(
-                N, qa, rij, idx_i, idx_j, R, cell, num_batch, batch_seg
-            )
+            ea_ele = self.electrostatic_energy(N, qa, rij, idx_i, idx_j, R, cell, num_batch, batch_seg)
         else:
             ea_ele = ea.new_zeros(N)
         # compute dispersion contributions
         if self.use_d4_dispersion:
-            ea_vdw, pa, c6 = self.d4_dispersion_energy(
-                N, Z, qa, rij, idx_i, idx_j, self.compute_d4_atomic
-            )
+            ea_vdw, pa, c6 = self.d4_dispersion_energy(N, Z, qa, rij, idx_i, idx_j, self.compute_d4_atomic)
         else:
             ea_vdw, pa, c6 = ea.new_zeros(N), ea.new_zeros(N), ea.new_zeros(N)
         return (f, ea, qa, ea_rep, ea_ele, ea_vdw, pa, c6)
@@ -986,9 +948,7 @@ class SpookyNet(nn.Module):
             num_batch=num_batch,
             batch_seg=batch_seg,
         )
-        energy = ea.new_zeros(num_batch).index_add_(
-            0, batch_seg, ea + ea_rep + ea_ele + ea_vdw
-        )
+        energy = ea.new_zeros(num_batch).index_add_(0, batch_seg, ea + ea_rep + ea_ele + ea_vdw)
         return (energy, f, ea, qa, ea_rep, ea_ele, ea_vdw, pa, c6)
 
     @torch.jit.export
@@ -1050,9 +1010,7 @@ class SpookyNet(nn.Module):
             batch_seg=batch_seg,
         )
         if idx_i.numel() > 0:  # autograd will fail if there are no distances
-            grad = torch.autograd.grad(
-                [torch.sum(energy)], [R], create_graph=create_graph
-            )[0]
+            grad = torch.autograd.grad([torch.sum(energy)], [R], create_graph=create_graph)[0]
             if grad is not None:  # necessary for torch.jit compatibility
                 forces = -grad
             else:
@@ -1244,9 +1202,7 @@ class SpookyNet(nn.Module):
             )
             forces = torch.zeros_like(R)
         if use_dipole:
-            dipole = qa.new_zeros((num_batch, 3)).index_add_(
-                0, batch_seg, qa.view(-1, 1) * R
-            )
+            dipole = qa.new_zeros((num_batch, 3)).index_add_(0, batch_seg, qa.view(-1, 1) * R)
         else:
             dipole = qa.new_zeros((num_batch, 3))
         return energy, forces, dipole, f, ea, qa, ea_rep, ea_ele, ea_vdw, pa, c6

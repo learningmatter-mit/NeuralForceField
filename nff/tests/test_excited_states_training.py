@@ -1,4 +1,3 @@
-
 import os
 import pathlib
 
@@ -52,7 +51,6 @@ def test_excited_training(device, tmpdir):
     # Now we can supply the loss dictionary to `loss.build_multi_loss`, and we have our loss funnction:
 
     loss_fn = loss.build_multi_loss(loss_dict)
-
 
     # ## Making the model
     #
@@ -110,7 +108,6 @@ def test_excited_training(device, tmpdir):
         ),
     ]
 
-
     # ## Dataset
     dset = Dataset.from_file(os.path.join(pathlib.Path(__file__).parent.absolute(), "data/azo_diabat.pth.tar"))
     train, val, test = split_train_validation_test(dset, val_size=0.1, test_size=0.1)
@@ -119,7 +116,6 @@ def test_excited_training(device, tmpdir):
     train_loader = DataLoader(train, batch_size=batch_size, collate_fn=collate_dicts, sampler=RandomSampler(train))
     val_loader = DataLoader(val, batch_size=batch_size, collate_fn=collate_dicts)
     test_loader = DataLoader(test, batch_size=batch_size, collate_fn=collate_dicts)
-
 
     # ## Training
 

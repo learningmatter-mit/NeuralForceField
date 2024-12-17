@@ -38,7 +38,7 @@ class ElectronicEmbedding(nn.Module):
         activation: str = "swish",
         is_charge: bool = False,
     ) -> None:
-        """ Initializes the ElectronicEmbedding class. """
+        """Initializes the ElectronicEmbedding class."""
         super(ElectronicEmbedding, self).__init__()
         self.is_charge = is_charge
         self.linear_q = nn.Linear(num_features, num_features)
@@ -58,7 +58,7 @@ class ElectronicEmbedding(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ Initialize parameters. """
+        """Initialize parameters."""
         nn.init.orthogonal_(self.linear_k.weight)
         nn.init.orthogonal_(self.linear_v.weight)
         nn.init.orthogonal_(self.linear_q.weight)

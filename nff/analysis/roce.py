@@ -25,17 +25,17 @@ BAR_HEIGHT = 0.02
 DELTA = 0.2
 
 # keys for specifying text attributes
-TEXT_KEYS = ['fontsize']
+TEXT_KEYS = ["fontsize"]
 
 
 # use the same defaults as in iPython notebooks
 # to avoid an unhappy surprise after testing your plots
 # in a notebook
 
-rcParams['figure.figsize'] = (6.0, 4.0)
-rcParams['font.size'] = 10
-rcParams['savefig.dpi'] = 72
-rcParams['figure.subplot.bottom'] = 0.125
+rcParams["figure.figsize"] = (6.0, 4.0)
+rcParams["font.size"] = 10
+rcParams["savefig.dpi"] = 72
+rcParams["figure.subplot.bottom"] = 0.125
 
 
 def compute_roce(fpr, preds, real):
@@ -213,9 +213,7 @@ def remove_overlap(scores, height):
                 # the model that are ordered before this one
                 for other_val in vals:
                     # calculate how much you have to change this value
-                    change = get_change(this_val=new_vals[model, i],
-                                        other_val=other_val,
-                                        height=height)
+                    change = get_change(this_val=new_vals[model, i], other_val=other_val, height=height)
                     # if you've changed it at all after comparing
                     # to another value, break
                     if abs(change) > eps:
@@ -231,9 +229,7 @@ def remove_overlap(scores, height):
     return new_vals
 
 
-def parse_csv(pred_path,
-              true_path,
-              target):
+def parse_csv(pred_path, true_path, target):
     """
     Get the list of predicted and real values from a csv file.
     Running `predict.sh` on the results of a ChemProp calculation
@@ -263,9 +259,7 @@ def parse_csv(pred_path,
     return [pred], [real]
 
 
-def parse_json(pred_path,
-               target,
-               split):
+def parse_json(pred_path, target, split):
     """
     Get the list of predicted and real values from a JSON file.
     Running `predict.sh` on the results of a ChemProp calculation
@@ -297,12 +291,11 @@ def parse_json(pred_path,
             values.
     """
 
-    with open(pred_path, 'r') as f_open:
+    with open(pred_path, "r") as f_open:
         pred_dic = json.load(f_open)
 
     # int keys for different seeds
-    int_keys = list([i for i in pred_dic.keys()
-                     if i.isdigit()])
+    int_keys = list([i for i in pred_dic.keys() if i.isdigit()])
 
     # get the predictions of each seed
     preds = []
@@ -336,16 +329,13 @@ def parse_pickle(path):
     with open(path, "rb") as f_open:
         dic = pickle.load(f_open)
 
-    real = np.array([sub_dic['true'] for sub_dic in dic.values()])
-    pred = np.array([sub_dic['pred'] for sub_dic in dic.values()])
+    real = np.array([sub_dic["true"] for sub_dic in dic.values()])
+    pred = np.array([sub_dic["pred"] for sub_dic in dic.values()])
 
     return [pred], [real]
 
 
-def get_all_preds(true_path,
-                  pred_paths,
-                  target,
-                  split):
+def get_all_preds(true_path, pred_paths, target, split):
     """
     Get all predictions from various different versions of a model
     (e.g. different seeds of a ChemProp model).
@@ -368,14 +358,10 @@ def get_all_preds(true_path,
 
     for path in pred_paths:
         if path.endswith("csv"):
-            these_preds, these_real = parse_csv(pred_path=path,
-                                                true_path=true_path,
-                                                target=target)
+            these_preds, these_real = parse_csv(pred_path=path, true_path=true_path, target=target)
 
         elif path.endswith("json"):
-            these_preds, these_real = parse_json(pred_path=path,
-                                                 target=target,
-                                                 split=split)
+            these_preds, these_real = parse_json(pred_path=path, target=target, split=split)
         elif path.endswith("pickle"):
             these_preds, these_real = parse_pickle(path)
         else:
@@ -390,11 +376,7 @@ def get_all_preds(true_path,
     return preds, reals
 
 
-def get_mean_roce(true_path,
-                  pred_paths,
-                  target,
-                  split,
-                  fpr_vals):
+def get_mean_roce(true_path, pred_paths, target, split, fpr_vals):
     """
     Get mean ROCE scores from various different versions of a model
     (e.g. different seeds of a ChemProp model).
@@ -410,14 +392,10 @@ def get_mean_roce(true_path,
             averaged over the different versions of the model.
     """
 
-    all_preds, all_reals = get_all_preds(true_path=true_path,
-                                         pred_paths=pred_paths,
-                                         target=target,
-                                         split=split)
+    all_preds, all_reals = get_all_preds(true_path=true_path, pred_paths=pred_paths, target=target, split=split)
     roces = []
     for pred, real in zip(all_preds, all_reals):
-        roce = np.array([compute_roce(fpr, pred, real)
-                         for fpr in fpr_vals])
+        roce = np.array([compute_roce(fpr, pred, real) for fpr in fpr_vals])
         roces.append(roce)
 
     mean_roce = np.stack(roces).mean(axis=0)
@@ -446,11 +424,8 @@ def add_model_roces(plot_dic):
 
     for i, model_dic in enumerate(model_dics):
         mean_roce = get_mean_roce(
-            true_path=true_path,
-            pred_paths=model_dic["pred_paths"],
-            target=target,
-            split=split,
-            fpr_vals=fpr_vals)
+            true_path=true_path, pred_paths=model_dic["pred_paths"], target=target, split=split, fpr_vals=fpr_vals
+        )
         model_dics[i]["roce"] = mean_roce
 
     return plot_dic
@@ -490,7 +465,7 @@ def vals_for_plot(plot_dic):
     roce_no_overlap = remove_overlap(roce_scores, bar_height)
 
     # get the default cycle colors
-    fpr_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    fpr_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
     # set the labels equal to the plot names, but replace every space
     # with a new line to avoid overlapping labels
@@ -500,11 +475,7 @@ def vals_for_plot(plot_dic):
     return roce_scores, roce_no_overlap, fpr_colors, labels, bar_height
 
 
-def base_plot(roce_scores,
-              roce_no_overlap,
-              labels,
-              fpr_colors,
-              bar_height):
+def base_plot(roce_scores, roce_no_overlap, labels, fpr_colors, bar_height):
     """
     Make the basic ROCE plot without any extra features, label sizes, axis
     limits, etc.
@@ -541,7 +512,6 @@ def base_plot(roce_scores,
     # go through each value of fpr
 
     for j in range(roce_no_overlap.shape[1]):
-
         # start is where the slice starts
         start = -0.4
 
@@ -561,23 +531,11 @@ def base_plot(roce_scores,
             x_range = np.arange(start, end, interval / 100)
             y_vals = np.array([new_perform] * len(x_range))
 
-            plt.plot(x_range, y_vals,
-                     '-',
-                     color=fpr_colors[j],
-                     linewidth=3,
-                     label='_nolegend_')
+            plt.plot(x_range, y_vals, "-", color=fpr_colors[j], linewidth=3, label="_nolegend_")
 
             # add black lines at +/- bar_height / 2
-            plt.plot(x_range, (y_vals - bar_height / 2),
-                     '-',
-                     color='black',
-                     linewidth=1,
-                     label='_nolegend_')
-            plt.plot(x_range, (y_vals + bar_height / 2),
-                     '-',
-                     color='black',
-                     linewidth=1,
-                     label='_nolegend_')
+            plt.plot(x_range, (y_vals - bar_height / 2), "-", color="black", linewidth=1, label="_nolegend_")
+            plt.plot(x_range, (y_vals + bar_height / 2), "-", color="black", linewidth=1, label="_nolegend_")
 
             # add `DELTA` to `start` as you continue left to
             # right in the plot
@@ -586,9 +544,7 @@ def base_plot(roce_scores,
     return axis
 
 
-def set_plot_ylim(max_scale,
-                  roce_no_overlap,
-                  bar_height):
+def set_plot_ylim(max_scale, roce_no_overlap, bar_height):
     """
     Set the y limits for the plot.
     Args:
@@ -605,15 +561,13 @@ def set_plot_ylim(max_scale,
     max_score = roce_no_overlap.max()
     min_scale = max_scale if (min_score < 0) else (1 / max_scale)
 
-    ylim = [min([min_score * min_scale, 0]) -
-            bar_height, max_score * max_scale]
+    ylim = [min([min_score * min_scale, 0]) - bar_height, max_score * max_scale]
     plt.ylim(ylim)
 
     return ylim
 
 
-def set_tick_sizes(x_axis_dic,
-                   y_axis_dic):
+def set_tick_sizes(x_axis_dic, y_axis_dic):
     """
     Set plot tick sizes.
     Args:
@@ -625,24 +579,20 @@ def set_tick_sizes(x_axis_dic,
         None
     """
 
-   # x-axis tick font size
+    # x-axis tick font size
     if "ticks" in x_axis_dic:
         tick_dic = x_axis_dic["ticks"]
         if "fontsize" in tick_dic:
-            plt.rc('xtick', labelsize=tick_dic["fontsize"])
+            plt.rc("xtick", labelsize=tick_dic["fontsize"])
 
     # y-axis tick font size
     if "ticks" in y_axis_dic:
         tick_dic = y_axis_dic["ticks"]
         if "fontsize" in tick_dic:
-            plt.rc('ytick', labelsize=tick_dic["fontsize"])
+            plt.rc("ytick", labelsize=tick_dic["fontsize"])
 
 
-def label_plot(fpr_vals,
-               legend_dic,
-               x_axis_dic,
-               y_axis_dic,
-               axis):
+def label_plot(fpr_vals, legend_dic, x_axis_dic, y_axis_dic, axis):
     """
     Add various labels to the plot.
     Args:
@@ -661,37 +611,30 @@ def label_plot(fpr_vals,
 
     # legend
     fpr_pct = [(use_val * 100) for use_val in fpr_vals]
-    fpr_str = [("%.1f" % val) if (val < 1) else ("%d" % val)
-               for val in fpr_pct]
+    fpr_str = [("%.1f" % val) if (val < 1) else ("%d" % val) for val in fpr_pct]
 
-    kwargs = {key: legend_dic[key] for key in
-              [*TEXT_KEYS, 'loc', 'ncol'] if key in legend_dic}
+    kwargs = {key: legend_dic[key] for key in [*TEXT_KEYS, "loc", "ncol"] if key in legend_dic}
     if legend_dic.get("use_legend", True):
-        plt.legend([f'{string}%' for string in fpr_str],
-                   **kwargs)
+        plt.legend([f"{string}%" for string in fpr_str], **kwargs)
 
     # y-axis font size and label
     ylabel_kwargs = {}
-    if 'labels' in y_axis_dic:
-        label_dic = y_axis_dic['labels']
-        if 'fontsize' in label_dic:
+    if "labels" in y_axis_dic:
+        label_dic = y_axis_dic["labels"]
+        if "fontsize" in label_dic:
             ylabel_kwargs["fontsize"] = label_dic["fontsize"]
 
     plt.ylabel("ROCE", **ylabel_kwargs)
 
     # x-axis label font sizes
-    if 'labels' in x_axis_dic:
-        label_dic = x_axis_dic['labels']
-        if 'fontsize' in label_dic:
+    if "labels" in x_axis_dic:
+        label_dic = x_axis_dic["labels"]
+        if "fontsize" in label_dic:
             for label in axis.get_xticklabels():
-                label.set_fontsize(label_dic['fontsize'])
+                label.set_fontsize(label_dic["fontsize"])
 
 
-def decorate_plot(labels,
-                  ylim,
-                  axis,
-                  dividers=None,
-                  texts=None):
+def decorate_plot(labels, ylim, axis, dividers=None, texts=None):
     """
     Add various "decorations" to the plot - such as dividers between
     different model categories, text on the plot, etc.
@@ -710,12 +653,7 @@ def decorate_plot(labels,
 
     max_x = len(labels)
     x_range = np.arange(-0.5, max_x, max_x / 100)
-    plt.plot(x_range, [0] * len(x_range),
-             '-',
-             color='black',
-             linewidth=1,
-             label='_nolegend_',
-             zorder=-10)
+    plt.plot(x_range, [0] * len(x_range), "-", color="black", linewidth=1, label="_nolegend_", zorder=-10)
 
     # add any dividers
     if dividers is not None:
@@ -723,25 +661,18 @@ def decorate_plot(labels,
         for divider in dividers:
             loc = labels.index(divider.replace(" ", "\n")) + 2.5 * DELTA
             locs.append(loc)
-        plt.vlines(locs,
-                   ylim[0],
-                   ylim[1],
-                   linestyles='--',
-                   color='black')
+        plt.vlines(locs, ylim[0], ylim[1], linestyles="--", color="black")
 
     # add any text
     if texts is not None:
         for item in texts:
-            text = item['text']
-            pos = item['position']
-            kwargs = {key: item[key] for key in TEXT_KEYS
-                      if key in item}
+            text = item["text"]
+            pos = item["position"]
+            kwargs = {key: item[key] for key in TEXT_KEYS if key in item}
 
-            plt.text(*pos, text,
-                     horizontalalignment='center',
-                     verticalalignment='center',
-                     transform=axis.transAxes,
-                     **kwargs)
+            plt.text(
+                *pos, text, horizontalalignment="center", verticalalignment="center", transform=axis.transAxes, **kwargs
+            )
 
 
 def save_plot(save_path):
@@ -783,41 +714,39 @@ def plot(plot_dic):
     plot_info = plot_dic["plot_info"]
 
     # get ROCE scores and other values needed for the plot
-    (roce_scores, roce_no_overlap,
-        fpr_colors, labels, bar_height) = vals_for_plot(plot_dic=plot_dic)
+    (roce_scores, roce_no_overlap, fpr_colors, labels, bar_height) = vals_for_plot(plot_dic=plot_dic)
 
     # set tick sizes - this has to come before making the plot
     x_axis_dic = plot_info.get("x_axis", {})
     y_axis_dic = plot_info.get("y_axis", {})
 
-    set_tick_sizes(x_axis_dic=x_axis_dic,
-                   y_axis_dic=y_axis_dic)
+    set_tick_sizes(x_axis_dic=x_axis_dic, y_axis_dic=y_axis_dic)
 
     # make the base plot
-    axis = base_plot(roce_scores=roce_scores,
-                     roce_no_overlap=roce_no_overlap,
-                     labels=labels,
-                     fpr_colors=fpr_colors,
-                     bar_height=bar_height)
+    axis = base_plot(
+        roce_scores=roce_scores,
+        roce_no_overlap=roce_no_overlap,
+        labels=labels,
+        fpr_colors=fpr_colors,
+        bar_height=bar_height,
+    )
 
     # add labels
-    label_plot(fpr_vals=base_info["fpr_vals"],
-               legend_dic=plot_info.get("legend", {}),
-               x_axis_dic=x_axis_dic,
-               y_axis_dic=y_axis_dic,
-               axis=axis)
+    label_plot(
+        fpr_vals=base_info["fpr_vals"],
+        legend_dic=plot_info.get("legend", {}),
+        x_axis_dic=x_axis_dic,
+        y_axis_dic=y_axis_dic,
+        axis=axis,
+    )
 
     # set the y limits
-    ylim = set_plot_ylim(max_scale=plot_info.get("max_height_scale", 1.2),
-                         roce_no_overlap=roce_no_overlap,
-                         bar_height=bar_height)
+    ylim = set_plot_ylim(
+        max_scale=plot_info.get("max_height_scale", 1.2), roce_no_overlap=roce_no_overlap, bar_height=bar_height
+    )
 
     # add decorations
-    decorate_plot(labels=labels,
-                  ylim=ylim,
-                  axis=axis,
-                  dividers=plot_info.get("dividers"),
-                  texts=plot_info.get("texts"))
+    decorate_plot(labels=labels, ylim=ylim, axis=axis, dividers=plot_info.get("dividers"), texts=plot_info.get("texts"))
 
     # save and show
     save_plot(save_path=plot_info.get("save_path"))
@@ -828,9 +757,7 @@ def plot(plot_dic):
     return roce_scores, labels, fpr_vals
 
 
-def get_perform_info(fprs,
-                     roce_scores,
-                     labels):
+def get_perform_info(fprs, roce_scores, labels):
     """
     Summarize the information about model performances so it
     can be saved in a JSON.
@@ -857,13 +784,12 @@ def get_perform_info(fprs,
         sort_scores = scores[sort_idx].tolist()
         sort_labels = np.array(labels)[sort_idx].tolist()
 
-        score_list = [{"rank": i + 1,
-                       "model": sort_labels[i].replace("\n", " "),
-                       "roce": score}
-                      for i, score in enumerate(sort_scores)]
+        score_list = [
+            {"rank": i + 1, "model": sort_labels[i].replace("\n", " "), "roce": score}
+            for i, score in enumerate(sort_scores)
+        ]
 
-        this_info = {"fpr": fpr,
-                     "scores": score_list}
+        this_info = {"fpr": fpr, "scores": score_list}
         info.append(this_info)
 
     return info
@@ -883,9 +809,7 @@ def plot_all(plot_dics):
 
     for plot_dic in plot_dics:
         roce_scores, labels, fprs = plot(plot_dic)
-        info = get_perform_info(fprs=fprs,
-                                roce_scores=roce_scores,
-                                labels=labels)
+        info = get_perform_info(fprs=fprs, roce_scores=roce_scores, labels=labels)
         roces.append(info)
 
     return roces
@@ -897,13 +821,14 @@ def main():
     file with plot information.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_file', type=str,
-                        help=("Path to JSON file with plot information. "
-                              "Please see config/plot_info.json for an "
-                              "example."))
-    parser.add_argument('--save_path', type=str,
-                        help=("Path to JSON file with saved ROCE scores."),
-                        default='roce.json')
+    parser.add_argument(
+        "--config_file",
+        type=str,
+        help=("Path to JSON file with plot information. " "Please see config/plot_info.json for an " "example."),
+    )
+    parser.add_argument(
+        "--save_path", type=str, help=("Path to JSON file with saved ROCE scores."), default="roce.json"
+    )
 
     args = parser.parse_args()
     config_file = args.config_file
@@ -912,7 +837,7 @@ def main():
 
     roces = plot_all(plot_dics=plot_dics)
     save_path = args.save_path
-    with open(save_path, 'w') as f_open:
+    with open(save_path, "w") as f_open:
         json.dump(roces, f_open, indent=4, sort_keys=True)
 
     print(f"Saved ROCE score information to {save_path}")

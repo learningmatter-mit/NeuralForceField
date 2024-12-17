@@ -1,6 +1,5 @@
 import os
 import shutil
-import sys
 import tempfile
 from urllib import request as request
 

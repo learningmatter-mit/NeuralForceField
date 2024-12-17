@@ -25,14 +25,11 @@ def assert_ordered(batch):
     """
 
     weights = batch["weights"].reshape(-1).tolist()
-    sort_weights = sorted(weights,
-                          key=lambda x: -x)
+    sort_weights = sorted(weights, key=lambda x: -x)
     assert weights == sort_weights
 
 
-def get_batch_dic(batch,
-                  idx_dic,
-                  num_confs):
+def get_batch_dic(batch, idx_dic, num_confs):
     """
     Get some conformer information about the batch.
     Args:
@@ -56,11 +53,9 @@ def get_batch_dic(batch,
     confs_in_batch = old_num_atoms // mol_size
 
     # new number of atoms after trimming
-    new_num_atoms = int(mol_size * min(
-        confs_in_batch, num_confs))
+    new_num_atoms = int(mol_size * min(confs_in_batch, num_confs))
 
     if idx_dic is None:
-
         assert_ordered(batch)
         # new number of conformers after trimming
         real_num_confs = min(confs_in_batch, num_confs)
@@ -71,12 +66,14 @@ def get_batch_dic(batch,
         conf_idx = idx_dic[smiles]
         real_num_confs = len(conf_idx)
 
-    info_dic = {"conf_idx": conf_idx,
-                "real_num_confs": real_num_confs,
-                "old_num_atoms": old_num_atoms,
-                "new_num_atoms": new_num_atoms,
-                "confs_in_batch": confs_in_batch,
-                "mol_size": mol_size}
+    info_dic = {
+        "conf_idx": conf_idx,
+        "real_num_confs": real_num_confs,
+        "old_num_atoms": old_num_atoms,
+        "new_num_atoms": new_num_atoms,
+        "confs_in_batch": confs_in_batch,
+        "mol_size": mol_size,
+    }
 
     return info_dic
 
@@ -108,7 +105,6 @@ def to_xyz_idx(batch_dic):
     # and append them to xyz_conf_all_idx
 
     for conf_num in conf_idx:
-
         start_idx = xyz_conf_start_idx[conf_num]
         end_idx = xyz_conf_start_idx[conf_num + 1]
         full_idx = torch.arange(start_idx, end_idx)
@@ -121,10 +117,7 @@ def to_xyz_idx(batch_dic):
     return xyz_conf_all_idx
 
 
-def split_nbrs(nbrs,
-               mol_size,
-               confs_in_batch,
-               conf_idx):
+def split_nbrs(nbrs, mol_size, confs_in_batch, conf_idx):
     """
     Get the indices of the neighbor list that correspond to conformers
     we're keeping.
@@ -143,7 +136,6 @@ def split_nbrs(nbrs,
     cutoffs = [i * mol_size - 1 for i in range(1, confs_in_batch + 1)]
 
     for i in conf_idx:
-
         # start index of the conformer
         start = cutoffs[i] - mol_size + 1
         # end index of the conformer
@@ -178,10 +170,7 @@ def to_nbr_idx(batch_dic, nbrs):
     confs_in_batch = batch_dic["confs_in_batch"]
     conf_idx = batch_dic["conf_idx"]
 
-    split_nbr_idx = split_nbrs(nbrs=nbrs,
-                               mol_size=mol_size,
-                               confs_in_batch=confs_in_batch,
-                               conf_idx=conf_idx)
+    split_nbr_idx = split_nbrs(nbrs=nbrs, mol_size=mol_size, confs_in_batch=confs_in_batch, conf_idx=conf_idx)
 
     return split_nbr_idx
 
@@ -227,10 +216,9 @@ def update_nbr_idx_keys(dset, batch, i, old_nbrs, num_confs):
 
     # make a mask for the neighbor list indices that are being kept
 
-    mol_size = batch['mol_size']
+    mol_size = batch["mol_size"]
     for j in range(num_confs):
-        mask = (old_nbrs[:, 0] < (j + 1) * mol_size
-                ) * (old_nbrs[:, 0] >= j * mol_size)
+        mask = (old_nbrs[:, 0] < (j + 1) * mol_size) * (old_nbrs[:, 0] >= j * mol_size)
         if j == 0:
             total_mask = copy.deepcopy(mask)
         else:
@@ -249,7 +237,7 @@ def update_nbr_idx_keys(dset, batch, i, old_nbrs, num_confs):
 
 
 def update_per_conf(dataset, i, old_num_atoms, new_n_confs):
-    mol_size = dataset.props["mol_size"][i]
+    dataset.props["mol_size"][i]
     for key in PER_CONF_KEYS:
         if key not in dataset.props:
             continue
@@ -300,26 +288,18 @@ def update_dset(batch, batch_dic, dataset, i):
     dataset.props["atom_features"][i] = atom_feats[conf_xyz_idx]
 
     # renormalize weights
-    dataset.props["weights"][i] = update_weights(batch,
-                                                 batch_dic)
+    dataset.props["weights"][i] = update_weights(batch, batch_dic)
 
     # update anything else that's a per-conformer quantity
     update_per_conf(dataset, i, old_num_atoms, batch_dic["real_num_confs"])
 
     # update anything that depends on the indexing of the nbr list
-    update_nbr_idx_keys(dset=dataset,
-                        batch=batch,
-                        i=i,
-                        old_nbrs=nbr_list,
-                        num_confs=batch_dic["real_num_confs"])
+    update_nbr_idx_keys(dset=dataset, batch=batch, i=i, old_nbrs=nbr_list, num_confs=batch_dic["real_num_confs"])
 
     return dataset
 
 
-def trim_confs(dataset,
-               num_confs,
-               idx_dic,
-               enum_func=None):
+def trim_confs(dataset, num_confs, idx_dic, enum_func=None):
     """
     Trim conformers for the entire dataset.
     Args:
@@ -341,23 +321,14 @@ def trim_confs(dataset,
         enum_func = tqdm_enum
 
     for i, batch in tqdm_enum(dataset):
+        batch_dic = get_batch_dic(batch=batch, idx_dic=idx_dic, num_confs=num_confs)
 
-        batch_dic = get_batch_dic(batch=batch,
-                                  idx_dic=idx_dic,
-                                  num_confs=num_confs)
-
-        dataset = update_dset(batch=batch,
-                              batch_dic=batch_dic,
-                              dataset=dataset,
-                              i=i)
+        dataset = update_dset(batch=batch, batch_dic=batch_dic, dataset=dataset, i=i)
 
     return dataset
 
 
-def make_split_nbrs(nbr_list,
-                    mol_size,
-                    num_confs,
-                    confs_per_split):
+def make_split_nbrs(nbr_list, mol_size, num_confs, confs_per_split):
     """
     Split neighbor list of a species into chunks for each sub-batch.
     Args:
@@ -382,8 +353,7 @@ def make_split_nbrs(nbr_list,
         # mask = (nbr_list[:, 0] <= (i + 1) * mol_size
         #         ) * (nbr_list[:, 1] <= (i + 1) * mol_size)
 
-        mask = (nbr_list[:, 0] < (i + 1) * mol_size
-                ) * (nbr_list[:, 0] >= i * mol_size)
+        mask = (nbr_list[:, 0] < (i + 1) * mol_size) * (nbr_list[:, 0] >= i * mol_size)
 
         new_nbrs.append(nbr_list[mask])
         masks.append(mask)
@@ -394,7 +364,6 @@ def make_split_nbrs(nbr_list,
     sub_batch_masks = []
 
     for i, num in enumerate(confs_per_split):
-
         # neighbor first
         prev_idx = sum(confs_per_split[:i])
         nbr_idx = list(range(prev_idx, prev_idx + num))
@@ -405,18 +374,13 @@ def make_split_nbrs(nbr_list,
         all_grouped_nbrs.append(grouped_nbrs)
 
         # then add together all the masks
-        mask = sum(masks[i] for i in range(prev_idx,
-                                           prev_idx + num)).to(torch.bool)
+        mask = sum(masks[i] for i in range(prev_idx, prev_idx + num)).to(torch.bool)
         sub_batch_masks.append(mask)
 
     return all_grouped_nbrs, sub_batch_masks
 
 
-def add_split_nbrs(batch,
-                   mol_size,
-                   num_confs,
-                   confs_per_split,
-                   sub_batches):
+def add_split_nbrs(batch, mol_size, num_confs, confs_per_split, sub_batches):
     """
     Add split-up neighbor lists to each sub-batch.
     Args:
@@ -443,10 +407,9 @@ def add_split_nbrs(batch,
         if key not in batch:
             continue
         nbr_list = batch[key]
-        split_nbrs, masks = make_split_nbrs(nbr_list=nbr_list,
-                                            mol_size=mol_size,
-                                            num_confs=num_confs,
-                                            confs_per_split=confs_per_split)
+        split_nbrs, masks = make_split_nbrs(
+            nbr_list=nbr_list, mol_size=mol_size, num_confs=num_confs, confs_per_split=confs_per_split
+        )
         if key == "nbr_list":
             nbr_masks = masks
 
@@ -457,9 +420,7 @@ def add_split_nbrs(batch,
     return sub_batches, nbr_masks
 
 
-def get_confs_per_split(batch,
-                        num_confs,
-                        sub_batch_size):
+def get_confs_per_split(batch, num_confs, sub_batch_size):
     """
     Get the number of conformers per sub-batch.
     Args:
@@ -474,8 +435,7 @@ def get_confs_per_split(batch,
 
     val_len = len(batch["nxyz"])
     inherent_val_len = val_len // num_confs
-    split_list = [sub_batch_size * inherent_val_len] * math.floor(
-        num_confs / sub_batch_size)
+    split_list = [sub_batch_size * inherent_val_len] * math.floor(num_confs / sub_batch_size)
 
     # if there's a remainder
 
@@ -487,9 +447,7 @@ def get_confs_per_split(batch,
     return confs_per_split
 
 
-def fix_nbr_idx(batch,
-                masks,
-                sub_batches):
+def fix_nbr_idx(batch, masks, sub_batches):
     """
     Fix anything that is defined with respect to positions
     of pairs in a neighbor list (e.g. `bond_idx`, `kj_idx`,
@@ -504,7 +462,7 @@ def fix_nbr_idx(batch,
         sub_batches (list[dict]): corrected sub batches of the batch
     """
 
-    old_nbr_list = batch['nbr_list']
+    old_nbr_list = batch["nbr_list"]
     new_idx_list = []
 
     for mask in masks:
@@ -512,8 +470,7 @@ def fix_nbr_idx(batch,
         # make everything not in this batch equal to -1  so we
         # know what's actually not in this batch
         new_idx = -torch.ones_like(old_nbr_list)[:, 0]
-        new_idx[mask] = (torch.arange(num_new_nbrs)
-                         .to(mask.device))
+        new_idx[mask] = torch.arange(num_new_nbrs).to(mask.device)
         new_idx_list.append(new_idx)
 
     for new_idx, sub_batch in zip(new_idx_list, sub_batches):
@@ -529,8 +486,7 @@ def fix_nbr_idx(batch,
     return sub_batches
 
 
-def split_batch(batch,
-                sub_batch_size):
+def split_batch(batch, sub_batch_size):
     """
     Split a batch into sub-batches.
     Args:
@@ -545,10 +501,7 @@ def split_batch(batch,
     num_confs = len(batch["nxyz"]) // mol_size
     sub_batch_dic = {}
 
-    confs_per_split = get_confs_per_split(
-        batch=batch,
-        num_confs=num_confs,
-        sub_batch_size=sub_batch_size)
+    confs_per_split = get_confs_per_split(batch=batch, num_confs=num_confs, sub_batch_size=sub_batch_size)
 
     num_splits = len(confs_per_split)
 
@@ -561,8 +514,7 @@ def split_batch(batch,
             continue
         elif np.mod(val_len, num_confs) != 0 or val_len == 1:
             if key == "num_atoms":
-                sub_batch_dic[key] = [int(val * num / num_confs)
-                                      for num in confs_per_split]
+                sub_batch_dic[key] = [int(val * num / num_confs) for num in confs_per_split]
             else:
                 sub_batch_dic[key] = [val] * num_splits
             continue
@@ -575,26 +527,20 @@ def split_batch(batch,
         # use this to determine the number of items in each
         # section of the split list
 
-        split_list = [inherent_val_len * num
-                      for num in confs_per_split]
+        split_list = [inherent_val_len * num for num in confs_per_split]
 
         # split the value accordingly
         split_val = torch.split(val, split_list)
         sub_batch_dic[key] = split_val
 
-    sub_batches = [{key: sub_batch_dic[key][i] for key in
-                    sub_batch_dic.keys()} for i in range(num_splits)]
+    sub_batches = [{key: sub_batch_dic[key][i] for key in sub_batch_dic.keys()} for i in range(num_splits)]
 
     # fix neighbor list indexing
-    sub_batches, masks = add_split_nbrs(batch=batch,
-                                        mol_size=mol_size,
-                                        num_confs=num_confs,
-                                        confs_per_split=confs_per_split,
-                                        sub_batches=sub_batches)
+    sub_batches, masks = add_split_nbrs(
+        batch=batch, mol_size=mol_size, num_confs=num_confs, confs_per_split=confs_per_split, sub_batches=sub_batches
+    )
 
     # fix anything that relies on the position of a neighbor list pair
-    sub_batches = fix_nbr_idx(batch=batch,
-                              masks=masks,
-                              sub_batches=sub_batches)
+    sub_batches = fix_nbr_idx(batch=batch, masks=masks, sub_batches=sub_batches)
 
     return sub_batches

@@ -5,7 +5,6 @@ from torch import nn
 
 
 class shifted_softplus(torch.nn.Module):
-
     def __init__(self):
         super(shifted_softplus, self).__init__()
 
@@ -22,20 +21,10 @@ class Swish(torch.nn.Module):
 
 
 class LearnableSwish(torch.nn.Module):
-    def __init__(self,
-                 alpha=1.0,
-                 beta=1.702):
+    def __init__(self, alpha=1.0, beta=1.702):
         super().__init__()
-        self.alpha_inv = nn.Parameter(
-            torch.log(
-                torch.exp(torch.Tensor([alpha])) - 1
-            )
-        )
-        self.beta_inv = nn.Parameter(
-            torch.log(
-                torch.exp(torch.Tensor([beta])) - 1
-            )
-        )
+        self.alpha_inv = nn.Parameter(torch.log(torch.exp(torch.Tensor([alpha])) - 1))
+        self.beta_inv = nn.Parameter(torch.log(torch.exp(torch.Tensor([beta])) - 1))
 
     @property
     def alpha(self):

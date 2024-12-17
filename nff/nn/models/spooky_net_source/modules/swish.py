@@ -23,10 +23,8 @@ class Swish(nn.Module):
             (GELUs)."
     """
 
-    def __init__(
-        self, num_features: int, initial_alpha: float = 1.0, initial_beta: float = 1.702
-    ) -> None:
-        """ Initializes the Swish class. """
+    def __init__(self, num_features: int, initial_alpha: float = 1.0, initial_beta: float = 1.702) -> None:
+        """Initializes the Swish class."""
         super(Swish, self).__init__()
         self.initial_alpha = initial_alpha
         self.initial_beta = initial_beta
@@ -35,7 +33,7 @@ class Swish(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ Initialize parameters alpha and beta. """
+        """Initialize parameters alpha and beta."""
         nn.init.constant_(self.alpha, self.initial_alpha)
         nn.init.constant_(self.beta, self.initial_beta)
 

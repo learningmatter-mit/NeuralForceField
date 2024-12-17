@@ -2,9 +2,7 @@ import os
 import numpy as np
 import csv
 import json
-import logging
 import copy
-import pdb
 
 
 import ase
@@ -31,66 +29,64 @@ def get_energy(atoms):
 
     # ekin = ekin.detach().numpy()
 
-    print(('Energy per atom: Epot = %.2fkcal/mol  '
-           'Ekin = %.2fkcal/mol (T=%3.0fK)  '
-           'Etot = %.2fkcal/mol'
-           % (epot, ekin, Temperature, epot + ekin)))
+    print(
+        (
+            "Energy per atom: Epot = %.2fkcal/mol  "
+            "Ekin = %.2fkcal/mol (T=%3.0fK)  "
+            "Etot = %.2fkcal/mol" % (epot, ekin, Temperature, epot + ekin)
+        )
+    )
     # print('Energy per atom: Epot = %.5feV  Ekin = %.5feV (T=%3.0fK)  '
     #      'Etot = %.5feV' % (epot, ekin, Temperature, (epot + ekin)))
     return epot, ekin, Temperature
 
 
 def write_traj(filename, frames):
-    '''
-        Write trajectory dataframes into .xyz format for VMD visualization
-        to do: include multiple atom types
+    """
+    Write trajectory dataframes into .xyz format for VMD visualization
+    to do: include multiple atom types
 
-        example:
-            path = "../../sim/topotools_ethane/ethane-nvt_unwrap.xyz"
-            traj2write = trajconv(n_mol, n_atom, box_len, path)
-            write_traj(path, traj2write)
-    '''
-    file = open(filename, 'w')
+    example:
+        path = "../../sim/topotools_ethane/ethane-nvt_unwrap.xyz"
+        traj2write = trajconv(n_mol, n_atom, box_len, path)
+        write_traj(path, traj2write)
+    """
+    file = open(filename, "w")
     atom_no = frames.shape[1]
     for i, frame in enumerate(frames):
-        file.write(str(atom_no) + '\n')
-        file.write('Atoms. Timestep: ' + str(i) + '\n')
+        file.write(str(atom_no) + "\n")
+        file.write("Atoms. Timestep: " + str(i) + "\n")
         for atom in frame:
             if atom.shape[0] == 4:
                 try:
-                    file.write(str(int(atom[0])) + " " + str(atom[1]) +
-                               " " + str(atom[2]) + " " + str(atom[3]) + "\n")
+                    file.write(str(int(atom[0])) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
                 except BaseException:
-                    file.write(str(atom[0]) + " " + str(atom[1]) +
-                               " " + str(atom[2]) + " " + str(atom[3]) + "\n")
+                    file.write(str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
             elif atom.shape[0] == 3:
-                file.write(("1" + " " + str(atom[0]) + " "
-                            + str(atom[1]) + " " + str(atom[2]) + "\n"))
+                file.write(("1" + " " + str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + "\n"))
             else:
                 raise ValueError("wrong format")
     file.close()
 
 
 def mol_dot(vec1, vec2):
-    """ Say we have two vectors, each of which has the form
+    """Say we have two vectors, each of which has the form
     [[fx1, fy1, fz1], [fx2, fy2, fz2], ...].
     mol_dot returns an array of dot products between each
-    element of the two vectors. """
+    element of the two vectors."""
     v1 = np.array(vec1)
     v2 = np.array(vec2)
 
-    out = np.transpose([np.dot(element1, element2) for
-                        element1, element2 in zip(v1, v2)])
+    out = np.transpose([np.dot(element1, element2) for element1, element2 in zip(v1, v2)])
     return out
 
 
 def mol_norm(vec):
     """Square root of mol_dot(vec, vec)."""
-    return mol_dot(vec, vec)**0.5
+    return mol_dot(vec, vec) ** 0.5
 
 
 def atoms_to_nxyz(atoms, positions=None):
-
     atomic_numbers = atoms.get_atomic_numbers()
     if positions is None:
         positions = atoms.get_positions()
@@ -98,8 +94,7 @@ def atoms_to_nxyz(atoms, positions=None):
     # don't make this a numpy array or it'll become type float64,
     # which will mess up the tensor computation. Need it to be
     # type float32.
-    nxyz = [[symbol, *position] for
-            symbol, position in zip(atomic_numbers, positions)]
+    nxyz = [[symbol, *position] for symbol, position in zip(atomic_numbers, positions)]
 
     return nxyz
 
@@ -120,7 +115,7 @@ def zhu_dic_to_list(dic):
         sub_dic = dict()
         for key in dic.keys():
             sub_dic[key.split("_list")[0]] = dic[key][i]
-            if (key == "time_list"):
+            if key == "time_list":
                 sub_dic[key.split("_list")[0]] /= const.FS_TO_AU
         lst.append(sub_dic)
 
@@ -135,7 +130,7 @@ def append_to_csv(lst, out_file):
     Returns:
         None
     """
-    with open(out_file, 'a+') as csvfile:
+    with open(out_file, "a+") as csvfile:
         for item in lst:
             fieldnames = sorted(list(item.keys()))
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -147,7 +142,7 @@ def write_to_new_csv(lst, out_file):
     """
     Same as `append_to_csv`, but writes a new file.
     """
-    with open(out_file, 'w') as csvfile:
+    with open(out_file, "w") as csvfile:
         for item in lst:
             fieldnames = sorted(list(item.keys()))
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -176,7 +171,7 @@ def csv_read(out_file):
         dic_list (list): list of dictionaries
     """
 
-    with open(out_file, newline='') as csvfile:
+    with open(out_file, newline="") as csvfile:
         # get the keys and the corresponding dictionaries
         # being outputted
         dic_list = list(csv.DictReader(csvfile))[0::2]
@@ -186,7 +181,7 @@ def csv_read(out_file):
     # to the key order on every other line.
     # (Also, weird things happen if you define `dic_keys` and
     # `dic_list` within the same context manager, so must do it separately)
-    with open(out_file, newline='') as csvfile:
+    with open(out_file, newline="") as csvfile:
         # this dictionary gives you a key: value pair
         # of the form supposed key: actual key
         dic_keys = list(csv.DictReader(csvfile))[1::2]
@@ -201,19 +196,15 @@ def csv_read(out_file):
 
     for dic in new_dic_list:
         for key, value in dic.items():
-            if 'nan' in value:
-                value = value.replace('nan', "float('nan')")
+            if "nan" in value:
+                value = value.replace("nan", "float('nan')")
             dic[key] = eval(value)
 
     return new_dic_list
 
 
 class NeuralMDLogger(MDLogger):
-    def __init__(self,
-                 *args,
-                 verbose=True,
-                 **kwargs):
-
+    def __init__(self, *args, verbose=True, **kwargs):
         super().__init__(*args, **kwargs)
         self.natoms = len(self.atoms)
         self.verbose = verbose
@@ -244,7 +235,6 @@ class NeuralMDLogger(MDLogger):
 
 
 class ZhuNakamuraLogger:
-
     """
     Base class for Zhu Nakamura dynamics.
     Properties:
@@ -254,7 +244,6 @@ class ZhuNakamuraLogger:
     """
 
     def __init__(self, out_file, log_file, save_keys, **kwargs):
-
         self.out_file = out_file
         self.log_file = log_file
         self.save_keys = save_keys
@@ -307,8 +296,7 @@ class ZhuNakamuraLogger:
             else:
                 save_dic[key] = val
 
-        save_dic["nxyz_list"] = [atoms_to_nxyz(self.atoms, positions) for
-                                 positions in save_dic["position_list"]]
+        save_dic["nxyz_list"] = [atoms_to_nxyz(self.atoms, positions) for positions in save_dic["position_list"]]
         save_list = zhu_dic_to_list(save_dic)
 
         return save_list
@@ -319,16 +307,12 @@ class ZhuNakamuraLogger:
         """
 
         save_list = self.create_save_list()
-        csv_write(out_file=self.out_file,
-                  lst=save_list[-1:],
-                  method="append")
+        csv_write(out_file=self.out_file, lst=save_list[-1:], method="append")
 
         for key in self.save_keys:
             setattr(self, key, getattr(self, key)[-5:])
 
-    def ac_present(self,
-                   old_list,
-                   new_list):
+    def ac_present(self, old_list, new_list):
         """
         Check if the previous AC step, whose properties you're updating,
         was actually saved.
@@ -360,8 +344,7 @@ class ZhuNakamuraLogger:
         return present, freq_gt_2
 
     def modify_hop(self, new_list):
-
-        key = 'hopping_probability'
+        key = "hopping_probability"
         new_list[-3][key] = copy.deepcopy(new_list[-2][key])
         new_list[-2][key] = []
 
@@ -402,9 +385,7 @@ class ZhuNakamuraLogger:
         # check to see if [AC on old surface] was
         # actually saved - may not be if we're not
         # saving every frame
-        ac_present, freq_gt_2 = self.ac_present(
-            old_list=old_list,
-            new_list=new_list)
+        ac_present, freq_gt_2 = self.ac_present(old_list=old_list, new_list=new_list)
 
         # update [AC on old surface] with the
         # fact that it's not in the trj and that
@@ -434,9 +415,7 @@ class ZhuNakamuraLogger:
         if not freq_gt_2:
             save_list.append(new_list[-1])
 
-        csv_write(out_file=self.out_file,
-                  lst=save_list,
-                  method="new")
+        csv_write(out_file=self.out_file, lst=save_list, method="new")
 
     def output_to_json(self):
         """
@@ -456,7 +435,7 @@ class ZhuNakamuraLogger:
         Args:
             msg (str)
         """
-        output = '{:>12}:  {}'.format("Zhu-Nakamura dynamics".upper(), msg)
+        output = "{:>12}:  {}".format("Zhu-Nakamura dynamics".upper(), msg)
         with open(self.log_file, "a+") as f:
             f.write(output)
             f.write("\n")

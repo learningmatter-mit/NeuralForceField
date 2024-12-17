@@ -9,10 +9,7 @@ import numpy as np
 from nff.utils import bash_command, fprint
 
 
-def get_cp_cmd(script,
-               config_path,
-               data_path,
-               dataset_type):
+def get_cp_cmd(script, config_path, data_path, dataset_type):
     """
     Get the string for a ChemProp command.
     Args:
@@ -25,15 +22,11 @@ def get_cp_cmd(script,
       cmd (str): the chemprop command
     """
 
-    cmd = (f"python {script} --config_path {config_path} "
-           f" --data_path {data_path} "
-           f" --dataset_type {dataset_type}")
+    cmd = f"python {script} --config_path {config_path} " f" --data_path {data_path} " f" --dataset_type {dataset_type}"
     return cmd
 
 
-def cp_hyperopt(cp_folder,
-                hyp_folder,
-                rerun):
+def cp_hyperopt(cp_folder, hyp_folder, rerun):
     """
     Run hyperparameter optimization with ChemProp.
     Args:
@@ -54,7 +47,6 @@ def cp_hyperopt(cp_folder,
 
     # If it exists and you don't want to re-run, then load it
     if params_exist and (not rerun):
-
         fprint(f"Loading hyperparameter results from {param_file}\n")
 
         with open(param_file, "r") as f:
@@ -71,10 +63,7 @@ def cp_hyperopt(cp_folder,
 
     data_path = config["data_path"]
     dataset_type = config["dataset_type"]
-    cmd = get_cp_cmd(hyp_script,
-                     config_path,
-                     data_path,
-                     dataset_type)
+    cmd = get_cp_cmd(hyp_script, config_path, data_path, dataset_type)
     cmd += f" --config_save_path {param_file}"
 
     fprint(f"Running hyperparameter optimization in folder {hyp_folder}\n")
@@ -89,8 +78,7 @@ def cp_hyperopt(cp_folder,
     return best_params
 
 
-def cp_train(cp_folder,
-             train_folder):
+def cp_train(cp_folder, train_folder):
     """
     Train a chemprop model.
     Args:
@@ -108,10 +96,7 @@ def cp_train(cp_folder,
 
     data_path = config["data_path"]
     dataset_type = config["dataset_type"]
-    cmd = get_cp_cmd(train_script,
-                     config_path,
-                     data_path,
-                     dataset_type)
+    cmd = get_cp_cmd(train_script, config_path, data_path, dataset_type)
 
     p = bash_command(f"source activate chemprop && {cmd}")
     p.wait()
@@ -133,15 +118,17 @@ def make_feat_paths(feat_path):
     return paths
 
 
-def modify_config(base_config_path,
-                  metric,
-                  train_feat_path,
-                  val_feat_path,
-                  test_feat_path,
-                  train_folder,
-                  features_only,
-                  hyp_params,
-                  no_features):
+def modify_config(
+    base_config_path,
+    metric,
+    train_feat_path,
+    val_feat_path,
+    test_feat_path,
+    train_folder,
+    features_only,
+    hyp_params,
+    no_features,
+):
     """
     Modify a chemprop config file with new parameters.
     Args:
@@ -164,16 +151,17 @@ def modify_config(base_config_path,
     with open(base_config_path, "r") as f:
         config = json.load(f)
 
-    dic = {"metric": metric,
-           "features_path": make_feat_paths(train_feat_path),
-           "separate_val_features_path": make_feat_paths(val_feat_path),
-           "separate_test_features_path": make_feat_paths(test_feat_path),
-           "save_dir": train_folder,
-           "features_only": features_only,
-           **hyp_params}
+    dic = {
+        "metric": metric,
+        "features_path": make_feat_paths(train_feat_path),
+        "separate_val_features_path": make_feat_paths(val_feat_path),
+        "separate_test_features_path": make_feat_paths(test_feat_path),
+        "save_dir": train_folder,
+        "features_only": features_only,
+        **hyp_params,
+    }
 
-    config.update({key: val for key, val in
-                   dic.items() if val is not None})
+    config.update({key: val for key, val in dic.items() if val is not None})
 
     if no_features:
         for key in list(config.keys()):
@@ -188,12 +176,7 @@ def modify_config(base_config_path,
         json.dump(config, f, indent=4, sort_keys=True)
 
 
-def modify_hyp_config(hyp_config_path,
-                      metric,
-                      hyp_feat_path,
-                      hyp_folder,
-                      features_only,
-                      no_features):
+def modify_hyp_config(hyp_config_path, metric, hyp_feat_path, hyp_folder, features_only, no_features):
     """
     Modfiy a hyperparameter optimization config file with new parameters.
     Args:
@@ -215,13 +198,14 @@ def modify_hyp_config(hyp_config_path,
     with open(hyp_config_path, "r") as f:
         config = json.load(f)
 
-    dic = {"metric": metric,
-           "features_path": make_feat_paths(hyp_feat_path),
-           "save_dir": hyp_folder,
-           "features_only": features_only}
+    dic = {
+        "metric": metric,
+        "features_path": make_feat_paths(hyp_feat_path),
+        "save_dir": hyp_folder,
+        "features_only": features_only,
+    }
 
-    config.update({key: val for key, val in
-                   dic.items() if val is not None})
+    config.update({key: val for key, val in dic.items() if val is not None})
 
     if no_features:
         for key in list(config.keys()):
@@ -275,8 +259,7 @@ def save_smiles(smiles_folder, smiles_list, name):
     # no bind):
 
     file_names = [f"{name}_smiles.csv", f"{name}_full.csv"]
-    paths = [os.path.join(smiles_folder, name) for name in
-             file_names]
+    paths = [os.path.join(smiles_folder, name) for name in file_names]
     for path in paths:
         with open(path, "r") as f:
             lines = f.readlines()
@@ -333,11 +316,7 @@ def make_hyperopt_csvs(smiles_folder, all_smiles):
     save_smiles(smiles_folder, all_smiles, name="hyperopt")
 
 
-def save_hyperopt(feat_folder,
-                  metric,
-                  smiles_folder,
-                  cp_save_folder,
-                  dset_size):
+def save_hyperopt(feat_folder, metric, smiles_folder, cp_save_folder, dset_size):
     """
     Aggregate and save the train and validation SMILES for hyperparameter optimization.
     Args:
@@ -357,9 +336,8 @@ def save_hyperopt(feat_folder,
 
     for name in names:
         smiles_list = get_smiles(smiles_folder, f"{name}_smiles.csv")
-        np_save_path = os.path.join(cp_save_folder,
-                                    f"{name}_{metric}.npz")
-        feats = np.load(np_save_path)['features']
+        np_save_path = os.path.join(cp_save_folder, f"{name}_{metric}.npz")
+        feats = np.load(np_save_path)["features"]
         all_feats.append(feats)
         all_smiles += smiles_list
 
@@ -370,12 +348,10 @@ def save_hyperopt(feat_folder,
         all_feats = all_feats[:dset_size]
 
     # save the entire train + val dataset features
-    hyp_np_path = os.path.join(cp_save_folder,
-                               f"hyperopt_{metric}.npz")
+    hyp_np_path = os.path.join(cp_save_folder, f"hyperopt_{metric}.npz")
     np.savez_compressed(hyp_np_path, features=all_feats)
 
     # save csvs for the train + val dataset
-    make_hyperopt_csvs(smiles_folder=smiles_folder,
-                       all_smiles=all_smiles)
+    make_hyperopt_csvs(smiles_folder=smiles_folder, all_smiles=all_smiles)
 
     return hyp_np_path

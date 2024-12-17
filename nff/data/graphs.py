@@ -232,7 +232,7 @@ def generate_subgraphs(atomsobject, unwrap=True, get_edge=False):
 
     atoms = AtomsBatch(atomsobject)
     z, adj, dmat, threshold = adjdistmat(atoms, unwrap=unwrap)
-    box_len = torch.Tensor(np.diag(atoms.get_cell()))
+    torch.Tensor(np.diag(atoms.get_cell()))
     G = nx.from_numpy_matrix(adj)
 
     for i, item in enumerate(z):

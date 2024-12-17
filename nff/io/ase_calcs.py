@@ -198,11 +198,14 @@ class NeuralFF(Calculator):
             self.results["embedding"] = embedding
 
         if requires_stress:
-            if isinstance(self.model, NffScaleMACE):  # the implementation of stress calculation in MACE is a bit different
+            if isinstance(
+                self.model, NffScaleMACE
+            ):  # the implementation of stress calculation in MACE is a bit different
                 # and hence this is required (ASE_suit: mace/mace/calculators/mace.py)
 
                 self.results["stress"] = (
-                    torch.mean(prediction["stress"], dim=0).cpu().numpy())  # converting to eV/Angstrom^3
+                    torch.mean(prediction["stress"], dim=0).cpu().numpy()
+                )  # converting to eV/Angstrom^3
             else:  # for other models
                 stress = prediction["stress_volume"].detach().cpu().numpy()
                 self.results["stress"] = stress * (1 / atoms.get_volume())
@@ -407,10 +410,7 @@ class EnsembleNFF(Calculator):
             gradients.append(prediction_numpy["energy_grad"])
             if "stress_volume" in prediction:
                 # TODO: implement unit conversion for stress with prediction_numpy
-                stresses.append(
-                    prediction["stress_volume"].detach().cpu().numpy()
-                    * (1 / atoms.get_volume())
-                )
+                stresses.append(prediction["stress_volume"].detach().cpu().numpy() * (1 / atoms.get_volume()))
 
         energies = np.stack(energies)
         gradients = np.stack(gradients)
@@ -428,7 +428,7 @@ class EnsembleNFF(Calculator):
         if "e_disp" in prediction:
             self.results["energy"] = self.results["energy"] + prediction["e_disp"]
         if self.jobdir is not None and system_changes:
-            energy_std = self.results["energy_std"][None]
+            self.results["energy_std"][None]
             self.log_ensemble(self.jobdir, "energy_nff_ensemble.npy", energies)
 
         if "forces" in properties:

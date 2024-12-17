@@ -52,7 +52,6 @@ class EarlyStoppingHook(Hook):
 
 
 class WarmRestartHook(Hook):
-
     def __init__(
         self,
         optimizer,
@@ -108,9 +107,7 @@ class WarmRestartHook(Hook):
             self.Tmax *= self.Tmult
             self.scheduler.last_epoch = -1
             self.scheduler.T_max = self.Tmax
-            self.scheduler.base_lrs = [
-                base_lr * self.lr_factor for base_lr in self.scheduler.base_lrs
-            ]
+            self.scheduler.base_lrs = [base_lr * self.lr_factor for base_lr in self.scheduler.base_lrs]
             trainer.optimizer.load_state_dict(self.init_opt_state)
 
             if self.best_current > self.best_previous:
@@ -318,9 +315,7 @@ class ExponentialDecayHook(Hook):
 
 
 class WarmUpLR(_LRScheduler):
-
     def __init__(self, optimizer, n_steps, max_lr, last_epoch=-1, verbose=False):
-
         self.n_steps = n_steps
         self.max_lr = max_lr
         super(WarmUpLR, self).__init__(optimizer, last_epoch, verbose)
@@ -345,7 +340,6 @@ class WarmUpLRHook(Hook):
         self.scheduler = WarmUpLR(optimizer=optimizer, n_steps=n_steps, max_lr=max_lr)
 
     def on_batch_end(self, trainer, train_batch, result, loss):
-
         self.scheduler.step()
         if self.scheduler._step_count >= self.scheduler.n_steps:
             trainer._stop = True

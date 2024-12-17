@@ -1,12 +1,7 @@
 from torch import nn
 
 from nff.nn.layers import DEFAULT_DROPOUT_RATE
-from nff.nn.modules import (
-    SchNetConv,
-    NodeMultiTaskReadOut,
-    get_rij,
-    add_stress
-)
+from nff.nn.modules import SchNetConv, NodeMultiTaskReadOut, get_rij, add_stress
 
 
 from nff.nn.modules.diabat import DiabaticReadout
@@ -17,7 +12,6 @@ from nff.utils.scatter import scatter_add
 
 
 class SchNet(nn.Module):
-
     """SchNet implementation with continous filter.
 
     Attributes:
@@ -87,8 +81,7 @@ class SchNet(nn.Module):
 
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
 
-        readoutdict = modelparams.get(
-            "readoutdict", get_default_readout(n_atom_basis))
+        readoutdict = modelparams.get("readoutdict", get_default_readout(n_atom_basis))
         post_readout = modelparams.get("post_readout", None)
 
         # convolutions
@@ -107,22 +100,17 @@ class SchNet(nn.Module):
         )
 
         # ReadOut
-        self.atomwisereadout = NodeMultiTaskReadOut(
-            multitaskdict=readoutdict, post_readout=post_readout
-        )
+        self.atomwisereadout = NodeMultiTaskReadOut(multitaskdict=readoutdict, post_readout=post_readout)
         self.device = None
         self.cutoff = cutoff
 
     def set_cutoff(self):
         if hasattr(self, "cutoff"):
             return
-        gauss_centers = (self.convolutions[0].moduledict
-                         ['message_edge_filter'][0].offsets)
+        gauss_centers = self.convolutions[0].moduledict["message_edge_filter"][0].offsets
         self.cutoff = gauss_centers[-1] - gauss_centers[0]
 
-    def convolve(self,
-                 batch,
-                 xyz=None):
+    def convolve(self, batch, xyz=None):
         """
 
         Apply the convolutional layers to the batch.
@@ -152,10 +140,7 @@ class SchNet(nn.Module):
         # get r_ij including offsets and excluding
         # anything in the neighbor skin
         self.set_cutoff()
-        r_ij, a = get_rij(xyz=xyz,
-                          batch=batch,
-                          nbrs=a,
-                          cutoff=self.cutoff)
+        r_ij, a = get_rij(xyz=xyz, batch=batch, nbrs=a, cutoff=self.cutoff)
         dist = r_ij.pow(2).sum(1).sqrt()
         e = dist[:, None]
 
@@ -169,17 +154,12 @@ class SchNet(nn.Module):
         return r, N, xyz, r_ij, a
 
     def V_ex(self, r_ij, nbr_list, xyz):
-
         dist = (r_ij).pow(2).sum(1).sqrt()
-        potential = ((dist.reciprocal() * self.sigma).pow(self.power))
+        potential = (dist.reciprocal() * self.sigma).pow(self.power)
 
         return scatter_add(potential, nbr_list[:, 0], dim_size=xyz.shape[0])[:, None]
 
-    def forward(self,
-                batch,
-                xyz=None,
-                requires_stress=False,
-                **kwargs):
+    def forward(self, batch, xyz=None, requires_stress=False, **kwargs):
         """Summary
         Args:
             batch (dict): dictionary of props
@@ -196,47 +176,47 @@ class SchNet(nn.Module):
         if getattr(self, "excl_vol", None):
             # Excluded Volume interactions
             r_ex = self.V_ex(r_ij, a, xyz)
-            r['energy'] += r_ex
+            r["energy"] += r_ex
 
         results = batch_and_sum(r, N, list(batch.keys()), xyz)
         if requires_stress:
-            results = add_stress(batch=batch,
-                                 all_results=results,
-                                 nbrs=a,
-                                 r_ij=r_ij)
+            results = add_stress(batch=batch, all_results=results, nbrs=a, r_ij=r_ij)
 
         return results
 
 
 class SchNetDiabat(SchNet):
     def __init__(self, modelparams):
-
         super().__init__(modelparams)
 
         self.diabatic_readout = DiabaticReadout(
             diabat_keys=modelparams["diabat_keys"],
             grad_keys=modelparams["grad_keys"],
-            energy_keys=modelparams["output_keys"])
+            energy_keys=modelparams["output_keys"],
+        )
 
-    def forward(self,
-                batch,
-                xyz=None,
-                add_nacv=False,
-                add_grad=True,
-                add_gap=True,
-                extra_grads=None,
-                try_speedup=False,
-                **kwargs):
-
+    def forward(
+        self,
+        batch,
+        xyz=None,
+        add_nacv=False,
+        add_grad=True,
+        add_gap=True,
+        extra_grads=None,
+        try_speedup=False,
+        **kwargs,
+    ):
         r, N, xyz = self.convolve(batch, xyz)
         output = self.atomwisereadout(r)
-        results = self.diabatic_readout(batch=batch,
-                                        output=output,
-                                        xyz=xyz,
-                                        add_nacv=add_nacv,
-                                        add_grad=add_grad,
-                                        add_gap=add_gap,
-                                        extra_grads=extra_grads,
-                                        try_speedup=try_speedup)
+        results = self.diabatic_readout(
+            batch=batch,
+            output=output,
+            xyz=xyz,
+            add_nacv=add_nacv,
+            add_grad=add_grad,
+            add_gap=add_gap,
+            extra_grads=extra_grads,
+            try_speedup=try_speedup,
+        )
 
         return results

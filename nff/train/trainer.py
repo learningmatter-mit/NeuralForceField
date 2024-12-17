@@ -118,9 +118,7 @@ class Trainer:
         # how many times you've called loss.backward()
         self.back_count = 0
         # maximum number of batches to iterate through
-        self.max_batch_iters = (
-            max_batch_iters if (max_batch_iters is not None) else len(self.train_loader)
-        )
+        self.max_batch_iters = max_batch_iters if (max_batch_iters is not None) else len(self.train_loader)
         self.model_kwargs = model_kwargs if (model_kwargs is not None) else {}
         self.batch_stop = False
         self.nloss = 0
@@ -165,9 +163,7 @@ class Trainer:
 
     def _check_is_parallel(self):
         data_par = isinstance(self._model, torch.nn.DataParallel)
-        dist_dat_par = isinstance(
-            self._model, torch.nn.parallel.DistributedDataParallel
-        )
+        dist_dat_par = isinstance(self._model, torch.nn.parallel.DistributedDataParallel)
         return any((data_par, dist_dat_par))
 
     def _load_model_state_dict(self, state_dict):
@@ -227,9 +223,7 @@ class Trainer:
                 hook.scheduler.optimizer = self.optimizer
 
     def store_checkpoint(self):
-        chkpt = os.path.join(
-            self.checkpoint_path, "checkpoint-" + str(self.epoch) + ".pth.tar"
-        )
+        chkpt = os.path.join(self.checkpoint_path, "checkpoint-" + str(self.epoch) + ".pth.tar")
         torch.save(self.state_dict, chkpt)
 
         chpts = [f for f in os.listdir(self.checkpoint_path) if f.endswith(".pth.tar")]
@@ -249,9 +243,7 @@ class Trainer:
                 ]
             )
 
-        chkpt = os.path.join(
-            self.checkpoint_path, "checkpoint-" + str(epoch) + ".pth.tar"
-        )
+        chkpt = os.path.join(self.checkpoint_path, "checkpoint-" + str(epoch) + ".pth.tar")
         self.state_dict = torch.load(chkpt, map_location="cpu")
 
     def loss_backward(self, loss):
@@ -387,9 +379,7 @@ class Trainer:
                     for hook in self.hooks:
                         hook.on_batch_begin(self, batch)
 
-                    batch, results, mini_loss, _ = self.call_and_loss(
-                        batch=batch, device=device, calc_loss=True
-                    )
+                    batch, results, mini_loss, _ = self.call_and_loss(batch=batch, device=device, calc_loss=True)
 
                     if not torch.isnan(mini_loss):
                         loss += mini_loss.cpu().detach().to(device)
@@ -468,9 +458,7 @@ class Trainer:
 
         # each parallel folder just has the name of its global rank
 
-        par_folders = [
-            os.path.join(self.model_path, str(i)) for i in range(self.world_size)
-        ]
+        par_folders = [os.path.join(self.model_path, str(i)) for i in range(self.world_size)]
         self_folder = par_folders[self.global_rank]
 
         # if the folder of this global rank doesn't exist yet then
@@ -543,9 +531,7 @@ class Trainer:
             # average the losses according to number of atoms
             # or molecules in each
             denom = sum(list(n_vals.values()))
-            avg_loss = (
-                sum([n_vals[key] * loaded_vals[key] for key in n_vals.keys()]) / denom
-            )
+            avg_loss = sum([n_vals[key] * loaded_vals[key] for key in n_vals.keys()]) / denom
         else:
             # add the losses
             avg_loss = np.sum(list(loaded_vals.values()))
@@ -613,9 +599,7 @@ class Trainer:
                 vsize = val_batch["nxyz"].size(0)
 
             n_val += vsize
-            val_batch, results, _, use_device = self.call_and_loss(
-                batch=val_batch, device=device, calc_loss=False
-            )
+            val_batch, results, _, use_device = self.call_and_loss(batch=val_batch, device=device, calc_loss=False)
 
             # detach from the graph
             results = batch_to(batch_detach(results), use_device)

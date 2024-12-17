@@ -1,8 +1,6 @@
-import os
 import numpy as np
 import torch
 from typing import Union, Tuple
-import copy
 
 from ase import Atoms
 from ase.neighborlist import neighbor_list
@@ -19,7 +17,7 @@ from nff.md.colvars import ColVar
 
 
 nonbondedMethod = {
-    'NonPeriodic': app.CutoffNonPeriodic,
+    "NonPeriodic": app.CutoffNonPeriodic,
 }
 
 
@@ -33,40 +31,43 @@ class BiasBase(Calculator):
         equil_temp: float temperature of the simulation (important for extended system dynamics)
     """
 
-    implemented_properties = ['energy', 'forces',
-                              'energy_unbiased', 'forces_unbiased',
-                              'cv_vals', 'ext_pos', 'cv_invmass',
-                              'grad_length', 'cv_grad_lengths',
-                              'cv_dot_PES', 'const_vals']
+    implemented_properties = [
+        "energy",
+        "forces",
+        "energy_unbiased",
+        "forces_unbiased",
+        "cv_vals",
+        "ext_pos",
+        "cv_invmass",
+        "grad_length",
+        "cv_grad_lengths",
+        "cv_dot_PES",
+        "const_vals",
+    ]
 
-    def __init__(self,
-                 mmparms,
-                 cv_defs: list[dict],
-                 equil_temp: float = 300.0,
-                 extra_constraints: list[dict] = None,
-                 **kwargs):
-
+    def __init__(
+        self, mmparms, cv_defs: list[dict], equil_temp: float = 300.0, extra_constraints: list[dict] = None, **kwargs
+    ):
         Calculator.__init__(self, **kwargs)
 
         # OpenMM setup
-        if 'prmtop' in mmparms.keys():
-            parm = pmd.load_file(mmparms['prmtop'])
-        elif 'parm7' in mmparms.keys():
+        if "prmtop" in mmparms.keys():
+            parm = pmd.load_file(mmparms["prmtop"])
+        elif "parm7" in mmparms.keys():
             # for a list with parm7 and rst7
-            parm = pmd.load_file(mmparms['parm7'], mmparms['rst7'])
+            parm = pmd.load_file(mmparms["parm7"], mmparms["rst7"])
         else:
             raise NotImplemented
         # in case we need PBC, the pdb contains the box values
-        pdb = app.PDBFile(mmparms['pdb'])
+        app.PDBFile(mmparms["pdb"])
 
-        system = parm.createSystem(nonbondedMethod=nonbondedMethod[mmparms['nonbonded']],
-                                   nonbondedCutoff=mmparms['nonbonded_cutoff'] * unit.nanometers,
-                                   )
-        platform = omm.Platform.getPlatformByName(mmparms['platform'])
-        # this will not be used
-        integrator = omm.LangevinIntegrator(
-            0.0 * unit.kelvin, 1.0 / unit.picoseconds, 0.1 * unit.picoseconds
+        system = parm.createSystem(
+            nonbondedMethod=nonbondedMethod[mmparms["nonbonded"]],
+            nonbondedCutoff=mmparms["nonbonded_cutoff"] * unit.nanometers,
         )
+        platform = omm.Platform.getPlatformByName(mmparms["platform"])
+        # this will not be used
+        integrator = omm.LangevinIntegrator(0.0 * unit.kelvin, 1.0 / unit.picoseconds, 0.1 * unit.picoseconds)
         self.context = omm.Context(system, integrator, platform)
 
         # BiasBase setup
@@ -91,30 +92,29 @@ class BiasBase(Calculator):
         self.conf_k = np.zeros(shape=(self.num_cv, 1))
 
         for ii, cv in enumerate(self.cv_defs):
-            if 'range' in cv.keys():
-                self.ext_coords[ii] = cv['range'][0]
-                self.ranges[ii] = cv['range']
+            if "range" in cv.keys():
+                self.ext_coords[ii] = cv["range"][0]
+                self.ranges[ii] = cv["range"]
             else:
-                raise PropertyNotPresent('range')
+                raise PropertyNotPresent("range")
 
-            if 'margin' in cv.keys():
-                self.margins[ii] = cv['margin']
+            if "margin" in cv.keys():
+                self.margins[ii] = cv["margin"]
 
-            if 'conf_k' in cv.keys():
-                self.conf_k[ii] = cv['conf_k']
+            if "conf_k" in cv.keys():
+                self.conf_k[ii] = cv["conf_k"]
 
-            if 'ext_k' in cv.keys():
-                self.ext_k[ii] = cv['ext_k']
-            elif 'ext_sigma' in cv.keys():
-                self.ext_k[ii] = (units.kB * self.equil_temp) / (
-                    cv['ext_sigma'] * cv['ext_sigma'])
+            if "ext_k" in cv.keys():
+                self.ext_k[ii] = cv["ext_k"]
+            elif "ext_sigma" in cv.keys():
+                self.ext_k[ii] = (units.kB * self.equil_temp) / (cv["ext_sigma"] * cv["ext_sigma"])
             else:
-                raise PropertyNotPresent('ext_k/ext_sigma')
+                raise PropertyNotPresent("ext_k/ext_sigma")
 
-            if 'type' not in cv.keys():
-                self.cv_defs[ii]['type'] = 'not_angle'
+            if "type" not in cv.keys():
+                self.cv_defs[ii]["type"] = "not_angle"
             else:
-                self.cv_defs[ii]['type'] = cv['type']
+                self.cv_defs[ii]["type"] = cv["type"]
 
         self.constraints = None
         self.num_const = 0
@@ -123,28 +123,25 @@ class BiasBase(Calculator):
             for cv in extra_constraints:
                 self.constraints.append({})
 
-                self.constraints[-1]['func'] = CV(cv["definition"])
+                self.constraints[-1]["func"] = CV(cv["definition"])
 
-                self.constraints[-1]['pos'] = cv['pos']
-                if 'k' in cv.keys():
-                    self.constraints[-1]['k'] = cv['k']
-                elif 'sigma' in cv.keys():
-                    self.constraints[-1]['k'] = (units.kB * self.equil_temp) / (
-                        cv['sigma'] * cv['sigma'])
+                self.constraints[-1]["pos"] = cv["pos"]
+                if "k" in cv.keys():
+                    self.constraints[-1]["k"] = cv["k"]
+                elif "sigma" in cv.keys():
+                    self.constraints[-1]["k"] = (units.kB * self.equil_temp) / (cv["sigma"] * cv["sigma"])
                 else:
-                    raise PropertyNotPresent('k/sigma')
+                    raise PropertyNotPresent("k/sigma")
 
-                if 'type' not in cv.keys():
-                    self.constraints[-1]['type'] = 'not_angle'
+                if "type" not in cv.keys():
+                    self.constraints[-1]["type"] = "not_angle"
                 else:
-                    self.constraints[-1]['type'] = cv['type']
+                    self.constraints[-1]["type"] = cv["type"]
 
             self.num_const = len(self.constraints)
 
         self.cvs = np.zeros(shape=(self.num_cv, 1))
-        self.cv_grads = np.zeros(shape=(self.num_cv,
-                                        atoms.get_positions().shape[0],
-                                        atoms.get_positions().shape[1]))
+        self.cv_grads = np.zeros(shape=(self.num_cv, atoms.get_positions().shape[0], atoms.get_positions().shape[1]))
         self.cv_grad_lens = np.zeros(shape=(self.num_cv, 1))
         self.cv_invmass = np.zeros(shape=(self.num_cv, 1))
         self.cv_dot_PES = np.zeros(shape=(self.num_cv, 1))
@@ -159,15 +156,10 @@ class BiasBase(Calculator):
         pass
 
     def _check_boundaries(self, xi: np.ndarray):
-        in_bounds = ((xi <= self.ranges[:, 1]).all() and
-                     (xi >= self.ranges[:, 0]).all())
+        in_bounds = (xi <= self.ranges[:, 1]).all() and (xi >= self.ranges[:, 0]).all()
         return in_bounds
 
-    def diff(self,
-             a: Union[np.ndarray, float],
-             b: Union[np.ndarray, float],
-             cv_type: str
-             ) -> Union[np.ndarray, float]:
+    def diff(self, a: Union[np.ndarray, float], b: Union[np.ndarray, float], cv_type: str) -> Union[np.ndarray, float]:
         """get difference of elements of numbers or arrays
         in range(-inf, inf) if is_angle is False or in range(-pi, pi) if is_angle is True
         Args:
@@ -180,12 +172,10 @@ class BiasBase(Calculator):
 
         # wrap to range(-pi,pi) for angle
         if isinstance(diff, np.ndarray) and cv_type == "angle":
-
             diff[diff > np.pi] -= 2 * np.pi
             diff[diff < -np.pi] += 2 * np.pi
 
         elif cv_type == "angle":
-
             if diff < -np.pi:
                 diff += 2 * np.pi
             elif diff > np.pi:
@@ -193,10 +183,11 @@ class BiasBase(Calculator):
 
         return diff
 
-    def step_bias(self,
-                  xi: np.ndarray,
-                  grad_xi: np.ndarray,
-                  ) -> Tuple[np.ndarray, np.ndarray]:
+    def step_bias(
+        self,
+        xi: np.ndarray,
+        grad_xi: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """energy and gradient of bias
 
         Args:
@@ -215,18 +206,18 @@ class BiasBase(Calculator):
 
         for i in range(self.num_cv):
             # harmonic coupling of extended coordinate to reaction coordinate
-            dxi = self.diff(xi[i], self.ext_coords[i], self.cv_defs[i]['type'])
+            dxi = self.diff(xi[i], self.ext_coords[i], self.cv_defs[i]["type"])
             self.ext_forces[i] = self.ext_k[i] * dxi
             bias_grad += self.ext_k[i] * dxi * grad_xi[i]
             bias_ener += 0.5 * self.ext_k[i] * dxi**2
 
             # harmonic walls for confinement to range of interest
             if self.ext_coords[i] > (self.ranges[i][1] + self.margins[i]):
-                r = self.diff(self.ranges[i][1] + self.margins[i], self.ext_coords[i], self.cv_defs[i]['type'])
+                r = self.diff(self.ranges[i][1] + self.margins[i], self.ext_coords[i], self.cv_defs[i]["type"])
                 self.ext_forces[i] += self.conf_k[i] * r
 
             elif self.ext_coords[i] < (self.ranges[i][0] - self.margins[i]):
-                r = self.diff(self.ranges[i][0] - self.margins[i], self.ext_coords[i], self.cv_defs[i]['type'])
+                r = self.diff(self.ranges[i][0] - self.margins[i], self.ext_coords[i], self.cv_defs[i]["type"])
                 self.ext_forces[i] += self.conf_k[i] * r
 
         self._update_bias(xi)
@@ -234,10 +225,11 @@ class BiasBase(Calculator):
 
         return bias_ener, bias_grad
 
-    def harmonic_constraint(self,
-                            xi: np.ndarray,
-                            grad_xi: np.ndarray,
-                            ) -> Tuple[np.ndarray, np.ndarray]:
+    def harmonic_constraint(
+        self,
+        xi: np.ndarray,
+        grad_xi: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """energy and gradient of additional harmonic constraint
 
         Args:
@@ -254,20 +246,28 @@ class BiasBase(Calculator):
         constr_ener = 0.0
 
         for i in range(self.num_const):
-            dxi = self.diff(xi[i], self.constraints[i]['pos'], self.constraints[i]['type'])
-            constr_grad += self.constraints[i]['k'] * dxi * grad_xi[i]
-            constr_ener += 0.5 * self.constraints[i]['k'] * dxi**2
+            dxi = self.diff(xi[i], self.constraints[i]["pos"], self.constraints[i]["type"])
+            constr_grad += self.constraints[i]["k"] * dxi * grad_xi[i]
+            constr_ener += 0.5 * self.constraints[i]["k"] * dxi**2
 
         return constr_ener, constr_grad
 
     def calculate(
-            self,
-            atoms=None,
-            properties=['energy', 'forces',
-                        'energy_unbiased', 'forces_unbiased',
-                        'cv_vals', 'cv_invmass',
-                        'grad_length', 'cv_grad_lengths', 'cv_dot_PES', 'const_vals'],
-            system_changes=all_changes,
+        self,
+        atoms=None,
+        properties=[
+            "energy",
+            "forces",
+            "energy_unbiased",
+            "forces_unbiased",
+            "cv_vals",
+            "cv_invmass",
+            "grad_length",
+            "cv_grad_lengths",
+            "cv_dot_PES",
+            "const_vals",
+        ],
+        system_changes=all_changes,
     ):
         """Calculates the desired properties for the given AtomsBatch.
 
@@ -290,12 +290,13 @@ class BiasBase(Calculator):
         new_positions = ([omm.Vec3(*xyz.tolist()) for xyz in numpy_pos]) * unit.nanometers
         self.context.setPositions(new_positions)
         state = self.context.getState(getForces=True, getEnergy=True)
-        model_energy = (state.getPotentialEnergy().value_in_unit(
-                        unit.kilocalories / unit.moles) / const.EV_TO_KCAL_MOL)
-        model_forces = (state.getForces(asNumpy=True).value_in_unit(
-                        unit.kilocalories / (unit.moles * unit.angstroms)) / const.EV_TO_KCAL_MOL)
+        model_energy = state.getPotentialEnergy().value_in_unit(unit.kilocalories / unit.moles) / const.EV_TO_KCAL_MOL
+        model_forces = (
+            state.getForces(asNumpy=True).value_in_unit(unit.kilocalories / (unit.moles * unit.angstroms))
+            / const.EV_TO_KCAL_MOL
+        )
 
-        inv_masses = 1. / atoms.get_masses()
+        inv_masses = 1.0 / atoms.get_masses()
         M_inv = np.diag(np.repeat(inv_masses, 3).flatten())
 
         for ii, cv_def in enumerate(self.cv_defs):
@@ -312,31 +313,31 @@ class BiasBase(Calculator):
 
         if self.constraints:
             consts = np.zeros(shape=(self.num_const, 1))
-            const_grads = np.zeros(shape=(self.num_const,
-                                          atoms.get_positions().shape[0],
-                                          atoms.get_positions().shape[1]))
+            const_grads = np.zeros(
+                shape=(self.num_const, atoms.get_positions().shape[0], atoms.get_positions().shape[1])
+            )
             for ii, const_dict in enumerate(self.constraints):
-                consts[ii], const_grads[ii] = const_dict['func'](atoms)
+                consts[ii], const_grads[ii] = const_dict["func"](atoms)
 
             const_ener, const_grad = self.harmonic_constraint(consts, const_grads)
             energy += const_ener
             forces -= const_grad
 
         self.results = {
-            'energy': energy.reshape(-1),
-            'forces': forces.reshape(-1, 3),
-            'energy_unbiased': model_energy,
-            'forces_unbiased': model_forces.reshape(-1, 3),
-            'grad_length': np.linalg.norm(model_forces),
-            'cv_vals': self.cvs,
-            'cv_grad_lengths': self.cv_grad_lens,
-            'cv_invmass': self.cv_invmass,
-            'cv_dot_PES': self.cv_dot_PES,
-            'ext_pos': self.ext_coords,
+            "energy": energy.reshape(-1),
+            "forces": forces.reshape(-1, 3),
+            "energy_unbiased": model_energy,
+            "forces_unbiased": model_forces.reshape(-1, 3),
+            "grad_length": np.linalg.norm(model_forces),
+            "cv_vals": self.cvs,
+            "cv_grad_lengths": self.cv_grad_lens,
+            "cv_invmass": self.cv_invmass,
+            "cv_dot_PES": self.cv_dot_PES,
+            "ext_pos": self.ext_coords,
         }
 
         if self.constraints:
-            self.results['const_vals'] = consts
+            self.results["const_vals"] = consts
 
 
 class eABF(BiasBase):
@@ -353,64 +354,54 @@ class eABF(BiasBase):
         nfull: numer of samples need for full application of bias force
     """
 
-    def __init__(self,
-                 mmparms,
-                 cv_defs: list[dict],
-                 dt: float,
-                 friction_per_ps: float,
-                 equil_temp: float = 300.0,
-                 nfull: int = 100,
-                 **kwargs):
-
-        BiasBase.__init__(self,
-                          mmparms=mmparms,
-                          cv_defs=cv_defs,
-                          equil_temp=equil_temp,
-                          **kwargs)
+    def __init__(
+        self,
+        mmparms,
+        cv_defs: list[dict],
+        dt: float,
+        friction_per_ps: float,
+        equil_temp: float = 300.0,
+        nfull: int = 100,
+        **kwargs,
+    ):
+        BiasBase.__init__(self, mmparms=mmparms, cv_defs=cv_defs, equil_temp=equil_temp, **kwargs)
 
         self.ext_dt = dt * units.fs
         self.nfull = nfull
 
         for ii, cv in enumerate(self.cv_defs):
-            if 'bin_width' in cv.keys():
-                self.ext_binwidth[ii] = cv['bin_width']
-            elif 'ext_sigma' in cv.keys():
-                self.ext_binwidth[ii] = cv['ext_sigma']
+            if "bin_width" in cv.keys():
+                self.ext_binwidth[ii] = cv["bin_width"]
+            elif "ext_sigma" in cv.keys():
+                self.ext_binwidth[ii] = cv["ext_sigma"]
             else:
-                raise PropertyNotPresent('bin_width')
+                raise PropertyNotPresent("bin_width")
 
-            if 'ext_pos' in cv.keys():
+            if "ext_pos" in cv.keys():
                 # set initial position
-                self.ext_coords[ii] = cv['ext_pos']
+                self.ext_coords[ii] = cv["ext_pos"]
             else:
-                raise PropertyNotPresent('ext_pos')
+                raise PropertyNotPresent("ext_pos")
 
-            if 'ext_mass' in cv.keys():
-                self.ext_masses[ii] = cv['ext_mass']
+            if "ext_mass" in cv.keys():
+                self.ext_masses[ii] = cv["ext_mass"]
             else:
-                raise PropertyNotPresent('ext_mass')
+                raise PropertyNotPresent("ext_mass")
 
         # initialize extended system at target temp of MD simulation
         for i in range(self.num_cv):
-            self.ext_vel[i] = (np.random.randn() *
-                               np.sqrt(self.equil_temp * units.kB /
-                                       self.ext_masses[i]))
+            self.ext_vel[i] = np.random.randn() * np.sqrt(self.equil_temp * units.kB / self.ext_masses[i])
 
         self.friction = friction_per_ps * 1.0e-3 / units.fs
-        self.rand_push = np.sqrt(self.equil_temp * self.friction *
-                                 self.ext_dt * units.kB / (2.0e0 * self.ext_masses))
+        self.rand_push = np.sqrt(self.equil_temp * self.friction * self.ext_dt * units.kB / (2.0e0 * self.ext_masses))
         self.prefac1 = 2.0 / (2.0 + self.friction * self.ext_dt)
-        self.prefac2 = ((2.0e0 - self.friction * self.ext_dt) /
-                        (2.0e0 + self.friction * self.ext_dt))
+        self.prefac2 = (2.0e0 - self.friction * self.ext_dt) / (2.0e0 + self.friction * self.ext_dt)
 
         # set up all grid accumulators for ABF
         self.nbins_per_dim = np.array([1 for i in range(self.num_cv)])
         self.grid = []
         for i in range(self.num_cv):
-            self.nbins_per_dim[i] = (
-                int(np.ceil(np.abs(self.ranges[i, 1] - self.ranges[i, 0]) /
-                            self.ext_binwidth[i]))
-            )
+            self.nbins_per_dim[i] = int(np.ceil(np.abs(self.ranges[i, 1] - self.ranges[i, 0]) / self.ext_binwidth[i]))
             self.grid.append(
                 np.arange(
                     self.ranges[i, 0] + self.ext_binwidth[i] / 2,
@@ -421,17 +412,13 @@ class eABF(BiasBase):
         self.nbins = np.prod(self.nbins_per_dim)
 
         # accumulators and conditional averages
-        self.bias = np.zeros(
-            (self.num_cv, *self.nbins_per_dim), dtype=float
-        )
+        self.bias = np.zeros((self.num_cv, *self.nbins_per_dim), dtype=float)
         self.var_force = np.zeros_like(self.bias)
         self.m2_force = np.zeros_like(self.bias)
 
         self.cv_crit = np.copy(self.bias)
 
-        self.histogram = np.zeros(
-            self.nbins_per_dim, dtype=float
-        )
+        self.histogram = np.zeros(self.nbins_per_dim, dtype=float)
         self.ext_hist = np.zeros_like(self.histogram)
 
     def get_index(self, xi: np.ndarray) -> tuple:
@@ -443,26 +430,18 @@ class eABF(BiasBase):
         """
         bin_x = np.zeros(shape=xi.shape, dtype=np.int64)
         for i in range(self.num_cv):
-            bin_x[i] = int(np.floor(np.abs(xi[i] - self.ranges[i, 0]) /
-                                    self.ext_binwidth[i]))
+            bin_x[i] = int(np.floor(np.abs(xi[i] - self.ranges[i, 0]) / self.ext_binwidth[i]))
         return tuple(bin_x.reshape(1, -1)[0])
 
-    def _update_bias(self,
-                     xi: np.ndarray):
+    def _update_bias(self, xi: np.ndarray):
         if self._check_boundaries(self.ext_coords):
-
             bink = self.get_index(self.ext_coords)
             self.ext_hist[bink] += 1
 
             # linear ramp function
-            ramp = (
-                1.0
-                if self.ext_hist[bink] > self.nfull
-                else self.ext_hist[bink] / self.nfull
-            )
+            ramp = 1.0 if self.ext_hist[bink] > self.nfull else self.ext_hist[bink] / self.nfull
 
             for i in range(self.num_cv):
-
                 # apply bias force on extended system
                 (
                     self.bias[i][bink],
@@ -472,8 +451,7 @@ class eABF(BiasBase):
                     self.ext_hist[bink],
                     self.bias[i][bink],
                     self.m2_force[i][bink],
-                    self.ext_k[i] *
-                    self.diff(xi[i], self.ext_coords[i], self.cv_defs[i]['type']),
+                    self.ext_k[i] * self.diff(xi[i], self.ext_coords[i], self.cv_defs[i]["type"]),
                 )
                 self.ext_forces[i] -= ramp * self.bias[i][bink]
 
@@ -493,7 +471,6 @@ class eABF(BiasBase):
         """
 
     def _propagate_ext(self):
-
         self.ext_rand_gauss = np.random.randn(len(self.ext_vel), 1)
 
         self.ext_vel += self.rand_push * self.ext_rand_gauss
@@ -502,14 +479,13 @@ class eABF(BiasBase):
 
         # wrap to range(-pi,pi) for angle
         for ii in range(self.num_cv):
-            if self.cv_defs[ii]['type'] == 'angle':
+            if self.cv_defs[ii]["type"] == "angle":
                 if self.ext_coords[ii] > np.pi:
                     self.ext_coords[ii] -= 2 * np.pi
                 elif self.ext_coords[ii] < -np.pi:
                     self.ext_coords[ii] += 2 * np.pi
 
     def _up_extvel(self):
-
         self.ext_vel *= self.prefac2
         self.ext_vel += self.rand_push * self.ext_rand_gauss
         self.ext_vel += 0.5e0 * self.ext_dt * self.ext_forces / self.ext_masses
@@ -532,26 +508,29 @@ class WTMeABF(eABF):
         well_tempered_temp: ficticious temperature for the well-tempered scaling
     """
 
-    def __init__(self,
-                 mmparms,
-                 cv_defs: list[dict],
-                 dt: float,
-                 friction_per_ps: float,
-                 equil_temp: float = 300.0,
-                 nfull: int = 100,
-                 hill_height: float = 0.0,
-                 hill_drop_freq: int = 20,
-                 well_tempered_temp: float = 4000.0,
-                 **kwargs):
-
-        eABF.__init__(self,
-                      mmparms=mmparms,
-                      cv_defs=cv_defs,
-                      equil_temp=equil_temp,
-                      dt=dt,
-                      friction_per_ps=friction_per_ps,
-                      nfull=nfull,
-                      **kwargs)
+    def __init__(
+        self,
+        mmparms,
+        cv_defs: list[dict],
+        dt: float,
+        friction_per_ps: float,
+        equil_temp: float = 300.0,
+        nfull: int = 100,
+        hill_height: float = 0.0,
+        hill_drop_freq: int = 20,
+        well_tempered_temp: float = 4000.0,
+        **kwargs,
+    ):
+        eABF.__init__(
+            self,
+            mmparms=mmparms,
+            cv_defs=cv_defs,
+            equil_temp=equil_temp,
+            dt=dt,
+            friction_per_ps=friction_per_ps,
+            nfull=nfull,
+            **kwargs,
+        )
 
         self.hill_height = hill_height
         self.hill_drop_freq = hill_drop_freq
@@ -562,36 +541,28 @@ class WTMeABF(eABF):
         self.center = []
 
         for ii, cv in enumerate(self.cv_defs):
-            if 'hill_std' in cv.keys():
-                self.hill_std[ii] = cv['hill_std']
-                self.hill_var[ii] = cv['hill_std'] * cv['hill_std']
+            if "hill_std" in cv.keys():
+                self.hill_std[ii] = cv["hill_std"]
+                self.hill_var[ii] = cv["hill_std"] * cv["hill_std"]
             else:
-                raise PropertyNotPresent('hill_std')
+                raise PropertyNotPresent("hill_std")
 
         # set up all grid for MetaD potential
         self.metapot = np.zeros_like(self.histogram)
         self.metaforce = np.zeros_like(self.bias)
 
-    def _update_bias(self,
-                     xi: np.ndarray):
-
+    def _update_bias(self, xi: np.ndarray):
         mtd_forces = self.get_wtm_force(self.ext_coords)
         self.call_count += 1
 
         if self._check_boundaries(self.ext_coords):
-
             bink = self.get_index(self.ext_coords)
             self.ext_hist[bink] += 1
 
             # linear ramp function
-            ramp = (
-                1.0
-                if self.ext_hist[bink] > self.nfull
-                else self.ext_hist[bink] / self.nfull
-            )
+            ramp = 1.0 if self.ext_hist[bink] > self.nfull else self.ext_hist[bink] / self.nfull
 
             for i in range(self.num_cv):
-
                 # apply bias force on extended system
                 (
                     self.bias[i][bink],
@@ -601,8 +572,7 @@ class WTMeABF(eABF):
                     self.ext_hist[bink],
                     self.bias[i][bink],
                     self.m2_force[i][bink],
-                    self.ext_k[i] *
-                    self.diff(xi[i], self.ext_coords[i], self.cv_defs[i]['type']),
+                    self.ext_k[i] * self.diff(xi[i], self.ext_coords[i], self.cv_defs[i]["type"]),
                 )
                 self.ext_forces[i] -= ramp * self.bias[i][bink] + mtd_forces[i]
 
@@ -626,8 +596,7 @@ class WTMeABF(eABF):
 
         return bias_force
 
-    def _accumulate_wtm_force(self,
-                              xi: np.ndarray) -> Tuple[list, float]:
+    def _accumulate_wtm_force(self, xi: np.ndarray) -> Tuple[list, float]:
         """compute numerical WTM bias force from a grid
         Right now this works only for 1D CVs
         Args:
@@ -638,13 +607,11 @@ class WTMeABF(eABF):
 
         bink = self.get_index(xi)
         if self.call_count % self.hill_drop_freq == 0:
+            w = self.hill_height * np.exp(-self.metapot[bink] / (units.kB * self.well_tempered_temp))
 
-            w = self.hill_height * np.exp(
-                -self.metapot[bink]
-                / (units.kB * self.well_tempered_temp)
+            dx = self.diff(self.grid[0], xi[0], self.cv_defs[0]["type"]).reshape(
+                -1,
             )
-
-            dx = self.diff(self.grid[0], xi[0], self.cv_defs[0]['type']).reshape(-1,)
             epot = w * np.exp(-(dx * dx) / (2.0 * self.hill_var[0]))
             self.metapot += epot
             self.metaforce[0] -= epot * dx / self.hill_var[0]
@@ -672,7 +639,7 @@ class WTMeABF(eABF):
 
         dist_to_centers = []
         for ii in range(self.num_cv):
-            dist_to_centers.append(self.diff(xi[ii], np.asarray(self.center)[:, ii], self.cv_defs[ii]['type']))
+            dist_to_centers.append(self.diff(xi[ii], np.asarray(self.center)[:, ii], self.cv_defs[ii]["type"]))
 
         dist_to_centers = np.asarray(dist_to_centers)
 
@@ -683,9 +650,7 @@ class WTMeABF(eABF):
 
         # can get slow in long run, so only iterate over significant elements
         for i in np.nditer(ind.compressed(), flags=["zerosize_ok"]):
-            w = self.hill_height * np.exp(
-                -local_pot / (units.kB * self.well_tempered_temp)
-            )
+            w = self.hill_height * np.exp(-local_pot / (units.kB * self.well_tempered_temp))
 
             epot = w * np.exp(-np.power(dist_to_centers[:, i] / self.hill_std, 2).sum() / 2.0)
             local_pot += epot
@@ -694,11 +659,7 @@ class WTMeABF(eABF):
         return bias_force.reshape(-1, 1), local_pot
 
 
-def welford_var(
-        count: float,
-        mean: float,
-        M2: float,
-        newValue: float) -> Tuple[float, float, float]:
+def welford_var(count: float, mean: float, M2: float, newValue: float) -> Tuple[float, float, float]:
     """On-the-fly estimate of sample variance by Welford's online algorithm
     Args:
         count: current number of samples (with new one)

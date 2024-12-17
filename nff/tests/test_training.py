@@ -22,17 +22,16 @@ def test_training(device, tmpdir):
     # series of convolution layers with continuous filters. Here, we are going to create a simple model using the
     # hyperparameters given on `params`:
     params = {
-         "n_atom_basis": 256,
-         "n_filters": 256,
-         "n_gaussians": 32,
-         "n_convolutions": 4,
-         "cutoff": 5.0,
-         "trainable_gauss": True,
-         "dropout_rate": 0.2,
+        "n_atom_basis": 256,
+        "n_filters": 256,
+        "n_gaussians": 32,
+        "n_convolutions": 4,
+        "cutoff": 5.0,
+        "trainable_gauss": True,
+        "dropout_rate": 0.2,
     }
 
     model = get_model(params)
-
 
     # ## Creating a trainer
 

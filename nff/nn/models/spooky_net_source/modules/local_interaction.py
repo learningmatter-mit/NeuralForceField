@@ -39,7 +39,7 @@ class LocalInteraction(nn.Module):
         num_residual: int,
         activation: str = "swish",
     ) -> None:
-        """ Initializes the LocalInteraction class. """
+        """Initializes the LocalInteraction class."""
         super(LocalInteraction, self).__init__()
         self.radial_s = nn.Linear(num_basis_functions, num_features, bias=False)
         self.radial_p = nn.Linear(num_basis_functions, num_features, bias=False)
@@ -50,13 +50,11 @@ class LocalInteraction(nn.Module):
         self.resblock_d = ResidualMLP(num_features, num_residual_d, activation)
         self.projection_p = nn.Linear(num_features, 2 * num_features, bias=False)
         self.projection_d = nn.Linear(num_features, 2 * num_features, bias=False)
-        self.resblock = ResidualMLP(
-            num_features, num_residual, activation, zero_init=True
-        )
+        self.resblock = ResidualMLP(num_features, num_residual, activation, zero_init=True)
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ Initialize parameters. """
+        """Initialize parameters."""
         nn.init.orthogonal_(self.radial_s.weight)
         nn.init.orthogonal_(self.radial_p.weight)
         nn.init.orthogonal_(self.radial_d.weight)

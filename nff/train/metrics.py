@@ -33,7 +33,7 @@ class Metric:
         self.n_entries = 0.0
 
     def add_batch(self, batch, results):
-        """ Add a batch to calculate the metric on """
+        """Add a batch to calculate the metric on"""
 
         y = batch[self.target]
         yp = results[self.target]
@@ -96,9 +96,7 @@ class RootMeanSquaredError(MeanSquaredError):
         name=None,
     ):
         name = "RMSE_" + target if name is None else name
-        super().__init__(
-            target, name
-        )
+        super().__init__(target, name)
 
     def aggregate(self):
         """Aggregate metric over all previously added batches."""
@@ -129,7 +127,6 @@ class MeanAbsoluteError(Metric):
 
     @staticmethod
     def loss_fn(y, yp):
-
         # select only properties which are given
 
         yp = yp.reshape(*y.shape)
@@ -167,7 +164,6 @@ class DipoleMeanAbsoluteError(Metric):
 
     @staticmethod
     def loss_fn(y, yp):
-
         # select only properties which are given
 
         yp = yp.reshape(*y.shape)
@@ -179,9 +175,7 @@ class DipoleMeanAbsoluteError(Metric):
         pos_delta = (abs(y - yp)).mean(-1)
         neg_delta = (abs(y + yp)).mean(-1)
 
-        signs = (torch.ones(pos_delta.shape[0],
-                            dtype=torch.long)
-                 .to(pos_delta.device))
+        signs = torch.ones(pos_delta.shape[0], dtype=torch.long).to(pos_delta.device)
         signs[neg_delta < pos_delta] = -1
         y = y * signs.reshape(-1, 1)
 
@@ -191,7 +185,7 @@ class DipoleMeanAbsoluteError(Metric):
 
 
 class Classifier(Metric):
-    """" Metric for binary classification."""
+    """ " Metric for binary classification."""
 
     def __init__(
         self,
@@ -205,7 +199,7 @@ class Classifier(Metric):
         )
 
     def add_batch(self, batch, results):
-        """ Add a batch to calculate the metric on """
+        """Add a batch to calculate the metric on"""
 
         y = batch[self.target]
         yp = results[self.target]
@@ -216,7 +210,6 @@ class Classifier(Metric):
         self.loss += loss
 
     def non_nan(self):
-
         actual = torch.Tensor(self.actual)
         pred = torch.Tensor(self.pred)
 
@@ -229,7 +222,7 @@ class Classifier(Metric):
     def aggregate(self):
         """Aggregate metric over all previously added batches."""
         if self.n_entries == 0:
-            result = float('nan')
+            result = float("nan")
         else:
             result = self.loss / self.n_entries
         return result
@@ -254,13 +247,11 @@ class FalsePositives(Classifier):
 
     @staticmethod
     def loss_fn(y, yp):
-
         actual = y.detach().cpu().numpy().round().reshape(-1)
         pred = yp.detach().cpu().numpy().round().reshape(-1)
 
         all_positives = [i for i, item in enumerate(pred) if item == 1]
-        false_positives = [i for i in range(len(pred)) if pred[i]
-                           == 1 and pred[i] != actual[i]]
+        false_positives = [i for i in range(len(pred)) if pred[i] == 1 and pred[i] != actual[i]]
 
         # number of predicted negatives
         num_pred = len(all_positives)
@@ -270,7 +261,6 @@ class FalsePositives(Classifier):
 
 
 class FalseNegatives(Classifier):
-
     """
     Percentage of claimed negatives that are actually wrong for a
     binary classifier.
@@ -289,13 +279,11 @@ class FalseNegatives(Classifier):
 
     @staticmethod
     def loss_fn(y, yp):
-
         actual = y.detach().cpu().numpy().round().reshape(-1)
         pred = yp.detach().cpu().numpy().round().reshape(-1)
 
         all_negatives = [i for i, item in enumerate(pred) if item == 0]
-        false_negatives = [i for i in range(len(pred)) if pred[i]
-                           == 0 and pred[i] != actual[i]]
+        false_negatives = [i for i in range(len(pred)) if pred[i] == 0 and pred[i] != actual[i]]
         # number of predicted negatives
         num_pred = len(all_negatives)
         num_pred_correct = len(false_negatives)
@@ -304,7 +292,6 @@ class FalseNegatives(Classifier):
 
 
 class TruePositives(Classifier):
-
     """
     Percentage of claimed positives that are actually right for a
     binary classifier.
@@ -323,13 +310,11 @@ class TruePositives(Classifier):
 
     @staticmethod
     def loss_fn(y, yp):
-
         actual = y.detach().cpu().numpy().round().reshape(-1)
         pred = yp.detach().cpu().numpy().round().reshape(-1)
 
         all_positives = [i for i, item in enumerate(pred) if item == 1]
-        true_positives = [i for i in range(len(pred)) if pred[i]
-                          == 1 and pred[i] == actual[i]]
+        true_positives = [i for i in range(len(pred)) if pred[i] == 1 and pred[i] == actual[i]]
 
         # number of predicted negatives
         num_pred = len(all_positives)
@@ -339,7 +324,6 @@ class TruePositives(Classifier):
 
 
 class TrueNegatives(Classifier):
-
     """
     Percentage of claimed negatives that are actually right for a
     binary classifier.
@@ -358,13 +342,11 @@ class TrueNegatives(Classifier):
 
     @staticmethod
     def loss_fn(y, yp):
-
         actual = y.detach().cpu().numpy().round().reshape(-1)
         pred = yp.detach().cpu().numpy().round().reshape(-1)
 
         all_negatives = [i for i, item in enumerate(pred) if item == 0]
-        true_negatives = [i for i in range(len(pred)) if pred[i]
-                          == 0 and pred[i] == actual[i]]
+        true_negatives = [i for i in range(len(pred)) if pred[i] == 0 and pred[i] == actual[i]]
 
         # number of predicted negatives
         num_pred = len(all_negatives)
@@ -374,7 +356,6 @@ class TrueNegatives(Classifier):
 
 
 class RocAuc(Classifier):
-
     """
     AUC metric (area under true-positive vs. false-positive curve).
     """
@@ -411,7 +392,7 @@ class RocAuc(Classifier):
         return actual, pred
 
     def add_batch(self, batch, results):
-        """ Add a batch to calculate the metric on """
+        """Add a batch to calculate the metric on"""
 
         y = batch[self.target]
         yp = results[self.target]
@@ -434,7 +415,6 @@ class RocAuc(Classifier):
 
 
 class PrAuc(Classifier):
-
     """
     AUC metric (area under true-positive vs. false-positive curve).
     """
@@ -471,7 +451,7 @@ class PrAuc(Classifier):
         return actual, pred
 
     def add_batch(self, batch, results):
-        """ Add a batch to calculate the metric on """
+        """Add a batch to calculate the metric on"""
 
         y = batch[self.target]
         yp = results[self.target]
@@ -487,8 +467,7 @@ class PrAuc(Classifier):
         pred, actual = self.non_nan()
 
         try:
-            precision, recall, thresholds = precision_recall_curve(
-                y_true=actual, probas_pred=pred)
+            precision, recall, thresholds = precision_recall_curve(y_true=actual, probas_pred=pred)
             pr_auc = auc(recall, precision)
 
         except ValueError:
@@ -498,7 +477,6 @@ class PrAuc(Classifier):
 
 
 class Accuracy(Classifier):
-
     """
     Overall accuracy of classifier.
     """
@@ -516,7 +494,6 @@ class Accuracy(Classifier):
 
     @staticmethod
     def loss_fn(y, yp):
-
         actual = y.detach().cpu().numpy().round().reshape(-1)
         pred = yp.detach().cpu().numpy().round().reshape(-1)
 

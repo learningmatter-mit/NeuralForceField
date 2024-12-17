@@ -39,12 +39,8 @@ class CombinedLossNFF(CombinedLoss):
 
         targets = {k: self.split_props(k, v, detach(targets["num_atoms"]).tolist()) for k, v in targets.items()}
         predictions = {
-            k: self.split_props(
-                k,
-                v,
-                detach(
-                    predictions["num_atoms"]).tolist()) for k,
-            v in predictions.items()}
+            k: self.split_props(k, v, detach(predictions["num_atoms"]).tolist()) for k, v in predictions.items()
+        }
 
         if key_style == "nff":
             targets = {self.key_mappings.get(k, k): self.negate_value(k, v) for k, v in targets.items()}
@@ -71,9 +67,7 @@ class CombinedLossNFF(CombinedLoss):
             return -value
         return value
 
-    def split_props(
-        self, key: str, value: Union[list, Tensor], num_atoms: Union[list, Tensor]
-    ) -> Union[list, Tensor]:
+    def split_props(self, key: str, value: Union[list, Tensor], num_atoms: Union[list, Tensor]) -> Union[list, Tensor]:
         """Split the properties if the key is in the split_keys list.
 
         Args:

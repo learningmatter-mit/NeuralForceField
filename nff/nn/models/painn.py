@@ -28,7 +28,6 @@ from nff.nn.layers import Diagonalize, ExpNormalBasis
 from nff.utils.scatter import scatter_add, compute_grad
 import torch
 
-import pdb
 
 POOL_DIC = {
     "sum": SumPool,
@@ -84,19 +83,12 @@ class Painn(nn.Module):
             ]
         )
         self.update_blocks = nn.ModuleList(
-            [
-                UpdateBlock(
-                    feat_dim=feat_dim, activation=activation, dropout=conv_dropout
-                )
-                for _ in range(num_conv)
-            ]
+            [UpdateBlock(feat_dim=feat_dim, activation=activation, dropout=conv_dropout) for _ in range(num_conv)]
         )
 
         self.output_keys = output_keys
         # no skip connection in original paper
-        self.skip = modelparams.get(
-            "skip_connection", {key: False for key in self.output_keys}
-        )
+        self.skip = modelparams.get("skip_connection", {key: False for key in self.output_keys})
 
         self.num_readouts = num_conv if any(self.skip.values()) else 1
         self.readout_blocks = nn.ModuleList(
@@ -159,9 +151,7 @@ class Painn(nn.Module):
 
         for i, message_block in enumerate(self.message_blocks):
             update_block = self.update_blocks[i]
-            ds_message, dv_message = message_block(
-                s_j=s_i, v_j=v_i, r_ij=r_ij, nbrs=nbrs
-            )
+            ds_message, dv_message = message_block(s_j=s_i, v_j=v_i, r_ij=r_ij, nbrs=nbrs)
 
             s_i = s_i + ds_message
             v_i = v_i + dv_message
@@ -249,9 +239,7 @@ class Painn(nn.Module):
             grad_keys = [e_i + "_grad", e_j + "_grad"]
             delta_grad_key = "_".join(grad_keys) + "_delta"
             if all([grad_key in all_results for grad_key in grad_keys]):
-                all_results[delta_grad_key] = (
-                    all_results[grad_keys[0]] - all_results[grad_keys[1]]
-                )
+                all_results[delta_grad_key] = all_results[grad_keys[0]] - all_results[grad_keys[1]]
         return all_results
 
     def V_ex(self, r_ij, nbr_list, xyz):
@@ -286,14 +274,10 @@ class Painn(nn.Module):
         )
 
         if requires_embedding:
-            all_results = add_embedding(
-                atomwise_out=atomwise_out, all_results=all_results
-            )
+            all_results = add_embedding(atomwise_out=atomwise_out, all_results=all_results)
 
         if requires_stress:
-            all_results = add_stress(
-                batch=batch, all_results=all_results, nbrs=nbrs, r_ij=r_ij
-            )
+            all_results = add_stress(batch=batch, all_results=all_results, nbrs=nbrs, r_ij=r_ij)
 
         if getattr(self, "compute_delta", False):
             all_results = self.add_delta(all_results)
@@ -359,13 +343,9 @@ class PainnTransformer(Painn):
         )
 
         if same_message_blocks:
-            self.message_blocks = nn.ModuleList(
-                [self.message_blocks[0]] * len(self.message_blocks)
-            )
+            self.message_blocks = nn.ModuleList([self.message_blocks[0]] * len(self.message_blocks))
 
-        self.embed_block = NbrEmbeddingBlock(
-            feat_dim=feat_dim, dropout=conv_dropout, rbf=rbf
-        )
+        self.embed_block = NbrEmbeddingBlock(feat_dim=feat_dim, dropout=conv_dropout, rbf=rbf)
 
 
 class PainnDiabat(Painn):
@@ -521,17 +501,10 @@ class PainnGapToAbs(nn.Module):
         combined_results = {}
 
         for key in common_keys:
-            pool_dics = [
-                self.get_model_attr(model, "pool_dic") for model in self.models
-            ]
+            pool_dics = [self.get_model_attr(model, "pool_dic") for model in self.models]
 
             in_pool = all([key in dic for dic in pool_dics])
-            in_grad = all(
-                [
-                    key in self.get_model_attr(model, "grad_keys")
-                    for model in self.models
-                ]
-            )
+            in_grad = all([key in self.get_model_attr(model, "grad_keys") for model in self.models])
 
             common = in_pool or in_grad
 
@@ -565,9 +538,7 @@ class Painn_VecOut(Painn):
 
         self.output_vec_keys = output_vec_keys
         # no skip connection in original paper
-        self.skip_vec = modelparams.get(
-            "skip_vec_connection", {key: False for key in self.output_vec_keys}
-        )
+        self.skip_vec = modelparams.get("skip_vec_connection", {key: False for key in self.output_vec_keys})
 
         num_vec_readouts = modelparams["num_conv"] if any(self.skip.values()) else 1
         self.readout_vec_blocks = nn.ModuleList(
@@ -608,9 +579,7 @@ class Painn_VecOut(Painn):
 
         for i, message_block in enumerate(self.message_blocks):
             update_block = self.update_blocks[i]
-            ds_message, dv_message = message_block(
-                s_j=s_i, v_j=v_i, r_ij=r_ij, nbrs=nbrs
-            )
+            ds_message, dv_message = message_block(s_j=s_i, v_j=v_i, r_ij=r_ij, nbrs=nbrs)
 
             s_i = s_i + ds_message
             v_i = v_i + dv_message
@@ -662,8 +631,7 @@ class Painn_VecOut(Painn):
 
 class Painn_VecOut2(Painn_VecOut):
     # unlike Painn_VecOut this uses 2 equivariant blocks for each output
-    def __init__(self,
-                 modelparams):
+    def __init__(self, modelparams):
         """
         Args:
             modelparams (dict): dictionary of model parameters
@@ -681,20 +649,21 @@ class Painn_VecOut2(Painn_VecOut):
 
         self.output_vec_keys = output_vec_keys
         # no skip connection in original paper
-        self.skip_vec = modelparams.get("skip_vec_connection",
-                                        {key: False for key
-                                         in self.output_vec_keys})
+        self.skip_vec = modelparams.get("skip_vec_connection", {key: False for key in self.output_vec_keys})
 
-        num_vec_readouts = (modelparams["num_conv"] if any(self.skip.values())
-                            else 1)
+        num_vec_readouts = modelparams["num_conv"] if any(self.skip.values()) else 1
         self.readout_vec_blocks = nn.ModuleList(
-            [ReadoutBlock_Vec2(feat_dim=feat_dim,
-                               output_keys=output_vec_keys,
-                               activation=activation,
-                               dropout=readout_dropout,
-                               means=means,
-                               stddevs=stddevs)
-             for _ in range(num_vec_readouts)]
+            [
+                ReadoutBlock_Vec2(
+                    feat_dim=feat_dim,
+                    output_keys=output_vec_keys,
+                    activation=activation,
+                    dropout=readout_dropout,
+                    means=means,
+                    stddevs=stddevs,
+                )
+                for _ in range(num_vec_readouts)
+            ]
         )
 
 
@@ -702,8 +671,7 @@ class Painn_NAC_OuterProd(Painn_VecOut2):
     # This model attempts to learn non-adiabatic coupling vectors
     # as suggested by Jeremy Richardson, as eigenvector
     # of an outer product matrix
-    def __init__(self,
-                 modelparams):
+    def __init__(self, modelparams):
         """
         Args:
             modelparams (dict): dictionary of model parameters
@@ -712,22 +680,16 @@ class Painn_NAC_OuterProd(Painn_VecOut2):
 
         super().__init__(modelparams)
 
-    def get_nac(self,
-                all_results,
-                batch,
-                xyz):
-
+    def get_nac(self, all_results, batch, xyz):
         N = batch["num_atoms"].detach().cpu().tolist()
         xyz_s = torch.split(xyz, N)
 
         for key in self.output_vec_keys:
-
             mats = []
             nacs = []
             nu_s = torch.split(all_results[key], N)
             for nu, r in zip(nu_s, xyz_s):
-                mat = (torch.outer(r.reshape(-1), nu.reshape(-1))
-                       + torch.outer(nu.reshape(-1), r.reshape(-1)))
+                mat = torch.outer(r.reshape(-1), nu.reshape(-1)) + torch.outer(nu.reshape(-1), r.reshape(-1))
                 mats.append(mat)
 
                 eigvals, eigvecs = torch.linalg.eigh(mat)
@@ -744,17 +706,10 @@ class Painn_NAC_OuterProd(Painn_VecOut2):
 
         return all_results, xyz
 
-    def run(self,
-            batch,
-            xyz=None,
-            requires_embedding=False,
-            requires_stress=False,
-            inference=False):
-
+    def run(self, batch, xyz=None, requires_embedding=False, requires_stress=False, inference=False):
         from nff.train import batch_detach
 
-        atomwise_out, xyz, r_ij, nbrs = self.atomwise(batch=batch,
-                                                      xyz=xyz)
+        atomwise_out, xyz, r_ij, nbrs = self.atomwise(batch=batch, xyz=xyz)
 
         if getattr(self, "excl_vol", None):
             # Excluded Volume interactions
@@ -762,26 +717,17 @@ class Painn_NAC_OuterProd(Painn_VecOut2):
             for key in self.output_keys:
                 atomwise_out[key] += r_ex
 
-        pooled_results, xyz = self.pool(batch=batch,
-                                        atomwise_out=atomwise_out,
-                                        xyz=xyz,
-                                        r_ij=r_ij,
-                                        nbrs=nbrs,
-                                        inference=False)
+        pooled_results, xyz = self.pool(
+            batch=batch, atomwise_out=atomwise_out, xyz=xyz, r_ij=r_ij, nbrs=nbrs, inference=False
+        )
 
-        all_results, xyz = self.get_nac(all_results=pooled_results,
-                                        batch=batch,
-                                        xyz=xyz)
+        all_results, xyz = self.get_nac(all_results=pooled_results, batch=batch, xyz=xyz)
 
         if requires_embedding:
-            all_results = add_embedding(atomwise_out=atomwise_out,
-                                        all_results=all_results)
+            all_results = add_embedding(atomwise_out=atomwise_out, all_results=all_results)
 
         if requires_stress:
-            all_results = add_stress(batch=batch,
-                                     all_results=all_results,
-                                     nbrs=nbrs,
-                                     r_ij=r_ij)
+            all_results = add_stress(batch=batch, all_results=all_results, nbrs=nbrs, r_ij=r_ij)
 
         if getattr(self, "compute_delta", False):
             all_results = self.add_delta(all_results)
@@ -793,9 +739,7 @@ class Painn_NAC_OuterProd(Painn_VecOut2):
 
 
 class Painn_Complex(Painn):
-
-    def __init__(self,
-                 modelparams):
+    def __init__(self, modelparams):
         """
         Args:
             modelparams (dict): dictionary of model parameters
@@ -811,27 +755,26 @@ class Painn_Complex(Painn):
         activation = modelparams["activation"]
         readout_dropout = modelparams.get("readout_dropout", 0)
 
-        num_cmplx_readouts = (modelparams["num_conv"] if any(self.skip.values())
-                              else 1)
+        num_cmplx_readouts = modelparams["num_conv"] if any(self.skip.values()) else 1
         self.readout_cmplx_blocks = nn.ModuleList(
-            [ReadoutBlock_Complex(feat_dim=feat_dim,
-                                  output_keys=self.output_cmplx_keys,
-                                  activation=activation,
-                                  dropout=readout_dropout)
-             for _ in range(num_cmplx_readouts)]
+            [
+                ReadoutBlock_Complex(
+                    feat_dim=feat_dim,
+                    output_keys=self.output_cmplx_keys,
+                    activation=activation,
+                    dropout=readout_dropout,
+                )
+                for _ in range(num_cmplx_readouts)
+            ]
         )
 
-    def atomwise(self,
-                 batch,
-                 xyz=None):
-
+    def atomwise(self, batch, xyz=None):
         # for backwards compatability
         if isinstance(self.skip, bool):
-            self.skip = {key: self.skip
-                         for key in self.output_keys}
+            self.skip = {key: self.skip for key in self.output_keys}
 
-        nbrs, _ = make_directed(batch['nbr_list'])
-        nxyz = batch['nxyz']
+        nbrs, _ = make_directed(batch["nbr_list"])
+        nxyz = batch["nxyz"]
 
         if xyz is None:
             xyz = nxyz[:, 1:]
@@ -842,28 +785,19 @@ class Painn_Complex(Painn):
         # get r_ij including offsets and excluding
         # anything in the neighbor skin
         self.set_cutoff()
-        r_ij, nbrs = get_rij(xyz=xyz,
-                             batch=batch,
-                             nbrs=nbrs,
-                             cutoff=self.cutoff)
+        r_ij, nbrs = get_rij(xyz=xyz, batch=batch, nbrs=nbrs, cutoff=self.cutoff)
 
-        s_i, v_i = self.embed_block(z_numbers,
-                                    nbrs=nbrs,
-                                    r_ij=r_ij)
+        s_i, v_i = self.embed_block(z_numbers, nbrs=nbrs, r_ij=r_ij)
         results = {}
 
         for i, message_block in enumerate(self.message_blocks):
             update_block = self.update_blocks[i]
-            ds_message, dv_message = message_block(s_j=s_i,
-                                                   v_j=v_i,
-                                                   r_ij=r_ij,
-                                                   nbrs=nbrs)
+            ds_message, dv_message = message_block(s_j=s_i, v_j=v_i, r_ij=r_ij, nbrs=nbrs)
 
             s_i = s_i + ds_message
             v_i = v_i + dv_message
 
-            ds_update, dv_update = update_block(s_i=s_i,
-                                                v_i=v_i)
+            ds_update, dv_update = update_block(s_i=s_i, v_i=v_i)
 
             s_i = s_i + ds_update
             v_i = v_i + dv_update
@@ -902,8 +836,8 @@ class Painn_Complex(Painn):
                 if not skip:
                     results[key] = new_cmplx_results[key]
 
-        results['features'] = s_i
-        results['features_vec'] = v_i
+        results["features"] = s_i
+        results["features_vec"] = v_i
 
         return results, xyz, r_ij, nbrs
 
@@ -927,13 +861,9 @@ class Painn_Tuple(Painn):
         readout_dropout = modelparams.get("readout_dropout", 0)
 
         # no skip connection in original paper
-        self.skip_tuple = modelparams.get(
-            "skip_tuple_connection", {key: False for key in self.output_tuple_keys}
-        )
+        self.skip_tuple = modelparams.get("skip_tuple_connection", {key: False for key in self.output_tuple_keys})
 
-        num_tuple_readouts = (
-            modelparams["num_conv"] if any(self.skip_tuple.values()) else 1
-        )
+        num_tuple_readouts = modelparams["num_conv"] if any(self.skip_tuple.values()) else 1
         self.readout_tuple_blocks = nn.ModuleList(
             [
                 ReadoutBlock_Tuple(
@@ -974,9 +904,7 @@ class Painn_Tuple(Painn):
 
         for i, message_block in enumerate(self.message_blocks):
             update_block = self.update_blocks[i]
-            ds_message, dv_message = message_block(
-                s_j=s_i, v_j=v_i, r_ij=r_ij, nbrs=nbrs
-            )
+            ds_message, dv_message = message_block(s_j=s_i, v_j=v_i, r_ij=r_ij, nbrs=nbrs)
 
             s_i = s_i + ds_message
             v_i = v_i + dv_message
@@ -1060,13 +988,9 @@ class Painn_wCP(Painn_Tuple):
         readout_dropout = modelparams.get("readout_dropout", 0)
 
         # no skip connection in original paper
-        self.skip_tuple = modelparams.get(
-            "skip_tuple_connection", {key: False for key in self.output_tuple_keys}
-        )
+        self.skip_tuple = modelparams.get("skip_tuple_connection", {key: False for key in self.output_tuple_keys})
 
-        num_tuple_readouts = (
-            modelparams["num_conv"] if any(self.skip_tuple.values()) else 1
-        )
+        num_tuple_readouts = modelparams["num_conv"] if any(self.skip_tuple.values()) else 1
         # overwrite what has been done before
         self.readout_tuple_blocks = nn.ModuleList(
             [
@@ -1102,15 +1026,11 @@ class Painn_wCP(Painn_Tuple):
             omega = all_results[wCP_keys[0]]
             batch_size = len(omega)
 
-            C_mat0 = torch.zeros(
-                batch_size, num_states, num_states, device=omega.device
-            )
+            C_mat0 = torch.zeros(batch_size, num_states, num_states, device=omega.device)
 
             for mat in C_mat0:
                 mat.fill_diagonal_(1)
-            C_mat = C_mat0 * omega.reshape(-1, 1, 1) + torch.diag(
-                torch.ones(num_states - 1), -1
-            ).to(omega.device)
+            C_mat = C_mat0 * omega.reshape(-1, 1, 1) + torch.diag(torch.ones(num_states - 1), -1).to(omega.device)
 
             for idx, coef in enumerate(wCP_keys[1:]):
                 C_mat[:, idx, -1] = -all_results[coef]
@@ -1158,19 +1078,13 @@ class Painn_wCP(Painn_Tuple):
             inference=False,
         )
 
-        all_results, xyz = self.adibatic_energies(
-            all_results=intermediate_results, xyz=xyz
-        )
+        all_results, xyz = self.adibatic_energies(all_results=intermediate_results, xyz=xyz)
 
         if requires_embedding:
-            all_results = add_embedding(
-                atomwise_out=atomwise_out, all_results=all_results
-            )
+            all_results = add_embedding(atomwise_out=atomwise_out, all_results=all_results)
 
         if requires_stress:
-            all_results = add_stress(
-                batch=batch, all_results=all_results, nbrs=nbrs, r_ij=r_ij
-            )
+            all_results = add_stress(batch=batch, all_results=all_results, nbrs=nbrs, r_ij=r_ij)
 
         if getattr(self, "compute_delta", False):
             all_results = self.add_delta(all_results)
@@ -1384,9 +1298,7 @@ class PainnDipole(Painn_VecOut):
                 continue
             val = results[key]
             split_vals = torch.split(val, batch["num_atoms"].tolist())
-            final_vals = torch.stack(
-                [split_val.sum(0).reshape(3) for split_val in split_vals]
-            )
+            final_vals = torch.stack([split_val.sum(0).reshape(3) for split_val in split_vals])
             results[key] = final_vals
 
         return results

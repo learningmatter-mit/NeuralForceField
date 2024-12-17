@@ -81,12 +81,7 @@ class Dataset(TorchDataset):
     """
 
     def __init__(
-        self,
-        props: dict,
-        units: str = "kcal/mol",
-        check_props: bool = True,
-        do_copy: bool = True,
-        device: str = "cuda"
+        self, props: dict, units: str = "kcal/mol", check_props: bool = True, do_copy: bool = True, device: str = "cuda"
     ) -> None:
         """Constructor for Dataset class.
 
@@ -447,7 +442,7 @@ class Dataset(TorchDataset):
                 numbers=self.props["nxyz"][i][:, 0],
                 cell=self.props["cell"][i],
                 pbc=True,
-                device=self.device
+                device=self.device,
             )
 
             # recontruct coordinates based on subgraphs index
@@ -581,7 +576,7 @@ class Dataset(TorchDataset):
                 "cutoff": cutoff,
                 "cell": cell,
                 "nbr_torch": False,
-                "device": self.device
+                "device": self.device,
             }
 
             # the coordinates have been unwrapped and try to results offsets

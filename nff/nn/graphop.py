@@ -1,6 +1,7 @@
 import torch
 from nff.utils.scatter import compute_grad
 from nff.nn.modules import ConfAttention
+
 EPS = 1e-15
 
 
@@ -31,12 +32,7 @@ def update_boltz(conf_fp, weight, boltz_nn):
     return boltzmann_fp
 
 
-def conf_pool(mol_size,
-              boltzmann_weights,
-              mol_fp_nn,
-              boltz_nns,
-              conf_fps,
-              head_pool="concatenate"):
+def conf_pool(mol_size, boltzmann_weights, mol_fp_nn, boltz_nns, conf_fps, head_pool="concatenate"):
     """
     Pool atomic representations of conformers into molecular fingerprint,
     and then add those fingerprints together with Boltzmann weights.
@@ -65,9 +61,7 @@ def conf_pool(mol_size,
         # the attention pooler and return
 
         if isinstance(boltz_nn, ConfAttention):
-            final_fp, learned_weights = boltz_nn(
-                conf_fps=conf_fps,
-                boltzmann_weights=boltzmann_weights)
+            final_fp, learned_weights = boltz_nn(conf_fps=conf_fps, boltzmann_weights=boltzmann_weights)
         else:
             # otherwise get a new fingerprint for each conformer
             # based on its Boltzmann weight
@@ -75,10 +69,7 @@ def conf_pool(mol_size,
             boltzmann_fps = []
             for i, conf_fp in enumerate(conf_fps):
                 weight = boltzmann_weights[i]
-                boltzmann_fp = update_boltz(
-                    conf_fp=conf_fp,
-                    weight=weight,
-                    boltz_nn=boltz_nn)
+                boltzmann_fp = update_boltz(conf_fp=conf_fp, weight=weight, boltz_nn=boltz_nn)
                 boltzmann_fps.append(boltzmann_fp)
 
             boltzmann_fps = torch.stack(boltzmann_fps)
@@ -181,17 +172,11 @@ def get_atoms_inside_cell(r, N, pbc):
         N = [N]
 
     # selecting only the atoms inside the unit cell
-    atoms_in_cell = [
-        set(x.cpu().data.numpy())
-        for x in torch.split(pbc, N)
-    ]
+    atoms_in_cell = [set(x.cpu().data.numpy()) for x in torch.split(pbc, N)]
 
     N = [len(n) for n in atoms_in_cell]
 
-    atoms_in_cell = torch.cat([
-        torch.LongTensor(list(x))
-        for x in atoms_in_cell
-    ])
+    atoms_in_cell = torch.cat([torch.LongTensor(list(x)) for x in atoms_in_cell])
 
     r = r[atoms_in_cell]
 

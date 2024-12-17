@@ -18,13 +18,9 @@ from nff.data import Dataset
 from nff.utils.cuda import detach
 
 # get the path to NFF models dir, which is the parent directory of this file
-module_dir = os.path.abspath(
-    os.path.join(os.path.abspath(__file__), "..", "..", "..", "models")
-)
+module_dir = os.path.abspath(os.path.join(os.path.abspath(__file__), "..", "..", "..", "models"))
 print(module_dir)
-LOCAL_MODEL_PATH = os.path.join(
-    module_dir, "foundation_models/mace/2023-12-03-mace-mp.model"
-)
+LOCAL_MODEL_PATH = os.path.join(module_dir, "foundation_models/mace/2023-12-03-mace-mp.model")
 
 MACE_URLS = dict(
     small="http://tinyurl.com/46jrkm3v",  # 2023-12-10-mace-128-L0_energy_epoch-249.model
@@ -35,9 +31,7 @@ MACE_URLS = dict(
 
 def _check_non_zero(std):
     if std == 0.0:
-        logging.warning(
-            "Standard deviation of the scaling is zero, Changing to no scaling"
-        )
+        logging.warning("Standard deviation of the scaling is zero, Changing to no scaling")
         std = 1.0
     return std
 
@@ -58,20 +52,14 @@ def get_mace_mp_model_path(model: str = None) -> str:
     """
     if model in (None, "medium") and os.path.isfile(LOCAL_MODEL_PATH):
         model_path = LOCAL_MODEL_PATH
-        print(
-            f"Using local medium Materials Project MACE model for MACECalculator {model}"
-        )
+        print(f"Using local medium Materials Project MACE model for MACECalculator {model}")
     elif model in (None, "small", "medium", "large") or str(model).startswith("https:"):
         try:
             checkpoint_url = (
-                MACE_URLS.get(model, MACE_URLS["medium"])
-                if model in (None, "small", "medium", "large")
-                else model
+                MACE_URLS.get(model, MACE_URLS["medium"]) if model in (None, "small", "medium", "large") else model
             )
             cache_dir = os.path.expanduser("~/.cache/mace")
-            checkpoint_url_name = "".join(
-                c for c in os.path.basename(checkpoint_url) if c.isalnum() or c in "_"
-            )
+            checkpoint_url_name = "".join(c for c in os.path.basename(checkpoint_url) if c.isalnum() or c in "_")
             model_path = f"{cache_dir}/{checkpoint_url_name}"
             if not os.path.isfile(model_path):
                 os.makedirs(cache_dir, exist_ok=True)
@@ -82,13 +70,9 @@ def get_mace_mp_model_path(model: str = None) -> str:
             msg = f"Loading Materials Project MACE with {model_path}"
             print(msg)
         except Exception as exc:
-            raise RuntimeError(
-                "Model download failed and no local model found"
-            ) from exc
+            raise RuntimeError("Model download failed and no local model found") from exc
     else:
-        raise RuntimeError(
-            "Model download failed and no local model found"
-        )
+        raise RuntimeError("Model download failed and no local model found")
 
     return model_path
 
@@ -114,16 +98,15 @@ def get_init_kwargs_from_model(model: Union[ScaleShiftMACE, MACE]) -> dict:
         "atomic_energies": model.atomic_energies_fn.atomic_energies,
         "avg_num_neighbors": model.interactions[0].avg_num_neighbors,
         "atomic_numbers": model.atomic_numbers.tolist(),
-        "correlation": model.products[0]
-        .symmetric_contractions.contractions[0]
-        .correlation,
+        "correlation": model.products[0].symmetric_contractions.contractions[0].correlation,
         "gate": model.readouts[-1].non_linearity.acts[0].f,
         "radial_MLP": model.interactions[0].conv_tp_weights.hs[1:-1],
-        "radial_type": radial_type
+        "radial_type": radial_type,
     }
     if isinstance(model, ScaleShiftMACE):
-        init_kwargs.update({"atomic_inter_scale": model.scale_shift.scale,
-                           "atomic_inter_shift": model.scale_shift.shift})
+        init_kwargs.update(
+            {"atomic_inter_scale": model.scale_shift.scale, "atomic_inter_shift": model.scale_shift.shift}
+        )
 
     return init_kwargs
 
@@ -143,9 +126,7 @@ def get_atomic_number_table_from_zs(zs: Iterable[int]) -> AtomicNumberTable:
     return AtomicNumberTable(sorted(z_set))
 
 
-def compute_average_E0s(
-    train_dset: Dataset, z_table: AtomicNumberTable, desired_units: str = "eV"
-) -> Dict[int, float]:
+def compute_average_E0s(train_dset: Dataset, z_table: AtomicNumberTable, desired_units: str = "eV") -> Dict[int, float]:
     """Function to compute the average interaction energy of each chemical element
     returns dictionary of E0s
 
@@ -174,9 +155,7 @@ def compute_average_E0s(
         for i, z in enumerate(z_table.zs):
             atomic_energies_dict[z] = E0s[i]
     except np.linalg.LinAlgError:
-        logging.warning(
-            "Failed to compute E0s using least squares regression, using the same for all atoms"
-        )
+        logging.warning("Failed to compute E0s using least squares regression, using the same for all atoms")
         atomic_energies_dict = {}
         for i, z in enumerate(z_table.zs):
             atomic_energies_dict[z] = 0.0
@@ -213,7 +192,7 @@ def compute_mean_rms_energy_forces(
             one_hot_zs[i, z_table.z_to_index(z)] = 1
         # compute atomic energies
         node_e0 = atomic_energies_fn(one_hot_zs)
-        graph_sizes = batch['num_atoms']  # list of num atoms
+        graph_sizes = batch["num_atoms"]  # list of num atoms
 
         # given graph_sizes, transform to list of indices
         # index starts from 0, denoting the first graph
@@ -221,17 +200,13 @@ def compute_mean_rms_energy_forces(
         counter = 0
         batch_indices = torch.zeros(sum(graph_sizes), dtype=torch.long)
         for i, size in enumerate(graph_sizes):
-            batch_indices[counter:counter + size] = i
+            batch_indices[counter : counter + size] = i
             counter += size
 
         # get the graph energy
-        graph_e0s = scatter_sum(
-            src=node_e0, index=batch_indices, dim=-1, dim_size=len(graph_sizes)
-        )
-        atom_energy_list.append(
-            (batch['energy'] - graph_e0s) / graph_sizes
-        )  # {[n_graphs], }
-        forces_list.append(-batch['energy_grad'])  # {[n_graphs*n_atoms,3], }
+        graph_e0s = scatter_sum(src=node_e0, index=batch_indices, dim=-1, dim_size=len(graph_sizes))
+        atom_energy_list.append((batch["energy"] - graph_e0s) / graph_sizes)  # {[n_graphs], }
+        forces_list.append(-batch["energy_grad"])  # {[n_graphs*n_atoms,3], }
 
     atom_energies = torch.cat(atom_energy_list, dim=0)  # [total_n_graphs]
     forces = torch.cat(forces_list, dim=0)  # {[total_n_graphs*n_atoms,3], }
@@ -254,27 +229,23 @@ def compute_avg_num_neighbors(data_loader: torch.utils.data.DataLoader) -> float
     num_neighbors = []
 
     for batch in data_loader:
-        unique_neighbors_list = torch.unique(batch['nbr_list'], dim=0)  # remove repeated neighbors
+        unique_neighbors_list = torch.unique(batch["nbr_list"], dim=0)  # remove repeated neighbors
         receivers = unique_neighbors_list[:, 1]
 
         _, counts = torch.unique(receivers, return_counts=True)
         num_neighbors.append(counts)
 
-    avg_num_neighbors = torch.mean(
-        torch.cat(num_neighbors, dim=0).type(torch.get_default_dtype())
-    )
+    avg_num_neighbors = torch.mean(torch.cat(num_neighbors, dim=0).type(torch.get_default_dtype()))
     return detach(avg_num_neighbors, to_numpy=True).item()
 
 
-def update_mace_init_params(train: Dataset,
-                            val: Dataset,
-                            train_loader: torch.utils.data.DataLoader,
-                            model_params: Dict,
-                            logger: logging.Logger = None) -> Dict[str,
-                                                                   Union[int,
-                                                                         float,
-                                                                         np.ndarray,
-                                                                         List[int]]]:
+def update_mace_init_params(
+    train: Dataset,
+    val: Dataset,
+    train_loader: torch.utils.data.DataLoader,
+    model_params: Dict,
+    logger: logging.Logger = None,
+) -> Dict[str, Union[int, float, np.ndarray, List[int]]]:
     """Update the MACE model initialization parameters based values obtained from training and validation datasets.
 
     Args:
@@ -291,8 +262,14 @@ def update_mace_init_params(train: Dataset,
         logger = logging.getLogger(__name__)
 
     # z_table
-    z_table = get_atomic_number_table_from_zs([int(z) for data_split in (train, val)
-                                              for data in data_split for z in detach(data["nxyz"][:, 0], to_numpy=True)])
+    z_table = get_atomic_number_table_from_zs(
+        [
+            int(z)
+            for data_split in (train, val)
+            for data in data_split
+            for z in detach(data["nxyz"][:, 0], to_numpy=True)
+        ]
+    )
     logger.info("Z Table %s", z_table.zs)
 
     # avg_num_neighbors
@@ -304,9 +281,7 @@ def update_mace_init_params(train: Dataset,
     # atomic_energies
     # {8: -4.930998234144857, 38: -5.8572783662579795, 77: -8.316066722236071}
     atomic_energies_dict = compute_average_E0s(train, z_table)
-    atomic_energies: np.ndarray = np.array(
-        [atomic_energies_dict[z] for z in z_table.zs]
-    )
+    atomic_energies: np.ndarray = np.array([atomic_energies_dict[z] for z in z_table.zs])
     logger.info("Atomic energies: %s", atomic_energies.tolist())
 
     # mean & std

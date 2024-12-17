@@ -3,8 +3,6 @@ from ase.optimize import BFGS
 import scipy.optimize as opt
 import numpy as np
 
-from warnings import warn
-
 
 class Converged(Exception):
     pass
@@ -15,28 +13,26 @@ class OptimizerConvergenceError(Exception):
 
 
 class NeuralCG(SciPyFminCG):
-
     def call_fmin(self, fmax, steps):
-        output = opt.fmin_cg(self.f,
-                             self.x0(),
-                             fprime=self.fprime,
-                             # args=(),
-                             gtol=fmax * 0.1,  # Should never be reached
-                             norm=np.inf,
-                             # epsilon=
-                             maxiter=steps,
-                             full_output=1,
-                             disp=0,
-                             # retall=0,
-                             callback=self.callback)
+        output = opt.fmin_cg(
+            self.f,
+            self.x0(),
+            fprime=self.fprime,
+            # args=(),
+            gtol=fmax * 0.1,  # Should never be reached
+            norm=np.inf,
+            # epsilon=
+            maxiter=steps,
+            full_output=1,
+            disp=0,
+            # retall=0,
+            callback=self.callback,
+        )
         warnflag = output[-1]
         if warnflag == 2:
-            raise OptimizerConvergenceError(
-                'Warning: Desired error not necessarily achieved '
-                'due to precision loss')
+            raise OptimizerConvergenceError("Warning: Desired error not necessarily achieved " "due to precision loss")
 
     def run(self, fmax=0.05, steps=100000000):
-
         if self.force_consistent is None:
             self.set_force_consistent()
         self.fmax = fmax
@@ -54,9 +50,7 @@ class NeuralCG(SciPyFminCG):
 
 
 class NeuralBFGS(SciPyFminBFGS):
-
     def run(self, fmax=0.05, steps=100000000):
-
         if self.force_consistent is None:
             self.set_force_consistent()
         self.fmax = fmax
@@ -73,7 +67,6 @@ class NeuralBFGS(SciPyFminBFGS):
 
 
 class NeuralAseBFGS(BFGS):
-
     def step(self, f=None):
         atoms = self.atoms
 
@@ -87,6 +80,7 @@ class NeuralAseBFGS(BFGS):
         self.update(r.flat, f, self.r0, self.f0)
 
         from numpy.linalg import eigh
+
         omega, V = eigh(self.H)
 
         # FUTURE: Log this properly
@@ -102,7 +96,7 @@ class NeuralAseBFGS(BFGS):
         #         self.logfile.flush()
 
         dr = np.dot(V, np.dot(f, V) / np.fabs(omega)).reshape((-1, 3))
-        steplengths = (dr**2).sum(1)**0.5
+        steplengths = (dr**2).sum(1) ** 0.5
         dr = self.determine_step(dr, steplengths)
         atoms.set_positions(r + dr)
         self.r0 = r.flat.copy()

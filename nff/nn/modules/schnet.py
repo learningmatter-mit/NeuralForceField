@@ -1313,7 +1313,6 @@ class TestModules(unittest.TestCase):
         n_filters = 10
         n_gaussians = 10
         num_nodes = 6
-        cutoff = 0.5
 
         e = torch.rand(5, n_atom_basis)
         r_in = torch.rand(num_nodes, n_atom_basis)
@@ -1447,7 +1446,7 @@ class TestModules(unittest.TestCase):
         }
 
         model = NodeMultiTaskReadOut(multitaskdict)
-        output = model(r)
+        model(r)
 
 
 if __name__ == "__main__":

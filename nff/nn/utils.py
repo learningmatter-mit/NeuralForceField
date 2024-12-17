@@ -1,4 +1,5 @@
 """Tools to build layers"""
+
 import collections
 import numpy as np
 import torch
@@ -40,8 +41,7 @@ def construct_sequential(layers):
     """
     return Sequential(
         collections.OrderedDict(
-            [layer["name"] + str(i), layer_types[layer["name"]](**layer["param"])]
-            for i, layer in enumerate(layers)
+            [layer["name"] + str(i), layer_types[layer["name"]](**layer["param"])] for i, layer in enumerate(layers)
         )
     )
 
@@ -148,9 +148,7 @@ def clean_matrix(matrix, eps=1e-12):
     return matrix
 
 
-def torch_nbr_list(
-    atomsobject, cutoff, device="cuda:0", directed=True, requires_large_offsets=True
-):
+def torch_nbr_list(atomsobject, cutoff, device="cuda:0", directed=True, requires_large_offsets=True):
     """Pytorch implementations of nbr_list for minimum image convention, the offsets are only limited to 0, 1, -1:
     it means that no pair interactions is allowed for more than 1 periodic box length. It is so much faster than
     neighbor_list algorithm in ase.
@@ -170,10 +168,7 @@ def torch_nbr_list(
         # otherwise, default to the "robust" nbr_list function below for small cells
         if (
             np.all(2 * cutoff < atomsobject.cell.cellpar()[:3])
-            and not np.count_nonzero(
-                atomsobject.cell.T - np.diag(np.diagonal(atomsobject.cell.T))
-            )
-            != 0
+            and not np.count_nonzero(atomsobject.cell.T - np.diag(np.diagonal(atomsobject.cell.T))) != 0
         ):
             # "fast" nbr_list function for large cells (pbc)
             xyz = torch.Tensor(atomsobject.get_positions(wrap=False)).to(device)
@@ -183,17 +178,13 @@ def torch_nbr_list(
                 shift = torch.round(torch.divide(dis_mat, cell_dim))
                 offsets = -shift
             else:
-                offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + dis_mat.lt(
-                    -0.5 * cell_dim
-                ).to(torch.float)
+                offsets = -dis_mat.ge(0.5 * cell_dim).to(torch.float) + dis_mat.lt(-0.5 * cell_dim).to(torch.float)
 
             dis_mat = dis_mat + offsets * cell_dim
             dis_sq = dis_mat.pow(2).sum(-1)
             mask = (dis_sq < cutoff**2) & (dis_sq != 0)
             nbr_list = mask.nonzero(as_tuple=False)
-            offsets = (
-                offsets[nbr_list[:, 0], nbr_list[:, 1], :].detach().to("cpu").numpy()
-            )
+            offsets = offsets[nbr_list[:, 0], nbr_list[:, 1], :].detach().to("cpu").numpy()
 
         else:
             # "robust" nbr_list function for all cells (pbc)
@@ -205,9 +196,7 @@ def torch_nbr_list(
             unwrapped_positions = atomsobject.get_positions(wrap=False)
             shift = positions - unwrapped_positions
             cell = atomsobject.cell
-            cell = np.broadcast_to(
-                cell.T, (shift.shape[0], cell.shape[0], cell.shape[1])
-            )
+            cell = np.broadcast_to(cell.T, (shift.shape[0], cell.shape[0], cell.shape[1]))
             shift = np.linalg.solve(cell, shift).round().astype(int)
 
             # estimate getting close to the cutoff with supercell expansion
@@ -222,12 +211,8 @@ def torch_nbr_list(
             lattice_points_frac = lattice_points_in_supercell(supercell_matrix)
             lattice_points = np.dot(lattice_points_frac, supercell)
             # need to get all negative lattice translation vectors but remove duplicate 0 vector
-            zero_idx = np.where(
-                np.all(lattice_points.__eq__(np.array([0, 0, 0])), axis=1)
-            )[0][0]
-            lattice_points = np.concatenate(
-                [lattice_points[zero_idx:, :], lattice_points[:zero_idx, :]]
-            )
+            zero_idx = np.where(np.all(lattice_points.__eq__(np.array([0, 0, 0])), axis=1))[0][0]
+            lattice_points = np.concatenate([lattice_points[zero_idx:, :], lattice_points[:zero_idx, :]])
 
             N = len(lattice_points)
             # perform lattice translation vectors on positions
@@ -247,9 +232,7 @@ def torch_nbr_list(
             ]
 
             # get offsets as original integer multiples of lattice vectors
-            cell = np.broadcast_to(
-                cell.T, (offsets.shape[0], cell.shape[0], cell.shape[1])
-            )
+            cell = np.broadcast_to(cell.T, (offsets.shape[0], cell.shape[0], cell.shape[1]))
             offsets = offsets.detach().to("cpu").numpy()
             offsets = np.linalg.solve(cell, offsets).round().astype(int)
 
@@ -488,9 +471,7 @@ def chemprop_msg_to_node(h, nbrs, num_nodes):
     h_to_add = h[good_idx]
 
     # add together
-    node_features = scatter_add(
-        src=h_to_add, index=match_idx, dim=0, dim_size=num_nodes
-    )
+    node_features = scatter_add(src=h_to_add, index=match_idx, dim=0, dim_size=num_nodes)
 
     return node_features
 

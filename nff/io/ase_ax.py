@@ -18,25 +18,20 @@ from nff.nn.models.cp3d import OnlyBondUpdateCP3D
 DEFAULT_CUTOFF = 5.0
 DEFAULT_SKIN = 1.0
 DEFAULT_DIRECTED = False
-CONVERSION_DIC = {"ev": 1 / const.EV_TO_KCAL_MOL,
-                  "au": const.KCAL_TO_AU["energy"]}
+CONVERSION_DIC = {"ev": 1 / const.EV_TO_KCAL_MOL, "au": const.KCAL_TO_AU["energy"]}
 
-UNDIRECTED = [SchNet,
-              SchNetDiabat,
-              HybridGraphConv,
-              SchNetFeatures,
-              OnlyBondUpdateCP3D]
+UNDIRECTED = [SchNet, SchNetDiabat, HybridGraphConv, SchNetFeatures, OnlyBondUpdateCP3D]
 
 
 def check_directed(model, atoms):
     model_cls = model.__class__.__name__
     msg = f"{model_cls} needs a directed neighbor list"
-    assert (not atoms.undirected), msg
+    assert not atoms.undirected, msg
 
 
 class AtomsBatch(Atoms):
     """Class to deal with the Neural Force Field and batch several
-        Atoms objects.
+    Atoms objects.
     """
 
     def __init__(
@@ -47,7 +42,7 @@ class AtomsBatch(Atoms):
         needs_angles=False,
         undirected=(not DEFAULT_DIRECTED),
         cutoff_skin=DEFAULT_SKIN,
-        **kwargs
+        **kwargs,
     ):
         """
 
@@ -61,16 +56,16 @@ class AtomsBatch(Atoms):
         super().__init__(*args, **kwargs)
 
         self.props = {} if (props is None) else props.copy()
-        self.nbr_list = self.props.get('nbr_list', None)
-        self.offsets = self.props.get('offsets', None)
-        self.num_atoms = self.props.get('num_atoms', len(self))
+        self.nbr_list = self.props.get("nbr_list", None)
+        self.offsets = self.props.get("offsets", None)
+        self.num_atoms = self.props.get("num_atoms", len(self))
         self.cutoff = cutoff
         self.cutoff_skin = cutoff_skin
 
         self.needs_angles = needs_angles
-        self.kj_idx = self.props.get('kj_idx')
-        self.ji_idx = self.props.get('ji_idx')
-        self.angle_list = self.props.get('angle_list')
+        self.kj_idx = self.props.get("kj_idx")
+        self.ji_idx = self.props.get("ji_idx")
+        self.angle_list = self.props.get("angle_list")
         self.device = self.props.get("device", 0)
         self.undirected = undirected
 
@@ -82,14 +77,11 @@ class AtomsBatch(Atoms):
             nxyz (np.array): atomic numbers + cartesian coordinates
                 of the atoms.
         """
-        nxyz = np.concatenate([
-            self.get_atomic_numbers().reshape(-1, 1),
-            self.get_positions().reshape(-1, 3)
-        ], axis=1)
+        nxyz = np.concatenate([self.get_atomic_numbers().reshape(-1, 1), self.get_positions().reshape(-1, 3)], axis=1)
 
         return nxyz
 
-    def get_batch(self, device='cpu'):
+    def get_batch(self, device="cpu"):
         """Uses the properties of Atoms to create a batch
             to be sent to the model.
 
@@ -100,15 +92,15 @@ class AtomsBatch(Atoms):
 
         if self.nbr_list is None:  # or self.offsets is None:
             self.update_nbr_list()
-            self.props['nbr_list'] = self.nbr_list
-            self.props['angle_list'] = self.angle_list
-            self.props['ji_idx'] = self.ji_idx
-            self.props['kj_idx'] = self.kj_idx
+            self.props["nbr_list"] = self.nbr_list
+            self.props["angle_list"] = self.angle_list
+            self.props["ji_idx"] = self.ji_idx
+            self.props["kj_idx"] = self.kj_idx
 
-            self.props['offsets'] = self.offsets
+            self.props["offsets"] = self.offsets
 
-        self.props['nxyz'] = torch.Tensor(self.get_nxyz())
-        self.props['num_atoms'] = torch.LongTensor([len(self)])
+        self.props["nxyz"] = torch.Tensor(self.get_nxyz())
+        self.props["num_atoms"] = torch.LongTensor([len(self)])
 
         return self.props
 
@@ -127,35 +119,29 @@ class AtomsBatch(Atoms):
         """
 
         if self.needs_angles:
-
-            dataset = Dataset({key: [val] for key, val in
-                               self.props.items()}, check_props=False)
+            dataset = Dataset({key: [val] for key, val in self.props.items()}, check_props=False)
             if "nxyz" not in dataset.props:
                 dataset.props["nxyz"] = [self.get_nxyz()]
 
-            dataset.generate_neighbor_list((self.cutoff + self.cutoff_skin),
-                                           undirected=self.undirected)
+            dataset.generate_neighbor_list((self.cutoff + self.cutoff_skin), undirected=self.undirected)
             dataset.generate_angle_list()
 
-            self.ji_idx = dataset.props['ji_idx'][0]
-            self.kj_idx = dataset.props['kj_idx'][0]
-            self.nbr_list = dataset.props['nbr_list'][0]
-            self.angle_list = dataset.props['angle_list'][0]
+            self.ji_idx = dataset.props["ji_idx"][0]
+            self.kj_idx = dataset.props["kj_idx"][0]
+            self.nbr_list = dataset.props["nbr_list"][0]
+            self.angle_list = dataset.props["angle_list"][0]
 
             nbr_list = self.nbr_list
 
             if any(self.pbc):
-                offsets = offsets[self.nbr_list[:, 0],
-                                  self.nbr_list[:, 1], :].detach().to("cpu").numpy()
+                offsets = offsets[self.nbr_list[:, 0], self.nbr_list[:, 1], :].detach().to("cpu").numpy()
             else:
                 offsets = np.zeros((self.nbr_list.shape[0], 3))
 
         else:
-            edge_from, edge_to, offsets = torch_nbr_list(self,
-                                                         (self.cutoff +
-                                                          self.cutoff_skin),
-                                                         self.device,
-                                                         directed=(not self.undirected))
+            edge_from, edge_to, offsets = torch_nbr_list(
+                self, (self.cutoff + self.cutoff_skin), self.device, directed=(not self.undirected)
+            )
             nbr_list = torch.LongTensor(np.stack([edge_from, edge_to], axis=1))
             self.nbr_list = nbr_list
 
@@ -174,19 +160,9 @@ class AtomsBatch(Atoms):
         pass
 
     @classmethod
-    def from_atoms(cls,
-                   atoms,
-                   props=None,
-                   needs_angles=False,
-                   device=0,
-                   **kwargs):
+    def from_atoms(cls, atoms, props=None, needs_angles=False, device=0, **kwargs):
         instance = cls(
-            atoms,
-            positions=atoms.positions,
-            numbers=atoms.numbers,
-            props=props,
-            needs_angles=needs_angles,
-            **kwargs
+            atoms, positions=atoms.positions, numbers=atoms.numbers, props=props, needs_angles=needs_angles, **kwargs
         )
 
         instance.device = device
@@ -196,18 +172,18 @@ class AtomsBatch(Atoms):
 class NeuralFF(Calculator):
     """ASE calculator using a pretrained NeuralFF model"""
 
-    implemented_properties = ['energy', 'forces']
+    implemented_properties = ["energy", "forces"]
 
     def __init__(
         self,
         model,
-        device='cpu',
-        output_keys=['energy'],
-        conversion='ev',
+        device="cpu",
+        output_keys=["energy"],
+        conversion="ev",
         dataset_props=None,
         needs_angles=False,
         model_kwargs=None,
-        **kwargs
+        **kwargs,
     ):
         """Creates a NeuralFF calculator.nff/io/ase.py
 
@@ -234,8 +210,7 @@ class NeuralFF(Calculator):
         # output keys
 
         if getattr(model, "grad_keys", []):
-            keep_keys = [key for key in model.grad_keys
-                         if key.replace("_grad", "") in self.output_keys]
+            keep_keys = [key for key in model.grad_keys if key.replace("_grad", "") in self.output_keys]
             if hasattr(model, "_grad_keys"):
                 model._grad_keys = keep_keys
             else:
@@ -245,12 +220,7 @@ class NeuralFF(Calculator):
         self.device = device
         self.model.to(device)
 
-    def calculate(
-        self,
-        atomsbatch=None,
-        properties=['energy', 'forces'],
-        system_changes=all_changes
-    ):
+    def calculate(self, atomsbatch=None, properties=["energy", "forces"], system_changes=all_changes):
         """Calculates the desired properties for the given AtomsBatch.
 
         Args:
@@ -276,7 +246,7 @@ class NeuralFF(Calculator):
         # add keys so that the readout function can calculate these properties
         for key in self.output_keys:
             batch[key] = []
-            if 'forces' in properties:
+            if "forces" in properties:
                 batch[key + "_grad"] = []
 
         kwargs = {}
@@ -289,16 +259,15 @@ class NeuralFF(Calculator):
         # results to an empty list
         if len(self.output_keys) != 1:
             self.results["energy"] = []
-        if len(self.output_keys) != 1 and 'forces' in properties:
+        if len(self.output_keys) != 1 and "forces" in properties:
             self.results["forces"] = []
 
         for key in self.output_keys:
-
             assert self.conversion in CONVERSION_DIC, "Unit conversion kcal/mol to {} not supported.".format(
-                self.conversion)
+                self.conversion
+            )
 
-            value = prediction[key].detach().cpu(
-            ).numpy() * CONVERSION_DIC[self.conversion]
+            value = prediction[key].detach().cpu().numpy() * CONVERSION_DIC[self.conversion]
 
             # if you're only outputting energy, then set energy to value
             if len(self.output_keys) == 1:
@@ -307,9 +276,8 @@ class NeuralFF(Calculator):
             else:
                 self.results["energy"].append(value.reshape(-1))
 
-            if 'forces' in properties:
-                value_grad = prediction[key + "_grad"].detach(
-                ).cpu().numpy() * CONVERSION_DIC[self.conversion]
+            if "forces" in properties:
+                value_grad = prediction[key + "_grad"].detach().cpu().numpy() * CONVERSION_DIC[self.conversion]
 
                 if len(self.output_keys) == 1:
                     self.results["forces"] = -value_grad.reshape(-1, 3)
@@ -324,20 +292,13 @@ class NeuralFF(Calculator):
     def from_file(
         cls,
         model_path,
-        device='cuda',
-        output_keys=['energy'],
-        conversion='ev',
+        device="cuda",
+        output_keys=["energy"],
+        conversion="ev",
         params=None,
         model_type=None,
         needs_angles=False,
-        **kwargs
+        **kwargs,
     ):
-        model = load_model(model_path,
-                           params=params,
-                           model_type=model_type)
-        return cls(model,
-                   device,
-                   output_keys,
-                   conversion,
-                   needs_angles=needs_angles,
-                   **kwargs)
+        model = load_model(model_path, params=params, model_type=model_type)
+        return cls(model, device, output_keys, conversion, needs_angles=needs_angles, **kwargs)

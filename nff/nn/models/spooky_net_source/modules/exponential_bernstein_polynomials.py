@@ -40,7 +40,7 @@ class ExponentialBernsteinPolynomials(nn.Module):
         ini_alpha: float = 0.9448630629184640,
         exp_weighting: bool = False,
     ) -> None:
-        """ Initializes the ExponentialBernsteinPolynomials class. """
+        """Initializes the ExponentialBernsteinPolynomials class."""
         super(ExponentialBernsteinPolynomials, self).__init__()
         self.ini_alpha = ini_alpha
         self.exp_weighting = exp_weighting
@@ -61,13 +61,11 @@ class ExponentialBernsteinPolynomials(nn.Module):
         self.register_buffer("logc", torch.tensor(logbinomial, dtype=torch.float64))
         self.register_buffer("n", torch.tensor(n, dtype=torch.float64))
         self.register_buffer("v", torch.tensor(v, dtype=torch.float64))
-        self.register_parameter(
-            "_alpha", nn.Parameter(torch.tensor(1.0, dtype=torch.float64))
-        )
+        self.register_parameter("_alpha", nn.Parameter(torch.tensor(1.0, dtype=torch.float64)))
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ Initialize exponential scaling parameter alpha. """
+        """Initialize exponential scaling parameter alpha."""
         nn.init.constant_(self._alpha, softplus_inverse(self.ini_alpha))
 
     def forward(self, r: torch.Tensor, cutoff_values: torch.Tensor) -> torch.Tensor:

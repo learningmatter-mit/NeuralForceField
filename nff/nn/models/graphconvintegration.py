@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import copy
 import torch.nn.functional as F
 
 from nff.nn.layers import Dense, GaussianSmearing
@@ -11,7 +10,6 @@ from nff.nn.utils import get_default_readout
 
 
 class GraphConvIntegration(nn.Module):
-
     """SchNet with optional aggr_weight for thermodynamic intergration
 
     Attributes:
@@ -37,27 +35,31 @@ class GraphConvIntegration(nn.Module):
 
         super().__init__()
 
-        n_atom_basis = modelparams['n_atom_basis']
-        n_filters = modelparams['n_filters']
-        n_gaussians = modelparams['n_gaussians']
-        n_convolutions = modelparams['n_convolutions']
-        cutoff = modelparams['cutoff']
-        trainable_gauss = modelparams.get('trainable_gauss', False)
+        n_atom_basis = modelparams["n_atom_basis"]
+        n_filters = modelparams["n_filters"]
+        n_gaussians = modelparams["n_gaussians"]
+        n_convolutions = modelparams["n_convolutions"]
+        cutoff = modelparams["cutoff"]
+        trainable_gauss = modelparams.get("trainable_gauss", False)
 
         # default predict var
-        readoutdict = modelparams.get('readoutdict', get_default_readout(n_atom_basis))
-        post_readout = modelparams.get('post_readout', None)
+        readoutdict = modelparams.get("readoutdict", get_default_readout(n_atom_basis))
+        post_readout = modelparams.get("post_readout", None)
 
         self.atom_embed = nn.Embedding(100, n_atom_basis, padding_idx=0)
 
-        self.convolutions = nn.ModuleList([
-            SchNetConv(n_atom_basis=n_atom_basis,
-                       n_filters=n_filters,
-                       n_gaussians=n_gaussians,
-                       cutoff=cutoff,
-                       trainable_gauss=trainable_gauss)
-            for _ in range(n_convolutions)
-        ])
+        self.convolutions = nn.ModuleList(
+            [
+                SchNetConv(
+                    n_atom_basis=n_atom_basis,
+                    n_filters=n_filters,
+                    n_gaussians=n_gaussians,
+                    cutoff=cutoff,
+                    trainable_gauss=trainable_gauss,
+                )
+                for _ in range(n_convolutions)
+            ]
+        )
 
         # ReadOut
         self.atomwisereadout = NodeMultiTaskReadOut(multitaskdict=readoutdict, post_readout=post_readout)
@@ -72,14 +74,14 @@ class GraphConvIntegration(nn.Module):
         Returns:
             dict: dionary of results
         """
-        r = batch['nxyz'][:, 0]
-        xyz = batch['nxyz'][:, 1:4]
-        N = batch['num_atoms'].reshape(-1).tolist()
-        a = batch['nbr_list']
-        aggr_wgt = batch['aggr_wgt']
+        r = batch["nxyz"][:, 0]
+        xyz = batch["nxyz"][:, 1:4]
+        N = batch["num_atoms"].reshape(-1).tolist()
+        a = batch["nbr_list"]
+        aggr_wgt = batch["aggr_wgt"]
 
         # offsets take care of periodic boundary conditions
-        offsets = batch.get('offsets', 0)
+        offsets = batch.get("offsets", 0)
 
         xyz.requires_grad = True
 
