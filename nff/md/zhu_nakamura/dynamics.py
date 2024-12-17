@@ -977,7 +977,7 @@ class BatchedZhuNakamura:
 
             current_trj = i * self.batch_size
 
-            for j, trj in enumerate(trjs[current_trj: current_trj + self.batch_size]):
+            for j, trj in enumerate(trjs[current_trj : current_trj + self.batch_size]):
                 energies = []
                 forces = []
                 for key in self.energy_keys:

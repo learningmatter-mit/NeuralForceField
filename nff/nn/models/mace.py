@@ -138,9 +138,9 @@ class NffScaleMACE(ScaleShiftMACE):
             numbers = props.get("nxyz")[node_idx, 0].long().detach().cpu().numpy()
 
             if "cell" in props.keys():
-                cell = props["cell"][3 * i: 3 * i + 3].detach().cpu().numpy()
+                cell = props["cell"][3 * i : 3 * i + 3].detach().cpu().numpy()
             elif "lattice" in props.keys():
-                cell = props["lattice"][3 * i: 3 * i + 3].detach().cpu().numpy()
+                cell = props["lattice"][3 * i : 3 * i + 3].detach().cpu().numpy()
             else:
                 raise ValueError("No cell or lattice found in batch")
             config = Configuration(

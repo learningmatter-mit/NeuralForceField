@@ -270,7 +270,7 @@ class ConformerGenerator(object):
             if i in self.removed:
                 continue
             self.counter += 1
-            for conf_b in clustered_confs[i + 1:]:
+            for conf_b in clustered_confs[i + 1 :]:
                 j += 1
                 if conf_b[1] - conf_a[1] > energy_window:
                     break
