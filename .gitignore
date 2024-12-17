@@ -74,5 +74,9 @@ build/
 # pycharm
 .idea/
 
+# coverage and tests
+junit
+.coverage
+
 # required exceptions
 !tutorials/models/ammonia/Ammonia.xyz
