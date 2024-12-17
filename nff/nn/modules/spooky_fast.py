@@ -325,7 +325,7 @@ class ElectronicEmbedding(nn.Module):
             # dimension atoms_in_mol x F
             av = a_i.reshape(-1, 1) * v.reshape(1, -1)
             this_e_psi = self.resmlp(av)
-            e_psi[counter : counter + num_atoms[j]] = this_e_psi
+            e_psi[counter: counter + num_atoms[j]] = this_e_psi
             counter += num_atoms[j]
 
         return e_psi
@@ -615,7 +615,7 @@ class NonLocalInteraction(nn.Module):
             ###
 
             counter = sum(num_atoms[:i])
-            out[counter : counter + num] = att
+            out[counter: counter + num] = att
 
         # pdb.set_trace()
 
@@ -717,7 +717,7 @@ class Electrostatics(nn.Module):
         new_charges = []
         for i, n in enumerate(num_atoms):
             counter = num_atoms[:i].sum()
-            old_val = charge[counter : counter + n]
+            old_val = charge[counter: counter + n]
             new_val = old_val + correction[i]
             new_charges.append(new_val)
 

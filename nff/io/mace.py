@@ -200,7 +200,7 @@ def compute_mean_rms_energy_forces(
         counter = 0
         batch_indices = torch.zeros(sum(graph_sizes), dtype=torch.long)
         for i, size in enumerate(graph_sizes):
-            batch_indices[counter : counter + size] = i
+            batch_indices[counter: counter + size] = i
             counter += size
 
         # get the graph energy

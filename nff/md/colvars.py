@@ -442,7 +442,7 @@ class ColVar(torch.nn.Module):
         dis1 = dis_sq[self.Oacid, :][:, self.Owater]
         cvmatrix = torch.exp(-self.do * dis)
         cvmatrix = cvmatrix / cvmatrix.sum(0)
-        cvmatrixw = cvmatrix[self.Oacid.shape[0] :].sum(-1) - self.r1
+        cvmatrixw = cvmatrix[self.Oacid.shape[0]:].sum(-1) - self.r1
         cvmatrix = cvmatrix[: self.Oacid.shape[0]].sum(-1) - self.ro
         cv1 = 2 * cvmatrix.sum() + cvmatrixw.sum()
 
@@ -470,7 +470,7 @@ class ColVar(torch.nn.Module):
         cvmatrix = cvmatrix / cvmatrix.sum(0)
         cvmatrixx = torch.exp(-self.d * dis)
         cvmatrixx = cvmatrixx / cvmatrixx.sum(0)
-        cvmatrixw = cvmatrixx[self.Oacid.shape[0] :].sum(-1) - self.r1
+        cvmatrixw = cvmatrixx[self.Oacid.shape[0]:].sum(-1) - self.r1
         cvmatrix = cvmatrixx[: self.Oacid.shape[0]].sum(-1) - self.ro
         torch.cat((cvmatrix, cvmatrixw))
         cvmatrix2 = torch.matmul(cvmatrix.view(1, -1).t(), cvmatrixw.view(1, -1))

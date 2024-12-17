@@ -453,7 +453,7 @@ def get_bonds(UA, AC):
     bonds = []
 
     for k, i in enumerate(UA):
-        for j in UA[k + 1 :]:
+        for j in UA[k + 1:]:
             if AC[i, j] == 1:
                 bonds.append(tuple(sorted([i, j])))
 
