@@ -1,30 +1,30 @@
-from tqdm import tqdm
-import numpy as np
-import os
 import copy
+import os
 import pickle
-from rdkit import Chem
 import shutil
-from torch.utils.data import DataLoader
-from torch.nn.modules.container import ModuleDict
 
+import numpy as np
 from ase import optimize, units
-from ase.md.verlet import VelocityVerlet
 from ase.io.trajectory import Trajectory as AseTrajectory
-from ase.vibrations import Vibrations
-from ase.units import kg, kB, mol, J, m
+from ase.md.verlet import VelocityVerlet
 from ase.thermochemistry import IdealGasThermo
+from ase.units import J, kB, kg, m, mol
+from ase.vibrations import Vibrations
+from rdkit import Chem
+from torch.nn.modules.container import ModuleDict
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
-from nff.io.ase_ax import NeuralFF, AtomsBatch
-from nff.train import load_model
-from nff.data import collate_dicts, Dataset
+from nff.data import Dataset, collate_dicts
+from nff.io.ase_ax import AtomsBatch, NeuralFF
 from nff.md import nve
-from nff.utils.constants import FS_TO_AU, ASE_TO_FS, EV_TO_AU, BOHR_RADIUS
-from nff.utils import constants as const
-from nff.nn.tensorgrad import get_schnet_hessians
-from nff.utils.cuda import batch_to
 from nff.nn.models.schnet import SchNet
+from nff.nn.tensorgrad import get_schnet_hessians
 from nff.nn.tensorgrad import hess_from_atoms as analytical_hess
+from nff.train import load_model
+from nff.utils import constants as const
+from nff.utils.constants import ASE_TO_FS, BOHR_RADIUS, EV_TO_AU, FS_TO_AU
+from nff.utils.cuda import batch_to
 
 PT = Chem.GetPeriodicTable()
 PERIODICTABLE = PT
@@ -75,7 +75,7 @@ def get_key(iroot, num_states):
 
     # otherwise energy with state suffix
     else:
-        key = "energy_{}".format(iroot)
+        key = f"energy_{iroot}"
     return key
 
 
@@ -195,13 +195,12 @@ def check_convg(model, loader, energy_key, device, restart_file):
     neg_freqs = list(filter(lambda x: x < 0, freqs))
     num_neg = len(neg_freqs)
     if num_neg != 0:
-        print(("Found {} negative frequencies; " "restarting optimization.").format(num_neg))
+        print(f"Found {num_neg} negative frequencies; " "restarting optimization.")
         correct_hessian(restart_file=restart_file, hessian=mode_dic["hess"])
         return False, mode_dic
-    else:
-        print(("Found no negative frequencies; " "optimization complete."))
+    print("Found no negative frequencies; " "optimization complete.")
 
-        return True, mode_dic
+    return True, mode_dic
 
 
 def get_opt_kwargs(params):
@@ -368,10 +367,10 @@ def get_orca_form(cc_mat, cc_freqs, n_atoms):
     matrix = np.asarray(new_mat[:]).reshape(n_tot, n_modes)
 
     zero_col = np.asarray([[0]] * len(matrix))
-    for i in range(0, n_inactive):
+    for i in range(n_inactive):
         matrix = np.insert(matrix, [0], zero_col, axis=1)
     freqs = np.asarray(pure_freqs[:])
-    for i in range(0, n_inactive):
+    for i in range(n_inactive):
         freqs = np.insert(freqs, 0, 0)
 
     return matrix, freqs * CM_2_AU
@@ -786,7 +785,7 @@ def mrrho_quants(
     potentialenergy = ase_atoms.get_potential_energy()
 
     if flip_all_but_ts:
-        print(("Flipping all imaginary frequencies except " "the lowest one"))
+        print("Flipping all imaginary frequencies except " "the lowest one")
         abs_freqs = abs(freqs[1:])
 
     else:

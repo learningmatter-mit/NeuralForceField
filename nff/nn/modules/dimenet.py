@@ -1,9 +1,9 @@
 import torch
 from torch import nn
 
+from nff.nn.layers import Dense
 from nff.utils.scatter import scatter_add
 from nff.utils.tools import layer_types
-from nff.nn.layers import Dense
 
 
 def get_dense(inp_dim, out_dim, activation, bias):

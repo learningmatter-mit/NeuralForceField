@@ -1,8 +1,8 @@
-import numpy as np
-import torch
 import copy
 
-from torch.utils.data.sampler import Sampler, BatchSampler
+import numpy as np
+import torch
+from torch.utils.data.sampler import BatchSampler, Sampler
 
 REINDEX_KEYS = ["atoms_nbr_list", "nbr_list", "bonded_nbr_list", "angle_list", "mol_nbrs"]
 NBR_LIST_KEYS = ["bond_idx", "kj_idx", "ji_idx"]

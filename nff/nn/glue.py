@@ -1,7 +1,9 @@
 import copy
+
+import numpy as np
 from torch import nn
 from torch.nn import ModuleDict, ModuleList
-import numpy as np
+
 from nff.train import batch_detach
 
 IMPLEMENTED_MODES = ["sum", "mean"]
@@ -93,7 +95,7 @@ class DiabatStack(nn.Module):
                 result_list.append(model(batch=batch, xyz=xyz, **init_kwargs))
 
         combined_results = {}
-        unique_diabat_keys = list(set((np.array(self.diabat_keys).reshape(-1).tolist())))
+        unique_diabat_keys = list(set(np.array(self.diabat_keys).reshape(-1).tolist()))
         num_models = len(self.models)
         for key in unique_diabat_keys:
             for i, result in enumerate(result_list):

@@ -1,6 +1,6 @@
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
 
 
 class BernsteinPolynomials(nn.Module):
@@ -22,7 +22,7 @@ class BernsteinPolynomials(nn.Module):
         """Initializes the BernsteinPolynomials class."""
         super(BernsteinPolynomials, self).__init__()
         # compute values to initialize buffers
-        logfactorial = np.zeros((num_basis_functions))
+        logfactorial = np.zeros(num_basis_functions)
         for i in range(2, num_basis_functions):
             logfactorial[i] = logfactorial[i - 1] + np.log(i)
         v = np.arange(0, num_basis_functions)

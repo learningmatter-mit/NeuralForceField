@@ -1,6 +1,6 @@
 import numpy as np
-from scipy.stats import rv_discrete
 from ase.units import Bohr
+from scipy.stats import rv_discrete
 
 CM_2_AU = 4.5564e-6
 ANGS_2_AU = 1.8897259886

@@ -1,11 +1,11 @@
 import os
-import numpy as np
 
-from tqdm import tqdm
-from ase.optimize.optimize import Dynamics
-from ase.md.md import MolecularDynamics
+import numpy as np
 from ase import units
+from ase.md.md import MolecularDynamics
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
+from ase.optimize.optimize import Dynamics
+from tqdm import tqdm
 
 
 class TempRamp(MolecularDynamics):
@@ -94,10 +94,10 @@ class TempRamp(MolecularDynamics):
                     has_keys = True
             if not has_keys:
                 print(
-                    (
+
                         "WARNING: velocity not set to zero for any atoms in constraint "
                         "%s; do not know how to find its fixed indices." % constraint
-                    )
+
                 )
 
         if not fixed_idx:

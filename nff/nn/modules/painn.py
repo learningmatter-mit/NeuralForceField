@@ -1,12 +1,12 @@
 import torch
 from torch import nn
 
-from nff.utils.tools import layer_types
-from nff.nn.layers import PainnRadialBasis, CosineEnvelope, Dense
-from nff.utils.scatter import scatter_add
+from nff.nn.layers import CosineEnvelope, Dense, PainnRadialBasis
 from nff.nn.modules.schnet import ScaleShift
-from nff.nn.modules.torchmd_net import MessageBlock as MDMessage
 from nff.nn.modules.torchmd_net import EmbeddingBlock as MDEmbedding
+from nff.nn.modules.torchmd_net import MessageBlock as MDMessage
+from nff.utils.scatter import scatter_add
+from nff.utils.tools import layer_types
 
 EPS = 1e-15
 

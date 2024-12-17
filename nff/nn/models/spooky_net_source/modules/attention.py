@@ -1,8 +1,9 @@
+import math
+from typing import Optional
+
+import numpy as np
 import torch
 import torch.nn as nn
-import math
-import numpy as np
-from typing import Optional
 
 
 class Attention(nn.Module):
@@ -139,9 +140,8 @@ class Attention(nn.Module):
                 one_hot = nn.functional.one_hot(batch_seg).to(dtype=V.dtype, device=V.device)
                 mask = one_hot @ one_hot.transpose(-1, -2)
             return ((mask * (K @ Q.transpose(-1, -2))).transpose(-1, -2) @ V) / norm
-        else:
-            norm = Q @ torch.sum(K, 0, keepdim=True).T + eps
-            return (Q @ (K.T @ V)) / norm
+        norm = Q @ torch.sum(K, 0, keepdim=True).T + eps
+        return (Q @ (K.T @ V)) / norm
 
     def forward(
         self,
@@ -178,5 +178,4 @@ class Attention(nn.Module):
         """
         if self.num_random_features is None:
             return self._exact_attention(Q, K, V, num_batch, batch_seg)
-        else:
-            return self._approximate_attention(Q, K, V, num_batch, batch_seg, mask)
+        return self._approximate_attention(Q, K, V, num_batch, batch_seg, mask)

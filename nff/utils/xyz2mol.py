@@ -12,13 +12,12 @@ Implementation by Jan H. Jensen, based on the paper
 """
 
 import copy
-import itertools
-import pickle
-from functools import wraps
 import errno
+import itertools
 import os
+import pickle
 import signal
-
+from functools import wraps
 
 try:
     from rdkit.Chem import rdEHTTools  # requires RDKit 2019.9.1 or later
@@ -27,13 +26,11 @@ except ImportError:
 
 from collections import defaultdict
 
-import numpy as np
 import networkx as nx
-
+import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem, GetPeriodicTable
 from rdkit.Chem.rdchem import EditableMol
-
 
 global __ATOM_LIST__
 __ATOM_LIST__ = [
@@ -281,7 +278,7 @@ def BO_is_OK(BO, AC, charge, DU, atomic_valence_electrons, atoms, valances, allo
                 if number_of_single_bonds_to_C == 2 and BO_valences[i] == 2:
                     Q += 1
                     q = 2
-                if number_of_single_bonds_to_C == 3 and Q + 1 < charge:
+                if number_of_single_bonds_to_C == 3 and charge > Q + 1:
                     Q += 2
                     q = 1
 
@@ -305,9 +302,7 @@ def get_atomic_charge(atom, atomic_valence_electrons, BO_valence):
         charge = 1 - BO_valence
     elif atom == 5:
         charge = 3 - BO_valence
-    elif atom == 15 and BO_valence == 5:
-        charge = 0
-    elif atom == 16 and BO_valence == 6:
+    elif (atom == 15 and BO_valence == 5) or (atom == 16 and BO_valence == 6):
         charge = 0
     else:
         charge = atomic_valence_electrons - 8 + BO_valence
@@ -382,7 +377,7 @@ def BO2mol(mol, BO_matrix, atoms, atomic_valence_electrons, mol_charge, allow_ch
     BO_valences = list(BO_matrix.sum(axis=1))
 
     if l != l2:
-        raise RuntimeError("sizes of adjMat ({0:d}) and Atoms {1:d} differ".format(l, l2))
+        raise RuntimeError(f"sizes of adjMat ({l:d}) and Atoms {l2:d} differ")
 
     rwMol = Chem.RWMol(mol)
 
@@ -552,7 +547,7 @@ def AC2BO(AC, atoms, charge, allow_charged_fragments=True, use_graph=True):
             if status:
                 return BO, atomic_valence_electrons
 
-            elif BO.sum() >= best_BO.sum() and valences_not_too_large(BO, valences):
+            if BO.sum() >= best_BO.sum() and valences_not_too_large(BO, valences):
                 best_BO = BO.copy()
 
     return best_BO, atomic_valence_electrons
@@ -630,8 +625,7 @@ def xyz2AC(atoms, xyz, charge, use_huckel=False):
 
     if use_huckel:
         return xyz2AC_huckel(atoms, xyz, charge)
-    else:
-        return xyz2AC_vdW(atoms, xyz)
+    return xyz2AC_vdW(atoms, xyz)
 
 
 def xyz2AC_vdW(atoms, xyz):

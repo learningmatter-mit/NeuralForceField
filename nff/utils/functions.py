@@ -6,14 +6,14 @@ dimenet/blob/master/dimenet/model/
 layers/basis_utils.py.
 """
 
-import numpy as np
-from scipy.optimize import brentq
-from scipy import special as sp
-import sympy as sym
 import copy
-import torch
 import math
 
+import numpy as np
+import sympy as sym
+import torch
+from scipy import special as sp
+from scipy.optimize import brentq
 
 EPS = 1e-15
 
@@ -213,7 +213,7 @@ def make_c_table(l_max):
     c_table = {}
     for l in range(l_max + 1):
         for m in range(-l, l + 1):
-            for p in range(0, math.floor((l - m) / 2) + 1):
+            for p in range(math.floor((l - m) / 2) + 1):
                 c_table[(p, l, m)] = c_plm(p, l, m)
     return c_table
 
@@ -314,7 +314,7 @@ def make_g_funcs(bern_k, gamma, r_cut, l_max=2):
     g_funcs = {}
     letters = {0: "s", 1: "p", 2: "d"}
 
-    for l in range(0, l_max + 1):
+    for l in range(l_max + 1):
         letter = letters[l]
         name = f"g_{letter}"
         g_func = get_g_func(l=l, r_cut=r_cut, bern_k=bern_k, gamma=gamma, y_lm_fn=y_lm_fn)

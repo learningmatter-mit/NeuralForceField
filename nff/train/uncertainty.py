@@ -8,12 +8,12 @@ import torch
 from ..io.gmm import GaussianMixture
 
 __all__ = [
-    "Uncertainty",
+    "ConformalPrediction",
     "EnsembleUncertainty",
     "EvidentialUncertainty",
-    "MVEUncertainty",
     "GMMUncertainty",
-    "ConformalPrediction",
+    "MVEUncertainty",
+    "Uncertainty",
 ]
 
 
@@ -52,7 +52,7 @@ class Uncertainty:
         """
         Set the minimum uncertainty value to be used for scaling the uncertainty.
         """
-        if getattr(self, "umin") is None:
+        if self.umin is None:
             self.umin = min_uncertainty
         elif force:
             warnings.warn(f"Uncertainty: min_uncertainty already set to {self.umin}. Overwriting.")
@@ -64,7 +64,7 @@ class Uncertainty:
         """
         Scale the uncertainty to the minimum value.
         """
-        if getattr(self, "umin") is not None:
+        if self.umin is not None:
             if self.order not in ["system_mean_squared"]:
                 uncertainty = uncertainty - self.umin
             else:
@@ -88,7 +88,7 @@ class Uncertainty:
         """
         Calibrate the uncertainty using Conformal Prediction.
         """
-        if getattr(self.CP, "qhat") is None:
+        if self.CP.qhat is None:
             raise Exception("Uncertainty: ConformalPrediction not fitted.")
 
         cp_uncertainty, qhat = self.CP.predict(uncertainty)
@@ -440,7 +440,7 @@ class GMMUncertainty(Uncertainty):
         self.gm_model.fit(self.Xtrain.squeeze().cpu().numpy())
 
         # Save the fitted GMM model if gmm_path is specified
-        if hasattr(self, "gmm_path") and not os.path.exists(getattr(self, "gmm_path")):
+        if hasattr(self, "gmm_path") and not os.path.exists(self.gmm_path):
             self.gm_model.save(self.gmm_path)
             print(f"Saved fitted GMM model to {self.gmm_path}")
 

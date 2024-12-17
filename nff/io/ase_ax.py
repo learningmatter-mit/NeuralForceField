@@ -1,19 +1,17 @@
 import numpy as np
 import torch
-
 from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
 
 import nff.utils.constants as const
-from nff.train import load_model
-from nff.data.sparse import sparsify_array
 from nff.data import Dataset
-from nff.nn.utils import torch_nbr_list
-from nff.nn.models.schnet import SchNet, SchNetDiabat
-from nff.nn.models.hybridgraph import HybridGraphConv
-from nff.nn.models.schnet_features import SchNetFeatures
+from nff.data.sparse import sparsify_array
 from nff.nn.models.cp3d import OnlyBondUpdateCP3D
-
+from nff.nn.models.hybridgraph import HybridGraphConv
+from nff.nn.models.schnet import SchNet, SchNetDiabat
+from nff.nn.models.schnet_features import SchNetFeatures
+from nff.nn.utils import torch_nbr_list
+from nff.train import load_model
 
 DEFAULT_CUTOFF = 5.0
 DEFAULT_SKIN = 1.0
@@ -263,9 +261,7 @@ class NeuralFF(Calculator):
             self.results["forces"] = []
 
         for key in self.output_keys:
-            assert self.conversion in CONVERSION_DIC, "Unit conversion kcal/mol to {} not supported.".format(
-                self.conversion
-            )
+            assert self.conversion in CONVERSION_DIC, f"Unit conversion kcal/mol to {self.conversion} not supported."
 
             value = prediction[key].detach().cpu().numpy() * CONVERSION_DIC[self.conversion]
 

@@ -4,9 +4,8 @@ from collections import Counter
 from pathlib import Path
 
 import numpy as np
-import torch
-
 import pytest
+import torch
 
 from nff.data.dataset import (
     Dataset,

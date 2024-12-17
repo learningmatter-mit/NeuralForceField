@@ -3,16 +3,17 @@ Ab initio version of Tully's surface hopping
 """
 
 import argparse
-import shutil
-import os
+import copy
 import math
+import os
+import shutil
+
 import numpy as np
 from ase import Atoms
-import copy
 
-from nff.md.tully.dynamics import NeuralTully, TULLY_LOG_FILE, TULLY_SAVE_FILE
-from nff.md.tully.io import load_json, coords_to_xyz
 from nff.md.tully.ab_io import get_results as ab_results
+from nff.md.tully.dynamics import TULLY_LOG_FILE, TULLY_SAVE_FILE, NeuralTully
+from nff.md.tully.io import coords_to_xyz, load_json
 from nff.utils import constants as const
 
 

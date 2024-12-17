@@ -1,22 +1,19 @@
-import numpy as np
-import random
-from datetime import datetime
-import torch
 import copy
 import pickle
+import random
+from datetime import datetime
 
+import numpy as np
+import torch
 from ase.io.trajectory import Trajectory
-
-from nff.md.utils_ax import mol_dot, mol_norm, ZhuNakamuraLogger, atoms_to_nxyz
-from nff.md.nvt_ax import NoseHoover, NoseHooverChain
-from nff.utils.constants import BOHR_RADIUS, FS_TO_AU, AMU_TO_AU, ASE_TO_FS, EV_TO_AU
-from nff.data import Dataset, collate_dicts
-from nff.utils.cuda import batch_to
-from nff.utils.constants import KCAL_TO_AU
-from nff.train import load_model
-
 from torch.utils.data import DataLoader
 
+from nff.data import Dataset, collate_dicts
+from nff.md.nvt_ax import NoseHoover, NoseHooverChain
+from nff.md.utils_ax import ZhuNakamuraLogger, atoms_to_nxyz, mol_dot, mol_norm
+from nff.train import load_model
+from nff.utils.constants import AMU_TO_AU, ASE_TO_FS, BOHR_RADIUS, EV_TO_AU, FS_TO_AU, KCAL_TO_AU
+from nff.utils.cuda import batch_to
 
 HBAR = 1
 OUT_FILE = "trj.csv"
@@ -387,7 +384,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         # update surf (which also appends to surf_list)
         self.surf = self.surf
         self.time = self.time + self.dt
-        self.log("Completed step {}. Currently in state {}.".format(int(self.time / self.dt), self.surf))
+        self.log(f"Completed step {int(self.time / self.dt)}. Currently in state {self.surf}.")
         self.log(
             "Relative energies are {} eV".format(
                 ", ".join(((self.energies - self.energies[0]) * 27.2).reshape(-1).astype("str").tolist())
@@ -731,8 +728,8 @@ class BatchedZhuNakamura:
         self.num_trj = batched_params["num_trj"]
         self.zhu_trjs = self.make_zhu_trjs(props, atoms_list, zhu_params)
         self.max_time = self.zhu_trjs[0].max_time
-        self.energy_keys = ["energy_{}".format(i) for i in range(self.zhu_trjs[0].num_states)]
-        self.grad_keys = ["{}_grad".format(key) for key in self.energy_keys]
+        self.energy_keys = [f"energy_{i}" for i in range(self.zhu_trjs[0].num_states)]
+        self.grad_keys = [f"{key}_grad" for key in self.energy_keys]
 
         self.props = self.duplicate_props(props)
         self.nbr_update_period = batched_params["nbr_update_period"]
@@ -762,8 +759,8 @@ class BatchedZhuNakamura:
 
         for i, atoms in enumerate(atoms_list):
             these_params = copy.deepcopy(zhu_params)
-            these_params["out_file"] = "{}_{}.csv".format(base_out_name, i)
-            these_params["log_file"] = "{}_{}.log".format(base_log_name, i)
+            these_params["out_file"] = f"{base_out_name}_{i}.csv"
+            these_params["log_file"] = f"{base_log_name}_{i}.log"
 
             zhu_trjs.append(ZhuNakamuraDynamics(atoms=atoms, **these_params))
 
@@ -888,7 +885,7 @@ class BatchedZhuNakamura:
                 get_new_neighbors = False
 
             self.step(get_new_neighbors=get_new_neighbors)
-            print("Completed step {}".format(num_steps))
+            print(f"Completed step {num_steps}")
 
             complete = all([trj.time >= self.max_time for trj in self.zhu_trjs])
 

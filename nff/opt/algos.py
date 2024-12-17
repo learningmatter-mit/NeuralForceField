@@ -1,7 +1,7 @@
-from ase.optimize.sciopt import SciPyFminCG, SciPyFminBFGS
-from ase.optimize import BFGS
-import scipy.optimize as opt
 import numpy as np
+import scipy.optimize as opt
+from ase.optimize import BFGS
+from ase.optimize.sciopt import SciPyFminBFGS, SciPyFminCG
 
 
 class Converged(Exception):

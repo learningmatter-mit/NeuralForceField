@@ -1,24 +1,23 @@
 import torch
 from torch import nn
-from nff.utils.scatter import compute_grad
-from nff.utils.tools import make_directed
-from nff.utils import constants as const
+
+from nff.nn.models.spooky_net_source.spookynet import SpookyNet as SourceSpooky
+from nff.nn.modules.schnet import get_offsets, get_rij
 from nff.nn.modules.spooky import (
-    DEFAULT_DROPOUT,
     DEFAULT_ACTIVATION,
+    DEFAULT_DROPOUT,
     DEFAULT_MAX_Z,
     DEFAULT_RES_LAYERS,
-    CombinedEmbedding,
-    InteractionBlock,
     AtomwiseReadout,
+    CombinedEmbedding,
     Electrostatics,
+    InteractionBlock,
     NuclearRepulsion,
     get_dipole,
 )
-from nff.nn.modules.schnet import get_rij, get_offsets
-
-
-from nff.nn.models.spooky_net_source.spookynet import SpookyNet as SourceSpooky
+from nff.utils import constants as const
+from nff.utils.scatter import compute_grad
+from nff.utils.tools import make_directed
 
 
 def default(val, def_val):

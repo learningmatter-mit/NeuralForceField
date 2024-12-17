@@ -1,23 +1,23 @@
+import copy
+import json
 import os
+import pickle
 import random
-import subprocess
 import re
 import socket
+import subprocess
 import time
-import numpy as np
-import json
-import pickle
-import copy
 
-from rdkit.Chem import AddHs, MolFromSmiles, inchi, GetPeriodicTable, Conformer, MolToSmiles
+import numpy as np
+from rdkit.Chem import AddHs, Conformer, GetPeriodicTable, MolFromSmiles, MolToSmiles, inchi
 from rdkit.Chem.AllChem import (
     EmbedMultipleConfs,
-    UFFGetMoleculeForceField,
+    GetConformerRMS,
     MMFFGetMoleculeForceField,
     MMFFGetMoleculeProperties,
-    GetConformerRMS,
+    UFFGetMoleculeForceField,
 )
-from rdkit.Chem.rdmolops import RemoveHs, GetFormalCharge
+from rdkit.Chem.rdmolops import GetFormalCharge, RemoveHs
 
 from nff.utils.misc import read_csv, tqdm_enum
 
@@ -83,7 +83,7 @@ def align_rmsd(file1, file2, path, smarts=None):
     return float(rmsd)
 
 
-class ConformerGenerator(object):
+class ConformerGenerator:
     """
     Generates conformations of molecules from 2D representation.
     """
@@ -121,8 +121,8 @@ class ConformerGenerator(object):
             randomSeed=random.randint(1, 10000000),
         )
         if len(self.initial_confs) == 0:
-            output.write((f"Generated  {len(self.initial_confs)} " "initial confs\n"))
-            output.write((f"Trying again with {max_generated_conformers * 10} " "attempts and random coords\n"))
+            output.write(f"Generated  {len(self.initial_confs)} " "initial confs\n")
+            output.write(f"Trying again with {max_generated_conformers * 10} " "attempts and random coords\n")
 
             self.initial_confs = EmbedMultipleConfs(
                 self.mol,
@@ -146,15 +146,15 @@ class ConformerGenerator(object):
         """
 
         if "\\" in self.smiles or "/" in self.smiles:
-            output.write(("WARNING: Smiles string contains slashes, " "which specify cis/trans stereochemistry.\n"))
-            output.write(("Bypassing force-field minimization to avoid generating " "incorrect isomer.\n"))
+            output.write("WARNING: Smiles string contains slashes, " "which specify cis/trans stereochemistry.\n")
+            output.write("Bypassing force-field minimization to avoid generating " "incorrect isomer.\n")
             minimize = False
 
         if self.forcefield != "mmff" and self.forcefield != "uff":
             raise ValueError("Unrecognised force field")
         if self.forcefield == "mmff":
             props = MMFFGetMoleculeProperties(self.mol)
-            for i in range(0, len(self.initial_confs)):
+            for i in range(len(self.initial_confs)):
                 potential = MMFFGetMoleculeForceField(self.mol, props, confId=i)
                 if potential is None:
                     output.write("MMFF not available, using UFF\n")
@@ -168,7 +168,7 @@ class ConformerGenerator(object):
                 self.conf_energies.append((i, mmff_energy))
 
         elif self.forcefield == "uff":
-            for i in range(0, len(self.initial_confs)):
+            for i in range(len(self.initial_confs)):
                 potential = UFFGetMoleculeForceField(self.mol, confId=i)
                 assert potential is not None
                 if minimize:
@@ -194,15 +194,15 @@ class ConformerGenerator(object):
         for i, pair_1 in enumerate(confs):
             if i == 0:
                 index_0, energy_0 = pair_1
-            output.write((f"clustering cluster {i} of " f"{len(self.conf_energies)}\n"))
+            output.write(f"clustering cluster {i} of " f"{len(self.conf_energies)}\n")
             index_1, energy_1 = pair_1
             if abs(energy_1 - energy_0) > Report_e_tol:
                 output.write(
-                    (
+
                         "Breaking because hit Report Energy Window, "
                         f"E was {energy_1} kcal/mol "
                         f"and minimum was {energy_0} \n"
-                    )
+
                 )
 
                 break
@@ -233,7 +233,7 @@ class ConformerGenerator(object):
                             ignore.append(j)
             self.full_clusters.append(clustered)
         output.write(f"{ignored} ignore passes made\n")
-        output.write((f"{calcs_performed} overlays needed out " f"of a possible {len(self.conf_energies) ** 2}\n"))
+        output.write(f"{calcs_performed} overlays needed out " f"of a possible {len(self.conf_energies) ** 2}\n")
 
         ranked_clusters = []
         for i, cluster in enumerate(self.full_clusters):
@@ -282,7 +282,7 @@ class ConformerGenerator(object):
                         output.write("obfit failed, falling back to obabel --align")
                         output.write(f"Exception {e}\n")
                         try:
-                            rms = align_rmsd(f"{key}_Conf_{str(i + 1)}", f"{key}_Conf_{str(j + 1)}", path)
+                            rms = align_rmsd(f"{key}_Conf_{i + 1!s}", f"{key}_Conf_{j + 1!s}", path)
                         except (ValueError, subprocess.TimeoutExpired):
                             continue
                     else:
@@ -306,8 +306,8 @@ class ConformerGenerator(object):
                             output.write("obfit failed, falling back to obabel --align")
                             output.write(f"Exception {e}\n")
                             try:
-                                i_key = f"{key}_Conf_{str(i + 1)}"
-                                inv_key = f"{key}_Conf_{str(j + 1)}_inv"
+                                i_key = f"{key}_Conf_{i + 1!s}"
+                                inv_key = f"{key}_Conf_{j + 1!s}_inv"
                                 rmsinv = align_rmsd(i_key, inv_key)
                             except (ValueError, subprocess.TimeoutExpired):
                                 continue
@@ -316,7 +316,7 @@ class ConformerGenerator(object):
 
                     rms = min([rms, rmsinv])
                     os.remove(key + "_Conf_" + str(j + 1) + "_inv.xyz")
-                    output.write((f"Comparing {i + 1} {j + 1} " f"RMSD after checking inversion {rms}\n"))
+                    output.write(f"Comparing {i + 1} {j + 1} " f"RMSD after checking inversion {rms}\n")
                 if rms <= rms_tolerance:
                     self.removed.append(j)
                     output.write("Removed Conf_" + str(j + 1) + "\n")
@@ -343,7 +343,7 @@ def _atomic_pos_from_conformer(conformer):
     """
     atom_positions = []
     natoms = conformer.GetNumAtoms()
-    for atom_num in range(0, natoms):
+    for atom_num in range(natoms):
         pos = conformer.GetAtomPosition(atom_num)
         atom_positions.append([pos.x, pos.y, pos.z])
     return atom_positions
@@ -387,12 +387,12 @@ def minimize(output, molecule, forcefield, nconf_gen, prun_tol, e_window, rms_to
     # print "There are", NumRotatableBonds(mol)
     output.write("Generating initial conformations\n")
     confgen = ConformerGenerator(smiles=molecule, forcefield=forcefield)
-    output.write((f"Minimising conformations using the {forcefield} " "force field\n"))
+    output.write(f"Minimising conformations using the {forcefield} " "force field\n")
     confgen.generate(max_generated_conformers=int(nconf_gen), prune_thresh=float(prun_tol), output=output)
     gen_time = time.time()
     confgen.minimise(output=output)
     min_time = time.time()
-    output.write(("Minimisation complete, generated conformations " "with the following energies:\n"))
+    output.write("Minimisation complete, generated conformations " "with the following energies:\n")
     output.write("\n".join([str(energy[1]) for energy in confgen.conf_energies]) + "\n")
     msg = (
         f"Clustering structures using an energy window of "
@@ -431,11 +431,11 @@ def summarize(output, gen_time, start_time, min_time, cluster_time):
     recluster_time = time.time()
 
     output.write(socket.gethostname() + "\n")
-    output.write("gen time  {0:1f}  sec\n".format(gen_time - start_time))
-    output.write("min time  {0:1f}  sec\n".format(min_time - gen_time))
-    output.write("cluster time  {0:1f}  sec\n".format(cluster_time - min_time))
-    output.write("recluster time  {0:1f}  sec\n".format(recluster_time - cluster_time))
-    output.write("total time  {0:1f}  sec\n".format(time.time() - start_time))
+    output.write(f"gen time  {gen_time - start_time:1f}  sec\n")
+    output.write(f"min time  {min_time - gen_time:1f}  sec\n")
+    output.write(f"cluster time  {cluster_time - min_time:1f}  sec\n")
+    output.write(f"recluster time  {recluster_time - cluster_time:1f}  sec\n")
+    output.write(f"total time  {time.time() - start_time:1f}  sec\n")
     output.write("Terminated successfully\n")
 
 
@@ -599,7 +599,7 @@ def one_species_confs(
         output.write("\n".join([molecule]) + "\n")
 
         if any([element in molecule for element in UFF_ELEMENTS]):
-            output.write(("Switching to UFF, since MMFF94 does " "not have boron and/or aluminum\n"))
+            output.write("Switching to UFF, since MMFF94 does " "not have boron and/or aluminum\n")
             forcefield = "uff"
 
         confgen, gen_time, min_time = minimize(

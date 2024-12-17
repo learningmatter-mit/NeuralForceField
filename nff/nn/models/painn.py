@@ -1,33 +1,33 @@
-from torch import nn
-import numpy as np
 import copy
-from nff.utils.tools import make_directed
+
+import numpy as np
+import torch
+from torch import nn
+
+from nff.nn.layers import Diagonalize, ExpNormalBasis
+from nff.nn.modules.diabat import AdiabaticReadout, DiabaticReadout
 from nff.nn.modules.painn import (
-    MessageBlock,
-    UpdateBlock,
     EmbeddingBlock,
-    ReadoutBlock,
-    ReadoutBlock_Vec,
-    ReadoutBlock_Tuple,
-    ReadoutBlock_Complex,
-    TransformerMessageBlock,
+    MessageBlock,
     NbrEmbeddingBlock,
+    ReadoutBlock,
+    ReadoutBlock_Complex,
+    ReadoutBlock_Tuple,
+    ReadoutBlock_Vec,
+    TransformerMessageBlock,
+    UpdateBlock,
 )
 from nff.nn.modules.schnet import (
     AttentionPool,
-    SumPool,
-    MolFpPool,
     MeanPool,
-    get_rij,
+    MolFpPool,
+    SumPool,
     add_embedding,
     add_stress,
+    get_rij,
 )
-
-from nff.nn.modules.diabat import DiabaticReadout, AdiabaticReadout
-from nff.nn.layers import Diagonalize, ExpNormalBasis
-from nff.utils.scatter import scatter_add, compute_grad
-import torch
-
+from nff.utils.scatter import compute_grad, scatter_add
+from nff.utils.tools import make_directed
 
 POOL_DIC = {
     "sum": SumPool,
@@ -224,7 +224,7 @@ class Painn(nn.Module):
         if inference:
             atomwise_out = batch_detach(atomwise_out)
         for key in atomwise_out.keys():
-            if key not in all_results.keys():
+            if key not in all_results:
                 all_results[key] = atomwise_out[key]
 
         return all_results, xyz

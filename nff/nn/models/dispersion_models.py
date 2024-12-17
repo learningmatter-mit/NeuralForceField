@@ -2,16 +2,15 @@
 Models with added empirical dispersion on top
 """
 
-import torch
 import numpy as np
+import torch
 from torch import nn
 
-from nff.nn.models.painn import add_stress
-from nff.utils.scatter import compute_grad
+from nff.nn.models.painn import Painn, PainnDiabat, add_stress
 from nff.utils import constants as const
-from nff.utils.dispersion import get_dispersion as base_dispersion, grimme_dispersion
-from nff.nn.models.painn import Painn
-from nff.nn.models.painn import PainnDiabat
+from nff.utils.dispersion import get_dispersion as base_dispersion
+from nff.utils.dispersion import grimme_dispersion
+from nff.utils.scatter import compute_grad
 
 
 class PainnDispersion(nn.Module):

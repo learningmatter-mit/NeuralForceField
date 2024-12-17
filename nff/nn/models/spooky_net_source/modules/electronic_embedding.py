@@ -1,8 +1,10 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from .residual_mlp import ResidualMLP
-from typing import Optional
 
 
 class ElectronicEmbedding(nn.Module):

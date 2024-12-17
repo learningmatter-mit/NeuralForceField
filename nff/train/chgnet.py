@@ -1,4 +1,5 @@
-from typing import Dict, Iterable, Union
+from collections.abc import Iterable
+from typing import Dict, Union
 
 import torch
 from chgnet.trainer.trainer import CombinedLoss

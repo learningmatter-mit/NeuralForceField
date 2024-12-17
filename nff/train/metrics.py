@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from sklearn.metrics import roc_auc_score, auc, precision_recall_curve
+from sklearn.metrics import auc, precision_recall_curve, roc_auc_score
 
 
 class Metric:

@@ -137,7 +137,7 @@ class NeuralTully:
 
     def init_decoherence(self, params):
         if not params:
-            return
+            return None
 
         name = params["name"]
         kwargs = params.get("kwargs", {})
@@ -191,9 +191,9 @@ class NeuralTully:
     @property
     def U(self):
         if not self.props:
-            return
+            return None
         if "U" not in self.props:
-            return
+            return None
         return self.props["U"]
 
     @U.setter
@@ -238,7 +238,7 @@ class NeuralTully:
                     continue
                 key = f"nacv_{i}{j}"
                 if key not in self.props:
-                    return
+                    return None
                 _nacv[:, i, j, :] = self.props[key]
 
         return _nacv
@@ -273,7 +273,7 @@ class NeuralTully:
 
         nacv = self.nacv
         if nacv is None:
-            return
+            return None
 
         gap = self.gap.reshape(self.num_samples, self.num_states, self.num_states, 1, 1)
 
@@ -338,7 +338,7 @@ class NeuralTully:
     @property
     def H_plus_nacv(self):
         if self.nacv is None:
-            return
+            return None
         pot_V = self.pot_V
         nac_term = -1j * (self.nacv * self.vel.reshape(self.num_samples, 1, 1, self.num_atoms, 3)).sum((-1, -2))
 
@@ -349,7 +349,7 @@ class NeuralTully:
         diabat_keys = getattr(self, "diabat_keys", [None])
         reshaped = np.array(diabat_keys).reshape(-1).tolist()
         if not all([i in self.props for i in reshaped]):
-            return
+            return None
 
         _H_d = np.zeros((self.num_samples, self.num_diabat, self.num_diabat))
 

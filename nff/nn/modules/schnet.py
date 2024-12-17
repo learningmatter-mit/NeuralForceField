@@ -1014,7 +1014,7 @@ def sum_and_grad(batch, xyz, r_ij, nbrs, atomwise_output, grad_keys, out_keys=No
             use_val = val.sum(-1)
 
         else:
-            raise Exception(("Don't know how to handle val shape " "{} for key {}".format(val.shape, key)))
+            raise Exception("Don't know how to handle val shape " f"{val.shape} for key {key}")
 
         pooled_result = scatter_add(use_val, mol_idx, dim_size=dim_size)
         if mean:

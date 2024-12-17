@@ -1,10 +1,12 @@
+from typing import Optional, Tuple
+
 import torch
 import torch.nn as nn
-from .residual_stack import ResidualStack
+
 from .local_interaction import LocalInteraction
 from .nonlocal_interaction import NonlocalInteraction
 from .residual_mlp import ResidualMLP
-from typing import Tuple, Optional
+from .residual_stack import ResidualStack
 
 
 class InteractionModule(nn.Module):

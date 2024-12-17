@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+
 from nff.nn.layers import CosineEnvelope, Dense
 from nff.utils.scatter import scatter_add
 from nff.utils.tools import layer_types

@@ -1,6 +1,8 @@
 import math
+
 import torch
 import torch.nn as nn
+
 from .electron_configurations import electron_config
 
 
@@ -66,5 +68,5 @@ class NuclearEmbedding(nn.Module):
             self.embedding = self.element_embedding + self.config_linear(self.electron_config)
         if self.embedding.device.type == "cpu":  # indexing is faster on CPUs
             return self.embedding[Z]
-        else:  # gathering is faster on GPUs
-            return torch.gather(self.embedding, 0, Z.view(-1, 1).expand(-1, self.num_features))
+        # gathering is faster on GPUs
+        return torch.gather(self.embedding, 0, Z.view(-1, 1).expand(-1, self.num_features))

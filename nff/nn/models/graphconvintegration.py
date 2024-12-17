@@ -1,7 +1,7 @@
 import torch.nn as nn
 
-from nff.nn.modules import SchNetConv, NodeMultiTaskReadOut
 from nff.nn.graphop import batch_and_sum
+from nff.nn.modules import NodeMultiTaskReadOut, SchNetConv
 from nff.nn.utils import get_default_readout
 
 

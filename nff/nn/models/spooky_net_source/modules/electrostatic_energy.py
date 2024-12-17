@@ -1,8 +1,10 @@
 import math
+from typing import Optional
+
 import torch
 import torch.nn as nn
+
 from ..functional import switch_function
-from typing import Optional
 
 """
 computes electrostatic energy, switches between a constant value
@@ -202,5 +204,4 @@ class ElectrostaticEnergy(nn.Module):
             assert cell is not None
             assert batch_seg is not None
             return self._ewald(N, q, R, rij, idx_i, idx_j, cell, num_batch, batch_seg)
-        else:
-            return self._coulomb(N, q, rij, idx_i, idx_j)
+        return self._coulomb(N, q, rij, idx_i, idx_j)

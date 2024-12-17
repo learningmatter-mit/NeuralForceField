@@ -80,7 +80,7 @@ def log(prefix, msg):
         prefix (str)
         msg (str)
     """
-    print("{:>12}:  {}".format(prefix.upper(), msg))
+    print(f"{prefix.upper():>12}:  {msg}")
 
 
 def add_json_args(args, config_flag="config_file"):
@@ -516,7 +516,7 @@ def parse_args_from_json(arg_path, direc):
     parser = argparse.ArgumentParser(description=description)
     default_args.pop("description")
 
-    required = parser.add_argument_group(("required arguments (either in " "the command line or the config " "file)"))
+    required = parser.add_argument_group("required arguments (either in " "the command line or the config " "file)")
     optional = parser.add_argument_group("optional arguments")
 
     for name, info in default_args.items():

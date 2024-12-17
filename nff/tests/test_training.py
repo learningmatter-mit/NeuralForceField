@@ -5,8 +5,8 @@ import torch
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 
-from nff.data import Dataset, split_train_validation_test, collate_dicts, to_tensor
-from nff.train import Trainer, get_model, loss, hooks, metrics, evaluate
+from nff.data import Dataset, collate_dicts, split_train_validation_test, to_tensor
+from nff.train import Trainer, evaluate, get_model, hooks, loss, metrics
 
 
 def test_training(device, tmpdir):

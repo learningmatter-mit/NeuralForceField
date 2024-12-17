@@ -1,7 +1,9 @@
+from typing import List, Optional, Tuple
+
 import torch
 import torch.nn as nn
+
 from .spookynet import SpookyNet
-from typing import List, Tuple, Optional
 
 
 class SpookyNetEnsemble(nn.Module):

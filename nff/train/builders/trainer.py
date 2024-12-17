@@ -3,11 +3,12 @@
 Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/utils/script_utils/training.py
 """
 
-import os
 import json
+import os
+
+from torch.optim import Adam
 
 import nff
-from torch.optim import Adam
 
 
 def get_trainer(args, model, train_loader, val_loader, metrics, loss_fn=None):

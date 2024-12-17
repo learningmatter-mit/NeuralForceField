@@ -70,7 +70,7 @@ class NffScaleMACE(ScaleShiftMACE):
         compute_virials: bool = False,
         compute_displacement: bool = False,
         **kwargs,
-    ) -> dict:  # noqa: W0221
+    ) -> dict:
         """Forward pass through the model and ouput in NFF format
 
         Args:
@@ -324,7 +324,7 @@ def reduce_foundations(
     num_conv_tp_weights=4,
     num_products=2,
     num_contraction=2,
-) -> "NffScaleMACE":
+) -> NffScaleMACE:
     """Reducing the model by extracting elements of interests
     Refer to the original paper to understand the architecture:
     "https://openreview.net/forum?id=YPpSngE-ZU"
@@ -459,7 +459,7 @@ def restore_foundations(
     num_conv_tp_weights=4,
     num_products=2,
     num_contraction=2,
-) -> "NffScaleMACE":
+) -> NffScaleMACE:
     """Restore back to foundational model from reduced model
     Refer to the original paper to understand the architecture:
     "https://openreview.net/forum?id=YPpSngE-ZU"

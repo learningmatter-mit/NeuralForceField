@@ -1,15 +1,15 @@
-import torch
-from ase.io import Trajectory, write
-from ase import Atoms
-import numpy as np
-
-from nff.io.ase_calcs import EnsembleNFF
-from nff.io.ase import AtomsBatch
-from nff.utils.scatter import compute_grad
-from nff.utils.cuda import batch_to
 from typing import Union
 
+import numpy as np
+import torch
+from ase import Atoms
+from ase.io import Trajectory, write
 from tqdm import tqdm
+
+from nff.io.ase import AtomsBatch
+from nff.io.ase_calcs import EnsembleNFF
+from nff.utils.cuda import batch_to
+from nff.utils.scatter import compute_grad
 
 
 def get_molecules(atom: AtomsBatch, bond_length: dict = None, mode: str = "bond", **kwargs) -> list[np.array]:
@@ -269,8 +269,7 @@ class Attribution:
                 },
             }
             return atoms_list, properties
-        else:
-            return attributions
+        return attributions
 
     def activelearning(
         self,
@@ -337,7 +336,7 @@ class Attribution:
                     neighs = np.append(neighs, a)
                     for n in neighs:
                         atomstocare = np.append(atomstocare, molecules[np.where(balanced_mols == n)[0][0]])
-                    atomstocare = np.array((list(set(atomstocare))))
+                    atomstocare = np.array(list(set(atomstocare)))
                     atomstocare = np.int64(atomstocare)
                     atoms1 = atoms[atomstocare]
                     index = np.where(atoms1.positions == atoms.positions[a])[0][0]

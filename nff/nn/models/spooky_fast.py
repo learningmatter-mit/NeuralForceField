@@ -1,19 +1,20 @@
 import torch
 from torch import nn
-from nff.utils.scatter import compute_grad
-from nff.utils.tools import make_directed, make_undirected
+
 from nff.nn.modules.spooky_fast import (
-    DEFAULT_DROPOUT,
     DEFAULT_ACTIVATION,
+    DEFAULT_DROPOUT,
     DEFAULT_MAX_Z,
     DEFAULT_RES_LAYERS,
-    CombinedEmbedding,
-    InteractionBlock,
     AtomwiseReadout,
+    CombinedEmbedding,
     Electrostatics,
+    InteractionBlock,
     NuclearRepulsion,
     get_dipole,
 )
+from nff.utils.scatter import compute_grad
+from nff.utils.tools import make_directed, make_undirected
 
 
 def default(val, def_val):

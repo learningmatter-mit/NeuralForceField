@@ -1,7 +1,8 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
+
 from ..functional import softplus_inverse
 
 
@@ -47,7 +48,7 @@ class ExponentialBernsteinPolynomials(nn.Module):
         if no_basis_function_at_infinity:  # increase number of basis functions by one
             num_basis_functions += 1
         # compute values to initialize buffers
-        logfactorial = np.zeros((num_basis_functions))
+        logfactorial = np.zeros(num_basis_functions)
         for i in range(2, num_basis_functions):
             logfactorial[i] = logfactorial[i - 1] + np.log(i)
         v = np.arange(0, num_basis_functions)
@@ -91,5 +92,4 @@ class ExponentialBernsteinPolynomials(nn.Module):
         rbf = cutoff_values.view(-1, 1) * torch.exp(x)
         if self.exp_weighting:
             return rbf * torch.exp(alphar)
-        else:
-            return rbf
+        return rbf

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from ..functional import softplus_inverse
 
 
@@ -76,5 +77,4 @@ class ExponentialGaussianFunctions(nn.Module):
         rbf = cutoff_values.view(-1, 1) * torch.exp(-self.width * (expalphar - self.center) ** 2)
         if self.exp_weighting:
             return rbf * expalphar
-        else:
-            return rbf
+        return rbf

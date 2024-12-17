@@ -1,10 +1,9 @@
-import os
-import numpy as np
+import copy
 import csv
 import json
-import copy
+import os
 
-
+import numpy as np
 from ase import units
 from ase.md import MDLogger
 
@@ -27,11 +26,11 @@ def get_energy(atoms):
     # ekin = ekin.detach().numpy()
 
     print(
-        (
+
             "Energy per atom: Epot = %.2fkcal/mol  "
             "Ekin = %.2fkcal/mol (T=%3.0fK)  "
             "Etot = %.2fkcal/mol" % (epot, ekin, Temperature, epot + ekin)
-        )
+
     )
     # print('Energy per atom: Epot = %.5feV  Ekin = %.5feV (T=%3.0fK)  '
     #      'Etot = %.5feV' % (epot, ekin, Temperature, (epot + ekin)))
@@ -60,7 +59,7 @@ def write_traj(filename, frames):
                 except BaseException:
                     file.write(str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
             elif atom.shape[0] == 3:
-                file.write(("1" + " " + str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + "\n"))
+                file.write("1" + " " + str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + "\n")
             else:
                 raise ValueError("wrong format")
     file.close()

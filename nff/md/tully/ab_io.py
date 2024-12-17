@@ -1,15 +1,14 @@
-import os
+import copy
 import json
+import os
+import time
+
+import numpy as np
+from chemconfigs.parsers.qchem import get_cis_grads, get_nacv, get_sf_energies
 from jinja2 import Template
 from rdkit import Chem
-import time
-import numpy as np
-import copy
-
-from chemconfigs.parsers.qchem import get_cis_grads, get_nacv, get_sf_energies
 
 from nff.utils.misc import bash_command
-
 
 CONFIG_DIRS = {
     "bhhlyp_6-31gs_sf_tddft_engrad_qchem": "qchem/bhhlyp_6-31gs_sf_tddft_engrad",

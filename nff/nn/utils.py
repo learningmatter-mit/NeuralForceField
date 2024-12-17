@@ -1,15 +1,15 @@
 """Tools to build layers"""
 
 import collections
-import numpy as np
-import torch
 import copy
 
+import numpy as np
+import torch
 from torch.nn import ModuleDict, Sequential
+
 from nff.nn.activations import shifted_softplus
 from nff.nn.layers import Dense, Diagonalize
 from nff.utils.scatter import scatter_add
-
 
 layer_types = {
     "linear": torch.nn.Linear,
@@ -168,7 +168,7 @@ def torch_nbr_list(atomsobject, cutoff, device="cuda:0", directed=True, requires
         # otherwise, default to the "robust" nbr_list function below for small cells
         if (
             np.all(2 * cutoff < atomsobject.cell.cellpar()[:3])
-            and not np.count_nonzero(atomsobject.cell.T - np.diag(np.diagonal(atomsobject.cell.T))) != 0
+            and np.count_nonzero(atomsobject.cell.T - np.diag(np.diagonal(atomsobject.cell.T))) == 0
         ):
             # "fast" nbr_list function for large cells (pbc)
             xyz = torch.Tensor(atomsobject.get_positions(wrap=False)).to(device)

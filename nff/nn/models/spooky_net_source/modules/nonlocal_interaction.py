@@ -1,8 +1,10 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
+
 from .attention import Attention
 from .residual_mlp import ResidualMLP
-from typing import Optional
 
 
 class NonlocalInteraction(nn.Module):

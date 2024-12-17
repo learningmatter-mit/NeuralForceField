@@ -3,9 +3,9 @@ from torch import nn
 from torch.nn import Sequential
 
 from nff.data.graphs import get_bond_idx
-from nff.nn.models.conformers import WeightedConformers
-from nff.nn.modules import SchNetEdgeFilter, MixedSchNetConv
 from nff.nn.layers import Dense
+from nff.nn.models.conformers import WeightedConformers
+from nff.nn.modules import MixedSchNetConv, SchNetEdgeFilter
 from nff.utils.tools import layer_types, make_directed
 
 

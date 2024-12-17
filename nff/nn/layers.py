@@ -491,7 +491,7 @@ class CosineEnvelope(nn.Module):
         self.cutoff = cutoff
 
     def forward(self, d):
-        output = 0.5 * (torch.cos((np.pi * d / self.cutoff)) + 1)
+        output = 0.5 * (torch.cos(np.pi * d / self.cutoff) + 1)
         exclude = d >= self.cutoff
         output[exclude] = 0
 

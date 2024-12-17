@@ -3,9 +3,8 @@ from collections.abc import Iterable
 
 import networkx as nx
 import numpy as np
-from ase import Atoms
-
 import pytest
+from ase import Atoms
 
 from nff.io.ase import AtomsBatch
 

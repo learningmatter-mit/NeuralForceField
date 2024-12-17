@@ -1,17 +1,15 @@
+from typing import Tuple, Union
+
 import numpy as np
-from typing import Union, Tuple
-
-from ase.calculators.calculator import Calculator, all_changes
-from ase import units
-
+import openmm as omm
 import openmm.app as app
 import openmm.unit as unit
-import openmm as omm
 import parmed as pmd
+from ase import units
+from ase.calculators.calculator import Calculator, all_changes
 
 import nff.utils.constants as const
 from nff.md.colvars import ColVar
-
 
 nonbondedMethod = {
     "NonPeriodic": app.CutoffNonPeriodic,
@@ -54,7 +52,7 @@ class BiasBase(Calculator):
             # for a list with parm7 and rst7
             parm = pmd.load_file(mmparms["parm7"], mmparms["rst7"])
         else:
-            raise NotImplemented
+            raise NotImplementedError
         # in case we need PBC, the pdb contains the box values
         app.PDBFile(mmparms["pdb"])
 

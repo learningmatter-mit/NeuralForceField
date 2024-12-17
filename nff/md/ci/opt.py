@@ -1,30 +1,32 @@
-from nff.utils.cuda import batch_to
-from nff.utils import constants as const
-from nff.train import load_model
-from nff.nn.tensorgrad import get_schnet_hessians
-from nff.io.ase_ax import AtomsBatch, NeuralFF
-from nff.data import Dataset, collate_dicts
-from torch.utils.data import DataLoader
-from rdkit import Chem
+import copy
+import json
+import os
+import pdb
+import sys
+
+import django
+import numpy as np
+from ase import optimize, units
+from ase.io.trajectory import Trajectory as AseTrajectory
+from ase.md.verlet import VelocityVerlet
+from django.contrib.auth.models import Group
+from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone
+from jobs.models import Job, JobConfig
+from neuralnet.utils import vib
 from pgmols.models import (
     Geom,
     Method,
 )
-from neuralnet.utils import vib
-from jobs.models import Job, JobConfig
-from django.utils import timezone
-from django.contrib.contenttypes.models import ContentType
-from django.contrib.auth.models import Group
-from ase.md.verlet import VelocityVerlet
-from ase.io.trajectory import Trajectory as AseTrajectory
-from ase import optimize, units
-import numpy as np
-import pdb
-import json
-import copy
-import django
-import os
-import sys
+from rdkit import Chem
+from torch.utils.data import DataLoader
+
+from nff.data import Dataset, collate_dicts
+from nff.io.ase_ax import AtomsBatch, NeuralFF
+from nff.nn.tensorgrad import get_schnet_hessians
+from nff.train import load_model
+from nff.utils import constants as const
+from nff.utils.cuda import batch_to
 
 sys.path.append("/home/saxelrod/htvs-ax/htvs")
 
@@ -205,8 +207,8 @@ def opt_ci(model, nxyz, penalty=0.5, lower_idx=0, upper_idx=1, method="BFGS", st
     atoms.set_calculator(init_calc)
     ref_energy = atoms.get_potential_energy().item() * const.EV_TO_KCAL_MOL
 
-    lower_key = "energy_{}".format(lower_idx)
-    upper_key = "energy_{}".format(upper_idx)
+    lower_key = f"energy_{lower_idx}"
+    upper_key = f"energy_{upper_idx}"
 
     set_ci_calc(
         atoms=atoms, model=model, lower_key=lower_key, upper_key=upper_key, ref_energy=ref_energy, penalty=penalty
@@ -310,7 +312,7 @@ def opt_and_sample_ci(
         model=model, nxyz=nxyz, penalty=penalty, lower_idx=lower_idx, upper_idx=upper_idx, method=method, steps=steps
     )
 
-    energy_keys = ["energy_{}".format(lower_idx), "energy_{}".format(upper_idx)]
+    energy_keys = [f"energy_{lower_idx}", f"energy_{upper_idx}"]
 
     lower_atoms, upper_atoms = sample_ci(
         ci_atoms=ci_atoms, model=model, cutoff=cutoff, energy_keys=energy_keys, device=device, kt=KT
@@ -342,8 +344,8 @@ def test():
         kt=KT,
     )
 
-    lower_calc = NeuralFF(model=model, output_keys=["energy_{}".format(lower_idx)])
-    upper_calc = NeuralFF(model=model, output_keys=["energy_{}".format(upper_idx)])
+    lower_calc = NeuralFF(model=model, output_keys=[f"energy_{lower_idx}"])
+    upper_calc = NeuralFF(model=model, output_keys=[f"energy_{upper_idx}"])
 
     lower_atoms.set_calculator(lower_calc)
     upper_atoms.set_calculator(upper_calc)
@@ -356,21 +358,21 @@ def test():
 
 
 def run_ci_md(model, lower_atoms, upper_atoms, lower_idx, upper_idx, base_name="test", dt=0.5, tmax=500):
-    lower_calc = NeuralFF(model=model, output_keys=["energy_{}".format(lower_idx)])
-    upper_calc = NeuralFF(model=model, output_keys=["energy_{}".format(upper_idx)])
+    lower_calc = NeuralFF(model=model, output_keys=[f"energy_{lower_idx}"])
+    upper_calc = NeuralFF(model=model, output_keys=[f"energy_{upper_idx}"])
 
     lower_atoms.set_calculator(lower_calc)
     upper_atoms.set_calculator(upper_calc)
 
-    lower_log = "{}_lower.log".format(base_name)
-    lower_trj_name = "{}_lower.traj".format(base_name)
+    lower_log = f"{base_name}_lower.log"
+    lower_trj_name = f"{base_name}_lower.traj"
     num_steps = int(tmax / dt)
 
     lower_integrator = VelocityVerlet(lower_atoms, dt=dt * units.fs, logfile=lower_log, trajectory=lower_trj_name)
     lower_integrator.run(num_steps)
 
-    upper_log = "{}_upper.log".format(base_name)
-    upper_trj_name = "{}_upper.traj".format(base_name)
+    upper_log = f"{base_name}_upper.log"
+    upper_trj_name = f"{base_name}_upper.traj"
     upper_integrator = VelocityVerlet(upper_atoms, dt=dt * units.fs, logfile=upper_log, trajectory=upper_trj_name)
     upper_integrator.run(num_steps)
 
@@ -523,8 +525,8 @@ def to_db(
     md_job.details = md_details
     md_job.save()
 
-    lower_key = "energy_{}".format(lower_idx)
-    upper_key = "energy_{}".format(upper_idx)
+    lower_key = f"energy_{lower_idx}"
+    upper_key = f"energy_{upper_idx}"
     best_atoms = []
 
     # pdb.set_trace()
@@ -573,7 +575,7 @@ def make_plots():
     smiles = "c1ccc(/N=N\\c2ccccc2)cc1"
     group = Group.objects.get(name="switches")
     parentgeom = Geom.objects.filter(species__smiles=smiles, species__group=group, converged=True).first()
-    trj_name = "{}_upper.traj".format(parentgeom.id)
+    trj_name = f"{parentgeom.id}_upper.traj"
     print(trj_name)
 
     return

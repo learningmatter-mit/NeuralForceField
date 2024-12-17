@@ -249,8 +249,7 @@ def generate_subgraphs(atomsobject, unwrap=True, get_edge=False):
             edge_list.append(list(sg.edges))
     if len(edge_list) != 0:
         return partitions, edge_list
-    else:
-        return partitions
+    return partitions
 
 
 def get_single_molecule(atomsobject, mol_idx, single_mol_id):

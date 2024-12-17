@@ -1,11 +1,8 @@
-from ase.vibrations import Vibrations
-from ase.units import Bohr, mol, kcal
-from ase import Atoms
-
 import numpy as np
-
+from ase import Atoms
+from ase.units import Bohr, kcal, mol
+from ase.vibrations import Vibrations
 from rdkit import Chem
-
 
 PT = Chem.GetPeriodicTable()
 

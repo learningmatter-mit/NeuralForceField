@@ -3,19 +3,17 @@ Tools for computing and plotting the ROCE values of different classification mod
 at different enrichment factors.
 """
 
+import argparse
 import copy
-import pickle
 import json
 import math
+import pickle
 
-import argparse
+import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 
-import numpy as np
-
 from nff.utils import read_csv
-
 
 # height of each ROCE bar slice in the plots, normalized
 # to max value of all bars in the plot

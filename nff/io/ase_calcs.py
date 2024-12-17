@@ -25,6 +25,7 @@ from nff.data import Dataset, collate_dicts
 from nff.io.ase import DEFAULT_DIRECTED, AtomsBatch
 from nff.nn.models.cp3d import OnlyBondUpdateCP3D
 from nff.nn.models.hybridgraph import HybridGraphConv
+from nff.nn.models.mace import NffScaleMACE
 from nff.nn.models.schnet import SchNet, SchNetDiabat
 from nff.nn.models.schnet_features import SchNetFeatures
 from nff.train.builders.model import load_model
@@ -32,7 +33,6 @@ from nff.utils.constants import EV_TO_KCAL_MOL, HARTREE_TO_KCAL_MOL
 from nff.utils.cuda import batch_detach, batch_to
 from nff.utils.geom import batch_compute_distance, compute_distances
 from nff.utils.scatter import compute_grad
-from nff.nn.models.mace import NffScaleMACE
 
 HARTREE_TO_EV = HARTREE_TO_KCAL_MOL / EV_TO_KCAL_MOL
 
@@ -1045,7 +1045,7 @@ class HarmonicRestraint:
         kappas = []
         eq_vals = []
         # in case the restraint does not start at 0
-        templist = list(range(0, restraint_list[0]["step"]))
+        templist = list(range(restraint_list[0]["step"]))
         steps += templist
         kappas += [0 for _ in templist]
         eq_vals += [0 for _ in templist]
@@ -1207,12 +1207,12 @@ class NeuralRestraint(Calculator):
             self.results["stress"] = stress * (1 / atoms.get_volume())
 
         with open("colvar", "a") as f:
-            f.write("{} ".format(self.step * 0.5))
+            f.write(f"{self.step * 0.5} ")
             # ARREGLAR, SI YA ESTA CALCULADO PARA QUE RECALCULAR LA CVS
             for cv in self.hr.cvs:
                 curr_cv_val = float(cv.get_value(torch.tensor(atoms.get_positions(), device=self.device)))
-                f.write(" {:.6f} ".format(curr_cv_val))
-            f.write("{:.6f} \n".format(float(bias_energy)))
+                f.write(f" {curr_cv_val:.6f} ")
+            f.write(f"{float(bias_energy):.6f} \n")
 
     @classmethod
     def from_file(cls, model_path, device="cuda", **kwargs):

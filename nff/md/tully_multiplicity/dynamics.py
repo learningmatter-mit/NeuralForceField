@@ -8,37 +8,34 @@ matrix exponentiation and SciPy can only do one batch at a
 time, so we need to use PyTorch to do it efficiently.
 """
 
-import numpy as np
-import pickle
-import os
 import copy
 import json
-import random
 import math
-from functools import partial
+import os
+import pickle
+import random
 import shutil
-
-from tqdm import tqdm
-
+from functools import partial
 from typing import *
 
-from ase.io.trajectory import Trajectory
+import numpy as np
 from ase import Atoms
+from ase.io.trajectory import Trajectory
+from tqdm import tqdm
 
-from nff.train import load_model
-from nff.utils import constants as const
-from nff.md.utils_ax import atoms_to_nxyz
-from nff.md.tully_multiplicity.io import get_results, load_json, get_atoms
+from nff.md.nvt_ax import NoseHoover, NoseHooverChain
+from nff.md.tully_multiplicity.io import get_atoms, get_results, load_json
 from nff.md.tully_multiplicity.step import (
+    adiabatic_c,
+    get_p_hop,
+    truhlar_decoherence,
     try_hop,
     verlet_step_1,
     verlet_step_2,
-    truhlar_decoherence,
-    adiabatic_c,
-    get_p_hop,
 )
-
-from nff.md.nvt_ax import NoseHoover, NoseHooverChain
+from nff.md.utils_ax import atoms_to_nxyz
+from nff.train import load_model
+from nff.utils import constants as const
 
 METHOD_DIC = {"nosehoover": NoseHoover, "nosehooverchain": NoseHooverChain}
 
@@ -206,7 +203,7 @@ class NeuralTully:
 
     def init_decoherence(self, params):
         if not params:
-            return
+            return None
 
         name = params["name"]
         kwargs = params.get("kwargs", {})
@@ -307,7 +304,7 @@ class NeuralTully:
 
                 if adiabat1 == adiabat2:
                     continue
-                elif adiabat1[0] != adiabat2[0]:
+                if adiabat1[0] != adiabat2[0]:
                     # checks for the same degeneracy
                     continue
 
@@ -336,7 +333,7 @@ class NeuralTully:
 
         nacv = self.nacv
         if nacv is None:
-            return
+            return None
 
         gap = self.gap.reshape(self.num_samples, self.num_states, self.num_states, 1, 1)
 
@@ -438,7 +435,7 @@ class NeuralTully:
 
     def get_H_plus_nacv(self):
         if self.nacv is None:
-            return
+            return None
         # pot_V = self.pot_V
         H_hmc = self.H_hmc
         nac_term = -1j * (self.nacv * self.vel.reshape(self.num_samples, 1, 1, self.num_atoms, 3)).sum((-1, -2))

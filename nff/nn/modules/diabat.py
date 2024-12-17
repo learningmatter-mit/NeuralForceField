@@ -38,7 +38,7 @@ class DiabaticReadout(nn.Module):
 
     def make_cross_talk(self, cross_talk_dic):
         if cross_talk_dic is None:
-            return
+            return None
 
         cross_talk = CrossTalk(
             diabat_keys=self.diabat_keys,
@@ -764,12 +764,11 @@ class AdiabaticReadout(nn.Module):
     def get_abs(self, abs_name):
         if abs_name == "abs":
             return abs
-        elif abs_name is None:
+        if abs_name is None:
             return lambda x: x
-        elif abs_name in layer_types:
+        if abs_name in layer_types:
             return layer_types[abs_name]()
-        else:
-            raise NotImplementedError
+        raise NotImplementedError
 
     def forward(self, results, xyz):
         ordered_keys = sorted(self.output_keys, key=lambda x: int(x.split("_")[-1]))

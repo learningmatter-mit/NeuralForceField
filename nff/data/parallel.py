@@ -2,15 +2,15 @@
 Tools for applying functions in parallel to the dataset
 """
 
-import numpy as np
-from concurrent import futures
 import copy
+from concurrent import futures
+
+import numpy as np
 import torch
 
+from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES, add_e3fp, featurize_atoms, featurize_bonds, make_rd_mols
+from nff.data.graphs import add_bond_idx, kj_ji_to_dset
 from nff.utils import fprint
-from nff.data.features import make_rd_mols, featurize_bonds, featurize_atoms, add_e3fp, BOND_FEAT_TYPES, ATOM_FEAT_TYPES
-from nff.data.graphs import kj_ji_to_dset, add_bond_idx
-
 
 NUM_PROCS = 5
 
@@ -277,7 +277,7 @@ def add_e3fp_parallel(dataset, fp_length, num_procs):
 
 
 def add_kj_ji_parallel(dataset, num_procs):
-    fprint((f"Adding kj and ji indices with {num_procs} " "parallel processes"))
+    fprint(f"Adding kj and ji indices with {num_procs} " "parallel processes")
 
     datasets = split_dataset(dataset=dataset, num=num_procs)
     datasets = kj_ji_parallel(datasets)
@@ -286,7 +286,7 @@ def add_kj_ji_parallel(dataset, num_procs):
 
 
 def add_bond_idx_parallel(dataset, num_procs):
-    fprint((f"Adding bond indices with {num_procs} " "parallel processes"))
+    fprint(f"Adding bond indices with {num_procs} " "parallel processes")
 
     datasets = split_dataset(dataset=dataset, num=num_procs)
     datasets = bond_idx_parallel(datasets)

@@ -5,11 +5,11 @@ Tools for balanced sampling of a dataset
 import torch
 from tqdm import tqdm
 
+from nff.data import Dataset
 from nff.train.loss import batch_zhu_p
 from nff.utils import constants as const
-from nff.utils.misc import cat_props
-from nff.data import Dataset
 from nff.utils.geom import compute_distances
+from nff.utils.misc import cat_props
 
 
 def get_spec_dic(props):

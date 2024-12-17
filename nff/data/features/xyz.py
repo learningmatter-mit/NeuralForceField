@@ -4,11 +4,10 @@ Tools for generating xyz-baed features
 
 import logging
 
-from rdkit import Chem
-from rdkit.Chem import rdMolDescriptors as rdMD
 import torch
 from e3fp.pipeline import fprints_from_mol
-
+from rdkit import Chem
+from rdkit.Chem import rdMolDescriptors as rdMD
 from tqdm import tqdm
 
 

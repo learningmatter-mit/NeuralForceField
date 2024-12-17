@@ -1,19 +1,17 @@
-import numpy as np
-from typing import Union, Tuple
+from typing import Tuple, Union
 
-from ase.calculators.calculator import Calculator, all_changes
+import numpy as np
 from ase import units
+from ase.calculators.calculator import Calculator, all_changes
 
 import nff.utils.constants as const
-from nff.utils.cuda import batch_to
-
 from nff.io.ase_calcs import NeuralFF, check_directed
 from nff.md.colvars import ColVar as CV
-
-from nff.nn.models.schnet import SchNet, SchNetDiabat
-from nff.nn.models.hybridgraph import HybridGraphConv
-from nff.nn.models.schnet_features import SchNetFeatures
 from nff.nn.models.cp3d import OnlyBondUpdateCP3D
+from nff.nn.models.hybridgraph import HybridGraphConv
+from nff.nn.models.schnet import SchNet, SchNetDiabat
+from nff.nn.models.schnet_features import SchNetFeatures
+from nff.utils.cuda import batch_to
 
 DEFAULT_CUTOFF = 5.0
 DEFAULT_DIRECTED = False

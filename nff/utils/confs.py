@@ -2,10 +2,11 @@
 Tools for manipulating conformer numbers in a dataset.
 """
 
-import torch
-import math
-import numpy as np
 import copy
+import math
+
+import numpy as np
+import torch
 
 from nff.utils.misc import tqdm_enum
 
@@ -512,7 +513,7 @@ def split_batch(batch, sub_batch_size):
         # get rid of `bond_idx` because it's wrong
         if key in [*NBR_IDX_KEYS, *REINDEX_KEYS]:
             continue
-        elif np.mod(val_len, num_confs) != 0 or val_len == 1:
+        if np.mod(val_len, num_confs) != 0 or val_len == 1:
             if key == "num_atoms":
                 sub_batch_dic[key] = [int(val * num / num_confs) for num in confs_per_split]
             else:
@@ -533,7 +534,7 @@ def split_batch(batch, sub_batch_size):
         split_val = torch.split(val, split_list)
         sub_batch_dic[key] = split_val
 
-    sub_batches = [{key: sub_batch_dic[key][i] for key in sub_batch_dic.keys()} for i in range(num_splits)]
+    sub_batches = [{key: sub_batch_dic[key][i] for key in sub_batch_dic} for i in range(num_splits)]
 
     # fix neighbor list indexing
     sub_batches, masks = add_split_nbrs(

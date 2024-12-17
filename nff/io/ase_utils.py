@@ -491,11 +491,10 @@ class BatchedLBFGS(LBFGS):
         g = -f
         if self.use_line_search:
             raise NotImplementedError("Not yet implemented wdith line search")
-        else:
-            self.force_calls += 1
-            self.function_calls += 1
-            steplengths = (self.p**2).sum(1) ** 0.5
-            dr = self.determine_step(dr=self.p, steplengths=steplengths, f=f) * self.damping
+        self.force_calls += 1
+        self.function_calls += 1
+        steplengths = (self.p**2).sum(1) ** 0.5
+        dr = self.determine_step(dr=self.p, steplengths=steplengths, f=f) * self.damping
 
         self.atoms.set_positions(r + dr)
 

@@ -3,8 +3,8 @@ Tools to implement parallelization by writing quantities to disk and loading the
 between processes.
 """
 
-import pickle
 import os
+import pickle
 
 
 def get_grad(optimizer):
@@ -22,7 +22,7 @@ def get_grad(optimizer):
 def save_grad(optimizer, loss_size, rank, weight_path, batch_num, epoch):
     grad_list = get_grad(optimizer)
     save_dic = {"grad": grad_list, "loss_size": loss_size}
-    save_path = os.path.join(weight_path, str(rank), "grad_{}_{}.pickle".format(epoch, batch_num))
+    save_path = os.path.join(weight_path, str(rank), f"grad_{epoch}_{batch_num}.pickle")
     with open(save_path, "wb") as f:
         pickle.dump(save_dic, f)
 
@@ -38,7 +38,7 @@ def add_grads(optimizer, loss_size, weight_path, rank, world_size, batch_num, ep
     # paths to all pickle files
 
     paths = [
-        os.path.join(weight_path, str(index), "grad_{}_{}.pickle".format(epoch, batch_num))
+        os.path.join(weight_path, str(index), f"grad_{epoch}_{batch_num}.pickle")
         for index in range(world_size)
     ]
 

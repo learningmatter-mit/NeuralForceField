@@ -195,7 +195,7 @@ def plot_err_var(
     min_text = ax.text(
         0.6,
         0.9,
-        r"$R^2$: {:.3f}".format(res.rvalue**2),
+        rf"$R^2$: {res.rvalue**2:.3f}",
         transform=ax.transAxes,
     )
 

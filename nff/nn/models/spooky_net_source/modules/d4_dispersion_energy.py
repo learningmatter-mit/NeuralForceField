@@ -1,10 +1,12 @@
-import os
 import math
+import os
+from typing import Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from ..functional import softplus_inverse, switch_function
-from typing import Tuple, Optional
 
 """
 computes D4 dispersion energy

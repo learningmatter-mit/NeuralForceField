@@ -6,19 +6,18 @@ and JSON parameter files.
 import json
 import os
 
-import torch
-from torch.utils.data import DataLoader
 import numpy as np
-
-from rdkit import Chem
+import torch
 from ase import Atoms
+from rdkit import Chem
+from torch.utils.data import DataLoader
 
-from nff.train import batch_to, batch_detach
-from nff.nn.utils import single_spec_nbrs
 from nff.data import Dataset, collate_dicts
+from nff.io.ase_ax import AtomsBatch, NeuralFF
+from nff.nn.utils import single_spec_nbrs
+from nff.train import batch_detach, batch_to
 from nff.utils import constants as const
 from nff.utils.scatter import compute_grad
-from nff.io.ase_ax import NeuralFF, AtomsBatch
 
 PERIODICTABLE = Chem.GetPeriodicTable()
 ANGLE_MODELS = ["DimeNet", "DimeNetDiabat", "DimeNetDiabatDelta"]

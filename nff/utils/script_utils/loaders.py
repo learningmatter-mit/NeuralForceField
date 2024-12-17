@@ -1,8 +1,8 @@
 import torch
-import nff.data
-
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
+
+import nff.data
 from nff.data.loader import collate_dicts
 
 
@@ -21,7 +21,7 @@ def get_loaders(args, logging=None):
 
         return test_loader
 
-    elif args.mode == "train":
+    if args.mode == "train":
         if logging is not None:
             logging.info("creating splits...")
 

@@ -1,7 +1,9 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
+
 from .residual_mlp import ResidualMLP
-from typing import Optional
 
 
 class NonlinearElectronicEmbedding(nn.Module):

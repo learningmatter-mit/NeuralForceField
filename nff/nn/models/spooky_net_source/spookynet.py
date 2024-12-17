@@ -1,9 +1,11 @@
 import math
+from typing import Optional, Tuple
+
 import torch
 import torch.nn as nn
+
 from .functional import cutoff_function
 from .modules import *
-from typing import Tuple, Optional
 
 # backwards compatibility with old versions of pytorch
 try:

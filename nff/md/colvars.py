@@ -1,14 +1,15 @@
-from torch import nn
-from itertools import repeat
-from torch.nn import ModuleDict
-from typing import Union
 import itertools as itertools
+from itertools import repeat
+from typing import Union
+
 import numpy as np
 import torch
+from torch import nn
+from torch.nn import ModuleDict
 
-from nff.utils.scatter import compute_grad
 from nff.train import load_model
 from nff.utils.cuda import batch_to
+from nff.utils.scatter import compute_grad
 
 
 class ColVar(torch.nn.Module):
@@ -45,24 +46,13 @@ class ColVar(torch.nn.Module):
         super(ColVar, self).__init__()
         self.info_dict = info_dict
 
-        if "name" not in info_dict.keys():
+        if "name" not in info_dict:
             raise TypeError('CV definition is missing the key "name"!')
 
         if self.info_dict["name"] not in self.implemented_cvs:
             raise NotImplementedError(f"The CV {self.info_dict['name']} is not implemented!")
 
-        if self.info_dict["name"] == "Sp":
-            self.Oacid = torch.tensor(self.info_dict["x"])
-            self.Owater = torch.tensor(self.info_dict["y"])
-            self.H = torch.tensor(self.info_dict["z"])
-            self.Box = torch.tensor(self.info_dict.get("box", None))
-            self.O = torch.cat((Oacid, Owater))
-            self.do = self.info_dict["dcv1"]
-            self.d = self.info_dict["dcv2"]
-            self.ro = self.info_dict["acidhyd"]
-            self.r1 = self.info_dict["waterhyd"]
-
-        elif self.info_dict["name"] == "Sd":
+        if self.info_dict["name"] == "Sp" or self.info_dict["name"] == "Sd":
             self.Oacid = torch.tensor(self.info_dict["x"])
             self.Owater = torch.tensor(self.info_dict["y"])
             self.H = torch.tensor(self.info_dict["z"])
@@ -88,11 +78,7 @@ class ColVar(torch.nn.Module):
             self.mol_inds = torch.LongTensor(self.info_dict["indices"])
             self.reference_inds = self.info_dict["reference"]
 
-        elif self.info_dict["name"] == "projecting_veconplane":
-            self.mol_inds = torch.LongTensor(self.info_dict["mol_inds"])
-            self.ring_inds = torch.LongTensor(self.info_dict["ring_inds"])
-
-        elif self.info_dict["name"] == "projecting_veconplanenormal":
+        elif self.info_dict["name"] == "projecting_veconplane" or self.info_dict["name"] == "projecting_veconplanenormal":
             self.mol_inds = torch.LongTensor(self.info_dict["mol_inds"])
             self.ring_inds = torch.LongTensor(self.info_dict["ring_inds"])
 

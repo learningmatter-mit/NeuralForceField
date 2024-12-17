@@ -3,15 +3,16 @@ Copyright: SchNetPack, 2019
 Retrieved from https://github.com/atomistic-machine-learning/schnetpack/tree/dev/src/schnetpack/train/hooks
 """
 
+import json
 import os
+import sys
 import time
+
 import numpy as np
 import torch
-import json
-import sys
 
 from nff.train.hooks import Hook
-from nff.train.metrics import RootMeanSquaredError, PrAuc, RocAuc
+from nff.train.metrics import PrAuc, RocAuc, RootMeanSquaredError
 
 
 class LoggingHook(Hook):
@@ -140,9 +141,9 @@ class LoggingHook(Hook):
         # save metrics to json file
         par_folder = self.par_folders[self.global_rank]
         if test:
-            json_file = os.path.join(par_folder, "epoch_{}_test.json".format(epoch))
+            json_file = os.path.join(par_folder, f"epoch_{epoch}_test.json")
         else:
-            json_file = os.path.join(par_folder, "epoch_{}.json".format(epoch))
+            json_file = os.path.join(par_folder, f"epoch_{epoch}.json")
 
         # if the json file you're saving to already exists,
         # then load its contents
@@ -189,9 +190,9 @@ class LoggingHook(Hook):
             while None in par_dic.values():
                 for folder in self.par_folders:
                     if test:
-                        path = os.path.join(folder, "epoch_{}_test.json".format(epoch))
+                        path = os.path.join(folder, f"epoch_{epoch}_test.json")
                     else:
-                        path = os.path.join(folder, "epoch_{}.json".format(epoch))
+                        path = os.path.join(folder, f"epoch_{epoch}.json")
                     try:
                         with open(path, "r") as f:
                             path_dic = json.load(f)

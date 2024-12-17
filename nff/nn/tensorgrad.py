@@ -1,12 +1,12 @@
 """Summary"""
 
-import numpy as np
 import copy
 import inspect
 
+import numpy as np
 import torch
-from torch.autograd import grad
 import torch.nn.functional as F
+from torch.autograd import grad
 from torch.utils.data import DataLoader
 
 
@@ -271,7 +271,7 @@ def results_from_stack(batch, model=None, forward=None, **kwargs):
     info = inspect.getargspec(forward)
     if "xyz" not in info.args:
         raise Exception(
-            ("Model does not take xyz as input. " "Please modify the model so that it can take " "an external xyz.")
+            "Model does not take xyz as input. " "Please modify the model so that it can take " "an external xyz."
         )
     results = forward(batch=batch, xyz=xyz, **kwargs)
 
@@ -324,8 +324,7 @@ def hess_from_atoms(atoms):
 
     """
 
-    from nff.data import Dataset
-    from nff.data import collate_dicts
+    from nff.data import Dataset, collate_dicts
     from nff.train import batch_to
     from nff.utils import constants as const
 

@@ -1,13 +1,10 @@
 from torch import nn
 
-from nff.nn.layers import DEFAULT_DROPOUT_RATE
-from nff.nn.modules import SchNetConv, NodeMultiTaskReadOut, get_rij, add_stress
-
-
-from nff.nn.modules.diabat import DiabaticReadout
 from nff.nn.graphop import batch_and_sum
+from nff.nn.layers import DEFAULT_DROPOUT_RATE
+from nff.nn.modules import NodeMultiTaskReadOut, SchNetConv, add_stress, get_rij
+from nff.nn.modules.diabat import DiabaticReadout
 from nff.nn.utils import get_default_readout
-
 from nff.utils.scatter import scatter_add
 
 

@@ -5,8 +5,8 @@ Tools for analyzing and comparing geometries
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from nff.utils.scatter import scatter_add
 
+from nff.utils.scatter import scatter_add
 
 BATCH_SIZE = 3000
 
@@ -195,8 +195,7 @@ def compute_distance(targ_nxyz, atom_nxyz, store_grad=False):
 
     if store_grad:
         return distances, R, base_p
-    else:
-        return distances.detach(), R
+    return distances.detach(), R
 
 
 def compute_distances(dataset, device, batch_size=BATCH_SIZE, dataset_1=None, store_grad=False, collate_dicts=None):
@@ -257,8 +256,7 @@ def compute_distances(dataset, device, batch_size=BATCH_SIZE, dataset_1=None, st
 
     if store_grad:
         return distance_mat, R_mat, xyz_list
-    else:
-        return distance_mat, R_mat
+    return distance_mat, R_mat
 
 
 """

@@ -1,12 +1,13 @@
+import time
+
 import torch
 from torch import nn
-from nff.nn.layers import PreActivation, Dense, zeros_initializer, BatchedPreActivation
-from nff.utils.tools import layer_types, make_undirected
-from nff.utils.scatter import scatter_add
-from nff.utils.constants import ELEC_CONFIG, KE_KCAL, BOHR_RADIUS
-from nff.utils import spooky_f_cut, make_y_lm, rho_k
 
-import time
+from nff.nn.layers import BatchedPreActivation, Dense, PreActivation, zeros_initializer
+from nff.utils import make_y_lm, rho_k, spooky_f_cut
+from nff.utils.constants import BOHR_RADIUS, ELEC_CONFIG, KE_KCAL
+from nff.utils.scatter import scatter_add
+from nff.utils.tools import layer_types, make_undirected
 
 EPS = 1e-15
 DEFAULT_ACTIVATION = "learnable_swish"

@@ -1,9 +1,9 @@
-from torch import nn
 import torch
-from nff.data.graphs import get_bond_idx
+from torch import nn
 
+from nff.data.graphs import get_bond_idx
 from nff.nn.models.conformers import WeightedConformers
-from nff.nn.modules import ChemPropConv, ChemPropMsgToNode, ChemPropInit, SchNetEdgeFilter, CpSchNetConv
+from nff.nn.modules import ChemPropConv, ChemPropInit, ChemPropMsgToNode, CpSchNetConv, SchNetEdgeFilter
 from nff.utils.tools import make_directed
 
 REINDEX_KEYS = ["nbr_list", "bonded_nbr_list"]

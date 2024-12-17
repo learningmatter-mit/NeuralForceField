@@ -1,8 +1,9 @@
-import torch
 import numpy as np
-from ase.neighborlist import neighbor_list
+import torch
 from ase.calculators.calculator import Calculator, all_changes
+from ase.neighborlist import neighbor_list
 from sklearn.neighbors import BallTree
+
 from .spookynet import SpookyNet
 from .spookynet_ensemble import SpookyNetEnsemble
 
@@ -72,7 +73,7 @@ class SpookyNetCalculator(Calculator):
         self.cell_offsets = None
 
     def _nsquared_neighborlist(self, atoms):
-        if self.N != len(atoms):
+        if len(atoms) != self.N:
             self.N = len(atoms)
             self.positions = np.copy(atoms.positions)
             self.pbc = np.array([False])
@@ -87,7 +88,7 @@ class SpookyNetCalculator(Calculator):
 
     def _periodic_neighborlist(self, atoms):
         if (
-            self.N != len(atoms)
+            len(atoms) != self.N
             or (self.pbc != atoms.pbc).any()
             or (self.cell != atoms.cell).any()
             or ((self.positions - atoms.positions) ** 2).sum(-1).max() > self.skin2
@@ -102,7 +103,7 @@ class SpookyNetCalculator(Calculator):
             self.cell_offsets = torch.tensor(cell_offsets, dtype=self.dtype)
 
     def _non_periodic_neighborlist(self, atoms):
-        if self.N != len(atoms) or ((self.positions - atoms.positions) ** 2).sum(-1).max() >= self.skin2:
+        if len(atoms) != self.N or ((self.positions - atoms.positions) ** 2).sum(-1).max() >= self.skin2:
             self.N = len(atoms)
             self.positions = np.copy(atoms.positions)
             self.pbc = np.array([False])
@@ -146,7 +147,7 @@ class SpookyNetCalculator(Calculator):
 
         # send args to GPU
         if self.use_gpu:
-            for key in args.keys():
+            for key in args:
                 if isinstance(args[key], torch.Tensor):
                     args[key] = args[key].cuda()
 

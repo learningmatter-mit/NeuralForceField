@@ -1,12 +1,12 @@
 import torch
+from neuralnet.vib import hessian_and_modes
 
 from nff.io.ase_calcs import NeuralFF
 from nff.reactive_tools.utils import (
     neural_energy_ase,
     neural_force_ase,
 )
-from nff.utils.constants import EV_TO_AU, BOHR_RADIUS
-from neuralnet.vib import hessian_and_modes
+from nff.utils.constants import BOHR_RADIUS, EV_TO_AU
 
 CONVG_LINE = "Optimization converged!"
 
@@ -156,7 +156,7 @@ def ev_run(
 
         rmslist.append(grad.pow(2).sqrt().mean())
         maxlist.append(grad.pow(2).sqrt().max())
-        print("RMS: {}, MAX: {}".format(grad.pow(2).sqrt().mean(), grad.pow(2).sqrt().max()))
+        print(f"RMS: {grad.pow(2).sqrt().mean()}, MAX: {grad.pow(2).sqrt().max()}")
 
         if grad.pow(2).sqrt().max() < convergence:
             print(CONVG_LINE)

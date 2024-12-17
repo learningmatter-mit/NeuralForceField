@@ -7,17 +7,17 @@ D3 dispersion data taken from PhysNet:
 https://github.com/MMunibas/PhysNet/tree/master/neural_network/grimme_d3/tables
 """
 
+import json
 import os
+
 import numpy as np
 import torch
-import json
-
-from nff.utils import constants as const
-from nff.nn.utils import lattice_points_in_supercell, clean_matrix
-from nff.utils.scatter import scatter_add
-
 from ase import Atoms
 from ase.calculators.dftd3 import DFTD3
+
+from nff.nn.utils import clean_matrix, lattice_points_in_supercell
+from nff.utils import constants as const
+from nff.utils.scatter import scatter_add
 
 base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "table_data")
 c6_ref_path = os.path.join(base_dir, "c6ab.npy")

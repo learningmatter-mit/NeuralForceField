@@ -2,14 +2,15 @@
 Tools for generating graph-based features
 """
 
-import torch
-import numpy as np
 import copy
+
+import numpy as np
+import torch
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from nff.utils.xyz2mol import xyz2mol
 from nff.utils import tqdm_enum
+from nff.utils.xyz2mol import xyz2mol
 
 # default options for xyz2mol
 
@@ -105,7 +106,7 @@ def remove_bad_idx(dataset, smiles_list, bad_idx, verbose=True):
     conv_pct = good_len / total_len * 100
 
     if verbose:
-        print(("Converted %d of %d " "species (%.2f%%)" % (good_len, total_len, conv_pct)))
+        print("Converted %d of %d " "species (%.2f%%)" % (good_len, total_len, conv_pct))
 
 
 def smiles_from_smiles(smiles):
@@ -252,19 +253,17 @@ def verify_smiles(rd_mol, smiles):
 
     if good_con:
         msg = (
-            "WARNING: xyz2mol SMILES is {} "
-            "and database SMILES is {}. "
+            f"WARNING: xyz2mol SMILES is {rd_smiles} "
+            f"and database SMILES is {db_smiles}. "
             "However, the connectivity is the same. "
             "Check to make sure the SMILES are resonances "
-            "structures.".format(rd_smiles, db_smiles)
+            "structures."
         )
         return
 
     # otherwise raise an exception
 
-    msg = "SMILES created by xyz2mol is {}, " "which doesn't match the database " "SMILES {}.".format(
-        rd_smiles, db_smiles
-    )
+    msg = f"SMILES created by xyz2mol is {rd_smiles}, " "which doesn't match the database " f"SMILES {db_smiles}."
     raise Exception(msg)
 
 
@@ -285,7 +284,7 @@ def log_failure(bad_idx, i):
     good_len = i - len(bad_idx)
     conv_pct = good_len / i * 100
 
-    print(("Converted %d of %d " "species (%.2f%%)" % (good_len, i, conv_pct)))
+    print("Converted %d of %d " "species (%.2f%%)" % (good_len, i, conv_pct))
 
 
 def log_missing(missing_e):
@@ -394,8 +393,8 @@ def make_rd_mols(dataset, verbose=True, check_smiles=False, track=True):
                     verify_smiles(rd_mol=mol, smiles=smiles)
 
             except Exception as e:
-                print(("xyz2mol failed " "with error '{}' ".format(e)))
-                print("Removing smiles {}".format(smiles))
+                print("xyz2mol failed " f"with error '{e}' ")
+                print(f"Removing smiles {smiles}")
                 bad_idx.append(i)
 
                 if verbose:
@@ -463,14 +462,14 @@ def bond_feat_to_vec(feat_type, feat):
         result = torch.Tensor([conj])
         return result
 
-    elif feat_type == "bond_type":
+    if feat_type == "bond_type":
         # select from `BOND_OPTIONS`
         options = BOND_OPTIONS
         bond_type = feat
         one_hot = make_one_hot(options=options, result=bond_type)
         return one_hot
 
-    elif feat_type == "in_ring_size":
+    if feat_type == "in_ring_size":
         # This is already a one-hot encoded vector,
         # because RDKit tests if the bond is in a
         # ring of a specific size, so the feature we
@@ -490,13 +489,13 @@ def bond_feat_to_vec(feat_type, feat):
 
         return one_hot
 
-    elif feat_type == "in_ring":
+    if feat_type == "in_ring":
         # just 0 or 1
         in_ring = feat
         result = torch.Tensor([in_ring])
         return result
 
-    elif feat_type == "stereo":
+    if feat_type == "stereo":
         # select from `STEREO_OPTIONS`
         stereo = feat
         options = STEREO_OPTIONS
@@ -556,42 +555,42 @@ def atom_feat_to_vec(feat_type, feat):
 
         return one_hot
 
-    elif feat_type == "num_bonds":
+    if feat_type == "num_bonds":
         options = BONDS
         one_hot = make_one_hot(options=options, result=feat)
 
         return one_hot
 
-    elif feat_type == "formal_charge":
+    if feat_type == "formal_charge":
         options = FORMAL_CHARGES
         one_hot = make_one_hot(options=options, result=feat)
 
         return one_hot
 
-    elif feat_type == "chirality":
+    if feat_type == "chirality":
         options = CHIRAL_OPTIONS
         one_hot = make_one_hot(options=options, result=feat)
 
         return one_hot
 
-    elif feat_type == "num_bonded_h":
+    if feat_type == "num_bonded_h":
         options = NUM_H
         one_hot = make_one_hot(options=options, result=feat)
 
         return one_hot
 
-    elif feat_type == "hybrid":
+    if feat_type == "hybrid":
         options = HYBRID_OPTIONS
         one_hot = make_one_hot(options=options, result=feat)
 
         return one_hot
 
-    elif feat_type == "aromaticity":
+    if feat_type == "aromaticity":
         one_hot = torch.Tensor([feat])
 
         return one_hot
 
-    elif feat_type == "mass":
+    if feat_type == "mass":
         # the mass is converted to a feature vector
         # by dividing by 100
         result = torch.Tensor([feat / 100])
@@ -822,7 +821,7 @@ def decode_one_hot(options, vector):
         return bool(vector.item())
 
     # if the options are a single float, return the value
-    elif options == [float]:
+    if options == [float]:
         return vector.item()
 
     # otherwise return the option at the nonzero index

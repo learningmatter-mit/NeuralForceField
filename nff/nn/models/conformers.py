@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
 
-from nff.nn.layers import DEFAULT_DROPOUT_RATE
-from nff.nn.modules import SchNetConv, NodeMultiTaskReadOut, ConfAttention, LinearConfAttention
 from nff.nn.graphop import conf_pool
+from nff.nn.layers import DEFAULT_DROPOUT_RATE
+from nff.nn.modules import ConfAttention, LinearConfAttention, NodeMultiTaskReadOut, SchNetConv
 from nff.nn.utils import construct_sequential
-from nff.utils.scatter import compute_grad
 from nff.utils.confs import split_batch
+from nff.utils.scatter import compute_grad
 
 
 class WeightedConformers(nn.Module):
@@ -163,7 +163,7 @@ class WeightedConformers(nn.Module):
         # under the key `layers` will be used to create the corresponding
         # network
 
-        elif boltzmann_dict["type"] == "layers":
+        if boltzmann_dict["type"] == "layers":
             layers = boltzmann_dict["layers"]
             networks.append(construct_sequential(layers))
 
@@ -352,7 +352,7 @@ class WeightedConformers(nn.Module):
         # features are per-conformer features, return empty tensors
 
         if self.extra_feats is None or "conformer" not in self.ext_feat_types:
-            return
+            return None
 
         # get all the features and split them up by species
 

@@ -2,22 +2,21 @@
 Tools for analyzing conformer-based model predictions.
 """
 
+import json
+import logging
 import os
 import pickle
 import random
-import logging
-import json
 
 import numpy as np
 import torch
-from tqdm import tqdm
-from sklearn.metrics import roc_auc_score, auc, precision_recall_curve
-from sklearn.metrics.pairwise import cosine_similarity as cos_sim
 from rdkit import Chem
+from sklearn.metrics import auc, precision_recall_curve, roc_auc_score
+from sklearn.metrics.pairwise import cosine_similarity as cos_sim
+from tqdm import tqdm
 
-
-from nff.utils import fprint
 from nff.data.features import get_e3fp
+from nff.utils import fprint
 
 LOGGER = logging.getLogger()
 LOGGER.disabled = True
@@ -42,7 +41,7 @@ def get_pred_files(model_path):
         # or pred_<metric>.pickle
         splits = ["train", "val", "test"]
         starts_split = any([file.startswith(f"{split}_pred") for split in splits])
-        starts_pred = any([file.startswith(f"pred") for split in splits])
+        starts_pred = any([file.startswith("pred") for split in splits])
         if (not starts_split) and (not starts_pred):
             continue
         if not file.endswith("pickle"):
@@ -106,7 +105,7 @@ def get_att_type(dic):
     if is_linear:
         num_heads = int(num_weights_list[0] / num_confs_list[0])
     else:
-        num_heads = int((num_weights_list[0] / num_confs_list[0] ** 2))
+        num_heads = int(num_weights_list[0] / num_confs_list[0] ** 2)
 
     return num_heads, is_linear
 
@@ -505,7 +504,7 @@ def get_scores(path, avg_metrics=["auc", "prc-auc"]):
     """
     files = [i for i in os.listdir(path) if i.endswith(".pickle") and i.startswith("pred")]
     if not files:
-        return
+        return None
     scores = []
     for file in files:
         with open(os.path.join(path, file), "rb") as f:
@@ -518,7 +517,7 @@ def get_scores(path, avg_metrics=["auc", "prc-auc"]):
 
         # then it's not a binary classification problem
         if any([i not in [0, 1] for i in true]):
-            return
+            return None
 
         auc_score = roc_auc_score(y_true=true, y_score=pred)
         precision, recall, thresholds = precision_recall_curve(y_true=true, probas_pred=pred)

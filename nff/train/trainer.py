@@ -333,7 +333,7 @@ class Trainer:
 
             except RuntimeError as err:
                 if "CUDA out of memory" in str(err):
-                    print(("CUDA out of memory. Doing this batch " "on cpu."))
+                    print("CUDA out of memory. Doing this batch " "on cpu.")
                     use_device = "cpu"
                     torch.cuda.empty_cache()
                 else:
@@ -484,7 +484,7 @@ class Trainer:
         # write the loss as a number to a file called "val_epoch_i"
         # for epoch i.
 
-        info_file = os.path.join(self_folder, "val_epoch_{}".format(self.epoch))
+        info_file = os.path.join(self_folder, f"val_epoch_{self.epoch}")
         with open(info_file, "w") as f_open:
             loss_float = val_loss.item()
             string = f"{loss_float},{n_val}"
@@ -514,7 +514,7 @@ class Trainer:
                 # then no need to load anything
                 if loaded_vals[folder] is not None:
                     continue
-                val_file = os.path.join(folder, "val_epoch_{}".format(self.epoch))
+                val_file = os.path.join(folder, f"val_epoch_{self.epoch}")
                 # try opening the file and getting the value
                 try:
                     with open(val_file, "r") as f_open:
@@ -531,7 +531,7 @@ class Trainer:
             # average the losses according to number of atoms
             # or molecules in each
             denom = sum(list(n_vals.values()))
-            avg_loss = sum([n_vals[key] * loaded_vals[key] for key in n_vals.keys()]) / denom
+            avg_loss = sum([n_vals[key] * loaded_vals[key] for key in n_vals]) / denom
         else:
             # add the losses
             avg_loss = np.sum(list(loaded_vals.values()))

@@ -5,13 +5,13 @@ Theory, by Helgaker, Jorgensen and Olsen.
 """
 
 # import numba as nb
+import time
+
 import numpy as np
 import torch
-import time
 
 # from typing import Union
 from nff.utils.scatter import compute_grad
-
 
 # @torch.jit.script
 

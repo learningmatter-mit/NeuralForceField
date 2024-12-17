@@ -3,11 +3,11 @@
 Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/utils/script_utils/setup.py
 """
 
-import os
 import logging
+import os
 from shutil import rmtree
 
-from nff.utils.tools import to_json, set_random_seed, read_from_json
+from nff.utils.tools import read_from_json, set_random_seed, to_json
 
 __all__ = ["setup_run"]
 

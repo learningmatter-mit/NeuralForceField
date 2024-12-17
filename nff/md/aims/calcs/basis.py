@@ -1,7 +1,8 @@
-from torch.utils.data import DataLoader
-import torch
-import numpy as np
 import copy
+
+import numpy as np
+import torch
+from torch.utils.data import DataLoader
 
 from nff.data import Dataset, collate_dicts
 from nff.train.evaluate import evaluate
@@ -177,8 +178,7 @@ def tile_params(r_i, r_j, p_i, p_j, alpha_i, alpha_j, m_i=None, m_j=None):
         expand_mj = m_j.reshape(1, 1, N_at, 1).expand(N_J, N_I, N_at, 3).transpose(0, 1)
 
         return (expand_r_i, expand_r_j, expand_p_i, expand_p_j, expand_alpha_i, expand_alpha_j, expand_mi, expand_mj)
-    else:
-        return (expand_r_i, expand_r_j, expand_p_i, expand_p_j, expand_alpha_i, expand_alpha_j)
+    return (expand_r_i, expand_r_j, expand_p_i, expand_p_j, expand_alpha_i, expand_alpha_j)
 
 
 def get_overlaps(r_i, r_j, alpha_i, alpha_j, p_i, p_j):
@@ -823,47 +823,46 @@ def find_spawn(
 def rescale(p_new, m, diabatic, results, old_surf, new_surf):
     if diabatic:
         raise NotImplementedError
-    else:
-        # p has dimension N_J x N_at x 3
-        # nacv has dimension N_J x N_at x 3
+    # p has dimension N_J x N_at x 3
+    # nacv has dimension N_J x N_at x 3
 
-        nacv = results[f"nacv_{old_surf}{new_surf}"]
-        norm = (nacv**2).sum(-1) ** 0.5
-        nacv_unit = nacv / norm
+    nacv = results[f"nacv_{old_surf}{new_surf}"]
+    norm = (nacv**2).sum(-1) ** 0.5
+    nacv_unit = nacv / norm
 
-        # dot product
-        projection = (nacv_unit * p_new).sum(-1)
+    # dot product
+    projection = (nacv_unit * p_new).sum(-1)
 
-        # p_parallel
-        N_J, N_at = projection.shape
-        p_par = projection.reshape(N_J, N_at, 1) * nacv_unit
+    # p_parallel
+    N_J, N_at = projection.shape
+    p_par = projection.reshape(N_J, N_at, 1) * nacv_unit
 
-        # p perpendicular
-        p_perp = p_new - p_par
+    # p perpendicular
+    p_perp = p_new - p_par
 
-        # get energies before and after hop
-        # m has shape N_at
-        # is this right?
+    # get energies before and after hop
+    # m has shape N_at
+    # is this right?
 
-        t_old = (p_new**2 / (2 * m.reshape(1, -1, 1))).sum()
-        t_old_perp = (p_perp**2 / (2 * m.reshape(1, -1, 1))).sum()
-        t_old_par = (p_par**2 / (2 * m.reshape(1, -1, 1))).sum()
-        v_old = results[f"energy_{old_surf}"]
-        v_new = results[f"energy_{new_surf}"]
+    t_old = (p_new**2 / (2 * m.reshape(1, -1, 1))).sum()
+    t_old_perp = (p_perp**2 / (2 * m.reshape(1, -1, 1))).sum()
+    t_old_par = (p_par**2 / (2 * m.reshape(1, -1, 1))).sum()
+    v_old = results[f"energy_{old_surf}"]
+    v_new = results[f"energy_{new_surf}"]
 
-        # re-scale p_parallel
-        # not 100% sure if this is right
+    # re-scale p_parallel
+    # not 100% sure if this is right
 
-        scale_sq = (t_old + v_old - (t_old_perp + v_new)) / t_old_par
+    scale_sq = (t_old + v_old - (t_old_perp + v_new)) / t_old_par
 
-        if scale_sq < 0:
-            # kinetic energy can't compensate the change in
-            # potential energy
-            return None
+    if scale_sq < 0:
+        # kinetic energy can't compensate the change in
+        # potential energy
+        return None
 
-        scale = scale_sq**0.5
+    scale = scale_sq**0.5
 
-        new_p = p_par * scale + p_perp
+    new_p = p_par * scale + p_perp
 
     return new_p
 

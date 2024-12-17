@@ -1,5 +1,5 @@
-import torch
 import numpy as np
+import torch
 
 
 def make_w(feat_dim, rand_dim):

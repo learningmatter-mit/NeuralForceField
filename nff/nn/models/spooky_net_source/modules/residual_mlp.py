@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+
 from .residual_stack import ResidualStack
 from .shifted_softplus import ShiftedSoftplus
 from .swish import Swish

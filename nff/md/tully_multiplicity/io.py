@@ -5,21 +5,19 @@ and JSON parameter files.
 
 import json
 import os
-
 from typing import *
 
-import torch
-from torch.utils.data import DataLoader
 import numpy as np
-
-from rdkit import Chem
+import torch
 from ase import Atoms
+from rdkit import Chem
+from torch.utils.data import DataLoader
 
-from nff.train import batch_to, batch_detach
-from nff.nn.utils import single_spec_nbrs
 from nff.data import Dataset, collate_dicts
+from nff.io.ase_ax import AtomsBatch, NeuralFF
+from nff.nn.utils import single_spec_nbrs
+from nff.train import batch_detach, batch_to
 from nff.utils import constants as const
-from nff.io.ase_ax import NeuralFF, AtomsBatch
 
 PERIODICTABLE = Chem.GetPeriodicTable()
 ANGLE_MODELS = ["DimeNet", "DimeNetDiabat", "DimeNetDiabatDelta"]
@@ -86,10 +84,7 @@ def concat_and_conv(results_list, num_atoms):
             val = val.reshape(*grad_shape)
         elif "energy" in key:
             val *= conv["energy"]
-        elif ("nacv" in key or "NACV" in key) and "grad" in key:
-            val *= conv["_grad"]
-            val = val.reshape(*grad_shape)
-        elif "NACP" in key and "grad" in key:
+        elif (("nacv" in key or "NACV" in key) and "grad" in key) or ("NACP" in key and "grad" in key):
             val *= conv["_grad"]
             val = val.reshape(*grad_shape)
         elif "soc" in key or "SOC" in key:

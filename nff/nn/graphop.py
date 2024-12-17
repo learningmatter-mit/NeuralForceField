@@ -1,6 +1,7 @@
 import torch
-from nff.utils.scatter import compute_grad
+
 from nff.nn.modules import ConfAttention
+from nff.utils.scatter import compute_grad
 
 EPS = 1e-15
 
@@ -139,12 +140,7 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
         # split
         if key in predict_keys and key + "_grad" not in predict_keys:
             results[key] = split_and_sum(val, N)
-        elif key in predict_keys and key + "_grad" in predict_keys:
-            results[key] = split_and_sum(val, N)
-            grad = compute_grad(inputs=xyz, output=results[key])
-            results[key + "_grad"] = grad
-        # For the case only predicting gradient
-        elif key not in predict_keys and key + "_grad" in predict_keys:
+        elif (key in predict_keys and key + "_grad" in predict_keys) or (key not in predict_keys and key + "_grad" in predict_keys):
             results[key] = split_and_sum(val, N)
             grad = compute_grad(inputs=xyz, output=results[key])
             results[key + "_grad"] = grad

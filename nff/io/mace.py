@@ -1,7 +1,8 @@
 import logging
 import os
 import urllib
-from typing import Dict, Iterable, List, Tuple, Union
+from collections.abc import Iterable
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import torch
@@ -311,10 +312,10 @@ class NffBatch(Batch):
 
         if self.__slices__ is None:
             raise RuntimeError(
-                (
+
                     "Cannot reconstruct data list from batch because the batch "
                     "object was not created using `Batch.from_data_list()`."
-                )
+
             )
 
         data = {}

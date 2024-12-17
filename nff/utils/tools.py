@@ -2,24 +2,23 @@
 Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/utils/spk_utils.py
 """
 
+import collections
 import json
 import logging
-import collections
 from argparse import Namespace
 
 import numpy as np
 import torch
-
 from torch.nn import ModuleDict, Sequential
-from nff.nn.activations import shifted_softplus, Swish, LearnableSwish
+
+from nff.nn.activations import LearnableSwish, Swish, shifted_softplus
 from nff.nn.layers import Dense
 
-
 __all__ = [
-    "set_random_seed",
     "compute_params",
-    "to_json",
     "read_from_json",
+    "set_random_seed",
+    "to_json",
 ]
 
 layer_types = {
@@ -82,6 +81,7 @@ def set_random_seed(seed):
         seed (int, optional): if seed not present, it is generated based on time
     """
     import time
+
     import numpy as np
 
     # 1) if seed not present, generate based on time
@@ -100,7 +100,7 @@ def set_random_seed(seed):
     np.random.seed(seed)
     # 3) Set seed for torch (manual_seed now seeds all CUDA devices automatically)
     torch.manual_seed(seed)
-    logging.info("Random state initialized with seed {:<10d}".format(seed))
+    logging.info(f"Random state initialized with seed {seed:<10d}")
 
 
 def compute_params(model):

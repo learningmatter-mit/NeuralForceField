@@ -6,9 +6,8 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
 
-
-from nff.data import Dataset, split_train_validation_test, collate_dicts
-from nff.train import Trainer, get_model, loss, hooks, metrics, evaluate
+from nff.data import Dataset, collate_dicts, split_train_validation_test
+from nff.train import Trainer, evaluate, get_model, hooks, loss, metrics
 
 
 def test_excited_training(device, tmpdir):

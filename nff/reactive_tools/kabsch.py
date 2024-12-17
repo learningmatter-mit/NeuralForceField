@@ -1,9 +1,10 @@
-import numpy as np
 import io
 
+import numpy as np
+
 try:
-    from alog import Logger
     import acore as ac
+    from alog import Logger
 except ModuleNotFoundError:
     print("You need to install the group's fork of aRMSD and put it in your path " "https://github.mit.edu/MLMat/aRMSD")
 
@@ -13,7 +14,7 @@ VERSION, YEAR = "0.9.4", "2017"
 def write_coord(coord):
     """Adjusts whitespace for coordinates"""
 
-    return "{:06.8f}".format(coord) if coord < 0.0 else " " + "{:06.8f}".format(coord)
+    return f"{coord:06.8f}" if coord < 0.0 else " " + f"{coord:06.8f}"
 
 
 def data_to_xyz(sym, cor):
