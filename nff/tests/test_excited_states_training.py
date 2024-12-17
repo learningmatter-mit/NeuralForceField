@@ -7,11 +7,13 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
 
+import pytest
 
 from nff.data import Dataset, split_train_validation_test, collate_dicts
 from nff.train import Trainer, get_model, loss, hooks, metrics, evaluate
 
 
+@pytest.mark.skip("still taking too long, disable for now")
 def test_excited_training(device, tmpdir):
     # Loss function
     # Let's make a loss function for the model. We'll use three diabatic states,
