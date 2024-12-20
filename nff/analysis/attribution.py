@@ -12,8 +12,9 @@ from nff.utils.cuda import batch_to
 from nff.utils.scatter import compute_grad
 
 
-def get_molecules(atom: AtomsBatch, bond_length: Optional[Dict[str, float]] = None, mode: str = "bond", **kwargs) \
-        -> List[np.array]:
+def get_molecules(
+    atom: AtomsBatch, bond_length: Optional[Dict[str, float]] = None, mode: str = "bond", **kwargs
+) -> List[np.array]:
     """
     find molecules in periodic or non-periodic system. bond mode finds molecules within bond length.
     Must pass bond_length dict: e.g bond_length=dict()
@@ -206,9 +207,7 @@ class Attribution:
         energy_stds = []
         grads = []
         grad_stds = []
-        with tqdm(
-            range(skip, len(traj), step), disable= not progress_bar
-        ) as pbar:  # , postfix={"fbest":"?",}) as pbar:
+        with tqdm(range(skip, len(traj), step), disable=not progress_bar) as pbar:  # , postfix={"fbest":"?",}) as pbar:
             # for i in range(skip,len(traj),step):
             for i in pbar:
                 # create atoms batch object
@@ -284,9 +283,7 @@ class Attribution:
         bond_length: Optional[dict] = None,
     ):
         atom_list = []
-        with tqdm(
-            range(skip, len(traj), step), disable=not progress_bar
-        ) as pbar:  # , postfix={"fbest":"?",}) as pbar:
+        with tqdm(range(skip, len(traj), step), disable=not progress_bar) as pbar:  # , postfix={"fbest":"?",}) as pbar:
             # for i in range(skip,len(traj),step):
             for i in pbar:
                 # create atoms batch object

@@ -933,8 +933,9 @@ class WTMeABF(eABF):
         ind = np.ma.indices((len(self.center),))[0]
         ind = np.ma.masked_array(ind)
 
-        dist_to_centers = np.array([self.diff(xi[ii], np.asarray(self.center)[:, ii], self.cv_defs[ii]["type"])
-                                    for ii in range(self.num_cv)])
+        dist_to_centers = np.array(
+            [self.diff(xi[ii], np.asarray(self.center)[:, ii], self.cv_defs[ii]["type"]) for ii in range(self.num_cv)]
+        )
 
         if self.num_cv > 1:
             ind[(abs(dist_to_centers) > 3 * self.hill_std.reshape(-1, 1)).all(axis=0)] = np.ma.masked

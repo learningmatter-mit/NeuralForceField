@@ -15,6 +15,7 @@ nonbondedMethod = {
     "NonPeriodic": app.CutoffNonPeriodic,
 }
 
+
 class PropertyNotPresent(Exception):
     pass
 
@@ -44,8 +45,12 @@ class BiasBase(Calculator):
     ]
 
     def __init__(
-        self, mmparms, cv_defs: List[Dict], equil_temp: float = 300.0, extra_constraints: Optional[List[Dict]] = None,
-            **kwargs
+        self,
+        mmparms,
+        cv_defs: List[Dict],
+        equil_temp: float = 300.0,
+        extra_constraints: Optional[List[Dict]] = None,
+        **kwargs,
     ):
         Calculator.__init__(self, **kwargs)
 
@@ -632,8 +637,9 @@ class WTMeABF(eABF):
         ind = np.ma.indices((len(self.center),))[0]
         ind = np.ma.masked_array(ind)
 
-        dist_to_centers = np.array([self.diff(xi[ii], np.asarray(self.center)[:, ii], self.cv_defs[ii]["type"])
-                                    for ii in range(self.num_cv)])
+        dist_to_centers = np.array(
+            [self.diff(xi[ii], np.asarray(self.center)[:, ii], self.cv_defs[ii]["type"]) for ii in range(self.num_cv)]
+        )
 
         if self.num_cv > 1:
             ind[(abs(dist_to_centers) > 3 * self.hill_std.reshape(-1, 1)).all(axis=0)] = np.ma.masked

@@ -94,10 +94,8 @@ class TempRamp(MolecularDynamics):
                     has_keys = True
             if not has_keys:
                 print(
-
-                        "WARNING: velocity not set to zero for any atoms in constraint "
-                        "%s; do not know how to find its fixed indices." % constraint
-
+                    "WARNING: velocity not set to zero for any atoms in constraint "
+                    "%s; do not know how to find its fixed indices." % constraint
                 )
 
         if not fixed_idx:

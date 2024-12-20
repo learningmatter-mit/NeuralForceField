@@ -26,11 +26,9 @@ def get_energy(atoms):
     # ekin = ekin.detach().numpy()
 
     print(
-
-            "Energy per atom: Epot = %.2fkcal/mol  "
-            "Ekin = %.2fkcal/mol (T=%3.0fK)  "
-            "Etot = %.2fkcal/mol" % (epot, ekin, Temperature, epot + ekin)
-
+        "Energy per atom: Epot = %.2fkcal/mol  "
+        "Ekin = %.2fkcal/mol (T=%3.0fK)  "
+        "Etot = %.2fkcal/mol" % (epot, ekin, Temperature, epot + ekin)
     )
     # print('Energy per atom: Epot = %.5feV  Ekin = %.5feV (T=%3.0fK)  '
     #      'Etot = %.5feV' % (epot, ekin, Temperature, (epot + ekin)))

@@ -37,10 +37,7 @@ def add_grads(optimizer, loss_size, weight_path, rank, world_size, batch_num, ep
 
     # paths to all pickle files
 
-    paths = [
-        os.path.join(weight_path, str(index), f"grad_{epoch}_{batch_num}.pickle")
-        for index in range(world_size)
-    ]
+    paths = [os.path.join(weight_path, str(index), f"grad_{epoch}_{batch_num}.pickle") for index in range(world_size)]
 
     loaded_grads = {path: None for path in paths}
 

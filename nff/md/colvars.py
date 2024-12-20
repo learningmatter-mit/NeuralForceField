@@ -78,7 +78,9 @@ class ColVar(torch.nn.Module):
             self.mol_inds = torch.LongTensor(self.info_dict["indices"])
             self.reference_inds = self.info_dict["reference"]
 
-        elif self.info_dict["name"] == "projecting_veconplane" or self.info_dict["name"] == "projecting_veconplanenormal":
+        elif (
+            self.info_dict["name"] == "projecting_veconplane" or self.info_dict["name"] == "projecting_veconplanenormal"
+        ):
             self.mol_inds = torch.LongTensor(self.info_dict["mol_inds"])
             self.ring_inds = torch.LongTensor(self.info_dict["ring_inds"])
 

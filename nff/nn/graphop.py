@@ -140,7 +140,9 @@ def batch_and_sum(dict_input, N, predict_keys, xyz):
         # split
         if key in predict_keys and key + "_grad" not in predict_keys:
             results[key] = split_and_sum(val, N)
-        elif (key in predict_keys and key + "_grad" in predict_keys) or (key not in predict_keys and key + "_grad" in predict_keys):
+        elif (key in predict_keys and key + "_grad" in predict_keys) or (
+            key not in predict_keys and key + "_grad" in predict_keys
+        ):
             results[key] = split_and_sum(val, N)
             grad = compute_grad(inputs=xyz, output=results[key])
             results[key + "_grad"] = grad

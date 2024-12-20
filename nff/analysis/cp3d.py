@@ -125,7 +125,7 @@ def annotate_confs(dic):
     num_heads, is_linear = get_att_type(dic)
     for sub_dic in dic.values():
         num_confs = sub_dic["boltz_weights"].shape[0]
-        split_sizes = [num_confs] * num_heads if is_linear else [num_confs ** 2] * num_heads
+        split_sizes = [num_confs] * num_heads if is_linear else [num_confs**2] * num_heads
 
         learned = torch.Tensor(sub_dic["learned_weights"])
         head_weights = torch.split(learned, split_sizes)

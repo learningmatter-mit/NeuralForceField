@@ -86,7 +86,7 @@ class Dataset(TorchDataset):
         units: str = "kcal/mol",
         check_props: bool = True,
         do_copy: bool = True,
-        device: str = "cuda"
+        device: str = "cuda",
     ) -> None:
         """Constructor for Dataset class.
 

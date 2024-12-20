@@ -312,10 +312,8 @@ class NffBatch(Batch):
 
         if self.__slices__ is None:
             raise RuntimeError(
-
-                    "Cannot reconstruct data list from batch because the batch "
-                    "object was not created using `Batch.from_data_list()`."
-
+                "Cannot reconstruct data list from batch because the batch "
+                "object was not created using `Batch.from_data_list()`."
             )
 
         data = {}

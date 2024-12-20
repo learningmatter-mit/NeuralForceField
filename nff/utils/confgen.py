@@ -198,11 +198,9 @@ class ConformerGenerator:
             index_1, energy_1 = pair_1
             if abs(energy_1 - energy_0) > Report_e_tol:
                 output.write(
-
-                        "Breaking because hit Report Energy Window, "
-                        f"E was {energy_1} kcal/mol "
-                        f"and minimum was {energy_0} \n"
-
+                    "Breaking because hit Report Energy Window, "
+                    f"E was {energy_1} kcal/mol "
+                    f"and minimum was {energy_0} \n"
                 )
 
                 break
