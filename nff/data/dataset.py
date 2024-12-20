@@ -9,7 +9,7 @@ import copy
 import numbers
 from collections import Counter
 from copy import deepcopy
-from typing import Any, Dict, List, TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Dict, List, Literal
 
 import numpy as np
 import torch
