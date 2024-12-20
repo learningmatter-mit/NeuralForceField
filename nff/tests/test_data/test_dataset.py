@@ -258,7 +258,7 @@ class TestPeriodicDataset(unittest.TestCase):
         self._test_fixture_device = device
 
     def test_neighbor_list(self):
-        nbrs, offs = self.qtz_dataset.generate_neighbor_list(cutoff=5)
+        self.qtz_dataset.generate_neighbor_list(cutoff=5)
 
 
 if __name__ == "__main__":

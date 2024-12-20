@@ -151,7 +151,7 @@ def to_tuple(tensor):
 def get_bond_idx(bonded_nbr_list, nbr_list):
     """
     For each index in the bond list, get the
-    index in the neighbour list that corresponds to the
+    index in the neighbor list that corresponds to the
     same directed pair of atoms.
     Args:
         bonded_nbr_list (torch.LongTensor): pairs
@@ -447,9 +447,9 @@ def add_ji_kj(angle_lists, nbr_lists):
     """
     Get ji and kj idx (explained more below):
     Args:
-        angle_list (list[torch.LongTensor]): list of angle
+        angle_lists (list[torch.LongTensor]): list of angle
             lists
-        nbr_list (list[torch.LongTensor]): list of directed neighbor
+        nbr_lists (list[torch.LongTensor]): list of directed neighbor
             lists
     Returns:
         ji_idx_list (list[torch.LongTensor]): ji_idx for each geom
@@ -562,7 +562,7 @@ def full_angle_idx(batch):
 
     for i in range(num_confs):
         max_idx = (i + 1) * mol_size
-        min_idx = (i) * mol_size
+        min_idx = i * mol_size
 
         # get only the indices for this conformer
         conf_mask = (nbr_list[:, 0] < max_idx) * (nbr_list[:, 0] >= min_idx)
