@@ -87,12 +87,13 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
     Properties:
 
-        positions: returns self._positions. Updating positions updates self._positions, self.positions_list, and positions of
-            self.atoms.
-        velocities: returns self._velocities. Updating positions updates self._velocities, self.velocities_list and velocities
-            of self.atoms.
+        positions: returns self._positions. Updating positions updates self._positions, self.positions_list,
+            and positions of self.atoms.
+        velocities: returns self._velocities. Updating positions updates self._velocities, self.velocities_list
+            and velocities of self.atoms.
         forces: returns self._forces. Updating forces updates self._forces, self.forces_list and forces of self.atoms.
-        energies: returns self._energies. Updating energies updates self._energies, self.energy_list and energies of self.atoms.
+        energies: returns self._energies. Updating energies updates self._energies, self.energy_list
+            and energies of self.atoms.
         surf: returns self._surf. Updating surf updates self._surf and self.surf_list.
         in_trj: returns self._in_trj. Updating in_trj updates self._in_trj and self.
         time: returns self._time. Updating time updates self.time_list.
@@ -698,9 +699,9 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
 class BatchedZhuNakamura:
     """
-    A class for running several Zhu Nakamura trajectories at once. This is done by taking a half step for each trajectory,
-    combining all the xyz's into a dataset and batching it for the network, and then de-batching to put the forces and energies
-    back in the trajectories.
+    A class for running several Zhu Nakamura trajectories at once. This is done by taking a half step
+    for each trajectory, combining all the xyz's into a dataset and batching it for the network, and then de-batching
+    to put the forces and energies back in the trajectories.
 
     Attributes:
         num_trj (int): number of concurrent trajectories

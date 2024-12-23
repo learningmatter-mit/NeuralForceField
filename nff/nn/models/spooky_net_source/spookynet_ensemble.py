@@ -266,13 +266,13 @@ class SpookyNetEnsemble(nn.Module):
                 retain_graph=True,
                 create_graph=create_graph,
             )[0]
-            if grad_mean is not None:  # necessary for torch.jit compatibility
+            if grad_mean is not None:  # necessary for torch.jit compatibility  # noqa
                 forces_mean = -grad_mean
             else:
                 forces_mean = torch.zeros_like(R)
             if calculate_forces_std:
                 grad_std = torch.autograd.grad([torch.sum(energy[1])], [R], create_graph=create_graph)[0]
-                if grad_std is not None:  # necessary for torch.jit compatibility
+                if grad_std is not None:  # necessary for torch.jit compatibility  # noqa
                     forces_std = torch.abs(grad_std)
                 else:
                     forces_std = torch.zeros_like(R)

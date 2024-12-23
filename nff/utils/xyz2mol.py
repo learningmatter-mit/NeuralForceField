@@ -32,7 +32,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem, GetPeriodicTable
 from rdkit.Chem.rdchem import EditableMol
 
-global __ATOM_LIST__
+
 __ATOM_LIST__ = [
     "h",
     "he",
@@ -131,11 +131,7 @@ __ATOM_LIST__ = [
 ]
 
 
-global atomic_valence
-global atomic_valence_electrons
-
 atomic_valence = defaultdict(list)
-
 atomic_valence_electrons = {}
 PERIODICTABLE = GetPeriodicTable()
 
@@ -160,8 +156,10 @@ MAX_TIME = 600
 class TimeoutError(Exception):
     pass
 
+ERROR_MESSAGE = os.strerror(errno.ETIME)
 
-def timeout(seconds, error_message=os.strerror(errno.ETIME)):
+
+def timeout(seconds, error_message=ERROR_MESSAGE):
     def decorator(func):
         def _handle_timeout(signum, frame):
             raise TimeoutError(error_message)
@@ -438,7 +436,7 @@ def get_bonds(UA, AC):
     for k, i in enumerate(UA):
         for j in UA[k + 1 :]:
             if AC[i, j] == 1:
-                bonds.append(tuple(sorted([i, j])))
+                bonds.append(tuple(sorted([i, j])))  # noqa
 
     return bonds
 
@@ -489,10 +487,8 @@ def AC2BO(AC, atoms, charge, allow_charged_fragments=True, use_graph=True):
     global atomic_valence_electrons
 
     # make a list of valences, e.g. for CO: [[4],[2,1]]
-    valences_list_of_lists = []
     AC_valence = list(AC.sum(axis=1))
-    for atomicNum in atoms:
-        valences_list_of_lists.append(atomic_valence[atomicNum])
+    valences_list_of_lists = [atomic_valence[atomicNum] for atomicNum in atoms]
 
     # convert [[4],[2,1]] to [[4,2],[4,1]]
     valences_list = itertools.product(*valences_list_of_lists)
@@ -753,14 +749,14 @@ def check_mol(mol, coordinates):
 
     ed_mol = EditableMol(Chem.MolFromSmiles(""))
 
-    for i, idx in enumerate(new_idx):
+    for idx in new_idx:
         atom = mol.GetAtoms()[idx]
         ed_mol.AddAtom(atom)
 
     all_old_bond_idx = []
     all_old_bond_types = []
 
-    for i, atom in enumerate(mol.GetAtoms()):
+    for atom in mol.GetAtoms():
         bonds = atom.GetBonds()
         old_bond_idx = [[i.GetBeginAtomIdx(), i.GetEndAtomIdx()] for i in bonds]
         bond_types = [i.GetBondType() for i in bonds]

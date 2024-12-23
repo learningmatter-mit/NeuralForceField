@@ -46,7 +46,7 @@ def get_periodic_nbrs(batch, xyz, r_cut=95, nbrs_info=None, mol_idx=None):
     """
     Get the neighbor list connecting every atom to its neighbor within
     a given geometry, but not to itself or to atoms in other geometries.
-    Since this is for perodic systems it also requires getting all possible
+    Since this is for periodic systems it also requires getting all possible
     lattice translation vectors.
     """
 
@@ -60,7 +60,6 @@ def get_periodic_nbrs(batch, xyz, r_cut=95, nbrs_info=None, mol_idx=None):
         nxyz_list = torch.split(batch["nxyz"], num_atoms)
         xyzs = torch.split(xyz, num_atoms)
 
-        nbrs = []
         nbrs_T = []
         nbrs = []
         z = []
@@ -145,7 +144,7 @@ def get_periodic_nbrs(batch, xyz, r_cut=95, nbrs_info=None, mol_idx=None):
 
         _xyzs = []
         num_atoms = []
-        for _xyz, nxyz in zip(xyzs, nxyz_list):
+        for _xyz, nxyz in zip(xyzs, nxyz_list):  # noqa
             _xyz = _xyz / const.BOHR_RADIUS  # convert to Bohr
             _xyzs.append(_xyz)
             num_atoms.append(len(_xyz))

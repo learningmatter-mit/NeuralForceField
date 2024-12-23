@@ -147,9 +147,9 @@ class SpookyNetCalculator(Calculator):
 
         # send args to GPU
         if self.use_gpu:
-            for key in args:
-                if isinstance(args[key], torch.Tensor):
-                    args[key] = args[key].cuda()
+            for key, value in args.items():
+                if isinstance(value, torch.Tensor):
+                    args[key] = value.cuda()
 
         if self.calc_hessian:
             (

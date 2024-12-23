@@ -74,10 +74,10 @@ def add_stress(batch, all_results, nbrs, r_ij):
     if batch["num_atoms"].shape[0] == 1:
         all_results["stress_volume"] = torch.matmul(Z.t(), r_ij)
     else:
-        allstress = []
-        for j in range(batch["nxyz"].shape[0]):
-            allstress.append(torch.matmul(Z[torch.where(nbrs[:, 0] == j)].t(), r_ij[torch.where(nbrs[:, 0] == j)]))
-        allstress = torch.stack(allstress)
+        allstress = torch.stack([
+            torch.matmul(Z[torch.where(nbrs[:, 0] == j)].t(), r_ij[torch.where(nbrs[:, 0] == j)])
+            for j in range(batch["nxyz"].shape[0])
+        ])
         N = batch["num_atoms"].detach().cpu().tolist()
         split_val = torch.split(allstress, N)
         all_results["stress_volume"] = torch.stack([i.sum(0) for i in split_val])
@@ -1030,12 +1030,10 @@ def sum_and_grad(batch, xyz, r_ij, nbrs, atomwise_output, grad_keys, out_keys=No
         if key == "stress":
             output = results["energy"]
             grad_ = compute_grad(output=output, inputs=r_ij)
-            allstress = []
-            for i in range(batch["nxyz"].shape[0]):
-                allstress.append(
-                    torch.matmul(grad_[torch.where(nbrs[:, 0] == i)].t(), r_ij[torch.where(nbrs[:, 0] == i)])
-                )
-            allstress = torch.stack(allstress)
+            allstress = torch.stack([
+                torch.matmul(grad_[torch.where(nbrs[:, 0] == i)].t(), r_ij[torch.where(nbrs[:, 0] == i)])
+                for i in range(batch["nxyz"].shape[0])
+            ])
             split_val = torch.split(allstress, N)
             grad_ = torch.stack([i.sum(0) for i in split_val])
             if "cell" in batch:
@@ -1397,7 +1395,7 @@ class TestModules(unittest.TestCase):
         model = SchNetEdgeUpdate(n_atom_basis=n_atom_basis)
         e_out = model(r, e_in, a)
 
-        assert e_in.shape == e_out.shape, "The edge feature dimensions should be same for the SchNet " "Edge Update case"
+        assert e_in.shape == e_out.shape, "The edge feature dimensions should be same for the SchNet Edge Update case"
 
     def testGAT(self):
         n_atom_basis = 10

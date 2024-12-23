@@ -188,11 +188,11 @@ class CHGNetNFF(CHGNet):
                 "0.2.0": "../../..models/foundation_models/chgnet/0.2.0/chgnet_0.2.0_e30f77s348m32.pth.tar",
             }[model_name]
 
-        except KeyError:
+        except KeyError as e:
             if Path(checkpoint_path).is_file():
                 checkpoint_path = model_name
             elif checkpoint_path is None:
-                raise ValueError(f"Unknown {model_name=}")
+                raise ValueError(f"Unknown model name {model_name}") from e
 
         return cls.from_file(
             os.path.join(module_dir, checkpoint_path),
@@ -211,7 +211,7 @@ class CHGNetNFF(CHGNet):
         Returns:
             CHGNetNFF: Model moved to the specified device.
         """
-        self = super().to(device, **kwargs)
+        super().to(device, **kwargs)
         self.device = device
         if hasattr(self, "composition_model"):
             self.composition_model = self.composition_model.to(device, **kwargs)
@@ -348,10 +348,7 @@ class BatchedGraph:
         bond_bases_bg = torch.cat(bond_bases_bg, dim=0)
         angle_bases = torch.cat(angle_bases, dim=0) if len(angle_bases) != 0 else torch.tensor([])
         batched_atom_graph = torch.cat(batched_atom_graph, dim=0)
-        if batched_bond_graph != []:
-            batched_bond_graph = torch.cat(batched_bond_graph, dim=0)
-        else:  # when bond graph is empty or disabled
-            batched_bond_graph = torch.tensor([])
+        batched_bond_graph = torch.cat(batched_bond_graph, dim=0) if batched_bond_graph != [] else torch.tensor([])
         atom_owners = torch.cat(atom_owners, dim=0).type(torch.int32).to(atomic_numbers.device)
         directed2undirected = torch.cat(directed2undirected, dim=0)
         volumes = torch.tensor(volumes, dtype=datatype, device=atomic_numbers.device)

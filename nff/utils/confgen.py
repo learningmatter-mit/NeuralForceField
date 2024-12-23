@@ -326,11 +326,8 @@ def _extract_atomic_type(confomer):
     Extracts the elements associated with a conformer, in order that prune_threshy
     are read in
     """
-    elements = []
     mol = confomer.GetOwningMol()
-    for atom in mol.GetAtoms():
-        elements.append(atom.GetSymbol())
-    return elements
+    return [atom.GetSymbol() for atom in mol.GeAtoms()]
 
 
 def _atomic_pos_from_conformer(conformer):

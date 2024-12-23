@@ -58,12 +58,8 @@ class NoseHoovernpt(NPT):
 
         self.T = temperature * units.kB
 
-        # initial Maxwell-Boltmann temperature for atoms
-        if T_init is not None:
-            # convert units
-            T_init = T_init * units.kB
-        else:
-            T_init = 2 * self.T
+        # initial Maxwell-Boltzmann temperature for atoms
+        T_init = T_init * units.kB if T_init is not None else 2 * self.T
 
         MaxwellBoltzmannDistribution(self.atoms, T_init)
         Stationary(self.atoms)
@@ -134,12 +130,8 @@ class Berendsennpt(Inhomogeneous_NPTBerendsen):
 
         self.T = temperature * units.kB
 
-        # initial Maxwell-Boltmann temperature for atoms
-        if T_init is not None:
-            # convert units
-            T_init = T_init * units.kB
-        else:
-            T_init = 2 * self.T
+        # initial Maxwell-Boltzmann temperature for atoms
+        T_init = T_init * units.kB if T_init is not None else 2 * self.T
 
         MaxwellBoltzmannDistribution(self.atoms, T_init)
         Stationary(self.atoms)
@@ -223,12 +215,8 @@ class NoseHooverNPT(MolecularDynamics):
 
         self.nbr_update_period = nbr_update_period
 
-        # initial Maxwell-Boltmann temperature for atoms
-        if maxwell_temp is not None:
-            # convert units
-            maxwell_temp = maxwell_temp * units.kB
-        else:
-            maxwell_temp = 2 * self.T
+        # initial Maxwell-Boltzmann temperature for atoms
+        maxwell_temp = maxwell_temp * units.kB if maxwell_temp is not None else 2 * self.T
 
         MaxwellBoltzmannDistribution(self.atoms, maxwell_temp)
         Stationary(self.atoms)

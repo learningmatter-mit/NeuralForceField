@@ -5,7 +5,7 @@ and JSON parameter files.
 
 import json
 import os
-from typing import *
+from typing import List, Union
 
 import numpy as np
 import torch

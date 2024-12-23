@@ -35,8 +35,8 @@ def xyz_to_ase_atoms(xyz_file):
     sym = []
     pos = []
 
-    f = open(xyz_file, "r")
-    lines = f.readlines()
+    with open(xyz_file, "r") as f:
+        lines = f.readlines()
 
     for i, line in enumerate(lines):
         if i > 1:

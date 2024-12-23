@@ -505,7 +505,7 @@ class NeuralTully:
             nxyz = state_dict["nxyz"]
             if single:
                 nxyz = [nxyz]
-            for i, nxyz in enumerate(nxyz):
+            for i, nxyz in enumerate(nxyz):  # noqa
                 if nxyz is None:
                     trjs[i].append(None)
                     continue

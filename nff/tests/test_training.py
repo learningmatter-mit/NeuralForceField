@@ -106,8 +106,6 @@ def test_training(device, tmpdir):
     # `test_loss` is the loss, calculated with the same function used during the training part
     results, targets, val_loss = evaluate(T.get_best_model(), test_loader, loss_fn, device=device)
 
-    to_tensor(results["energy"], stack=True).shape
-
     # Finally, we could plot our results to observe how well is our model performing
     # here we are just checking the MAE to ensure the pipeline works
 

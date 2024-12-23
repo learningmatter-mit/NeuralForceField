@@ -80,7 +80,7 @@ class PainnDispersion(nn.Module):
         fallback_to_grimme = getattr(self, "fallback_to_grimme", True)
 
         if grimme_disp:
-            pass
+            e_disp, r_ij_T, nbrs_T = None
         else:
             e_disp, r_ij_T, nbrs_T = self.get_dispersion(batch=batch, xyz=xyz)
 
@@ -104,20 +104,20 @@ class PainnDispersion(nn.Module):
                         all_results[grad_key] = all_results[grad_key] + disp_grad
 
         if requires_stress and not grimme_disp:
+            if e_disp is None or r_ij_T is None or nbrs_T is None:
+                raise RuntimeError("Should not be reached, something went wrong")
             # add gradient for stress
             disp_rij_grad = compute_grad(inputs=r_ij_T, output=e_disp)
 
             if batch["num_atoms"].shape[0] == 1:
                 disp_stress_volume = torch.matmul(disp_rij_grad.t(), r_ij_T)
             else:
-                allstress = []
-                for j in range(batch["nxyz"].shape[0]):
-                    allstress.append(
-                        torch.matmul(
-                            disp_rij_grad[torch.where(nbrs_T[:, 0] == j)].t(), r_ij_T[torch.where(nbrs_T[:, 0] == j)]
-                        )
+                allstress = torch.stack([
+                    torch.matmul(
+                        disp_rij_grad[torch.where(nbrs_T[:, 0] == j)].t(), r_ij_T[torch.where(nbrs_T[:, 0] == j)]
                     )
-                allstress = torch.stack(allstress)
+                    for j in range(batch["nxyz"].shape[0])
+                ])
                 N = batch["num_atoms"].detach().cpu().tolist()
                 split_val = torch.split(allstress, N)
                 disp_stress_volume = torch.stack([i.sum(0) for i in split_val])

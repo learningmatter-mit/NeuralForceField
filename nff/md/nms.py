@@ -69,15 +69,8 @@ def get_key(iroot, num_states):
     Returns:
         key (str): energy key
     """
-
-    # energy if only one state
-    if iroot == 0 and num_states == 1:
-        key = "energy"
-
-    # otherwise energy with state suffix
-    else:
-        key = f"energy_{iroot}"
-    return key
+    # energy if only one state, other energy with state suffix
+    return "energy" if iroot == 0 and num_states == 1 else f"energy_{iroot}"
 
 
 def init_calculator(atoms, params):
@@ -366,10 +359,10 @@ def get_orca_form(cc_mat, cc_freqs, n_atoms):
     matrix = np.asarray(new_mat[:]).reshape(n_tot, n_modes)
 
     zero_col = np.asarray([[0]] * len(matrix))
-    for i in range(n_inactive):
+    for _ in range(n_inactive):
         matrix = np.insert(matrix, [0], zero_col, axis=1)
     freqs = np.asarray(pure_freqs[:])
-    for i in range(n_inactive):
+    for _ in range(n_inactive):
         freqs = np.insert(freqs, 0, 0)
 
     return matrix, freqs * CM_2_AU

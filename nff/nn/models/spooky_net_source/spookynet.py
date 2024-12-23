@@ -5,7 +5,19 @@ import torch
 import torch.nn as nn
 
 from .functional import cutoff_function
-from .modules import *
+from .modules import (
+    D4DispersionEnergy,
+    ElectronicEmbedding,
+    ElectrostaticEnergy,
+    ExponentialBernsteinPolynomials,
+    ExponentialGaussianFunctions,
+    GaussianFunctions,
+    InteractionModule,
+    NonlinearElectronicEmbedding,
+    NuclearEmbedding,
+    SincFunctions,
+    ZBLRepulsionEnergy
+)
 
 # backwards compatibility with old versions of pytorch
 try:
@@ -448,7 +460,7 @@ class SpookyNet(nn.Module):
             return sep.join(parts)
 
         new_state_dict = {}
-        for old_key in old_state_dict:
+        for old_key, old_value in old_state_dict.items():
             if old_key == "idx" or old_key == "mul":
                 continue
 
@@ -481,7 +493,7 @@ class SpookyNet(nn.Module):
                 new_key = new_key.replace("activation_pre", "activation1")
             if "activation_post" in new_key:
                 new_key = new_key.replace("activation_post", "activation2")
-            new_state_dict[new_key] = old_state_dict[old_key]
+            new_state_dict[new_key] = old_value
         return new_state_dict
 
     def get_number_of_parameters(self) -> int:
@@ -1004,7 +1016,7 @@ class SpookyNet(nn.Module):
         )
         if idx_i.numel() > 0:  # autograd will fail if there are no distances
             grad = torch.autograd.grad([torch.sum(energy)], [R], create_graph=create_graph)[0]
-            if grad is not None:  # necessary for torch.jit compatibility
+            if grad is not None:  # necessary for torch.jit compatibility  # noqa
                 forces = -grad
             else:
                 forces = torch.zeros_like(R)

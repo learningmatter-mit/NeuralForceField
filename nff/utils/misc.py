@@ -56,20 +56,17 @@ CHEMPROP_METRICS = [
 ]
 
 
-def tqdm_enum(iter):
+def tqdm_enum(iterable):
     """
     Wrap tqdm around `enumerate`.
     Args:
-        iter (iterable): an iterable (e.g. list)
+        iterable (iterable): an iterable (e.g. list)
     Returns
         i (int): current index
         y: current value
     """
-
-    i = 0
-    for y in tqdm(iter):
+    for i, y in enumerate(tqdm(iterable)):
         yield i, y
-        i += 1
 
 
 def log(prefix, msg):

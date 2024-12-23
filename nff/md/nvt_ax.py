@@ -56,13 +56,8 @@ class NoseHoover(MolecularDynamics):
         self.nbr_update_period = nbr_update_period
         self.max_steps = 0
 
-        # initial Maxwell-Boltmann temperature for atoms
-        if maxwell_temp is not None:
-            # convert units
-            maxwell_temp = maxwell_temp * units.kB
-        else:
-            maxwell_temp = 2 * self.T
-
+        # initial Maxwell-Boltzmann temperature for atoms
+        maxwell_temp = maxwell_temp * units.kB if maxwell_temp is not None else 2 * self.T
         MaxwellBoltzmannDistribution(self.atoms, maxwell_temp)
         Stationary(self.atoms)
         ZeroRotation(self.atoms)
@@ -159,12 +154,8 @@ class NoseHooverChain(MolecularDynamics):
         self.n_steps = 0
         self.max_steps = 0
 
-        # initial Maxwell-Boltmann temperature for atoms
-        if maxwell_temp is not None:
-            # convert units
-            maxwell_temp = maxwell_temp * units.kB
-        else:
-            maxwell_temp = 2 * self.T
+        # initial Maxwell-Boltzmann temperature for atoms
+        maxwell_temp = maxwell_temp * units.kB if maxwell_temp is not None else 2 * self.T
         MaxwellBoltzmannDistribution(self.atoms, maxwell_temp)
 
     def get_zeta_accel(self):

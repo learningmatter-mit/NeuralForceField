@@ -249,22 +249,22 @@ def write_traj(filename, frames):
         traj2write = trajconv(n_mol, n_atom, box_len, path)
         write_traj(path, traj2write)
     """
-    file = open(filename, "w")
-    atom_no = frames.shape[1]
-    for i, frame in enumerate(frames):
-        file.write(str(atom_no) + "\n")
-        file.write("Atoms. Timestep: " + str(i) + "\n")
-        for atom in frame:
-            if atom.shape[0] == 4:
-                try:
-                    file.write(str(int(atom[0])) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
-                except BaseException:
-                    file.write(str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
-            elif atom.shape[0] == 3:
-                file.write("1" + " " + str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + "\n")
-            else:
-                raise ValueError("wrong format")
-    file.close()
+    with open(filename, "w") as file:
+        atom_no = frames.shape[1]
+        for i, frame in enumerate(frames):
+            file.write(str(atom_no) + "\n")
+            file.write("Atoms. Timestep: " + str(i) + "\n")
+            for atom in frame:
+                if atom.shape[0] == 4:
+                    try:
+                        file.write(str(int(atom[0])) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3])
+                                   + "\n")
+                    except BaseException:
+                        file.write(str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
+                elif atom.shape[0] == 3:
+                    file.write("1" + " " + str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + "\n")
+                else:
+                    raise ValueError("wrong format")
 
 
 def csv_read(out_file):

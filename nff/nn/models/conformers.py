@@ -32,21 +32,21 @@ class WeightedConformers(nn.Module):
 
             # all the atomic fingerprints get added together, then go through the network created
             # by `mol_fp_layers` to turn into a molecular fingerprint
-            mol_fp_layers = [{'name': 'linear', 'param' : { 'in_features': n_atom_basis,
-                                                            'out_features': int((n_atom_basis + mol_basis)/2)}},
-                                           {'name': 'shifted_softplus', 'param': {}},
-                                           {'name': 'linear', 'param' : { 'in_features': int((n_atom_basis + mol_basis)/2),
-                                                                          'out_features': mol_basis}}]
+            mol_fp_layers = [{'name': 'linear',
+                              'param' : { 'in_features': n_atom_basis,
+                                          'out_features': int((n_atom_basis + mol_basis)/2)}},
+                             {'name': 'shifted_softplus', 'param': {}},
+                             {'name': 'linear', 'param' : { 'in_features': int((n_atom_basis + mol_basis)/2),
+                                                            'out_features': mol_basis}}
+            ]
 
-
-            readoutdict = {
-                                "covid": [{'name': 'linear', 'param' : { 'in_features': mol_basis,
-                                                                          'out_features': int(mol_basis / 2)}},
-                                           {'name': 'shifted_softplus', 'param': {}},
-                                           {'name': 'linear', 'param' : { 'in_features': int(mol_basis / 2),
-                                                                          'out_features': 1}},
-                                           {'name': 'sigmoid', 'param': {}}],
-                            }
+            readout_dict = {"covid": [{'name': 'linear', 'param' : { 'in_features': mol_basis,
+                                                                     'out_features': int(mol_basis / 2)}},
+                                      {'name': 'shifted_softplus', 'param': {}},
+                                      {'name': 'linear', 'param' : { 'in_features': int(mol_basis / 2),
+                                                                     'out_features': 1}},
+                                      {'name': 'sigmoid', 'param': {}}],
+            }
 
             # dictionary to tell you what to do with the Boltzmann factors
             # ex. 1:

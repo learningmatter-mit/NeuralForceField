@@ -741,9 +741,7 @@ class CrossTalk(nn.Module):
 
             final_results[key] = pool_val
 
-        for key, val in results.items():
-            if key not in combined_results:
-                final_results[key] = val
+        final_results.update(**{key: val for key, val in results.items() if key not in combined_results})
 
         return final_results
 

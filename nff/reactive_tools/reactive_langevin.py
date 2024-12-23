@@ -1,6 +1,7 @@
 from ase.io import Trajectory
-from ase.md.langevin import *
 from ase.units import Ang, fs, kB, second
+
+import numpy as np
 
 from nff.md.utils import NeuralMDLogger, write_traj
 

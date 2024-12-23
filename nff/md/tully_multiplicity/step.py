@@ -7,6 +7,8 @@ import copy
 import numpy as np
 import torch
 
+from nff.md.tully.step import solve_quadratic
+
 
 def verlet_step_1(forces, surfs, vel, xyz, mass, dt):
     # `forces` has dimension (num_samples x num_states

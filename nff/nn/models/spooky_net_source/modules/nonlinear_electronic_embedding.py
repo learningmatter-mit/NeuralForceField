@@ -81,7 +81,7 @@ class NonlinearElectronicEmbedding(nn.Module):
                 mask = nn.functional.one_hot(batch_seg).to(dtype=x.dtype, device=x.device).transpose(-1, -2)
             tmp = dot.view(1, -1).expand(num_batch, -1)
             tmp, _ = torch.max(mask * tmp, dim=-1)
-            if tmp.device.type == "cpu":  # indexing is faster on CPUs
+            if tmp.device.type == "cpu":  # indexing is faster on CPUs  # noqa
                 maximum = tmp[batch_seg]
             else:  # gathering is faster on GPUs
                 maximum = torch.gather(tmp, 0, batch_seg)
@@ -92,7 +92,7 @@ class NonlinearElectronicEmbedding(nn.Module):
         a = torch.exp((dot - maximum) / d**0.5)
 
         anorm = a.new_zeros(num_batch).index_add_(0, batch_seg, a)
-        if a.device.type == "cpu":  # indexing is faster on CPUs
+        if a.device.type == "cpu":  # indexing is faster on CPUs  # noqa
             anorm = anorm[batch_seg]
         else:  # gathering is faster on GPUs
             anorm = torch.gather(anorm, 0, batch_seg)

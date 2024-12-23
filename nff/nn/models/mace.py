@@ -273,7 +273,8 @@ class NffScaleMACE(ScaleShiftMACE):
             default_dtype = model_dtype
         if model_dtype != default_dtype:
             print(
-                f"Default dtype {default_dtype} does not match model dtype {model_dtype}, converting models to {default_dtype}."
+                f"Default dtype {default_dtype} does not match model dtype {model_dtype}, "
+                f"converting models to {default_dtype}."
             )
             if default_dtype == "float64":
                 mace_model.double()
