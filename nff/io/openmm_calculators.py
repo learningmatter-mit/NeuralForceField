@@ -30,7 +30,7 @@ class BiasBase(Calculator):
         equil_temp: float temperature of the simulation (important for extended system dynamics)
     """
 
-    implemented_properties = [  # noqa
+    implemented_properties = [
         "energy",
         "forces",
         "energy_unbiased",

@@ -170,7 +170,7 @@ class AtomsBatch(Atoms):
 class NeuralFF(Calculator):
     """ASE calculator using a pretrained NeuralFF model"""
 
-    implemented_properties = ["energy", "forces"]  # noqa
+    implemented_properties = ["energy", "forces"]
 
     def __init__(
         self,

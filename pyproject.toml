@@ -148,5 +148,6 @@ ignore = [
     "UP031",   # Use format specifiers instead of percent format
     "PD901",   # dont name dataframes df
     "FA100",   # from future suggestion
+    "RUF012",  # type annotation for mutable class attributes
 ]
 pydocstyle.convention = "google"

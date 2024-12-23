@@ -49,7 +49,7 @@ def check_directed(model, atoms):
 class NeuralFF(Calculator):
     """ASE calculator using a pretrained NeuralFF model"""
 
-    implemented_properties = ["energy", "forces", "stress", "embedding"]  # noqa
+    implemented_properties = ["energy", "forces", "stress", "embedding"]
 
     def __init__(
         self,
@@ -229,7 +229,7 @@ class EnsembleNFF(Calculator):
     """Produces an ensemble of NFF calculators to predict the
     discrepancy between the properties"""
 
-    implemented_properties = ["energy", "forces", "stress", "energy_std", "forces_std", "stress_std"]  # noqa
+    implemented_properties = ["energy", "forces", "stress", "energy_std", "forces_std", "stress_std"]
 
     def __init__(
         self,
@@ -1100,7 +1100,7 @@ class HarmonicRestraint:
 class NeuralRestraint(Calculator):
     """ASE calculator to run Neural restraint MD simulations"""
 
-    implemented_properties = ["energy", "forces", "stress"]  # noqa
+    implemented_properties = ["energy", "forces", "stress"]
 
     def __init__(
         self,

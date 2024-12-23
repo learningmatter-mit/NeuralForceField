@@ -29,7 +29,7 @@ class BiasBase(NeuralFF):
         equil_temp: float temperature of the simulation (important for extended system dynamics)
     """
 
-    implemented_properties = [  # noqa
+    implemented_properties = [
         "energy",
         "forces",
         "stress",
@@ -964,7 +964,7 @@ class AttractiveBias(NeuralFF):
         gamma: coupling strength, regulates strength of attraction
     """
 
-    implemented_properties = [  # noqa
+    implemented_properties = [
         "energy",
         "forces",
         "stress",
