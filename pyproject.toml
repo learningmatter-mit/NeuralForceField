@@ -149,5 +149,7 @@ ignore = [
     "PD901",   # dont name dataframes df
     "FA100",   # from future suggestion
     "RUF012",  # type annotation for mutable class attributes
+    "RUF002",  # ambiguous characters in docstrings
+    "RUF003",  # ambiguous characters in comments
 ]
 pydocstyle.convention = "google"
