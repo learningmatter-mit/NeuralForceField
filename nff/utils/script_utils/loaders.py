@@ -43,3 +43,4 @@ def get_loaders(args, logging=None):
         test_loader = DataLoader(test, batch_size=args.batch_size, num_workers=args.workers, collate_fn=collate_dicts)
 
         return train_loader, val_loader, test_loader
+    return None

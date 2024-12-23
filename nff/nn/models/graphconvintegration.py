@@ -89,7 +89,7 @@ class GraphConvIntegration(nn.Module):
         r = self.atom_embed(r.long()).squeeze()
 
         # update function includes periodic boundary conditions
-        for i, conv in enumerate(self.convolutions):
+        for conv in self.convolutions:
             dr = conv(r=r, e=e, a=a, aggr_wgt=aggr_wgt)
             r = r + dr
 

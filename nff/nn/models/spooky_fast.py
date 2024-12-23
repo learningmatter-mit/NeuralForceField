@@ -103,7 +103,7 @@ class SpookyNet(nn.Module):
             if key in self.electrostatics:
                 dipole = get_dipole(xyz=xyz, q=q, num_atoms=num_atoms)
                 suffix = "_" + key.split("_")[-1]
-                if not any([i.isdigit() for i in suffix]):
+                if not any(i.isdigit() for i in suffix):
                     suffix = ""
                 results.update({f"dipole{suffix}": dipole, f"q{suffix}": q})
 
@@ -137,7 +137,7 @@ class SpookyNet(nn.Module):
         x = self.embedding(charge=charge, spin=spin, z=z, num_atoms=num_atoms)
 
         f = torch.zeros_like(x)
-        for i, interaction in enumerate(self.interactions):
+        for interaction in self.interactions:
             x, y_t = interaction(x=x, xyz=xyz, nbrs=nbrs, num_atoms=num_atoms)
             f += y_t
 

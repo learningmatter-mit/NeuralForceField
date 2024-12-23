@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..functional import softplus_inverse
+from nff.nn.models.spooky_net_source.functional import softplus_inverse
 
 
 class ExponentialGaussianFunctions(nn.Module):
@@ -34,7 +34,7 @@ class ExponentialGaussianFunctions(nn.Module):
         exp_weighting: bool = False,
     ) -> None:
         """Initializes the ExponentialGaussianFunctions class."""
-        super(ExponentialGaussianFunctions, self).__init__()
+        super().__init__()
         self.ini_alpha = ini_alpha
         self.exp_weighting = exp_weighting
         if no_basis_function_at_infinity:

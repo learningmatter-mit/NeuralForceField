@@ -221,10 +221,7 @@ class Classifier(Metric):
 
     def aggregate(self):
         """Aggregate metric over all previously added batches."""
-        if self.n_entries == 0:
-            result = float("nan")
-        else:
-            result = self.loss / self.n_entries
+        result = float("nan") if self.n_entries == 0 else self.loss / self.n_entries
         return result
 
 

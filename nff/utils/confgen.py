@@ -594,9 +594,9 @@ def one_species_confs(
     smiles = copy.deepcopy(molecule)
     with open(log, "w") as output:
         output.write("The smiles strings that will be run are:\n")
-        output.write("\n".join([molecule]) + "\n")
+        output.write(f"{molecule}" + "\n")
 
-        if any([element in molecule for element in UFF_ELEMENTS]):
+        if any(element in molecule for element in UFF_ELEMENTS):
             output.write("Switching to UFF, since MMFF94 does " "not have boron and/or aluminum\n")
             forcefield = "uff"
 

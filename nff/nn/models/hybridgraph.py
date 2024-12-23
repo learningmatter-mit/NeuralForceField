@@ -65,7 +65,7 @@ class HybridGraphConv(nn.Module):
         if pbc_offsets is None:
             pbc_offsets = 0
         e = (xyz[nbr_list[:, 1]] - xyz[nbr_list[:, 0]] + pbc_offsets).pow(2).sum(1).sqrt()[:, None]
-        for i, conv in enumerate(conv_module):
+        for _i, conv in enumerate(conv_module):
             dr = conv(r=node, e=e, a=nbr_list)
             node = node + dr
         return node

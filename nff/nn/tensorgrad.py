@@ -305,7 +305,7 @@ def hess_from_results(results, xyz, stack_xyz, keys, batch, device):
 def general_batched_hessian(batch, keys, device, model=None, forward=None, **kwargs):
     # doesn't seem to work for painn, at least with non-locality
 
-    assert any([i is not None for i in [model, forward]])
+    assert any(i is not None for i in [model, forward])
     xyz, stack_xyz, results = results_from_stack(batch=batch, model=model, forward=forward, **kwargs)
 
     results = hess_from_results(results=results, xyz=xyz, stack_xyz=stack_xyz, keys=keys, batch=batch, device=device)

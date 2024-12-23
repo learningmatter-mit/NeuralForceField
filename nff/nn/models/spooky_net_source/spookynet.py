@@ -148,7 +148,7 @@ class SpookyNet(nn.Module):
         **kwargs,
     ) -> None:
         """Initializes the SpookyNet class."""
-        super(SpookyNet, self).__init__()
+        super().__init__()
 
         # load state from a file (if load_from is not None) and overwrite
         # the given arguments.
@@ -181,14 +181,8 @@ class SpookyNet(nn.Module):
             module_keep_prob = saved_state["module_keep_prob"]
             Zmax = saved_state["Zmax"]
             # compatibility with older code
-            if "use_irreps" in saved_state:
-                use_irreps = saved_state["use_irreps"]
-            else:
-                use_irreps = False
-            if "use_nonlinear_embedding" in saved_state:
-                use_nonlinear_embedding = saved_state["use_nonlinear_embedding"]
-            else:
-                use_nonlinear_embedding = True
+            use_irreps = saved_state.get("use_irreps", False)
+            use_nonlinear_embedding = saved_state.get("use_nonlinear_embedding", True)
 
         # store argument values as attributes
         self.activation = activation
@@ -374,14 +368,14 @@ class SpookyNet(nn.Module):
 
     def train(self, mode: bool = True) -> None:
         """Turn on training mode."""
-        super(SpookyNet, self).train(mode=mode)
+        super().train(mode=mode)
         for name, param in self.named_parameters():
             param.requires_grad = self.requires_grad_dict[name]
 
     def eval(self) -> None:
         """Turn on evaluation mode (smaller memory footprint)."""
-        super(SpookyNet, self).eval()
-        for name, param in self.named_parameters():
+        super().eval()
+        for _name, param in self.named_parameters():
             param.requires_grad = False
 
     def build_requires_grad_dict(self) -> None:
@@ -463,10 +457,7 @@ class SpookyNet(nn.Module):
             elif "local_interaction.activation_" in old_key or "embedding.activation_" in old_key:
                 new_key = prefix_postfix(old_key, "activation")
             elif "local_interaction.linear_" in old_key or "embedding.linear_" in old_key:
-                if "embedding.linear_q" in old_key:
-                    new_key = old_key
-                else:
-                    new_key = prefix_postfix(old_key, "linear")
+                new_key = old_key if "embedding.linear_q" in old_key else prefix_postfix(old_key, "linear")
             elif ".local_interaction.residual." in old_key:
                 new_key = old_key.replace(".residual.", ".resblock.residual.")
             elif ".local_interaction.activation." in old_key:

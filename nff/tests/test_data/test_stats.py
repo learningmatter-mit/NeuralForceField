@@ -17,17 +17,17 @@ class TestAtoms(unittest.TestCase):
         # Test case 1: Single atom formula
         formula = "H"
         expected_result = {"H": 1}
-        self.assertEqual(get_atom_count(formula), expected_result)
+        assert get_atom_count(formula) == expected_result
 
         # Test case 2: Formula with multiple atoms
         formula = "H2O"
         expected_result = {"H": 2, "O": 1}
-        self.assertEqual(get_atom_count(formula), expected_result)
+        assert get_atom_count(formula) == expected_result
 
         # Test case 3: Formula with repeated atoms
         formula = "CH3CH2CH3"
         expected_result = {"C": 3, "H": 8}
-        self.assertEqual(get_atom_count(formula), expected_result)
+        assert get_atom_count(formula) == expected_result
 
     def test_all_atoms(self):
         unique_formulas = ["H2O", "CH4", "CO2"]
@@ -35,7 +35,7 @@ class TestAtoms(unittest.TestCase):
 
         result = all_atoms(unique_formulas)
 
-        self.assertEqual(result, expected_result, "Incorrect atom set")
+        assert result == expected_result, "Incorrect atom set"
 
 
 class TestStats(unittest.TestCase):

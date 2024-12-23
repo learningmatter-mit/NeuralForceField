@@ -546,7 +546,7 @@ class NeuralTully:
                 f.write(hdr)
 
         template = "%-10.2f "
-        for i, state in enumerate(states):
+        for _ in states:
             template += "%15.6f"
         template += "%15.4f"
         template += "%15.4f"

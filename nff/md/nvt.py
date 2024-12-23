@@ -2,6 +2,7 @@ import copy
 import math
 import os
 import pickle
+from typing import Optional
 
 import numpy as np
 from ase import units
@@ -328,7 +329,7 @@ class Langevin(MolecularDynamics):
         timestep: float,
         temperature: float,
         friction_per_ps: float = 1.0,
-        maxwell_temp: float = None,
+        maxwell_temp: Optional[float] = None,
         random_seed=None,
         trajectory=None,
         logfile=None,
@@ -481,7 +482,7 @@ class BatchLangevin(MolecularDynamics):
         timestep: float,
         temperature: float,
         friction_per_ps: float = 1.0,
-        maxwell_temp: float = None,
+        maxwell_temp: Optional[float] = None,
         random_seed=None,
         trajectory=None,
         logfile=None,
@@ -545,9 +546,7 @@ class BatchLangevin(MolecularDynamics):
         self.nbr_update_period = nbr_update_period
 
         # initial Maxwell-Boltmann temperature for atoms
-        if maxwell_temp is not None:
-            maxwell_temp = maxwell_temp
-        else:
+        if maxwell_temp is None:
             maxwell_temp = self.T
 
         # intialize system momentum
@@ -670,7 +669,7 @@ class VRescale(MolecularDynamics):
         timestep: float,
         temperature: float,
         relaxation_const: float = 100.0,
-        maxwell_temp: float = None,
+        maxwell_temp: Optional[float] = None,
         random_seed=None,
         trajectory=None,
         logfile=None,
@@ -1086,7 +1085,7 @@ class BatchMDLogger(MDLogger):
         epot = self.atoms.get_potential_energy()
         temp = self.atoms.get_batch_T()
 
-        for i, this_ek in enumerate(ekin):
+        for i, _this_ek in enumerate(ekin):
             this_epot = epot[i]
             this_temp = float(temp[i])
             dat += (this_epot, this_temp)

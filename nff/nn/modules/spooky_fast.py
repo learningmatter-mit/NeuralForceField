@@ -58,7 +58,7 @@ def get_elec_config(max_z):
     # in ELEC_CONFIG
     elec_config = torch.ones(max_z + 1, 20) * float("nan")
     for z, val in ELEC_CONFIG.items():
-        elec_config[z] = torch.Tensor([z] + val) / max_z_config
+        elec_config[z] = torch.Tensor([z, *val]) / max_z_config
     return elec_config
 
 

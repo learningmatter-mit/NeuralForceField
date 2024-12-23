@@ -144,7 +144,7 @@ class SchNet(nn.Module):
         r = self.atom_embed(r.long()).squeeze()
 
         # update function includes periodic boundary conditions
-        for i, conv in enumerate(self.convolutions):
+        for conv in self.convolutions:
             dr = conv(r=r, e=e, a=a)
             r = r + dr
 
@@ -159,7 +159,7 @@ class SchNet(nn.Module):
     def forward(self, batch, xyz=None, requires_stress=False, **kwargs):
         """Summary
         Args:
-            batch (dict): dictionary of props
+            batch (dict): dictionary of propSchNetEdgeFilters
             xyz (torch.tensor): (optional) coordinates
 
         Returns:

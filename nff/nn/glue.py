@@ -23,7 +23,7 @@ class Stack(nn.Module):
 
     def forward(self, batch, keys_to_combine=["energy", "energy_grad"], **kwargs):
         # run models
-        result_list = [self.models[key](batch, **kwargs) for key in self.models.keys()]
+        result_list = [self.models[key](batch, **kwargs) for key in self.models]
 
         # perform further operations
         combine_results = dict()

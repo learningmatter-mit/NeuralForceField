@@ -104,10 +104,10 @@ def zhu_dic_to_list(dic):
     """
 
     lst = []
-    first_key = list(dic.keys())[0]
+    first_key = next(iter(dic.keys()))
     for i in range(len(dic[first_key])):
         sub_dic = dict()
-        for key in dic.keys():
+        for key in dic:
             sub_dic[key.split("_list")[0]] = dic[key][i]
             if key == "time_list":
                 sub_dic[key.split("_list")[0]] /= const.FS_TO_AU
@@ -126,7 +126,7 @@ def append_to_csv(lst, out_file):
     """
     with open(out_file, "a+") as csvfile:
         for item in lst:
-            fieldnames = sorted(list(item.keys()))
+            fieldnames = sorted(item.keys())
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerow({key: item[key] for key in fieldnames})
@@ -138,7 +138,7 @@ def write_to_new_csv(lst, out_file):
     """
     with open(out_file, "w") as csvfile:
         for item in lst:
-            fieldnames = sorted(list(item.keys()))
+            fieldnames = sorted(item.keys())
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerow({key: item[key] for key in fieldnames})
@@ -184,7 +184,7 @@ def csv_read(out_file):
     new_dic_list = []
     for regular_dic, key_dic in zip(dic_list, dic_keys):
         new_dic = copy.deepcopy(regular_dic)
-        for key in regular_dic.keys():
+        for key in regular_dic:
             new_dic[key_dic[key]] = regular_dic[key]
         new_dic_list.append(new_dic)
 

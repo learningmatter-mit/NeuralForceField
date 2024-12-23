@@ -1,4 +1,4 @@
-import itertools as itertools
+import itertools
 from itertools import repeat
 from typing import Union
 
@@ -43,7 +43,7 @@ class ColVar(torch.nn.Module):
                               the common key is name, which defines the CV function
                               all other keys are specific to each CV
         """
-        super(ColVar, self).__init__()
+        super().__init__()
         self.info_dict = info_dict
 
         if "name" not in info_dict:
@@ -425,7 +425,7 @@ class ColVar(torch.nn.Module):
         dis_sq = torch.linalg.norm(dis_mat, dim=-1)
         dis = dis_sq[self.O, :][:, self.H]
 
-        dis1 = dis_sq[self.Oacid, :][:, self.Owater]
+        dis_sq[self.Oacid, :][:, self.Owater]
         cvmatrix = torch.exp(-self.do * dis)
         cvmatrix = cvmatrix / cvmatrix.sum(0)
         cvmatrixw = cvmatrix[self.Oacid.shape[0] :].sum(-1) - self.r1
@@ -659,7 +659,7 @@ class GNN(torch.nn.Module):
     """
 
     def __init__(self, n_convs=3, n_embed=64):
-        super(GNN, self).__init__()
+        super().__init__()
         self.atom_embed = nn.Embedding(100, n_embed)
         # Declare MLPs in a ModuleList
         self.convolutions = nn.ModuleList(
@@ -734,7 +734,7 @@ def get_adjacency_matrix(xyz, atom_numbers, bond_length, oxygeninvolved, cell=No
     ]
     adjacency_matrix = torch.matmul(adjacency_matrix, adjacency_matrix.t())
     adjacency_matrix = adjacency_matrix.fill_diagonal_(0)
-    edges = torch.stack([i for i in torch.where(adjacency_matrix >= 0)])
+    edges = torch.stack(list(torch.where(adjacency_matrix >= 0)))
     adjacency_matrix = adjacency_matrix[
         torch.where(adjacency_matrix >= 0)[0], torch.where(adjacency_matrix >= 0)[1]
     ].view(-1, 1)
@@ -791,10 +791,10 @@ def get_molecules(atom, bond_length, mode="bond", periodic=True):
         elif (clusters[oxy_neighbors] == 0).all() and clusters[i] == 0:
             clusters[oxy_neighbors] = mm + 1
             clusters[i] = mm + 1
-        elif (clusters[oxy_neighbors] == 0).all() == False and clusters[i] == 0:
+        elif (clusters[oxy_neighbors] == 0).all() is False and clusters[i] == 0:
             clusters[i] = min(clusters[oxy_neighbors][clusters[oxy_neighbors] != 0])
             clusters[oxy_neighbors] = min(clusters[oxy_neighbors][clusters[oxy_neighbors] != 0])
-        elif (clusters[oxy_neighbors] == 0).all() == False and clusters[i] != 0:
+        elif (clusters[oxy_neighbors] == 0).all() is False and clusters[i] != 0:
             tmp = clusters[oxy_neighbors][clusters[oxy_neighbors] != 0][
                 clusters[oxy_neighbors][clusters[oxy_neighbors] != 0]
                 != min(clusters[oxy_neighbors][clusters[oxy_neighbors] != 0])
@@ -825,7 +825,7 @@ def reconstruct_atoms(atomsobject, mol_idx, centre=None):
             center = centre
         intra_dmat = (mol_xyz[None, :, ...] - mol_xyz[:, None, ...])[center]
         if np.count_nonzero(atomsobject.cell.T - np.diag(np.diagonal(atomsobject.cell.T))) != 0:
-            M, N = intra_dmat.shape[0], intra_dmat.shape[1]
+            M, _N = intra_dmat.shape[0], intra_dmat.shape[1]
             f = torch.linalg.solve(torch.Tensor(atomsobject.cell.T), (intra_dmat.view(-1, 3).T)).T
             g = f - torch.floor(f + 0.5)
             intra_dmat = torch.matmul(g, torch.Tensor(atomsobject.cell))
@@ -834,7 +834,7 @@ def reconstruct_atoms(atomsobject, mol_idx, centre=None):
             traj_unwrap = mol_xyz + torch.matmul(offsets, torch.Tensor(atomsobject.cell))
         else:
             (intra_dmat > 0.5 * box_len).to(torch.float) * box_len
-            add = (intra_dmat <= -0.5 * box_len).to(torch.float) * box_len
+            (intra_dmat <= -0.5 * box_len).to(torch.float) * box_len
             shift = torch.round(torch.divide(intra_dmat, box_len))
             offsets = -shift
             traj_unwrap = mol_xyz + offsets * box_len

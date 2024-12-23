@@ -267,7 +267,7 @@ def parse_sf_nacv(job_dir, conifg_name):
 
 def check_sf(grad_config, nacv_config):
     configs = [grad_config, nacv_config]
-    is_sf = any([config in SPIN_FLIP_CONFIGS for config in configs])
+    is_sf = any(config in SPIN_FLIP_CONFIGS for config in configs)
 
     return is_sf
 
@@ -278,10 +278,7 @@ def parse_sf(job_dir, nacv_config, calc_nacv=True):
 
     en_dics = parse_sf_ens(job_dir=grad_dir)
     grad_dics = parse_sf_grads(job_dir=grad_dir)
-    if calc_nacv:
-        nacv_dic = parse_sf_nacv(job_dir=nacv_dir, conifg_name=nacv_config)
-    else:
-        nacv_dic = {}
+    nacv_dic = parse_sf_nacv(job_dir=nacv_dir, conifg_name=nacv_config) if calc_nacv else {}
 
     return en_dics, grad_dics, nacv_dic
 

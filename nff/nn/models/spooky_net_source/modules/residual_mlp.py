@@ -15,7 +15,7 @@ class ResidualMLP(nn.Module):
         bias: bool = True,
         zero_init: bool = False,
     ) -> None:
-        super(ResidualMLP, self).__init__()
+        super().__init__()
         self.residual = ResidualStack(num_features, num_residual, activation=activation, bias=bias, zero_init=True)
         # initialize activation function
         if activation == "ssp":

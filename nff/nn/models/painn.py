@@ -223,7 +223,7 @@ class Painn(nn.Module):
         # transfer those results that don't get pooled
         if inference:
             atomwise_out = batch_detach(atomwise_out)
-        for key in atomwise_out.keys():
+        for key in atomwise_out:
             if key not in all_results:
                 all_results[key] = atomwise_out[key]
 
@@ -238,7 +238,7 @@ class Painn(nn.Module):
             all_results[key] = all_results[e_i] - all_results[e_j]
             grad_keys = [e_i + "_grad", e_j + "_grad"]
             delta_grad_key = "_".join(grad_keys) + "_delta"
-            if all([grad_key in all_results for grad_key in grad_keys]):
+            if all(grad_key in all_results for grad_key in grad_keys):
                 all_results[delta_grad_key] = all_results[grad_keys[0]] - all_results[grad_keys[1]]
         return all_results
 
@@ -451,7 +451,7 @@ class PainnGapToAbs(nn.Module):
     """
 
     def __init__(self, ground_model, gap_model, subtract_gap):
-        super(PainnGapToAbs, self).__init__()
+        super().__init__()
 
         self.ground_model = ground_model
         self.gap_model = gap_model
@@ -464,18 +464,12 @@ class PainnGapToAbs(nn.Module):
         return getattr(model, key)
 
     def set_model_attr(self, model, key, val):
-        if hasattr(model, "painn_model"):
-            sub_model = model.painn_model
-        else:
-            sub_model = model
+        sub_model = model.painn_model if hasattr(model, "painn_model") else model
 
         setattr(sub_model, key, val)
 
     def get_grad_keys(self, model):
-        if hasattr(model, "painn_model"):
-            grad_keys = model.painn_model.grad_keys
-        else:
-            grad_keys = model.grad_keys
+        grad_keys = model.painn_model.grad_keys if hasattr(model, "painn_model") else model.grad_keys
         return set(grad_keys)
 
     @property
@@ -503,8 +497,8 @@ class PainnGapToAbs(nn.Module):
         for key in common_keys:
             pool_dics = [self.get_model_attr(model, "pool_dic") for model in self.models]
 
-            in_pool = all([key in dic for dic in pool_dics])
-            in_grad = all([key in self.get_model_attr(model, "grad_keys") for model in self.models])
+            in_pool = all(key in dic for dic in pool_dics)
+            in_grad = all(key in self.get_model_attr(model, "grad_keys") for model in self.models)
 
             common = in_pool or in_grad
 

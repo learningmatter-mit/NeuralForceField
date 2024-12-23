@@ -59,7 +59,7 @@ class InteractionModule(nn.Module):
         activation: str = "swish",
     ) -> None:
         """Initializes the InteractionModule class."""
-        super(InteractionModule, self).__init__()
+        super().__init__()
         # initialize modules
         self.local_interaction = LocalInteraction(
             num_features=num_features,

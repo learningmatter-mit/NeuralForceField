@@ -19,7 +19,7 @@ class GaussianFunctions(nn.Module):
 
     def __init__(self, num_basis_functions: int, cutoff: float) -> None:
         """Initializes the GaussianFunctions class."""
-        super(GaussianFunctions, self).__init__()
+        super().__init__()
         self.register_buffer("cutoff", torch.tensor(cutoff, dtype=torch.float64))
         self.register_buffer(
             "center",

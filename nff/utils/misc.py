@@ -179,15 +179,12 @@ def prepare_metric(lines, metric):
     else:
         for i, item in enumerate(header_items):
             sub_keys = metric.split("_")
-            if all([key.lower() in item.lower() for key in sub_keys]):
+            if all(key.lower() in item.lower() for key in sub_keys):
                 idx = i
 
     optim = METRIC_DIC[metric]
 
-    if optim == "minimize":
-        best_score = float("inf")
-    else:
-        best_score = -float("inf")
+    best_score = float("inf") if optim == "minimize" else -float("inf")
 
     best_epoch = -1
 
@@ -266,7 +263,7 @@ def write_csv(path, dic):
         None
     """
 
-    keys = sorted(list(dic.keys()))
+    keys = sorted(dic.keys())
     if "smiles" in keys:
         keys.remove("smiles")
         keys.insert(0, "smiles")
@@ -364,10 +361,7 @@ def get_split_names(train_only, val_only, test_only):
         msg = f"Requested {string}, which are mutually exclusive"
         raise Exception(msg)
 
-    if len(requested) != 0:
-        names = requested
-    else:
-        names = ["train", "val", "test"]
+    names = requested if len(requested) != 0 else ["train", "val", "test"]
 
     return names
 
@@ -412,10 +406,7 @@ def apply_metric(metric, pred, actual):
     """
     if metric == "auc":
         pred = preprocess_class(pred)
-        if max(pred) == 0:
-            score = 0
-        else:
-            score = roc_auc_score(y_true=actual, y_score=pred)
+        score = 0 if max(pred) == 0 else roc_auc_score(y_true=actual, y_score=pred)
     elif metric == "prc-auc":
         pred = preprocess_class(pred)
         if max(pred) == 0:
@@ -456,7 +447,7 @@ def avg_distances(dset):
     for nbrs in dset.props["nbr_list"]:
         for pair in nbrs:
             all_nbrs.append(tuple(pair.tolist()))
-    all_nbrs_tuple = list(set(tuple(all_nbrs)))
+    all_nbrs_tuple = list(set(all_nbrs))
 
     all_nbrs = torch.LongTensor([list(i) for i in all_nbrs_tuple])
 

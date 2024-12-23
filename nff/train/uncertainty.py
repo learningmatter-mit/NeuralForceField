@@ -1,11 +1,11 @@
 import os
 import warnings
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import torch
 
-from ..io.gmm import GaussianMixture
+from nff.io.gmm import GaussianMixture
 
 __all__ = [
     "ConformalPrediction",
@@ -23,7 +23,7 @@ class Uncertainty:
         order: str,
         calibrate: bool,
         cp_alpha: Union[None, float] = None,
-        min_uncertainty: float = None,
+        min_uncertainty: Optional[float] = None,
         *args,
         **kwargs,
     ):
@@ -55,7 +55,7 @@ class Uncertainty:
         if self.umin is None:
             self.umin = min_uncertainty
         elif force:
-            warnings.warn(f"Uncertainty: min_uncertainty already set to {self.umin}. Overwriting.")
+            warnings.warn(f"Uncertainty: min_uncertainty already set to {self.umin}. Overwriting.", stacklevel=2)
             self.umin = min_uncertainty
         else:
             raise Exception(f"Uncertainty: min_uncertainty already set to {self.umin}")
@@ -103,7 +103,7 @@ class Uncertainty:
 
         assert len(uncertainty) == len(num_atoms), "Number of systems do not match"
 
-        assert all([len(u) == n for u, n in zip(uncertainty, num_atoms)]), "Number of atoms in each system do not match"
+        assert all(len(u) == n for u, n in zip(uncertainty, num_atoms)), "Number of atoms in each system do not match"
 
         if self.order == "system_sum":
             uncertainty = uncertainty.sum(dim=-1)
@@ -275,7 +275,7 @@ class EvidentialUncertainty(Uncertainty):
         source: str = "epistemic",
         calibrate: bool = False,
         cp_alpha: Union[float, None] = None,
-        min_uncertainty: float = None,
+        min_uncertainty: Optional[float] = None,
         *args,
         **kwargs,
     ):
@@ -304,7 +304,8 @@ class EvidentialUncertainty(Uncertainty):
         num_systems = len(num_atoms)
         total_atoms = torch.sum(num_atoms)
         if self.order == "atomic" and self.shared_v:
-            assert v.shape[0] == num_systems and alpha.shape[0] == total_atoms
+            assert v.shape[0] == num_systems
+            assert alpha.shape[0] == total_atoms
             v = torch.split(v, list(num_atoms))
             v = torch.stack(v, dim=0)
             v = v.mean(-1, keepdims=True)
@@ -346,7 +347,7 @@ class MVEUncertainty(Uncertainty):
         variance_key: str = "var",
         quantity: str = "forces",
         order: str = "atomic",
-        min_uncertainty: float = None,
+        min_uncertainty: Optional[float] = None,
         *args,
         **kwargs,
     ):

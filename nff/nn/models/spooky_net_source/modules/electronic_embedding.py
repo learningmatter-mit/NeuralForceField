@@ -39,7 +39,7 @@ class ElectronicEmbedding(nn.Module):
         is_charge: bool = False,
     ) -> None:
         """Initializes the ElectronicEmbedding class."""
-        super(ElectronicEmbedding, self).__init__()
+        super().__init__()
         self.is_charge = is_charge
         self.linear_q = nn.Linear(num_features, num_features)
         if is_charge:  # charges are duplicated to use separate weights for +/-

@@ -7,7 +7,7 @@ class MessagePassingModule(nn.Module):
     """Convolution constructed as MessagePassing."""
 
     def __init__(self):
-        super(MessagePassingModule, self).__init__()
+        super().__init__()
 
     def message(self, r, e, a, aggr_wgt):
         # Basic message case
@@ -46,7 +46,7 @@ class EdgeUpdateModule(nn.Module):
     """Update Edge State Based on information from connected nodes"""
 
     def __init__(self):
-        super(EdgeUpdateModule, self).__init__()
+        super().__init__()
 
     def message(self, r, e, a):
         """Summary
@@ -91,11 +91,11 @@ class GeometricOperations(nn.Module):
     """Compute geomtrical properties based on XYZ coordinates"""
 
     def __init__(self):
-        super(GeometricOperations, self).__init__()
+        super().__init__()
 
 
 class TopologyOperations(nn.Module):
     """Change the topology index given geomtrical properties"""
 
     def __init__(self):
-        super(TopologyOperations, self).__init__()
+        super().__init__()

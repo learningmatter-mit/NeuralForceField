@@ -262,10 +262,7 @@ def torch_nbr_list(atomsobject, cutoff, device="cuda:0", directed=True, requires
         nbr_list[:, 1].detach().to("cpu").numpy(),
     )
 
-    if any(atomsobject.pbc):
-        offsets = offsets
-    else:
-        offsets = np.zeros((nbr_list.shape[0], 3))
+    offsets = offsets if any(atomsobject.pbc) else np.zeros((nbr_list.shape[0], 3))
 
     return i, j, offsets
 

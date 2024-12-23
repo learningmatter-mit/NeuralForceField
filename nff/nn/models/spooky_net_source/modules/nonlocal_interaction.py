@@ -40,7 +40,7 @@ class NonlocalInteraction(nn.Module):
         activation: str = "swish",
     ) -> None:
         """Initializes the NonlocalInteraction class."""
-        super(NonlocalInteraction, self).__init__()
+        super().__init__()
         self.resblock_q = ResidualMLP(num_features, num_residual_q, activation=activation, zero_init=True)
         self.resblock_k = ResidualMLP(num_features, num_residual_k, activation=activation, zero_init=True)
         self.resblock_v = ResidualMLP(num_features, num_residual_v, activation=activation, zero_init=True)

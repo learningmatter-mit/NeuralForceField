@@ -25,7 +25,7 @@ class Swish(nn.Module):
 
     def __init__(self, num_features: int, initial_alpha: float = 1.0, initial_beta: float = 1.702) -> None:
         """Initializes the Swish class."""
-        super(Swish, self).__init__()
+        super().__init__()
         self.initial_alpha = initial_alpha
         self.initial_beta = initial_beta
         self.register_parameter("alpha", nn.Parameter(torch.Tensor(num_features)))

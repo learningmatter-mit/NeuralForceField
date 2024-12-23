@@ -187,10 +187,7 @@ class Trainer:
             return model
 
     def call_model(self, batch, train):
-        if (self.torch_parallel and self.parallel) and not train:
-            model = self._model.module
-        else:
-            model = self._model
+        model = self._model.module if (self.torch_parallel and self.parallel) and not train else self._model
 
         return model(batch, **self.model_kwargs)
 

@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Literal, Union
+from typing import List, Literal
 
 import torch
 from e3nn import o3
@@ -85,10 +85,7 @@ class NffScaleMACE(ScaleShiftMACE):
         Returns:
             dict: dict of output from the forward pass in NFF format
         """
-        if isinstance(batch, dict):
-            data = self.convert_batch_to_data(batch)
-        else:
-            data = batch
+        data = self.convert_batch_to_data(batch) if isinstance(batch, dict) else batch
         output = super().forward(
             data,
             training=training,  # set the training mode to the value of the wrapper
@@ -123,11 +120,8 @@ class NffScaleMACE(ScaleShiftMACE):
             props = batch
         else:
             raise ValueError("Batch must be a dictionary")
-        if props["num_atoms"].dim() == 0:
-            num_atoms = props["num_atoms"].unsqueeze(0)
-        else:
-            num_atoms = props["num_atoms"]
-        cum_idx_list = [0] + torch.cumsum(num_atoms, 0).tolist()
+        num_atoms = props["num_atoms"].unsqueeze(0) if props["num_atoms"].dim() == 0 else props["num_atoms"]
+        cum_idx_list = [0, *torch.cumsum(num_atoms, 0).tolist()]
         z_table = AtomicNumberTable([int(z) for z in self.atomic_numbers])
 
         dataset = []
@@ -137,9 +131,9 @@ class NffScaleMACE(ScaleShiftMACE):
             positions = props.get("nxyz")[node_idx, 1:].detach().cpu().numpy()
             numbers = props.get("nxyz")[node_idx, 0].long().detach().cpu().numpy()
 
-            if "cell" in props.keys():
+            if "cell" in props:
                 cell = props["cell"][3 * i : 3 * i + 3].detach().cpu().numpy()
-            elif "lattice" in props.keys():
+            elif "lattice" in props:
                 cell = props["lattice"][3 * i : 3 * i + 3].detach().cpu().numpy()
             else:
                 raise ValueError("No cell or lattice found in batch")
@@ -235,7 +229,7 @@ class NffScaleMACE(ScaleShiftMACE):
         return model
 
     @classmethod
-    def from_file(cls, path: str, map_location: str = None, **kwargs) -> NffScaleMACE:
+    def from_file(cls, path: str, map_location: str | None = None, **kwargs) -> NffScaleMACE:
         """Load the model from checkpoint created by pytorch lightning.
 
         Args:
@@ -293,7 +287,7 @@ class NffScaleMACE(ScaleShiftMACE):
     def load(
         cls,
         model_name: str = "medium",
-        map_location: str = None,
+        map_location: str | None = None,
         **kwargs,
     ) -> NffScaleMACE:
         """Load the model from checkpoint created by pytorch lightning.
@@ -316,7 +310,7 @@ class NffScaleMACE(ScaleShiftMACE):
 
 def reduce_foundations(
     model_foundations: NffScaleMACE,
-    table: Union[List, AtomicNumberTable],
+    table: List | AtomicNumberTable,
     load_readout=False,
     use_shift=True,
     use_scale=True,
@@ -349,7 +343,7 @@ def reduce_foundations(
         reduced_atomic_numbers = table
         table = get_atomic_number_table_from_zs(table)
     elif isinstance(AtomicNumberTable):
-        reduced_atomic_numbers = [n for n in table.zs]
+        reduced_atomic_numbers = list(table.zs)
     z_table = AtomicNumberTable([int(z) for z in model_foundations.atomic_numbers])
     new_z_table = table
     num_species_foundations = len(z_table.zs)

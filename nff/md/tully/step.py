@@ -702,7 +702,7 @@ def runge_delta(pot_V, delta_P, delta_R, nacv, force_nacv, forces, surfs, vel, s
     names = ["delta_P", "delta_R", "sigma"]
 
     for i in range(4):
-        kwargs = {name: val for name, val in zip(names, intermed_vals)}
+        kwargs = dict(zip(names, intermed_vals))
         k_i = [deriv(**kwargs) for deriv in derivs]
 
         intermed_vals = []

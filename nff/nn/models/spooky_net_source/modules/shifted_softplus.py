@@ -24,7 +24,7 @@ class ShiftedSoftplus(nn.Module):
 
     def __init__(self, num_features: int, initial_alpha: float = 1.0, initial_beta: float = 1.0) -> None:
         """Initializes the ShiftedSoftplus class."""
-        super(ShiftedSoftplus, self).__init__()
+        super().__init__()
         self._log2 = math.log(2)
         self.initial_alpha = initial_alpha
         self.initial_beta = initial_beta

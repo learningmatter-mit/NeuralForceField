@@ -96,10 +96,7 @@ def eigvec_following(
     h = torch.add(h_p, torch.sum(h_n, dim=0)).reshape(-1, len(old_xyz[0]), Ndim)
 
     step_size = h.norm()
-    if step_size <= maxstepsize:
-        new_xyz = old_xyz + h
-    else:
-        new_xyz = old_xyz + (h / (step_size / maxstepsize))
+    new_xyz = old_xyz + h if step_size <= maxstepsize else old_xyz + h / (step_size / maxstepsize)
 
     output = (new_xyz.detach(), grad.detach(), hessian.detach(), h.reshape(-1).detach())
     print(f"STEP {step}:", output)
@@ -142,17 +139,11 @@ def ev_run(
         if step % nbr_update_period == 0:
             ev_atoms.update_nbr_list()
 
-        if step == 0:
-            args = []
-        else:
-            args = [hessian, grad, h]
+        args = [] if step == 0 else [hessian, grad, h]
 
         xyz, grad, hessian, h = eigvec_following(ev_atoms, step, maxstepsize, device, method, *args)
 
-        if step == 0:
-            xyz_all = xyz
-        else:
-            xyz_all = torch.cat((xyz_all, xyz), dim=0)
+        xyz_all = xyz if step == 0 else torch.cat((xyz_all, xyz), dim=0)
 
         rmslist.append(grad.pow(2).sqrt().mean())
         maxlist.append(grad.pow(2).sqrt().max())

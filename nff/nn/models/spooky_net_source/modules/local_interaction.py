@@ -40,7 +40,7 @@ class LocalInteraction(nn.Module):
         activation: str = "swish",
     ) -> None:
         """Initializes the LocalInteraction class."""
-        super(LocalInteraction, self).__init__()
+        super().__init__()
         self.radial_s = nn.Linear(num_basis_functions, num_features, bias=False)
         self.radial_p = nn.Linear(num_basis_functions, num_features, bias=False)
         self.radial_d = nn.Linear(num_basis_functions, num_features, bias=False)

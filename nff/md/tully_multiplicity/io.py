@@ -58,7 +58,7 @@ def run_models(models: List, batch, device: Union[str, int]):
         result = batch_detach(result)
 
         # merge dictionaries
-        for key in result.keys():
+        for key in result:
             results[key] = result[key]
 
     return results
@@ -147,10 +147,7 @@ def load_json(file):
     with open(file, "r") as f:
         info = json.load(f)
 
-    if "details" in info:
-        details = info["details"]
-    else:
-        details = {}
+    details = info.get("details", {})
     all_params = {key: val for key, val in info.items() if key != "details"}
     all_params.update(details)
 

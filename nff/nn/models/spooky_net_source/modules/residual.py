@@ -27,7 +27,7 @@ class Residual(nn.Module):
         zero_init: bool = True,
     ) -> None:
         """Initializes the Residual class."""
-        super(Residual, self).__init__()
+        super().__init__()
         # initialize attributes
         if activation == "ssp":
             Activation = ShiftedSoftplus

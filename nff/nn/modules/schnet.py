@@ -93,7 +93,7 @@ class SchNetEdgeUpdate(EdgeUpdateModule):
     """
 
     def __init__(self, n_atom_basis):
-        super(SchNetEdgeUpdate, self).__init__()
+        super().__init__()
 
         self.mlp = Sequential(
             Linear(2 * n_atom_basis, n_atom_basis),
@@ -113,7 +113,7 @@ class SchNetEdgeUpdate(EdgeUpdateModule):
 
 class SchNetEdgeFilter(nn.Module):
     def __init__(self, cutoff, n_gaussians, trainable_gauss, n_filters, dropout_rate, activation="shifted_softplus"):
-        super(SchNetEdgeFilter, self).__init__()
+        super().__init__()
 
         self.filter = Sequential(
             GaussianSmearing(
@@ -155,7 +155,7 @@ class SchNetConv(MessagePassingModule):
         trainable_gauss,
         dropout_rate,
     ):
-        super(SchNetConv, self).__init__()
+        super().__init__()
         self.moduledict = ModuleDict(
             {
                 "message_edge_filter": Sequential(
@@ -235,7 +235,7 @@ class GraphAttention(MessagePassingModule):
     """
 
     def __init__(self, n_atom_basis):
-        super(GraphAttention, self).__init__()
+        super().__init__()
         self.weight = torch.nn.Parameter(torch.rand(1, 2 * n_atom_basis))
         self.activation = LeakyReLU()
 
@@ -265,7 +265,7 @@ class GraphAttention(MessagePassingModule):
         )
 
         a_ij = weight_ij / normalization[a[:, 0]]  # the importance of node j’s features to node i
-        a_ji = weight_ji / normalization[a[:, 1]]  # the importance of node i’s features to node j
+        weight_ji / normalization[a[:, 1]]  # the importance of node i’s features to node j
         a_ii = weight_ii / normalization  # self-attention
 
         message = (
@@ -327,7 +327,7 @@ class NodeMultiTaskReadOut(nn.Module):
         Args:
             multitaskdict (dict): dictionary that contains model information
         """
-        super(NodeMultiTaskReadOut, self).__init__()
+        super().__init__()
         # construct moduledict
         self.readout = construct_module_dict(multitaskdict)
         self.post_readout = post_readout
@@ -406,7 +406,7 @@ class MixedSchNetConv(MessagePassingModule):
         Returns:
             None
         """
-        super(MixedSchNetConv, self).__init__()
+        super().__init__()
         self.moduledict = ModuleDict(
             {
                 # convert the atom features to the dimension
@@ -487,7 +487,7 @@ class ConfAttention(nn.Module):
             None
         """
 
-        super(ConfAttention, self).__init__()
+        super().__init__()
 
         """
         Xavier initializations from
@@ -622,7 +622,7 @@ class LinearConfAttention(ConfAttention):
             None
         """
 
-        super(LinearConfAttention, self).__init__(mol_basis, boltz_basis, final_act, equal_weights)
+        super().__init__(mol_basis, boltz_basis, final_act, equal_weights)
 
         # has dimension mol_basis instead of 2 * mol_basis because we're not
         # comparing fingerprint pairs
@@ -1038,9 +1038,9 @@ def sum_and_grad(batch, xyz, r_ij, nbrs, atomwise_output, grad_keys, out_keys=No
             allstress = torch.stack(allstress)
             split_val = torch.split(allstress, N)
             grad_ = torch.stack([i.sum(0) for i in split_val])
-            if "cell" in batch.keys():
+            if "cell" in batch:
                 cell = torch.stack(torch.split(batch["cell"], 3, dim=0))
-            elif "lattice" in batch.keys():
+            elif "lattice" in batch:
                 cell = torch.stack(torch.split(batch["lattice"], 3, dim=0))
             volume = torch.Tensor(np.abs(np.linalg.det(cell.cpu().numpy()))).to(grad_.get_device())
             grad = grad_ * (1 / volume[:, None, None])
@@ -1250,7 +1250,7 @@ class ScaleShift(nn.Module):
     """
 
     def __init__(self, means=None, stddevs=None):
-        super(ScaleShift, self).__init__()
+        super().__init__()
 
         means = means if (means is not None) else {}
         stddevs = stddevs if (stddevs is not None) else {}
@@ -1285,11 +1285,7 @@ class TestModules(unittest.TestCase):
         r_in = torch.rand(6, 10)
         model = MessagePassingModule()
         r_out = model(r_in, e, a)
-        self.assertEqual(
-            r_in.shape,
-            r_out.shape,
-            "The node feature dimensions should be same for the base case",
-        )
+        assert r_in.shape == r_out.shape, "The node feature dimensions should be same for the base case"
 
     def testBaseMessagePassing(self):
         # initialize basic graphs
@@ -1298,11 +1294,7 @@ class TestModules(unittest.TestCase):
         r = torch.rand(6, 10)
         model = EdgeUpdateModule()
         e_out = model(r, e_in, a)
-        self.assertEqual(
-            e_in.shape,
-            e_out.shape,
-            "The edge feature dimensions should be same for the base case",
-        )
+        assert e_in.shape == e_out.shape, "The edge feature dimensions should be same for the base case"
 
     def testSchNetMPNN(self):
         # contruct a graph
@@ -1327,7 +1319,7 @@ class TestModules(unittest.TestCase):
 
         r_out = model(r_in, e, a)
 
-        self.assertEqual(r_in.shape, r_out.shape, "The node feature dimensions should be same.")
+        assert r_in.shape == r_out.shape, "The node feature dimensions should be same."
 
     """
     Deprecated
@@ -1405,11 +1397,7 @@ class TestModules(unittest.TestCase):
         model = SchNetEdgeUpdate(n_atom_basis=n_atom_basis)
         e_out = model(r, e_in, a)
 
-        self.assertEqual(
-            e_in.shape,
-            e_out.shape,
-            ("The edge feature dimensions should be same for the SchNet " "Edge Update case"),
-        )
+        assert e_in.shape == e_out.shape, "The edge feature dimensions should be same for the SchNet " "Edge Update case"
 
     def testGAT(self):
         n_atom_basis = 10
@@ -1422,7 +1410,7 @@ class TestModules(unittest.TestCase):
 
         r_out = attention(r_in, e, a)
 
-        self.assertEqual(r_out.shape, r_in.shape)
+        assert r_out.shape == r_in.shape
 
     def testmultitask(self):
         n_atom = 10

@@ -28,7 +28,7 @@ class SincFunctions(nn.Module):
 
     def __init__(self, num_basis_functions: int, cutoff: float) -> None:
         """Initializes the SincFunctions class."""
-        super(SincFunctions, self).__init__()
+        super().__init__()
         self.register_buffer(
             "factor",
             torch.linspace(1, num_basis_functions, num_basis_functions, dtype=torch.float64) / cutoff,

@@ -163,10 +163,7 @@ class NeuralTully:
         return vel
 
     def init_c(self):
-        if self.explicit_diabat:
-            num_states = self.num_diabat
-        else:
-            num_states = self.num_states
+        num_states = self.num_diabat if self.explicit_diabat else self.num_states
 
         c = np.zeros((self.num_samples, num_states), dtype="complex128")
         c[:, self.surfs[0]] = 1
@@ -348,7 +345,7 @@ class NeuralTully:
     def H_d(self):
         diabat_keys = getattr(self, "diabat_keys", [None])
         reshaped = np.array(diabat_keys).reshape(-1).tolist()
-        if not all([i in self.props for i in reshaped]):
+        if not all(i in self.props for i in reshaped):
             return None
 
         _H_d = np.zeros((self.num_samples, self.num_diabat, self.num_diabat))
@@ -448,7 +445,7 @@ class NeuralTully:
                 f.write(hdr)
 
         template = "%-10.1f "
-        for i, state in enumerate(states):
+        for _ in states:
             template += "%15.4f%%"
         template += "%15.4f"
         template += "%15.4f"

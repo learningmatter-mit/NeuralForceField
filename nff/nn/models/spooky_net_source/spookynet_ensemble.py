@@ -19,7 +19,7 @@ class SpookyNetEnsemble(nn.Module):
 
     def __init__(self, models: List[str] = []) -> None:
         """Initializes the SpookyNetEnsemble class."""
-        super(SpookyNetEnsemble, self).__init__()
+        super().__init__()
         assert len(models) > 1
         self.models = nn.ModuleList([SpookyNet(load_from=model) for model in models])
         for model in self.models:
@@ -40,13 +40,13 @@ class SpookyNetEnsemble(nn.Module):
         Turn on training mode. This is just for compatibility, the models should
         be trained individually and only evaluated as ensemble.
         """
-        super(SpookyNetEnsemble, self).train(mode=mode)
+        super().train(mode=mode)
         for model in self.models:
             model.train(mode)
 
     def eval(self) -> None:
         """Turn on evaluation mode (smaller memory footprint)."""
-        super(SpookyNetEnsemble, self).eval()
+        super().eval()
         for model in self.models:
             model.eval()
 

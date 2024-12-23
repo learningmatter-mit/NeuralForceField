@@ -32,7 +32,7 @@ class NonlinearElectronicEmbedding(nn.Module):
 
     def __init__(self, num_features: int, num_residual: int, activation: str = "swish") -> None:
         """Initializes the NonlinearElectronicEmbedding class."""
-        super(NonlinearElectronicEmbedding, self).__init__()
+        super().__init__()
         self.linear_q = nn.Linear(num_features, num_features, bias=False)
         self.featurize_k = nn.Linear(1, num_features)
         self.resblock_k = ResidualMLP(num_features, num_residual, activation=activation, zero_init=True)

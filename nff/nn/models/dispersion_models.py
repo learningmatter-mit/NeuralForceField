@@ -84,12 +84,9 @@ class PainnDispersion(nn.Module):
         else:
             e_disp, r_ij_T, nbrs_T = self.get_dispersion(batch=batch, xyz=xyz)
 
-            for key in self.painn_model.pool_dic.keys():
+            for key in self.painn_model.pool_dic:
                 # add dispersion energy
-                if inference:
-                    add_e = e_disp.detach().cpu()
-                else:
-                    add_e = e_disp
+                add_e = e_disp.detach().cpu() if inference else e_disp
 
                 # add gradient for forces
                 grad_key = "%s_grad" % key

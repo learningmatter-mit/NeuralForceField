@@ -4,7 +4,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from ..functional import switch_function
+from nff.nn.models.spooky_net_source.functional import switch_function
 
 """
 computes electrostatic energy, switches between a constant value
@@ -20,7 +20,7 @@ class ElectrostaticEnergy(nn.Module):
         cutoff: float = 1.0,
         lr_cutoff: Optional[float] = None,
     ) -> None:
-        super(ElectrostaticEnergy, self).__init__()
+        super().__init__()
         self.ke = ke
         self.kehalf = ke / 2
         self.cuton = cuton
@@ -62,7 +62,7 @@ class ElectrostaticEnergy(nn.Module):
         kz = torch.arange(0, Nzmax + 1)
         kz = torch.cat([kz, -kz[1:]])
         kmul = torch.cartesian_prod(kx, ky, kz)[1:]  # 0th entry is 0 0 0
-        kmax = max(max(Nxmax, Nymax), Nzmax)
+        kmax = max(Nxmax, Nymax, Nzmax)
         self.register_buffer("kmul", kmul[torch.sum(kmul**2, dim=-1) <= kmax**2], persistent=False)
 
     def set_alpha(self, alpha: Optional[float] = None) -> None:

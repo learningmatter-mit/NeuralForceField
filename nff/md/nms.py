@@ -1,3 +1,4 @@
+import contextlib
 import copy
 import os
 import pickle
@@ -162,7 +163,7 @@ def get_output_keys(model):
     readout_dicts = [getattr(atomwisereadout, name) for name in readout_dict_names]
 
     # get their keys
-    output_keys = [key for dic in readout_dicts for key in dic.keys()]
+    output_keys = [key for dic in readout_dicts for key in dic]
 
     return output_keys
 
@@ -225,7 +226,7 @@ def opt_conformer(atoms, params):
     nn_params = params.get("networkhyperparams", {})
     output_keys = nn_params.get("output_keys", ["energy"])
 
-    for iteration in tqdm(range(max_rounds)):
+    for _iteration in tqdm(range(max_rounds)):
         model, energy_key = init_calculator(atoms=atoms, params=params)
 
         opt_module = getattr(optimize, params.get("opt_type", "BFGS"))
@@ -259,10 +260,8 @@ def get_confs(traj_filename, thermo_filename, num_starting_poses):
         lines = f.readlines()
     energies = []
     for line in lines:
-        try:
+        with contextlib.suppress(ValueError):
             energies.append(float(line.split()[2]))
-        except ValueError:
-            pass
 
     sort_idx = np.argsort(energies)
     sorted_steps = np.array(range(len(lines)))[sort_idx[:num_starting_poses]]
@@ -275,7 +274,7 @@ def get_confs(traj_filename, thermo_filename, num_starting_poses):
 
 def get_nve_params(params):
     nve_params = copy.deepcopy(nve.DEFAULTNVEPARAMS)
-    common_keys = [key for key in nve_params.keys() if key in params]
+    common_keys = [key for key in nve_params if key in params]
     for key in common_keys:
         nve_params[key] = params[key]
 
@@ -362,7 +361,7 @@ def get_orca_form(cc_mat, cc_freqs, n_atoms):
             new_mat = np.column_stack((old_col, new_col))
         elif i > 1:
             new_mat = np.column_stack((new_mat, new_col))
-        old_col = new_col[:]
+        new_col[:]
 
     matrix = np.asarray(new_mat[:]).reshape(n_tot, n_modes)
 

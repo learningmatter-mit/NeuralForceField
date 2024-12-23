@@ -23,12 +23,9 @@ class Attention(nn.Module):
 
     def __init__(self, dim_qk: int, dim_v: int, num_random_features: Optional[int] = None) -> None:
         """Initializes the Attention class."""
-        super(Attention, self).__init__()
+        super().__init__()
         self.num_random_features = num_random_features
-        if self.num_random_features is not None:
-            omega = self._omega(num_random_features, dim_qk)
-        else:
-            omega = []
+        omega = self._omega(num_random_features, dim_qk) if self.num_random_features is not None else []
         self.register_buffer("omega", torch.tensor(omega, dtype=torch.float64))
         self.reset_parameters()
 
@@ -39,7 +36,7 @@ class Attention(nn.Module):
         """Return a (nrows x ncols) random feature matrix."""
         nblocks = int(nrows / ncols)
         blocks = []
-        for i in range(nblocks):
+        for _ in range(nblocks):
             block = np.random.normal(size=(ncols, ncols))
             q, _ = np.linalg.qr(block)
             blocks.append(np.transpose(q))

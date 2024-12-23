@@ -559,7 +559,7 @@ def to_db(
     for atoms in best_atoms[:num_samples]:
         nxyz = AtomsBatch(atoms).get_nxyz()
         coords = make_coords(nxyz)
-        new_geom = make_geom(method=md_method, job=md_job, coords=coords, parentgeom=ci_geom)
+        make_geom(method=md_method, job=md_job, coords=coords, parentgeom=ci_geom)
 
 
 @pdb_wrap

@@ -28,7 +28,7 @@ class ResidualStack(nn.Module):
         zero_init: bool = True,
     ) -> None:
         """Initializes the ResidualStack class."""
-        super(ResidualStack, self).__init__()
+        super().__init__()
         self.stack = nn.ModuleList([Residual(num_features, activation, bias, zero_init) for i in range(num_residual)])
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

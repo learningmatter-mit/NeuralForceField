@@ -142,10 +142,10 @@ PERIODICTABLE = GetPeriodicTable()
 
 for i in range(100):
     dics = [atomic_valence, atomic_valence_electrons]
-    if all([i in dic for dic in dics]):
+    if all(i in dic for dic in dics):
         continue
 
-    valence_list = [j for j in PERIODICTABLE.GetValenceList(i)]
+    valence_list = list(PERIODICTABLE.GetValenceList(i))
     valence_num = PERIODICTABLE.GetNOuterElecs(i)
 
     atomic_valence[i] = valence_list
@@ -233,11 +233,7 @@ def get_BO(AC, UA, DU, valences, UA_pairs, use_graph=True):
 def valences_not_too_large(BO, valences):
     """ """
     number_of_bonds_list = BO.sum(axis=1)
-    for valence, number_of_bonds in zip(valences, number_of_bonds_list):
-        if number_of_bonds > valence:
-            return False
-
-    return True
+    return all(number_of_bonds <= valence for valence, number_of_bonds in zip(valences, number_of_bonds_list))
 
 
 def BO_is_OK(BO, AC, charge, DU, atomic_valence_electrons, atoms, valances, allow_charged_fragments=True):
@@ -289,10 +285,7 @@ def BO_is_OK(BO, AC, charge, DU, atomic_valence_electrons, atoms, valances, allo
     check_charge = charge == Q
     # check_len = len(q_list) <= abs(charge)
 
-    if check_sum and check_charge:
-        return True
-
-    return False
+    return bool(check_sum and check_charge)
 
 
 def get_atomic_charge(atom, atomic_valence_electrons, BO_valence):
@@ -342,10 +335,7 @@ def clean_charges(mol):
                 ps = rxn.RunReactants((fragment,))
                 fragment = ps[0][0]
                 Chem.SanitizeMol(fragment)
-        if i == 0:
-            mol = fragment
-        else:
-            mol = Chem.CombineMols(mol, fragment)
+        mol = fragment if i == 0 else Chem.CombineMols(mol, fragment)
 
     return mol
 

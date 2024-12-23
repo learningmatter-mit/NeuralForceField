@@ -158,7 +158,7 @@ class SchNetFeatures(WeightedConformers):
 
         # update function includes periodic boundary conditions
 
-        for i, conv in enumerate(self.convolutions):
+        for conv in self.convolutions:
             dr = conv(r=r, e=e, a=a)
             r = r + dr
 

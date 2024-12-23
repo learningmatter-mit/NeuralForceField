@@ -223,7 +223,7 @@ class WeightedConformers(nn.Module):
         if self.extra_feats is None or "species" not in self.ext_feat_types:
             return [torch.tensor([]) for _ in range(num_mols)]
 
-        assert all([feat in batch.keys() for feat in self.extra_feats])
+        assert all(feat in batch for feat in self.extra_feats)
         feats = []
 
         # go through each extra per-species feature
@@ -288,7 +288,7 @@ class WeightedConformers(nn.Module):
         r = self.atom_embed(r.long()).squeeze()
 
         # update function includes periodic boundary conditions
-        for i, conv in enumerate(self.convolutions):
+        for conv in self.convolutions:
             dr = conv(r=r, e=e, a=a)
             r = r + dr
 
@@ -314,10 +314,7 @@ class WeightedConformers(nn.Module):
             self.classifier = True
 
         # split batches as necessary
-        if sub_batch_size is None:
-            sub_batches = [batch]
-        else:
-            sub_batches = split_batch(batch, sub_batch_size)
+        sub_batches = [batch] if sub_batch_size is None else split_batch(batch, sub_batch_size)
 
         # go through each sub-batch, get the xyz and node features,
         # and concatenate them when done
@@ -606,7 +603,7 @@ class WeightedConformers(nn.Module):
 
         batch_keys = batch.keys()
         # names of the gradients of each property
-        result_grad_keys = [key + "_grad" for key in results.keys()]
+        result_grad_keys = [key + "_grad" for key in results]
         for key in batch_keys:
             # if the batch with the ground truth contains one of
             # these keys, then compute its predicted value

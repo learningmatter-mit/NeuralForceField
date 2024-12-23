@@ -6,7 +6,7 @@ from torch import nn
 
 class shifted_softplus(torch.nn.Module):
     def __init__(self):
-        super(shifted_softplus, self).__init__()
+        super().__init__()
 
     def forward(self, input):
         return F.softplus(input) - np.log(2.0)

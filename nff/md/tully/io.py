@@ -102,8 +102,8 @@ def fill_results(batch, these_results, results, idx):
     num_atoms = batch["num_atoms"].tolist()
     grad_flags = ["_grad", "nacv"]
 
-    for key, val in these_results.keys():
-        if any([flag in key for flag in grad_flags]):
+    for key, val in these_results:
+        if any(flag in key for flag in grad_flags):
             val = torch.stack(torch.split(val, num_atoms))
 
         results[key][idx] = val
@@ -472,10 +472,7 @@ def load_json(file):
     with open(file, "r") as f:
         info = json.load(f)
 
-    if "details" in info:
-        details = info["details"]
-    else:
-        details = {}
+    details = info.get("details", {})
     all_params = {key: val for key, val in info.items() if key != "details"}
     all_params.update(details)
 

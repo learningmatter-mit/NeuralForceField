@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..functional import softplus_inverse, switch_function
+from nff.nn.models.spooky_net_source.functional import softplus_inverse, switch_function
 
 """
 computes D4 dispersion energy
@@ -36,7 +36,7 @@ class D4DispersionEnergy(nn.Module):
         dtype: torch.dtype = torch.float32,
     ) -> None:
         """Initializes the D4DispersionEnergy class."""
-        super(D4DispersionEnergy, self).__init__()
+        super().__init__()
         # Grimme's D4 dispersion is only parametrized up to Rn (Z=86)
         assert Zmax <= 87
         # trainable parameters

@@ -517,6 +517,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
 
         scale = (((energy[old_surf] + (self.ke_parallel)) - energy[new_surf]) / (self.ke_parallel)) ** 0.5
         self.velocities = scale * v_par_vec + (self.velocity_list[-2] - v_par_vec)
+        return None
 
     def update_probabilities(self):
         """
@@ -625,6 +626,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.time = self.time - self.dt
 
         self.modify_save()
+        return None
 
     def full_step(self, compute_internal_forces=True):
         """
@@ -879,15 +881,12 @@ class BatchedZhuNakamura:
 
         while not complete:
             num_steps += 1
-            if np.mod(num_steps, self.nbr_update_period) == 0:
-                get_new_neighbors = True
-            else:
-                get_new_neighbors = False
+            get_new_neighbors = np.mod(num_steps, self.nbr_update_period) == 0
 
             self.step(get_new_neighbors=get_new_neighbors)
             print(f"Completed step {num_steps}")
 
-            complete = all([trj.time >= self.max_time for trj in self.zhu_trjs])
+            complete = all(trj.time >= self.max_time for trj in self.zhu_trjs)
 
         for trj in self.zhu_trjs:
             trj.output_to_json()

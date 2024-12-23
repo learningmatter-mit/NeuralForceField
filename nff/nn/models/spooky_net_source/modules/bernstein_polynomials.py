@@ -20,7 +20,7 @@ class BernsteinPolynomials(nn.Module):
 
     def __init__(self, num_basis_functions: int, cutoff: float) -> None:
         """Initializes the BernsteinPolynomials class."""
-        super(BernsteinPolynomials, self).__init__()
+        super().__init__()
         # compute values to initialize buffers
         logfactorial = np.zeros(num_basis_functions)
         for i in range(2, num_basis_functions):

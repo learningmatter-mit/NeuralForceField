@@ -78,7 +78,7 @@ class LoggingHook(Hook):
 
     def _batch_size(self, result):
         if type(result) is dict:
-            n_samples = list(result.values())[0].size(0)
+            n_samples = next(iter(result.values())).size(0)
         elif type(result) in [list, tuple]:
             n_samples = result[0].size(0)
         else:
@@ -428,24 +428,23 @@ class TensorboardHook(LoggingHook):
 
                 if np.isscalar(m):
                     self.writer.add_scalar("metrics/%s" % metric.name, float(m), trainer.epoch)
-                elif m.ndim == 2:
-                    if trainer.epoch % self.img_every_n_epochs == 0:
-                        import matplotlib.pyplot as plt
+                elif m.ndim == 2 and trainer.epoch % self.img_every_n_epochs == 0:
+                    import matplotlib.pyplot as plt
 
-                        # tensorboardX only accepts images as numpy arrays.
-                        # we therefore convert plots in numpy array
-                        # see https://github.com/lanpa/tensorboard-
-                        # pytorch/blob/master/examples/matplotlib_demo.py
-                        fig = plt.figure()
-                        plt.colorbar(plt.pcolor(m))
-                        fig.canvas.draw()
+                    # tensorboardX only accepts images as numpy arrays.
+                    # we therefore convert plots in numpy array
+                    # see https://github.com/lanpa/tensorboard-
+                    # pytorch/blob/master/examples/matplotlib_demo.py
+                    fig = plt.figure()
+                    plt.colorbar(plt.pcolor(m))
+                    fig.canvas.draw()
 
-                        np_image = np.fromstring(fig.canvas.tostring_rgb(), dtype="uint8")
-                        np_image = np_image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+                    np_image = np.fromstring(fig.canvas.tostring_rgb(), dtype="uint8")
+                    np_image = np_image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
 
-                        plt.close(fig)
+                    plt.close(fig)
 
-                        self.writer.add_image("metrics/%s" % metric.name, np_image, trainer.epoch)
+                    self.writer.add_image("metrics/%s" % metric.name, np_image, trainer.epoch)
 
             if self.log_validation_loss:
                 self.writer.add_scalar("train/val_loss", float(val_loss), trainer.step)
@@ -552,7 +551,7 @@ class PrintingHook(LoggingHook):
         if len(self.metrics) > 0:
             log += self._separator
 
-        for i, metric in enumerate(self.metrics):
+        for metric in self.metrics:
             header = str(metric.name)
             log += self.str_format.format(len(header), header)
             log += self._separator
@@ -590,7 +589,7 @@ class PrintingHook(LoggingHook):
                 log += self._separator
 
             metric_dic = self.aggregate(trainer)
-            for i, metric in enumerate(self.metrics):
+            for metric in self.metrics:
                 m = metric_dic[metric.name]
                 if hasattr(m, "__iter__"):
                     log += self._separator.join([str(j) for j in m])

@@ -26,7 +26,7 @@ class NuclearEmbedding(nn.Module):
 
     def __init__(self, num_features: int, Zmax: int = 87, zero_init: bool = True) -> None:
         """Initializes the NuclearEmbedding class."""
-        super(NuclearEmbedding, self).__init__()
+        super().__init__()
         self.num_features = num_features
         self.register_buffer("electron_config", torch.tensor(electron_config))
         self.register_parameter("element_embedding", nn.Parameter(torch.Tensor(Zmax, self.num_features)))
@@ -45,7 +45,7 @@ class NuclearEmbedding(nn.Module):
 
     def train(self, mode: bool = True) -> None:
         """Switch between training and evaluation mode."""
-        super(NuclearEmbedding, self).train(mode=mode)
+        super().train(mode=mode)
         if not self.training:
             with torch.no_grad():
                 self.embedding = self.element_embedding + self.config_linear(self.electron_config)

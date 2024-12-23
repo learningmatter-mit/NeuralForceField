@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..functional import softplus_inverse
+from nff.nn.models.spooky_net_source.functional import softplus_inverse
 
 
 class ZBLRepulsionEnergy(nn.Module):
@@ -23,7 +23,7 @@ class ZBLRepulsionEnergy(nn.Module):
 
     def __init__(self, a0: float = 0.5291772105638411, ke: float = 14.399645351950548) -> None:
         """Initializes the ZBLRepulsionEnergy class."""
-        super(ZBLRepulsionEnergy, self).__init__()
+        super().__init__()
         self.a0 = a0
         self.ke = ke
         self.kehalf = ke / 2

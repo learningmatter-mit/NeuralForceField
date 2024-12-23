@@ -317,7 +317,7 @@ class WarmUpLR(_LRScheduler):
     def __init__(self, optimizer, n_steps, max_lr, last_epoch=-1, verbose=False):
         self.n_steps = n_steps
         self.max_lr = max_lr
-        super(WarmUpLR, self).__init__(optimizer, last_epoch, verbose)
+        super().__init__(optimizer, last_epoch, verbose)
 
         for param_group in self.optimizer.param_groups:
             param_group["lr"] = 0
