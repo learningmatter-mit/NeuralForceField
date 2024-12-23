@@ -47,7 +47,7 @@ def add_grads(optimizer, loss_size, weight_path, rank, world_size, batch_num, ep
             try:
                 with open(path, "rb") as f:
                     loaded_grads[path] = pickle.load(f)
-            except (EOFError, FileNotFoundError, pickle.UnpicklingError):
+            except (EOFError, FileNotFoundError, pickle.UnpicklingError):  # noqa
                 continue
 
     # total size is the sum of all sizes from each process

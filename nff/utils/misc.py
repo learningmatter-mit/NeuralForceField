@@ -65,8 +65,7 @@ def tqdm_enum(iterable):
         i (int): current index
         y: current value
     """
-    for i, y in enumerate(tqdm(iterable)):
-        yield i, y
+    yield from enumerate(tqdm(iterable))
 
 
 def log(prefix, msg):
@@ -443,7 +442,7 @@ def avg_distances(dset):
     all_nbrs = []
     for nbrs in dset.props["nbr_list"]:
         for pair in nbrs:
-            all_nbrs.append(tuple(pair.tolist()))
+            all_nbrs.append(tuple(pair.tolist()))  # noqa
     all_nbrs_tuple = list(set(all_nbrs))
 
     all_nbrs = torch.LongTensor([list(i) for i in all_nbrs_tuple])

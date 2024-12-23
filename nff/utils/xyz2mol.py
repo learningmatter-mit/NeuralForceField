@@ -182,19 +182,14 @@ def str_atom(atom):
     """
     convert integer atom to string atom
     """
-    global __ATOM_LIST__
-    atom = __ATOM_LIST__[atom - 1]
-    return atom
+    return __ATOM_LIST__[atom - 1]
 
 
 def int_atom(atom):
     """
     convert str atom to integer atom
     """
-    global __ATOM_LIST__
-    print(atom)
-    atom = atom.lower()
-    return __ATOM_LIST__.index(atom) + 1
+    return __ATOM_LIST__.index(atom.lower()) + 1
 
 
 def get_UA(maxValence_list, valence_list):
@@ -472,7 +467,7 @@ def get_UA_pairs(UA, AC, use_graph=True):
 def AC2BO(AC, atoms, charge, allow_charged_fragments=True, use_graph=True):
     """
 
-    implemenation of algorithm shown in Figure 2
+    implementation of the algorithm shown in Figure 2
 
     UA: unsaturated atoms
 
@@ -481,9 +476,6 @@ def AC2BO(AC, atoms, charge, allow_charged_fragments=True, use_graph=True):
     best_BO: Bcurr in Figure
 
     """
-
-    global atomic_valence
-    global atomic_valence_electrons
 
     # make a list of valences, e.g. for CO: [[4],[2,1]]
     AC_valence = list(AC.sum(axis=1))
