@@ -32,7 +32,6 @@ from rdkit import Chem
 from rdkit.Chem import AllChem, GetPeriodicTable
 from rdkit.Chem.rdchem import EditableMol
 
-
 __ATOM_LIST__ = [
     "h",
     "he",

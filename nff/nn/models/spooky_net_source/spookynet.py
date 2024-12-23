@@ -16,7 +16,7 @@ from .modules import (
     NonlinearElectronicEmbedding,
     NuclearEmbedding,
     SincFunctions,
-    ZBLRepulsionEnergy
+    ZBLRepulsionEnergy,
 )
 
 # backwards compatibility with old versions of pytorch

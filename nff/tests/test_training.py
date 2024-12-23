@@ -5,7 +5,7 @@ import torch
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 
-from nff.data import Dataset, collate_dicts, split_train_validation_test, to_tensor
+from nff.data import Dataset, collate_dicts, split_train_validation_test
 from nff.train import Trainer, evaluate, get_model, hooks, loss, metrics
 
 
