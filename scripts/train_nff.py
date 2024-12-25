@@ -43,6 +43,16 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
     )
     parser.add_argument(
+        "--custom_layers",
+        nargs="+",
+        type=str,
+        default=[],
+        help="Which layers to unfreeze for fine-tuning",
+    )
+    parser.add_argument(
+        "--unfreeze_conv_layers", help="Number of convolutional layers to unfreeze for fine-tuning", type=int, default=1
+    )
+    parser.add_argument(
         "--trim_embeddings",
         help="Whether to reduce the size of MACE foundational model by resizing the embedding layers",
         action="store_true",
@@ -134,6 +144,8 @@ def main(
     train_file: Union[str, Path],
     val_file: Union[str, Path],
     fine_tune: bool = False,
+    custom_layers: Iterable[str] = [],
+    unfreeze_conv_layers: int = 1,
     trim_embeddings: bool = False,
     targets: Iterable[str] = ["energy", "energy_grad"],
     loss_weights: Iterable[float] = [0.05, 1.0],
@@ -149,6 +161,34 @@ def main(
     pin_memory: bool = True,
     seed: int = 1337,
 ):
+    """Train a neural network model.
+
+    Args:
+        name (str): Model name
+        model_type (str): Type of model
+        model_params_path (Union[str, Path]): Path to model parameters
+        model_path (Union[str, Path]): Path to a trained model
+        train_dir (Union[str, Path]): Model training directory
+        train_file (Union[str, Path]): Training set pth.tar file
+        val_file (Union[str, Path]): Validation set pth.tar file
+        fine_tune (bool, optional): Whether to fine tune an existing model. Defaults to False.
+        custom_layers (Iterable[str], optional): Named modules to unfreeze for finetuning. Defaults to [].
+        unfreeze_conv_layers (int, optional): Number of convolutional layers to unfreeze for fine-tuning. Defaults to 1.
+        trim_embeddings (bool, optional): Whether to trim MACE embeddings. Defaults to False.
+        targets (Iterable[str], optional): Model output. Defaults to ["energy", "energy_grad"].
+        loss_weights (Iterable[float], optional): Relative weights of output targets. Defaults to [0.05, 1.0].
+        criterion (Literal[&quot;MSE&quot;, &quot;MAE&quot;], optional): Loss function criterion. Defaults to "MSE".
+        batch_size (int, optional): Batch size. Defaults to 16.
+        lr (float, optional): Learning rate. Defaults to 1e-3.
+        min_lr (float, optional): Minimum LR. Defaults to 1e-6.
+        max_num_epochs (int, optional): Max number training epochs. Defaults to 200.
+        patience (int, optional): LR patience. Defaults to 25.
+        lr_decay (float, optional): LR decay rate. Defaults to 0.5.
+        weight_decay (float, optional): Weight decay for optimizer. Defaults to 0.0.
+        num_workers (int, optional): Number of workers for data loader. Defaults to 1.
+        pin_memory (bool, optional): Whether to pin memory for data loader. Defaults to True.
+        seed (int, optional): Random seed. Defaults to 1337.
+    """
     # Set seeds
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -199,8 +239,10 @@ def main(
             logger.info("Trimming embeddings with MACE model and atomic numbers %s", atomic_numbers)
             model = reduce_foundations(model, atomic_numbers, load_readout=True)
         model_freezer = get_layer_freezer(model_type)
-        model_freezer.model_tl(model)  # TODO: add custom options for freezing layers
-
+        if unfreeze_conv_layers:
+            model_freezer.model_tl(model, custom_layers=custom_layers, unfreeze_conv_layers=unfreeze_conv_layers)
+        else:
+            model_freezer.model_tl(model, custom_layers=custom_layers)
     else:
         # Load model params and save a copy
         logger.info("Training model from scratch")
@@ -257,13 +299,6 @@ def main(
     ]
 
     train_hooks = [
-        hooks.WarmRestartHook(
-            T0=max_num_epochs,
-            Tmult=1,
-            min_lr=min_lr,
-            lr_factor=lr,
-            optimizer=optimizer,
-        ),
         hooks.MaxEpochHook(max_num_epochs),
         hooks.CSVHook(
             save_path,
@@ -314,6 +349,8 @@ if __name__ == "__main__":
         train_file=args.train_file,
         val_file=args.val_file,
         fine_tune=args.fine_tune,
+        custom_layers=args.custom_layers,
+        unfreeze_conv_layers=args.unfreeze_conv_layers,
         trim_embeddings=args.trim_embeddings,
         targets=args.targets,
         loss_weights=args.loss_weights,
