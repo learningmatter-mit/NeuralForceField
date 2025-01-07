@@ -180,17 +180,27 @@ class PainnDiabatLayerFreezer(PainnLayerFreezer):
 class MaceLayerFreezer(LayerFreezer):
     """Class to handle freezing layers in MACE models."""
 
-    def unfreeze_mace_interaction_linears(self, model: torch.nn.Module) -> None:
+    def unfreeze_mace_node_embedding(self, model: torch.nn.Module) -> None:
+        """Unfreeze the node embedding layer in a MACE model.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+        """
+        self.unfreeze_parameters(model.node_embedding)
+        print("Unfreezing node embedding")
+
+    def unfreeze_mace_interaction_linears(self, model: torch.nn.Module, num_layers: int = 1) -> None:
         """Unfreeze the linear readout layer from the interaction blocks in
         a MACE model.
 
         Args:
             model (torch.nn.Module): model to be transfer learned
         """
-        interaction_linears = [f"interactions.{i}.linear.weight" for i in range(model.num_interactions.item())]
-        self.custom_unfreeze(model, interaction_linears)
+        for i in reversed(range(model.num_interactions.item() - num_layers, model.num_interactions.item())):
+            print(f"Unfreezing # {i} interaction linear layers from last")
+            self.custom_unfreeze(model, [f"interactions.{i}.linear.weight"])
 
-    def unfreeze_mace_produce_linears(self, model: torch.nn.Module) -> None:
+    def unfreeze_mace_product_linears(self, model: torch.nn.Module) -> None:
         """Unfreeze the linear readout layer from the interaction blocks in
         a MACE model.
 
@@ -225,6 +235,7 @@ class MaceLayerFreezer(LayerFreezer):
                 self.unfreeze_parameters(block)
             elif i == num_readouts - 1:
                 self.unfreeze_parameters(block)
+            print(f"Unfreezing {block.__class__.__name__}")
 
     def model_tl(
         self,
@@ -260,9 +271,12 @@ class MaceLayerFreezer(LayerFreezer):
             if unfreeze_pool:
                 self.unfreeze_mace_pooling(model)
             if not freeze_interactions:
-                self.unfreeze_mace_interaction_linears(model)
+                num_layers = kwargs.get("unfreeze_conv_layers", 1)
+                self.unfreeze_mace_interaction_linears(model, num_layers=num_layers)
             if not freeze_products:
-                self.unfreeze_mace_produce_linears(model)
+                self.unfreeze_mace_product_linears(model)
+            if kwargs.get("unfreeze_embeddings", False):
+                self.unfreeze_mace_node_embedding(model)
 
 
 class ChgnetLayerFreezer(LayerFreezer):
