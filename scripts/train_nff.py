@@ -50,6 +50,11 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         help="Which layers to unfreeze for fine-tuning",
     )
     parser.add_argument(
+        "--unfreeze_embeddings",
+        help="Whether to unfreeze embeddings for fine-tuning",
+        action="store_true",
+    )
+    parser.add_argument(
         "--unfreeze_conv_layers", help="Number of convolutional layers to unfreeze for fine-tuning", type=int, default=1
     )
     parser.add_argument(
@@ -145,6 +150,7 @@ def main(
     val_file: Union[str, Path],
     fine_tune: bool = False,
     custom_layers: Iterable[str] = [],
+    unfreeze_embeddings: bool = False,
     unfreeze_conv_layers: int = 1,
     trim_embeddings: bool = False,
     targets: Iterable[str] = ["energy", "energy_grad"],
@@ -173,6 +179,7 @@ def main(
         val_file (Union[str, Path]): Validation set pth.tar file
         fine_tune (bool, optional): Whether to fine tune an existing model. Defaults to False.
         custom_layers (Iterable[str], optional): Named modules to unfreeze for finetuning. Defaults to [].
+        unfreeze_embeddings (bool, optional): Whether to unfreeze embeddings for fine-tuning. Defaults to False.
         unfreeze_conv_layers (int, optional): Number of convolutional layers to unfreeze for fine-tuning. Defaults to 1.
         trim_embeddings (bool, optional): Whether to trim MACE embeddings. Defaults to False.
         targets (Iterable[str], optional): Model output. Defaults to ["energy", "energy_grad"].
@@ -240,9 +247,17 @@ def main(
             model = reduce_foundations(model, atomic_numbers, load_readout=True)
         model_freezer = get_layer_freezer(model_type)
         if unfreeze_conv_layers:
-            model_freezer.model_tl(model, custom_layers=custom_layers, unfreeze_conv_layers=unfreeze_conv_layers)
+            model_freezer.model_tl(
+                model,
+                custom_layers=custom_layers,
+                freeze_interactions=False,  # freeze MACE interactions
+                unfreeze_conv_layers=unfreeze_conv_layers,
+                unfreeze_embeddings=unfreeze_embeddings,
+            )
         else:
-            model_freezer.model_tl(model, custom_layers=custom_layers)
+            model_freezer.model_tl(
+                model, custom_layers=custom_layers, freeze_interactions=True, unfreeze_embeddings=unfreeze_embeddings
+            )
     else:
         # Load model params and save a copy
         logger.info("Training model from scratch")
@@ -350,6 +365,7 @@ if __name__ == "__main__":
         val_file=args.val_file,
         fine_tune=args.fine_tune,
         custom_layers=args.custom_layers,
+        unfreeze_embeddings=args.unfreeze_embeddings,
         unfreeze_conv_layers=args.unfreeze_conv_layers,
         trim_embeddings=args.trim_embeddings,
         targets=args.targets,

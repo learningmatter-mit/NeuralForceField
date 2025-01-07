@@ -274,6 +274,33 @@ class ChgnetLayerFreezer(LayerFreezer):
     (accessed 2024-03-09)
     """
 
+    def unfreeze_chgnet_atom_embedding(self, model: torch.nn.Module) -> None:
+        """Unfreeze the atom embedding layer in a CHGNet model.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+        """
+        self.unfreeze_parameters(model.atom_embedding)
+
+    def unfreeze_chgnet_bond_embedding(self, model: torch.nn.Module) -> None:
+        """Unfreeze the bond embedding and weights layers in a CHGNet model.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+        """
+        self.unfreeze_parameters(model.bond_embedding)
+        self.unfreeze_parameters(model.bond_weights_ag)
+        self.unfreeze_parameters(model.bond_weights_bg)
+
+    def unfreeze_chgnet_angle_embedding(self, model: torch.nn.Module) -> None:
+        """Unfreeze the angle embedding and basis expansion layers in a CHGNet model.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+        """
+        self.unfreeze_parameters(model.angle_embedding)
+        self.unfreeze_parameters(model.angle_basis_expansion)
+
     def unfreeze_chgnet_atom_layers(self, model: torch.nn.Module, num_layers: int = 1) -> None:
         """Unfreeze the atom layers in a CHGNet model starting from the
         last layer.
@@ -389,3 +416,7 @@ class ChgnetLayerFreezer(LayerFreezer):
                 self.unfreeze_chgnet_angle_layers(model, num_layers=num_layers)
             else:
                 self.unfreeze_chgnet_atom_layers(model)
+            if kwargs.get("unfreeze_embeddings", False):
+                self.unfreeze_chgnet_atom_embedding(model)
+                self.unfreeze_chgnet_bond_embedding(model)
+                self.unfreeze_chgnet_angle_embedding(model)
