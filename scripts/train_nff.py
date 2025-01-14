@@ -9,6 +9,7 @@ import yaml
 from torch.utils.data import DataLoader
 
 from nff.data import Dataset, collate_dicts
+from nff.data.dataset import to_tensor
 from nff.io.mace import update_mace_init_params
 from nff.nn.models.mace import reduce_foundations
 from nff.train import Trainer, get_layer_freezer, get_model, hooks, load_model, loss, metrics
@@ -50,12 +51,20 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         help="Which layers to unfreeze for fine-tuning",
     )
     parser.add_argument(
+        "--freeze_pooling",
+        help="Whether to freeze pooling layers for fine-tuning",
+        action="store_true",
+    )
+    parser.add_argument(
         "--unfreeze_embeddings",
         help="Whether to unfreeze embeddings for fine-tuning",
         action="store_true",
     )
     parser.add_argument(
         "--unfreeze_conv_layers", help="Number of convolutional layers to unfreeze for fine-tuning", type=int, default=1
+    )
+    parser.add_argument(
+        "--unfreeze_interactions", help="Whether to unfreeze all MACE interactions for fine-tuning", action="store_true"
     )
     parser.add_argument(
         "--trim_embeddings",
@@ -150,8 +159,10 @@ def main(
     val_file: Union[str, Path],
     fine_tune: bool = False,
     custom_layers: Iterable[str] = [],
+    freeze_pooling: bool = False,
     unfreeze_embeddings: bool = False,
     unfreeze_conv_layers: int = 1,
+    unfreeze_interactions: bool = False,
     trim_embeddings: bool = False,
     targets: Iterable[str] = ["energy", "energy_grad"],
     loss_weights: Iterable[float] = [0.05, 1.0],
@@ -179,8 +190,10 @@ def main(
         val_file (Union[str, Path]): Validation set pth.tar file
         fine_tune (bool, optional): Whether to fine tune an existing model. Defaults to False.
         custom_layers (Iterable[str], optional): Named modules to unfreeze for finetuning. Defaults to [].
+        freeze_pooling (bool, optional): Whether to freeze pooling layers for fine-tuning. Defaults to False.
         unfreeze_embeddings (bool, optional): Whether to unfreeze embeddings for fine-tuning. Defaults to False.
         unfreeze_conv_layers (int, optional): Number of convolutional layers to unfreeze for fine-tuning. Defaults to 1.
+        unfreeze_interactions (bool, optional): Whether to unfreeze all MACE interactions for fine-tuning. Defaults to False.
         trim_embeddings (bool, optional): Whether to trim MACE embeddings. Defaults to False.
         targets (Iterable[str], optional): Model output. Defaults to ["energy", "energy_grad"].
         loss_weights (Iterable[float], optional): Relative weights of output targets. Defaults to [0.05, 1.0].
@@ -242,21 +255,27 @@ def main(
         logger.info("Fine-tuning model")
         model = load_model(model_path, model_type=model_type, map_location=device, device=device)
         if "NffScaleMACE" in model_type and trim_embeddings:
-            atomic_numbers = np.unique(train[0]["nxyz"][:, 0]).astype(int).tolist()
+            atomic_numbers = to_tensor(train.props["nxyz"], stack=True)[:, 0].unique().to(int).tolist()
             logger.info("Trimming embeddings with MACE model and atomic numbers %s", atomic_numbers)
             model = reduce_foundations(model, atomic_numbers, load_readout=True)
         model_freezer = get_layer_freezer(model_type)
-        if unfreeze_conv_layers:
+        if unfreeze_conv_layers > 0:
             model_freezer.model_tl(
                 model,
                 custom_layers=custom_layers,
-                freeze_interactions=False,  # freeze MACE interactions
+                freeze_interactions=not unfreeze_interactions,  # freeze MACE all interactions (all conv parameters, not
+                # just the linear layers)
+                freeze_pooling=freeze_pooling,
                 unfreeze_conv_layers=unfreeze_conv_layers,
                 unfreeze_embeddings=unfreeze_embeddings,
             )
         else:
             model_freezer.model_tl(
-                model, custom_layers=custom_layers, freeze_interactions=True, unfreeze_embeddings=unfreeze_embeddings
+                model,
+                custom_layers=custom_layers,
+                freeze_interactions=not unfreeze_interactions,
+                freeze_pooling=freeze_pooling,
+                unfreeze_embeddings=unfreeze_embeddings,
             )
     else:
         # Load model params and save a copy
@@ -365,8 +384,10 @@ if __name__ == "__main__":
         val_file=args.val_file,
         fine_tune=args.fine_tune,
         custom_layers=args.custom_layers,
+        freeze_pooling=args.freeze_pooling,
         unfreeze_embeddings=args.unfreeze_embeddings,
         unfreeze_conv_layers=args.unfreeze_conv_layers,
+        unfreeze_interactions=args.unfreeze_interactions,
         trim_embeddings=args.trim_embeddings,
         targets=args.targets,
         loss_weights=args.loss_weights,

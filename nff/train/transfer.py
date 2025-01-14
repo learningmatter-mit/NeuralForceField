@@ -189,6 +189,15 @@ class MaceLayerFreezer(LayerFreezer):
         self.unfreeze_parameters(model.node_embedding)
         print("Unfreezing node embedding")
 
+    def unfreeze_mace_radial_embedding(self, model: torch.nn.Module) -> None:
+        """Unfreeze the radial embedding layer in a MACE model.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+        """
+        self.unfreeze_parameters(model.radial_embedding)
+        print("Unfreezing radial embedding")
+
     def unfreeze_mace_interaction_linears(self, model: torch.nn.Module, num_layers: int = 1) -> None:
         """Unfreeze the linear readout layer from the interaction blocks in
         a MACE model.
@@ -199,6 +208,16 @@ class MaceLayerFreezer(LayerFreezer):
         for i in reversed(range(model.num_interactions.item() - num_layers, model.num_interactions.item())):
             print(f"Unfreezing # {i} interaction linear layers from last")
             self.custom_unfreeze(model, [f"interactions.{i}.linear.weight"])
+
+    def unfreeze_mace_interactions(self, model: torch.nn.Module, num_layers: int = 1) -> None:
+        """Unfreeze the interaction layers in a MACE model.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+        """
+        for i in reversed(range(model.num_interactions.item() - num_layers, model.num_interactions.item())):
+            print(f"Unfreezing # {i} interaction linear layers from last")
+            self.unfreeze_parameters(model.interactions[i])
 
     def unfreeze_mace_product_linears(self, model: torch.nn.Module) -> None:
         """Unfreeze the linear readout layer from the interaction blocks in
@@ -218,6 +237,7 @@ class MaceLayerFreezer(LayerFreezer):
         """
         for module in model.products:
             self.unfreeze_parameters(module)
+        print("Unfreezing products")
 
     def unfreeze_mace_readout(self, model: torch.nn.Module, freeze_skip: bool = False):
         """Unfreeze the readout layers in a MACE model.
@@ -254,6 +274,11 @@ class MaceLayerFreezer(LayerFreezer):
             model (torch.nn.Module): MACE model
             freeze_gap_embedding (bool, optional): Unused for MACE, inherited from
                 parent class for consistency with the diabatic models.
+                Defaults to False.
+            freeze_interactions (bool, optional): If true, keep all product layers frozen.
+                Defaults to True.
+            freeze_products (bool, optional): If true, keep product linear layers frozen.
+                Defaults to False.
             freeze_pooling (bool, optional): If true, keep all pooling layers frozen.
                 Defaults to True.
             freeze_skip (bool, optional): If true, keep all but the last readout layer
@@ -268,15 +293,20 @@ class MaceLayerFreezer(LayerFreezer):
         else:
             self.unfreeze_mace_readout(model, freeze_skip=freeze_skip)
             unfreeze_pool = not freeze_pooling
+            unfreeze_interactions = not freeze_interactions
             if unfreeze_pool:
                 self.unfreeze_mace_pooling(model)
-            if not freeze_interactions:
-                num_layers = kwargs.get("unfreeze_conv_layers", 1)
-                self.unfreeze_mace_interaction_linears(model, num_layers=num_layers)
+            num_layers = kwargs.get("unfreeze_conv_layers", 0)
+            if num_layers > 0:
+                if unfreeze_interactions:
+                    self.unfreeze_mace_interactions(model, num_layers=num_layers)
+                else:
+                    self.unfreeze_mace_interaction_linears(model, num_layers=num_layers)
             if not freeze_products:
                 self.unfreeze_mace_product_linears(model)
             if kwargs.get("unfreeze_embeddings", False):
                 self.unfreeze_mace_node_embedding(model)
+                self.unfreeze_mace_radial_embedding(model)
 
 
 class ChgnetLayerFreezer(LayerFreezer):
