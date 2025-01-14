@@ -23,8 +23,7 @@ def plot_parity(
     force_key: str = "energy_grad",
     units: Dict[str, str] = {"energy": "eV", "energy_grad": "eV/Ang"},
 ) -> tuple[float, float]:
-    """
-    Perform a parity plot between the results and the targets.
+    """Perform a parity plot between the results and the targets.
 
     Args:
         results (dict): dictionary containing the results
@@ -97,12 +96,12 @@ def plot_parity(
         ax.text(
             0.1,
             0.9,
-            "MAE: %.2f %s" % (mae, units[key]),
+            "MAE: %.3f %s" % (mae, units[key]),
             transform=ax.transAxes,
         )
 
     plt.tight_layout()
-    plt.savefig(f"{figname}.png")
+    plt.savefig(f"{figname}.pdf")
     plt.show()
     mae_energy = float(mae_save[energy_key])
     mae_forces = float(mae_save[force_key])
