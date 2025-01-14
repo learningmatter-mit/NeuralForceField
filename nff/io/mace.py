@@ -98,11 +98,21 @@ def get_init_kwargs_from_model(model: Union[ScaleShiftMACE, MACE]) -> dict:
         radial_type = "bessel"
     elif isinstance(model.radial_embedding.bessel_fn, GaussianBasis):
         radial_type = "gaussian"
-    if isinstance(model.radial_embedding.distance_transform, AgnesiTransform):
-        distance_transform = "Agnesi"
-    elif isinstance(model.radial_embedding.distance_transform, SoftTransform):
-        distance_transform = "Soft"
-    heads = model.heads
+    try:
+        if isinstance(model.radial_embedding.distance_transform, AgnesiTransform):
+            distance_transform = "Agnesi"
+        elif isinstance(model.radial_embedding.distance_transform, SoftTransform):
+            distance_transform = "Soft"
+    except:
+        distance_transform = None
+    try:
+        heads = model.heads
+    except:
+        heads = ["default"]
+    try:
+        pair_repulsion = model.pair_repulsion
+    except:
+        pair_repulsion = False
     num_interactions = model.num_interactions.item()
     MLP_irreps = []
 
@@ -135,15 +145,15 @@ def get_init_kwargs_from_model(model: Union[ScaleShiftMACE, MACE]) -> dict:
         .symmetric_contractions.contractions[0]
         .correlation,
         "gate": model.readouts[-1].non_linearity.acts[0].f,
-        "pair_repulsion": model.pair_repulsion,
+        "pair_repulsion": pair_repulsion,
         "distance_transform": distance_transform,
         "radial_MLP": model.interactions[0].conv_tp_weights.hs[1:-1],
         "radial_type": radial_type,
         "heads": heads
     }
     if type(model).__name__ == "ScaleShiftMACE":
-    # if isinstance(model, ScaleShiftMACE):
         init_kwargs.update({"atomic_inter_scale":model.scale_shift.scale, "atomic_inter_shift": model.scale_shift.shift})
+    # if isinstance(model, ScaleShiftMACE):
 
     return init_kwargs
 
