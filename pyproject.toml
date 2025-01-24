@@ -19,7 +19,7 @@ dependencies = [
     "torch>=2.2.0",
     "tqdm",
     "mace-torch>=0.3.4",
-    "chgnet>=0.3.5",
+    "chgnet==0.3.5",
     "e3fp",
     "nglview",
     "ipykernel",
