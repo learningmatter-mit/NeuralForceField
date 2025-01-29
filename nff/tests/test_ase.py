@@ -487,7 +487,6 @@ class TestPeriodic(ut.TestCase):
             ]
         )
         assert np.allclose(nbrlist, expected_nbrlist)
-        print(offsets)
 
 
 if __name__ == "__main__":
