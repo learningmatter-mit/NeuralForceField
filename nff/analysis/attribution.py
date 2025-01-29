@@ -341,8 +341,8 @@ class Attribution:
                     xyz = reconstruct_atoms(atoms1, [np.arange(0, len(atoms1))], centre=index)
                     atoms1.positions = xyz
                     is_repeated = False
-                    for Atoms in atom_list:
-                        if atoms1.__eq__(Atoms):
+                    for at in atom_list:
+                        if atoms1 == at:
                             is_repeated = True
                             break
                     if not is_repeated:

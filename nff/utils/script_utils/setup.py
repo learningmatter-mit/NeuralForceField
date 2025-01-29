@@ -1,6 +1,7 @@
 """Helper function to setup the run from the command line.
 
-Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/utils/script_utils/setup.py
+Adapted from:
+https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/utils/script_utils/setup.py
 """
 
 import logging

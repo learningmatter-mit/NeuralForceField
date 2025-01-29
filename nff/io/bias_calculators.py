@@ -537,16 +537,16 @@ class eABF(BiasBase):
 
 class aMDeABF(eABF):
     """Accelerated extended-system Adaptive Biasing Force Calculator
-       class with neural force field
+    class with neural force field
 
-       Accelerated Molecular Dynamics
+    Accelerated Molecular Dynamics
 
-        see:
-            aMD: Hamelberg et. al., J. Chem. Phys. 120, 11919 (2004); https://doi.org/10.1063/1.1755656
-            GaMD: Miao et. al., J. Chem. Theory Comput. (2015); https://doi.org/10.1021/acs.jctc.5b00436
-            SaMD: Zhao et. al., J. Phys. Chem. Lett. 14, 4, 1103 - 1112 (2023); https://doi.org/10.1021/acs.jpclett.2c03688
+    see:
+        aMD: Hamelberg et. al., J. Chem. Phys. 120, 11919 (2004); https://doi.org/10.1063/1.1755656
+        GaMD: Miao et. al., J. Chem. Theory Comput. (2015); https://doi.org/10.1021/acs.jctc.5b00436
+        SaMD: Zhao et. al., J. Phys. Chem. Lett. 14, 4, 1103 - 1112 (2023); https://doi.org/10.1021/acs.jpclett.2c03688
 
-        Apply global boost potential to potential energy, that is independent of Collective Variables.
+    Apply global boost potential to potential energy, that is independent of Collective Variables.
 
     Args:
         model: the neural force field model

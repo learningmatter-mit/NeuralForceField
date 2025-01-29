@@ -1,6 +1,7 @@
 """Helper function to create a trainer for a given model.
 
-Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/utils/script_utils/training.py
+Adapted from:
+https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/utils/script_utils/training.py
 """
 
 import json

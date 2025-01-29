@@ -1,5 +1,6 @@
 """Argument parsing from the command line.
-From https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/utils/script_utils/script_parsing.py
+From:
+https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/utils/script_utils/script_parsing.py
 """
 
 import argparse
@@ -120,7 +121,7 @@ def add_subparsers(cmd_parser, defaults={}):
     # model-specific parsers
     model_parser = argparse.ArgumentParser(add_help=False)
 
-    #######  SchNet  #######
+    # SchNet
     schnet_parser = argparse.ArgumentParser(add_help=False, parents=[model_parser])
     schnet_parser.add_argument(
         "--n_atom_basis",
