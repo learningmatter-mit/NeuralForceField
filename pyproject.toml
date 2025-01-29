@@ -16,7 +16,7 @@ dependencies = [
     "rdkit",
     "scikit-learn",
     "scipy",
-    "torch (>=2.2.0,<2.6.0)"
+    "torch >= 2.2.0, < 2.6.0",
     "tqdm",
     "mace-torch>=0.3.4",
     "chgnet>=0.3.5",
