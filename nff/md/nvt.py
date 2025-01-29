@@ -65,7 +65,7 @@ class NoseHoover(MolecularDynamics):
 
         self.nbr_update_period = nbr_update_period
 
-        # initial Maxwell-Boltmann temperature for atoms
+        # initial Maxwell-Boltzmann temperature for atoms
         if maxwell_temp is None:
             maxwell_temp = temperature
 
