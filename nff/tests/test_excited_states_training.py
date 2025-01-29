@@ -6,15 +6,10 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
 
-<<<<<<< HEAD
-from nff.data import Dataset, collate_dicts, split_train_validation_test
-from nff.train import Trainer, evaluate, get_model, hooks, loss, metrics
-=======
 import pytest
 
-from nff.data import Dataset, split_train_validation_test, collate_dicts
-from nff.train import Trainer, get_model, loss, hooks, metrics, evaluate
->>>>>>> unittests
+from nff.data import Dataset, collate_dicts, split_train_validation_test
+from nff.train import Trainer, evaluate, get_model, hooks, loss, metrics
 
 
 @pytest.mark.skip("still taking too long, disable for now")
