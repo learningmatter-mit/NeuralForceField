@@ -627,7 +627,6 @@ def collate_graphs(batch):
 
     AtomicNum_batch = torch.cat(AtomicNum_batch)
     Edge_batch = torch.cat(Edge_batch, dim=1)
-    Natom_batch = Natom_batch
     # Adjacency_matrix_batch=torch.block_diag(*Adjacency_matrix_batch)
     Adjacency_matrix_batch = torch.cat(Adjacency_matrix_batch, dim=0).view(-1, 1)
 
