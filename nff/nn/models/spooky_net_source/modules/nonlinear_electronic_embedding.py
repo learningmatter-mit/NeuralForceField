@@ -1,11 +1,9 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from .attention import Attention
+
 from .residual_mlp import ResidualMLP
-from .shifted_softplus import ShiftedSoftplus
-from .swish import Swish
-from typing import Optional
 
 
 class NonlinearElectronicEmbedding(nn.Module):
@@ -32,16 +30,12 @@ class NonlinearElectronicEmbedding(nn.Module):
             'ssp': Shifted softplus activation function.
     """
 
-    def __init__(
-        self, num_features: int, num_residual: int, activation: str = "swish"
-    ) -> None:
-        """ Initializes the NonlinearElectronicEmbedding class. """
-        super(NonlinearElectronicEmbedding, self).__init__()
+    def __init__(self, num_features: int, num_residual: int, activation: str = "swish") -> None:
+        """Initializes the NonlinearElectronicEmbedding class."""
+        super().__init__()
         self.linear_q = nn.Linear(num_features, num_features, bias=False)
         self.featurize_k = nn.Linear(1, num_features)
-        self.resblock_k = ResidualMLP(
-            num_features, num_residual, activation=activation, zero_init=True
-        )
+        self.resblock_k = ResidualMLP(num_features, num_residual, activation=activation, zero_init=True)
         self.featurize_v = nn.Linear(1, num_features, bias=False)
         self.resblock_v = ResidualMLP(
             num_features,
@@ -53,7 +47,7 @@ class NonlinearElectronicEmbedding(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ Initialize parameters. """
+        """Initialize parameters."""
         nn.init.orthogonal_(self.linear_q.weight)
         nn.init.orthogonal_(self.featurize_k.weight)
         nn.init.zeros_(self.featurize_k.bias)
@@ -84,14 +78,10 @@ class NonlinearElectronicEmbedding(nn.Module):
         # determine maximum dot product (for numerics)
         if num_batch > 1:
             if mask is None:
-                mask = (
-                    nn.functional.one_hot(batch_seg)
-                    .to(dtype=x.dtype, device=x.device)
-                    .transpose(-1, -2)
-                )
+                mask = nn.functional.one_hot(batch_seg).to(dtype=x.dtype, device=x.device).transpose(-1, -2)
             tmp = dot.view(1, -1).expand(num_batch, -1)
             tmp, _ = torch.max(mask * tmp, dim=-1)
-            if tmp.device.type == "cpu":  # indexing is faster on CPUs
+            if tmp.device.type == "cpu":  # indexing is faster on CPUs  # noqa
                 maximum = tmp[batch_seg]
             else:  # gathering is faster on GPUs
                 maximum = torch.gather(tmp, 0, batch_seg)
@@ -99,10 +89,10 @@ class NonlinearElectronicEmbedding(nn.Module):
             maximum = torch.max(dot)
         # attention
         d = k.shape[-1]
-        a = torch.exp((dot - maximum) / d ** 0.5)
+        a = torch.exp((dot - maximum) / d**0.5)
 
         anorm = a.new_zeros(num_batch).index_add_(0, batch_seg, a)
-        if a.device.type == "cpu":  # indexing is faster on CPUs
+        if a.device.type == "cpu":  # indexing is faster on CPUs  # noqa
             anorm = anorm[batch_seg]
         else:  # gathering is faster on GPUs
             anorm = torch.gather(anorm, 0, batch_seg)

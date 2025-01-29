@@ -3,6 +3,7 @@ Copyright: SchNetPack, 2019
 Retrieved from https://github.com/atomistic-machine-learning/schnetpack/tree/dev/src/schnetpack/train/hooks
 """
 
+
 class Hook:
     """Base class for hooks."""
 
@@ -30,7 +31,6 @@ class Hook:
             trainer (Trainer): instance of schnetpack.train.trainer.Trainer class.
 
         """
-        pass
 
     def on_batch_begin(self, trainer, train_batch):
         """Log at the beginning of train batch.
@@ -40,7 +40,6 @@ class Hook:
             train_batch (dict of torch.Tensor): SchNetPack dictionary of input tensors.
 
         """
-        pass
 
     def on_batch_end(self, trainer, train_batch, result, loss):
         pass

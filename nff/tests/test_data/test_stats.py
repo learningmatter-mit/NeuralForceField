@@ -1,4 +1,3 @@
-import os
 import unittest
 from pathlib import Path
 
@@ -18,17 +17,17 @@ class TestAtoms(unittest.TestCase):
         # Test case 1: Single atom formula
         formula = "H"
         expected_result = {"H": 1}
-        self.assertEqual(get_atom_count(formula), expected_result)
+        assert get_atom_count(formula) == expected_result
 
         # Test case 2: Formula with multiple atoms
         formula = "H2O"
         expected_result = {"H": 2, "O": 1}
-        self.assertEqual(get_atom_count(formula), expected_result)
+        assert get_atom_count(formula) == expected_result
 
         # Test case 3: Formula with repeated atoms
         formula = "CH3CH2CH3"
         expected_result = {"C": 3, "H": 8}
-        self.assertEqual(get_atom_count(formula), expected_result)
+        assert get_atom_count(formula) == expected_result
 
     def test_all_atoms(self):
         unique_formulas = ["H2O", "CH4", "CO2"]
@@ -36,7 +35,7 @@ class TestAtoms(unittest.TestCase):
 
         result = all_atoms(unique_formulas)
 
-        self.assertEqual(result, expected_result, "Incorrect atom set")
+        assert result == expected_result, "Incorrect atom set"
 
 
 class TestStats(unittest.TestCase):
@@ -53,7 +52,7 @@ class TestStats(unittest.TestCase):
         new_array = new_dset.props[TEST_KEY].cpu().numpy()
 
         ref_std = np.std(array)
-        ref_mean = np.mean(array)
+        np.mean(array)
 
         assert np.max(new_array) - np.min(new_array) <= 2 * STD_AWAY * ref_std, "range is not working"
 
@@ -68,7 +67,7 @@ class TestStats(unittest.TestCase):
         stats_array = torch.cat(array, dim=0).flatten().cpu().numpy()
 
         ref_std = np.std(stats_array)
-        ref_mean = np.mean(stats_array)
+        np.mean(stats_array)
 
         new_stats_array = torch.cat(new_array, dim=0).flatten().cpu().numpy()
 

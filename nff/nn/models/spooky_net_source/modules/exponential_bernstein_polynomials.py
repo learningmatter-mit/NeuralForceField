@@ -1,8 +1,9 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-from ..functional import softplus_inverse
+
+from nff.nn.models.spooky_net_source.functional import softplus_inverse
 
 
 class ExponentialBernsteinPolynomials(nn.Module):
@@ -40,14 +41,14 @@ class ExponentialBernsteinPolynomials(nn.Module):
         ini_alpha: float = 0.9448630629184640,
         exp_weighting: bool = False,
     ) -> None:
-        """ Initializes the ExponentialBernsteinPolynomials class. """
-        super(ExponentialBernsteinPolynomials, self).__init__()
+        """Initializes the ExponentialBernsteinPolynomials class."""
+        super().__init__()
         self.ini_alpha = ini_alpha
         self.exp_weighting = exp_weighting
         if no_basis_function_at_infinity:  # increase number of basis functions by one
             num_basis_functions += 1
         # compute values to initialize buffers
-        logfactorial = np.zeros((num_basis_functions))
+        logfactorial = np.zeros(num_basis_functions)
         for i in range(2, num_basis_functions):
             logfactorial[i] = logfactorial[i - 1] + np.log(i)
         v = np.arange(0, num_basis_functions)
@@ -61,13 +62,11 @@ class ExponentialBernsteinPolynomials(nn.Module):
         self.register_buffer("logc", torch.tensor(logbinomial, dtype=torch.float64))
         self.register_buffer("n", torch.tensor(n, dtype=torch.float64))
         self.register_buffer("v", torch.tensor(v, dtype=torch.float64))
-        self.register_parameter(
-            "_alpha", nn.Parameter(torch.tensor(1.0, dtype=torch.float64))
-        )
+        self.register_parameter("_alpha", nn.Parameter(torch.tensor(1.0, dtype=torch.float64)))
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ Initialize exponential scaling parameter alpha. """
+        """Initialize exponential scaling parameter alpha."""
         nn.init.constant_(self._alpha, softplus_inverse(self.ini_alpha))
 
     def forward(self, r: torch.Tensor, cutoff_values: torch.Tensor) -> torch.Tensor:
@@ -93,5 +92,4 @@ class ExponentialBernsteinPolynomials(nn.Module):
         rbf = cutoff_values.view(-1, 1) * torch.exp(x)
         if self.exp_weighting:
             return rbf * torch.exp(alphar)
-        else:
-            return rbf
+        return rbf

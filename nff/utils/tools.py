@@ -1,25 +1,24 @@
 """Assorted tools in the package.
 Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/utils/spk_utils.py
 """
+
+import collections
 import json
 import logging
-import collections
 from argparse import Namespace
 
 import numpy as np
 import torch
-
 from torch.nn import ModuleDict, Sequential
-from nff.nn.activations import (shifted_softplus, Swish,
-                                LearnableSwish)
+
+from nff.nn.activations import LearnableSwish, Swish, shifted_softplus
 from nff.nn.layers import Dense
 
-
 __all__ = [
-    "set_random_seed",
     "compute_params",
-    "to_json",
     "read_from_json",
+    "set_random_seed",
+    "to_json",
 ]
 
 layer_types = {
@@ -31,31 +30,32 @@ layer_types = {
     "sigmoid": torch.nn.Sigmoid,
     "Dropout": torch.nn.Dropout,
     "LeakyReLU": torch.nn.LeakyReLU,
-    "ELU":  torch.nn.ELU,
+    "ELU": torch.nn.ELU,
     "swish": Swish,
     "learnable_swish": LearnableSwish,
-    "softplus": torch.nn.Softplus
+    "softplus": torch.nn.Softplus,
 }
 
 
 def construct_Sequential(layers):
-    """Construct a sequential model from list of params 
+    """Construct a sequential model from list of params
 
     Args:
-        layers (list): list to describe the stacked layer params 
+        layers (list): list to describe the stacked layer params
                         example:    [
                                         {'name': 'linear', 'param' : {'in_features': 10, 'out_features': 20}},
                                         {'name': 'linear', 'param' : {'in_features': 10, 'out_features': 1}}
                                     ]
 
     Returns:
-        Sequential: Stacked Sequential Model 
+        Sequential: Stacked Sequential Model
     """
 
-    return Sequential(collections.OrderedDict([layer['name']+str(i),
-                                               layer_types[layer['name']](
-                                                   **layer['param'])
-                                               ] for i, layer in enumerate(layers)))
+    return Sequential(
+        collections.OrderedDict(
+            [layer["name"] + str(i), layer_types[layer["name"]](**layer["param"])] for i, layer in enumerate(layers)
+        )
+    )
 
 
 def construct_ModuleDict(moduledict):
@@ -81,6 +81,7 @@ def set_random_seed(seed):
         seed (int, optional): if seed not present, it is generated based on time
     """
     import time
+
     import numpy as np
 
     # 1) if seed not present, generate based on time
@@ -99,7 +100,7 @@ def set_random_seed(seed):
     np.random.seed(seed)
     # 3) Set seed for torch (manual_seed now seeds all CUDA devices automatically)
     torch.manual_seed(seed)
-    logging.info("Random state initialized with seed {:<10d}".format(seed))
+    logging.info(f"Random state initialized with seed {seed:<10d}")
 
 
 def compute_params(model):
@@ -146,7 +147,6 @@ def read_from_json(jsonpath):
 
 
 def make_directed(nbr_list):
-
     gtr_ij = (nbr_list[:, 0] > nbr_list[:, 1]).any().item()
     gtr_ji = (nbr_list[:, 1] > nbr_list[:, 0]).any().item()
     directed = gtr_ij and gtr_ji
@@ -157,6 +157,7 @@ def make_directed(nbr_list):
     new_nbrs = torch.cat([nbr_list, nbr_list.flip(1)], dim=0)
     return new_nbrs, directed
 
+
 def make_undirected(nbr_list):
     gtr_ij = (nbr_list[:, 0] > nbr_list[:, 1]).any().item()
     gtr_ji = (nbr_list[:, 1] > nbr_list[:, 0]).any().item()
@@ -165,5 +166,5 @@ def make_undirected(nbr_list):
     if not directed:
         return nbr_list, directed
     nbrs = nbr_list[nbr_list[:, 1] > nbr_list[:, 0]]
-    
+
     return nbrs, directed

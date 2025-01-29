@@ -357,7 +357,8 @@ class DimeNetSphericalBasis(nn.Module):
         for i in range(l_spher):
             if i == 0:
                 first_sph = sym.lambdify([theta], self.sph_harm_formulas[i][0], modules)(0)
-                self.sph_funcs.append(lambda tensor: torch.zeros_like(tensor) + first_sph)
+                self.sph_funcs.append(partial(lambda tensor, fsph: torch.zeros_like(tensor) + fsph,
+                                              fsph=first_sph))
             else:
                 self.sph_funcs.append(sym.lambdify([theta], self.sph_harm_formulas[i][0], modules))
             for j in range(n_spher):
@@ -491,7 +492,7 @@ class CosineEnvelope(nn.Module):
         self.cutoff = cutoff
 
     def forward(self, d):
-        output = 0.5 * (torch.cos((np.pi * d / self.cutoff)) + 1)
+        output = 0.5 * (torch.cos(np.pi * d / self.cutoff) + 1)
         exclude = d >= self.cutoff
         output[exclude] = 0
 

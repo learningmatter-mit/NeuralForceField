@@ -560,6 +560,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         if np.isnan(velocities).any():
             return "err"
         self.velocities = velocities
+        return None
 
     def update_probabilities(self):
         """
@@ -677,6 +678,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.hopping_probabilities = []
         self.time = self.time - self.dt
         self.modify_save()
+        return None
 
     def full_step(self, compute_internal_forces=True, do_log=True):
         """
@@ -1161,7 +1163,7 @@ class BatchedZhuNakamura:
             if do_save:
                 print(f"Completed step {num_steps}")
 
-            complete = all([trj.time >= self.max_time for trj in self.zhu_trjs])
+            complete = all(trj.time >= self.max_time for trj in self.zhu_trjs)
             num_steps += 1
 
         print("Neural ZN terminated normally.")

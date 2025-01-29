@@ -1,10 +1,12 @@
-import os
 import math
+import os
+from typing import Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ..functional import softplus_inverse, switch_function
-from typing import Tuple, Optional
+
+from nff.nn.models.spooky_net_source.functional import softplus_inverse, switch_function
 
 """
 computes D4 dispersion energy
@@ -33,23 +35,17 @@ class D4DispersionEnergy(nn.Module):
         Hartree: float = 27.211386024367243,  # conversion to Hartree
         dtype: torch.dtype = torch.float32,
     ) -> None:
-        """ Initializes the D4DispersionEnergy class. """
-        super(D4DispersionEnergy, self).__init__()
+        """Initializes the D4DispersionEnergy class."""
+        super().__init__()
         # Grimme's D4 dispersion is only parametrized up to Rn (Z=86)
         assert Zmax <= 87
         # trainable parameters
         self.register_parameter(
             "_s6", nn.Parameter(softplus_inverse(s6), requires_grad=False)
         )  # s6 is usually not fitted (correct long-range)
-        self.register_parameter(
-            "_s8", nn.Parameter(softplus_inverse(s8), requires_grad=True)
-        )
-        self.register_parameter(
-            "_a1", nn.Parameter(softplus_inverse(a1), requires_grad=True)
-        )
-        self.register_parameter(
-            "_a2", nn.Parameter(softplus_inverse(a2), requires_grad=True)
-        )
+        self.register_parameter("_s8", nn.Parameter(softplus_inverse(s8), requires_grad=True))
+        self.register_parameter("_a1", nn.Parameter(softplus_inverse(a1), requires_grad=True))
+        self.register_parameter("_a2", nn.Parameter(softplus_inverse(a2), requires_grad=True))
         self.register_parameter(
             "_scaleq", nn.Parameter(softplus_inverse(1.0), requires_grad=True)
         )  # for scaling charges of reference systems
@@ -57,8 +53,8 @@ class D4DispersionEnergy(nn.Module):
         self.Zmax = Zmax
         self.convert2Bohr = 1 / Bohr
         self.convert2eV = 0.5 * Hartree  # factor of 0.5 prevents double counting
-        self.convert2Angstrom3 = Bohr ** 3
-        self.convert2eVAngstrom6 = Hartree * Bohr ** 6
+        self.convert2Angstrom3 = Bohr**3
+        self.convert2eVAngstrom6 = Hartree * Bohr**6
         self.set_cutoff(cutoff)
         self.g_a = g_a
         self.g_c = g_c
@@ -75,20 +71,24 @@ class D4DispersionEnergy(nn.Module):
             torch.load(os.path.join(directory, "refsys.pth"))[:Zmax],
         )
         self.register_buffer(
-            "zeff", torch.load(os.path.join(directory, "zeff.pth"))[:Zmax]  # [Zmax]
+            "zeff",
+            torch.load(os.path.join(directory, "zeff.pth"))[:Zmax],  # [Zmax]
         )
         self.register_buffer(
             "refh",  # [Zmax,max_nref]
             torch.load(os.path.join(directory, "refh.pth"))[:Zmax],
         )
         self.register_buffer(
-            "sscale", torch.load(os.path.join(directory, "sscale.pth"))  # [18]
+            "sscale",
+            torch.load(os.path.join(directory, "sscale.pth")),  # [18]
         )
         self.register_buffer(
-            "secaiw", torch.load(os.path.join(directory, "secaiw.pth"))  # [18,23]
+            "secaiw",
+            torch.load(os.path.join(directory, "secaiw.pth")),  # [18,23]
         )
         self.register_buffer(
-            "gam", torch.load(os.path.join(directory, "gam.pth"))[:Zmax]  # [Zmax]
+            "gam",
+            torch.load(os.path.join(directory, "gam.pth"))[:Zmax],  # [Zmax]
         )
         self.register_buffer(
             "ascale",  # [Zmax,max_nref]
@@ -107,10 +107,12 @@ class D4DispersionEnergy(nn.Module):
             torch.load(os.path.join(directory, "casimir_polder_weights.pth"))[:Zmax],
         )
         self.register_buffer(
-            "rcov", torch.load(os.path.join(directory, "rcov.pth"))[:Zmax]  # [Zmax]
+            "rcov",
+            torch.load(os.path.join(directory, "rcov.pth"))[:Zmax],  # [Zmax]
         )
         self.register_buffer(
-            "en", torch.load(os.path.join(directory, "en.pth"))[:Zmax]  # [Zmax]
+            "en",
+            torch.load(os.path.join(directory, "en.pth"))[:Zmax],  # [Zmax]
         )
         self.register_buffer(
             "ncount_mask",  # [Zmax,max_nref,max_ncount]
@@ -145,11 +147,10 @@ class D4DispersionEnergy(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ For compatibility with other modules. """
-        pass
+        """For compatibility with other modules."""
 
     def set_cutoff(self, cutoff: Optional[float] = None) -> None:
-        """ Can be used to change the cutoff. """
+        """Can be used to change the cutoff."""
         if cutoff is None:
             self.cutoff = None
             self.cuton = None
@@ -178,24 +179,18 @@ class D4DispersionEnergy(nn.Module):
                 * self.secaiw[is_]
                 * torch.where(
                     qmod > 1e-8,
-                    torch.exp(
-                        self.g_a
-                        * (1 - torch.exp(self.gam[is_] * self.g_c * (1 - qref / qmod_)))
-                    ),
+                    torch.exp(self.g_a * (1 - torch.exp(self.gam[is_] * self.g_c * (1 - qref / qmod_)))),
                     math.exp(self.g_a) * ones_like_qmod,
                 ).view(-1, self.max_nref, 1)
             )
             alpha = torch.max(
                 self.ascale[allZ, :].view(-1, self.max_nref, 1)
-                * (
-                    self.alphaiw[allZ, :, :]
-                    - self.hcount[allZ, :].view(-1, self.max_nref, 1) * alpha
-                ),
+                * (self.alphaiw[allZ, :, :] - self.hcount[allZ, :].view(-1, self.max_nref, 1) * alpha),
                 torch.zeros_like(alpha),
             )
-            alpha_expanded = alpha.view(
-                alpha.size(0), 1, alpha.size(1), 1, -1
-            ) * alpha.view(1, alpha.size(0), 1, alpha.size(1), -1)
+            alpha_expanded = alpha.view(alpha.size(0), 1, alpha.size(1), 1, -1) * alpha.view(
+                1, alpha.size(0), 1, alpha.size(1), -1
+            )
             self.register_buffer(
                 "refc6",
                 3.0
@@ -227,9 +222,7 @@ class D4DispersionEnergy(nn.Module):
 
         # calculate coordination numbers
         rco = self.k2 * (self.rcov[Zi] + self.rcov[Zj])
-        den = self.k4 * torch.exp(
-            -((torch.abs(self.en[Zi] - self.en[Zj]) + self.k5) ** 2) / self.k6
-        )
+        den = self.k4 * torch.exp(-((torch.abs(self.en[Zi] - self.en[Zj]) + self.k5) ** 2) / self.k6)
         tmp = den * 0.5 * (1.0 + torch.erf(-self.kn * (rij - rco) / rco))
         if self.cutoff is not None:
             tmp = tmp * switch_function(rij, self.cuton, self.cutoff)
@@ -239,11 +232,7 @@ class D4DispersionEnergy(nn.Module):
         # calculate gaussian weights
         gweights = torch.sum(
             self.ncount_mask[Z]
-            * torch.exp(
-                -self.wf
-                * self.ncount_weight[Z]
-                * (covcn.view(-1, 1, 1) - self.cn[Z]) ** 2
-            ),
+            * torch.exp(-self.wf * self.ncount_weight[Z] * (covcn.view(-1, 1, 1) - self.cn[Z]) ** 2),
             -1,
         )
         norm = torch.sum(gweights, -1, True)
@@ -261,15 +250,7 @@ class D4DispersionEnergy(nn.Module):
         zeta = (
             torch.where(
                 qmod > 1e-8,
-                torch.exp(
-                    self.g_a
-                    * (
-                        1
-                        - torch.exp(
-                            self.gam[Z].view(-1, 1) * self.g_c * (1 - qref / qmod_)
-                        )
-                    )
-                ),
+                torch.exp(self.g_a * (1 - torch.exp(self.gam[Z].view(-1, 1) * self.g_c * (1 - qref / qmod_)))),
                 math.exp(self.g_a) * ones_like_qmod,
             )
             * gweights
@@ -281,49 +262,38 @@ class D4DispersionEnergy(nn.Module):
             zetai = torch.gather(zeta, 0, idx_i.view(-1, 1).expand(-1, zeta.size(1)))
             zetaj = torch.gather(zeta, 0, idx_j.view(-1, 1).expand(-1, zeta.size(1)))
         refc6ij = self.refc6[Zi, Zj, :, :]
-        zetaij = zetai.view(zetai.size(0), zetai.size(1), 1) * zetaj.view(
-            zetaj.size(0), 1, zetaj.size(1)
-        )
+        zetaij = zetai.view(zetai.size(0), zetai.size(1), 1) * zetaj.view(zetaj.size(0), 1, zetaj.size(1))
         c6ij = torch.sum((refc6ij * zetaij).view(refc6ij.size(0), -1), -1)
         sqrt_r4r2ij = math.sqrt(3) * self.sqrt_r4r2[Zi] * self.sqrt_r4r2[Zj]
         a1 = F.softplus(self._a1)
         a2 = F.softplus(self._a2)
         r0 = a1 * sqrt_r4r2ij + a2
         if self.cutoff is None:
-            oor6 = 1 / (rij ** 6 + r0 ** 6)
-            oor8 = 1 / (rij ** 8 + r0 ** 8)
+            oor6 = 1 / (rij**6 + r0**6)
+            oor8 = 1 / (rij**8 + r0**8)
         else:
-            cut2 = self.cutoff ** 2
-            cut6 = cut2 ** 3
+            cut2 = self.cutoff**2
+            cut6 = cut2**3
             cut8 = cut2 * cut6
-            tmp6 = r0 ** 6
-            tmp8 = r0 ** 8
+            tmp6 = r0**6
+            tmp8 = r0**8
             cut6tmp6 = cut6 + tmp6
             cut8tmp8 = cut8 + tmp8
             tmpc = rij / self.cutoff - 1
-            oor6 = (
-                1 / (rij ** 6 + tmp6) - 1 / cut6tmp6 + 6 * cut6 / cut6tmp6 ** 2 * tmpc
-            )
-            oor8 = (
-                1 / (rij ** 8 + tmp8) - 1 / cut8tmp8 + 8 * cut8 / cut8tmp8 ** 2 * tmpc
-            )
+            oor6 = 1 / (rij**6 + tmp6) - 1 / cut6tmp6 + 6 * cut6 / cut6tmp6**2 * tmpc
+            oor8 = 1 / (rij**8 + tmp8) - 1 / cut8tmp8 + 8 * cut8 / cut8tmp8**2 * tmpc
             oor6 = torch.where(rij < self.cutoff, oor6, torch.zeros_like(oor6))
             oor8 = torch.where(rij < self.cutoff, oor8, torch.zeros_like(oor8))
         s6 = F.softplus(self._s6)
         s8 = F.softplus(self._s8)
-        pairwise = -c6ij * (s6 * oor6 + s8 * sqrt_r4r2ij ** 2 * oor8) * self.convert2eV
+        pairwise = -c6ij * (s6 * oor6 + s8 * sqrt_r4r2ij**2 * oor8) * self.convert2eV
         edisp = rij.new_zeros(N).index_add_(0, idx_i, pairwise)
         if compute_atomic_quantities:
             alpha = self.alpha[Z, :, 0]
             polarizabilities = torch.sum(zeta * alpha, -1) * self.convert2Angstrom3
             refc6ii = self.refc6[Z, Z, :, :]
-            zetaii = zeta.view(zeta.size(0), zeta.size(1), 1) * zeta.view(
-                zeta.size(0), 1, zeta.size(1)
-            )
-            c6_coefficients = (
-                torch.sum((refc6ii * zetaii).view(refc6ii.size(0), -1), -1)
-                * self.convert2eVAngstrom6
-            )
+            zetaii = zeta.view(zeta.size(0), zeta.size(1), 1) * zeta.view(zeta.size(0), 1, zeta.size(1))
+            c6_coefficients = torch.sum((refc6ii * zetaii).view(refc6ii.size(0), -1), -1) * self.convert2eVAngstrom6
         else:
             polarizabilities = rij.new_zeros(N)
             c6_coefficients = rij.new_zeros(N)

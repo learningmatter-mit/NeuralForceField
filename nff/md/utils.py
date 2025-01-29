@@ -157,7 +157,7 @@ class BiasedNeuralMDLogger(IOContext):
         self.hdr += "%12s %12s %12s " % ("U0+bias[eV]", "U0[eV]", "AbsGradPot")
         self.fmt += "%12.5f %12.5f %12.4f "
 
-        for i in range(self.num_cv):
+        for _i in range(self.num_cv):
             self.hdr += "%12s %12s %12s %12s %12s " % (
                 "CV",
                 "Lambda",
@@ -167,7 +167,7 @@ class BiasedNeuralMDLogger(IOContext):
             )
             self.fmt += "%12.4f %12.4f %12.4f %12.4f %12.4f "
 
-        for i in range(self.n_const):
+        for _i in range(self.n_const):
             self.hdr += "%12s " % ("Const")
             self.fmt += "%12.5f "
 
@@ -249,22 +249,22 @@ def write_traj(filename, frames):
         traj2write = trajconv(n_mol, n_atom, box_len, path)
         write_traj(path, traj2write)
     """
-    file = open(filename, "w")
-    atom_no = frames.shape[1]
-    for i, frame in enumerate(frames):
-        file.write(str(atom_no) + "\n")
-        file.write("Atoms. Timestep: " + str(i) + "\n")
-        for atom in frame:
-            if atom.shape[0] == 4:
-                try:
-                    file.write(str(int(atom[0])) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
-                except:
-                    file.write(str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
-            elif atom.shape[0] == 3:
-                file.write("1" + " " + str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + "\n")
-            else:
-                raise ValueError("wrong format")
-    file.close()
+    with open(filename, "w") as file:
+        atom_no = frames.shape[1]
+        for i, frame in enumerate(frames):
+            file.write(str(atom_no) + "\n")
+            file.write("Atoms. Timestep: " + str(i) + "\n")
+            for atom in frame:
+                if atom.shape[0] == 4:
+                    try:
+                        file.write(str(int(atom[0])) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3])
+                                   + "\n")
+                    except BaseException:
+                        file.write(str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + " " + str(atom[3]) + "\n")
+                elif atom.shape[0] == 3:
+                    file.write("1" + " " + str(atom[0]) + " " + str(atom[1]) + " " + str(atom[2]) + "\n")
+                else:
+                    raise ValueError("wrong format")
 
 
 def csv_read(out_file):
@@ -295,7 +295,7 @@ def csv_read(out_file):
     new_dic_list = []
     for regular_dic, key_dic in zip(dic_list, dic_keys):
         new_dic = copy.deepcopy(regular_dic)
-        for key in regular_dic.keys():
+        for key in regular_dic:
             new_dic[key_dic[key]] = regular_dic[key]
         new_dic_list.append(new_dic)
 

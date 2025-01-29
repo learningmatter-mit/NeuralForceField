@@ -1,9 +1,10 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+
 from .attention import Attention
 from .residual_mlp import ResidualMLP
-from typing import Optional
 
 
 class NonlocalInteraction(nn.Module):
@@ -38,23 +39,16 @@ class NonlocalInteraction(nn.Module):
         num_residual_v: int,
         activation: str = "swish",
     ) -> None:
-        """ Initializes the NonlocalInteraction class. """
-        super(NonlocalInteraction, self).__init__()
-        self.resblock_q = ResidualMLP(
-            num_features, num_residual_q, activation=activation, zero_init=True
-        )
-        self.resblock_k = ResidualMLP(
-            num_features, num_residual_k, activation=activation, zero_init=True
-        )
-        self.resblock_v = ResidualMLP(
-            num_features, num_residual_v, activation=activation, zero_init=True
-        )
+        """Initializes the NonlocalInteraction class."""
+        super().__init__()
+        self.resblock_q = ResidualMLP(num_features, num_residual_q, activation=activation, zero_init=True)
+        self.resblock_k = ResidualMLP(num_features, num_residual_k, activation=activation, zero_init=True)
+        self.resblock_v = ResidualMLP(num_features, num_residual_v, activation=activation, zero_init=True)
         self.attention = Attention(num_features, num_features, num_features)
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ For compatibility with other modules. """
-        pass
+        """For compatibility with other modules."""
 
     def forward(
         self,

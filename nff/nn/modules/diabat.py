@@ -38,7 +38,7 @@ class DiabaticReadout(nn.Module):
 
     def make_cross_talk(self, cross_talk_dic):
         if cross_talk_dic is None:
-            return
+            return None
 
         cross_talk = CrossTalk(
             diabat_keys=self.diabat_keys,
@@ -237,13 +237,11 @@ class DiabaticReadout(nn.Module):
                 for j in range(num_states):
                     if j < i:
                         continue
-                    if i == j:
-                        key = f"{base_key}_{i}"
-                    else:
-                        key = f"trans_{base_key}_{i}{j}"
+                    key = f"{base_key}_{i}" if i == j else f"trans_{base_key}_{i}{j}"
                     results[key] = to_eig[..., i, j]
 
             return results
+        return None
 
     def add_adiabat_grads(self, xyz, results, inference, en_keys_for_grad):
         if en_keys_for_grad is None:
@@ -284,7 +282,7 @@ class DiabaticReadout(nn.Module):
                     lower_grad_key = lower_key + "_grad"
 
                     grad_keys = [upper_grad_key, lower_grad_key]
-                    if not all([i in results for i in grad_keys]):
+                    if not all(i in results for i in grad_keys):
                         continue
 
                     gap_grad = results[upper_grad_key] - results[lower_grad_key]
@@ -348,10 +346,7 @@ class DiabaticReadout(nn.Module):
         return results
 
     def idx_to_grad_idx(self, num_atoms, nan_idx):
-        if isinstance(num_atoms, torch.Tensor):
-            atom_tens = num_atoms
-        else:
-            atom_tens = torch.LongTensor(num_atoms)
+        atom_tens = num_atoms if isinstance(num_atoms, torch.Tensor) else torch.LongTensor(num_atoms)
 
         end_idx = torch.cumsum(atom_tens, dim=0)
         start_idx = torch.cat([torch.tensor([0]).to(end_idx.device), end_idx[:-1]])
@@ -746,9 +741,7 @@ class CrossTalk(nn.Module):
 
             final_results[key] = pool_val
 
-        for key, val in results.items():
-            if key not in combined_results:
-                final_results[key] = val
+        final_results.update(**{key: val for key, val in results.items() if key not in combined_results})
 
         return final_results
 
@@ -764,12 +757,11 @@ class AdiabaticReadout(nn.Module):
     def get_abs(self, abs_name):
         if abs_name == "abs":
             return abs
-        elif abs_name is None:
+        if abs_name is None:
             return lambda x: x
-        elif abs_name in layer_types:
+        if abs_name in layer_types:
             return layer_types[abs_name]()
-        else:
-            raise NotImplementedError
+        raise NotImplementedError
 
     def forward(self, results, xyz):
         ordered_keys = sorted(self.output_keys, key=lambda x: int(x.split("_")[-1]))

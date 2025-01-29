@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ..functional import softplus_inverse
+
+from nff.nn.models.spooky_net_source.functional import softplus_inverse
 
 
 class ZBLRepulsionEnergy(nn.Module):
@@ -20,11 +21,9 @@ class ZBLRepulsionEnergy(nn.Module):
             lengths in Angstrom and energy in electronvolt).
     """
 
-    def __init__(
-        self, a0: float = 0.5291772105638411, ke: float = 14.399645351950548
-    ) -> None:
-        """ Initializes the ZBLRepulsionEnergy class. """
-        super(ZBLRepulsionEnergy, self).__init__()
+    def __init__(self, a0: float = 0.5291772105638411, ke: float = 14.399645351950548) -> None:
+        """Initializes the ZBLRepulsionEnergy class."""
+        super().__init__()
         self.a0 = a0
         self.ke = ke
         self.kehalf = ke / 2
@@ -41,7 +40,7 @@ class ZBLRepulsionEnergy(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ Initialize parameters to the default ZBL potential. """
+        """Initialize parameters to the default ZBL potential."""
         nn.init.constant_(self._adiv, softplus_inverse(1 / (0.8854 * self.a0)))
         nn.init.constant_(self._apow, softplus_inverse(0.23))
         nn.init.constant_(self._c1, softplus_inverse(0.18180))

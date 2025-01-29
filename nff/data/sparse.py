@@ -16,8 +16,7 @@ def sparsify_tensor(tensor):
     if len(ij) > 0:
         v = tensor[ij[:, 0], ij[:, 1]]
         return sp.FloatTensor(ij.t(), v, tensor.size())
-    else:
-        return 0
+    return 0
 
 
 def sparsify_array(array):

@@ -253,7 +253,7 @@ class DimeNet(nn.Module):
             else:
                 periodic = bool(offsets.abs().max() != 0)
         else:
-            raise Exception("Don't know how to interpret offsets of type {}".format(type(offsets)))
+            raise Exception(f"Don't know how to interpret offsets of type {type(offsets)}")
 
         if periodic:
             raise NotImplementedError("DimeNet not implemented for PBC.")

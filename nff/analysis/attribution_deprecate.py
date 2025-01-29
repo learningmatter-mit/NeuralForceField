@@ -1,15 +1,16 @@
-import torch
-from ase.io import Trajectory, write
-from ase import Atoms
-import numpy as np
-
-from nff.io.ase_calcs import EnsembleNFF
-from nff.io.ase import AtomsBatch
-from nff.utils.scatter import compute_grad
-from nff.utils.cuda import batch_to
+# ruff: noqa
 from typing import Union
 
+import numpy as np
+import torch
+from ase import Atoms
+from ase.io import Trajectory, write
 from tqdm import tqdm
+
+from nff.io.ase import AtomsBatch
+from nff.io.ase_calcs import EnsembleNFF
+from nff.utils.cuda import batch_to
+from nff.utils.scatter import compute_grad
 
 
 def get_molecules(atom: AtomsBatch, bond_length: dict = None, mode: str = "bond", **kwargs) -> list[np.array]:
@@ -29,7 +30,8 @@ def get_molecules(atom: AtomsBatch, bond_length: dict = None, mode: str = "bond"
     give extra cutoff = 6 e.g input
 
     output:
-    list of array of atom indices in molecules. e.g: if there is a H2O molecule, you will get a list with the atom indices
+    list of array of atom indices in molecules.
+    e.g: if there is a H2O molecule, you will get a list with the atom indices
 
     """
     types = list(set(atom.numbers))
@@ -50,7 +52,7 @@ def get_molecules(atom: AtomsBatch, bond_length: dict = None, mode: str = "bond"
         oxy_neighbors = []
         if mode == "bond":
             for t in types:
-                if bond_length.get("%s-%s" % (ty, t)) != None:
+                if bond_length.get("%s-%s" % (ty, t)) is not None:
                     oxy_neighbors.extend(
                         list(
                             np.where(atom.numbers == t)[0][
@@ -69,10 +71,10 @@ def get_molecules(atom: AtomsBatch, bond_length: dict = None, mode: str = "bond"
         elif (clusters[oxy_neighbors] == 0).all() and clusters[i] == 0:
             clusters[oxy_neighbors] = mm + 1
             clusters[i] = mm + 1
-        elif (clusters[oxy_neighbors] == 0).all() == False and clusters[i] == 0:
+        elif (clusters[oxy_neighbors] == 0).all() is False and clusters[i] == 0:
             clusters[i] = min(clusters[oxy_neighbors][clusters[oxy_neighbors] != 0])
             clusters[oxy_neighbors] = min(clusters[oxy_neighbors][clusters[oxy_neighbors] != 0])
-        elif (clusters[oxy_neighbors] == 0).all() == False and clusters[i] != 0:
+        elif (clusters[oxy_neighbors] == 0).all() is False and clusters[i] != 0:
             tmp = clusters[oxy_neighbors][clusters[oxy_neighbors] != 0][
                 clusters[oxy_neighbors][clusters[oxy_neighbors] != 0]
                 != min(clusters[oxy_neighbors][clusters[oxy_neighbors] != 0])
@@ -98,10 +100,10 @@ def reconstruct_atoms(atomsobject: AtomsBatch, mol_idx: list[np.array], centre: 
     atomsobject: Atomsbatch object from NFF
     mol_idx: list of array of atom indices in molecules or atoms you want to keep together when changing to non-periodic
     system
-    centre: by default the atoms in a molecule or set of close atoms are shifted so as to get them close to the centre which
-    is by default the first atom index in the array. For reconstructing molecules this is fine. However, for attribution,
-    we may have to shift a whole molecule to come closer to the atoms with high attribution. In that case, we manually assign
-    the atom index.
+    centre: by default the atoms in a molecule or set of close atoms are shifted so as to
+    get them close to the centre which is by default the first atom index in the array.
+    For reconstructing molecules this is fine. However, for attribution, we may have to shift a whole molecule
+    to come closer to the atoms with high attribution. In that case, we manually assign the atom index.
     """
 
     sys_xyz = torch.Tensor(atomsobject.get_positions(wrap=True))
@@ -111,7 +113,7 @@ def reconstruct_atoms(atomsobject: AtomsBatch, mol_idx: list[np.array], centre: 
         mol_xyz = sys_xyz[idx]
         if any(atomsobject.pbc):
             center = mol_xyz.shape[0] // 2
-            if centre != None:
+            if centre is not None:
                 center = centre  # changes the central atom to atom in focus
             intra_dmat = (mol_xyz[None, :, ...] - mol_xyz[:, None, ...])[center]
             if np.count_nonzero(atomsobject.cell.T - np.diag(np.diagonal(atomsobject.cell.T))) != 0:
@@ -123,7 +125,7 @@ def reconstruct_atoms(atomsobject: AtomsBatch, mol_idx: list[np.array], centre: 
                 offsets = -torch.floor(f + 0.5).view(M, 3)
                 traj_unwrap = mol_xyz + torch.matmul(offsets, torch.Tensor(atomsobject.cell))
             else:
-                sub = (intra_dmat > 0.5 * box_len).to(torch.float) * box_len
+                (intra_dmat > 0.5 * box_len).to(torch.float) * box_len
                 add = (intra_dmat <= -0.5 * box_len).to(torch.float) * box_len
                 shift = torch.round(torch.divide(intra_dmat, box_len))
                 offsets = -shift
@@ -206,7 +208,7 @@ class Attribution:
         grads = []
         grad_stds = []
         with tqdm(
-            range(skip, len(traj), step), disable=True if progress_bar == False else False
+            range(skip, len(traj), step), disable=True if not progress_bar else False
         ) as pbar:  # , postfix={"fbest":"?",}) as pbar:
             # for i in range(skip,len(traj),step):
             for i in pbar:
@@ -269,8 +271,7 @@ class Attribution:
                 },
             }
             return atoms_list, properties
-        else:
-            return attributions
+        return attributions
 
     def activelearning(
         self,
@@ -285,7 +286,7 @@ class Attribution:
     ):
         atom_list = []
         with tqdm(
-            range(skip, len(traj), step), disable=True if progress_bar == False else False
+            range(skip, len(traj), step), disable=True if not progress_bar else False
         ) as pbar:  # , postfix={"fbest":"?",}) as pbar:
             # for i in range(skip,len(traj),step):
             for i in pbar:
@@ -337,15 +338,15 @@ class Attribution:
                     neighs = np.append(neighs, a)
                     for n in neighs:
                         atomstocare = np.append(atomstocare, molecules[np.where(balanced_mols == n)[0][0]])
-                    atomstocare = np.array((list(set(atomstocare))))
+                    atomstocare = np.array(list(set(atomstocare)))
                     atomstocare = np.int64(atomstocare)
                     atoms1 = atoms[atomstocare]
                     index = np.where(atoms1.positions == atoms.positions[a])[0][0]
                     xyz = reconstruct_atoms(atoms1, [np.arange(0, len(atoms1))], centre=index)
                     atoms1.positions = xyz
                     is_repeated = False
-                    for Atoms in atom_list:
-                        if atoms1.__eq__(Atoms):
+                    for at in atom_list:
+                        if atoms1 == at:
                             is_repeated = True
                             break
                     if not is_repeated:

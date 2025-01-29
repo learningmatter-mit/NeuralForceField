@@ -118,7 +118,7 @@ def get_neighbor_list(xyz, cutoff=5, undirected=True):
             indices of connected atoms.
     """
 
-    if torch.is_tensor(xyz) == False:
+    if not torch.is_tensor(xyz):
         xyz = torch.Tensor(xyz)
     n = xyz.size(0)
 
@@ -151,7 +151,7 @@ def to_tuple(tensor):
 def get_bond_idx(bonded_nbr_list, nbr_list):
     """
     For each index in the bond list, get the
-    index in the neighbour list that corresponds to the
+    index in the neighbor list that corresponds to the
     same directed pair of atoms.
     Args:
         bonded_nbr_list (torch.LongTensor): pairs
@@ -232,7 +232,7 @@ def generate_subgraphs(atomsobject, unwrap=True, get_edge=False):
 
     atoms = AtomsBatch(atomsobject)
     z, adj, dmat, threshold = adjdistmat(atoms, unwrap=unwrap)
-    box_len = torch.Tensor(np.diag(atoms.get_cell()))
+    torch.Tensor(np.diag(atoms.get_cell()))
     G = nx.from_numpy_matrix(adj)
 
     for i, item in enumerate(z):
@@ -243,14 +243,13 @@ def generate_subgraphs(atomsobject, unwrap=True, get_edge=False):
     edge_list = []
     partitions = []
 
-    for i, sg in enumerate(sub_graphs):
+    for sg in sub_graphs:
         partitions.append(list(sg.nodes))
         if get_edge:
             edge_list.append(list(sg.edges))
     if len(edge_list) != 0:
         return partitions, edge_list
-    else:
-        return partitions
+    return partitions
 
 
 def get_single_molecule(atomsobject, mol_idx, single_mol_id):
@@ -281,7 +280,7 @@ def reconstruct_atoms(atomsobject, mol_idx):
 def list2adj(bond_list, size=None):
     E = bond_list
     if size is None:
-        size = max(set([n for e in E for n in e])) + 1
+        size = max({n for e in E for n in e}) + 1
     # make an empty adjacency list
     adjacency = [[0] * size for _ in range(size)]
     # populate the list for each edge
@@ -448,9 +447,9 @@ def add_ji_kj(angle_lists, nbr_lists):
     """
     Get ji and kj idx (explained more below):
     Args:
-        angle_list (list[torch.LongTensor]): list of angle
+        angle_lists (list[torch.LongTensor]): list of angle
             lists
-        nbr_list (list[torch.LongTensor]): list of directed neighbor
+        nbr_lists (list[torch.LongTensor]): list of directed neighbor
             lists
     Returns:
         ji_idx_list (list[torch.LongTensor]): ji_idx for each geom
@@ -563,7 +562,7 @@ def full_angle_idx(batch):
 
     for i in range(num_confs):
         max_idx = (i + 1) * mol_size
-        min_idx = (i) * mol_size
+        min_idx = i * mol_size
 
         # get only the indices for this conformer
         conf_mask = (nbr_list[:, 0] < max_idx) * (nbr_list[:, 0] >= min_idx)

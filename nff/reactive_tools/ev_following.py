@@ -1,12 +1,12 @@
 import torch
+from neuralnet.vib import hessian_and_modes
 
 from nff.io.ase_calcs import NeuralFF
 from nff.reactive_tools.utils import (
     neural_energy_ase,
     neural_force_ase,
 )
-from nff.utils.constants import EV_TO_AU, BOHR_RADIUS
-from neuralnet.vib import hessian_and_modes
+from nff.utils.constants import BOHR_RADIUS, EV_TO_AU
 
 CONVG_LINE = "Optimization converged!"
 
@@ -30,11 +30,7 @@ def powell_update(hessian_old, h, gradient_old, gradient_new):
     update = (
         torch.mm(V.reshape(-1, 1), h.reshape(1, -1))
         + torch.mm(h.reshape(-1, 1), V.reshape(1, -1))
-        - (
-            torch.dot(V, h)
-            / torch.dot(h, h)
-            * torch.mm(h.reshape(-1, 1), h.reshape(1, -1))
-        )
+        - (torch.dot(V, h) / torch.dot(h, h) * torch.mm(h.reshape(-1, 1), h.reshape(1, -1)))
     ) / torch.dot(h, h)
 
     powell_hessian = hessian_old + update
@@ -92,9 +88,7 @@ def eigvec_following(
 
     lambda_n = torch.linalg.eigvalsh(matrix_n, UPLO="U")[0]
 
-    lambda_n = lambda_n.new_full((Ndim * len(old_xyz[0]) - 1,), lambda_n.item()).to(
-        device
-    )
+    lambda_n = lambda_n.new_full((Ndim * len(old_xyz[0]) - 1,), lambda_n.item()).to(device)
 
     h_p = -1.0 * F[0] * eigvecs_t[0] / (eigenvalues[0] - lambda_p)
     h_n = -1.0 * F[1:] * eigvecs_t[1:] / ((eigenvalues[1:] - lambda_n).reshape(-1, 1))
@@ -102,10 +96,7 @@ def eigvec_following(
     h = torch.add(h_p, torch.sum(h_n, dim=0)).reshape(-1, len(old_xyz[0]), Ndim)
 
     step_size = h.norm()
-    if step_size <= maxstepsize:
-        new_xyz = old_xyz + h
-    else:
-        new_xyz = old_xyz + (h / (step_size / maxstepsize))
+    new_xyz = old_xyz + h if step_size <= maxstepsize else old_xyz + h / (step_size / maxstepsize)
 
     output = (new_xyz.detach(), grad.detach(), hessian.detach(), h.reshape(-1).detach())
     print(f"STEP {step}:", output)
@@ -138,9 +129,7 @@ def ev_run(
     rmslist = []
     maxlist = []
 
-    calc_kwargs = get_calc_kwargs(
-        calc_kwargs=calc_kwargs, device=device, nff_dir=nff_dir
-    )
+    calc_kwargs = get_calc_kwargs(calc_kwargs=calc_kwargs, device=device, nff_dir=nff_dir)
     nff = NeuralFF.from_file(**calc_kwargs)
     ev_atoms.set_calculator(nff)
 
@@ -150,27 +139,15 @@ def ev_run(
         if step % nbr_update_period == 0:
             ev_atoms.update_nbr_list()
 
-        if step == 0:
-            args = []
-        else:
-            args = [hessian, grad, h]
+        args = [] if step == 0 else [hessian, grad, h]
 
-        xyz, grad, hessian, h = eigvec_following(
-            ev_atoms, step, maxstepsize, device, method, *args
-        )
+        xyz, grad, hessian, h = eigvec_following(ev_atoms, step, maxstepsize, device, method, *args)
 
-        if step == 0:
-            xyz_all = xyz
-        else:
-            xyz_all = torch.cat((xyz_all, xyz), dim=0)
+        xyz_all = xyz if step == 0 else torch.cat((xyz_all, xyz), dim=0)
 
         rmslist.append(grad.pow(2).sqrt().mean())
         maxlist.append(grad.pow(2).sqrt().max())
-        print(
-            "RMS: {}, MAX: {}".format(
-                grad.pow(2).sqrt().mean(), grad.pow(2).sqrt().max()
-            )
-        )
+        print(f"RMS: {grad.pow(2).sqrt().mean()}, MAX: {grad.pow(2).sqrt().max()}")
 
         if grad.pow(2).sqrt().max() < convergence:
             print(CONVG_LINE)

@@ -1,8 +1,9 @@
+import math
+from typing import Optional
+
+import numpy as np
 import torch
 import torch.nn as nn
-import math
-import numpy as np
-from typing import Optional
 
 
 class Attention(nn.Module):
@@ -20,28 +21,22 @@ class Attention(nn.Module):
             this is 0, the exact attention matrix is computed.
     """
 
-    def __init__(
-        self, dim_qk: int, dim_v: int, num_random_features: Optional[int] = None
-    ) -> None:
-        """ Initializes the Attention class. """
-        super(Attention, self).__init__()
+    def __init__(self, dim_qk: int, dim_v: int, num_random_features: Optional[int] = None) -> None:
+        """Initializes the Attention class."""
+        super().__init__()
         self.num_random_features = num_random_features
-        if self.num_random_features is not None:
-            omega = self._omega(num_random_features, dim_qk)
-        else:
-            omega = []
+        omega = self._omega(num_random_features, dim_qk) if self.num_random_features is not None else []
         self.register_buffer("omega", torch.tensor(omega, dtype=torch.float64))
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ For compatibility with other modules. """
-        pass
+        """For compatibility with other modules."""
 
     def _omega(self, nrows: int, ncols: int) -> np.ndarray:
-        """ Return a (nrows x ncols) random feature matrix. """
+        """Return a (nrows x ncols) random feature matrix."""
         nblocks = int(nrows / ncols)
         blocks = []
-        for i in range(nblocks):
+        for _ in range(nblocks):
             block = np.random.normal(size=(ncols, ncols))
             q, _ = np.linalg.qr(block)
             blocks.append(np.transpose(q))
@@ -63,11 +58,11 @@ class Attention(nn.Module):
         batch_seg: torch.Tensor,
         eps: float = 1e-4,
     ) -> torch.Tensor:
-        """ Normalize X and project into random feature space. """
+        """Normalize X and project into random feature space."""
         d = X.shape[-1]
         m = self.omega.shape[-1]
-        U = torch.matmul(X / d ** 0.25, self.omega)
-        h = torch.sum(X ** 2, dim=-1, keepdim=True) / (2 * d ** 0.5)  # OLD
+        U = torch.matmul(X / d**0.25, self.omega)
+        h = torch.sum(X**2, dim=-1, keepdim=True) / (2 * d**0.5)  # OLD
         # determine maximum (is subtracted to prevent numerical overflow)
         if is_query:
             maximum, _ = torch.max(U, dim=-1, keepdim=True)
@@ -75,15 +70,11 @@ class Attention(nn.Module):
             if num_batch > 1:
                 brow = batch_seg.view(1, -1, 1).expand(num_batch, -1, U.shape[-1])
                 bcol = (
-                    torch.arange(
-                        num_batch, dtype=batch_seg.dtype, device=batch_seg.device
-                    )
+                    torch.arange(num_batch, dtype=batch_seg.dtype, device=batch_seg.device)
                     .view(-1, 1, 1)
                     .expand(-1, U.shape[-2], U.shape[-1])
                 )
-                mask = torch.where(
-                    brow == bcol, torch.ones_like(U), torch.zeros_like(U)
-                )
+                mask = torch.where(brow == bcol, torch.ones_like(U), torch.zeros_like(U))
                 tmp = U.unsqueeze(0).expand(num_batch, -1, -1)
                 tmp, _ = torch.max(mask * tmp, dim=-1)
                 tmp, _ = torch.max(tmp, dim=-1)
@@ -104,10 +95,10 @@ class Attention(nn.Module):
         batch_seg: torch.Tensor,
         eps: float = 1e-8,
     ):
-        """ Compute exact attention. """
+        """Compute exact attention."""
         d = Q.shape[-1]
         dot = Q @ K.T  # dot product
-        A = torch.exp((dot - torch.max(dot)) / d ** 0.5)  # attention matrix
+        A = torch.exp((dot - torch.max(dot)) / d**0.5)  # attention matrix
         if num_batch > 1:  # mask out entries of different batches
             brow = batch_seg.view(1, -1).expand(A.shape[-2], -1)
             bcol = batch_seg.view(-1, 1).expand(-1, A.shape[-1])
@@ -126,12 +117,12 @@ class Attention(nn.Module):
         mask: Optional[torch.Tensor] = None,
         eps: float = 1e-8,
     ) -> torch.Tensor:
-        """ Compute approximate attention. """
+        """Compute approximate attention."""
         Q = self._phi(Q, True, num_batch, batch_seg)  # random projection of Q
         K = self._phi(K, False, num_batch, batch_seg)  # random projection of K
         if num_batch > 1:
             d = Q.shape[-1]
-            n = batch_seg.shape[0]
+            batch_seg.shape[0]
 
             # compute norm
             idx = batch_seg.unsqueeze(-1).expand(-1, d)
@@ -143,14 +134,11 @@ class Attention(nn.Module):
             #    K[b==batch_seg].transpose(-1,-2)@V[b==batch_seg])
             #    for b in range(num_batch)])/norm
             if mask is None:  # mask can be shared across multiple attentions
-                one_hot = nn.functional.one_hot(batch_seg).to(
-                    dtype=V.dtype, device=V.device
-                )
+                one_hot = nn.functional.one_hot(batch_seg).to(dtype=V.dtype, device=V.device)
                 mask = one_hot @ one_hot.transpose(-1, -2)
             return ((mask * (K @ Q.transpose(-1, -2))).transpose(-1, -2) @ V) / norm
-        else:
-            norm = Q @ torch.sum(K, 0, keepdim=True).T + eps
-            return (Q @ (K.T @ V)) / norm
+        norm = Q @ torch.sum(K, 0, keepdim=True).T + eps
+        return (Q @ (K.T @ V)) / norm
 
     def forward(
         self,
@@ -187,5 +175,4 @@ class Attention(nn.Module):
         """
         if self.num_random_features is None:
             return self._exact_attention(Q, K, V, num_batch, batch_seg)
-        else:
-            return self._approximate_attention(Q, K, V, num_batch, batch_seg, mask)
+        return self._approximate_attention(Q, K, V, num_batch, batch_seg, mask)

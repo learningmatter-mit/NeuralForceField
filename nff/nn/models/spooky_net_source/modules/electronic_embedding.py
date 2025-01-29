@@ -1,10 +1,10 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from .residual_mlp import ResidualMLP
-from .shifted_softplus import ShiftedSoftplus
-from .swish import Swish
-from typing import Optional
 
 
 class ElectronicEmbedding(nn.Module):
@@ -38,8 +38,8 @@ class ElectronicEmbedding(nn.Module):
         activation: str = "swish",
         is_charge: bool = False,
     ) -> None:
-        """ Initializes the ElectronicEmbedding class. """
-        super(ElectronicEmbedding, self).__init__()
+        """Initializes the ElectronicEmbedding class."""
+        super().__init__()
         self.is_charge = is_charge
         self.linear_q = nn.Linear(num_features, num_features)
         if is_charge:  # charges are duplicated to use separate weights for +/-
@@ -58,7 +58,7 @@ class ElectronicEmbedding(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ Initialize parameters. """
+        """Initialize parameters."""
         nn.init.orthogonal_(self.linear_k.weight)
         nn.init.orthogonal_(self.linear_v.weight)
         nn.init.orthogonal_(self.linear_q.weight)
@@ -83,7 +83,7 @@ class ElectronicEmbedding(nn.Module):
         if batch_seg is None:  # assume a single batch
             batch_seg = torch.zeros(x.size(0), dtype=torch.int64, device=x.device)
         q = self.linear_q(x)  # queries
-        if self.is_charge:
+        if self.is_charge:  # noqa
             e = F.relu(torch.stack([E, -E], dim=-1))
         else:
             e = torch.abs(E).unsqueeze(-1)  # +/- spin is the same => abs
@@ -93,7 +93,7 @@ class ElectronicEmbedding(nn.Module):
         dot = torch.sum(k * q, dim=-1) / k.shape[-1] ** 0.5  # scaled dot product
         a = nn.functional.softplus(dot)  # unnormalized attention weights
         anorm = a.new_zeros(num_batch).index_add_(0, batch_seg, a)
-        if a.device.type == "cpu":  # indexing is faster on CPUs
+        if a.device.type == "cpu":  # indexing is faster on CPUs  # noqa
             anorm = anorm[batch_seg]
         else:  # gathering is faster on GPUs
             anorm = torch.gather(anorm, 0, batch_seg)

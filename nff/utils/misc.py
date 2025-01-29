@@ -56,20 +56,16 @@ CHEMPROP_METRICS = [
 ]
 
 
-def tqdm_enum(iter):
+def tqdm_enum(iterable):
     """
     Wrap tqdm around `enumerate`.
     Args:
-        iter (iterable): an iterable (e.g. list)
+        iterable (iterable): an iterable (e.g. list)
     Returns
         i (int): current index
         y: current value
     """
-
-    i = 0
-    for y in tqdm(iter):
-        yield i, y
-        i += 1
+    yield from enumerate(tqdm(iterable))
 
 
 def log(prefix, msg):
@@ -80,7 +76,7 @@ def log(prefix, msg):
         prefix (str)
         msg (str)
     """
-    print("{:>12}:  {}".format(prefix.upper(), msg))
+    print(f"{prefix.upper():>12}:  {msg}")
 
 
 def add_json_args(args, config_flag="config_file"):
@@ -179,15 +175,12 @@ def prepare_metric(lines, metric):
     else:
         for i, item in enumerate(header_items):
             sub_keys = metric.split("_")
-            if all([key.lower() in item.lower() for key in sub_keys]):
+            if all(key.lower() in item.lower() for key in sub_keys):
                 idx = i
 
     optim = METRIC_DIC[metric]
 
-    if optim == "minimize":
-        best_score = float("inf")
-    else:
-        best_score = -float("inf")
+    best_score = float("inf") if optim == "minimize" else -float("inf")
 
     best_epoch = -1
 
@@ -266,7 +259,7 @@ def write_csv(path, dic):
         None
     """
 
-    keys = sorted(list(dic.keys()))
+    keys = sorted(dic.keys())
     if "smiles" in keys:
         keys.remove("smiles")
         keys.insert(0, "smiles")
@@ -364,10 +357,7 @@ def get_split_names(train_only, val_only, test_only):
         msg = f"Requested {string}, which are mutually exclusive"
         raise Exception(msg)
 
-    if len(requested) != 0:
-        names = requested
-    else:
-        names = ["train", "val", "test"]
+    names = requested if len(requested) != 0 else ["train", "val", "test"]
 
     return names
 
@@ -412,10 +402,7 @@ def apply_metric(metric, pred, actual):
     """
     if metric == "auc":
         pred = preprocess_class(pred)
-        if max(pred) == 0:
-            score = 0
-        else:
-            score = roc_auc_score(y_true=actual, y_score=pred)
+        score = 0 if max(pred) == 0 else roc_auc_score(y_true=actual, y_score=pred)
     elif metric == "prc-auc":
         pred = preprocess_class(pred)
         if max(pred) == 0:
@@ -455,8 +442,8 @@ def avg_distances(dset):
     all_nbrs = []
     for nbrs in dset.props["nbr_list"]:
         for pair in nbrs:
-            all_nbrs.append(tuple(pair.tolist()))
-    all_nbrs_tuple = list(set(tuple(all_nbrs)))
+            all_nbrs.append(tuple(pair.tolist()))  # noqa
+    all_nbrs_tuple = list(set(all_nbrs))
 
     all_nbrs = torch.LongTensor([list(i) for i in all_nbrs_tuple])
 
@@ -516,7 +503,7 @@ def parse_args_from_json(arg_path, direc):
     parser = argparse.ArgumentParser(description=description)
     default_args.pop("description")
 
-    required = parser.add_argument_group(("required arguments (either in " "the command line or the config " "file)"))
+    required = parser.add_argument_group("required arguments (either in " "the command line or the config " "file)")
     optional = parser.add_argument_group("optional arguments")
 
     for name, info in default_args.items():

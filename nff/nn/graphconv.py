@@ -1,14 +1,13 @@
 import torch.nn as nn
+
 from nff.utils.scatter import scatter_add
 
 
 class MessagePassingModule(nn.Module):
-
-    """Convolution constructed as MessagePassing.
-    """
+    """Convolution constructed as MessagePassing."""
 
     def __init__(self):
-        super(MessagePassingModule, self).__init__()
+        super().__init__()
 
     def message(self, r, e, a, aggr_wgt):
         # Basic message case
@@ -25,17 +24,13 @@ class MessagePassingModule(nn.Module):
 
     def aggregate(self, message, index, size):
         # pdb.set_trace()
-        new_r = scatter_add(src=message,
-                            index=index,
-                            dim=0,
-                            dim_size=size)
+        new_r = scatter_add(src=message, index=index, dim=0, dim_size=size)
         return new_r
 
     def update(self, r):
         return r
 
     def forward(self, r, e, a, aggr_wgt=None):
-
         graph_size = r.shape[0]
 
         rij, rji = self.message(r, e, a, aggr_wgt)
@@ -48,11 +43,10 @@ class MessagePassingModule(nn.Module):
 
 
 class EdgeUpdateModule(nn.Module):
-    """Update Edge State Based on information from connected nodes
-    """
+    """Update Edge State Based on information from connected nodes"""
 
     def __init__(self):
-        super(EdgeUpdateModule, self).__init__()
+        super().__init__()
 
     def message(self, r, e, a):
         """Summary
@@ -79,8 +73,7 @@ class EdgeUpdateModule(nn.Module):
         Returns:
             TYPE: Description
         """
-        aggregated_edge_feature = message[neighborlist[:, 0]
-                                          ] + message[neighborlist[:, 1]]
+        aggregated_edge_feature = message[neighborlist[:, 0]] + message[neighborlist[:, 1]]
         return aggregated_edge_feature
 
     def update(self, e):
@@ -95,18 +88,14 @@ class EdgeUpdateModule(nn.Module):
 
 
 class GeometricOperations(nn.Module):
-
-    """Compute geomtrical properties based on XYZ coordinates
-    """
+    """Compute geomtrical properties based on XYZ coordinates"""
 
     def __init__(self):
-        super(GeometricOperations, self).__init__()
+        super().__init__()
 
 
 class TopologyOperations(nn.Module):
-
-    """Change the topology index given geomtrical properties
-    """
+    """Change the topology index given geomtrical properties"""
 
     def __init__(self):
-        super(TopologyOperations, self).__init__()
+        super().__init__()

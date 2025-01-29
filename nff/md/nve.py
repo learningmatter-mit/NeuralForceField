@@ -129,8 +129,7 @@ class Dynamics:
 
             return self.steps
 
-        else:
-            return self.steps
+        return self.steps
 
     def setup_restart(self, restart_param):
         """If you want to restart a simulations with predfined mdparams but
@@ -196,12 +195,10 @@ class Dynamics:
         self.atomsbatch.update_nbr_list()
 
         if self.mdparam.get("stability_check", False):
-            for step in range(epochs):
+            for _step in range(epochs):
                 T = self.atomsbatch.get_batch_kinetic_energy() / (1.5 * units.kB * self.atomsbatch.num_atoms)
-                if (
-                    (T > (10 * self.mdparam["thermostat_params"]["temperature"] / units.kB)).any()
-                    or (T < 1e-1).any()
-                    and self.mdparam.get("stability_check", False)
+                if ((10 * self.mdparam["thermostat_params"]["temperature"] / units.kB) < T).any() or (
+                    (T < 1e-1).any() and self.mdparam.get("stability_check", False)
                 ):
                     break
 
@@ -215,7 +212,7 @@ class Dynamics:
                 self.atomsbatch.update_nbr_list()
 
         else:
-            for step in range(epochs):
+            for _step in range(epochs):
                 self.integrator.run(self.mdparam["nbr_list_update_freq"])
 
                 # # unwrap coordinates if mol_idx is defined

@@ -35,51 +35,49 @@ ATOMIC_MASS = {
 AU_TO_KCAL = {
     "energy": HARTREE_TO_KCAL_MOL,
     "_grad": 1.0 / BOHR_RADIUS,
-    "stress": HARTREE_TO_KCAL_MOL*((1.0/BOHR_RADIUS)**3),
-    "_volume": 1/((1.0/BOHR_RADIUS)**3),
+    "stress": HARTREE_TO_KCAL_MOL * ((1.0 / BOHR_RADIUS) ** 3),
+    "_volume": 1 / ((1.0 / BOHR_RADIUS) ** 3),
 }
 
 
 AU_TO_EV = {
     "energy": HARTREE_TO_EV,
     "_grad": 1.0 / BOHR_RADIUS,
-    "stress": HARTREE_TO_EV*((1.0/BOHR_RADIUS)**3),
-    "_volume": 1/((1.0/BOHR_RADIUS)**3),
+    "stress": HARTREE_TO_EV * ((1.0 / BOHR_RADIUS) ** 3),
+    "_volume": 1 / ((1.0 / BOHR_RADIUS) ** 3),
 }
 
 
 EV_TO_AU = {
     "energy": 1.0 / HARTREE_TO_EV,
     "_grad": BOHR_RADIUS,
-    "stress": (1.0/HARTREE_TO_EV)*(BOHR_RADIUS**3),
-    "_volume": 1/(BOHR_RADIUS**3),
+    "stress": (1.0 / HARTREE_TO_EV) * (BOHR_RADIUS**3),
+    "_volume": 1 / (BOHR_RADIUS**3),
 }
 
 
 EV_TO_KCAL = {
     "energy": EV_TO_KCAL_MOL,
     "_grad": 1.0,
-    "stress": EV_TO_KCAL_MOL*(1.0**3),
-    "_volume": 1/(1.0**3),
+    "stress": EV_TO_KCAL_MOL * (1.0**3),
+    "_volume": 1 / (1.0**3),
 }
 
 
 KCAL_TO_AU = {
     "energy": 1.0 / HARTREE_TO_KCAL_MOL,
     "_grad": BOHR_RADIUS,
-    "stress": (1.0/HARTREE_TO_KCAL_MOL)*(BOHR_RADIUS**3),
-    "_volume": 1/(BOHR_RADIUS**3),
+    "stress": (1.0 / HARTREE_TO_KCAL_MOL) * (BOHR_RADIUS**3),
+    "_volume": 1 / (BOHR_RADIUS**3),
 }
 
 
 KCAL_TO_EV = {
     "energy": 1.0 / EV_TO_KCAL_MOL,
     "_grad": 1.0,
-    "stress": (1.0/EV_TO_KCAL_MOL)*(1.0**3),
-    "_volume": 1/(1.0**3),
+    "stress": (1.0 / EV_TO_KCAL_MOL) * (1.0**3),
+    "_volume": 1 / (1.0**3),
 }
-
-
 
 
 DEFAULT = {
@@ -246,11 +244,7 @@ def exc_ev_to_hartree(props: dict, add_ground_energy: bool = False) -> dict:
         new_props (dict): dictionary with properties converted.
     """
     assert "energy_0" in props
-    exc_keys = [
-        key
-        for key in props
-        if key.startswith("energy") and "grad" not in key and key != "energy_0"
-    ]
+    exc_keys = [key for key in props if key.startswith("energy") and "grad" not in key and key != "energy_0"]
     energy_0 = props["energy_0"]
     new_props = copy.deepcopy(props)
 

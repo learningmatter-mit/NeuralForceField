@@ -1,7 +1,7 @@
 """Module to deal with statistics of the datasets, removal of outliers and other statistical functions."""
 
 import logging
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 def remove_outliers(
     array: Union[List, np.ndarray, torch.Tensor],
     std_away: float = 3.0,
-    reference_mean: float = None,
-    reference_std: float = None,
+    reference_mean: Optional[float] = None,
+    reference_std: Optional[float] = None,
     max_value: float = np.inf,
 ) -> Tuple[np.ndarray, np.ndarray, float, float]:
     """Remove outliers from given array using both a number of standard
@@ -53,14 +53,8 @@ def remove_outliers(
         stats_array = array.copy()
         max_values = stats_array.copy()  # used for outlier removal
 
-    if not reference_mean:
-        mean = np.mean(stats_array)
-    else:
-        mean = reference_mean
-    if not reference_std:
-        std = np.std(stats_array)
-    else:
-        std = reference_std
+    mean = reference_mean if reference_mean else np.mean(stats_array)
+    std = reference_std if reference_std else np.std(stats_array)
     non_outlier = np.bitwise_and(np.abs(max_values - mean) < std_away * std, max_values < max_value)
 
     non_outlier = np.arange(len(array))[non_outlier]
@@ -76,8 +70,8 @@ def remove_outliers(
 def remove_dataset_outliers(
     dset: Dataset,
     reference_key: str = "energy",
-    reference_mean: float = None,
-    reference_std: float = None,
+    reference_mean: Optional[float] = None,
+    reference_std: Optional[float] = None,
     std_away: float = 3.0,
     max_value: float = np.inf,
 ) -> Tuple[Dataset, float, float]:
@@ -121,7 +115,7 @@ def remove_dataset_outliers(
 
 
 def center_dataset(
-    dset: Dataset, reference_key: str = "energy", reference_value: float = None
+    dset: Dataset, reference_key: str = "energy", reference_value: Optional[float] = None
 ) -> Tuple[Dataset, float]:
     """Center a dataset by subtracting the mean of the reference key.
 
@@ -266,7 +260,7 @@ def get_stoich_dict(dset: Dataset, formula_key: str = "formula", energy_key: str
     err = abs(pred - y_out).mean()  # in kcal/mol
     logging.info("MAE between target energy and stoich energy is %.3f kcal/mol", err)
     logging.info("R : %s", clf.score(x_in, y_out))
-    fit_dic = {atom: coef for atom, coef in zip(unique_atoms, clf.coef_.reshape(-1))}
+    fit_dic = {atom: coef for atom, coef in zip(unique_atoms, clf.coef_.reshape(-1))}  # noqa
     stoich_dict = {**fit_dic, "offset": clf.intercept_.item()}
     logging.info(stoich_dict)
 
@@ -303,10 +297,7 @@ def perform_energy_offset(
     formulas = dset.props[formula_key]
     energies = dset.props[energy_key]
 
-    if isinstance(energies, torch.Tensor):
-        new_energies = energies.clone()
-    else:
-        new_energies = energies.copy()
+    new_energies = energies.clone() if isinstance(energies, torch.Tensor) else energies.copy()
 
     for i, formula in enumerate(formulas):
         dictio = get_atom_count(formula)

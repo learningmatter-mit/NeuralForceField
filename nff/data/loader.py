@@ -1,25 +1,23 @@
-import numpy as np
-import torch
 import copy
 
-from torch.utils.data.sampler import Sampler, BatchSampler
+import numpy as np
+import torch
+from torch.utils.data.sampler import BatchSampler, Sampler
 
-REINDEX_KEYS = ['atoms_nbr_list', 'nbr_list', 'bonded_nbr_list',
-                'angle_list', 'mol_nbrs']
-NBR_LIST_KEYS = ['bond_idx', 'kj_idx', 'ji_idx']
-MOL_IDX_KEYS = ['atomwise_mol_list', 'directed_nbr_mol_list',
-                'undirected_nbr_mol_list']
-IGNORE_KEYS = ['rd_mols']
+REINDEX_KEYS = ["atoms_nbr_list", "nbr_list", "bonded_nbr_list", "angle_list", "mol_nbrs"]
+NBR_LIST_KEYS = ["bond_idx", "kj_idx", "ji_idx"]
+MOL_IDX_KEYS = ["atomwise_mol_list", "directed_nbr_mol_list", "undirected_nbr_mol_list"]
+IGNORE_KEYS = ["rd_mols"]
 
 TYPE_KEYS = {
-    'atoms_nbr_list': torch.long,
-    'nbr_list': torch.long,
-    'num_atoms': torch.long,
-    'bond_idx': torch.long,
-    'bonded_nbr_list': torch.long,
-    'angle_list': torch.long,
-    'ji_idx': torch.long,
-    'kj_idx': torch.long,
+    "atoms_nbr_list": torch.long,
+    "nbr_list": torch.long,
+    "num_atoms": torch.long,
+    "bond_idx": torch.long,
+    "bonded_nbr_list": torch.long,
+    "angle_list": torch.long,
+    "ji_idx": torch.long,
+    "kj_idx": torch.long,
 }
 
 
@@ -37,18 +35,17 @@ def collate_dicts(dicts):
     # new indices for the batch: the first one is zero and the
     # last does not matter
 
-    cumulative_atoms = np.cumsum([0] + [d['num_atoms'] for d in dicts])[:-1]
+    cumulative_atoms = np.cumsum([0] + [d["num_atoms"] for d in dicts])[:-1]
 
     for n, d in zip(cumulative_atoms, dicts):
         for key in REINDEX_KEYS:
             if key in d:
                 d[key] = d[key] + int(n)
 
-    if all(['nbr_list' in d for d in dicts]):
+    if all("nbr_list" in d for d in dicts):
         # same idea, but for quantities whose maximum value is the length of
         # the nbr list in each batch
-        cumulative_nbrs = np.cumsum(
-            [0] + [len(d['nbr_list']) for d in dicts])[:-1]
+        cumulative_nbrs = np.cumsum([0] + [len(d["nbr_list"]) for d in dicts])[:-1]
         for n, d in zip(cumulative_nbrs, dicts):
             for key in NBR_LIST_KEYS:
                 if key in d:
@@ -60,24 +57,17 @@ def collate_dicts(dicts):
         for i, d in enumerate(dicts):
             d[key] += i
 
-
     # batching the data
     batch = {}
     for key, val in dicts[0].items():
         if key in IGNORE_KEYS:
             continue
-        if type(val) == str:
+        if isinstance(val, str):
             batch[key] = [data[key] for data in dicts]
-        elif hasattr(val, 'shape') and len(val.shape) > 0:
-            batch[key] = torch.cat([
-                data[key]
-                for data in dicts
-            ], dim=0)
+        elif hasattr(val, "shape") and len(val.shape) > 0:
+            batch[key] = torch.cat([data[key] for data in dicts], dim=0)
         else:
-            batch[key] = torch.stack(
-                [data[key] for data in dicts],
-                dim=0
-            )
+            batch[key] = torch.stack([data[key] for data in dicts], dim=0)
 
     # adjusting the data types:
     for key, dtype in TYPE_KEYS.items():
@@ -102,9 +92,7 @@ class ImbalancedDatasetSampler(Sampler):
 
     """
 
-    def __init__(self,
-                 target_name,
-                 props):
+    def __init__(self, target_name, props):
         """
         Args:
             target_name (str): name of the property being classified
@@ -113,10 +101,8 @@ class ImbalancedDatasetSampler(Sampler):
 
         data_length = len(props[target_name])
 
-        negative_idx = [i for i, target in enumerate(
-            props[target_name]) if round(target.item()) == 0]
-        positive_idx = [i for i in range(data_length)
-                        if i not in negative_idx]
+        negative_idx = [i for i, target in enumerate(props[target_name]) if round(target.item()) == 0]
+        positive_idx = [i for i in range(data_length) if i not in negative_idx]
 
         num_neg = len(negative_idx)
         num_pos = len(positive_idx)
@@ -135,22 +121,14 @@ class ImbalancedDatasetSampler(Sampler):
         self.weights[positive_idx] = 1 / positive_weight
 
     def __iter__(self):
-
-        return (i for i in torch.multinomial(
-            self.weights, self.data_length, replacement=True))
+        return (i for i in torch.multinomial(self.weights, self.data_length, replacement=True))
 
     def __len__(self):
         return self.data_length
 
 
 class BalancedFFSampler(torch.utils.data.sampler.Sampler):
-
-    def __init__(self,
-                 balance_type=None,
-                 weights=None,
-                 balance_dict=None,
-                 **kwargs):
-
+    def __init__(self, balance_type=None, weights=None, balance_dict=None, **kwargs):
         from nff.data.sampling import spec_config_zhu_balance
 
         if weights is not None:
@@ -171,32 +149,21 @@ class BalancedFFSampler(torch.utils.data.sampler.Sampler):
         self.data_length = len(self.balance_dict["weights"])
 
     def __iter__(self):
-
-        return (i for i in torch.multinomial(
-            self.balance_dict["weights"],
-            self.data_length,
-            replacement=True))
+        return (i for i in torch.multinomial(self.balance_dict["weights"], self.data_length, replacement=True))
 
     def __len__(self):
         return self.data_length
 
 
 class BalancedBatchedSpecies(BatchSampler):
-    def __init__(self,
-                 base_sampler,
-                 smiles_list,
-                 batch_size,
-                 min_geoms=None):
+    def __init__(self, base_sampler, smiles_list, batch_size, min_geoms=None):
         """
         min_geoms (int, optional): minimum number of geoms
             that a species has to have to be sampled
         """
         from nff.data.sampling import get_spec_dic
 
-        BatchSampler.__init__(self,
-                              sampler=base_sampler,
-                              batch_size=batch_size,
-                              drop_last=False)
+        BatchSampler.__init__(self, sampler=base_sampler, batch_size=batch_size, drop_last=False)
 
         self.spec_dic = get_spec_dic({"smiles": smiles_list})
         self.rev_specs = self.reverse_spec_dic()
@@ -218,16 +185,13 @@ class BalancedBatchedSpecies(BatchSampler):
     def exclude_sparse(self, min_geoms):
         if min_geoms is None:
             return
-        invalid_specs = [key for key, val in self.spec_dic.items()
-                         if len(val) < min_geoms]
+        invalid_specs = [key for key, val in self.spec_dic.items() if len(val) < min_geoms]
         if not invalid_specs:
             return
-        invalid_idx = torch.cat([self.spec_dic[spec] for spec
-                                 in invalid_specs])
+        invalid_idx = torch.cat([self.spec_dic[spec] for spec in invalid_specs])
         self.sampler.balance_dict["weights"][invalid_idx] = 0
 
     def __iter__(self):
-
         sampler_indices = list(iter(self.sampler))
         num_samples = len(self.sampler) // self.batch_size
         batch = []
@@ -242,20 +206,15 @@ class BalancedBatchedSpecies(BatchSampler):
             # to zero
             weights = self.sampler.balance_dict["weights"]
             these_weights = copy.deepcopy(weights)
-            zero_weight = torch.ones(len(weights),
-                                     dtype=torch.bool)
+            zero_weight = torch.ones(len(weights), dtype=torch.bool)
             zero_weight[other_geom_idx] = False
             these_weights[zero_weight] = 0
 
             # sample indices from this species only
             # by using `these_weights`
-            add_idx = torch.multinomial(
-                these_weights,
-                self.batch_size,
-                replacement=True)
+            add_idx = torch.multinomial(these_weights, self.batch_size, replacement=True)
 
-            for idx in add_idx:
-                batch.append(idx)
+            batch.extend(add_idx.tolist().copy())
 
             yield batch
             batch = []

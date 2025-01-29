@@ -4,9 +4,8 @@ from collections import Counter
 from pathlib import Path
 
 import numpy as np
-import torch
-
 import pytest
+import torch
 
 from nff.data.dataset import (
     Dataset,
@@ -116,13 +115,13 @@ class TestStratifiedSplit(unittest.TestCase):
             min_count=MIN_COUNT,
         )
 
-        self.assertEqual(len(train_dset), 43)
-        self.assertEqual(len(val_dset), 6)
-        self.assertEqual(len(test_dset), 6)
+        assert len(train_dset) == 43
+        assert len(val_dset) == 6
+        assert len(test_dset) == 6
 
-        self.assertEqual(Counter(train_dset.props[TARG_NAME]), self.train_formula_count)
-        self.assertEqual(Counter(val_dset.props[TARG_NAME]), self.val_formula_count)
-        self.assertEqual(Counter(test_dset.props[TARG_NAME]), self.test_formula_count)
+        assert Counter(train_dset.props[TARG_NAME]) == self.train_formula_count
+        assert Counter(val_dset.props[TARG_NAME]) == self.val_formula_count
+        assert Counter(test_dset.props[TARG_NAME]) == self.test_formula_count
 
     def test_stratified_split(self):
         idx_train, idx_test = stratified_split(
@@ -133,8 +132,8 @@ class TestStratifiedSplit(unittest.TestCase):
             min_count=MIN_COUNT,
         )
 
-        self.assertEqual(idx_train, self.idx_train)
-        self.assertEqual(idx_test, self.idx_test)
+        assert idx_train == self.idx_train
+        assert idx_test == self.idx_test
 
 
 class TestConcatenate(unittest.TestCase):
@@ -169,19 +168,19 @@ class TestConcatenate(unittest.TestCase):
 
     def test_concat_1(self):
         ab = concatenate_dict(self.dict_a, self.dict_b)
-        self.assertEqual(ab, self.dict_ab)
+        assert ab == self.dict_ab
 
     def test_concat_2(self):
         ac = concatenate_dict(self.dict_a, self.dict_c)
-        self.assertEqual(ac, self.dict_ac)
+        assert ac == self.dict_ac
 
     def test_concat_single_dict(self):
         a = concatenate_dict(self.dict_a)
-        self.assertEqual(a, self.dict_a_list)
+        assert a == self.dict_a_list
 
     def test_concat_single_dict_lists(self):
         a = concatenate_dict(self.dict_a_list)
-        self.assertEqual(a, self.dict_a_list)
+        assert a == self.dict_a_list
 
     def test_tensors(self):
         d1 = {"a": torch.tensor([1.0])}
@@ -194,11 +193,11 @@ class TestConcatenate(unittest.TestCase):
                 torch.tensor(3.0),
             ]
         }
-        self.assertEqual(dcat, expected)
+        assert dcat == expected
 
     def test_concat_list_lists(self):
         dd = concatenate_dict(self.dict_d, self.dict_d)
-        self.assertEqual(dd, self.dict_dd)
+        assert dd == self.dict_dd
 
     def test_concat_tensors(self):
         t = {
@@ -214,7 +213,7 @@ class TestConcatenate(unittest.TestCase):
         concat = concatenate_dict(t, t)
         for key, val in concat.items():
             for i, j in zip(val, tt[key]):
-                self.assertTrue((i == j).all().item())
+                assert (i == j).all().item()
 
     def test_inexistent_list_lists(self):
         a = {"a": [[[1, 2]], [[3, 4]]], "b": [5, 6]}
@@ -222,7 +221,7 @@ class TestConcatenate(unittest.TestCase):
         b = {"b": [7, 8]}
         ab = concatenate_dict(a, b)
         expected = {"a": [[[1, 2]], [[3, 4]], None, None], "b": [5, 6, 7, 8]}
-        self.assertEqual(ab, expected)
+        assert ab == expected
 
 
 @pytest.mark.usefixtures("device")  # Ensure the fixture is accessible
@@ -259,7 +258,7 @@ class TestPeriodicDataset(unittest.TestCase):
         self._test_fixture_device = device
 
     def test_neighbor_list(self):
-        nbrs, offs = self.qtz_dataset.generate_neighbor_list(cutoff=5)
+        self.qtz_dataset.generate_neighbor_list(cutoff=5)
 
 
 if __name__ == "__main__":

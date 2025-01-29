@@ -1,7 +1,9 @@
+from typing import List, Optional, Tuple
+
 import torch
 import torch.nn as nn
+
 from .spookynet import SpookyNet
-from typing import List, Tuple, Optional
 
 
 class SpookyNetEnsemble(nn.Module):
@@ -16,8 +18,8 @@ class SpookyNetEnsemble(nn.Module):
     """
 
     def __init__(self, models: List[str] = []) -> None:
-        """ Initializes the SpookyNetEnsemble class. """
-        super(SpookyNetEnsemble, self).__init__()
+        """Initializes the SpookyNetEnsemble class."""
+        super().__init__()
         assert len(models) > 1
         self.models = nn.ModuleList([SpookyNet(load_from=model) for model in models])
         for model in self.models:
@@ -25,12 +27,12 @@ class SpookyNetEnsemble(nn.Module):
 
     @property
     def dtype(self) -> torch.dtype:
-        """ Return torch.dtype of parameters (input tensors must match). """
+        """Return torch.dtype of parameters (input tensors must match)."""
         return self.models[0].dtype
 
     @property
     def device(self) -> torch.device:
-        """ Return torch.device of parameters (input tensors must match). """
+        """Return torch.device of parameters (input tensors must match)."""
         return self.models[0].device
 
     def train(self, mode=True) -> None:
@@ -38,13 +40,13 @@ class SpookyNetEnsemble(nn.Module):
         Turn on training mode. This is just for compatibility, the models should
         be trained individually and only evaluated as ensemble.
         """
-        super(SpookyNetEnsemble, self).train(mode=mode)
+        super().train(mode=mode)
         for model in self.models:
             model.train(mode)
 
     def eval(self) -> None:
-        """ Turn on evaluation mode (smaller memory footprint)."""
-        super(SpookyNetEnsemble, self).eval()
+        """Turn on evaluation mode (smaller memory footprint)."""
+        super().eval()
         for model in self.models:
             model.eval()
 
@@ -137,9 +139,7 @@ class SpookyNetEnsemble(nn.Module):
             c6.append(c6_)
         return (f, ea, qa, ea_rep, ea_ele, ea_vdw, pa, c6)
 
-    def _mean_std_from_list(
-        self, x: List[torch.Tensor]
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _mean_std_from_list(self, x: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Given a list of tensors, computes their mean and standard deviation.
         Only used internally.
@@ -266,15 +266,13 @@ class SpookyNetEnsemble(nn.Module):
                 retain_graph=True,
                 create_graph=create_graph,
             )[0]
-            if grad_mean is not None:  # necessary for torch.jit compatibility
+            if grad_mean is not None:  # necessary for torch.jit compatibility  # noqa
                 forces_mean = -grad_mean
             else:
                 forces_mean = torch.zeros_like(R)
             if calculate_forces_std:
-                grad_std = torch.autograd.grad(
-                    [torch.sum(energy[1])], [R], create_graph=create_graph
-                )[0]
-                if grad_std is not None:  # necessary for torch.jit compatibility
+                grad_std = torch.autograd.grad([torch.sum(energy[1])], [R], create_graph=create_graph)[0]
+                if grad_std is not None:  # necessary for torch.jit compatibility  # noqa
                     forces_std = torch.abs(grad_std)
                 else:
                     forces_std = torch.zeros_like(R)
@@ -357,15 +355,11 @@ class SpookyNetEnsemble(nn.Module):
             for idx in range(s):  # loop through entries of the hessian
                 # retain graph when the index is smaller than the max index,
                 # else computation fails
-                tmp = torch.autograd.grad(
-                    [grad_mean[idx]], [R], retain_graph=(idx < s)
-                )[0]
+                tmp = torch.autograd.grad([grad_mean[idx]], [R], retain_graph=(idx < s))[0]
                 if tmp is not None:  # necessary for torch.jit compatibility
                     hessian_mean[idx] = tmp.view(-1)
                 if calculate_hessian_std and calculate_forces_std:
-                    tmp = torch.autograd.grad(
-                        [grad_std[idx]], [R], retain_graph=(idx < s)
-                    )[0]
+                    tmp = torch.autograd.grad([grad_std[idx]], [R], retain_graph=(idx < s))[0]
                     if tmp is not None:  # necessary for torch.jit compatibility
                         hessian_std[idx] = tmp.view(-1)
         hessian = (hessian_mean, hessian_std)
@@ -452,16 +446,8 @@ class SpookyNetEnsemble(nn.Module):
             )
             forces = (torch.zeros_like(R), torch.zeros_like(R))
         if use_dipole:
-            dipole_mean = (
-                qa[0]
-                .new_zeros((num_batch, 3))
-                .index_add_(0, batch_seg, qa[0].view(-1, 1) * R)
-            )
-            dipole_std = (
-                qa[1]
-                .new_zeros((num_batch, 3))
-                .index_add_(0, batch_seg, qa[1].view(-1, 1) * R)
-            )
+            dipole_mean = qa[0].new_zeros((num_batch, 3)).index_add_(0, batch_seg, qa[0].view(-1, 1) * R)
+            dipole_std = qa[1].new_zeros((num_batch, 3)).index_add_(0, batch_seg, qa[1].view(-1, 1) * R)
             dipole = (dipole_mean, torch.abs(dipole_std))
         else:
             dipole = (qa[0].new_zeros((num_batch, 3)), qa[1].new_zeros((num_batch, 3)))

@@ -1,16 +1,14 @@
-
 import os
 import pathlib
 
+import pytest
 import torch
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
 
-import pytest
-
-from nff.data import Dataset, split_train_validation_test, collate_dicts
-from nff.train import Trainer, get_model, loss, hooks, metrics, evaluate
+from nff.data import Dataset, collate_dicts, split_train_validation_test
+from nff.train import Trainer, evaluate, get_model, hooks, loss, metrics
 
 
 @pytest.mark.skip("still taking too long, disable for now")
@@ -83,7 +81,6 @@ def test_excited_training(device, tmpdir):
     train_loader = DataLoader(train, batch_size=batch_size, collate_fn=collate_dicts, sampler=RandomSampler(train))
     val_loader = DataLoader(val, batch_size=batch_size, collate_fn=collate_dicts)
     test_loader = DataLoader(test, batch_size=batch_size, collate_fn=collate_dicts)
-
 
     # train
     T = Trainer(

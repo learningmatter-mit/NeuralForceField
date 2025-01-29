@@ -69,7 +69,6 @@ class LayerFreezer:
         """
         Function to transfer learn a model. Defined in the subclasses.
         """
-        pass
 
 
 class PainnLayerFreezer(LayerFreezer):
@@ -86,9 +85,7 @@ class PainnLayerFreezer(LayerFreezer):
         unfreeze_skip = not freeze_skip
 
         for i, block in enumerate(model.readout_blocks):
-            if unfreeze_skip:
-                self.unfreeze_parameters(block)
-            elif i == num_readouts - 1:
+            if unfreeze_skip or i == num_readouts - 1:
                 self.unfreeze_parameters(block)
 
     def unfreeze_painn_pooling(self, model: torch.nn.Module) -> None:
@@ -130,9 +127,7 @@ class PainnLayerFreezer(LayerFreezer):
 class PainnDiabatLayerFreezer(PainnLayerFreezer):
     """Class to handle freezing layers in PaiNN models with diabatic readout."""
 
-    def unfreeze_diabat_readout(
-        self, model: torch.nn.Module, freeze_gap_embedding: bool
-    ) -> None:
+    def unfreeze_diabat_readout(self, model: torch.nn.Module, freeze_gap_embedding: bool) -> None:
         """Unfreeze the diabatic readout layers in a PaiNN model.
 
         Args:
@@ -170,9 +165,7 @@ class PainnDiabatLayerFreezer(PainnLayerFreezer):
         """
         self.freeze_parameters(model)
         self.unfreeze_painn_readout(model=model, freeze_skip=freeze_skip)
-        self.unfreeze_diabat_readout(
-            model=model, freeze_gap_embedding=freeze_gap_embedding
-        )
+        self.unfreeze_diabat_readout(model=model, freeze_gap_embedding=freeze_gap_embedding)
 
         unfreeze_pool = not freeze_pooling
         if unfreeze_pool:
@@ -189,10 +182,7 @@ class MaceLayerFreezer(LayerFreezer):
         Args:
             model (torch.nn.Module): model to be transfer learned
         """
-        interaction_linears = [
-            f"interactions.{i}.linear.weight"
-            for i in range(model.num_interactions.item())
-        ]
+        interaction_linears = [f"interactions.{i}.linear.weight" for i in range(model.num_interactions.item())]
         self.custom_unfreeze(model, interaction_linears)
 
     def unfreeze_mace_produce_linears(self, model: torch.nn.Module) -> None:
@@ -202,10 +192,7 @@ class MaceLayerFreezer(LayerFreezer):
         Args:
             model (torch.nn.Module): model to be transfer learned
         """
-        product_linears = [
-            f"products.{i}.linear.weight"
-            for i in range(model.num_interactions.item())
-        ]
+        product_linears = [f"products.{i}.linear.weight" for i in range(model.num_interactions.item())]
         self.custom_unfreeze(model, product_linears)
 
     def unfreeze_mace_pooling(self, model: torch.nn.Module) -> None:
@@ -229,9 +216,7 @@ class MaceLayerFreezer(LayerFreezer):
         unfreeze_skip = not freeze_skip
 
         for i, block in enumerate(model.readouts):
-            if unfreeze_skip:
-                self.unfreeze_parameters(block)
-            elif i == num_readouts - 1:
+            if unfreeze_skip or i == num_readouts - 1:
                 self.unfreeze_parameters(block)
 
     def model_tl(
@@ -300,9 +285,7 @@ class ChgnetLayerFreezer(LayerFreezer):
         """
         self.unfreeze_parameters(model.pooling)
 
-    def unfreeze_chgnet_readout(
-        self, model: torch.nn.Module, freeze_skip: bool = False
-    ) -> None:
+    def unfreeze_chgnet_readout(self, model: torch.nn.Module, freeze_skip: bool = False) -> None:
         """Unfreeze the "site_wise", "readout_norm", and last MLP layers
         in a CHGNet model. Similar to readout layers in other models.
 
@@ -318,9 +301,7 @@ class ChgnetLayerFreezer(LayerFreezer):
         unfreeze_skip = not freeze_skip
 
         for i, block in enumerate(model.mlp.layers):
-            if unfreeze_skip:
-                self.unfreeze_parameters(block)
-            elif i == num_readouts - 1:
+            if unfreeze_skip or i == num_readouts - 1:
                 self.unfreeze_parameters(block)
 
     def model_tl(

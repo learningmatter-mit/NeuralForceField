@@ -1,9 +1,9 @@
 import torch
 from torch import nn
 
-from nff.utils.scatter import scatter_add, compute_grad
-from nff.utils.tools import layer_types
 from nff.nn.layers import Dense
+from nff.utils.scatter import scatter_add
+from nff.utils.tools import layer_types
 
 
 def get_dense(inp_dim, out_dim, activation, bias):
@@ -23,7 +23,6 @@ def get_dense(inp_dim, out_dim, activation, bias):
 
 
 class EdgeEmbedding(nn.Module):
-
     """
     Class to create an edge embedding from edge features and
     node emebeddings.
@@ -44,11 +43,7 @@ class EdgeEmbedding(nn.Module):
         # 3 * embed_dim (one each for h_i, h_j, and e_ij)
         # and output dimension embed_dim.
 
-        self.dense = get_dense(
-            3 * embed_dim,
-            embed_dim,
-            activation=activation,
-            bias=True)
+        self.dense = get_dense(3 * embed_dim, embed_dim, activation=activation, bias=True)
 
     def forward(self, h, e, nbr_list):
         """
@@ -113,15 +108,10 @@ class EmbeddingBlock(nn.Module):
         # create a dense layer to convert the basis
         # representation of the distances into a vector
         # of size embed_dim
-        self.edge_dense = get_dense(n_rbf,
-                                    embed_dim,
-                                    activation=None,
-                                    bias=False)
+        self.edge_dense = get_dense(n_rbf, embed_dim, activation=None, bias=False)
         # make node and edge embedding layers
         self.node_embedding = NodeEmbedding(embed_dim)
-        self.edge_embedding = EdgeEmbedding(embed_dim,
-                                            n_rbf,
-                                            activation)
+        self.edge_embedding = EdgeEmbedding(embed_dim, n_rbf, activation)
 
     def forward(self, e_rbf, z, nbr_list):
         """
@@ -137,14 +127,12 @@ class EmbeddingBlock(nn.Module):
 
         e = self.edge_dense(e_rbf)
         h = self.node_embedding(z)
-        m_ji = self.edge_embedding(h=h,
-                                   e=e,
-                                   nbr_list=nbr_list)
+        m_ji = self.edge_embedding(h=h, e=e, nbr_list=nbr_list)
         return m_ji
 
 
 class ResidualBlock(nn.Module):
-    """ Residual block """
+    """Residual block"""
 
     def __init__(self, embed_dim, n_rbf, activation):
         """
@@ -159,11 +147,7 @@ class ResidualBlock(nn.Module):
         super().__init__()
         # create dense layers
         self.dense_layers = nn.ModuleList(
-            [get_dense(embed_dim,
-                       embed_dim,
-                       activation=activation,
-                       bias=True)
-                for _ in range(2)]
+            [get_dense(embed_dim, embed_dim, activation=activation, bias=True) for _ in range(2)]
         )
 
     def forward(self, m_ji):
@@ -184,19 +168,12 @@ class ResidualBlock(nn.Module):
 
 
 class DirectedMessage(nn.Module):
-
     """
     Module for passing directed messages based
     on distances and angles.
     """
 
-    def __init__(self,
-                 activation,
-                 embed_dim,
-                 n_rbf,
-                 n_spher,
-                 l_spher,
-                 n_bilinear):
+    def __init__(self, activation, embed_dim, n_rbf, n_spher, l_spher, n_bilinear):
         """
         Args:
             activation (str): name of activation layer
@@ -217,38 +194,23 @@ class DirectedMessage(nn.Module):
 
         # dense layer to apply to m's that are in the
         # neighborhood of those in your neighborhood
-        self.m_kj_dense = get_dense(embed_dim,
-                                    embed_dim,
-                                    activation=activation,
-                                    bias=True)
+        self.m_kj_dense = get_dense(embed_dim, embed_dim, activation=activation, bias=True)
 
         # dense layer to apply to the rbf representation of
         # the distances
-        self.e_dense = get_dense(n_rbf,
-                                 embed_dim,
-                                 activation=None,
-                                 bias=False)
+        self.e_dense = get_dense(n_rbf, embed_dim, activation=None, bias=False)
 
         # dense layer to apply to the sbf representation of
         # the angles and distances
-        self.a_dense = get_dense(n_spher * l_spher,
-                                 n_bilinear,
-                                 activation=None,
-                                 bias=False)
+        self.a_dense = get_dense(n_spher * l_spher, n_bilinear, activation=None, bias=False)
 
         # matrix that is used to aggregate the distance
         # and angle information
-        self.w = nn.Parameter(torch.empty(
-            embed_dim, n_bilinear, embed_dim))
+        self.w = nn.Parameter(torch.empty(embed_dim, n_bilinear, embed_dim))
 
         nn.init.xavier_uniform_(self.w)
 
-    def forward(self,
-                m_ji,
-                e_rbf,
-                a_sbf,
-                kj_idx,
-                ji_idx):
+    def forward(self, m_ji, e_rbf, a_sbf, kj_idx, ji_idx):
         """
         Args:
             m_ji (torch.Tensor): edge vector
@@ -296,64 +258,31 @@ class DirectedMessage(nn.Module):
         # use `scatter_add` with indices `ji_idx`, and give the resulting
         # vector the same dimension as m_ji.
 
-        out = scatter_add(aggr.transpose(0, 1),
-                          ji_idx,
-                          dim_size=m_ji.shape[0]
-                          ).transpose(0, 1)
+        out = scatter_add(aggr.transpose(0, 1), ji_idx, dim_size=m_ji.shape[0]).transpose(0, 1)
 
         return out
 
 
 class DirectedMessagePP(nn.Module):
-    def __init__(self,
-                 activation,
-                 embed_dim,
-                 n_rbf,
-                 n_spher,
-                 l_spher,
-                 int_dim,
-                 basis_emb_dim):
-
+    def __init__(self, activation, embed_dim, n_rbf, n_spher, l_spher, int_dim, basis_emb_dim):
         super().__init__()
 
-        self.m_kj_dense = get_dense(embed_dim,
-                                    embed_dim,
-                                    activation=activation,
-                                    bias=True)
-        self.e_dense = nn.Sequential(get_dense(n_rbf,
-                                               basis_emb_dim,
-                                               activation=None,
-                                               bias=False),
-                                     get_dense(basis_emb_dim,
-                                               embed_dim,
-                                               activation=None,
-                                               bias=False))
+        self.m_kj_dense = get_dense(embed_dim, embed_dim, activation=activation, bias=True)
+        self.e_dense = nn.Sequential(
+            get_dense(n_rbf, basis_emb_dim, activation=None, bias=False),
+            get_dense(basis_emb_dim, embed_dim, activation=None, bias=False),
+        )
 
-        self.a_dense = nn.Sequential(get_dense(n_spher * l_spher,
-                                               basis_emb_dim,
-                                               activation=None,
-                                               bias=False),
-                                     get_dense(basis_emb_dim,
-                                               int_dim,
-                                               activation=None,
-                                               bias=False))
+        self.a_dense = nn.Sequential(
+            get_dense(n_spher * l_spher, basis_emb_dim, activation=None, bias=False),
+            get_dense(basis_emb_dim, int_dim, activation=None, bias=False),
+        )
 
-        self.down_conv = get_dense(embed_dim,
-                                   int_dim,
-                                   activation=activation,
-                                   bias=False)
+        self.down_conv = get_dense(embed_dim, int_dim, activation=activation, bias=False)
 
-        self.up_conv = get_dense(int_dim,
-                                 embed_dim,
-                                 activation=activation,
-                                 bias=False)
+        self.up_conv = get_dense(int_dim, embed_dim, activation=activation, bias=False)
 
-    def forward(self,
-                m_ji,
-                e_rbf,
-                a_sbf,
-                kj_idx,
-                ji_idx):
+    def forward(self, m_ji, e_rbf, a_sbf, kj_idx, ji_idx):
         """
         Args:
             m_ji (torch.Tensor): edge vector
@@ -376,10 +305,7 @@ class DirectedMessagePP(nn.Module):
 
         edge_message = self.down_conv(m_kj * e_ji)
         aggr = edge_message * a
-        out = self.up_conv(scatter_add(aggr.transpose(0, 1),
-                                       ji_idx,
-                                       dim_size=m_ji.shape[0]
-                                       ).transpose(0, 1))
+        out = self.up_conv(scatter_add(aggr.transpose(0, 1), ji_idx, dim_size=m_ji.shape[0]).transpose(0, 1))
 
         return out
 
@@ -389,16 +315,9 @@ class InteractionBlock(nn.Module):
     Block for aggregating distance and angle information
     """
 
-    def __init__(self,
-                 embed_dim,
-                 n_rbf,
-                 activation,
-                 n_spher,
-                 l_spher,
-                 n_bilinear,
-                 int_dim=None,
-                 basis_emb_dim=None,
-                 use_pp=False):
+    def __init__(
+        self, embed_dim, n_rbf, activation, n_spher, l_spher, n_bilinear, int_dim=None, basis_emb_dim=None, use_pp=False
+    ):
         """
         Args:
             embed_dim (int): embedding size
@@ -419,10 +338,7 @@ class InteractionBlock(nn.Module):
 
         # make the three residual blocks
         self.residual_blocks = nn.ModuleList(
-            [ResidualBlock(
-                embed_dim=embed_dim,
-                n_rbf=n_rbf,
-                activation=activation) for _ in range(3)]
+            [ResidualBlock(embed_dim=embed_dim, n_rbf=n_rbf, activation=activation) for _ in range(3)]
         )
 
         # make a block for getting the directed messages
@@ -435,7 +351,8 @@ class InteractionBlock(nn.Module):
                 n_spher=n_spher,
                 l_spher=l_spher,
                 int_dim=int_dim,
-                basis_emb_dim=basis_emb_dim)
+                basis_emb_dim=basis_emb_dim,
+            )
 
         else:
             self.directed_block = DirectedMessage(
@@ -444,26 +361,16 @@ class InteractionBlock(nn.Module):
                 n_rbf=n_rbf,
                 n_spher=n_spher,
                 l_spher=l_spher,
-                n_bilinear=n_bilinear)
+                n_bilinear=n_bilinear,
+            )
 
         # dense layers for m_ji and for what comes after
         # the residual blocks
-        self.m_ji_dense = get_dense(embed_dim,
-                                    embed_dim,
-                                    activation=activation,
-                                    bias=True)
+        self.m_ji_dense = get_dense(embed_dim, embed_dim, activation=activation, bias=True)
 
-        self.post_res_dense = get_dense(embed_dim,
-                                        embed_dim,
-                                        activation=activation,
-                                        bias=True)
+        self.post_res_dense = get_dense(embed_dim, embed_dim, activation=activation, bias=True)
 
-    def forward(self,
-                m_ji,
-                e_rbf,
-                a_sbf,
-                kj_idx,
-                ji_idx):
+    def forward(self, m_ji, e_rbf, a_sbf, kj_idx, ji_idx):
         """
         Args:
             m_ji (torch.Tensor): edge vector
@@ -482,18 +389,13 @@ class InteractionBlock(nn.Module):
         """
 
         # get the directed message
-        directed_out = self.directed_block(m_ji=m_ji,
-                                           e_rbf=e_rbf,
-                                           a_sbf=a_sbf,
-                                           kj_idx=kj_idx,
-                                           ji_idx=ji_idx)
+        directed_out = self.directed_block(m_ji=m_ji, e_rbf=e_rbf, a_sbf=a_sbf, kj_idx=kj_idx, ji_idx=ji_idx)
         # put m_ji through dense layer and add to directed
         # message
         dense_m_ji = self.m_ji_dense(m_ji)
         output = directed_out + dense_m_ji
         # put through one dense layer and add back m_ji
-        output = self.post_res_dense(
-            self.residual_blocks[0](output)) + m_ji
+        output = self.post_res_dense(self.residual_blocks[0](output)) + m_ji
         # put through remaining dense layers
         for res_block in self.residual_blocks[1:]:
             output = res_block(output)
@@ -506,12 +408,7 @@ class OutputBlock(nn.Module):
     Block to convert edge messages to atomic fingerprints
     """
 
-    def __init__(self,
-                 embed_dim,
-                 n_rbf,
-                 activation,
-                 use_pp=False,
-                 out_dim=None):
+    def __init__(self, embed_dim, n_rbf, activation, use_pp=False, out_dim=None):
         """
         Args:
             embed_dim (int): embedding size
@@ -524,32 +421,18 @@ class OutputBlock(nn.Module):
 
         # dense layer to convert rbf edge representation
         # to dimension embed_dim
-        self.edge_dense = get_dense(n_rbf,
-                                    embed_dim,
-                                    activation=None,
-                                    bias=False)
+        self.edge_dense = get_dense(n_rbf, embed_dim, activation=None, bias=False)
         out_dense = []
         if use_pp:
-            out_dense.append(get_dense(embed_dim,
-                                       out_dim,
-                                       activation=None,
-                                       bias=False))
+            out_dense.append(get_dense(embed_dim, out_dim, activation=None, bias=False))
         else:
             out_dim = embed_dim
 
-        out_dense += [get_dense(out_dim,
-                                out_dim,
-                                activation=activation,
-                                bias=True)
-                      for _ in range(3)]
-        out_dense.append(get_dense(out_dim,
-                                   out_dim,
-                                   activation=None,
-                                   bias=False))
+        out_dense += [get_dense(out_dim, out_dim, activation=activation, bias=True) for _ in range(3)]
+        out_dense.append(get_dense(out_dim, out_dim, activation=None, bias=False))
         self.out_dense = nn.Sequential(*out_dense)
 
     def forward(self, m_ji, e_rbf, nbr_list, num_atoms):
-
         # product of e and m
 
         prod = self.edge_dense(e_rbf) * m_ji
@@ -563,9 +446,7 @@ class OutputBlock(nn.Module):
         # and the last two to index 0. This means we use
         # nbr_list[:, 1] in the scatter addition.
 
-        node_feats = scatter_add(prod.transpose(0, 1),
-                                 nbr_list[:, 1],
-                                 dim_size=num_atoms).transpose(0, 1)
+        node_feats = scatter_add(prod.transpose(0, 1), nbr_list[:, 1], dim_size=num_atoms).transpose(0, 1)
         # Apply the dense layers
         node_feats = self.out_dense(node_feats)
 

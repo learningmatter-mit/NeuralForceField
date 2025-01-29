@@ -1,12 +1,14 @@
 """Helper function to setup the run from the command line.
 
-Adapted from https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/utils/script_utils/setup.py
+Adapted from:
+https://github.com/atomistic-machine-learning/schnetpack/blob/dev/src/schnetpack/utils/script_utils/setup.py
 """
-import os
+
 import logging
+import os
 from shutil import rmtree
 
-from nff.utils.tools import to_json, set_random_seed, read_from_json
+from nff.utils.tools import read_from_json, set_random_seed, to_json
 
 __all__ = ["setup_run"]
 
@@ -16,8 +18,8 @@ def setup_run(args):
     jsonpath = os.path.join(args.model_path, "args.json")
 
     # absolute paths
-    argparse_dict['data_path'] = os.path.abspath(argparse_dict['data_path'])
-    argparse_dict['model_path'] = os.path.abspath(argparse_dict['model_path'])
+    argparse_dict["data_path"] = os.path.abspath(argparse_dict["data_path"])
+    argparse_dict["model_path"] = os.path.abspath(argparse_dict["model_path"])
 
     if args.mode == "train":
         if args.overwrite and os.path.exists(args.model_path):
