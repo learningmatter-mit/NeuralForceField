@@ -86,7 +86,10 @@ class Dynamics:
                     interval=self.mdparam["save_frequency"],
                 )
 
-    def check_restart(self):
+    def check_restart(self) -> int:
+        """Check if the MD path is being restarted from an existing traj file and adjust the number of
+        steps accordingly.
+        """
         if os.path.exists(self.mdparam["traj_filename"]):
             new_atoms = Trajectory(self.mdparam["traj_filename"])[-1]
 
@@ -129,8 +132,7 @@ class Dynamics:
 
             return self.steps
 
-        else:
-            return self.steps
+        return self.steps
 
     def setup_restart(self, restart_param):
         """If you want to restart a simulations with predfined mdparams but
@@ -147,7 +149,6 @@ class Dynamics:
         Args:
             restart_param (dict): dictionary to contains restart paramsters and file paths
         """
-
         if restart_param["thermo_filename"] == self.mdparam["thermo_filename"]:
             raise ValueError(
                 "{} is also used, \
@@ -189,17 +190,21 @@ class Dynamics:
 
         self.mdparam["steps"] = restart_param["steps"]
 
-    def run(self):
+    def run(self) -> None:
+        """Run the MD simulation for the specified number of steps. If the stability_check
+        parameter is set to True, the simulation will run until the temperature is within
+        reasonable bounds. The neighbor list is updated every nbr_list_update_freq steps.
+        """
         epochs = int(self.steps // self.mdparam["nbr_list_update_freq"])
         # In case it had neighbors that didn't include the cutoff skin,
         # for example, it's good to update the neighbor list here
         self.atomsbatch.update_nbr_list()
 
         if self.mdparam.get("stability_check", False):
-            for step in range(epochs):
+            for _step in range(epochs):
                 T = self.atomsbatch.get_batch_kinetic_energy() / (1.5 * units.kB * self.atomsbatch.num_atoms)
                 if (
-                    (T > (10 * self.mdparam["thermostat_params"]["temperature"] / units.kB)).any()
+                    ((10 * self.mdparam["thermostat_params"]["temperature"] / units.kB) < T).any()
                     or (T < 1e-1).any()
                     and self.mdparam.get("stability_check", False)
                 ):
@@ -215,7 +220,7 @@ class Dynamics:
                 self.atomsbatch.update_nbr_list()
 
         else:
-            for step in range(epochs):
+            for _step in range(epochs):
                 self.integrator.run(self.mdparam["nbr_list_update_freq"])
 
                 # # unwrap coordinates if mol_idx is defined
