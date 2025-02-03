@@ -18,6 +18,7 @@ from ase.neighborlist import neighbor_list
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle as skshuffle
 from torch.utils.data import Dataset as TorchDataset
+from tqdm import trange
 
 import nff.utils.constants as const
 from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
@@ -620,7 +621,7 @@ class Dataset(TorchDataset):
 
         atoms_batches = []
         num_batches = len(self.props["nxyz"])
-        for i in range(num_batches):
+        for i in trange(num_batches):
             nxyz = self.props["nxyz"][i]
             atoms = AtomsBatch(
                 nxyz[:, 0].long(),
