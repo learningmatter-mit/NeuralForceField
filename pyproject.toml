@@ -12,7 +12,7 @@ readme = "README.md"
 license = { text = "MIT" }
 dependencies = [
     "ase==3.22.1",
-    "numpy >=1.26.*, <2",
+    "numpy >=1.26.4, <2",
     "pymatgen>=2023.3.10",
     "rdkit",
     "scikit-learn",
