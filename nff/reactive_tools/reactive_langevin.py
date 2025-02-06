@@ -1,5 +1,7 @@
 import numpy as np
 from ase.io import Trajectory
+# todo check if this necessary, probably better to properly typehint and check the input arguments
+from ase.md.langevin import *  # noqa
 from ase.units import Ang, fs, kB, second
 
 from nff.md.utils import NeuralMDLogger, write_traj
