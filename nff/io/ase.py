@@ -91,7 +91,6 @@ class AtomsBatch(Atoms):
         """
         # periodic systems
         if np.array([atoms.pbc.any() for atoms in self.get_list_atoms()]).any():
-            nbrs = []
             nbrs_T = []
             nbrs = []
             z = []
@@ -415,25 +414,6 @@ class AtomsBatch(Atoms):
             float: The temperature of the system.
         """
         return self.get_batch_kinetic_energy() / (1.5 * units.kB * self.props["num_atoms"].detach().cpu().numpy())
-
-    def batch_properties():
-        """This function is used to batch process properties.
-        It takes in a list of properties and performs some operations on them.
-        """
-
-    def batch_virial():
-        """Calculate the virial for a batch of systems.
-
-        This function calculates the virial for a batch of systems using a specific algorithm.
-        The virial is a measure of the internal forces within a system
-        and is commonly used in molecular dynamics simulations.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
 
     @classmethod
     def from_atoms(cls, atoms, **kwargs):

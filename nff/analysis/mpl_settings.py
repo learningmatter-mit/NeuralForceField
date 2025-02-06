@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -84,9 +84,7 @@ def rgb_to_dec(value: list):
     return [v / 256 for v in value]
 
 
-def get_continuous_cmap(
-    hex_list: List[str], float_list: List[float] = None
-) -> matplotlib.colors.Colormap:
+def get_continuous_cmap(hex_list: List[str], float_list: Optional[List[float]] = None) -> matplotlib.colors.Colormap:
     """
     Creates and returns a color map that can be used in heat map figures.
     If float_list is not provided, colour map graduates linearly between each color in hex_list.
@@ -109,10 +107,7 @@ def get_continuous_cmap(
 
     cdict = dict()
     for num, col in enumerate(["red", "green", "blue"]):
-        col_list = [
-            [float_list[i], rgb_list[i][num], rgb_list[i][num]]
-            for i in range(len(float_list))
-        ]
+        col_list = [[float_list[i], rgb_list[i][num], rgb_list[i][num]] for i in range(len(float_list))]
         cdict[col] = col_list
     cmp = matplotlib.colors.LinearSegmentedColormap("j_cmap", segmentdata=cdict, N=256)
     return cmp

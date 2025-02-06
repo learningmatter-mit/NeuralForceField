@@ -3,9 +3,8 @@ from collections.abc import Iterable
 
 import networkx as nx
 import numpy as np
-from ase import Atoms
-
 import pytest
+from ase import Atoms
 
 from nff.io.ase import AtomsBatch
 
@@ -217,9 +216,10 @@ class TestPeriodic(ut.TestCase):
                 [0.0, 0.0, 5.51891759],
             ]
         )
-        self.quartz = AtomsBatch(nxyz[:, 0].astype(int), positions=nxyz[:, 1:], cell=lattice, pbc=True,
-                                 device=self._test_fixture_device)
-        
+        self.quartz = AtomsBatch(
+            nxyz[:, 0].astype(int), positions=nxyz[:, 1:], cell=lattice, pbc=True, device=self._test_fixture_device
+        )
+
     @pytest.fixture(autouse=True)
     def inject_device(self, device):
         # Automatically set the fixture value to an attribute

@@ -1,7 +1,8 @@
-from torch.utils.data import DataLoader
-import torch
-import numpy as np
 import copy
+
+import numpy as np
+import torch
+from torch.utils.data import DataLoader
 
 from nff.data import Dataset, collate_dicts
 from nff.train.evaluate import evaluate
@@ -51,7 +52,7 @@ def dgamma_dt(en, p, m):
     """
 
     reshape_m = m.reshape(1, -1, 1)
-    deriv = -en + (p ** 2 / (2 * reshape_m)).sum((1, 2))
+    deriv = -en + (p**2 / (2 * reshape_m)).sum((1, 2))
 
     return deriv
 
@@ -65,8 +66,7 @@ def to_dset(r, atom_nums, nbrs, gen_nbrs):
     """
 
     atom_num_reshape = atom_nums.reshape(-1, 1)
-    nxyz = [torch.cat([atom_num_reshape, xyz], dim=-1)
-            for xyz in r]
+    nxyz = [torch.cat([atom_num_reshape, xyz], dim=-1) for xyz in r]
 
     dataset = Dataset(props={"nxyz": nxyz})
 
@@ -78,14 +78,7 @@ def to_dset(r, atom_nums, nbrs, gen_nbrs):
     return dataset
 
 
-def get_engrad(r,
-               atom_nums,
-               nbrs,
-               gen_nbrs,
-               batch_size,
-               device,
-               model,
-               diabat_keys):
+def get_engrad(r, atom_nums, nbrs, gen_nbrs, batch_size, device, model, diabat_keys):
     """
     Args:
             r (torch.Tensor): a position tensor of dimension N_J x N_at x 3,
@@ -93,53 +86,25 @@ def get_engrad(r,
             J and N_at is the number of atoms.
     """
 
-    dataset = to_dset(r=r,
-                      atom_nums=atom_nums,
-                      nbrs=nbrs,
-                      gen_nbrs=gen_nbrs)
+    dataset = to_dset(r=r, atom_nums=atom_nums, nbrs=nbrs, gen_nbrs=gen_nbrs)
 
-    loader = DataLoader(dataset,
-                        batch_size=batch_size,
-                        collate_fn=collate_dicts)
+    loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_dicts)
 
-    results, _, _ = evaluate(model=model,
-                             loader=loader,
-                             loss_fn=lambda x, y: 0,
-                             device=device,
-                             debatch=True)
+    results, _, _ = evaluate(model=model, loader=loader, loss_fn=lambda x, y: 0, device=device, debatch=True)
 
     for key, val in results.items():
-        if key.endswith("_grad") or key.startswith('nacv_'):
+        if key.endswith("_grad") or key.startswith("nacv_"):
             results[key] = torch.stack(val)
 
     return results, dataset
 
 
-def compute_derivs(r,
-                   m,
-                   atom_num,
-                   p,
-                   nbrs,
-                   gen_nbrs,
-                   batch_size,
-                   device,
-                   model,
-                   diabat_keys,
-                   diabatic):
-
-    results, dataset = get_engrad(r,
-                                  atom_num,
-                                  nbrs,
-                                  gen_nbrs,
-                                  batch_size,
-                                  device,
-                                  model,
-                                  diabat_keys)
+def compute_derivs(r, m, atom_num, p, nbrs, gen_nbrs, batch_size, device, model, diabat_keys, diabatic):
+    results, dataset = get_engrad(r, atom_num, nbrs, gen_nbrs, batch_size, device, model, diabat_keys)
     num_states = len(diabat_keys)
     derivs = []
 
     for i in range(num_states):
-
         if diabatic:
             en_key = diabat_keys[i][i]
             grad_key = en_key + "_grad"
@@ -153,22 +118,14 @@ def compute_derivs(r,
         p_deriv = dp_dt(en_grad)
         r_deriv = dr_dt(p, m)
 
-        dic = {"gamma": gamma_deriv,
-               "p": p_deriv,
-               "r": r_deriv}
+        dic = {"gamma": gamma_deriv, "p": p_deriv, "r": r_deriv}
 
         derivs.append(dic)
 
     return derivs
 
 
-def overlap_formula(expand_r_i,
-                    expand_r_j,
-                    expand_alpha_i,
-                    expand_alpha_j,
-                    expand_p_i,
-                    expand_p_j):
-
+def overlap_formula(expand_r_i, expand_r_j, expand_alpha_i, expand_alpha_j, expand_p_i, expand_p_j):
     r_i = expand_r_i.numpy()
     r_j = expand_r_j.numpy()
     alpha_i = expand_alpha_i.numpy()
@@ -176,17 +133,16 @@ def overlap_formula(expand_r_i,
     p_i = expand_p_i.numpy()
     p_j = expand_p_j.numpy()
 
-    A = (-alpha_j * r_j ** 2 - alpha_i * r_i ** 2
-         + 1j * p_j * (-r_j) - 1j * p_i * (-r_i))
+    A = -alpha_j * r_j**2 - alpha_i * r_i**2 + 1j * p_j * (-r_j) - 1j * p_i * (-r_i)
 
     B = alpha_i + alpha_j
 
-    C = (2 * alpha_j * r_j + 1j * p_j
-         + 2 * alpha_i * r_i - 1j * p_i)
+    C = 2 * alpha_j * r_j + 1j * p_j + 2 * alpha_i * r_i - 1j * p_i
 
     # has dimension N_I x N_J x N_at x 3
-    overlaps = ((2 / np.pi) ** 0.5 * (alpha_i * alpha_j) ** 0.25
-                * np.exp(A) * (np.pi / B) ** 0.5 * np.exp(C ** 2 / (4 * B)))
+    overlaps = (
+        (2 / np.pi) ** 0.5 * (alpha_i * alpha_j) ** 0.25 * np.exp(A) * (np.pi / B) ** 0.5 * np.exp(C**2 / (4 * B))
+    )
 
     # take the product over the last two dimensions
     N_I = expand_r_i.shape[0]
@@ -201,15 +157,7 @@ def overlap_formula(expand_r_i,
     return overlap_prod
 
 
-def tile_params(r_i,
-                r_j,
-                p_i,
-                p_j,
-                alpha_i,
-                alpha_j,
-                m_i=None,
-                m_j=None):
-
+def tile_params(r_i, r_j, p_i, p_j, alpha_i, alpha_j, m_i=None, m_j=None):
     N_I = r_i.shape[0]
     N_J = r_i.shape[0]
     N_at = r_i.shape[1]
@@ -220,35 +168,20 @@ def tile_params(r_i,
     expand_p_i = p_i.expand(N_J, N_I, N_at, 3).transpose(0, 1)
     expand_p_j = p_j.expand(N_I, N_J, N_at, 3)
 
-    expand_alpha_i = (alpha_i.reshape(1, 1, N_at, 1)
-                      .expand(N_I, N_J, N_at, 3))
+    expand_alpha_i = alpha_i.reshape(1, 1, N_at, 1).expand(N_I, N_J, N_at, 3)
 
-    expand_alpha_j = (alpha_j.reshape(1, 1, N_at, 1)
-                      .expand(N_J, N_I, N_at, 3)
-                      .transpose(0, 1))
+    expand_alpha_j = alpha_j.reshape(1, 1, N_at, 1).expand(N_J, N_I, N_at, 3).transpose(0, 1)
 
     if m_i is not None and m_j is not None:
-        expand_mi = (m_i.reshape(1, 1, N_at, 1)
-                     .expand(N_I, N_J, N_at, 3))
+        expand_mi = m_i.reshape(1, 1, N_at, 1).expand(N_I, N_J, N_at, 3)
 
-        expand_mj = (m_j.reshape(1, 1, N_at, 1)
-                     .expand(N_J, N_I, N_at, 3)
-                     .transpose(0, 1))
+        expand_mj = m_j.reshape(1, 1, N_at, 1).expand(N_J, N_I, N_at, 3).transpose(0, 1)
 
-        return (expand_r_i, expand_r_j, expand_p_i,
-                expand_p_j, expand_alpha_i, expand_alpha_j,
-                expand_mi, expand_mj)
-    else:
-        return (expand_r_i, expand_r_j, expand_p_i,
-                expand_p_j, expand_alpha_i, expand_alpha_j)
+        return (expand_r_i, expand_r_j, expand_p_i, expand_p_j, expand_alpha_i, expand_alpha_j, expand_mi, expand_mj)
+    return (expand_r_i, expand_r_j, expand_p_i, expand_p_j, expand_alpha_i, expand_alpha_j)
 
 
-def get_overlaps(r_i,
-                 r_j,
-                 alpha_i,
-                 alpha_j,
-                 p_i,
-                 p_j):
+def get_overlaps(r_i, r_j, alpha_i, alpha_j, p_i, p_j):
     """
     Args:
             r_i: Gaussian positions in state i. Tensor of
@@ -260,34 +193,27 @@ def get_overlaps(r_i,
 
     """
 
-    (expand_r_i, expand_r_j, expand_p_i,
-     expand_p_j, expand_alpha_i, expand_alpha_j) = tile_params(r_i,
-                                                               r_j,
-                                                               p_i,
-                                                               p_j,
-                                                               alpha_i,
-                                                               alpha_j)
+    (expand_r_i, expand_r_j, expand_p_i, expand_p_j, expand_alpha_i, expand_alpha_j) = tile_params(
+        r_i, r_j, p_i, p_j, alpha_i, alpha_j
+    )
 
-    r_max = ((expand_alpha_i * expand_r_i + expand_alpha_j * expand_r_j)
-             / (expand_alpha_i + expand_alpha_j))
+    r_max = (expand_alpha_i * expand_r_i + expand_alpha_j * expand_r_j) / (expand_alpha_i + expand_alpha_j)
 
     # G_ij
 
-    overlap = overlap_formula(expand_r_i=expand_r_i,
-                              expand_r_j=expand_r_j,
-                              expand_alpha_i=expand_alpha_i,
-                              expand_alpha_j=expand_alpha_j,
-                              expand_p_i=expand_p_i,
-                              expand_p_j=expand_p_j)
+    overlap = overlap_formula(
+        expand_r_i=expand_r_i,
+        expand_r_j=expand_r_j,
+        expand_alpha_i=expand_alpha_i,
+        expand_alpha_j=expand_alpha_j,
+        expand_p_i=expand_p_i,
+        expand_p_j=expand_p_j,
+    )
 
     return overlap, r_max
 
 
-def get_coupling_r(r_list,
-                   p_list,
-                   alpha_dic,
-                   atom_nums,
-                   min_overlap):
+def get_coupling_r(r_list, p_list, alpha_dic, atom_nums, min_overlap):
     """
     Get all overlaps betwene nuclear wave functions on different states, and get the positions
     at which the overlaps are large enough that we'll want to calculate matrix elements
@@ -304,32 +230,27 @@ def get_coupling_r(r_list,
 
     for i in range(num_states):
         for j in range(num_states):
-
             r_i = r_list[i]  # N_I x N_at x 3
             r_j = r_list[j]  # N_J x N_at x 3
 
             p_i = p_list[i]
             p_j = p_list[j]
 
-            alpha_i = torch.Tensor([alpha_dic[atom_num]
-                                    for atom_num in atom_nums])
+            alpha_i = torch.Tensor([alpha_dic[atom_num] for atom_num in atom_nums])
             alpha_j = copy.deepcopy(alpha_i)
 
-            overlap, r_max = get_overlaps(r_i=r_i,
-                                          r_j=r_j,
-                                          alpha_i=alpha_i,
-                                          alpha_j=alpha_j,
-                                          p_i=p_i,
-                                          p_j=p_j)
+            overlap, r_max = get_overlaps(r_i=r_i, r_j=r_j, alpha_i=alpha_i, alpha_j=alpha_j, p_i=p_i, p_j=p_j)
 
             couple_mask = abs(overlap) > min_overlap
             couple_idx = couple_mask.nonzero()
             couple_r = r_max[couple_idx[:, 0], couple_idx[:, 1]]
 
-            couple_dic[f"{i}_{j}"] = {"overlap": overlap,
-                                      "couple_idx": couple_idx,
-                                      "couple_r": couple_r,
-                                      "couple_mask": couple_mask}
+            couple_dic[f"{i}_{j}"] = {
+                "overlap": overlap,
+                "couple_idx": couple_idx,
+                "couple_r": couple_r,
+                "couple_mask": couple_mask,
+            }
 
     return couple_dic
 
@@ -350,19 +271,12 @@ def compute_A(m, nacv, hbar=1):
     """
 
     m_reshape = m.reshape(1, -1, 1)
-    A_ij = (-hbar ** 2 / m_reshape * nacv).sum((1, 2))
+    A_ij = (-(hbar**2) / m_reshape * nacv).sum((1, 2))
 
     return A_ij
 
 
-def nonad_ham_ij(couple_r,
-                 nacv,
-                 overlap,
-                 mask,
-                 alpha_j,
-                 r_j,
-                 p_j,
-                 m):
+def nonad_ham_ij(couple_r, nacv, overlap, mask, alpha_j, r_j, p_j, m):
     """
     Construct the off-diagonal elements of the Hamiltonian in the
     adiabatic basis. Computes f_ij = f(R_ij), the value of the matrix
@@ -412,8 +326,7 @@ def nonad_ham_ij(couple_r,
     # we take the sum along the atomic dimensions
 
     n_ij = idx.shape[0]
-    nabla_ij_real = ((-alpha_j_reshape * (couple_r - mask_rj))
-                     .reshape(n_ij, -1).sum(-1))
+    nabla_ij_real = (-alpha_j_reshape * (couple_r - mask_rj)).reshape(n_ij, -1).sum(-1)
     nabla_ij_im = mask_pj.reshape(n_ij, -1).sum(-1)
 
     # Convert to numpy to make it complex
@@ -498,15 +411,8 @@ def nonad_ham_ij(couple_r,
 
 #     return h_ij
 
-def nuc_ke(r_j,
-           p_j,
-           alpha_j,
-           r_i,
-           p_i,
-           alpha_i,
-           mask,
-           m,
-           hbar=1):
+
+def nuc_ke(r_j, p_j, alpha_j, r_i, p_i, alpha_i, mask, m, hbar=1):
     """
     Get the diagonal kinetic energy part of the Hamiltonian.
     Args:
@@ -524,38 +430,31 @@ def nuc_ke(r_j,
 
     #  **** this should actually be done analytically
 
-    (expand_r_i, expand_r_j, expand_p_i,
-     expand_p_j, expand_alpha_i, expand_alpha_j,
-     expand_mi, expand_mj) = tile_params(r_i,
-                                         r_j,
-                                         p_i,
-                                         p_j,
-                                         alpha_i,
-                                         alpha_j)
+    (expand_r_i, expand_r_j, expand_p_i, expand_p_j, expand_alpha_i, expand_alpha_j, expand_mi, expand_mj) = (
+        tile_params(r_i, r_j, p_i, p_j, alpha_i, alpha_j)
+    )
 
-    A = (-2 * expand_alpha_j - (expand_p_j) ** 2
-         + 4 * 1j * expand_alpha_j * expand_p_j * expand_r_j)
+    A = -2 * expand_alpha_j - (expand_p_j) ** 2 + 4 * 1j * expand_alpha_j * expand_p_j * expand_r_j
 
-    B = (-4 * 1j * expand_alpha_j * expand_p_j
-         - 8 * (expand_alpha_j) ** 2 * expand_r_j)
+    B = -4 * 1j * expand_alpha_j * expand_p_j - 8 * (expand_alpha_j) ** 2 * expand_r_j
 
-    C = 4 * expand_alpha_j ** 2
+    C = 4 * expand_alpha_j**2
 
-    D = (1j * expand_p_i * expand_r_i - 1j * expand_p_j * expand_r_j
-         - expand_alpha_i * expand_r_i ** 2 - expand_alpha_j * expand_r_j ** 2)
+    D = (
+        1j * expand_p_i * expand_r_i
+        - 1j * expand_p_j * expand_r_j
+        - expand_alpha_i * expand_r_i**2
+        - expand_alpha_j * expand_r_j**2
+    )
 
-    E = (1j * expand_p_j - 1j * expand_p_i + 2 * expand_r_i * expand_alpha_i
-         + 2 * expand_r_j * expand_alpha_j)
+    E = 1j * expand_p_j - 1j * expand_p_i + 2 * expand_r_i * expand_alpha_i + 2 * expand_r_j * expand_alpha_j
 
     F = expand_alpha_i + expand_alpha_j
     #  *** are we dividing by the right mass here??
 
-    prefactor = ((2) ** 0.5 * (expand_alpha_i * expand_alpha_j) ** 0.25
-                 * (-hbar ** 2) / (2 * expand_mj))
+    prefactor = (2) ** 0.5 * (expand_alpha_i * expand_alpha_j) ** 0.25 * (-(hbar**2)) / (2 * expand_mj)
 
-    main_term = (1 / (4 * F ** (5/2))
-                 * np.exp(D + E ** 2 / (4 * F))
-                 * (C * E ** 2 + 2 * (C + B * E) * F + 4 * A * F ** 2))
+    main_term = 1 / (4 * F ** (5 / 2)) * np.exp(D + E**2 / (4 * F)) * (C * E**2 + 2 * (C + B * E) * F + 4 * A * F**2)
 
     # dimension N_I x N_J x N_at x 3
     ke_vec = prefactor * main_term
@@ -567,9 +466,7 @@ def nuc_ke(r_j,
     return ke
 
 
-def elec_e(energies,
-           overlap,
-           mask):
+def elec_e(energies, overlap, mask):
     """
         Args:
         energies (torch.Tensor): n_ij dimensional tensor
@@ -587,18 +484,9 @@ def elec_e(energies,
     return h_ij
 
 
-def construct_ham(r_list,
-                  p_list,
-                  atom_nums,
-                  m,
-                  couple_dic,
-                  nbrs,
-                  gen_nbrs,
-                  batch_size,
-                  device,
-                  model,
-                  diabat_keys,
-                  alpha_dic):
+def construct_ham(
+    r_list, p_list, atom_nums, m, couple_dic, nbrs, gen_nbrs, batch_size, device, model, diabat_keys, alpha_dic
+):
     """
     This needs to be fixed  -- need properly H term
     for adiabatic, and also nuclear kinetic energy
@@ -617,39 +505,37 @@ def construct_ham(r_list,
         h_ad (np.array): Hamiltonian in adiabatic basis
     """
 
-    num_states = int(couple_dic ** 0.5)
+    num_states = int(couple_dic**0.5)
     max_basis = max([r.shape[0] for r in r_list])
 
     # padded, as different states have different number of
     # trj basis functions
 
-    h_d = torch.zeros(num_states, num_states,
-                      max_basis, max_basis).numpy()
+    h_d = torch.zeros(num_states, num_states, max_basis, max_basis).numpy()
 
-    h_ad = torch.zeros(num_states, num_states,
-                       max_basis,  max_basis).numpy()
+    h_ad = torch.zeros(num_states, num_states, max_basis, max_basis).numpy()
 
     for key, sub_dic in couple_dic.items():
-
         i, j = key.split("_")
         couple_r = sub_dic["couple_r"]
 
-        results, dataset = get_engrad(r=couple_r,
-                                      atom_nums=atom_nums,
-                                      nbrs=nbrs,
-                                      gen_nbrs=gen_nbrs,
-                                      batch_size=batch_size,
-                                      device=device,
-                                      model=model,
-                                      diabat_keys=diabat_keys)
+        results, dataset = get_engrad(
+            r=couple_r,
+            atom_nums=atom_nums,
+            nbrs=nbrs,
+            gen_nbrs=gen_nbrs,
+            batch_size=batch_size,
+            device=device,
+            model=model,
+            diabat_keys=diabat_keys,
+        )
 
         mask = sub_dic["couple_mask"]  # numpy array
         overlap = sub_dic["overlap"]  # numpy array (complex)
 
         # h_d_ij = torch.zeros_like(overlap).numpy()
 
-        alpha_j = torch.Tensor([alpha_dic[atom_num]
-                                for atom_num in atom_nums])
+        alpha_j = torch.Tensor([alpha_dic[atom_num] for atom_num in atom_nums])
         alpha_i = copy.deepcopy(alpha_j)
 
         r_j = r_list[j]
@@ -659,17 +545,9 @@ def construct_ham(r_list,
         p_i = p_list[i]
 
         if i == j:
-
             # nuclear kinetic energy component
 
-            h_ad_ij = nuc_ke(r_j,
-                             p_j,
-                             alpha_j,
-                             r_i,
-                             p_i,
-                             alpha_i,
-                             mask,
-                             m)
+            h_ad_ij = nuc_ke(r_j, p_j, alpha_j, r_i, p_i, alpha_i, mask, m)
 
             h_d_ij = copy.deepcopy(h_ad_ij)
 
@@ -678,36 +556,24 @@ def construct_ham(r_list,
             ad_key = f"energy_{i}"
             diabat_key = diabat_keys[i][j]
 
-            h_ad_ij += elec_e(results[ad_key],
-                              overlap,
-                              mask)
+            h_ad_ij += elec_e(results[ad_key], overlap, mask)
 
-            h_d_ij += elec_e(results[diabat_key],
-                             overlap,
-                             mask)
+            h_d_ij += elec_e(results[diabat_key], overlap, mask)
 
         else:
-
             # The off-diagonal Hamiltonian in the adiabatic
             # basis involves the non-adiabatic coupling vector
 
             nacv = results[f"nacv_{i}{j}"]
-            h_ad_ij = nonad_ham_ij(couple_r=couple_r,
-                                   nacv=nacv,
-                                   overlap=overlap,
-                                   mask=mask,
-                                   alpha_j=alpha_j,
-                                   r_j=r_j,
-                                   p_j=p_j,
-                                   m=m)
+            h_ad_ij = nonad_ham_ij(
+                couple_r=couple_r, nacv=nacv, overlap=overlap, mask=mask, alpha_j=alpha_j, r_j=r_j, p_j=p_j, m=m
+            )
 
             # The off-diagonal Hamiltonian in the diabatic
             # basis is the diabatic eletronic energy
 
             diabat_key = diabat_keys[i][j]
-            h_d_ij = elec_e(results[diabat_key],
-                            overlap,
-                            mask)
+            h_d_ij = elec_e(results[diabat_key], overlap, mask)
 
         N_I, N_J = overlap.shape[:2]
         h_d[i, j, :N_I, :N_J] = h_d_ij
@@ -716,26 +582,23 @@ def construct_ham(r_list,
     return h_d, h_ad
 
 
-def diabat_spawn_criterion(states,
-                           results,
-                           diabat_keys,
-                           threshold):
+def diabat_spawn_criterion(states, results, diabat_keys, threshold):
     """
-        Args:
+    Args:
 
-          results_list (list[dict]): list of dictionaries. Each
-                            dictionary corresponds to an electronic state.
-                            It contains model predictions for the
-                            positions of the nuclear wave packets on
-                             that state.
-        Returns:
-                thresh_dic (dict): dictionary with keys for each state,
-                        the value of which is a subdictionary. The subdictionary
-                        contains keys for each other state. Say we're looking at 
-                        main key i and subdictionary key j. Then thresh_dic[i][j]
-                        is a boolean tensor of dimension N_I. For each Gaussian
-                        basis function in state i, it tells you whether you should
-                        replicate it on state j.
+      results_list (list[dict]): list of dictionaries. Each
+                        dictionary corresponds to an electronic state.
+                        It contains model predictions for the
+                        positions of the nuclear wave packets on
+                         that state.
+    Returns:
+            thresh_dic (dict): dictionary with keys for each state,
+                    the value of which is a subdictionary. The subdictionary
+                    contains keys for each other state. Say we're looking at
+                    main key i and subdictionary key j. Then thresh_dic[i][j]
+                    is a boolean tensor of dimension N_I. For each Gaussian
+                    basis function in state i, it tells you whether you should
+                    replicate it on state j.
 
     """
 
@@ -768,28 +631,25 @@ def diabat_spawn_criterion(states,
     return thresh_dic
 
 
-def adiabat_spawn_criterion(states,
-                            results,
-                            v_list,
-                            threshold):
+def adiabat_spawn_criterion(states, results, v_list, threshold):
     """
-        Args:
+    Args:
 
-          results_list (list[dict]): list of dictionaries. Each
-                            dictionary corresponds to an electronic state.
-                            It contains model predictions for the
-                            positions of the nuclear wave packets on
-                             that state.
-            v_list (list[torch.Tensor]): list of velocities for wave
-                                        packets on each state.
-        Returns:
-                thresh_dic (dict): dictionary with keys for each state,
-                        the value of which is a subdictionary. The subdictionary
-                        contains keys for each other state. Say we're looking at 
-                        main key i and subdictionary key j. Then thresh_dic[i][j]
-                        is a boolean tensor of dimension N_I. For each Gaussian
-                        basis function in state i, it tells you whether you should
-                        replicate it on state j.
+      results_list (list[dict]): list of dictionaries. Each
+                        dictionary corresponds to an electronic state.
+                        It contains model predictions for the
+                        positions of the nuclear wave packets on
+                         that state.
+        v_list (list[torch.Tensor]): list of velocities for wave
+                                    packets on each state.
+    Returns:
+            thresh_dic (dict): dictionary with keys for each state,
+                    the value of which is a subdictionary. The subdictionary
+                    contains keys for each other state. Say we're looking at
+                    main key i and subdictionary key j. Then thresh_dic[i][j]
+                    is a boolean tensor of dimension N_I. For each Gaussian
+                    basis function in state i, it tells you whether you should
+                    replicate it on state j.
 
     """
 
@@ -813,17 +673,12 @@ def adiabat_spawn_criterion(states,
             # Effective coupling
 
             h_eff = (vel * nacv).sum()
-            thresh_dic[i][j] = {"criterion": (abs(h_eff) > threshold).any(),
-                                "val": h_eff.norm()}
+            thresh_dic[i][j] = {"criterion": (abs(h_eff) > threshold).any(), "val": h_eff.norm()}
 
     return thresh_dic
 
 
-def get_vals(diabatic,
-             surf,
-             diabat_keys,
-             results):
-
+def get_vals(diabatic, surf, diabat_keys, results):
     i = surf
     if diabatic:
         en_key = diabat_keys[i][i]
@@ -837,29 +692,27 @@ def get_vals(diabatic,
     return en, en_grad
 
 
-def nuc_classical(r,
-                  gamma,
-                  m,
-                  atom_num,
-                  p,
-                  nbrs,
-                  gen_nbrs,
-                  batch_size,
-                  device,
-                  model,
-                  states,
-                  diabat_keys,
-                  diabatic,
-                  dt,
-                  surf,
-                  old_results):
-
+def nuc_classical(
+    r,
+    gamma,
+    m,
+    atom_num,
+    p,
+    nbrs,
+    gen_nbrs,
+    batch_size,
+    device,
+    model,
+    states,
+    diabat_keys,
+    diabatic,
+    dt,
+    surf,
+    old_results,
+):
     # classical propagation of nuclei
 
-    old_en, old_grad = get_vals(diabatic=diabatic,
-                                surf=surf,
-                                diabat_keys=diabat_keys,
-                                results=old_results)
+    old_en, old_grad = get_vals(diabatic=diabatic, surf=surf, diabat_keys=diabat_keys, results=old_results)
 
     # note: we need a p + 1/2 dt and a p + 3/2 dt
     # The p that we keep track of will always be 1/2 dt
@@ -874,19 +727,9 @@ def nuc_classical(r,
     # m has dim N_at
     r_new = r + 1 / m.reshape(1, -1, 1) * dt * p
 
-    results, dataset = get_engrad(r_new,
-                                  atom_num,
-                                  nbrs,
-                                  gen_nbrs,
-                                  batch_size,
-                                  device,
-                                  model,
-                                  diabat_keys)
+    results, dataset = get_engrad(r_new, atom_num, nbrs, gen_nbrs, batch_size, device, model, diabat_keys)
 
-    new_en, new_grad = get_vals(diabatic=diabatic,
-                                surf=surf,
-                                diabat_keys=diabat_keys,
-                                results=results)
+    new_en, new_grad = get_vals(diabatic=diabatic, surf=surf, diabat_keys=diabat_keys, results=results)
 
     p_new = p - new_grad * dt
 
@@ -896,24 +739,25 @@ def nuc_classical(r,
     return r_new, p_new, gamma_new, results
 
 
-def find_spawn(r,
-               gamma,
-               m,
-               atom_num,
-               p,
-               nbrs,
-               gen_nbrs,
-               batch_size,
-               device,
-               model,
-               diabat_keys,
-               diabatic,
-               dt,
-               new_surf,
-               old_results,
-               old_surf,
-               threshold):
-
+def find_spawn(
+    r,
+    gamma,
+    m,
+    atom_num,
+    p,
+    nbrs,
+    gen_nbrs,
+    batch_size,
+    device,
+    model,
+    diabat_keys,
+    diabatic,
+    dt,
+    new_surf,
+    old_results,
+    old_surf,
+    threshold,
+):
     # classical propagation
 
     too_big = False
@@ -929,38 +773,34 @@ def find_spawn(r,
 
     while too_big:
         # this is right: keep propagating along the old surface
-        r_new, p_new, gamma_new, new_results = nuc_classical(r_new,
-                                                             gamma_new,
-                                                             m,
-                                                             atom_num,
-                                                             p_new,
-                                                             nbrs,
-                                                             gen_nbrs,
-                                                             batch_size,
-                                                             device,
-                                                             model,
-                                                             diabat_keys,
-                                                             diabatic,
-                                                             dt,
-                                                             old_surf,
-                                                             old_results)
+        r_new, p_new, gamma_new, new_results = nuc_classical(
+            r_new,
+            gamma_new,
+            m,
+            atom_num,
+            p_new,
+            nbrs,
+            gen_nbrs,
+            batch_size,
+            device,
+            model,
+            diabat_keys,
+            diabatic,
+            dt,
+            old_surf,
+            old_results,
+        )
 
         states = [old_surf, new_surf]
 
         if diabatic:
-            spawn_dic = diabat_spawn_criterion(states,
-                                               new_results,
-                                               diabat_keys,
-                                               threshold)
+            spawn_dic = diabat_spawn_criterion(states, new_results, diabat_keys, threshold)
         else:
-            spawn_dic = adiabat_spawn_criterion(states,
-                                                new_results,
-                                                v_list,
-                                                threshold)
+            spawn_dic = adiabat_spawn_criterion(states, new_results, v_list, threshold)
 
-        coupling = spawn_dic[old_surf][new_surf]['val']
+        coupling = spawn_dic[old_surf][new_surf]["val"]
         couplings.append(coupling)
-        too_big = spawn_dic[old_surf][new_surf]['criterion']
+        too_big = spawn_dic[old_surf][new_surf]["criterion"]
 
         r_list.append(r_new)
         p_list.append(p_new)
@@ -980,81 +820,74 @@ def find_spawn(r,
     return spawn_r, spawn_p, spawn_idx, old_results_list
 
 
-def rescale(p_new,
-            m,
-            diabatic,
-            results,
-            old_surf,
-            new_surf):
-
+def rescale(p_new, m, diabatic, results, old_surf, new_surf):
     if diabatic:
         raise NotImplementedError
-    else:
-        # p has dimension N_J x N_at x 3
-        # nacv has dimension N_J x N_at x 3
+    # p has dimension N_J x N_at x 3
+    # nacv has dimension N_J x N_at x 3
 
-        nacv = results[f'nacv_{old_surf}{new_surf}']
-        norm = (nacv ** 2).sum(-1) ** 0.5
-        nacv_unit = nacv / norm
+    nacv = results[f"nacv_{old_surf}{new_surf}"]
+    norm = (nacv**2).sum(-1) ** 0.5
+    nacv_unit = nacv / norm
 
-        # dot product
-        projection = (nacv_unit * p_new).sum(-1)
+    # dot product
+    projection = (nacv_unit * p_new).sum(-1)
 
-        # p_parallel
-        N_J, N_at = projection.shape
-        p_par = (projection.reshape(N_J, N_at, 1)
-                 * nacv_unit)
+    # p_parallel
+    N_J, N_at = projection.shape
+    p_par = projection.reshape(N_J, N_at, 1) * nacv_unit
 
-        # p perpendicular
-        p_perp = p_new - p_par
+    # p perpendicular
+    p_perp = p_new - p_par
 
-        # get energies before and after hop
-        # m has shape N_at
-        # is this right?
+    # get energies before and after hop
+    # m has shape N_at
+    # is this right?
 
-        t_old = (p_new ** 2 / (2 * m.reshape(1, -1, 1))).sum()
-        t_old_perp = (p_perp ** 2 / (2 * m.reshape(1, -1, 1))).sum()
-        t_old_par = (p_par ** 2 / (2 * m.reshape(1, -1, 1))).sum()
-        v_old = results[f'energy_{old_surf}']
-        v_new = results[f'energy_{new_surf}']
+    t_old = (p_new**2 / (2 * m.reshape(1, -1, 1))).sum()
+    t_old_perp = (p_perp**2 / (2 * m.reshape(1, -1, 1))).sum()
+    t_old_par = (p_par**2 / (2 * m.reshape(1, -1, 1))).sum()
+    v_old = results[f"energy_{old_surf}"]
+    v_new = results[f"energy_{new_surf}"]
 
-        # re-scale p_parallel
-        # not 100% sure if this is right
+    # re-scale p_parallel
+    # not 100% sure if this is right
 
-        scale_sq = (t_old + v_old - (t_old_perp + v_new)) / t_old_par
+    scale_sq = (t_old + v_old - (t_old_perp + v_new)) / t_old_par
 
-        if scale_sq < 0:
-            # kinetic energy can't compensate the change in
-            # potential energy
-            return None
+    if scale_sq < 0:
+        # kinetic energy can't compensate the change in
+        # potential energy
+        return None
 
-        scale = scale_sq ** 0.5
+    scale = scale_sq**0.5
 
-        new_p = p_par * scale + p_perp
+    new_p = p_par * scale + p_perp
 
     return new_p
 
 
-def backward_prop(spawn_r,
-                  spawn_p,
-                  spawn_gamma,
-                  spawn_idx,
-                  m,
-                  atom_num,
-                  nbrs,
-                  gen_nbrs,
-                  batch_size,
-                  device,
-                  model,
-                  diabat_keys,
-                  diabatic,
-                  dt,
-                  new_surf,
-                  old_results_list,
-                  old_surf,
-                  threshold,
-                  dr):
-
+def backward_prop(
+    spawn_r,
+    spawn_p,
+    spawn_gamma,
+    spawn_idx,
+    m,
+    atom_num,
+    nbrs,
+    gen_nbrs,
+    batch_size,
+    device,
+    model,
+    diabat_keys,
+    diabatic,
+    dt,
+    new_surf,
+    old_results_list,
+    old_surf,
+    threshold,
+    dr,
+):
     num_steps = spawn_idx
     old_results = old_results_list[spawn_idx]
 
@@ -1062,48 +895,46 @@ def backward_prop(spawn_r,
     p_new = copy.deepcopy(spawn_p)
     # re-scale the momentum along the nacv
     # to ensure energy conservation
-    p_new = rescale(p_new=p_new,
-                    m=m,
-                    diabatic=diabatic,
-                    results=old_results,
-                    old_surf=old_surf,
-                    new_surf=new_surf)
+    p_new = rescale(p_new=p_new, m=m, diabatic=diabatic, results=old_results, old_surf=old_surf, new_surf=new_surf)
 
     if p_new is None:
-
-        grad = old_results[f'energy_{new_surf}_grad']
+        grad = old_results[f"energy_{new_surf}_grad"]
         r_new = spawn_r - grad * dr
 
-        new_results = get_engrad(r_new=r_new,
-                                 atom_num=atom_num,
-                                 nbrs=nbrs,
-                                 gen_nbrs=gen_nbrs,
-                                 batch_size=batch_size,
-                                 device=device,
-                                 model=model,
-                                 diabat_keys=diabat_keys)
+        new_results = get_engrad(
+            r_new=r_new,
+            atom_num=atom_num,
+            nbrs=nbrs,
+            gen_nbrs=gen_nbrs,
+            batch_size=batch_size,
+            device=device,
+            model=model,
+            diabat_keys=diabat_keys,
+        )
 
         old_results_list[spawn_idx] = new_results
 
-        return backward_prop(r_new,
-                             spawn_p,
-                             spawn_gamma,
-                             spawn_idx,
-                             m,
-                             atom_num,
-                             nbrs,
-                             gen_nbrs,
-                             batch_size,
-                             device,
-                             model,
-                             diabat_keys,
-                             diabatic,
-                             dt,
-                             new_surf,
-                             old_results_list,
-                             old_surf,
-                             threshold,
-                             dr)
+        return backward_prop(
+            r_new,
+            spawn_p,
+            spawn_gamma,
+            spawn_idx,
+            m,
+            atom_num,
+            nbrs,
+            gen_nbrs,
+            batch_size,
+            device,
+            model,
+            diabat_keys,
+            diabatic,
+            dt,
+            new_surf,
+            old_results_list,
+            old_surf,
+            threshold,
+            dr,
+        )
 
     gamma_new = copy.deepcopy(spawn_gamma)
 
@@ -1114,21 +945,23 @@ def backward_prop(spawn_r,
     for _ in range(num_steps):
         # I don't think just replacing it with -dt is right - don't
         # we have to replace the forces with their negative values?
-        r_new, p_new, gamma_new, new_results = nuc_classical(r_new,
-                                                             gamma_new,
-                                                             m,
-                                                             atom_num,
-                                                             p_new,
-                                                             nbrs,
-                                                             gen_nbrs,
-                                                             batch_size,
-                                                             device,
-                                                             model,
-                                                             diabat_keys,
-                                                             diabatic,
-                                                             (-dt),
-                                                             new_surf,
-                                                             old_results)
+        r_new, p_new, gamma_new, new_results = nuc_classical(
+            r_new,
+            gamma_new,
+            m,
+            atom_num,
+            p_new,
+            nbrs,
+            gen_nbrs,
+            batch_size,
+            device,
+            model,
+            diabat_keys,
+            diabatic,
+            (-dt),
+            new_surf,
+            old_results,
+        )
         old_results = new_results
 
     return r_new, p_new

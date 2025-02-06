@@ -1,3 +1,5 @@
+
+# ruff: noqa: E741
 import time
 
 import torch
@@ -55,7 +57,7 @@ def get_elec_config(max_z):
     # in ELEC_CONFIG
     elec_config = torch.ones(max_z + 1, 20) * float("nan")
     for z, val in ELEC_CONFIG.items():
-        elec_config[z] = torch.Tensor([z] + val) / max_z_config
+        elec_config[z] = torch.Tensor([z, *val]) / max_z_config
     return elec_config
 
 
@@ -101,14 +103,8 @@ def scatter_mol(atomwise, num_atoms):
     because it takes a very long time to make the indices that
     map atom index to molecule.
     """
-
-    out = []
     atom_split = torch.split(atomwise, num_atoms.tolist())
-    for split in atom_split:
-        out.append(split.sum(0))
-    out = torch.stack(out)
-
-    return out
+    return torch.stack([split.sum(0) for split in atom_split])
 
 
 def scatter_pairwise(pairwise, num_atoms, nbrs):

@@ -498,9 +498,9 @@ def check_parameters(params_type, params):
         if key in params_type and not isinstance(val, params_type[key]):
             raise ParameterError(f"{key} is not {params_type[key]}")
 
-        for model in PARAMS_TYPE:
+        for model, value in PARAMS_TYPE.items():
             if key == f"{model.lower()}_params":
-                check_parameters(PARAMS_TYPE[model], val)
+                check_parameters(value, val)
 
 
 def get_model(params: dict, model_type: str = "SchNet", **kwargs):

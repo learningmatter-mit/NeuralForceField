@@ -3,9 +3,9 @@ from torch import nn
 from torch.nn import Sequential
 
 from nff.data.graphs import get_bond_idx
-from nff.nn.models.conformers import WeightedConformers
-from nff.nn.modules import SchNetEdgeFilter, MixedSchNetConv
 from nff.nn.layers import Dense
+from nff.nn.models.conformers import WeightedConformers
+from nff.nn.modules import MixedSchNetConv, SchNetEdgeFilter
 from nff.utils.tools import layer_types, make_directed
 
 
@@ -52,7 +52,7 @@ class SchNetFeatures(WeightedConformers):
                     n_filters=n_filters,
                     dropout_rate=dropout_rate,
                     n_bond_hidden=n_bond_hidden,
-                    activation=activation
+                    activation=activation,
                 )
                 for _ in range(n_convolutions)
             ]
@@ -66,35 +66,23 @@ class SchNetFeatures(WeightedConformers):
             trainable_gauss=trainable_gauss,
             n_filters=n_filters,
             dropout_rate=dropout_rate,
-            activation=activation)
+            activation=activation,
+        )
 
         # for converting bond features to hidden feature vectors
         self.bond_filter = Sequential(
-            Dense(
-                in_features=n_bond_features,
-                out_features=n_bond_hidden,
-                dropout_rate=dropout_rate),
+            Dense(in_features=n_bond_features, out_features=n_bond_hidden, dropout_rate=dropout_rate),
             layer_types[activation](),
-            Dense(
-                in_features=n_bond_hidden,
-                out_features=n_bond_hidden,
-                dropout_rate=dropout_rate)
+            Dense(in_features=n_bond_hidden, out_features=n_bond_hidden, dropout_rate=dropout_rate),
         )
 
         self.atom_filter = Sequential(
-            Dense(
-                in_features=n_atom_basis,
-                out_features=n_atom_hidden,
-                dropout_rate=dropout_rate),
+            Dense(in_features=n_atom_basis, out_features=n_atom_hidden, dropout_rate=dropout_rate),
             layer_types[activation](),
-            Dense(
-                in_features=n_atom_hidden,
-                out_features=n_atom_hidden,
-                dropout_rate=dropout_rate)
+            Dense(in_features=n_atom_hidden, out_features=n_atom_hidden, dropout_rate=dropout_rate),
         )
 
-    def find_bond_idx(self,
-                      batch):
+    def find_bond_idx(self, batch):
         """
         Get `bond_idx`, which map bond indices to indices
         in the neighbor list.
@@ -110,19 +98,14 @@ class SchNetFeatures(WeightedConformers):
             bond_idx = batch["bond_idx"]
             if not was_directed:
                 nbr_dim = nbr_list.shape[0]
-                bond_idx = torch.cat([bond_idx,
-                                      bond_idx + nbr_dim // 2])
+                bond_idx = torch.cat([bond_idx, bond_idx + nbr_dim // 2])
         else:
             bonded_nbr_list = batch["bonded_nbr_list"]
             bonded_nbr_list, _ = make_directed(bonded_nbr_list)
             bond_idx = get_bond_idx(bonded_nbr_list, nbr_list)
         return bond_idx
 
-    def convolve_sub_batch(self,
-                           batch,
-                           xyz=None,
-                           xyz_grad=False,
-                           **kwargs):
+    def convolve_sub_batch(self, batch, xyz=None, xyz_grad=False, **kwargs):
         """
 
         Apply the convolutional layers to a sub-batch.
@@ -152,8 +135,7 @@ class SchNetFeatures(WeightedConformers):
 
         bond_dim = bond_features.shape[1]
         num_pairs = a.shape[0]
-        bond_edge_features = torch.zeros(num_pairs, bond_dim
-                                         ).to(a.device)
+        bond_edge_features = torch.zeros(num_pairs, bond_dim).to(a.device)
 
         bond_idx = self.find_bond_idx(batch)
         bond_edge_features[bond_idx] = bond_features
@@ -161,24 +143,22 @@ class SchNetFeatures(WeightedConformers):
         # offsets take care of periodic boundary conditions
         offsets = batch.get("offsets", 0)
         # to deal with any shape mismatches
-        if hasattr(offsets, 'max') and offsets.max() == 0:
+        if hasattr(offsets, "max") and offsets.max() == 0:
             offsets = 0
 
         if "distances" in batch:
             distances = batch["distances"][:, None]
         else:
-            distances = (xyz[a[:, 0]] - xyz[a[:, 1]] -
-                         offsets).pow(2).sum(1).sqrt()[:, None]
+            distances = (xyz[a[:, 0]] - xyz[a[:, 1]] - offsets).pow(2).sum(1).sqrt()[:, None]
         distance_feats = self.distance_filter(distances)
 
-        e = torch.cat([bond_edge_features, distance_feats],
-                      dim=-1)
+        e = torch.cat([bond_edge_features, distance_feats], dim=-1)
 
         r = self.atom_filter(batch["atom_features"])
 
         # update function includes periodic boundary conditions
 
-        for i, conv in enumerate(self.convolutions):
+        for conv in self.convolutions:
             dr = conv(r=r, e=e, a=a)
             r = r + dr
 

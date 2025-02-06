@@ -2,6 +2,7 @@ import copy
 import math
 import os
 import pickle
+from typing import Optional
 
 import numpy as np
 from ase import units
@@ -64,7 +65,7 @@ class NoseHoover(MolecularDynamics):
 
         self.nbr_update_period = nbr_update_period
 
-        # initial Maxwell-Boltmann temperature for atoms
+        # initial Maxwell-Boltzmann temperature for atoms
         if maxwell_temp is None:
             maxwell_temp = temperature
 
@@ -90,10 +91,8 @@ class NoseHoover(MolecularDynamics):
                     has_keys = True
             if not has_keys:
                 print(
-                    (
-                        "WARNING: velocity not set to zero for any atoms in constraint "
-                        "%s; do not know how to find its fixed indices." % constraint
-                    )
+                    "WARNING: velocity not set to zero for any atoms in constraint "
+                    "%s; do not know how to find its fixed indices." % constraint
                 )
 
         if not fixed_idx:
@@ -247,82 +246,6 @@ class NoseHooverChain(NoseHoover):
         self.p_zeta += 0.5 * dpzeta_dt * self.dt
 
 
-# Does anyone use this?
-# class NoseHooverChainsBiased(NoseHooverChain):
-#     def __init__(self,
-#                  atoms,
-#                  timestep,
-#                  temperature,
-#                  ttime,
-#                  num_chains,
-#                  maxwell_temp=None,
-#                  trajectory=None,
-#                  logfile=None,
-#                  loginterval=1,
-#                  max_steps=None,
-#                  nbr_update_period=20,
-#                  append_trajectory=True,
-#                  **kwargs):
-
-#         NoseHooverChain.__init__(self,
-#                             atoms=atoms,
-#                             timestep=timestep,
-#                             temperature=temperature,
-#                             ttime=ttime,
-#                             num_chains=num_chains,
-#                             maxwell_temp=maxwell_temp,
-#                             trajectory=trajectory,
-#                             logfile=logfile,
-#                             loginterval=loginterval,
-#                             max_steps=max_steps,
-#                             nbr_update_period=nbr_update_period,
-#                             append_trajectory=append_trajectory,
-#                             **kwargs)
-
-
-#     def update_bias(self):
-#         # update the bias function if necessary, e.g., add aconfiguration to MetaD
-#         self.atoms.calc.update(self)
-
-#     def irun(self):
-#         # run the algorithm max_steps reached
-#         while self.nsteps < self.max_steps:
-
-#             # compute the next step
-#             self.step()
-#             self.nsteps += 1
-#             self.update_bias()
-
-#             # log the step
-#             self.log()
-#             self.call_observers()
-
-
-#     def run(self, steps=None):
-#         if steps is None:
-#             steps = self.num_steps
-
-#         epochs = math.ceil(steps / self.nbr_update_period)
-#         # number of steps in between nbr updates
-#         steps_per_epoch = int(steps / epochs)
-#         # maximum number of steps starts at `steps_per_epoch`
-#         # and increments after every nbr list update
-
-#         self.atoms.update_nbr_list()
-
-#         # compute initial structure and log the first step
-#         if self.nsteps == 0:
-#             self.update_bias()
-#             self.atoms.get_forces()
-#             self.log()
-#             self.call_observers()
-
-#         for _ in tqdm(range(epochs)):
-#             self.max_steps += steps_per_epoch
-#             self.irun()
-#             self.atoms.update_nbr_list()
-
-
 class Langevin(MolecularDynamics):
     def __init__(
         self,
@@ -330,7 +253,7 @@ class Langevin(MolecularDynamics):
         timestep: float,
         temperature: float,
         friction_per_ps: float = 1.0,
-        maxwell_temp: float = None,
+        maxwell_temp: Optional[float] = None,
         random_seed=None,
         trajectory=None,
         logfile=None,
@@ -341,16 +264,16 @@ class Langevin(MolecularDynamics):
         **kwargs,
     ):
         # Random Number Generator
-        if random_seed == None:
+        if random_seed is None:
             random_seed = np.random.randint(2147483647)
         if type(random_seed) is int:
             np.random.seed(random_seed)
-            print("THE RANDOM NUMBER SEED WAS: %i" % (random_seed))
+            print(f"THE RANDOM NUMBER SEED WAS: {random_seed}")
         else:
             try:
                 np.random.set_state(random_seed)
-            except:
-                raise ValueError("\tThe provided seed was neither an int nor a state of numpy random")
+            except BaseException as e:
+                raise ValueError("\tThe provided seed was neither an int nor a state of numpy random") from e
 
         if os.path.isfile(str(trajectory)):
             os.remove(trajectory)
@@ -409,10 +332,8 @@ class Langevin(MolecularDynamics):
                     has_keys = True
             if not has_keys:
                 print(
-                    (
-                        "WARNING: velocity not set to zero for any atoms in constraint "
-                        "%s; do not know how to find its fixed indices." % constraint
-                    )
+                    "WARNING: velocity not set to zero for any atoms in constraint "
+                    "%s; do not know how to find its fixed indices." % constraint
                 )
 
         if not fixed_idx:
@@ -485,7 +406,7 @@ class BatchLangevin(MolecularDynamics):
         timestep: float,
         temperature: float,
         friction_per_ps: float = 1.0,
-        maxwell_temp: float = None,
+        maxwell_temp: Optional[float] = None,
         random_seed=None,
         trajectory=None,
         logfile=None,
@@ -499,16 +420,16 @@ class BatchLangevin(MolecularDynamics):
             os.remove(trajectory)
 
         # Random Number Generator
-        if random_seed == None:
+        if random_seed is None:
             random_seed = np.random.randint(2147483647)
         if type(random_seed) is int:
-            np.random.seed(radnom_seed)
-            print("THE RANDOM NUMBER SEED WAS: %i" % (random_seed))
+            np.random.seed(random_seed)
+            print(f"THE RANDOM NUMBER SEED WAS: {random_seed}")
         else:
             try:
                 np.random.set_state(random_seed)
-            except:
-                raise ValueError("\tThe provided seed was neither an int nor a state of numpy random")
+            except BaseException as e:
+                raise ValueError("\tThe provided seed was neither an int nor a state of numpy random") from e
 
         MolecularDynamics.__init__(
             self,
@@ -549,9 +470,7 @@ class BatchLangevin(MolecularDynamics):
         self.nbr_update_period = nbr_update_period
 
         # initial Maxwell-Boltmann temperature for atoms
-        if maxwell_temp is not None:
-            maxwell_temp = maxwell_temp
-        else:
+        if maxwell_temp is None:
             maxwell_temp = self.T
 
         # intialize system momentum
@@ -586,10 +505,8 @@ class BatchLangevin(MolecularDynamics):
                     has_keys = True
             if not has_keys:
                 print(
-                    (
-                        "WARNING: velocity not set to zero for any atoms in constraint "
-                        "%s; do not know how to find its fixed indices." % constraint
-                    )
+                    "WARNING: velocity not set to zero for any atoms in constraint "
+                    "%s; do not know how to find its fixed indices." % constraint
                 )
 
         if not fixed_idx:
@@ -676,7 +593,7 @@ class VRescale(MolecularDynamics):
         timestep: float,
         temperature: float,
         relaxation_const: float = 100.0,
-        maxwell_temp: float = None,
+        maxwell_temp: Optional[float] = None,
         random_seed=None,
         trajectory=None,
         logfile=None,
@@ -687,16 +604,16 @@ class VRescale(MolecularDynamics):
         **kwargs,
     ):
         # Random Number Generator
-        if random_seed == None:
+        if random_seed is None:
             random_seed = np.random.randint(2147483647)
         if type(random_seed) is int:
             np.random.seed(random_seed)
-            print("THE RANDOM NUMBER SEED WAS: %i" % (random_seed))
+            print(f"THE RANDOM NUMBER SEED WAS: {random_seed}")
         else:
             try:
                 np.random.set_state(random_seed)
-            except:
-                raise ValueError("\tThe provided seed was neither an int nor a state of numpy random")
+            except BaseException as e:
+                raise ValueError("\tThe provided seed was neither an int nor a state of numpy random") from e
 
         if os.path.isfile(str(trajectory)):
             os.remove(trajectory)
@@ -753,10 +670,8 @@ class VRescale(MolecularDynamics):
                     has_keys = True
             if not has_keys:
                 print(
-                    (
-                        "WARNING: velocity not set to zero for any atoms in constraint "
-                        "%s; do not know how to find its fixed indices." % constraint
-                    )
+                    "WARNING: velocity not set to zero for any atoms in constraint "
+                    "%s; do not know how to find its fixed indices." % constraint
                 )
 
         if not fixed_idx:
@@ -1094,7 +1009,7 @@ class BatchMDLogger(MDLogger):
         epot = self.atoms.get_potential_energy()
         temp = self.atoms.get_batch_T()
 
-        for i, this_ek in enumerate(ekin):
+        for i, _this_ek in enumerate(ekin):
             this_epot = epot[i]
             this_temp = float(temp[i])
             dat += (this_epot, this_temp)
