@@ -1,3 +1,7 @@
+"""This module contains functions for evaluating the model on a dataset"""
+
+from __future__ import annotations
+
 import copy
 
 import torch
@@ -7,18 +11,37 @@ from nff.data.dataset import concatenate_dict
 from nff.utils.cuda import batch_detach, batch_to
 
 
-def shrink_batch(batch):
-    """
-    Exclude certain keys from the batch that take up a lot of memory
-    """
+def shrink_batch(batch: dict) -> dict:
+    """Exclude certain keys from the batch that take up a lot of memory
 
+    Args:
+        batch (dict): the batch to shrink
+
+    Returns:
+        dict: the shrunk batch
+    """
     bad_keys = ["nbr_list", "kj_idx", "ji_idx", "angle_list"]
     new_batch = {key: val for key, val in batch.items() if key not in bad_keys}
 
     return new_batch
 
 
-def get_results(batch, model, device, submodel, loss_fn, **kwargs):
+def get_results(
+    batch: dict, model: torch.nn.Module, device: str, submodel: str | torch.nn.Module, loss_fn: callable, **kwargs
+) -> tuple[dict, float]:
+    """Get the results of a batch from the model
+
+    Args:
+        batch (dict): the batch to evaluate
+        model (torch.nn.Module): the model to evaluate
+        device (str): the device to use
+        submodel (str | torch.nn.Module): the submodel to use
+        loss_fn (callable): the loss function to use
+        **kwargs: additional keyword arguments
+
+    Returns:
+        tuple[dict, float]: the results of the batch and the loss
+    """
     batch = batch_to(batch, device)
     model.to(device)
     if submodel is not None:  # noqa: SIM108
@@ -36,19 +59,35 @@ def get_results(batch, model, device, submodel, loss_fn, **kwargs):
 
 
 def evaluate(
-    model,
-    loader,
-    loss_fn,
-    device,
-    return_results=True,
-    loss_is_normalized=True,
-    submodel=None,
-    trim_batch=False,
-    catch_oom=True,
+    model: torch.nn.Module,
+    loader: torch.utils.data.DataLoader,
+    loss_fn: callable,
+    device: str,
+    return_results: bool = True,
+    loss_is_normalized: bool = True,
+    submodel: torch.nn.Module | None = None,
+    trim_batch: bool = False,
+    catch_oom: bool = True,
     **kwargs,
-):
-    """Evaluate the current state of the model using a given dataloader"""
+) -> tuple[dict, dict, float]:
+    """Evaluate the current state of the model using a given dataloader
 
+    Args:
+        model (torch.nn.Module): the model to evaluate
+        loader (torch.utils.data.DataLoader): the dataloader to use
+        loss_fn (callable): the loss function to use
+        device (str): the device to use
+        return_results (bool): whether to return the results
+        loss_is_normalized (bool): whether the loss is normalized
+        submodel (torch.nn.Module | None): the submodel to use
+        trim_batch (bool): whether to exclude certain keys from the batch
+        catch_oom (bool): whether to catch out of memory errors
+        **kwargs: additional keyword arguments
+
+    Returns:
+        tuple[dict, dict, float]: the results of the evaluation, the batch used for evaluation,
+         and the evaluation loss
+    """
     model.eval()
     model.to(device)
 
@@ -117,5 +156,6 @@ def evaluate(
     # this step can be slow,
     all_results = concatenate_dict(*all_results)
     all_batches = concatenate_dict(*all_batches)
+    print(f"Embedding in results: {'embedding' in all_results}")
 
     return all_results, all_batches, eval_loss

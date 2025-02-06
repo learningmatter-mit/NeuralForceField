@@ -73,7 +73,6 @@ class NeuralFF(Calculator):
         **kwargs: Description
         model (one of nff.nn.models)
         """
-
         Calculator.__init__(self, **kwargs)
         self.model = model
         self.model.eval()

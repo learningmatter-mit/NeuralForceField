@@ -1,4 +1,11 @@
-from typing import Dict, List, Optional, Tuple, Union
+"""This module contains classes for biasing potentials in NFF MD simulations.
+These calculations can be for reactive dynamics, enhanced sampling, or other
+types of simulations.
+"""
+
+from __future__ import annotations
+
+from typing import Tuple, Union
 
 import numpy as np
 from ase import units
@@ -25,11 +32,12 @@ class BiasBase(NeuralFF):
     Args:
         model: the deural force field model
         cv_def: list of Collective Variable (CV) definitions
-            [["cv_type", [atom_indices], np.array([minimum, maximum]), bin_width], [possible second dimension]]
+            [{"name": "cv_type", "index_list": [atom_indices], np.array([minimum, maximum]), bin_width},
+             {possible second dimension dict}]
         equil_temp: float temperature of the simulation (important for extended system dynamics)
     """
 
-    implemented_properties = [
+    implemented_properties = [  # noqa: RUF012
         "energy",
         "forces",
         "stress",
@@ -44,7 +52,7 @@ class BiasBase(NeuralFF):
         "const_vals",
     ]
 
-    def __init__(
+    def __init__(  # noqa: D107
         self,
         model,
         cv_defs: list[dict],
@@ -136,9 +144,12 @@ class BiasBase(NeuralFF):
     def diff(self, a: Union[np.ndarray, float], b: Union[np.ndarray, float], cv_type: str) -> Union[np.ndarray, float]:
         """get difference of elements of numbers or arrays
         in range(-inf, inf) if is_angle is False or in range(-pi, pi) if is_angle is True
+
         Args:
             a: number or array
             b: number or array
+            cv_type (str): type of CV
+
         Returns:
             diff: element-wise difference (a-b)
         """
@@ -161,8 +172,8 @@ class BiasBase(NeuralFF):
         self,
         xi: np.ndarray,
         grad_xi: np.ndarray,
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """energy and gradient of bias
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Energy and gradient of bias
 
         Args:
             curr_cv: current value of the cv
@@ -172,7 +183,6 @@ class BiasBase(NeuralFF):
             bias_ener: bias energy
             bias_grad: gradiant of the bias in CV space, needs to be dotted with the cv_gradient
         """
-
         self._propagate_ext()
         bias_ener, bias_grad = self._extended_dynamics(xi, grad_xi)
 
@@ -958,7 +968,7 @@ class AttractiveBias(NeuralFF):
        Designed to be used with UQ as CV
 
     Args:
-        model: the deural force field model
+        model: the neural force field model
         cv_def: list of Collective Variable (CV) definitions
             [["cv_type", [atom_indices], np.array([minimum, maximum]), bin_width], [possible second dimension]]
         gamma: coupling strength, regulates strength of attraction

@@ -14,14 +14,28 @@ from rdkit import Chem
 from torch import nn
 from torch.nn import ModuleDict
 
+from nff.io.ase import AtomsBatch
 from nff.train import load_model
+from nff.train.uncertainty import (
+    EnsembleUncertainty,
+    EvidentialUncertainty,
+    GMMUncertainty,
+    MVEUncertainty,
+)
 from nff.utils.cuda import batch_to
+from nff.utils.prediction import get_prediction, get_residual
 from nff.utils.scatter import compute_grad
 
 if TYPE_CHECKING:
     from ase import Atoms
 
-    from nff.io.ase import AtomsBatch
+
+UNC_DICT = {
+    "ensemble": EnsembleUncertainty,
+    "evidential": EvidentialUncertainty,
+    "mve": MVEUncertainty,
+    "gmm": GMMUncertainty,
+}
 
 
 class ColVar(torch.nn.Module):
@@ -45,6 +59,8 @@ class ColVar(torch.nn.Module):
         "Sd",
         "adjecencey_matrix",
         "energy_gap",
+        "uncertainty",
+        "gmm_bias",
     ]
 
     def __init__(self, info_dict: dict):
@@ -107,6 +123,149 @@ class ColVar(torch.nn.Module):
             self.model = load_model(path, model_type=model_type, device=self.device)
             self.model = self.model.to(self.device)
             self.model.eval()
+
+        elif self.info_dict["name"] == "uncertainty":
+            self._init_uncertainty()
+
+        elif self.info_dict["name"] == "gmm_bias":
+            self._init_gmm_bias()
+
+    def _init_uncertainty(self):
+        self.device = self.info_dict["device"]
+        if self.info_dict.get("model"):
+            self.model = self.info_dict["model"].to(self.device)
+        else:
+            self.model = load_model(
+                path=self.info_dict["model_path"],
+                model_type=self.info_dict["model_type"],
+            )
+            self.model = self.model.to(self.device)
+
+        self.model.eval()
+
+        self.unc_class = UNC_DICT[self.info_dict["uncertainty_type"]](**self.info_dict["uncertainty_params"])
+        # turn off calibration for now in CP for initial fittings
+        self.unc_class.calibrate = False
+
+        # if the unc_class already has a gm_model, then we don't need
+        # to refit it
+
+        if self.info_dict.get("uncertainty_type") == "gmm" and self.unc_class.is_fitted() is False:
+            print("COLVAR: Doing train prediction")
+            _, train_predicted = get_prediction(
+                model=self.model,
+                dset=self.info_dict["train_dset"],
+                batch_size=self.info_dict["batch_size"],
+                device=self.device,
+                requires_grad=False,
+            )
+
+            train_embedding = train_predicted["embedding"][0].detach().cpu().squeeze()
+            train_atomic_numbers = torch.cat(
+                [torch.LongTensor(at.get_atomic_numbers()) for at in self.info_dict["train_dset"]]
+            )
+
+            print("COLVAR: Fitting GMM")
+            self.unc_class.fit_gmm(train_embedding, train_atomic_numbers)
+
+        self.calibrate = self.info_dict["uncertainty_params"].get("calibrate", False)
+        if self.calibrate:
+            print("COLVAR: Fitting ConformalPrediction")
+            calib_target, calib_predicted = get_prediction(
+                model=self.model,
+                dset=self.info_dict["calib_dset"],
+                batch_size=self.info_dict["batch_size"],
+                device=self.device,
+                requires_grad=False,
+            )
+            calib_predicted["embedding"] = calib_predicted["embedding"][0]
+
+            # get atomic numbers
+            calib_predicted["test_atomic_numbers"] = torch.cat(
+                [torch.LongTensor(at.get_atomic_numbers()) for at in self.info_dict["calib_dset"]]
+            )
+
+            # get neighbor list
+            nbr_lists, adjust_idx = [], 0
+            for _i, at in enumerate(self.info_dict["calib_dset"]):
+                at = AtomsBatch(
+                    at,
+                    cutoff=self.info_dict.get("cutoff", 5.0),
+                    cutoff_skin=self.info_dict.get("cutoff_skin", 0.0),
+                )
+                at.update_nbr_list()
+                nbr_list = at.nbr_list + adjust_idx
+                adjust_idx = nbr_list.max().item() + 1
+
+                nbr_lists.append(torch.LongTensor(nbr_list))
+            calib_predicted["nbr_list"] = torch.cat(nbr_lists).to(self.device)
+
+            calib_uncertainty = (
+                self.unc_class(
+                    results=calib_predicted,
+                    num_atoms=calib_predicted["num_atoms"],
+                    reset_min_uncertainty=True,
+                )
+                .detach()
+                .cpu()
+            )
+
+            # set minimum uncertainty to scale to
+            print(f"COLVAR: Setting min_uncertainty to {self.unc_class.umin}")
+
+            calib_res = (
+                get_residual(
+                    targ=calib_target,
+                    pred=calib_predicted,
+                    num_atoms=calib_predicted["num_atoms"],
+                    quantity=self.info_dict["uncertainty_params"]["quantity"],
+                    order=self.info_dict["uncertainty_params"]["order"],
+                )
+                .detach()
+                .cpu()
+            )
+            self.unc_class.fit_conformal_prediction(
+                calib_res,
+                calib_uncertainty,
+            )  # fit CP manually since calibration is turned off
+            # turn on the calibration again
+            self.unc_class.calibrate = True
+
+    def _init_gmm_bias(self):
+        self.device = self.info_dict["device"]
+        self.kB = self.info_dict["kB"]  # Boltzmann constant: must be in the same unit as the energy
+        self.T = self.info_dict["T"]
+
+        if self.info_dict.get("model"):
+            self.model = self.info_dict["model"].to(self.device)
+        else:
+            self.model = load_model(
+                path=self.info_dict["model_path"],
+                model_type=self.info_dict["model_type"],
+            )
+            self.model = self.model.to(self.device)
+
+        self.model.eval()
+
+        self.unc_class = UNC_DICT["gmm"](**self.info_dict["uncertainty_params"])
+
+        # calibration is always off for gmm_bias
+        self.unc_class.calibrate = False
+
+        if self.unc_class.is_fitted() is False:
+            print("COLVAR: Doing train prediction")
+            _, train_predicted = get_prediction(
+                model=self.model,
+                dset=self.info_dict["train_dset"],
+                batch_size=self.info_dict["batch_size"],
+                device=self.device,
+                requires_grad=False,
+            )
+
+            train_embedding = train_predicted["embedding"][0].detach().cpu().squeeze()
+
+            print("COLVAR: Fitting GMM")
+            self.unc_class.fit_gmm(train_embedding)
 
     def _get_com(self, indices: int | list[int]) -> torch.Tensor:
         """Get center of mass (com) of group of atoms

@@ -1,3 +1,16 @@
+"""This module contains the classes for uncertainty estimation for model predictions.
+It contains classes for:
+- EnsembleUncertainty: Ensemble uncertainty estimation using the variance or standard
+    deviation of the predictions from the model ensemble.
+- EvidentialUncertainty: Evidential Uncertainty estimation using the Evidential Deep
+    Learning framework.
+- MVEUncertainty: Mean Variance Estimation (MVE) based uncertainty estimation.
+- GMMUncertainty: Gaussian Mixture Model (GMM) based uncertainty estimation.
+- ConformalPrediction: Conformal Prediction for calibration of uncertainty estimates.
+"""
+
+from __future__ import annotations
+
 import os
 import warnings
 from typing import List, Optional, Tuple, Union
@@ -6,6 +19,9 @@ import numpy as np
 import torch
 
 from nff.io.gmm import GaussianMixture
+from nff.train.evaluate import evaluate
+from nff.utils.cuda import batch_detach
+from nff.utils.prediction import get_residual
 
 __all__ = [
     "ConformalPrediction",
@@ -16,9 +32,17 @@ __all__ = [
     "Uncertainty",
 ]
 
+CONVERSION = {
+    "eV": {"kcal/mol": 23.0605, "kJ/mol": 96.485},
+    "kcal/mol": {"eV": 0.0433641, "kJ/mol": 4.184},
+    "kJ/mol": {"eV": 0.0103641, "kcal/mol": 0.239006},
+}
+
 
 class Uncertainty:
-    def __init__(
+    """Base class for uncertainty predictions."""
+
+    def __init__(  # noqa: D107
         self,
         order: str,
         calibrate: bool,
@@ -45,12 +69,15 @@ class Uncertainty:
 
             self.CP = ConformalPrediction(alpha=cp_alpha)
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs):  # noqa: D102
         return self.get_uncertainty(*args, **kwargs)
 
     def set_min_uncertainty(self, min_uncertainty: float, force: bool = False) -> None:
-        """
-        Set the minimum uncertainty value to be used for scaling the uncertainty.
+        """Set the minimum uncertainty value to be used for scaling the uncertainty.
+
+        Args:
+            min_uncertainty (float): Minimum uncertainty value.
+            force (bool, optional): Force setting the minimum uncertainty value. Defaults to False.
         """
         if self.umin is None:
             self.umin = min_uncertainty
@@ -63,6 +90,12 @@ class Uncertainty:
     def scale_to_min_uncertainty(self, uncertainty: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         """
         Scale the uncertainty to the minimum value.
+
+        Args:
+            uncertainty (np.ndarray | torch.Tensor): Uncertainty values.
+
+        Returns:
+            np.ndarray | torch.Tensor: Scaled uncertainty values.
         """
         if self.umin is not None:
             if self.order not in ["system_mean_squared"]:
@@ -74,19 +107,30 @@ class Uncertainty:
 
     def fit_conformal_prediction(
         self,
-        residuals_calib: Union[np.ndarray, torch.Tensor],
-        heuristic_uncertainty_calib: Union[np.ndarray, torch.Tensor],
+        residuals_calib: np.ndarray | torch.Tensor,
+        heuristic_uncertainty_calib: np.ndarray | torch.Tensor,
     ) -> None:
-        """
-        Fit the Conformal Prediction model to the calibration data.
+        """Fit the Conformal Prediction model to the calibration data.
+
+        Args:
+            residuals_calib (np.ndarray | torch.Tensor): Residuals of the calibration data.
+            heuristic_uncertainty_calib (np.ndarray | torch.Tensor): Heuristic uncertainty of
+                the calibration data.
         """
         self.CP.fit(residuals_calib, heuristic_uncertainty_calib)
 
     def calibrate_uncertainty(
-        self, uncertainty: Union[np.ndarray, torch.Tensor], *args, **kwargs
-    ) -> Union[np.ndarray, torch.Tensor]:
-        """
-        Calibrate the uncertainty using Conformal Prediction.
+        self, uncertainty: np.ndarray | torch.Tensor, *args, **kwargs
+    ) -> np.ndarray | torch.Tensor:
+        """Calibrate the uncertainty using Conformal Prediction.
+
+        Args:
+            uncertainty (np.ndarray | torch.Tensor): Uncertainty values.
+            args: other arguments
+            kwargs: other keyword arguments
+
+        Returns:
+            np.ndarray | torch.Tensor: Calibrated uncertainty values.
         """
         if self.CP.qhat is None:
             raise Exception("Uncertainty: ConformalPrediction not fitted.")
@@ -121,27 +165,31 @@ class Uncertainty:
         return uncertainty
 
     def get_uncertainty(self, results: dict, *args, **kwargs):
-        """
-        Get the uncertainty from the results.
-        """
+        """Get the uncertainty from the results."""
         return NotImplementedError
 
 
 class ConformalPrediction:
-    """
-    Copied from https://github.com/ulissigroup/amptorch
+    """Copied from https://github.com/ulissigroup/amptorch
     Performs quantile regression on score functions to obtain the estimated qhat
         on calibration data and apply to test data during prediction.
     """
 
-    def __init__(self, alpha: float):
+    def __init__(self, alpha: float):  # noqa: D107
         self.alpha = alpha
 
     def fit(
         self,
-        residuals_calib: Union[np.ndarray, torch.Tensor],
-        heuristic_uncertainty_calib: Union[np.ndarray, torch.Tensor],
+        residuals_calib: np.ndarray | torch.Tensor,
+        heuristic_uncertainty_calib: np.ndarray | torch.Tensor,
     ) -> None:
+        """Fit the Conformal Prediction model to the calibration data.
+
+        Args:
+            residuals_calib (np.ndarray | torch.Tensor): Residuals of the calibration data.
+            heuristic_uncertainty_calib (np.ndarray | torch.Tensor): Heuristic uncertainty of
+                the calibration data.
+        """
         # score function
         scores = abs(residuals_calib / heuristic_uncertainty_calib)
         scores = np.array(scores)
@@ -151,27 +199,40 @@ class ConformalPrediction:
         qhat_value = np.float64(qhat.numpy()).item()
         self.qhat = qhat_value
 
-    def predict(
-        self, heuristic_uncertainty_test: Union[np.ndarray, torch.Tensor]
-    ) -> Tuple[Union[np.ndarray, torch.Tensor], float]:
+    def predict(self, heuristic_uncertainty_test: np.ndarray | torch.Tensor) -> tuple[np.ndarray | torch.Tensor, float]:
+        """Make predictions on test data.
+
+        Args:
+            heuristic_uncertainty_test (np.ndarray | torch.Tensor): Heuristic uncertainty of the test data.
+
+        Returns:
+            tuple[np.ndarray | torch.Tensor, float]: Calibrated uncertainty values and qhat value.
+        """
         cp_uncertainty_test = heuristic_uncertainty_test * self.qhat
         return cp_uncertainty_test, self.qhat
 
 
 class EnsembleUncertainty(Uncertainty):
-    """
-    Ensemble uncertainty estimation using the variance or standard deviation of the
+    """Ensemble uncertainty estimation using the variance or standard deviation of the
     predictions from the model ensemble.
+
+    Args:
+        quantity (str): Quantity for which the uncertainty is to be estimated.
+        order (str): Order of the uncertainty estimate.
+        std_or_var (str, optional): Standard deviation or variance. Defaults to "var".
+        min_uncertainty (Union[float, None], optional): Minimum uncertainty value. Defaults to None.
+        orig_unit (Union[str, None], optional): Original unit of the quantity. Defaults to None.
+        targ_unit (Union[str, None], optional): Target unit of the quantity. Defaults to None.
     """
 
-    def __init__(
+    def __init__(  # noqa: D107
         self,
         quantity: str,
         order: str,
         std_or_var: str = "var",
-        min_uncertainty: Union[float, None] = None,
-        orig_unit: Union[str, None] = None,
-        targ_unit: Union[str, None] = None,
+        min_uncertainty: float | None = None,
+        orig_unit: str | None = None,
+        targ_unit: str | None = None,
         *args,
         **kwargs,
     ):
@@ -179,7 +240,7 @@ class EnsembleUncertainty(Uncertainty):
             order=order,
             min_uncertainty=min_uncertainty,
             calibrate=False,
-            *args,
+            *args,  # noqa: B026
             **kwargs,
         )
         assert std_or_var in ["std", "var"], f"{std_or_var} not implemented"
@@ -195,21 +256,20 @@ class EnsembleUncertainty(Uncertainty):
         if orig_unit == targ_unit:
             return value
 
-        conversion = {
-            "eV": {"kcal/mol": 23.0605, "kJ/mol": 96.485},
-            "kcal/mol": {"eV": 0.0433641, "kJ/mol": 4.184},
-            "kJ/mol": {"eV": 0.0103641, "kcal/mol": 0.239006},
-        }
-
-        converted_val = value * conversion[orig_unit][targ_unit]
+        converted_val = value * CONVERSION[orig_unit][targ_unit]
         return converted_val
 
     def get_energy_uncertainty(
         self,
         results: dict,
-    ):
-        """
-        Get the uncertainty for the energy.
+    ) -> float:
+        """Get the uncertainty for the energy.
+
+        Args:
+            results (dict): Results dictionary.
+
+        Returns:
+            float: Energy uncertainty.
         """
         if self.orig_unit is not None and self.targ_unit is not None:
             results[self.q] = self.convert_units(results[self.q], orig_unit=self.orig_unit, targ_unit=self.targ_unit)
@@ -224,10 +284,16 @@ class EnsembleUncertainty(Uncertainty):
     def get_forces_uncertainty(
         self,
         results: dict,
-        num_atoms: List[int],
-    ):
-        """
-        Get the uncertainty for the forces.
+        num_atoms: list[int],
+    ) -> torch.Tensor:
+        """Get the uncertainty for the forces.
+
+        Args:
+            results (dict): Results dictionary.
+            num_atoms (List[int]): Number of atoms in each system.
+
+        Returns:
+            torch.Tensor: Forces uncertainty
         """
         if self.orig_unit is not None and self.targ_unit is not None:
             results[self.q] = self.convert_units(results[self.q], orig_unit=self.orig_unit, targ_unit=self.targ_unit)
@@ -264,11 +330,19 @@ class EnsembleUncertainty(Uncertainty):
 
 
 class EvidentialUncertainty(Uncertainty):
-    """
-    Evidential Uncertainty estimation using the Evidential Deep Learning framework.
+    """Evidential Uncertainty estimation using the Evidential Deep Learning framework.
+
+    Args:
+        order (str): Order of the uncertainty estimate. Defaults to "atomic". See base Uncertainty
+            class for the possible options.
+        shared_v (bool, optional): If True, average the v parameter over the systems. Defaults to False.
+        source (str, optional): Source of the uncertainty. Defaults to "epistemic".
+        calibrate (bool, optional): If True, calibrate the uncertainty using conformal prediction. Defaults to False.
+        cp_alpha (Union[float, None], optional): Alpha value for calibration. Defaults to None.
+        min_uncertainty (Union[float, None], optional): Minimum uncertainty value. Defaults to None.
     """
 
-    def __init__(
+    def __init__(  # noqa: D107
         self,
         order: str = "atomic",
         shared_v: bool = False,
@@ -284,7 +358,7 @@ class EvidentialUncertainty(Uncertainty):
             calibrate=calibrate,
             cp_alpha=cp_alpha,
             min_uncertainty=min_uncertainty,
-            *args,
+            *args,  # noqa: B026
             **kwargs,
         )
         self.shared_v = shared_v
@@ -295,6 +369,13 @@ class EvidentialUncertainty(Uncertainty):
         Check if the parameters are present in the results, if the shapes are
         correct. If the order is "atomic" and shared_v is True, then the v
         parameter is averaged over the systems.
+
+        Args:
+            results (dict): Results dictionary.
+            num_atoms (List[int], optional): Number of atoms in each system. Defaults to None.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: v, alpha, beta parameters.
         """
         v = results["v"].squeeze()
         alpha = results["alpha"].squeeze()
@@ -338,11 +419,17 @@ class EvidentialUncertainty(Uncertainty):
 
 
 class MVEUncertainty(Uncertainty):
-    """
-    Mean Variance Estimation (MVE) based uncertainty estimation.
+    """Mean Variance Estimation (MVE) based uncertainty estimation.
+
+    Args:
+        variance_key (str, optional): Key for the variance in the results dictionary. Defaults to "var".
+        quantity (str, optional): Quantity for which the uncertainty is to be estimated. Defaults to "forces".
+        order (str, optional): Order of the uncertainty estimate. Defaults to "atomic". See base Uncertainty
+            class for the possible options.
+        min_uncertainty (Union[float, None], optional): Minimum uncertainty value. Defaults to None.
     """
 
-    def __init__(
+    def __init__(  # noqa: D107
         self,
         variance_key: str = "var",
         quantity: str = "forces",
@@ -351,7 +438,7 @@ class MVEUncertainty(Uncertainty):
         *args,
         **kwargs,
     ):
-        super().__init__(order=order, min_uncertainty=min_uncertainty, *args, **kwargs)
+        super().__init__(order=order, min_uncertainty=min_uncertainty, *args, **kwargs)  # noqa: B026
         self.vkey = variance_key
         self.q = quantity
 
@@ -371,11 +458,29 @@ class MVEUncertainty(Uncertainty):
 
 
 class GMMUncertainty(Uncertainty):
-    """
-    Gaussian Mixture Model (GMM) based uncertainty estimation.
+    """Gaussian Mixture Model (GMM) based uncertainty estimation.
+
+    Args:
+        train_embed_key (str, optional): Key for the training embedding in the results dictionary. Defaults
+            to "train_embedding".
+        test_embed_key (str, optional): Key for the test embedding in the results dictionary. Defaults to "embedding".
+        n_clusters (int, optional): Number of clusters in the GMM model. Defaults to 5.
+        order (str, optional): Order of the uncertainty estimate. Defaults to "atomic". See base Uncertainty
+            class for the possible options.
+        covariance_type (str, optional): Type of covariance matrix in the GMM model. Defaults to "full".
+        tol (float, optional): Tolerance for the GMM model. Defaults to 1e-3.
+        max_iter (int, optional): Maximum number of iterations for the GMM model. Defaults to 100000.
+        n_init (int, optional): Number of initializations for the GMM model. Defaults to 1.
+        init_params (str, optional): Initialization parameters for the GMM model. Defaults to "kmeans".
+        verbose (int, optional): Verbosity level for the GMM model. Defaults to 0.
+        device (str, optional): Device for the GMM model. Defaults to "cuda".
+        calibrate (bool, optional): If True, calibrate the uncertainty using conformal prediction. Defaults to False.
+        cp_alpha (Union[float, None], optional): Alpha value for calibration. Defaults to None.
+        min_uncertainty (Union[float, None], optional): Minimum uncertainty value. Defaults to None.
+        gmm_path (Union[str, None], optional): Path to the saved GMM model. Defaults to None.
     """
 
-    def __init__(
+    def __init__(  # noqa: D107
         self,
         train_embed_key: str = "train_embedding",
         test_embed_key: str = "embedding",
@@ -389,9 +494,9 @@ class GMMUncertainty(Uncertainty):
         verbose: int = 0,
         device: str = "cuda",
         calibrate: bool = False,
-        cp_alpha: Union[float, None] = None,
-        min_uncertainty: Union[float, None] = None,
-        gmm_path: Union[str, None] = None,
+        cp_alpha: float | None = None,
+        min_uncertainty: float | None = None,
+        gmm_path: str | None = None,
         *args,
         **kwargs,
     ):
@@ -400,7 +505,7 @@ class GMMUncertainty(Uncertainty):
             calibrate=calibrate,
             cp_alpha=cp_alpha,
             min_uncertainty=min_uncertainty,
-            *args,
+            *args,  # noqa: B026
             **kwargs,
         )
         self.train_key = train_embed_key
@@ -425,8 +530,10 @@ class GMMUncertainty(Uncertainty):
             self._set_gmm_params()
 
     def fit_gmm(self, Xtrain: torch.Tensor) -> None:
-        """
-        Fit the GMM model to the embedding of training data.
+        """Fit the GMM model to the embedding of training data.
+
+        Args:
+            Xtrain (torch.Tensor): Embedding of the training data.
         """
         self.Xtrain = Xtrain
         self.gm_model = GaussianMixture(
@@ -449,18 +556,14 @@ class GMMUncertainty(Uncertainty):
         self._set_gmm_params()
 
     def is_fitted(self) -> bool:
-        """
-        Check if the GMM model is fitted.
-        """
+        """Check if the GMM model is fitted."""
         return getattr(self, "gm_model", None) is not None
 
     def _check_tensor(
         self,
-        X: Union[torch.Tensor, np.ndarray],
+        X: torch.Tensor | np.ndarray,
     ) -> torch.Tensor:
-        """
-        Check if the input is a tensor and convert to torch.Tensor if not.
-        """
+        """Check if the input is a tensor and convert to torch.Tensor if not."""
         if not isinstance(X, torch.Tensor):
             X = torch.tensor(X)
 
@@ -469,9 +572,7 @@ class GMMUncertainty(Uncertainty):
         return X
 
     def _set_gmm_params(self) -> None:
-        """
-        Get the means, precisions_cholesky, and weights from the GMM model.
-        """
+        """Get the means, precisions_cholesky, and weights from the GMM model."""
         if self.gm_model is None:
             raise Exception("GMMUncertainty: GMM does not exist/is not fitted")
 
@@ -480,9 +581,7 @@ class GMMUncertainty(Uncertainty):
         self.weights = self._check_tensor(self.gm_model.weights_)
 
     def estimate_log_prob(self, X: torch.Tensor) -> torch.Tensor:
-        """
-        Estimate the log probability of the given embedding.
-        """
+        """Estimate the log probability of the given embedding."""
         X = self._check_tensor(X)
 
         n_samples, n_features = X.shape
@@ -501,9 +600,7 @@ class GMMUncertainty(Uncertainty):
         return -0.5 * (n_features * log2pi + log_prob) + log_det
 
     def estimate_weighted_log_prob(self, X: torch.Tensor) -> torch.Tensor:
-        """
-        Estimate the weighted log probability of the given embedding.
-        """
+        """Estimate the weighted log probability of the given embedding."""
         log_prob = self.estimate_log_prob(X)
         log_weights = torch.log(self.weights)
         weighted_log_prob = log_prob + log_weights
@@ -511,9 +608,7 @@ class GMMUncertainty(Uncertainty):
         return weighted_log_prob
 
     def log_likelihood(self, X: torch.Tensor) -> torch.Tensor:
-        """
-        Log likelihood of the embedding under the GMM model.
-        """
+        """Log likelihood of the embedding under the GMM model."""
         weighted_log_prob = self.estimate_weighted_log_prob(X)
 
         weighted_log_prob_max = weighted_log_prob.max(dim=1).values
@@ -526,9 +621,7 @@ class GMMUncertainty(Uncertainty):
         return logsumexp
 
     def probability(self, X: torch.Tensor) -> torch.Tensor:
-        """
-        Probability of the embedding under the GMM model.
-        """
+        """Probability of the embedding under the GMM model."""
         logP = self.log_likelihood(X)
 
         return torch.exp(logP)
@@ -537,9 +630,7 @@ class GMMUncertainty(Uncertainty):
         self,
         X: torch.Tensor,
     ) -> torch.Tensor:
-        """
-        Negative log likelihood of the embedding under the GMM model.
-        """
+        """Negative log likelihood of the embedding under the GMM model."""
         logP = self.log_likelihood(X)
 
         return -logP
@@ -547,12 +638,20 @@ class GMMUncertainty(Uncertainty):
     def get_uncertainty(
         self,
         results: dict,
-        num_atoms: Union[List[int], None] = None,
+        num_atoms: list[int] | None = None,
         *args,
         **kwargs,
     ) -> torch.Tensor:
-        """
-        Get the uncertainty from the GMM model for the test embedding.
+        """Get the uncertainty from the GMM model for the test embedding.
+
+        Args:
+            results (dict): Results dictionary.
+            num_atoms (List[int], optional): Number of atoms in each system. Defaults to None.
+            args: other arguments
+            kwargs: other keyword arguments
+
+        Returns:
+            torch.Tensor: Uncertainty values.
         """
         test_embedding = self._check_tensor(results[self.test_key])
 
@@ -574,3 +673,88 @@ class GMMUncertainty(Uncertainty):
             uncertainty = self.calibrate_uncertainty(uncertainty)
 
         return uncertainty
+
+
+UNC_DICT = {
+    "gmm": GMMUncertainty,
+}
+
+
+def get_unc_class(model: torch.nn.Module, info_dict: dict) -> Uncertainty:
+    """Get the uncertainty class based on the information dictionary.
+
+    Args:
+        model (torch.nn.Module): Model for which the uncertainty is to be estimated.
+        info_dict (dict): Information dictionary containing the uncertainty parameters.
+
+    Returns:
+        Uncertainty: Uncertainty class.
+    """
+    device = info_dict["device"]
+    model.eval()
+
+    unc_class = UNC_DICT[info_dict["uncertainty_type"]](**info_dict["uncertainty_params"])
+    # turn off calibration for now in CP for initial fittings
+    unc_class.calibrate = False
+
+    # if the unc_class already has a gm_model, then we don't need
+    # to refit it
+    if info_dict.get("uncertainty_type") == "gmm" and unc_class.is_fitted() is False:
+        print("GMM: Doing train prediction")
+        train_predicted, _train_targs, _loss = evaluate(
+            model=model,
+            loader=info_dict["train_dset"],
+            loss_fn=info_dict["loss_fn"],
+            device=device,
+            requires_embedding=True,
+        )
+
+        # GMM requires a 2D tensor for the embeddings, with the
+        train_embedding = torch.stack([t.flatten() for t in train_predicted["embedding"]], dim=0)
+
+        print("COLVAR: Fitting GMM")
+        unc_class.fit_gmm(train_embedding)
+    calibrate = info_dict["uncertainty_params"].get("calibrate", False)
+    if calibrate and unc_class.CP.qhat is None:
+        print("COLVAR: Fitting ConformalPrediction")
+        calib_target, calib_predicted = evaluate(
+            model=model,
+            dset=info_dict["calib_dset"],
+            batch_size=info_dict["batch_size"],
+            device=device,
+            embedding_kwargs=info_dict["uncertainty_params"]["embedding_kwargs"],
+        )
+        # calib_predicted["embeddings"] = calib_predicted["embeddings"][0]
+        calib_uncertainty = (
+            unc_class(
+                results=calib_predicted,
+                # count=calib_predicted["count"],
+                # device=device,
+            )
+            .detach()
+            .cpu()
+        )
+
+        # set minimum uncertainty to scale to
+        umin = calib_uncertainty.min().item()
+        unc_class.set_min_uncertainty(umin)
+        print(f"COLVAR: Setting min_uncertainty to {umin}")
+
+        calib_res = (
+            get_residual(
+                targ=calib_target,
+                pred=calib_predicted,
+                count=calib_predicted["count"],
+                quantity=info_dict["residual"]["quantity"],
+                order=info_dict["uncertainty_params"]["order"],
+            )
+            .detach()
+            .cpu()
+        )
+        unc_class.fit_conformal_prediction(
+            calib_res,
+            calib_uncertainty,
+        )
+        # turn on the calibration again
+        unc_class.calibrate = True
+    return unc_class

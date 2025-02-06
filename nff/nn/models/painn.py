@@ -84,6 +84,7 @@ class Painn(nn.Module):
         )
         self.update_blocks = nn.ModuleList(
             [UpdateBlock(feat_dim=feat_dim, activation=activation, dropout=conv_dropout) for _ in range(num_conv)]
+            [UpdateBlock(feat_dim=feat_dim, activation=activation, dropout=conv_dropout) for _ in range(num_conv)]
         )
 
         self.output_keys = output_keys
