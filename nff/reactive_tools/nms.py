@@ -88,7 +88,7 @@ def reactive_normal_mode_sampling(
                 * np.sin(2 * np.pi * random_0_1[i])
                 * proj_hessian_eigvec[i]
                 / Bohr**2
-            )
+            )  # todo: properly import / name / document units and unit conversions
 
         else:
             displacements.append(0)
