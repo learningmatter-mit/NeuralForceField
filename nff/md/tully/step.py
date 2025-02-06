@@ -301,12 +301,12 @@ def get_implicit_diabat(c, elec_substeps, old_H_ad, new_H_ad, new_U, old_U, dt, 
     S = np.einsum("...ki, ...kj -> ...ij", old_U, new_U)[:, :num_ad, :num_ad]
 
     s_t_s = np.einsum("...ji, ...jk -> ...ik", S, S)
-    lam, O = np.linalg.eigh(s_t_s)
+    lam, o = np.linalg.eigh(s_t_s)
 
     # in case any eigenvalues are 0 or slightly negative
     with np.errstate(divide="ignore", invalid="ignore"):
         lam_half = np.stack([np.diag(i ** (-1 / 2)) for i in lam])
-    T = np.einsum("...ij, ...jk, ...kl, ...ml -> ...im", S, O, lam_half, O)
+    T = np.einsum("...ij, ...jk, ...kl, ...ml -> ...im", S, o, lam_half, o)
 
     # set T to the identity for any cases in which one of
     # the eigenvalues is 0

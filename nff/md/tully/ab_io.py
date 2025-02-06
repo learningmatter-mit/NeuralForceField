@@ -109,8 +109,8 @@ def render_all(config_name, jobspec, job_dir, num_parallel):
 
 def get_coords(nxyz):
     coords = []
-    for l in nxyz:
-        this_coord = {"element": PERIODICTABLE.GetElementSymbol(int(l[0])), "x": l[1], "y": l[2], "z": l[3]}
+    for line in nxyz:
+        this_coord = {"element": PERIODICTABLE.GetElementSymbol(int(line[0])), "x": line[1], "y": line[2], "z": line[3]}
         coords.append(this_coord)
 
     return coords

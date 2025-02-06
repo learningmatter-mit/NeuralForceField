@@ -547,10 +547,10 @@ def restore_foundations(
                 original_weights_max.data[index, :, :] = torch.nn.Parameter(new_weights_max)
 
             original_weights_list = model_foundations.products[i].symmetric_contractions.contractions[j].weights
-            for l in range(num_contraction):  # Assuming 2 weights in each contractions
-                original_weights = original_weights_list[l]
+            for n in range(num_contraction):  # Assuming 2 weights in each contractions
+                original_weights = original_weights_list[n]
                 for k, index in enumerate(indices_weights):
-                    new_weights = model.products[i].symmetric_contractions.contractions[j].weights[l][k, :, :].clone()
+                    new_weights = model.products[i].symmetric_contractions.contractions[j].weights[n][k, :, :].clone()
                     original_weights.data[index, :, :] = torch.nn.Parameter(new_weights)
 
         model_foundations.products[i].linear.weight = torch.nn.Parameter(model.products[i].linear.weight.clone())

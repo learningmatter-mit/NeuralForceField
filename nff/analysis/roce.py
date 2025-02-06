@@ -468,7 +468,7 @@ def vals_for_plot(plot_dic):
     # set the labels equal to the plot names, but replace every space
     # with a new line to avoid overlapping labels
     plot_names = [dic["plot_name"] for dic in model_dics]
-    labels = [l.replace(" ", "\n") for l in plot_names]
+    labels = [label.replace(" ", "\n") for label in plot_names]
 
     return roce_scores, roce_no_overlap, fpr_colors, labels, bar_height
 

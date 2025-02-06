@@ -127,7 +127,7 @@ class InteractionModule(nn.Module):
                 descriptors).
         """
         x = self.residual_pre(x)
-        l = self.local_interaction(x, rbf, pij, dij, idx_i, idx_j)
+        local = self.local_interaction(x, rbf, pij, dij, idx_i, idx_j)
         n = self.nonlocal_interaction(x, num_batch, batch_seg, mask)
-        x = self.residual_post(x + l + n)
+        x = self.residual_post(x + local + n)
         return x, self.resblock(x)

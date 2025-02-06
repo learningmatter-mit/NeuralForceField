@@ -144,7 +144,6 @@ ignore = [
     "UP035",   # deprecated Dict and List, but keep to support python<3.10
     "UP006",   # deprecated Dict and List, but keep to support python<3.10
     "ICN001",  # import name convention
-    "E741",    # 'l' as variable name
     "UP031",   # Use format specifiers instead of percent format
     "PD901",   # dont name dataframes df
     "FA100",   # from future suggestion

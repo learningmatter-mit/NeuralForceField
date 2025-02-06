@@ -1,3 +1,5 @@
+
+# ruff: noqa: E741
 import time
 
 import torch

@@ -6,6 +6,7 @@ dimenet/blob/master/dimenet/model/
 layers/basis_utils.py.
 """
 
+# ruff: noqa: E741
 import copy
 import math
 
