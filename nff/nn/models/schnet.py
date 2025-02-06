@@ -159,7 +159,7 @@ class SchNet(nn.Module):
     def forward(self, batch, xyz=None, requires_stress=False, **kwargs):
         """Summary
         Args:
-            batch (dict): dictionary of propSchNetEdgeFilters
+            batch (dict): dictionary of props
             xyz (torch.tensor): (optional) coordinates
 
         Returns:
