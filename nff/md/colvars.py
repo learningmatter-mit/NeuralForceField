@@ -1,15 +1,27 @@
+"""This file contains a class that helps define collective variables
+for running biased MD simulations with NFF.
+"""
+
+from __future__ import annotations
+
 import itertools
 from itertools import repeat
-from typing import Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
+from rdkit import Chem
 from torch import nn
 from torch.nn import ModuleDict
 
 from nff.train import load_model
 from nff.utils.cuda import batch_to
 from nff.utils.scatter import compute_grad
+
+if TYPE_CHECKING:
+    from ase import Atoms
+
+    from nff.io.ase import AtomsBatch
 
 
 class ColVar(torch.nn.Module):
@@ -18,7 +30,7 @@ class ColVar(torch.nn.Module):
     computes cv and its Cartesian gradient
     """
 
-    implemented_cvs = [
+    implemented_cvs = [  # noqa: RUF012
         "distance",
         "angle",
         "dihedral",
@@ -36,8 +48,9 @@ class ColVar(torch.nn.Module):
     ]
 
     def __init__(self, info_dict: dict):
-        """initialization of many class variables to avoid recurrent assignment
+        """Initialization of many class variables to avoid recurrent assignment
         with every forward call
+
         Args:
             info_dict (dict): dictionary that contains all the definitions of the CV,
                               the common key is name, which defines the CV function
@@ -52,12 +65,12 @@ class ColVar(torch.nn.Module):
         if self.info_dict["name"] not in self.implemented_cvs:
             raise NotImplementedError(f"The CV {self.info_dict['name']} is not implemented!")
 
-        if self.info_dict["name"] == "Sp" or self.info_dict["name"] == "Sd":
+        if self.info_dict["name"] in ["Sp", "Sd"]:
             self.Oacid = torch.tensor(self.info_dict["x"])
             self.Owater = torch.tensor(self.info_dict["y"])
             self.H = torch.tensor(self.info_dict["z"])
             self.Box = torch.tensor(self.info_dict.get("box", None))
-            self.O = torch.cat((Oacid, Owater))
+            self.O = torch.cat((self.Oacid, self.Owater))
             self.do = self.info_dict["dcv1"]
             self.d = self.info_dict["dcv2"]
             self.ro = self.info_dict["acidhyd"]
@@ -78,9 +91,7 @@ class ColVar(torch.nn.Module):
             self.mol_inds = torch.LongTensor(self.info_dict["indices"])
             self.reference_inds = self.info_dict["reference"]
 
-        elif (
-            self.info_dict["name"] == "projecting_veconplane" or self.info_dict["name"] == "projecting_veconplanenormal"
-        ):
+        elif self.info_dict["name"] in ["projecting_veconplane", "projecting_veconplanenormal"]:
             self.mol_inds = torch.LongTensor(self.info_dict["mol_inds"])
             self.ring_inds = torch.LongTensor(self.info_dict["ring_inds"])
 
@@ -97,8 +108,9 @@ class ColVar(torch.nn.Module):
             self.model = self.model.to(self.device)
             self.model.eval()
 
-    def _get_com(self, indices: Union[int, list]) -> torch.tensor:
-        """get center of mass (com) of group of atoms
+    def _get_com(self, indices: int | list[int]) -> torch.Tensor:
+        """Get center of mass (com) of group of atoms
+
         Args:
             indices (Union[int, list]): atom index or list of atom indices
         Returns:
@@ -119,11 +131,14 @@ class ColVar(torch.nn.Module):
 
         return com
 
-    def distance(self, index_list: list[Union[int, list]]) -> torch.tensor:
-        """distance between two mass centers in range(0, inf)
+    def distance(self, index_list: list[int | list]) -> torch.Tensor:
+        """Distance between two mass centers in range(0, inf)
+
         Args:
-                distance beteen atoms: [ind0, ind1]
-                distance between mass centers: [[ind00, ind01, ...], [ind10, ind11, ...]]
+            index_list (list): can be the distance beteen atoms ([ind0, ind1]) or
+                distance between mass centers (a list of lists) such
+                as [[ind00, ind01, ...], [ind10, ind11, ...]]
+
         Returns:
             cv (torch.tensor): computed distance
         """
@@ -139,12 +154,14 @@ class ColVar(torch.nn.Module):
 
         return cv
 
-    def angle(self, index_list: list[Union[int, list]]) -> torch.tensor:
-        """get angle between three mass centers in range(-pi,pi)
+    def angle(self, index_list: list[int | list]) -> torch.Tensor:
+        """Get angle between three mass centers in range(-pi,pi)
+
         Args:
-            index_list
+            index_list (list): can be the
                 angle between two atoms: [ind0, ind1, ind3]
                 angle between centers of mass: [[ind00, ind01, ...], [ind10, ind11, ...], [ind20, ind21, ...]]
+
         Returns:
             cv (torch.tensor): computed angle
         """
@@ -169,15 +186,17 @@ class ColVar(torch.nn.Module):
 
         return cv
 
-    def dihedral(self, index_list: list[Union[int, list]]) -> torch.tensor:
-        """torsion angle between four mass centers in range(-pi,pi)
-        Params:
-            self.info_dict['index_list']
+    def dihedral(self, index_list: list[int | list]) -> torch.Tensor:
+        """Torsion angle between four mass centers in range(-pi,pi)
+
+        Args:
+            index_list (list): can be the
                 dihedral between atoms: [ind0, ind1, ind2, ind3]
                 dihedral between center of mass: [[ind00, ind01, ...],
                                                   [ind10, ind11, ...],
                                                   [ind20, ind21, ...],
                                                   [ind30, ind 31, ...]]
+
         Returns:
             cv (float): computed torsional angle
         """
@@ -203,11 +222,14 @@ class ColVar(torch.nn.Module):
 
         return cv
 
-    def coordination_number(self, index_list: list[int], switch_distance: float) -> torch.tensor:
-        """coordination number between two atoms in range(0, 1)
+    def coordination_number(self, index_list: list[int], switch_distance: float) -> torch.Tensor:
+        """Coordination number between two atoms in range(0, 1)
+
         Args:
-                distance between atoms: [ind00, ind01]
-                switch_distance: value at which the switching function is 0.5
+            index_list (list): the indices of the atoms defining the coordination number as a
+                list of ints: [ind00, ind01]
+            switch_distance: value at which the switching function is 0.5
+
         Returns:
             cv (torch.tensor): computed distance
         """
@@ -220,11 +242,14 @@ class ColVar(torch.nn.Module):
 
         return cv
 
-    def coordination(self, index_list: list[list[int]], switch_distance: float) -> torch.tensor:
-        """sum of coordination numbers between two sets of atoms in range(0, 1)
+    def coordination(self, index_list: list[list[int]], switch_distance: float) -> torch.Tensor:
+        """Sum of coordination numbers between two sets of atoms in range(0, 1)
+
         Args:
-                distance between atoms: [[ind00, ind01, ...], [ind10, ind11, ...]]
-                switch_distance: value at which the switching function is 0.5
+            index_list (list): a list of lists of atom indices such as
+                [[ind00, ind01, ...], [ind10, ind11, ...]]
+            switch_distance: value at which the switching function is 0.5
+
         Returns:
             cv (torch.tensor): computed distance
         """
@@ -238,10 +263,13 @@ class ColVar(torch.nn.Module):
 
         return cv
 
-    def minimal_distance(self, index_list: list[list[int]]) -> torch.tensor:
-        """minimal distance between two sets of atoms
+    def minimal_distance(self, index_list: list[list[int]]) -> torch.Tensor:
+        """Minimal distance between two sets of atoms
+
         Args:
-                distance between atoms: [[ind00, ind01, ...], [ind10, ind11, ...]]
+            index_list (list): used to determine the distance between atoms, in the format
+                [[ind00, ind01, ...], [ind10, ind11, ...]]
+
         Returns:
             cv (torch.tensor): computed distance
         """
@@ -255,18 +283,9 @@ class ColVar(torch.nn.Module):
 
         return distances.min()
 
-    def projecting_centroidvec(self):
-        """
-        Projection of a position vector onto a reference vector
+    def projecting_centroidvec(self) -> torch.Tensor:
+        """Projection of a position vector onto a reference vector
         Atomic indices are used to determine the coordiantes of the vectors.
-        Params
-        ------
-        vector: list of int
-           List of the indices of atoms that define the vector on which the position vector is projected
-        indices: list if int
-           List of indices of the mol/fragment
-        reference: list of int
-           List of atomic indices that are used as reference for the position vector
         """
         vector_pos = self.xyz[self.vector_inds]
         vector = vector_pos[1] - vector_pos[0]
@@ -281,20 +300,19 @@ class ColVar(torch.nn.Module):
         rel_mol_pos = mol_centroid - reference_centroid
 
         # projection
-        cv = torch.dot(rel_mol_pos, vector)
-        return cv
+        return torch.dot(rel_mol_pos, vector)
 
-    def projecting_veconplane(self):
-        """
-        Projection of a position vector onto a the average plane
+    def projecting_veconplane(self) -> torch.Tensor:
+        """Projection of a position vector onto a the average plane
         of an arbitrary ring defined in the structure
         Atomic indices are used to determine the coordiantes of the vectors.
-        Params
-        ------
-        mol_inds: list of int
-           List of indices of the mol/fragment tracked by the CV
-        ring_inds: list of int
-           List of atomic indices of the ring for which the average plane is calculated.
+
+        Args:
+            mol_inds (list[int]): List of indices of the mol/fragment tracked by the CV
+            ring_inds (list[int]): List of atomic indices of the ring for which the average plane is calculated.
+
+        Returns:
+            cv (torch.tensor): tensor for the computed CV
         """
         mol_coors = self.xyz[self.mol_inds]
         ring_coors = self.xyz[self.ring_inds]
@@ -322,19 +340,18 @@ class ColVar(torch.nn.Module):
         cv = torch.dot(pos_vec, plane_vec)
         return cv
 
-    def projecting_veconplanenormal(self):
-        """
-        Projection of a position vector onto the average plane
+    def projecting_veconplanenormal(self) -> torch.Tensor:
+        """Projection of a position vector onto the average plane
         of an arbitrary ring defined in the structure
         Atomic indices are used to determine the coordiantes of the vectors.
-        Params
-        ------
-        mol_inds: list of int
-           List of indices of the mol/fragment tracked by the CV
-        ring_inds: list of int
-           List of atomic indices of the ring for which the average plane is calculated.
-        """
 
+        Args:
+            mol_inds (list[int]): List of indices of the mol/fragment tracked by the CV
+            ring_inds (list[int]): List of atomic indices of the ring for which the average plane is calculated.
+
+        Returns:
+            cv (torch.tensor): tensor for the computed CV
+        """
         mol_coors = self.xyz[self.mol_inds]
         ring_coors = self.xyz[self.ring_inds]
 
@@ -365,22 +382,19 @@ class ColVar(torch.nn.Module):
         cv = proj1 + proj2
         return torch.abs(cv)
 
-    def projection_channelnormal(self):
-        """
-        Projection of a position vector onto the vector
+    def projection_channelnormal(self) -> torch.Tensor:
+        """Projection of a position vector onto the vector
         along a channel
         Atomic indices are used to determine the coordiantes of the vectors.
-        Params
-        ------
-        mol_inds: list of int
-           List of indices of the mol/fragment tracked by the CV
-        g1_inds: list of int
-           List of atomic indices denoting "start" of channel
-        g2_inds: list of int
-           List of atomic indices denoting "end" of channel
-        """
 
-        self.xyz[self.mol_inds]
+        Args:
+            mol_inds (list[int]): List of indices of the mol/fragment tracked by the CV
+            g1_inds (list[int]): List of atomic indices denoting "start" of channel
+            g2_inds (list[int]): List of atomic indices denoting "end" of channel
+
+        Returns:
+            cv (torch.tensor): tensor for the computed CV
+        """
         g1_coors = self.xyz[self.g1_inds]
         g2_coors = self.xyz[self.g2_inds]
 
@@ -395,8 +409,12 @@ class ColVar(torch.nn.Module):
         cv = torch.dot(rel_pos, normal_vec)
         return cv
 
-    def adjacency_matrix_cv(self):
-        """Docstring"""
+    def adjacency_matrix_cv(self) -> torch.Tensor:
+        """Create the adjacency matrix for for a given structure as the CV
+
+        Returns:
+            cv (torch.tensor): computed adjacency matrix
+        """
         edges, atomslist, Natoms, adjacency_matrix = get_adjacency_matrix(
             self.xyz, self.atom_numbers, self.bond_length, cell=self.cell, device=self.device
         )
@@ -407,17 +425,19 @@ class ColVar(torch.nn.Module):
 
         return cv
 
-    def deproton1(self):
+    def deproton1(self) -> torch.Tensor:
         """Emanuele Grifoni, GiovanniMaria Piccini, and Michele Parrinello, PNAS (2019), 116 (10) 4054-40
         https://www.pnas.org/doi/10.1073/pnas.1819771116
 
         Sp describes the proton exchange between acid-base pairs
-        """
 
+        Returns:
+            cv (torch.tensor): computed Sp
+        """
         dis_mat = self.xyz[None, :, :] - self.xyz[:, None, :]
 
-        if Box is not None:
-            cell_dim = Box.to(dis_mat.device)
+        if self.Box is not None:
+            cell_dim = self.Box.to(dis_mat.device)
             shift = torch.round(torch.divide(dis_mat, cell_dim))
             offsets = -shift
             dis_mat = dis_mat + offsets * cell_dim
@@ -425,7 +445,6 @@ class ColVar(torch.nn.Module):
         dis_sq = torch.linalg.norm(dis_mat, dim=-1)
         dis = dis_sq[self.O, :][:, self.H]
 
-        dis_sq[self.Oacid, :][:, self.Owater]
         cvmatrix = torch.exp(-self.do * dis)
         cvmatrix = cvmatrix / cvmatrix.sum(0)
         cvmatrixw = cvmatrix[self.Oacid.shape[0] :].sum(-1) - self.r1
@@ -434,17 +453,19 @@ class ColVar(torch.nn.Module):
 
         return cv1
 
-    def deproton2(self):
+    def deproton2(self) -> torch.Tensor:
         """Emanuele Grifoni, GiovanniMaria Piccini, and Michele Parrinello, PNAS (2019), 116 (10) 4054-40
         https://www.pnas.org/doi/10.1073/pnas.1819771116
 
-        Sd describes tge distance between acid-base pairs
-        """
+        Sd describes the distance between acid-base pairs
 
+        Returns:
+            cv2 (torch.tensor): computed distance
+        """
         dis_mat = self.xyz[None, :, :] - self.xyz[:, None, :]
 
-        if Box is not None:
-            cell_dim = Box.to(dis_mat.device)
+        if self.Box is not None:
+            cell_dim = self.Box.to(dis_mat.device)
             shift = torch.round(torch.divide(dis_mat, cell_dim))
             offsets = -shift
             dis_mat = dis_mat + offsets * cell_dim
@@ -458,23 +479,22 @@ class ColVar(torch.nn.Module):
         cvmatrixx = cvmatrixx / cvmatrixx.sum(0)
         cvmatrixw = cvmatrixx[self.Oacid.shape[0] :].sum(-1) - self.r1
         cvmatrix = cvmatrixx[: self.Oacid.shape[0]].sum(-1) - self.ro
-        torch.cat((cvmatrix, cvmatrixw))
         cvmatrix2 = torch.matmul(cvmatrix.view(1, -1).t(), cvmatrixw.view(1, -1))
         cvmatrix2 = -cvmatrix2 * dis1
         cv2 = cvmatrix2.sum()
 
         return cv2
 
-    def energy_gap(self, enkey1, enkey2):
-        """get energy gap betweentwo adiabatic PES
+    def energy_gap(self, enkey1: str, enkey2: str):
+        """Get energy gap between two adiabatic PES
+
         Args:
             enkey1 (str): key of one adiabatic PES
             enkey2 (str): key of the other PES
 
         Returns:
-                cv (torch.tensor): computed energy gap
+            cv (torch.tensor): computed energy gap
         """
-
         batch = batch_to(self.atoms.get_batch(), self.device)
         pred = self.model(batch, device=self.device)
         energy_1 = pred[enkey1]
@@ -488,9 +508,15 @@ class ColVar(torch.nn.Module):
 
         return cv, cv_grad
 
-    def forward(self, atoms):
-        """switch function to call the right CV-func"""
+    def forward(self, atoms: Atoms) -> tuple[np.ndarray, np.ndarray]:
+        """Switch function to call the right CV-func
 
+        Args:
+            atoms (Atoms): ASE Atoms object
+
+        Returns:
+            cv (np.ndarray): computed CV
+        """
         self.xyz = torch.from_numpy(atoms.get_positions())
         self.xyz.requires_grad = True
 
@@ -552,16 +578,14 @@ class ColVar(torch.nn.Module):
 
 # implement SMILES to graph function
 def smiles2graph(smiles):
-    """
-    Transfrom smiles into a list nodes (atomic number)
+    """Transfrom smiles into a list nodes (atomic number)
 
     Args:
         smiles (str): SMILES strings
 
-    return:
+    Return:
         z(np.array), A (np.array): list of atomic numbers, adjancency matrix
     """
-
     mol = Chem.MolFromSmiles(smiles)  # no hydrogen
     z = np.array([atom.GetAtomicNum() for atom in mol.GetAtoms()])
     A = np.stack(Chem.GetAdjacencyMatrix(mol))
@@ -570,26 +594,32 @@ def smiles2graph(smiles):
 
 
 class GraphDataset(torch.utils.data.Dataset):
-    def __init__(self, AtomicNum_list, Edge_list, Natom_list, Adjacency_matrix_list):
-        """
-        GraphDataset object
+    """Class for datasets of graphs"""
+
+    def __init__(
+        self,
+        AtomicNum_list: list[torch.LongTensor],
+        Edge_list: list[torch.LongTensor],
+        Natom_list: list[int],
+        Adjacency_matrix_list: list,
+    ) -> None:
+        """GraphDataset object
 
         Args:
-            z_list (list of torch.LongTensor)
-            a_list (list of torch.LongTensor)
-            N_list (list of int)
-
-
+            AtomicNum_list (list of torch.LongTensor): list of atomic numbers
+            Edge_list (list of torch.LongTensor): list of edges in the graph
+            Natom_list (list of int): list of number of atoms in each graph
+            Adjacency_matrix_list (list of torch.LongTensor): list of adjacency matrices
         """
         self.AtomicNum_list = AtomicNum_list  # atomic number
         self.Edge_list = Edge_list  # edge list
         self.Natom_list = Natom_list  # Number of atoms
         self.Adjacency_matrix_list = Adjacency_matrix_list
 
-    def __len__(self):
+    def __len__(self):  # noqa: D105
         return len(self.Natom_list)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx):  # noqa: D105
         AtomicNum = torch.LongTensor(self.AtomicNum_list[idx])
         Edge = torch.LongTensor(self.Edge_list[idx])
         Natom = self.Natom_list[idx]
@@ -598,18 +628,15 @@ class GraphDataset(torch.utils.data.Dataset):
         return AtomicNum, Edge, Natom, Adjacency_matrix
 
 
-def collate_graphs(batch):
+def collate_graphs(batch: tuple) -> tuple:
     """Batch multiple graphs into one batched graph
 
     Args:
-
         batch (tuple): tuples of AtomicNum, Edge, Natom obtained from GraphDataset.__getitem__()
 
-    Return
-        (tuple): Batched AtomicNum, Edge, Natom
-
+    Return:
+        tuple: Batched AtomicNum, Edge, Natom
     """
-
     AtomicNum_batch = []
     Edge_batch = []
     Natom_batch = []
@@ -633,12 +660,10 @@ def collate_graphs(batch):
     return AtomicNum_batch, Edge_batch, Natom_batch, Adjacency_matrix_batch
 
 
-def scatter_add(src, index, dim_size, dim=-1, fill_value=0):
-    """
-    Sums all values from the src tensor into out at the indices specified in the index
+def scatter_add(src, index: torch.Tensor, dim_size: int, dim: int = -1, fill_value: int = 0) -> torch.Tensor:
+    """Sums all values from the src tensor into out at the indices specified in the index
     tensor along a given axis dim.
     """
-
     index_size = list(repeat(1, src.dim()))
     index_size[dim] = src.size(dim)
     index = index.view(index_size).expand_as(src)
@@ -653,11 +678,9 @@ def scatter_add(src, index, dim_size, dim=-1, fill_value=0):
 
 
 class GNN(torch.nn.Module):
-    """
-    A GNN model
-    """
+    """A GNN model"""
 
-    def __init__(self, n_convs=3, n_embed=64):
+    def __init__(self, n_convs=3, n_embed=64):  # noqa: D107
         super().__init__()
         self.atom_embed = nn.Embedding(100, n_embed)
         # Declare MLPs in a ModuleList
@@ -679,7 +702,7 @@ class GNN(torch.nn.Module):
         # Declare readout layers
         # self.readout = nn.Sequential(nn.Linear(n_embed, n_embed), nn.ReLU(), nn.Linear(n_embed, 1))
 
-    def forward(self, AtomicNum, Edge, Natom, adjacency_matrix):
+    def forward(self, AtomicNum, Edge, Natom, adjacency_matrix):  # noqa: D102
         ################ Code #################
 
         # Parametrize embedding
@@ -687,8 +710,9 @@ class GNN(torch.nn.Module):
         for conv in self.convolutions:
             messagei2j = conv.message_mlp(h[Edge[0]] * h[Edge[1]])
             messagei2j = messagei2j * adjacency_matrix
-            # +  scatter_add(src=messagei2j, index=Edge[0], dim=0, dim_size=len(AtomicNum))
-            node_message = scatter_add(src=messagei2j, index=Edge[1], dim=0, dim_size=len(AtomicNum))
+            node_message = scatter_add(
+                src=messagei2j, index=Edge[1], dim=0, dim_size=len(AtomicNum)
+            )  # +  scatter_add(src=messagei2j, index=Edge[0], dim=0, dim_size=len(AtomicNum))
             h = h + conv.update_mlp(node_message)
             output = [split.sum(0) for split in torch.split(h, Natom)]
 
@@ -696,19 +720,40 @@ class GNN(torch.nn.Module):
         return output
 
 
-def adjfunc(x, m, s):
+def adjfunc(x, m, s):  # noqa: D103
     return 4 / ((torch.exp(s * (x - m)) + 1) * (torch.exp((-s) * (x - m)) + 1))
 
 
-def gauss(x, m, s, a, b):
+def gauss(x, m, s, a, b):  # noqa: D103
     # return torch.exp(-abs((x-m)/2*s)**p)
     G = (1 + (2 ** (a / b) - 1) * abs((x - m) / s) ** a) ** (-b / a)
     G[torch.where(x < m)] = 1
     return G
 
 
-def get_adjacency_matrix(xyz, atom_numbers, bond_length, oxygeninvolved, cell=None, device="cpu"):
-    list(set(atom_numbers))
+def get_adjacency_matrix(
+    xyz: list | torch.Tensor,
+    atom_numbers: torch.Tensor,
+    bond_length: dict,
+    oxygeninvolved: list[int],
+    cell: torch.Tensor | None = None,
+    device: str = "cpu",
+) -> tuple[torch.LongTensor, torch.LongTensor, list[int], torch.Tensor]:
+    """Get the adjacency matrix of a molecule
+
+    Args:
+        xyz (list | torch.Tensor): the xyz coordinates of the atoms
+        atom_numbers (torch.Tensor): the atomic numbers of the atoms
+        bond_length (dict): the bond lengths of the atoms in the format "atom1-atom2"
+            for each key, the value is the bond length
+        oxygeninvolved (list[int]): list of indices of the oxygen atoms
+        cell (torch.Tensor | None, optional): The dimensions of the lattice if the system
+            is periodic. Defaults to None.
+        device (str, optional): the device to use. Defaults to "cpu".
+
+    Returns:
+        tuple[torch.LongTensor, torch.LongTensor, list[int], torch.Tensor]: _description_
+    """
     dis_mat = xyz[None, :, :] - xyz[:, None, :]
     if cell is not None:
         cell_dim = torch.tensor(np.diag(cell))
@@ -738,7 +783,9 @@ def get_adjacency_matrix(xyz, atom_numbers, bond_length, oxygeninvolved, cell=No
         torch.where(adjacency_matrix >= 0)[0], torch.where(adjacency_matrix >= 0)[1]
     ].view(-1, 1)
     atomslist = torch.tensor([14 for i in torch.where(atom_numbers == 14)[0]]).view(-1)
-    # molecules,edge_list,atom_list=get_molecules(xyz=xyz.detach(),atom_numbers=atom_numbers,bond_length=bond_length,periodic=False)
+    # molecules,edge_list,atom_list=get_molecules(
+    #     xyz=xyz.detach(),atom_numbers=atom_numbers,bond_length=bond_length,periodic=False
+    # )
     # adjacency_matrix_list=[]
     # print(compute_grad(xyz,dis_sq[0,1]))
     # for i,m in enumerate(molecules):
@@ -752,12 +799,23 @@ def get_adjacency_matrix(xyz, atom_numbers, bond_length, oxygeninvolved, cell=No
     )
 
 
-def get_molecules(atom, bond_length, mode="bond", periodic=True):
+def get_molecules(atom: AtomsBatch, bond_length: dict, mode: str = "bond", periodic: bool = True) -> list:
+    """Get the molecules in the system from the Atoms object
+
+    Args:
+        atom (AtomsBatch): Atoms from which to extract the molecules
+        bond_length (dict): Dictionary of bond lengths
+        mode (str, optional): Mode of identifying distinct molecules. Defaults to "bond".
+        periodic (bool, optional): Whehter or not the Atoms are periodic. Defaults to True.
+
+    Returns:
+        list: the molecules in the system
+    """
     types = list(set(atom.numbers))
     xyz = atom.positions
     # A=np.lexsort((xyz[:,2],xyz[:,1],xyz[:,0]))
     dis_mat = xyz[None, :, :] - xyz[:, None, :]
-    if periodic:
+    if periodic is True:
         cell_dim = np.diag(np.array(atom.get_cell()))
         shift = np.round(np.divide(dis_mat, cell_dim))
         offsets = -shift
@@ -771,11 +829,11 @@ def get_molecules(atom, bond_length, mode="bond", periodic=True):
         oxy_neighbors = []
         if mode == "bond":
             for t in types:
-                if bond_length.get("%s-%s" % (ty, t)) is not None:
+                if bond_length.get(f"{ty}-{t}") is not None:
                     oxy_neighbors.extend(
                         list(
                             np.where(atom.numbers == t)[0][
-                                np.where(dis_sq[i, np.where(atom.numbers == t)[0]] <= bond_length["%s-%s" % (ty, t)])[0]
+                                np.where(dis_sq[i, np.where(atom.numbers == t)[0]] <= bond_length[f"{ty}-{t}"])[0]
                             ]
                         )
                     )
@@ -812,7 +870,18 @@ def get_molecules(atom, bond_length, mode="bond", periodic=True):
     return molecules
 
 
-def reconstruct_atoms(atomsobject, mol_idx, centre=None):
+def reconstruct_atoms(atomsobject: Atoms | AtomsBatch, mol_idx: list, centre: torch.Tensor | None = None) -> np.ndarray:
+    """Reconstruct the atoms in the system
+
+    Args:
+        atomsobject (Atoms | AtomsBatch): The Atoms object to reconstruct
+        mol_idx (list): The indices of the molecules to reconstruct
+        centre (torch.Tensor | None, optional): A manual center of the atoms. If unspecified,
+            calculated within the function. Defaults to None.
+
+    Returns:
+        np.ndarray: the new positions of the atoms
+    """
     sys_xyz = torch.Tensor(atomsobject.get_positions(wrap=True))
     box_len = torch.Tensor(atomsobject.get_cell_lengths_and_angles()[:3])
 
@@ -832,8 +901,8 @@ def reconstruct_atoms(atomsobject, mol_idx, centre=None):
             offsets = -torch.floor(f + 0.5).view(M, 3)
             traj_unwrap = mol_xyz + torch.matmul(offsets, torch.Tensor(atomsobject.cell))
         else:
-            (intra_dmat > 0.5 * box_len).to(torch.float) * box_len
-            (intra_dmat <= -0.5 * box_len).to(torch.float) * box_len
+            # sub = (intra_dmat > 0.5 * box_len).to(torch.float) * box_len
+            # add = (intra_dmat <= -0.5 * box_len).to(torch.float) * box_len
             shift = torch.round(torch.divide(intra_dmat, box_len))
             offsets = -shift
             traj_unwrap = mol_xyz + offsets * box_len
