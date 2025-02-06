@@ -23,7 +23,7 @@ def get_cp_cmd(script, config_path, data_path, dataset_type):
       cmd (str): the chemprop command
     """
 
-    cmd = f"python {script} --config_path {config_path} " f" --data_path {data_path} " f" --dataset_type {dataset_type}"
+    cmd = f"python {script} --config_path {config_path} --data_path {data_path} --dataset_type {dataset_type}"
     return cmd
 
 
