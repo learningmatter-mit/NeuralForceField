@@ -381,15 +381,6 @@ class ChgnetLayerFreezer(LayerFreezer):
             print(f"Unfreezing # {i} {module.__class__.__name__} module from last")
             self.unfreeze_parameters(module)
 
-    # def unfreeze_chgnet_last_atom_conv_layer(self, model: torch.nn.Module) -> None:
-    #     """Unfreeze the pooling layers in a CHGNet model.
-
-    #     Args:
-    #         model (torch.nn.Module): model to be transfer learned
-    #     """
-    #     module = model.atom_conv_layers[-1]
-    #     self.unfreeze_parameters(module)
-
     def unfreeze_chgnet_pooling(self, model: torch.nn.Module) -> None:
         """Unfreeze the "pooling" layers after the representation layers
         in a CHGNet model.
