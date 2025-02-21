@@ -13,6 +13,9 @@ from nff.utils import cuda
 
 from . import mpl_settings
 
+plt.style.use("ggplot")
+mpl_settings.update_custom_settings()
+
 
 def plot_parity(
     results: Dict[str, Union[list, torch.Tensor]],
@@ -39,7 +42,7 @@ def plot_parity(
         float: MAE of the forces
     """
 
-    fig, ax_fig = plt.subplots(1, 2, figsize=(12, 6), dpi=mpl_settings.DPI)
+    fig, ax_fig = plt.subplots(1, 2, figsize=(5, 2.5), dpi=mpl_settings.DPI)
 
     mae_save = {force_key: 0, energy_key: 0}
 
@@ -75,10 +78,11 @@ def plot_parity(
                 cmap=mpl_settings.cmap,
                 edgecolor="None",
                 extent=(lim_min, lim_max, lim_min, lim_max),
+                rasterized=True,
             )
 
         else:
-            hb = ax.scatter(pred, targ, color="#ff7f0e", alpha=0.3)
+            hb = ax.scatter(pred, targ, color="#ff7f0e", alpha=0.3, rasterized=True)
 
         cb = fig.colorbar(hb, ax=ax)
         cb.set_label("Counts")
