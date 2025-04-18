@@ -196,7 +196,7 @@ class Dataset(TorchDataset):
                 props.update({key: to_tensor(val)})
 
             else:
-                assert len(val) == n_geoms, f"length of {key} is not " f"compatible with {n_geoms} " "geometries"
+                assert len(val) == n_geoms, f"length of {key} is not compatible with {n_geoms} geometries"
                 props[key] = to_tensor(val)
 
         return props
@@ -734,7 +734,7 @@ def convert_nan(x: list) -> list:
             elif isinstance(y, list):
                 new_x.append(torch.Tensor(y))
             else:
-                msg = "Don't know how to convert sub-components of type " f"{type(x)} when components might contain nan"
+                msg = f"Don't know how to convert sub-components of type {type(x)} when components might contain nan"
                 raise Exception(msg)
         else:
             # otherwise they can be kept as is
