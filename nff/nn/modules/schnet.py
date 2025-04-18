@@ -1,4 +1,5 @@
 import unittest
+from typing import Dict, Optional
 
 import numpy as np
 import torch
@@ -56,8 +57,35 @@ def get_rij(xyz, batch, nbrs, cutoff):
     return r_ij, nbrs
 
 
-def add_embedding(atomwise_out, all_results):
-    all_results["embedding"] = atomwise_out["features"]
+def add_embedding(
+    atomwise_out: dict,
+    all_results: dict,
+    pool_embeddings: bool = False,
+    pool_type: str = "sum",
+    batch: Optional[Dict] = None,
+) -> dict:
+    """Add node-wise embeddings to the results dictionary.
+
+    Args:
+        atomwise_out (dict): output of the atomwise layers
+        all_results (dict): results dictionary from the forward pass through the full network
+        pool_embedding (bool, optional): whether or not to pool the embedding. Defaults to False.
+        pool_type (str, optional): type of pooling to use, either "sum" or "mean". Defaults to "sum".
+
+    Returns:
+        _type_: _description_
+    """
+    if pool_embeddings:
+        if not batch:
+            raise ValueError("batch must be provided if pooling is requested.")
+        n_atoms = batch["num_atoms"].detach().cpu().tolist()
+        split_feat = torch.split(atomwise_out["features"], n_atoms)
+        if pool_type == "sum":
+            all_results["embedding"] = torch.stack([i.sum(0) for i in split_feat])
+        elif pool_type == "mean":
+            all_results["embedding"] = torch.stack([i.mean(0) for i in split_feat])
+    else:
+        all_results["embedding"] = atomwise_out["features"]
 
     return all_results
 
@@ -74,10 +102,12 @@ def add_stress(batch, all_results, nbrs, r_ij):
     if batch["num_atoms"].shape[0] == 1:
         all_results["stress_volume"] = torch.matmul(Z.t(), r_ij)
     else:
-        allstress = torch.stack([
-            torch.matmul(Z[torch.where(nbrs[:, 0] == j)].t(), r_ij[torch.where(nbrs[:, 0] == j)])
-            for j in range(batch["nxyz"].shape[0])
-        ])
+        allstress = torch.stack(
+            [
+                torch.matmul(Z[torch.where(nbrs[:, 0] == j)].t(), r_ij[torch.where(nbrs[:, 0] == j)])
+                for j in range(batch["nxyz"].shape[0])
+            ]
+        )
         N = batch["num_atoms"].detach().cpu().tolist()
         split_val = torch.split(allstress, N)
         all_results["stress_volume"] = torch.stack([i.sum(0) for i in split_val])
@@ -1014,7 +1044,7 @@ def sum_and_grad(batch, xyz, r_ij, nbrs, atomwise_output, grad_keys, out_keys=No
             use_val = val.sum(-1)
 
         else:
-            raise Exception("Don't know how to handle val shape " f"{val.shape} for key {key}")
+            raise Exception(f"Don't know how to handle val shape {val.shape} for key {key}")
 
         pooled_result = scatter_add(use_val, mol_idx, dim_size=dim_size)
         if mean:
@@ -1030,10 +1060,12 @@ def sum_and_grad(batch, xyz, r_ij, nbrs, atomwise_output, grad_keys, out_keys=No
         if key == "stress":
             output = results["energy"]
             grad_ = compute_grad(output=output, inputs=r_ij)
-            allstress = torch.stack([
-                torch.matmul(grad_[torch.where(nbrs[:, 0] == i)].t(), r_ij[torch.where(nbrs[:, 0] == i)])
-                for i in range(batch["nxyz"].shape[0])
-            ])
+            allstress = torch.stack(
+                [
+                    torch.matmul(grad_[torch.where(nbrs[:, 0] == i)].t(), r_ij[torch.where(nbrs[:, 0] == i)])
+                    for i in range(batch["nxyz"].shape[0])
+                ]
+            )
             split_val = torch.split(allstress, N)
             grad_ = torch.stack([i.sum(0) for i in split_val])
             if "cell" in batch:

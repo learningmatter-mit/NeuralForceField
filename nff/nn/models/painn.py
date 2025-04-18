@@ -14,6 +14,7 @@ from nff.nn.modules.painn import (
     ReadoutBlock_Complex,
     ReadoutBlock_Tuple,
     ReadoutBlock_Vec,
+    ReadoutBlock_Vec2,
     TransformerMessageBlock,
     UpdateBlock,
 )
@@ -83,7 +84,6 @@ class Painn(nn.Module):
             ]
         )
         self.update_blocks = nn.ModuleList(
-            [UpdateBlock(feat_dim=feat_dim, activation=activation, dropout=conv_dropout) for _ in range(num_conv)]
             [UpdateBlock(feat_dim=feat_dim, activation=activation, dropout=conv_dropout) for _ in range(num_conv)]
         )
 
@@ -256,6 +256,7 @@ class Painn(nn.Module):
         requires_embedding=False,
         requires_stress=False,
         inference=False,
+        pool_embeddings=False,
     ):
         atomwise_out, xyz, r_ij, nbrs = self.atomwise(batch=batch, xyz=xyz)
 
@@ -275,7 +276,9 @@ class Painn(nn.Module):
         )
 
         if requires_embedding:
-            all_results = add_embedding(atomwise_out=atomwise_out, all_results=all_results)
+            all_results = add_embedding(
+                atomwise_out=atomwise_out, all_results=all_results, pool_embeddings=pool_embeddings, batch=batch
+            )
 
         if requires_stress:
             all_results = add_stress(batch=batch, all_results=all_results, nbrs=nbrs, r_ij=r_ij)
@@ -292,6 +295,7 @@ class Painn(nn.Module):
         requires_embedding=False,
         requires_stress=False,
         inference=False,
+        pool_embeddings=False,
         **kwargs,
     ):
         """
@@ -308,6 +312,7 @@ class Painn(nn.Module):
             requires_embedding=requires_embedding,
             requires_stress=requires_stress,
             inference=inference,
+            pool_embeddings=pool_embeddings,
         )
 
         return results
@@ -517,9 +522,6 @@ class Painn_VecOut(Painn):
         """
         Args:
             modelparams (dict): dictionary of model parameters
-
-
-
         """
 
         super().__init__(modelparams)
