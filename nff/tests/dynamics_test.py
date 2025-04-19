@@ -24,7 +24,7 @@ from nff.utils.cuda import batch_to
 HBAR = 1
 OUT_FILE = "trj.csv"
 LOG_FILE = "trj.log"
-ETHANOL_MODEL_PATH = "../../tutorials/sandbox_painn/best_model"
+ETHANOL_MODEL_PATH = "../../tutorials/models/cco_1/best_model"  # Simon's SchNet model
 
 
 METHOD_DIC = {"nosehoover": NoseHoover, "nosehooverchain": NoseHooverChain}
