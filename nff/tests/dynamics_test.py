@@ -4,6 +4,7 @@ import pickle
 import random
 import unittest as ut
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -24,7 +25,10 @@ from nff.utils.cuda import batch_to
 HBAR = 1
 OUT_FILE = "trj.csv"
 LOG_FILE = "trj.log"
-ETHANOL_MODEL_PATH = "../../tutorials/models/cco_1/best_model"  # Simon's SchNet model
+this_file = Path(__file__).resolve()
+ETHANOL_MODEL_PATH = (
+    this_file.parent.parent.parent / "tutorials" / "models" / "cco_1" / "best_model"
+)  # Simon's SchNet model
 
 
 METHOD_DIC = {"nosehoover": NoseHoover, "nosehooverchain": NoseHooverChain}
