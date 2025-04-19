@@ -2,17 +2,55 @@ import copy
 import math
 import os
 import pickle
+import warnings
 from typing import Optional
 
+import ase
 import numpy as np
 from ase import units
 from ase.md.logger import MDLogger
 from ase.md.md import MolecularDynamics
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
 from ase.optimize.optimize import Dynamics
+from packaging.version import Version, parse
 from tqdm import tqdm
 
 from nff.io.ase import AtomsBatch
+
+ASE_VERSION = parse(ase.__version__)
+ASE_CUTOFF_VERSION = parse("3.23.0")
+
+
+def run_with_ase_check(
+    integrator: MolecularDynamics,
+    steps_per_epoch: int,
+    ase_ver: Version = ASE_VERSION,
+    ase_cut: Version = ASE_CUTOFF_VERSION,
+) -> None:
+    """Run the ASE dynamics with a check for the ASE version. ASE v3.23 has updated
+    the `run` method in the `Dynamics` class, so we need to check for the version
+    and run the appropriate method. This function will be deprecated in the future,
+    as ASE v3.23 will be the minimum version required for htvs, and contains a warning
+    to that effect.
+    Args:
+        integrator (MolecularDynamics): ASE integrator object or thermostat like NoseHoover
+        steps_per_epoch (int): number of steps per epoch
+        ase_ver (Version): ASE version
+        ase_cut (Version): ASE cutoff version where Dynamics approach was changed
+    Raises:
+        DeprecationWarning: if the ASE version is less than 3.23
+    """
+    if ase_ver < ase_cut:
+        warnings.warn(
+            f"ASE version {ase_ver} uses outdated `run` method in"
+            " its `Dynamics` class. Please update to a newer version of ASE as this"
+            " method will be deprecated in htvs in the future.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        Dynamics.run(integrator)
+    else:
+        Dynamics.run(integrator, steps=steps_per_epoch)
 
 
 class NoseHoover(MolecularDynamics):
@@ -154,7 +192,7 @@ class NoseHoover(MolecularDynamics):
 
         for _ in tqdm(range(epochs)):
             self.max_steps += steps_per_epoch
-            Dynamics.run(self)
+            run_with_ase_check(self, steps_per_epoch)
             self.atoms.update_nbr_list()
 
 
@@ -382,7 +420,7 @@ class Langevin(MolecularDynamics):
 
         for _ in tqdm(range(epochs)):
             self.max_steps += steps_per_epoch
-            Dynamics.run(self)
+            run_with_ase_check(self, steps_per_epoch)
 
             x = self.atoms.get_positions(wrap=True)
             self.atoms.set_positions(x)
@@ -567,7 +605,7 @@ class BatchLangevin(MolecularDynamics):
 
         for _ in tqdm(range(epochs)):
             self.max_steps += steps_per_epoch
-            Dynamics.run(self)
+            run_with_ase_check(self, steps_per_epoch)
             self.atoms.update_nbr_list()
 
             momenta = []
@@ -733,7 +771,7 @@ class VRescale(MolecularDynamics):
 
         for _ in tqdm(range(epochs)):
             self.max_steps += steps_per_epoch
-            Dynamics.run(self)
+            run_with_ase_check(self, steps_per_epoch)
             self.atoms.update_nbr_list()
             Stationary(self.atoms)
             ZeroRotation(self.atoms)
@@ -821,7 +859,7 @@ class NoseHooverMetadynamics(NoseHoover):
             # set hydrogen mass to 2 AMU (deuterium, following Grimme's mTD approach)
             self.increase_h_mass()
 
-            Dynamics.run(self)
+            run_with_ase_check(self, steps_per_epoch)
 
             # reset the masses
             self.decrease_h_mass()
@@ -965,7 +1003,7 @@ class BatchNoseHoover(MolecularDynamics):
 
         for _ in range(epochs):
             self.max_steps += steps_per_epoch
-            Dynamics.run(self)
+            run_with_ase_check(self, steps_per_epoch)
             self.atoms.update_nbr_list()
 
 
