@@ -30,7 +30,7 @@ def run_with_ase_check(
     """Run the ASE dynamics with a check for the ASE version. ASE v3.23 has updated
     the `run` method in the `Dynamics` class, so we need to check for the version
     and run the appropriate method. This function will be deprecated in the future,
-    as ASE v3.23 will be the minimum version required for htvs, and contains a warning
+    as ASE v3.23 will be the minimum version required for nff, and contains a warning
     to that effect.
     Args:
         integrator (MolecularDynamics): ASE integrator object or thermostat like NoseHoover
@@ -44,7 +44,7 @@ def run_with_ase_check(
         warnings.warn(
             f"ASE version {ase_ver} uses outdated `run` method in"
             " its `Dynamics` class. Please update to a newer version of ASE as this"
-            " method will be deprecated in htvs in the future.",
+            " method will be deprecated in nff in the future.",
             DeprecationWarning,
             stacklevel=2,
         )
