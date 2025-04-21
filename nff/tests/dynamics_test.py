@@ -1,14 +1,21 @@
 import copy
+import os
 import pickle
 import random
+import unittest as ut
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
+import pytest
 import torch
 from ase.io.trajectory import Trajectory
 from torch.utils.data import DataLoader
 
 from nff.data import Dataset, collate_dicts
+from nff.io.ase import AtomsBatch
+from nff.io.ase_calcs import NeuralFF
+from nff.md.nvt import Langevin
 from nff.md.nvt_ax import NoseHoover, NoseHooverChain
 from nff.md.utils_ax import ZhuNakamuraLogger, atoms_to_nxyz, mol_dot, mol_norm
 from nff.train import load_model
@@ -18,9 +25,95 @@ from nff.utils.cuda import batch_to
 HBAR = 1
 OUT_FILE = "trj.csv"
 LOG_FILE = "trj.log"
+this_file = Path(__file__).resolve()
+ETHANOL_MODEL_PATH = (
+    this_file.parent.parent.parent / "tutorials" / "models" / "cco_1" / "best_model"
+)  # Simon's SchNet model
 
 
 METHOD_DIC = {"nosehoover": NoseHoover, "nosehooverchain": NoseHooverChain}
+
+
+def get_directed_ethanol():
+    """Returns an ethanol molecule.
+
+    Returns:
+        ethanol (Atoms)
+    """
+    props = {
+        "nxyz": torch.Tensor(
+            [
+                [6.0000e00, 5.5206e-03, 5.9149e-01, -8.1382e-04],
+                [6.0000e00, -1.2536e00, -2.5536e-01, -2.9801e-02],
+                [8.0000e00, 1.0878e00, -3.0755e-01, 4.8230e-02],
+                [1.0000e00, 6.2821e-02, 1.2838e00, -8.4279e-01],
+                [1.0000e00, 6.0567e-03, 1.2303e00, 8.8535e-01],
+                [1.0000e00, -2.2182e00, 1.8981e-01, -5.8160e-02],
+                [1.0000e00, -9.1097e-01, -1.0539e00, -7.8160e-01],
+                [1.0000e00, -1.1920e00, -7.4248e-01, 9.2197e-01],
+                [1.0000e00, 1.8488e00, -2.8632e-02, -5.2569e-01],
+            ]
+        ),
+        "energy": torch.tensor(-4.3701),
+        "energy_grad": torch.Tensor(
+            [
+                [10.2030, -33.6563, 1.9132],
+                [-59.5878, 42.4086, 10.0746],
+                [-36.9785, 2.0060, 18.7998],
+                [-1.8185, 5.6604, 4.6715],
+                [-1.8685, 0.9660, -1.9927],
+                [11.0286, -11.6878, 18.4956],
+                [38.0142, -24.5804, -16.6240],
+                [5.8505, 15.7041, -12.9981],
+                [35.1569, 3.1794, -22.3399],
+            ]
+        ),
+        "smiles": "CCO",
+        "num_atoms": torch.tensor(9),
+        "nbr_list": torch.Tensor(
+            [
+                [0, 1],
+                [0, 2],
+                [0, 3],
+                [0, 4],
+                [0, 5],
+                [0, 6],
+                [0, 7],
+                [0, 8],
+                [1, 2],
+                [1, 3],
+                [1, 4],
+                [1, 5],
+                [1, 6],
+                [1, 7],
+                [1, 8],
+                [2, 3],
+                [2, 4],
+                [2, 5],
+                [2, 6],
+                [2, 7],
+                [2, 8],
+                [3, 4],
+                [3, 5],
+                [3, 6],
+                [3, 7],
+                [3, 8],
+                [4, 5],
+                [4, 6],
+                [4, 7],
+                [4, 8],
+                [5, 6],
+                [5, 7],
+                [5, 8],
+                [6, 7],
+                [6, 8],
+                [7, 8],
+            ]
+        ),
+        "charge": torch.tensor(0.0),
+        "spin": torch.tensor(0.0),
+    }
+    return AtomsBatch(positions=props["nxyz"][:, 1:], directed=True, numbers=props["nxyz"][:, 0], props=props)
 
 
 class ZhuNakamuraDynamics(ZhuNakamuraLogger):
@@ -974,3 +1067,44 @@ class CombinedZhuNakamura:
         )
 
         batched_zn.run()
+
+
+# @pytest.mark.usefixtures("device")
+@pytest.mark.skip("Works locally but need to update to work on remote CI")
+class TestLangevin(ut.TestCase):
+    def setUp(self):
+        self.ethanol = get_directed_ethanol()
+        self.device = self._test_fixture_device
+        self.model = NeuralFF.from_file(ETHANOL_MODEL_PATH, device=self.device)
+        self.ethanol.set_calculator(self.model)
+        if os.path.exists("langevin.traj"):
+            os.remove("langevin.traj")
+        if os.path.exists("langevin.log"):
+            os.remove("langevin.log")
+
+    @pytest.mark.timeout(30)
+    def test_langevin(self):
+        # Set up Langevin dynamics
+        my_dt = 1.0  # fs
+        my_temp = 100  # K
+        my_friction = 1.0
+        logfile = "langevin.log"
+
+        dyn = Langevin(
+            self.ethanol,
+            timestep=my_dt,
+            temperature=my_temp,
+            friction=my_friction,
+            maxwell_temp=my_temp,
+            logfile=logfile,
+            trajectory="langevin.traj",
+        )
+        dyn.run(steps=40)
+
+        # Check that the trajectory file was created
+        assert os.path.exists("langevin.traj")
+        assert os.path.exists("langevin.log")
+
+
+if __name__ == "__main__":
+    ut.main()
