@@ -255,7 +255,7 @@ def main(
         logger.info("Fine-tuning model")
         model = load_model(model_path, model_type=model_type, map_location=device, device=device)
         if "NffScaleMACE" in model_type and trim_embeddings:
-            atomic_numbers = to_tensor(train.props["nxyz"], stack=True)[:, 0].unique().to(int).tolist()
+            atomic_numbers = to_tensor(train.props["nxyz"], stack=True)[:, 0].unique().to(torch.int64).tolist()
             logger.info("Trimming embeddings with MACE model and atomic numbers %s", atomic_numbers)
             model = reduce_foundations(model, atomic_numbers, load_readout=True)
         model_freezer = get_layer_freezer(model_type)
