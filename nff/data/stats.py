@@ -48,21 +48,13 @@ def remove_outliers(
         stats_array = torch.cat(array, dim=0).flatten().cpu().numpy()
         # take the maximum absolute value in the list of tensors
         max_idx = [torch.argmax(torch.abs(ten.flatten())) for ten in array]
-        max_values = np.array(
-            [array[i].flatten()[max_idx[i]].cpu().numpy() for i in range(len(array))]
-        )
+        max_values = np.array([array[i].flatten()[max_idx[i]].cpu().numpy() for i in range(len(array))])
     else:
         stats_array = array.copy()
         max_values = stats_array.copy()  # used for outlier removal
 
-    if reference_mean is None:
-        mean = np.mean(stats_array)
-    else:
-        mean = reference_mean
-    if reference_std is None:
-        std = np.std(stats_array)
-    else:
-        std = reference_std
+    mean = reference_mean if reference_mean else np.mean(stats_array)
+    std = reference_std if reference_std else np.std(stats_array)
     non_outlier = np.bitwise_and(np.abs(max_values - mean) < std_away * std, max_values < max_value)
 
     non_outlier = np.arange(len(array))[non_outlier]
@@ -153,34 +145,25 @@ def center_dataset(
 def get_atom_count(formula: str) -> Dict[str, int]:
     """Count the number of each atom type in the formula.
 
-    Parameters
-    ----------
-    formula
-        The formula parameter is a string representing a chemical formula.
+    Args:
+        formula (str): A chemical formula.
 
-    Returns
-    -------
-        a dictionary containing the count of each atom in the given chemical formula.
-
+    Returns:
+        Dict[str, int]: A dictionary containing the count of each atom in the given
+            chemical formula.
     """
-
-    # return dictionary
     formula = Formula(formula)
     return formula.count()
 
 
 def all_atoms(unique_formulas: List[str]) -> set:
-    """Return set of all atoms in the list of formulas.
+    """Return a set of all atoms present in the list of formulas.
 
-    Parameters
-    ----------
-    unique_formulas
-        list of strings representing the chemical formulas for which you want to count the
-    occurrences of each atom.
+    Args:
+        unique_formulas (List[str]): A list of chemical formula strings.
 
-    Returns
-    -------
-        a set containing all the atoms in the list of formulas.
+    Returns:
+        set: A set containing all unique atom types found in the provided formulas.
     """
     atom_set = set()
     for formula in unique_formulas:
@@ -191,49 +174,32 @@ def all_atoms(unique_formulas: List[str]) -> set:
 
 
 def reg_atom_count(formula: str, atoms: List[str]) -> np.ndarray:
-    """Count the number of each specified atom type in the formula.
+    """Count the occurrence of specified atom types in the formula.
 
-    Parameters
-    ----------
-    formula
-        A string that represents a chemical formula. It can contain elements and
-    their corresponding subscripts. For example, "H2O" represents water, where "H" is the element
-    hydrogen and "O" is the element oxygen. The subscript "2" indicates that there are two
-    atoms
-        list of strings representing the atoms for which you want to count the
-    occurrences in the `formula`.
+    Args:
+        formula (str): A chemical formula string.
+        atoms (List[str]): A list of atom types to count in the formula.
 
-    Returns
-    -------
-        an array containing the count of each atom in the given formula.
+    Returns:
+        np.ndarray: An array containing the count of each specified atom in the formula.
     """
     dictio = get_atom_count(formula)
     count_array = np.array([dictio.get(atom, 0) for atom in atoms])
-
     return count_array
 
 
-def get_stoich_dict(
-    dset: Dataset, formula_key: str = "formula", energy_key: str = "energy"
-) -> Dict[str, float]:
-    """Linear regression to find the per atom energy for each element in the dataset.
+def get_stoich_dict(dset: Dataset, formula_key: str = "formula", energy_key: str = "energy") -> Dict[str, float]:
+    """Determine per-atom energy coefficients via linear regression.
 
-    Parameters
-    ----------
-    dset
-        Dataset object containing properties for each data point. It is assumed to have a property
-        for the chemical formula of each data point and a property for the energy value of each data point.
-    formula_key, optional
-        key for chemical formula in the dset properties dictionary.
-    energy_key, optional
-        key for energy in the dset properties dictionary.
+    Args:
+        dset (Dataset): Dataset object containing chemical formulas and energy values.
+        formula_key (str, optional): Key for chemical formulas in the dataset properties.
+        energy_key (str, optional): Key for energy values in the dataset properties.
 
-    Returns
-    -------
-        a dictionary containing the stoichiometric energy coefficients for each element in the dataset.
-
+    Returns:
+        Dict[str, float]: A dictionary with stoichiometric energy coefficients for
+            each element, including an 'offset' representing the intercept.
     """
-    # calculates the linear regresion and return the stoich dictionary
     formulas = dset.props[formula_key]
     energies = dset.props[energy_key]
     logging.debug("formulas: %s", formulas)
@@ -241,10 +207,9 @@ def get_stoich_dict(
 
     unique_formulas = list(set(formulas))
     logging.debug("unique formulas: %s", unique_formulas)
-    # find the ground state energy for each formula/stoichiometry
+    # Find the ground state energy for each formula/stoichiometry.
     ground_en = [
-        min([energies[i] for i in range(len(formulas)) if formulas[i] == formula])
-        for formula in unique_formulas
+        min([energies[i] for i in range(len(formulas)) if formulas[i] == formula]) for formula in unique_formulas
     ]
     unique_atoms = all_atoms(unique_formulas)
 
@@ -252,7 +217,6 @@ def get_stoich_dict(
     logging.debug("unique atoms: %s", unique_atoms)
 
     x_in = np.stack([reg_atom_count(formula, unique_atoms) for formula in unique_formulas])
-
     y_out = np.array(ground_en)
 
     logging.debug("x_in: %s", x_in)
@@ -262,14 +226,13 @@ def get_stoich_dict(
     clf.fit(x_in, y_out)
 
     pred = (clf.coef_ * x_in).sum(-1) + clf.intercept_
-    # pred = clf.predict(x_in)
     logging.info("coef: %s", clf.coef_)
     logging.info("intercept: %s", clf.intercept_)
     logging.debug("pred: %s", pred)
     err = abs(pred - y_out).mean()  # in kcal/mol
     logging.info("MAE between target energy and stoich energy is %.3f kcal/mol", err)
     logging.info("R : %s", clf.score(x_in, y_out))
-    fit_dic = {atom: coef for atom, coef in zip(unique_atoms, clf.coef_.reshape(-1))}  # noqa
+    fit_dic = dict(zip(unique_atoms, clf.coef_.reshape(-1)))
     stoich_dict = {**fit_dic, "offset": clf.intercept_.item()}
     logging.info(stoich_dict)
 
@@ -282,27 +245,18 @@ def perform_energy_offset(
     formula_key: str = "formula",
     energy_key: str = "energy",
 ) -> Dataset:
-    """Peform energy offset calculation on the dataset. Subtract the energy of the reference state for each atom
-    from the energy of each data point in the dataset.
+    """Perform energy offset calculation by subtracting the reference energy per atom.
 
-    Parameters
-    ----------
-    dset
-        Dataset object containing properties for each data point. It is assumed to have a property
-        for the chemical formula of each data point and a property for the energy value of each data point.
-    stoic_dict
-        a dictionary containing the stoichiometric energy coefficients for each element in the dataset.
-    formula_key, optional
-        key for chemical formula in the dset properties dictionary.
-    energy_key, optional
-        key for energy in the dset properties dictionary.
+    Args:
+        dset (Dataset): Dataset object containing chemical formulas and energy values.
+        stoic_dict (Dict[str, float]): Dictionary with stoichiometric energy coefficients for
+            each element.
+        formula_key (str, optional): Key for chemical formulas in the dataset properties.
+        energy_key (str, optional): Key for energy values in the dataset properties.
 
-    Returns
-    -------
-        a new dataset with the energy offset performed.
-
+    Returns:
+        Dataset: A new dataset with the energy offset applied to each energy value.
     """
-    # perform the energy offset
     formulas = dset.props[formula_key]
     energies = dset.props[energy_key]
 

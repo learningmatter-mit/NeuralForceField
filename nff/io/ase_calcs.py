@@ -132,8 +132,6 @@ class NeuralFF(Calculator):
             self.properties = properties
 
         Calculator.calculate(self, atoms, self.properties, system_changes)
-        # TODO: update atoms only when necessary
-        atoms.update_nbr_list(update_atoms=True)
 
         # run model
         # atomsbatch = AtomsBatch(atoms)
@@ -231,7 +229,14 @@ class EnsembleNFF(Calculator):
     """Produces an ensemble of NFF calculators to predict the
     discrepancy between the properties"""
 
-    implemented_properties = ["energy", "forces", "stress", "energy_std", "forces_std", "stress_std"]
+    implemented_properties = [
+        "energy",
+        "forces",
+        "stress",
+        "energy_std",
+        "forces_std",
+        "stress_std",
+    ]
 
     def __init__(
         self,

@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import json
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -61,11 +63,11 @@ custom_settings = {
 plt.rcParams.update(custom_settings)
 
 
-def update_custom_settings(custom_settings: dict = custom_settings) -> None:
+def update_custom_settings(custom_settings: dict | None = custom_settings) -> None:
     """Update the custom settings for Matplotlib.
 
     Args:
-        custom_settings (dict, optional): Custom settings for Matplotlib. Defaults to
+        custom_settings: Custom settings for Matplotlib. Defaults to
             custom_settings.
     """
     current_settings = plt.rcParams.copy()
@@ -77,10 +79,7 @@ def hex_to_rgb(value: str) -> list[float]:
     """Converts hex to rgb colors.
 
     Args:
-        value (str): string of 6 characters representing a hex colour.
-
-    Returns:
-        list: length 3 of RGB values
+        value: string of 6 characters representing a hex color.
     """
     value = value.strip("#")  # removes hash symbol if present
     lv = len(value)
@@ -91,7 +90,7 @@ def rgb_to_dec(value: list[float]) -> list[float]:
     """Converts rgb to decimal colors (i.e. divides each value by 256).
 
     Args:
-        value (list[float]): string of 6 characters representing a hex colour.
+        value: string of 6 characters representing a hex color.
 
     Returns:
         list: length 3 of RGB values
@@ -107,12 +106,9 @@ def get_continuous_cmap(
     each color in hex_list is mapped to the respective location in float_list.
 
     Args:
-        hex_list (list[str]): list of hex code strings
-        float_list (list[float]): list of floats between 0 and 1, same length as hex_list. Must
-            start with 0 and end with 1.
-
-    Returns:
-        matplotlib.colors.LinearSegmentedColormap: continuous
+        hex_list: list of hex code strings
+        float_list: list of floats between 0 and 1, same length as hex_list.
+            Must start with 0 and end with 1.
     """
     rgb_list = [rgb_to_dec(hex_to_rgb(i)) for i in hex_list]
     if float_list:
@@ -122,9 +118,7 @@ def get_continuous_cmap(
 
     cdict = dict()
     for num, col in enumerate(["red", "green", "blue"]):
-        col_list = [
-            [float_list[i], rgb_list[i][num], rgb_list[i][num]] for i in range(len(float_list))
-        ]
+        col_list = [[float_list[i], rgb_list[i][num], rgb_list[i][num]] for i in range(len(float_list))]
         cdict[col] = col_list
     return mpl.colors.LinearSegmentedColormap("j_cmap", segmentdata=cdict, N=256)
 
