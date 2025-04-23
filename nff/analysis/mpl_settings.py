@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -122,7 +122,9 @@ def get_continuous_cmap(
 
     cdict = dict()
     for num, col in enumerate(["red", "green", "blue"]):
-        col_list = [[float_list[i], rgb_list[i][num], rgb_list[i][num]] for i in range(len(float_list))]
+        col_list = [
+            [float_list[i], rgb_list[i][num], rgb_list[i][num]] for i in range(len(float_list))
+        ]
         cdict[col] = col_list
     return mpl.colors.LinearSegmentedColormap("j_cmap", segmentdata=cdict, N=256)
 

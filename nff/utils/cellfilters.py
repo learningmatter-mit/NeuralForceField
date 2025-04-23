@@ -1,6 +1,5 @@
-from ase.constraints import Filter, UnitCellFilter, ExpCellFilter
 import numpy as np
-
+from ase.constraints import UnitCellFilter
 from ase.stress import full_3x3_to_voigt_6_stress, voigt_6_to_full_3x3_stress
 
 
@@ -39,9 +38,7 @@ class NeuralCellFilterDynamics(UnitCellFilter):
         return self.atoms.set_velocities(velocities=velocities)
 
     def set_cell(self, cell, scale_atoms=False, apply_constraint=True):
-        return self.atoms.set_cell(
-            cell, scale_atoms=scale_atoms, apply_constraint=apply_constraint
-        )
+        return self.atoms.set_cell(cell, scale_atoms=scale_atoms, apply_constraint=apply_constraint)
 
     def get_cell(self, complete=False):
         return self.atoms.get_cell(complete=complete)
@@ -60,9 +57,7 @@ class NeuralCellFilterDynamics(UnitCellFilter):
         )
 
         volume = self.atoms.get_volume()
-        virial = -volume * (
-            voigt_6_to_full_3x3_stress(stress) + np.diag([self.scalar_pressure] * 3)
-        )
+        virial = -volume * (voigt_6_to_full_3x3_stress(stress) + np.diag([self.scalar_pressure] * 3))
         cur_deform_grad = self.deform_grad()
         virial = np.linalg.solve(cur_deform_grad, virial.T).T
 
@@ -97,9 +92,7 @@ class NeuralCellFilterDynamics(UnitCellFilter):
         return forces
 
     def get_potential_energy(self, force_consistent=False, apply_constraint=True):
-        return self.atoms.get_potential_energy(
-            force_consistent=force_consistent, apply_constraint=apply_constraint
-        )
+        return self.atoms.get_potential_energy(force_consistent=force_consistent, apply_constraint=apply_constraint)
 
     def get_global_number_of_atoms(self):
         return self.atoms.get_global_number_of_atoms()

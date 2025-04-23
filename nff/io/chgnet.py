@@ -172,7 +172,7 @@ def convert_chgnet_structure_data_to_nff(
 
 
 def convert_data_batch(
-    data_batch: Dict,  # noqa: FA100
+    data_batch: Dict,
     cutoff: float = 5.0,
     shuffle: bool = True,
 ):

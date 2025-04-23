@@ -2,22 +2,21 @@
 Tools for analyzing conformer-based model predictions.
 """
 
+import json
+import logging
 import os
 import pickle
 import random
-import logging
-import json
 
 import numpy as np
 import torch
-from tqdm import tqdm
-from sklearn.metrics import roc_auc_score, auc, precision_recall_curve
-from sklearn.metrics.pairwise import cosine_similarity as cos_sim
 from rdkit import Chem
+from sklearn.metrics import auc, precision_recall_curve, roc_auc_score
+from sklearn.metrics.pairwise import cosine_similarity as cos_sim
+from tqdm import tqdm
 
-
-from nff.utils import fprint
 from nff.data.features import get_e3fp
+from nff.utils import fprint
 
 LOGGER = logging.getLogger()
 LOGGER.disabled = True
@@ -41,10 +40,8 @@ def get_pred_files(model_path):
         # should have the form <split>_pred_<metric>.pickle
         # or pred_<metric>.pickle
         splits = ["train", "val", "test"]
-        starts_split = any([file.startswith(f"{split}_pred")
-                            for split in splits])
-        starts_pred = any([file.startswith(f"pred")
-                           for split in splits])
+        starts_split = any(file.startswith(f"{split}_pred") for split in splits)
+        starts_pred = file.startswith("pred")
         if (not starts_split) and (not starts_pred):
             continue
         if not file.endswith("pickle"):
@@ -89,8 +86,8 @@ def get_att_type(dic):
     num_confs_list = []
 
     for sub_dic in dic.values():
-        num_learned_weights = sub_dic['learned_weights'].shape[0]
-        num_confs = sub_dic['boltz_weights'].shape[0]
+        num_learned_weights = sub_dic["learned_weights"].shape[0]
+        num_confs = sub_dic["boltz_weights"].shape[0]
 
         if num_learned_weights in num_weights_list:
             continue
@@ -104,12 +101,11 @@ def get_att_type(dic):
         if len(num_confs_list) == 2:
             break
 
-    is_linear = ((num_weights_list[1] / num_weights_list[0])
-                 == (num_confs_list[1] / num_confs_list[0]))
+    is_linear = (num_weights_list[1] / num_weights_list[0]) == (num_confs_list[1] / num_confs_list[0])
     if is_linear:
         num_heads = int(num_weights_list[0] / num_confs_list[0])
     else:
-        num_heads = int((num_weights_list[0] / num_confs_list[0] ** 2))
+        num_heads = int(num_weights_list[0] / num_confs_list[0] ** 2)
 
     return num_heads, is_linear
 
@@ -128,34 +124,27 @@ def annotate_confs(dic):
     """
     num_heads, is_linear = get_att_type(dic)
     for sub_dic in dic.values():
-        num_confs = sub_dic['boltz_weights'].shape[0]
-        if is_linear:
-            split_sizes = [num_confs] * num_heads
-        else:
-            split_sizes = [num_confs ** 2] * num_heads
+        num_confs = sub_dic["boltz_weights"].shape[0]
+        split_sizes = [num_confs] * num_heads if is_linear else [num_confs**2] * num_heads
 
-        learned = torch.Tensor(sub_dic['learned_weights'])
+        learned = torch.Tensor(sub_dic["learned_weights"])
         head_weights = torch.split(learned, split_sizes)
         # if it's not linear, sum over conformer pairs to
         # get the average importance of each conformer
         if not is_linear:
-            head_weights = [i.reshape(num_confs, num_confs).sum(0)
-                            for i in head_weights]
+            head_weights = [i.reshape(num_confs, num_confs).sum(0) for i in head_weights]
 
         # the conformers with the highest weight, according to each
         # head
-        max_weight_confs = [head_weight.argmax().item()
-                            for head_weight in head_weights]
+        max_weight_confs = [head_weight.argmax().item() for head_weight in head_weights]
         # the highest conformer weight assigned by each head
-        max_weights = [head_weight.max()
-                       for head_weight in head_weights]
+        max_weights = [head_weight.max() for head_weight in head_weights]
         # the head that gave out the highest weight
         max_weight_head = np.argmax(max_weights)
         # the conformer with the highest of all weights
         max_weight_conf = max_weight_confs[max_weight_head]
 
-        sub_dic["head_weights"] = {i: weights.tolist() for i, weights in
-                                   enumerate(head_weights)}
+        sub_dic["head_weights"] = {i: weights.tolist() for i, weights in enumerate(head_weights)}
         sub_dic["max_weight_conf"] = max_weight_conf
         sub_dic["max_weight_head"] = max_weight_head
 
@@ -181,9 +170,7 @@ def choices_from_pickle(paths):
     return fps_choices
 
 
-def funcs_for_external(external_fp_fn,
-                       summary_path,
-                       rd_path):
+def funcs_for_external(external_fp_fn, summary_path, rd_path):
     """
     If requesting an external method to get and compare
     fingerprints, then use this function to get a dictionary
@@ -231,38 +218,24 @@ def sample_species(dic, classifier, max_samples):
         # if it's not a classifier, you'll just randomly sample
         # different species pairs and compare their fingerprints
         keys = list(dic.keys())
-        samples = [np.random.choice(keys, max_samples),
-                   np.random.choice(keys, max_samples)]
+        samples = [np.random.choice(keys, max_samples), np.random.choice(keys, max_samples)]
         sample_dics = {"random_mols": samples}
     else:
         # if it is a classifier, you'll want to compare species
         # that are both hits, both misses, or one hit and one miss
 
-        pos_keys = [smiles for smiles, sub_dic in dic.items()
-                    if sub_dic['true'] == 1]
-        neg_keys = [smiles for smiles, sub_dic in dic.items()
-                    if sub_dic['true'] == 0]
+        pos_keys = [smiles for smiles, sub_dic in dic.items() if sub_dic["true"] == 1]
+        neg_keys = [smiles for smiles, sub_dic in dic.items() if sub_dic["true"] == 0]
 
-        intra_pos = [np.random.choice(pos_keys, max_samples),
-                     np.random.choice(pos_keys, max_samples)]
-        intra_neg = [np.random.choice(neg_keys, max_samples),
-                     np.random.choice(neg_keys, max_samples)]
-        inter = [np.random.choice(pos_keys, max_samples),
-                 np.random.choice(neg_keys, max_samples)]
+        intra_pos = [np.random.choice(pos_keys, max_samples), np.random.choice(pos_keys, max_samples)]
+        intra_neg = [np.random.choice(neg_keys, max_samples), np.random.choice(neg_keys, max_samples)]
+        inter = [np.random.choice(pos_keys, max_samples), np.random.choice(neg_keys, max_samples)]
 
-        sample_dics = {"intra_pos": intra_pos,
-                       "intra_neg": intra_neg,
-                       "inter": inter}
+        sample_dics = {"intra_pos": intra_pos, "intra_neg": intra_neg, "inter": inter}
     return sample_dics
 
 
-def calc_sim(dic,
-             smiles_0,
-             smiles_1,
-             func,
-             pickle_dic,
-             conf_type,
-             fp_kwargs):
+def calc_sim(dic, smiles_0, smiles_1, func, pickle_dic, conf_type, fp_kwargs):
     """
     Calculate the similatiy between conformers of two different species.
     Args:
@@ -294,7 +267,6 @@ def calc_sim(dic,
         fp_1_choices = sub_dic_1["conf_fps"]
 
     if conf_type == "att":
-
         conf_0_idx = sub_dic_0["max_weight_conf"]
         conf_1_idx = sub_dic_1["max_weight_conf"]
 
@@ -312,20 +284,14 @@ def calc_sim(dic,
         if isinstance(fp, Chem.rdchem.Mol):
             fps[j] = func(fp, **fp_kwargs)
 
-    sim = cos_sim(fps[0].reshape(1, -1),
-                  fps[1].reshape(1, -1)).item()
+    sim = cos_sim(fps[0].reshape(1, -1), fps[1].reshape(1, -1)).item()
 
     return sim
 
 
-def attention_sim(dic,
-                  max_samples,
-                  classifier,
-                  seed,
-                  external_fp_fn=None,
-                  summary_path=None,
-                  rd_path=None,
-                  fp_kwargs=None):
+def attention_sim(
+    dic, max_samples, classifier, seed, external_fp_fn=None, summary_path=None, rd_path=None, fp_kwargs=None
+):
     """
     Calculate similarities of the conformer fingerprints of different
     pairs of species.
@@ -359,9 +325,7 @@ def attention_sim(dic,
 
     # get an external fingeprinting function if asked
     if external_fp_fn is not None:
-        pickle_dic, func = funcs_for_external(external_fp_fn,
-                                              summary_path,
-                                              rd_path)
+        pickle_dic, func = funcs_for_external(external_fp_fn, summary_path, rd_path)
     else:
         pickle_dic = None
         func = None
@@ -373,21 +337,22 @@ def attention_sim(dic,
     # conformer similarities
 
     for key, samples in sample_dics.items():
-
         fp_dics[key] = {}
-        conf_types = ['att', 'random']
+        conf_types = ["att", "random"]
         for conf_type in conf_types:
             fp_sims = []
             for i in tqdm(range(len(samples[0]))):
                 smiles_0 = samples[0][i]
                 smiles_1 = samples[1][i]
-                sim = calc_sim(dic=dic,
-                               smiles_0=smiles_0,
-                               smiles_1=smiles_1,
-                               func=func,
-                               pickle_dic=pickle_dic,
-                               conf_type=conf_type,
-                               fp_kwargs=fp_kwargs)
+                sim = calc_sim(
+                    dic=dic,
+                    smiles_0=smiles_0,
+                    smiles_1=smiles_1,
+                    func=func,
+                    pickle_dic=pickle_dic,
+                    conf_type=conf_type,
+                    fp_kwargs=fp_kwargs,
+                )
                 fp_sims.append(sim)
 
             fp_dics[key][conf_type] = np.array(fp_sims)
@@ -409,10 +374,11 @@ def analyze_data(bare_data, analysis):
     """
     for key, val in bare_data.items():
         if isinstance(val, np.ndarray):
-            analysis[key] = {"mean": np.mean(val),
-                             "std": np.std(val),
-                             "std_of_mean": (np.std(val)
-                                             / val.shape[0] ** 0.5)}
+            analysis[key] = {
+                "mean": np.mean(val),
+                "std": np.std(val),
+                "std_of_mean": (np.std(val) / val.shape[0] ** 0.5),
+            }
         else:
             if key not in analysis:
                 analysis[key] = {}
@@ -433,8 +399,8 @@ def report_delta(bare_dic):
         fprint("+/- indicates standard deviation of the mean")
 
         # attention and random differences in similarity
-        delta_att = dic['intra_pos']['att'] - dic['inter']['att']
-        delta_rand = dic['intra_pos']['random'] - dic['inter']['random']
+        delta_att = dic["intra_pos"]["att"] - dic["inter"]["att"]
+        delta_rand = dic["intra_pos"]["random"] - dic["inter"]["random"]
 
         # compute mean for attention
         delta_att_mean = np.mean(delta_att)
@@ -449,24 +415,17 @@ def report_delta(bare_dic):
         # a measure of how much attention is learning
 
         delta_delta_mean = delta_att_mean - delta_rand_mean
-        delta_delta_std = ((np.var(delta_att) + np.var(delta_rand)) ** 0.5
-                           / (len(delta_att)) ** 0.5)
+        delta_delta_std = (np.var(delta_att) + np.var(delta_rand)) ** 0.5 / (len(delta_att)) ** 0.5
 
-        fprint("Delta att: %.4f +/- %.4f" % (delta_att_mean, delta_att_std))
-        fprint("Delta rand: %.4f +/- %.4f" % (delta_rand_mean, delta_rand_std))
-        fprint("Delta delta: %.4f +/- %.4f" %
-               (delta_delta_mean, delta_delta_std))
+        fprint(f"Delta att: {delta_att_mean:.4f} +/- {delta_att_std:.4f}")
+        fprint(f"Delta rand: {delta_rand_mean:.4f} +/- {delta_rand_std:.4f}")
+        fprint(f"Delta delta: {delta_delta_mean:.4f} +/- {delta_delta_std:.4f}")
         fprint("\n")
 
 
-def conf_sims_from_files(model_path,
-                         max_samples,
-                         classifier,
-                         seed,
-                         external_fp_fn=None,
-                         summary_path=None,
-                         rd_path=None,
-                         fp_kwargs=None):
+def conf_sims_from_files(
+    model_path, max_samples, classifier, seed, external_fp_fn=None, summary_path=None, rd_path=None, fp_kwargs=None
+):
     """
     Get similarity among species according to predictions of different
     models, given a folder with all of the prediction pickles.
@@ -504,14 +463,16 @@ def conf_sims_from_files(model_path,
     for key in tqdm(pred):
         dic = pred[key]
         annotate_confs(dic)
-        fp_dics = attention_sim(dic=dic,
-                                max_samples=max_samples,
-                                classifier=classifier,
-                                seed=seed,
-                                external_fp_fn=external_fp_fn,
-                                summary_path=summary_path,
-                                rd_path=rd_path,
-                                fp_kwargs=fp_kwargs)
+        fp_dics = attention_sim(
+            dic=dic,
+            max_samples=max_samples,
+            classifier=classifier,
+            seed=seed,
+            external_fp_fn=external_fp_fn,
+            summary_path=summary_path,
+            rd_path=rd_path,
+            fp_kwargs=fp_kwargs,
+        )
         bare_data[key] = fp_dics
 
         # analyze the bare data
@@ -524,7 +485,7 @@ def conf_sims_from_files(model_path,
     return analysis, bare_data
 
 
-def get_scores(path, avg_metrics=['auc', 'prc-auc']):
+def get_scores(path, avg_metrics=["auc", "prc-auc"]):
     """
     Load pickle files that contain predictions and actual values, using
     models evaluated by different validation metrics, and use the predictions
@@ -538,10 +499,9 @@ def get_scores(path, avg_metrics=['auc', 'prc-auc']):
                     used, the validation metric used to get the model, and
                     the PRC and AUC scores.
     """
-    files = [i for i in os.listdir(path) if i.endswith(".pickle")
-             and i.startswith("pred")]
+    files = [i for i in os.listdir(path) if i.endswith(".pickle") and i.startswith("pred")]
     if not files:
-        return
+        return None
     scores = []
     for file in files:
         with open(os.path.join(path, file), "rb") as f:
@@ -549,38 +509,27 @@ def get_scores(path, avg_metrics=['auc', 'prc-auc']):
         split = file.split(".pickle")[0].split("_")[-1]
         from_metric = file.split("pred_")[-1].split(f"_{split}")[0]
 
-        pred = [sub_dic['pred'] for sub_dic in dic.values()]
-        true = [sub_dic['true'] for sub_dic in dic.values()]
+        pred = [sub_dic["pred"] for sub_dic in dic.values()]
+        true = [sub_dic["true"] for sub_dic in dic.values()]
 
         # then it's not a binary classification problem
-        if any([i not in [0, 1] for i in true]):
-            return
+        if any(i not in [0, 1] for i in true):
+            return None
 
         auc_score = roc_auc_score(y_true=true, y_score=pred)
-        precision, recall, thresholds = precision_recall_curve(
-            y_true=true, probas_pred=pred)
+        precision, recall, thresholds = precision_recall_curve(y_true=true, probas_pred=pred)
         prc_score = auc(recall, precision)
 
-        scores.append({"split": split,
-                       "from_metric": from_metric,
-                       "auc": auc_score,
-                       "prc": prc_score})
+        scores.append({"split": split, "from_metric": from_metric, "auc": auc_score, "prc": prc_score})
 
     if avg_metrics is None:
         avg_metrics = [score["from_metric"] for score in scores]
 
-    all_auc = [score["auc"] for score in scores if score['from_metric']
-               in avg_metrics]
-    all_prc = [score["prc"] for score in scores if score['from_metric']
-               in avg_metrics]
-    avg_auc = {"mean": np.mean(all_auc),
-               "std": np.std(all_auc)}
-    avg_prc = {"mean": np.mean(all_prc),
-               "std": np.std(all_prc)}
-    scores.append({"from_metric": "average",
-                   "auc": avg_auc,
-                   "prc": avg_prc,
-                   "avg_metrics": avg_metrics})
+    all_auc = [score["auc"] for score in scores if score["from_metric"] in avg_metrics]
+    all_prc = [score["prc"] for score in scores if score["from_metric"] in avg_metrics]
+    avg_auc = {"mean": np.mean(all_auc), "std": np.std(all_auc)}
+    avg_prc = {"mean": np.mean(all_prc), "std": np.std(all_prc)}
+    scores.append({"from_metric": "average", "auc": avg_auc, "prc": avg_prc, "avg_metrics": avg_metrics})
 
     save_path = os.path.join(path, "scores_from_metrics.json")
     with open(save_path, "w") as f:
@@ -589,7 +538,7 @@ def get_scores(path, avg_metrics=['auc', 'prc-auc']):
     return scores
 
 
-def recursive_scoring(base_path, avg_metrics=['auc', 'prc-auc']):
+def recursive_scoring(base_path, avg_metrics=["auc", "prc-auc"]):
     """
     Recursively search in a base directory to find sub-folders that
     have pickle files that can be used for scoring. Apply `get_scores`
@@ -602,8 +551,7 @@ def recursive_scoring(base_path, avg_metrics=['auc', 'prc-auc']):
             None
     """
 
-    files = [i for i in os.listdir(base_path) if i.endswith(".pickle")
-             and i.startswith("pred")]
+    files = [i for i in os.listdir(base_path) if i.endswith(".pickle") and i.startswith("pred")]
     if files:
         print(f"Analyzing {base_path}")
         get_scores(base_path, avg_metrics)
@@ -612,15 +560,13 @@ def recursive_scoring(base_path, avg_metrics=['auc', 'prc-auc']):
         direc_path = os.path.join(base_path, direc)
         if not os.path.isdir(direc_path):
             continue
-        files = [i for i in os.listdir(direc_path) if i.endswith(".pickle")
-                 and i.startswith("pred")]
+        files = [i for i in os.listdir(direc_path) if i.endswith(".pickle") and i.startswith("pred")]
         if files:
             print(f"Analyzing {direc_path}")
             get_scores(direc_path, avg_metrics)
             continue
 
-        folders = [os.path.join(direc_path, i) for i in
-                   os.listdir(direc_path)]
+        folders = [os.path.join(direc_path, i) for i in os.listdir(direc_path)]
         folders = [i for i in folders if os.path.isdir(i)]
 
         if not folders:

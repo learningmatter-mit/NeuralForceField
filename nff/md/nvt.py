@@ -2,16 +2,55 @@ import copy
 import math
 import os
 import pickle
+import warnings
+from typing import Optional
 
+import ase
 import numpy as np
 from ase import units
 from ase.md.logger import MDLogger
 from ase.md.md import MolecularDynamics
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
 from ase.optimize.optimize import Dynamics
+from packaging.version import Version, parse
 from tqdm import tqdm
 
 from nff.io.ase import AtomsBatch
+
+ASE_VERSION = parse(ase.__version__)
+ASE_CUTOFF_VERSION = parse("3.23.0")
+
+
+def run_with_ase_check(
+    integrator: MolecularDynamics,
+    steps_per_epoch: int,
+    ase_ver: Version = ASE_VERSION,
+    ase_cut: Version = ASE_CUTOFF_VERSION,
+) -> None:
+    """Run the ASE dynamics with a check for the ASE version. ASE v3.23 has updated
+    the `run` method in the `Dynamics` class, so we need to check for the version
+    and run the appropriate method. This function will be deprecated in the future,
+    as ASE v3.23 will be the minimum version required for nff, and contains a warning
+    to that effect.
+    Args:
+        integrator (MolecularDynamics): ASE integrator object or thermostat like NoseHoover
+        steps_per_epoch (int): number of steps per epoch
+        ase_ver (Version): ASE version
+        ase_cut (Version): ASE cutoff version where Dynamics approach was changed
+    Raises:
+        DeprecationWarning: if the ASE version is less than 3.23
+    """
+    if ase_ver < ase_cut:
+        warnings.warn(
+            f"ASE version {ase_ver} uses outdated `run` method in"
+            " its `Dynamics` class. Please update to a newer version of ASE as this"
+            " method will be deprecated in nff in the future.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        Dynamics.run(integrator)
+    else:
+        Dynamics.run(integrator, steps=steps_per_epoch)
 
 
 class NoseHoover(MolecularDynamics):
@@ -64,7 +103,7 @@ class NoseHoover(MolecularDynamics):
 
         self.nbr_update_period = nbr_update_period
 
-        # initial Maxwell-Boltmann temperature for atoms
+        # initial Maxwell-Boltzmann temperature for atoms
         if maxwell_temp is None:
             maxwell_temp = temperature
 
@@ -90,10 +129,8 @@ class NoseHoover(MolecularDynamics):
                     has_keys = True
             if not has_keys:
                 print(
-                    (
-                        "WARNING: velocity not set to zero for any atoms in constraint "
-                        "%s; do not know how to find its fixed indices." % constraint
-                    )
+                    "WARNING: velocity not set to zero for any atoms in constraint "
+                    "%s; do not know how to find its fixed indices." % constraint
                 )
 
         if not fixed_idx:
@@ -155,7 +192,7 @@ class NoseHoover(MolecularDynamics):
 
         for _ in tqdm(range(epochs)):
             self.max_steps += steps_per_epoch
-            Dynamics.run(self)
+            run_with_ase_check(self, steps_per_epoch)
             self.atoms.update_nbr_list()
 
 
@@ -247,82 +284,6 @@ class NoseHooverChain(NoseHoover):
         self.p_zeta += 0.5 * dpzeta_dt * self.dt
 
 
-# Does anyone use this?
-# class NoseHooverChainsBiased(NoseHooverChain):
-#     def __init__(self,
-#                  atoms,
-#                  timestep,
-#                  temperature,
-#                  ttime,
-#                  num_chains,
-#                  maxwell_temp=None,
-#                  trajectory=None,
-#                  logfile=None,
-#                  loginterval=1,
-#                  max_steps=None,
-#                  nbr_update_period=20,
-#                  append_trajectory=True,
-#                  **kwargs):
-
-#         NoseHooverChain.__init__(self,
-#                             atoms=atoms,
-#                             timestep=timestep,
-#                             temperature=temperature,
-#                             ttime=ttime,
-#                             num_chains=num_chains,
-#                             maxwell_temp=maxwell_temp,
-#                             trajectory=trajectory,
-#                             logfile=logfile,
-#                             loginterval=loginterval,
-#                             max_steps=max_steps,
-#                             nbr_update_period=nbr_update_period,
-#                             append_trajectory=append_trajectory,
-#                             **kwargs)
-
-
-#     def update_bias(self):
-#         # update the bias function if necessary, e.g., add aconfiguration to MetaD
-#         self.atoms.calc.update(self)
-
-#     def irun(self):
-#         # run the algorithm max_steps reached
-#         while self.nsteps < self.max_steps:
-
-#             # compute the next step
-#             self.step()
-#             self.nsteps += 1
-#             self.update_bias()
-
-#             # log the step
-#             self.log()
-#             self.call_observers()
-
-
-#     def run(self, steps=None):
-#         if steps is None:
-#             steps = self.num_steps
-
-#         epochs = math.ceil(steps / self.nbr_update_period)
-#         # number of steps in between nbr updates
-#         steps_per_epoch = int(steps / epochs)
-#         # maximum number of steps starts at `steps_per_epoch`
-#         # and increments after every nbr list update
-
-#         self.atoms.update_nbr_list()
-
-#         # compute initial structure and log the first step
-#         if self.nsteps == 0:
-#             self.update_bias()
-#             self.atoms.get_forces()
-#             self.log()
-#             self.call_observers()
-
-#         for _ in tqdm(range(epochs)):
-#             self.max_steps += steps_per_epoch
-#             self.irun()
-#             self.atoms.update_nbr_list()
-
-
 class Langevin(MolecularDynamics):
     def __init__(
         self,
@@ -330,7 +291,7 @@ class Langevin(MolecularDynamics):
         timestep: float,
         temperature: float,
         friction_per_ps: float = 1.0,
-        maxwell_temp: float = None,
+        maxwell_temp: Optional[float] = None,
         random_seed=None,
         trajectory=None,
         logfile=None,
@@ -341,16 +302,16 @@ class Langevin(MolecularDynamics):
         **kwargs,
     ):
         # Random Number Generator
-        if random_seed == None:
+        if random_seed is None:
             random_seed = np.random.randint(2147483647)
         if type(random_seed) is int:
             np.random.seed(random_seed)
-            print("THE RANDOM NUMBER SEED WAS: %i" % (random_seed))
+            print(f"THE RANDOM NUMBER SEED WAS: {random_seed}")
         else:
             try:
                 np.random.set_state(random_seed)
-            except:
-                raise ValueError("\tThe provided seed was neither an int nor a state of numpy random")
+            except BaseException as e:
+                raise ValueError("\tThe provided seed was neither an int nor a state of numpy random") from e
 
         if os.path.isfile(str(trajectory)):
             os.remove(trajectory)
@@ -409,10 +370,8 @@ class Langevin(MolecularDynamics):
                     has_keys = True
             if not has_keys:
                 print(
-                    (
-                        "WARNING: velocity not set to zero for any atoms in constraint "
-                        "%s; do not know how to find its fixed indices." % constraint
-                    )
+                    "WARNING: velocity not set to zero for any atoms in constraint "
+                    "%s; do not know how to find its fixed indices." % constraint
                 )
 
         if not fixed_idx:
@@ -461,7 +420,7 @@ class Langevin(MolecularDynamics):
 
         for _ in tqdm(range(epochs)):
             self.max_steps += steps_per_epoch
-            Dynamics.run(self)
+            run_with_ase_check(self, steps_per_epoch)
 
             x = self.atoms.get_positions(wrap=True)
             self.atoms.set_positions(x)
@@ -485,7 +444,7 @@ class BatchLangevin(MolecularDynamics):
         timestep: float,
         temperature: float,
         friction_per_ps: float = 1.0,
-        maxwell_temp: float = None,
+        maxwell_temp: Optional[float] = None,
         random_seed=None,
         trajectory=None,
         logfile=None,
@@ -499,16 +458,16 @@ class BatchLangevin(MolecularDynamics):
             os.remove(trajectory)
 
         # Random Number Generator
-        if random_seed == None:
+        if random_seed is None:
             random_seed = np.random.randint(2147483647)
         if type(random_seed) is int:
-            np.random.seed(radnom_seed)
-            print("THE RANDOM NUMBER SEED WAS: %i" % (random_seed))
+            np.random.seed(random_seed)
+            print(f"THE RANDOM NUMBER SEED WAS: {random_seed}")
         else:
             try:
                 np.random.set_state(random_seed)
-            except:
-                raise ValueError("\tThe provided seed was neither an int nor a state of numpy random")
+            except BaseException as e:
+                raise ValueError("\tThe provided seed was neither an int nor a state of numpy random") from e
 
         MolecularDynamics.__init__(
             self,
@@ -549,9 +508,7 @@ class BatchLangevin(MolecularDynamics):
         self.nbr_update_period = nbr_update_period
 
         # initial Maxwell-Boltmann temperature for atoms
-        if maxwell_temp is not None:
-            maxwell_temp = maxwell_temp
-        else:
+        if maxwell_temp is None:
             maxwell_temp = self.T
 
         # intialize system momentum
@@ -586,10 +543,8 @@ class BatchLangevin(MolecularDynamics):
                     has_keys = True
             if not has_keys:
                 print(
-                    (
-                        "WARNING: velocity not set to zero for any atoms in constraint "
-                        "%s; do not know how to find its fixed indices." % constraint
-                    )
+                    "WARNING: velocity not set to zero for any atoms in constraint "
+                    "%s; do not know how to find its fixed indices." % constraint
                 )
 
         if not fixed_idx:
@@ -650,7 +605,7 @@ class BatchLangevin(MolecularDynamics):
 
         for _ in tqdm(range(epochs)):
             self.max_steps += steps_per_epoch
-            Dynamics.run(self)
+            run_with_ase_check(self, steps_per_epoch)
             self.atoms.update_nbr_list()
 
             momenta = []
@@ -676,7 +631,7 @@ class VRescale(MolecularDynamics):
         timestep: float,
         temperature: float,
         relaxation_const: float = 100.0,
-        maxwell_temp: float = None,
+        maxwell_temp: Optional[float] = None,
         random_seed=None,
         trajectory=None,
         logfile=None,
@@ -687,16 +642,16 @@ class VRescale(MolecularDynamics):
         **kwargs,
     ):
         # Random Number Generator
-        if random_seed == None:
+        if random_seed is None:
             random_seed = np.random.randint(2147483647)
         if type(random_seed) is int:
             np.random.seed(random_seed)
-            print("THE RANDOM NUMBER SEED WAS: %i" % (random_seed))
+            print(f"THE RANDOM NUMBER SEED WAS: {random_seed}")
         else:
             try:
                 np.random.set_state(random_seed)
-            except:
-                raise ValueError("\tThe provided seed was neither an int nor a state of numpy random")
+            except BaseException as e:
+                raise ValueError("\tThe provided seed was neither an int nor a state of numpy random") from e
 
         if os.path.isfile(str(trajectory)):
             os.remove(trajectory)
@@ -753,10 +708,8 @@ class VRescale(MolecularDynamics):
                     has_keys = True
             if not has_keys:
                 print(
-                    (
-                        "WARNING: velocity not set to zero for any atoms in constraint "
-                        "%s; do not know how to find its fixed indices." % constraint
-                    )
+                    "WARNING: velocity not set to zero for any atoms in constraint "
+                    "%s; do not know how to find its fixed indices." % constraint
                 )
 
         if not fixed_idx:
@@ -818,7 +771,7 @@ class VRescale(MolecularDynamics):
 
         for _ in tqdm(range(epochs)):
             self.max_steps += steps_per_epoch
-            Dynamics.run(self)
+            run_with_ase_check(self, steps_per_epoch)
             self.atoms.update_nbr_list()
             Stationary(self.atoms)
             ZeroRotation(self.atoms)
@@ -906,7 +859,7 @@ class NoseHooverMetadynamics(NoseHoover):
             # set hydrogen mass to 2 AMU (deuterium, following Grimme's mTD approach)
             self.increase_h_mass()
 
-            Dynamics.run(self)
+            run_with_ase_check(self, steps_per_epoch)
 
             # reset the masses
             self.decrease_h_mass()
@@ -1050,7 +1003,7 @@ class BatchNoseHoover(MolecularDynamics):
 
         for _ in range(epochs):
             self.max_steps += steps_per_epoch
-            Dynamics.run(self)
+            run_with_ase_check(self, steps_per_epoch)
             self.atoms.update_nbr_list()
 
 
@@ -1094,7 +1047,7 @@ class BatchMDLogger(MDLogger):
         epot = self.atoms.get_potential_energy()
         temp = self.atoms.get_batch_T()
 
-        for i, this_ek in enumerate(ekin):
+        for i, _this_ek in enumerate(ekin):
             this_epot = epot[i]
             this_temp = float(temp[i])
             dat += (this_epot, this_temp)

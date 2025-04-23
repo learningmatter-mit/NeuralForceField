@@ -1,4 +1,5 @@
 import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -21,11 +22,9 @@ class ShiftedSoftplus(nn.Module):
             Initial "temperature" beta of the softplus function.
     """
 
-    def __init__(
-        self, num_features: int, initial_alpha: float = 1.0, initial_beta: float = 1.0
-    ) -> None:
-        """ Initializes the ShiftedSoftplus class. """
-        super(ShiftedSoftplus, self).__init__()
+    def __init__(self, num_features: int, initial_alpha: float = 1.0, initial_beta: float = 1.0) -> None:
+        """Initializes the ShiftedSoftplus class."""
+        super().__init__()
         self._log2 = math.log(2)
         self.initial_alpha = initial_alpha
         self.initial_beta = initial_beta
@@ -34,7 +33,7 @@ class ShiftedSoftplus(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ Initialize parameters alpha and beta. """
+        """Initialize parameters alpha and beta."""
         nn.init.constant_(self.alpha, self.initial_alpha)
         nn.init.constant_(self.beta, self.initial_beta)
 

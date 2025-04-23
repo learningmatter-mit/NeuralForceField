@@ -94,13 +94,13 @@ def plot_parity(
 
         label = key
         ax.set_title(label.upper())
-        ax.set_xlabel("Predicted %s [%s]" % (label, units[key]))
-        ax.set_ylabel("Target %s [%s]" % (label, units[key]))
+        ax.set_xlabel(f"Predicted {label} [{units[key]}]")
+        ax.set_ylabel(f"Target {label} [{units[key]}]")
 
         ax.text(
             0.1,
             0.9,
-            "MAE: %.3f %s" % (mae, units[key]),
+            f"MAE: {mae:.2f} {units[key]}",
             transform=ax.transAxes,
         )
 
@@ -148,7 +148,7 @@ def plot_err_var(
     idx = np.arange(len(var))
     np.random.seed(2)
     sample_idx = np.random.choice(idx, size=int(len(idx) * sample_frac), replace=False)
-    n_samples = len(sample_idx)
+    len(sample_idx)
 
     var = var.flatten()[sample_idx]
     err = err.flatten()[sample_idx]
@@ -166,7 +166,12 @@ def plot_err_var(
     x = pd.Series(var)
     y = pd.Series(err)
 
-    kernel = gaussian_kde(np.vstack([x.sample(n=len(x), random_state=2), y.sample(n=len(y), random_state=2)]))
+    kernel = gaussian_kde(
+        np.vstack([x.sample(n=len(x), random_state=2), y.sample(n=len(y), random_state=2)])
+    )
+    kernel = gaussian_kde(
+        np.vstack([x.sample(n=len(x), random_state=2), y.sample(n=len(y), random_state=2)])
+    )
     c = kernel(np.vstack([x, y]))
     hb = ax.scatter(
         var,
@@ -194,10 +199,10 @@ def plot_err_var(
         label="Avg. best fit",
         zorder=1,
     )
-    min_text = ax.text(
+    ax.text(
         0.6,
         0.9,
-        r"$R^2$: {:.3f}".format(res.rvalue**2),
+        rf"$R^2$: {res.rvalue**2:.3f}",
         transform=ax.transAxes,
     )
 

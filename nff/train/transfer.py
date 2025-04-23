@@ -88,9 +88,7 @@ class PainnLayerFreezer(LayerFreezer):
         unfreeze_skip = not freeze_skip
 
         for i, block in enumerate(model.readout_blocks):
-            if unfreeze_skip:
-                self.unfreeze_parameters(block)
-            elif i == num_readouts - 1:
+            if unfreeze_skip or i == num_readouts - 1:
                 self.unfreeze_parameters(block)
 
     def unfreeze_painn_pooling(self, model: torch.nn.Module) -> None:
@@ -198,14 +196,18 @@ class MaceLayerFreezer(LayerFreezer):
         self.unfreeze_parameters(model.radial_embedding)
         print("Unfreezing radial embedding")
 
-    def unfreeze_mace_interaction_linears(self, model: torch.nn.Module, num_layers: int = 1) -> None:
+    def unfreeze_mace_interaction_linears(
+        self, model: torch.nn.Module, num_layers: int = 1
+    ) -> None:
         """Unfreeze the linear readout layer from the interaction blocks in
         a MACE model.
 
         Args:
             model (torch.nn.Module): model to be transfer learned
         """
-        for i in reversed(range(model.num_interactions.item() - num_layers, model.num_interactions.item())):
+        for i in reversed(
+            range(model.num_interactions.item() - num_layers, model.num_interactions.item())
+        ):
             print(f"Unfreezing # {i} interaction linear layers from last")
             self.custom_unfreeze(model, [f"interactions.{i}.linear.weight"])
 
@@ -215,7 +217,9 @@ class MaceLayerFreezer(LayerFreezer):
         Args:
             model (torch.nn.Module): model to be transfer learned
         """
-        for i in reversed(range(model.num_interactions.item() - num_layers, model.num_interactions.item())):
+        for i in reversed(
+            range(model.num_interactions.item() - num_layers, model.num_interactions.item())
+        ):
             print(f"Unfreezing # {i} interaction linear layers from last")
             self.unfreeze_parameters(model.interactions[i])
 
@@ -226,7 +230,9 @@ class MaceLayerFreezer(LayerFreezer):
         Args:
             model (torch.nn.Module): model to be transfer learned
         """
-        product_linears = [f"products.{i}.linear.weight" for i in range(model.num_interactions.item())]
+        product_linears = [
+            f"products.{i}.linear.weight" for i in range(model.num_interactions.item())
+        ]
         self.custom_unfreeze(model, product_linears)
 
     def unfreeze_mace_pooling(self, model: torch.nn.Module) -> None:
@@ -406,9 +412,7 @@ class ChgnetLayerFreezer(LayerFreezer):
         unfreeze_skip = not freeze_skip
 
         for i, block in enumerate(model.mlp.layers):
-            if unfreeze_skip:
-                self.unfreeze_parameters(block)
-            elif i == num_readouts - 1:
+            if unfreeze_skip or i == num_readouts - 1:
                 self.unfreeze_parameters(block)
 
     def model_tl(

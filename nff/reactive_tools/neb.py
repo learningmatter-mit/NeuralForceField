@@ -1,13 +1,12 @@
 import copy
 
+from ase.io import read
+from ase.neb import NEB
+from ase.optimize import BFGS
+
 from nff.io.ase import AtomsBatch
 from nff.io.ase_calcs import NeuralFF
 from nff.reactive_tools.utils import xyz_to_ase_atoms
-
-from ase.io import read
-
-from ase.neb import NEB
-from ase.optimize import BFGS
 
 
 def neural_neb_ase(
@@ -36,17 +35,17 @@ def neural_neb_ase(
     neb.interpolate()
     neb.idpp_interpolate(optimizer=BFGS, steps=steps)
 
-    images = read("idpp.traj@-{}:".format(str(n_images + 2)))
+    images = read(f"idpp.traj@-{n_images + 2!s}:")
 
     # # Set calculators:
     nff_ase = NeuralFF.from_file(nff_dir, device="cuda:0")
     neb.set_calculators(nff_ase)
 
     # # Optimize:
-    optimizer = BFGS(neb, trajectory="{}/{}.traj".format(nff_dir, rxn_name))
+    optimizer = BFGS(neb, trajectory=f"{nff_dir}/{rxn_name}.traj")
     optimizer.run(fmax=fmax, steps=steps)
 
     # Read NEB images from File
-    images = read("{}/{}.traj@-{}:".format(nff_dir, rxn_name, str(n_images + 2)))
+    images = read(f"{nff_dir}/{rxn_name}.traj@-{n_images + 2!s}:")
 
     return images

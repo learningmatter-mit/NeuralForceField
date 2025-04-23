@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-from torch.nn import CrossEntropyLoss
 
 from nff.utils import constants as const
 
@@ -56,10 +55,7 @@ def build_general_loss(loss_coef, operation, correspondence_keys=None, cutoff=No
 
         loss = 0.0
         for key, coef in loss_coef.items():
-            if key not in ground_truth.keys():
-                ground_key = correspondence_keys[key]
-            else:
-                ground_key = key
+            ground_key = correspondence_keys[key] if key not in ground_truth else key
 
             targ = ground_truth[ground_key]
             pred = results[key].view(targ.shape)

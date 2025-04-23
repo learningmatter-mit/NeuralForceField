@@ -184,7 +184,7 @@ class SpookyPainn(Painn):
 
             if key in electrostatics:
                 suffix = "_" + key.split("_")[-1]
-                if not any([i.isdigit() for i in suffix]):
+                if not any(i.isdigit() for i in suffix):
                     suffix = ""
                 results.update({f"dipole{suffix}": full_dip, f"q{suffix}": q, f"dip_atom{suffix}": dip_atom})
 
@@ -304,10 +304,7 @@ class SpookyPainnDiabat(SpookyPainn):
         return off_diag
 
     def get_diabat_charge(self, key, charge):
-        if key in self.off_diag_keys:
-            total_charge = torch.zeros_like(charge)
-        else:
-            total_charge = charge
+        total_charge = torch.zeros_like(charge) if key in self.off_diag_keys else charge
         return total_charge
 
     def add_phys(self, results, s_i, v_i, xyz, z, charge, nbrs, num_atoms, offsets, mol_offsets, mol_nbrs):
@@ -325,7 +322,7 @@ class SpookyPainnDiabat(SpookyPainn):
 
                 # transition charges sum to 0
 
-                total_charge = self.get_diabat_charge(key=key, charge=charge)
+                self.get_diabat_charge(key=key, charge=charge)
 
                 mol_nbrs, _ = make_undirected(batch["mol_nbrs"])
                 elec_e, q, dip_atom, full_dip = elec_module(
@@ -348,7 +345,7 @@ class SpookyPainnDiabat(SpookyPainn):
 
             if key in electrostatics:
                 suffix = "_" + key.split("_")[-1]
-                if not any([i.isdigit() for i in suffix]):
+                if not any(i.isdigit() for i in suffix):
                     suffix = ""
                 results.update({f"dipole{suffix}": full_dip, f"q{suffix}": q, f"dip_atom{suffix}": dip_atom})
 

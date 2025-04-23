@@ -12,11 +12,12 @@ readme = "README.md"
 license = { text = "MIT" }
 dependencies = [
     "ase==3.23.0",
+    "numpy >=1.26.4, <2",
     "pymatgen>=2023.3.10",
     "rdkit",
     "scikit-learn",
     "scipy",
-    "torch>=2.2.0",
+    "torch >= 2.2.0, < 2.6.0",
     "tqdm",
     "mace-torch>=0.3.4",
     "chgnet>=0.3.5",
@@ -52,6 +53,20 @@ Homepage = "https://github.mit.edu/MLMat/NeuralForceField/"
 
 [tool.setuptools]
 packages.find = { where = ["."], include = ["nff*"] }
+
+[tool.flake8]
+max_line_length = 120
+# F401 and F403: start imports, they are bad but everywhere
+per-file-ignores = [
+    '__init__.py:F401, F403',
+]
+# E741 ambiguous variable name 'l'
+# F405 rely on objects from star imports, maybe worth removing in the future
+# E203 no whitespace before ':', ruff prefers this for list comprehensions
+extend-ignore = ['E741', 'F405', 'E203']
+exclude = [
+    'nff/nn/models/spooky_net_source/modules/electron_configurations.py'
+]
 
 [tool.ruff]
 include = ["**/pyproject.toml", "*.ipynb", "*.py", "*.pyi"]
@@ -124,5 +139,17 @@ ignore = [
     "S310",    # url open functions can be unsafe
     "TRY003",  # long exception messages not defined in the exception class itself
     "UP015",   # unnecessary "r" in open call
+    "Q000",    # single quotes
+    "D103",    # missing docstring in public function
+    "D",       # do not fight with doc for now, todo in the future
+    "UP035",   # deprecated Dict and List, but keep to support python<3.10
+    "UP006",   # deprecated Dict and List, but keep to support python<3.10
+    "ICN001",  # import name convention
+    "UP031",   # Use format specifiers instead of percent format
+    "PD901",   # dont name dataframes df
+    "FA100",   # from future suggestion
+    "RUF012",  # type annotation for mutable class attributes
+    "RUF002",  # ambiguous characters in docstrings
+    "RUF003",  # ambiguous characters in comments
 ]
 pydocstyle.convention = "google"
