@@ -20,7 +20,6 @@ import torch
 
 from nff.io.gmm import GaussianMixture
 from nff.train.evaluate import evaluate
-from nff.utils.cuda import batch_detach
 from nff.utils.prediction import get_residual
 
 __all__ = [
@@ -42,7 +41,7 @@ CONVERSION = {
 class Uncertainty:
     """Base class for uncertainty predictions."""
 
-    def __init__(  # noqa: D107
+    def __init__(
         self,
         order: str,
         calibrate: bool,
@@ -69,7 +68,7 @@ class Uncertainty:
 
             self.CP = ConformalPrediction(alpha=cp_alpha)
 
-    def __call__(self, *args, **kwargs):  # noqa: D102
+    def __call__(self, *args, **kwargs):
         return self.get_uncertainty(*args, **kwargs)
 
     def set_min_uncertainty(self, min_uncertainty: float, force: bool = False) -> None:
@@ -175,7 +174,7 @@ class ConformalPrediction:
         on calibration data and apply to test data during prediction.
     """
 
-    def __init__(self, alpha: float):  # noqa: D107
+    def __init__(self, alpha: float):
         self.alpha = alpha
 
     def fit(
@@ -225,7 +224,7 @@ class EnsembleUncertainty(Uncertainty):
         targ_unit (Union[str, None], optional): Target unit of the quantity. Defaults to None.
     """
 
-    def __init__(  # noqa: D107
+    def __init__(
         self,
         quantity: str,
         order: str,
@@ -342,7 +341,7 @@ class EvidentialUncertainty(Uncertainty):
         min_uncertainty (Union[float, None], optional): Minimum uncertainty value. Defaults to None.
     """
 
-    def __init__(  # noqa: D107
+    def __init__(
         self,
         order: str = "atomic",
         shared_v: bool = False,
@@ -429,7 +428,7 @@ class MVEUncertainty(Uncertainty):
         min_uncertainty (Union[float, None], optional): Minimum uncertainty value. Defaults to None.
     """
 
-    def __init__(  # noqa: D107
+    def __init__(
         self,
         variance_key: str = "var",
         quantity: str = "forces",
@@ -480,7 +479,7 @@ class GMMUncertainty(Uncertainty):
         gmm_path (Union[str, None], optional): Path to the saved GMM model. Defaults to None.
     """
 
-    def __init__(  # noqa: D107
+    def __init__(
         self,
         train_embed_key: str = "train_embedding",
         test_embed_key: str = "embedding",
@@ -701,30 +700,56 @@ def get_unc_class(model: torch.nn.Module, info_dict: dict) -> Uncertainty:
     # to refit it
     if info_dict.get("uncertainty_type") == "gmm" and unc_class.is_fitted() is False:
         print("GMM: Doing train prediction")
-        train_predicted, _train_targs, _loss = evaluate(
-            model=model,
-            loader=info_dict["train_dset"],
-            loss_fn=info_dict["loss_fn"],
-            device=device,
-            requires_embedding=True,
-        )
+        if any(c in model.__repr__() for c in ["Painn", "SchNet"]):
+            train_predicted, _train_targs, _loss = evaluate(
+                model=model,
+                loader=info_dict["train_dset"],
+                loss_fn=info_dict["loss_fn"],
+                device=device,
+                requires_embedding=True,
+            )
 
-        # GMM requires a 2D tensor for the embeddings, with the
-        train_embedding = torch.stack([t.flatten() for t in train_predicted["embedding"]], dim=0)
+            # GMM requires a 2D tensor for the embeddings, with the
+            train_embedding = torch.concat(train_predicted["embedding"])
+
+        elif "MACE" in model.__repr__():
+            _, train_predicted = evaluate(
+                model=model,
+                dset=info_dict["train_dset"],
+                batch_size=info_dict["batch_size"],
+                device=device,
+                embedding_kwargs=info_dict["uncertainty_params"]["embedding_kwargs"],
+            )
+
+            train_embedding = train_predicted["embeddings"].detach().cpu().squeeze()
 
         print("COLVAR: Fitting GMM")
         unc_class.fit_gmm(train_embedding)
     calibrate = info_dict["uncertainty_params"].get("calibrate", False)
-    if calibrate and unc_class.CP.qhat is None:
+    if calibrate and (not hasattr(unc_class.CP, "qhat") or unc_class.CP.qhat is None):
         print("COLVAR: Fitting ConformalPrediction")
-        calib_target, calib_predicted = evaluate(
-            model=model,
-            dset=info_dict["calib_dset"],
-            batch_size=info_dict["batch_size"],
-            device=device,
-            embedding_kwargs=info_dict["uncertainty_params"]["embedding_kwargs"],
-        )
+        if any(c in model.__repr__() for c in ["Painn", "SchNet"]):
+            calib_predicted, calib_target, _loss = evaluate(
+                model=model,
+                loader=info_dict["calib_dset"],
+                loss_fn=info_dict["loss_fn"],
+                device=device,
+                requires_embedding=True,
+            )
+
+        elif "MACE" in model.__repr__():
+            calib_target, calib_predicted = evaluate(
+                model=model,
+                dset=info_dict["calib_dset"],
+                batch_size=info_dict["batch_size"],
+                device=device,
+                embedding_kwargs=info_dict["uncertainty_params"]["embedding_kwargs"],
+            )
+
         # calib_predicted["embeddings"] = calib_predicted["embeddings"][0]
+        print(calib_predicted.keys())
+        print(len(calib_predicted[unc_class.test_key]))
+        print(calib_predicted[unc_class.test_key][0].shape)
         calib_uncertainty = (
             unc_class(
                 results=calib_predicted,

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import itertools
 from itertools import repeat
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
 import numpy as np
 import torch
@@ -16,6 +16,7 @@ from torch.nn import ModuleDict
 
 from nff.io.ase import AtomsBatch
 from nff.train import load_model
+from nff.train.evaluate import evaluate
 from nff.train.uncertainty import (
     EnsembleUncertainty,
     EvidentialUncertainty,
@@ -23,7 +24,7 @@ from nff.train.uncertainty import (
     MVEUncertainty,
 )
 from nff.utils.cuda import batch_to
-from nff.utils.prediction import get_prediction, get_residual
+from nff.utils.prediction import evaluate_mace, get_prediction, get_residual
 from nff.utils.scatter import compute_grad
 
 if TYPE_CHECKING:
@@ -152,21 +153,44 @@ class ColVar(torch.nn.Module):
 
         if self.info_dict.get("uncertainty_type") == "gmm" and self.unc_class.is_fitted() is False:
             print("COLVAR: Doing train prediction")
-            _, train_predicted = get_prediction(
-                model=self.model,
-                dset=self.info_dict["train_dset"],
-                batch_size=self.info_dict["batch_size"],
-                device=self.device,
-                requires_grad=False,
-            )
+            if any(c in self.model.__repr__() for c in ["Painn", "SchNet"]):
+                train_predicted, _train_targs, _loss = evaluate(
+                    model=self.model,
+                    loader=self.info_dict["train_dset"],
+                    loss_fn=self.info_dict["loss_fn"],
+                    device=self.device,
+                    requires_embedding=True,
+                )
 
-            train_embedding = train_predicted["embedding"][0].detach().cpu().squeeze()
-            train_atomic_numbers = torch.cat(
-                [torch.LongTensor(at.get_atomic_numbers()) for at in self.info_dict["train_dset"]]
-            )
+                # GMM requires a 2D tensor for the embeddings, with the
+                train_embedding = torch.concat(train_predicted["embedding"])
+
+            elif "MACE" in self.model.__repr__():
+                _, train_predicted = evaluate_mace(
+                    model=self.model,
+                    dset=self.info_dict["train_dset"],
+                    batch_size=self.info_dict["batch_size"],
+                    device=self.device,
+                    embedding_kwargs=self.info_dict["uncertainty_params"]["embedding_kwargs"],
+                )
+
+                train_embedding = train_predicted["embeddings"].detach().cpu().squeeze()
+            # print("COLVAR: Doing train prediction")
+            # _, train_predicted = get_prediction(
+            #     model=self.model,
+            #     dset=self.info_dict["train_dset"],
+            #     batch_size=self.info_dict["batch_size"],
+            #     device=self.device,
+            #     requires_grad=False,
+            # )
+
+            # train_embedding = train_predicted["embedding"][0].detach().cpu().squeeze()
+            # train_atomic_numbers = torch.cat(
+            #     [torch.LongTensor(at.get_atomic_numbers()) for at in self.info_dict["train_dset"]]
+            # )
 
             print("COLVAR: Fitting GMM")
-            self.unc_class.fit_gmm(train_embedding, train_atomic_numbers)
+            self.unc_class.fit_gmm(train_embedding)
 
         self.calibrate = self.info_dict["uncertainty_params"].get("calibrate", False)
         if self.calibrate:
@@ -667,7 +691,56 @@ class ColVar(torch.nn.Module):
 
         return cv, cv_grad
 
-    def forward(self, atoms: Atoms) -> tuple[np.ndarray, np.ndarray]:
+    def uncertainty(self, atoms: Atoms, pred=None, return_grad: bool = True) -> Tuple[torch.Tensor, torch.Tensor]:
+        if pred is None:
+            _, pred = get_prediction(
+                self.model,
+                dset=[atoms],
+                batch_size=self.info_dict["batch_size"],
+                device=self.device,
+                get_target=False,
+                requires_grad=True,
+                pool_embedding=True,
+            )
+
+        # get neighbor list
+        atoms.update_nbr_list()
+        pred["nbr_list"] = torch.LongTensor(atoms.nbr_list).to(self.device)
+
+        # get atomic numbers
+        pred["test_atomic_numbers"] = torch.LongTensor(atoms.get_atomic_numbers())
+
+        uncertainty = self.unc_class(
+            results=pred,
+            num_atoms=pred["num_atoms"],
+            reset_min_uncertainty=False,
+            device=self.device,
+        )
+
+        if return_grad is False:
+            return uncertainty, None
+
+        if not uncertainty.requires_grad:
+            uncertainty.requires_grad = True
+
+        uncertainty_grad = compute_grad(
+            inputs=pred["xyz"],
+            output=uncertainty,
+            allow_unused=True,
+        )
+        if uncertainty_grad is None:
+            uncertainty_grad = torch.zeros_like(pred["xyz"])
+
+        # make sure uncertainty is a scalar
+        uncertainty = uncertainty.sum()
+
+        return uncertainty, uncertainty_grad
+
+    def forward(
+        self,
+        atoms: Atoms,
+        pred: Optional[Dict] = None,  # noqa
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Switch function to call the right CV-func
 
         Args:
@@ -731,6 +804,9 @@ class ColVar(torch.nn.Module):
 
         elif self.info_dict["name"] == "energy_gap":
             cv, cv_grad = self.energy_gap(self.info_dict["enkey_1"], self.info_dict["enkey_2"])
+
+        elif self.info_dict["name"] == "uncertainty":
+            cv, cv_grad = self.uncertainty(atoms, pred)
 
         return cv.detach().cpu().numpy(), cv_grad.detach().cpu().numpy()
 
