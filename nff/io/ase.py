@@ -1,5 +1,7 @@
 """ASE wrapper for the Neural Force Field."""
 
+import copy
+
 import numpy as np
 import torch
 from ase import Atoms, units
@@ -427,11 +429,14 @@ class AtomsBatch(Atoms):
             An instance of the class initialized with the properties of the ASE Atoms object.
         """
         props = kwargs.pop("props", {})
-        return cls(
+        atoms_batch = cls(
             atoms,
             props=props,
             **kwargs,
         )
+        atoms_batch.arrays = copy.deepcopy(atoms.arrays)
+        atoms_batch.constraints = copy.deepcopy(atoms.constraints)
+        return atoms_batch
 
     def copy(self) -> Self:
         """Copy the current object.
@@ -439,7 +444,7 @@ class AtomsBatch(Atoms):
         Returns:
             AtomsBatch: A copy of the current object.
         """
-        return self.__class__.from_atoms(
+        atoms_batch = self.__class__.from_atoms(
             self,
             props=self.props,
             cutoff=self.cutoff,
@@ -449,6 +454,9 @@ class AtomsBatch(Atoms):
             dense_nbrs=self.mol_nbrs is not None and self.mol_idx is not None,
             device=self.device,
         )
+        atoms_batch.arrays = copy.deepcopy(self.arrays)
+        atoms_batch.constraints = copy.deepcopy(self.constraints)
+        return atoms_batch
 
     def todict(self, update_props=True) -> dict:
         """Serialize the object to a dictionary. Calls the parent class todict method.

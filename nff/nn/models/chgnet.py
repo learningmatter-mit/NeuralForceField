@@ -5,8 +5,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List
 
+import chgnet
 import torch
 from chgnet.data.dataset import collate_graphs
+from chgnet.graph import CrystalGraph
 
 try:
     from chgnet.graph.crystalgraph import datatype
@@ -21,7 +23,6 @@ from nff.utils.misc import cat_props
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from chgnet.graph import CrystalGraph
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -182,10 +183,12 @@ class CHGNetNFF(CHGNet):
         Returns:
             CHGNetNFF: CHGNetNFF foundational model.
         """
+        chgnet_path = Path(chgnet.__file__).parent
+
         try:
             checkpoint_path = {
-                "0.3.0": "../../../models/foundation_models/chgnet/0.3.0/chgnet_0.3.0_e29f68s314m37.pth.tar",
-                "0.2.0": "../../..models/foundation_models/chgnet/0.2.0/chgnet_0.2.0_e30f77s348m32.pth.tar",
+                "0.3.0": chgnet_path / "pretrained/0.3.0/chgnet_0.3.0_e29f68s314m37.pth.tar",
+                "0.2.0": chgnet_path / "pretrained/0.2.0/chgnet_0.2.0_e30f77s348m32.pth.tar",
             }[model_name]
 
         except KeyError as e:
@@ -202,8 +205,7 @@ class CHGNetNFF(CHGNet):
         )
 
     def to(self, device: str, **kwargs) -> CHGNetNFF:
-        """
-        Move the model to the specified device.
+        """Move the model to the specified device.
 
         Args:
             device (str): Device to move the model to.
@@ -348,7 +350,10 @@ class BatchedGraph:
         bond_bases_bg = torch.cat(bond_bases_bg, dim=0)
         angle_bases = torch.cat(angle_bases, dim=0) if len(angle_bases) != 0 else torch.tensor([])
         batched_atom_graph = torch.cat(batched_atom_graph, dim=0)
-        batched_bond_graph = torch.cat(batched_bond_graph, dim=0) if batched_bond_graph != [] else torch.tensor([])
+        if batched_bond_graph != []:
+            batched_bond_graph = torch.cat(batched_bond_graph, dim=0)
+        else:  # when bond graph is empty or disabled
+            batched_bond_graph = torch.tensor([])
         atom_owners = torch.cat(atom_owners, dim=0).type(torch.int32).to(atomic_numbers.device)
         directed2undirected = torch.cat(directed2undirected, dim=0)
         volumes = torch.tensor(volumes, dtype=datatype, device=atomic_numbers.device)

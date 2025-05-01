@@ -40,9 +40,7 @@ def detach(val: torch.Tensor, to_numpy: bool = False) -> torch.Tensor | np.ndarr
     return val.detach().cpu() if hasattr(val, "detach") else val
 
 
-def batch_detach(
-    batch: Dict[str, List | torch.Tensor], to_numpy: bool = False
-) -> Dict[str, List | torch.Tensor]:
+def batch_detach(batch: Dict[str, List | torch.Tensor], to_numpy: bool = False) -> Dict[str, List | torch.Tensor]:
     """Detach batch of GPU tensors
 
     Args:
@@ -114,5 +112,8 @@ def get_final_device(device: str) -> str:
         str: final device to use
     """
     if "cuda" in device and torch.cuda.is_available():
-        return f"cuda:{cuda_devices_sorted_by_free_mem()[-1]}"
+        try:
+            return f"cuda:{cuda_devices_sorted_by_free_mem()[-1]}"
+        except nvidia_smi.NVMLError:
+            return "cuda:0"
     return "cpu"
