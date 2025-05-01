@@ -112,7 +112,7 @@ def convert_chgnet_structure_targets_to_nff(
 def convert_chgnet_structure_data_to_nff(
     structure_data: StructureData,
     cutoff: float = 6.0,
-    shuffle: bool = True,
+    shuffle: bool = False,
 ) -> Dataset:
     """
     Converts a dataset in CHGNet structure data format to a dataset in NFF format.
@@ -120,7 +120,7 @@ def convert_chgnet_structure_data_to_nff(
     Args:
         structure_data (StructureData): A CHGNet StructureData object.
         cutoff (float, optional): Distance cutoff for constructing the neighbor list. Defaults to 6.0.
-        shuffle (bool, optional): Whether the dataset should be shuffled. Defaults to True.
+        shuffle (bool, optional): Whether the dataset should be shuffled. Defaults to False.
 
     Returns:
         Dataset: An NFF Dataset.
