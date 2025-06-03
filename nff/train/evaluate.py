@@ -1,9 +1,10 @@
 import copy
 
 import torch
+from tqdm import tqdm
+
 from nff.data.dataset import concatenate_dict
 from nff.utils.cuda import batch_detach, batch_to
-from tqdm import tqdm
 
 
 def shrink_batch(batch):
@@ -27,9 +28,7 @@ def get_results(batch, model, device, submodel, loss_fn, **kwargs):
     results = batch_to(batch_detach(results), device)
     if "forces" in results and "energy_grad" not in results:
         results["energy_grad"] = (
-            [-x for x in results["forces"]]
-            if isinstance(results["forces"], list)
-            else -results["forces"]
+            [-x for x in results["forces"]] if isinstance(results["forces"], list) else -results["forces"]
         )
     eval_batch_loss = loss_fn(batch, results).data.cpu().numpy()
 

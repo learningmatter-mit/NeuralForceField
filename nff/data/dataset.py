@@ -1047,7 +1047,11 @@ def split_train_validation_test(
     Returns:
         tuple[Dataset, Dataset, Dataset]: train, validation and test datasets
     """
-    train, validation = split_train_test(dataset, test_size=val_size, seed=seed, **kwargs)
-    train, test = split_train_test(train, test_size=test_size / (1 - val_size), seed=seed, **kwargs)
+    if np.isclose(val_size, 0.0):  # for no validation set
+        train, test = split_train_test(dataset, test_size=test_size, seed=seed, **kwargs)
+        validation = None
+    else:
+        train, validation = split_train_test(dataset, test_size=val_size, seed=seed, **kwargs)
+        train, test = split_train_test(train, test_size=test_size / (1 - val_size), seed=seed, **kwargs)
 
     return train, validation, test

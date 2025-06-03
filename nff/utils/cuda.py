@@ -114,5 +114,9 @@ def get_final_device(device: str) -> str:
         str: final device to use
     """
     if "cuda" in device and torch.cuda.is_available():
+        try:
+            return f"cuda:{cuda_devices_sorted_by_free_mem()[-1]}"
+        except nvidia_smi.NVMLError:
+            return "cuda:0"
         return f"cuda:{cuda_devices_sorted_by_free_mem()[-1]}"
     return "cpu"
