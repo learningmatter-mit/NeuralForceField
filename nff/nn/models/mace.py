@@ -17,7 +17,7 @@ from mace.calculators.mace import get_model_dtype
 from mace.data.atomic_data import AtomicData, AtomicNumberTable, torch_geometric
 from mace.data.utils import Configuration
 from mace.modules.models import ScaleShiftMACE
-from mace.modules.radial import BesselBasis, GaussianBasis
+from mace.modules.radial import BesselBasis, GaussianBasis, AgnesiTransform, SoftTransform
 from mace.tools import torch_tools
 
 # from mace.tools.torch_geometric.batch import Batch
@@ -186,7 +186,25 @@ class NffScaleMACE(ScaleShiftMACE):
             radial_type = "bessel"
         elif isinstance(self.radial_embedding.bessel_fn, GaussianBasis):
             radial_type = "gaussian"
+        if isinstance(self.radial_embedding.distance_transform, AgnesiTransform):
+            distance_transform = "Agnesi"
+        elif isinstance(self.radial_embedding.distance_transform, SoftTransform):
+            distance_transform = "Soft"
+        heads = self.heads
+        num_interactions = self.num_interactions.item()
+        MLP_irreps = []
 
+        # Iterate over the irreducible representations in the model
+        for mul, ir in self.readouts[num_interactions-1].hidden_irreps:
+            # Adjust the multiplicity by dividing by the number of heads
+            new_mul = mul // len(heads)  # Use integer division to avoid float results
+            new_ir = ir  # No need to change `ir`, just assign it for clarity
+
+            # Append the new multiplicity and irreducible representation to the list
+            MLP_irreps.append((new_mul, new_ir))
+
+        # Convert the list into an `o3.Irreps` object
+        MLP_irreps = o3.Irreps(MLP_irreps)
         return {
             "atomic_inter_scale": self.scale_shift.scale,
             "atomic_inter_shift": self.scale_shift.shift,
@@ -196,17 +214,22 @@ class NffScaleMACE(ScaleShiftMACE):
             "max_ell": self.spherical_harmonics.irreps_out.lmax,
             "interaction_cls": type(self.interactions[1]),
             "interaction_cls_first": type(self.interactions[0]),
-            "num_interactions": self.num_interactions.item(),
+            "num_interactions": num_interactions,
             "num_elements": self.node_embedding.linear.irreps_in.dim,
             "hidden_irreps": self.interactions[0].hidden_irreps,
-            "MLP_irreps": self.readouts[-1].hidden_irreps,
+            "MLP_irreps": MLP_irreps,
             "atomic_energies": self.atomic_energies_fn.atomic_energies,
             "avg_num_neighbors": self.interactions[0].avg_num_neighbors,
             "atomic_numbers": self.atomic_numbers.tolist(),
             "correlation": self.products[0].symmetric_contractions.contractions[0].correlation,
             "gate": self.readouts[-1].non_linearity.acts[0].f,
+            "pair_repulsion": self.pair_repulsion,
+            "distance_transform": distance_transform,
             "radial_MLP": self.interactions[0].conv_tp_weights.hs[1:-1],
             "radial_type": radial_type,
+            "heads": self.heads,
+            "atomic_inter_scale":self.scale_shift.scale, 
+            "atomic_inter_shift": self.scale_shift.shift
         }
 
     def save(self, path: str) -> None:
@@ -248,8 +271,12 @@ class NffScaleMACE(ScaleShiftMACE):
         device = kwargs.pop("device", "cpu")
         map_location = torch.device(map_location if map_location else device)
         ckpt = torch.load(path, map_location=map_location)
-        hparams = ckpt["init_params"]
-        state_dict = ckpt["state_dict"]
+        if isinstance(ckpt, dict):
+            hparams = ckpt["init_params"]
+            state_dict = ckpt["state_dict"]
+        elif isinstance(ckpt, torch.nn.Module):
+            hparams = get_init_kwargs_from_model(ckpt)
+            state_dict = ckpt.state_dict()
 
         return cls.from_dict(state_dict, **hparams, **kwargs)
 

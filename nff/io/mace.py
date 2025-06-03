@@ -8,12 +8,12 @@ import torch
 from mace.data.atomic_data import AtomicNumberTable
 from mace.modules.blocks import AtomicEnergiesBlock
 from mace.modules.models import MACE, ScaleShiftMACE
-from mace.modules.radial import BesselBasis, GaussianBasis
+from mace.modules.radial import BesselBasis, GaussianBasis, AgnesiTransform, SoftTransform
 from mace.tools.scatter import scatter_sum
 from mace.tools.torch_geometric.batch import Batch
 from mace.tools.torch_geometric.data import Data
 from torch import Tensor
-
+from e3nn import o3
 from nff.data import Dataset
 from nff.utils.cuda import detach
 
@@ -98,7 +98,35 @@ def get_init_kwargs_from_model(model: Union[ScaleShiftMACE, MACE]) -> dict:
         radial_type = "bessel"
     elif isinstance(model.radial_embedding.bessel_fn, GaussianBasis):
         radial_type = "gaussian"
-    
+    try:
+        if isinstance(model.radial_embedding.distance_transform, AgnesiTransform):
+            distance_transform = "Agnesi"
+        elif isinstance(model.radial_embedding.distance_transform, SoftTransform):
+            distance_transform = "Soft"
+    except:
+        distance_transform = None
+    try:
+        heads = model.heads
+    except:
+        heads = ["default"]
+    try:
+        pair_repulsion = model.pair_repulsion
+    except:
+        pair_repulsion = False
+    num_interactions = model.num_interactions.item()
+    MLP_irreps = []
+
+    # Iterate over the irreducible representations in the model
+    for mul, ir in model.readouts[num_interactions-1].hidden_irreps:
+        # Adjust the multiplicity by dividing by the number of heads
+        new_mul = mul // len(heads)  # Use integer division to avoid float results
+        new_ir = ir  # No need to change `ir`, just assign it for clarity
+
+        # Append the new multiplicity and irreducible representation to the list
+        MLP_irreps.append((new_mul, new_ir))
+
+    # Convert the list into an `o3.Irreps` object
+    MLP_irreps = o3.Irreps(MLP_irreps)
     init_kwargs = {
         "r_max": model.r_max.item(),
         "num_bessel": model.radial_embedding.out_dim,
@@ -106,10 +134,10 @@ def get_init_kwargs_from_model(model: Union[ScaleShiftMACE, MACE]) -> dict:
         "max_ell": model.spherical_harmonics.irreps_out.lmax,
         "interaction_cls": type(model.interactions[1]),
         "interaction_cls_first": type(model.interactions[0]),
-        "num_interactions": model.num_interactions.item(),
+        "num_interactions": num_interactions,
         "num_elements": model.node_embedding.linear.irreps_in.dim,
         "hidden_irreps": model.interactions[0].hidden_irreps,
-        "MLP_irreps": model.readouts[-1].hidden_irreps,
+        "MLP_irreps": MLP_irreps,
         "atomic_energies": model.atomic_energies_fn.atomic_energies,
         "avg_num_neighbors": model.interactions[0].avg_num_neighbors,
         "atomic_numbers": model.atomic_numbers.tolist(),
@@ -117,11 +145,15 @@ def get_init_kwargs_from_model(model: Union[ScaleShiftMACE, MACE]) -> dict:
         .symmetric_contractions.contractions[0]
         .correlation,
         "gate": model.readouts[-1].non_linearity.acts[0].f,
+        "pair_repulsion": pair_repulsion,
+        "distance_transform": distance_transform,
         "radial_MLP": model.interactions[0].conv_tp_weights.hs[1:-1],
-        "radial_type": radial_type
+        "radial_type": radial_type,
+        "heads": heads
     }
-    if isinstance(model, ScaleShiftMACE):
+    if type(model).__name__ == "ScaleShiftMACE":
         init_kwargs.update({"atomic_inter_scale":model.scale_shift.scale, "atomic_inter_shift": model.scale_shift.shift})
+    # if isinstance(model, ScaleShiftMACE):
 
     return init_kwargs
 
