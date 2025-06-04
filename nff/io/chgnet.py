@@ -13,8 +13,7 @@ from nff.utils.cuda import batch_detach, detach
 
 def convert_nff_to_chgnet_structure_data(
     dataset: Dataset,
-    cutoff: float = 5.0,
-    shuffle: bool = True,
+    cutoff: float = 5.0
 ):
     """The function `convert_nff_to_chgnet_structure_data` converts a dataset in NFF format to a dataset in
     CHGNet structure data format.
@@ -28,8 +27,6 @@ def convert_nff_to_chgnet_structure_data(
     neighbor list in the conversion process. It determines the maximum distance between atoms within
     which they are considered neighbors. Any atoms beyond this distance will not be included in the
     neighbor list.
-    shuffle : bool
-        The `shuffle` parameter is a boolean value that determines whether the dataset should be shuffled
 
     Returns:
     -------
@@ -54,15 +51,13 @@ def convert_nff_to_chgnet_structure_data(
         energies=energies_per_atom,
         forces=forces,
         stresses=stresses,
-        magmoms=magmoms,
-        shuffle=shuffle,
+        magmoms=magmoms
     )
 
 
 def convert_data_batch(
     data_batch: Dict,  # noqa: FA100
-    cutoff: float = 5.0,
-    shuffle: bool = True,
+    cutoff: float = 5.0
 ):
     """Converts a dataset in NFF format to a dataset in
     CHGNet structure data format.
@@ -85,8 +80,6 @@ def convert_data_batch(
     neighbor list in the conversion process. It determines the maximum distance between atoms within
     which they are considered neighbors. Any atoms beyond this distance will not be included in the
     neighbor list.
-    shuffle : bool
-        The `shuffle` parameter is a boolean value that determines whether the dataset should be shuffled
 
     Returns:
     -------
@@ -142,6 +135,5 @@ def convert_data_batch(
         energies=energies_per_atom,
         forces=forces,
         stresses=stresses,
-        magmoms=magmoms,
-        shuffle=shuffle,
+        magmoms=magmoms
     )

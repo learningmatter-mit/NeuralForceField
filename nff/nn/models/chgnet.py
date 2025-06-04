@@ -91,9 +91,7 @@ class CHGNetNFF(CHGNet):
                                         np.array([[0, 0, 0], [0.1, 0.2, 0.3]])],
                 }
         """
-        chgnet_data_batch = convert_data_batch(
-            data_batch, cutoff=self.cutoff, shuffle=False
-        )  # shuffle=False to keep the order of the structures
+        chgnet_data_batch = convert_data_batch(data_batch, cutoff=self.cutoff) 
 
         graphs, targets = collate_graphs(chgnet_data_batch)
 
