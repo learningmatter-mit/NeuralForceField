@@ -53,11 +53,11 @@ def remove_outliers(
         stats_array = array.copy()
         max_values = stats_array.copy()  # used for outlier removal
 
-    if not reference_mean:
+    if reference_mean is None:
         mean = np.mean(stats_array)
     else:
         mean = reference_mean
-    if not reference_std:
+    if reference_std is None:
         std = np.std(stats_array)
     else:
         std = reference_std
@@ -112,11 +112,9 @@ def remove_dataset_outliers(
         reference_std=reference_std,
         max_value=max_value,
     )
-
     new_props = {key: [val[i] for i in idx] for key, val in dset.props.items()}
     logging.info("reference_mean: %s", mean)
     logging.info("reference_std: %s", std)
-
     return Dataset(new_props, units=dset.units), mean, std
 
 

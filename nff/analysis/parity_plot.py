@@ -13,6 +13,9 @@ from nff.utils import cuda
 
 from . import mpl_settings
 
+plt.style.use("ggplot")
+mpl_settings.update_custom_settings()
+
 
 def plot_parity(
     results: Dict[str, Union[list, torch.Tensor]],
@@ -23,8 +26,7 @@ def plot_parity(
     force_key: str = "energy_grad",
     units: Dict[str, str] = {"energy": "eV", "energy_grad": "eV/Ang"},
 ) -> tuple[float, float]:
-    """
-    Perform a parity plot between the results and the targets.
+    """Perform a parity plot between the results and the targets.
 
     Args:
         results (dict): dictionary containing the results
@@ -40,7 +42,7 @@ def plot_parity(
         float: MAE of the forces
     """
 
-    fig, ax_fig = plt.subplots(1, 2, figsize=(12, 6), dpi=mpl_settings.DPI)
+    fig, ax_fig = plt.subplots(1, 2, figsize=(5, 2.5), dpi=mpl_settings.DPI)
 
     mae_save = {force_key: 0, energy_key: 0}
 
@@ -48,14 +50,14 @@ def plot_parity(
     targets = cuda.batch_detach(targets)
 
     for ax, key in zip(ax_fig, units.keys()):
-        pred = to_tensor(results[key], stack=True)
-        targ = to_tensor(targets[key], stack=True)
+        pred = to_tensor(results[key], stack=True).numpy()
+        targ = to_tensor(targets[key], stack=True).numpy()
 
         mae = abs(pred - targ).mean()
         mae_save[key] = mae
 
-        lim_min = min(torch.min(pred), torch.min(targ))
-        lim_max = max(torch.max(pred), torch.max(targ))
+        lim_min = min(np.min(pred), np.min(targ))
+        lim_max = max(np.max(pred), np.max(targ))
 
         if lim_min < 0:
             lim_min *= 1.1
@@ -66,7 +68,6 @@ def plot_parity(
             lim_max *= 0.9
         else:
             lim_max *= 1.1
-
         if plot_type.lower() == "hexbin":
             hb = ax.hexbin(
                 pred,
@@ -77,10 +78,11 @@ def plot_parity(
                 cmap=mpl_settings.cmap,
                 edgecolor="None",
                 extent=(lim_min, lim_max, lim_min, lim_max),
+                rasterized=True,
             )
 
         else:
-            hb = ax.scatter(pred, targ, color="#ff7f0e", alpha=0.3)
+            hb = ax.scatter(pred, targ, color="#ff7f0e", alpha=0.3, rasterized=True)
 
         cb = fig.colorbar(hb, ax=ax)
         cb.set_label("Counts")
@@ -98,12 +100,12 @@ def plot_parity(
         ax.text(
             0.1,
             0.9,
-            "MAE: %.2f %s" % (mae, units[key]),
+            "MAE: %.3f %s" % (mae, units[key]),
             transform=ax.transAxes,
         )
 
     plt.tight_layout()
-    plt.savefig(f"{figname}.png")
+    plt.savefig(f"{figname}.pdf")
     plt.show()
     mae_energy = float(mae_save[energy_key])
     mae_forces = float(mae_save[force_key])
@@ -164,11 +166,7 @@ def plot_err_var(
     x = pd.Series(var)
     y = pd.Series(err)
 
-    kernel = gaussian_kde(
-        np.vstack(
-            [x.sample(n=len(x), random_state=2), y.sample(n=len(y), random_state=2)]
-        )
-    )
+    kernel = gaussian_kde(np.vstack([x.sample(n=len(x), random_state=2), y.sample(n=len(y), random_state=2)]))
     c = kernel(np.vstack([x, y]))
     hb = ax.scatter(
         var,

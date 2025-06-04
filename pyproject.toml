@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools >= 50.0"]
+requires = ["setuptools>=65", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -11,7 +11,7 @@ requires-python = ">=3.6"
 readme = "README.md"
 license = { text = "MIT" }
 dependencies = [
-    "ase>=3.22.1",
+    "ase==3.23.0",
     "pymatgen>=2023.3.10",
     "rdkit",
     "scikit-learn",
@@ -43,7 +43,7 @@ classifiers = [
 [project.optional-dependencies]
 dev = [
     "pre-commit",
-    "pytest", 
+    "pytest",
     "pytest-cov"
 ]
 
@@ -52,6 +52,10 @@ Homepage = "https://github.mit.edu/MLMat/NeuralForceField/"
 
 [tool.setuptools]
 packages.find = { where = ["."], include = ["nff*"] }
+include-package-data = true
+
+[tool.setuptools.package-data]
+"nff" = ["**/*"]
 
 [tool.ruff]
 include = ["**/pyproject.toml", "*.ipynb", "*.py", "*.pyi"]
