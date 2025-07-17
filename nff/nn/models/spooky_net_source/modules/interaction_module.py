@@ -1,11 +1,12 @@
+from typing import Optional, Tuple
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from .residual_stack import ResidualStack
+
 from .local_interaction import LocalInteraction
 from .nonlocal_interaction import NonlocalInteraction
 from .residual_mlp import ResidualMLP
-from typing import Tuple, Optional
+from .residual_stack import ResidualStack
 
 
 class InteractionModule(nn.Module):
@@ -57,8 +58,8 @@ class InteractionModule(nn.Module):
         num_residual_output: int,
         activation: str = "swish",
     ) -> None:
-        """ Initializes the InteractionModule class. """
-        super(InteractionModule, self).__init__()
+        """Initializes the InteractionModule class."""
+        super().__init__()
         # initialize modules
         self.local_interaction = LocalInteraction(
             num_features=num_features,
@@ -79,14 +80,11 @@ class InteractionModule(nn.Module):
         )
         self.residual_pre = ResidualStack(num_features, num_residual_pre, activation)
         self.residual_post = ResidualStack(num_features, num_residual_post, activation)
-        self.resblock = ResidualMLP(
-            num_features, num_residual_output, activation=activation
-        )
+        self.resblock = ResidualMLP(num_features, num_residual_output, activation=activation)
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ For compatibility with other modules. """
-        pass
+        """For compatibility with other modules."""
 
     def forward(
         self,
@@ -129,7 +127,7 @@ class InteractionModule(nn.Module):
                 descriptors).
         """
         x = self.residual_pre(x)
-        l = self.local_interaction(x, rbf, pij, dij, idx_i, idx_j)
+        local = self.local_interaction(x, rbf, pij, dij, idx_i, idx_j)
         n = self.nonlocal_interaction(x, num_batch, batch_seg, mask)
-        x = self.residual_post(x + l + n)
+        x = self.residual_post(x + local + n)
         return x, self.resblock(x)

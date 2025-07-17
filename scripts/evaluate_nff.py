@@ -41,14 +41,30 @@ def parse_args():
         help="Folder to save output figures.",
     )
     parser.add_argument(
+        "--plot_type",
+        choices=["hexbin", "scatter"],
+        default="hexbin",
+        help="Type of plot to use",
+    )
+    parser.add_argument(
+        "--per_atom_energy",
+        action="store_true",
+        help="Whether to calculate per atom energy",
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=32,
+        help="Batch size",
+    )
+    parser.add_argument(
         "--device",
         choices=["cpu", "cuda"],
         default="cuda",
         help="device to use for calculations",
     )
 
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main(
@@ -56,6 +72,9 @@ def main(
     model_type: str,
     data_path: str,
     train_log_path: str,
+    plot_type: str = "hexbin",
+    per_atom_energy: bool = False,
+    batch_size: int = 32,
     device: str = "cpu",
     save_folder: str = "./",
 ):
@@ -66,6 +85,9 @@ def main(
         model_type (str): name of the model
         data_path (str): path to the data
         train_log_path (str): path to the training log
+        plot_type (str, optional): type of plot to use. Defaults to "hexbin".
+        per_atom_energy (bool, optional): whether to calculate per atom energy. Defaults to False.
+        batch_size (int, optional): batch size. Defaults to 32.
         device (str, optional): device to use. Defaults to "cpu".
         save_folder (str, optional): folder to save the results. Defaults to "./".
     """
@@ -88,14 +110,13 @@ def main(
     model.to(device)
 
     test_data = Dataset.from_file(data_path)
-    if hasattr(model, "units"):
-        units = model.units
-    else:
-        units = "eV"
+
+    units = model.units if hasattr(model, "units") else "eV"
+
     test_data.to_units(units)
     print(f"Using dataset units: {test_data.units}")
 
-    test_loader = DataLoader(test_data, batch_size=4, collate_fn=collate_dicts, pin_memory=True)
+    test_loader = DataLoader(test_data, batch_size=batch_size, collate_fn=collate_dicts, pin_memory=True)
 
     loss_fn = loss.build_mse_loss(loss_coef={"energy": 0.05, "energy_grad": 1})
 
@@ -105,14 +126,25 @@ def main(
     # plot parity plot
     parity_plot_path = save_path / f"{start_time}_parity_plot"
     print(f"Saving parity plot to {parity_plot_path}")
+
+    # convert units to per atom if needed
+    if per_atom_energy and "/atom" not in test_data.units:
+        units = f"{units}/atom"
+        results["energy"] = [x / y for x, y in zip(results["energy"], targets["num_atoms"])]
+        targets["energy"] = [x / y for x, y in zip(targets["energy"], targets["num_atoms"])]
+
+    # Change energy_grad to force
+    results["force"] = results["energy_grad"]
+    targets["force"] = targets["energy_grad"]
+
     mae_energy, mae_force = plot_parity(
         results,
         targets,
         parity_plot_path,
-        plot_type="reg",
+        plot_type=plot_type,
         energy_key="energy",
-        force_key="energy_grad",
-        units={"energy_grad": "eV/Å", "energy": units},
+        force_key="force",
+        units={"force": "eV/Å", "energy": units},
     )
 
     # plot loss curves
@@ -132,6 +164,9 @@ if __name__ == "__main__":
         model_type=args.model_type,
         data_path=args.data_path,
         train_log_path=args.train_log_path,
+        plot_type=args.plot_type,
+        per_atom_energy=args.per_atom_energy,
+        batch_size=args.batch_size,
         device=args.device,
         save_folder=args.save_folder,
     )

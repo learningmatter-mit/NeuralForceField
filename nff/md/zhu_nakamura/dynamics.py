@@ -560,6 +560,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         if np.isnan(velocities).any():
             return "err"
         self.velocities = velocities
+        return None
 
     def update_probabilities(self):
         """
@@ -677,6 +678,7 @@ class ZhuNakamuraDynamics(ZhuNakamuraLogger):
         self.hopping_probabilities = []
         self.time = self.time - self.dt
         self.modify_save()
+        return None
 
     def full_step(self, compute_internal_forces=True, do_log=True):
         """
@@ -1059,18 +1061,18 @@ class BatchedZhuNakamura:
                 # only store the diagonal diabatic forces
                 diabat_forces = np.zeros((num_states, N[j], 3))
 
-                for l in range(num_states):
+                for k in range(num_states):
                     for m in range(num_states):
-                        d_key = diabat_keys[l, m]
+                        d_key = diabat_keys[k, m]
                         diabat_en_kcal = results[d_key][j].item()
                         diabat_en_au = diabat_en_kcal * KCAL_TO_AU["energy"]
 
-                        diabat_ens[l, m] = diabat_en_au
+                        diabat_ens[k, m] = diabat_en_au
 
-                        if l == m:
+                        if k == m:
                             diabat_force_kcal = -(results[f"{d_key}_grad"][j].detach().cpu().numpy())
                             diabat_force_au = diabat_force_kcal * KCAL_TO_AU["energy"] * KCAL_TO_AU["_grad"]
-                            diabat_forces[l, :] = diabat_force_au
+                            diabat_forces[k, :] = diabat_force_au
 
                 trj.diabat_ens = diabat_ens
                 trj.diabat_forces = diabat_forces
@@ -1161,7 +1163,7 @@ class BatchedZhuNakamura:
             if do_save:
                 print(f"Completed step {num_steps}")
 
-            complete = all([trj.time >= self.max_time for trj in self.zhu_trjs])
+            complete = all(trj.time >= self.max_time for trj in self.zhu_trjs)
             num_steps += 1
 
         print("Neural ZN terminated normally.")

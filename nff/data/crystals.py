@@ -1,6 +1,4 @@
 import torch
-import numpy as np
-# from pymatgen.core.structure import Structure
 
 
 def get_crystal_graph(crystal, cutoff):
@@ -21,7 +19,7 @@ def get_crystal_graph(crystal, cutoff):
     pbc = list(range(len(sites)))
 
     for site in crystal.sites:
-        for site, _, idx, _ in crystal.get_neighbors(site, cutoff, include_index=True, include_image=True):
+        for site, _, idx, _ in crystal.get_neighbors(site, cutoff, include_index=True, include_image=True):  # noqa
             if site not in sites:
                 sites.append(site)
                 pbc.append(idx)
@@ -30,4 +28,3 @@ def get_crystal_graph(crystal, cutoff):
     pbc = torch.LongTensor(pbc)
 
     return nxyz, pbc
-

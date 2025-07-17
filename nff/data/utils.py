@@ -1,8 +1,7 @@
 import os
 import shutil
-import sys
 import tempfile
-from urllib import request as request
+from urllib import request
 
 import numpy as np
 
@@ -36,7 +35,7 @@ def get_md17_dataset(molecule, cutoff=5.0):
         "azobenzene_dft": "C1=CC=C(N=NC2=CC=CC=C2)C=C1",
     }
 
-    if molecule not in smiles_dict.keys():
+    if molecule not in smiles_dict:
         raise ValueError("Incorrect value for molecule. Must be one of: ", list(smiles_dict.keys()))
 
     # make tmpdir to save npz file

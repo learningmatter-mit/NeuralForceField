@@ -45,7 +45,9 @@ class LayerFreezer:
                 from list(model.named_parameters())
         """
         for module in model.named_parameters():
+            print(f"In custom unfreeze: {module[0]}")
             if module[0] in custom_layers:
+                print(f"Unfreezing {module[0]}")
                 module[1].requires_grad = True
 
     def unfreeze_readout(self, model: torch.nn.Module) -> None:
@@ -69,7 +71,6 @@ class LayerFreezer:
         """
         Function to transfer learn a model. Defined in the subclasses.
         """
-        pass
 
 
 class PainnLayerFreezer(LayerFreezer):
@@ -86,9 +87,7 @@ class PainnLayerFreezer(LayerFreezer):
         unfreeze_skip = not freeze_skip
 
         for i, block in enumerate(model.readout_blocks):
-            if unfreeze_skip:
-                self.unfreeze_parameters(block)
-            elif i == num_readouts - 1:
+            if unfreeze_skip or i == num_readouts - 1:
                 self.unfreeze_parameters(block)
 
     def unfreeze_painn_pooling(self, model: torch.nn.Module) -> None:
@@ -130,9 +129,7 @@ class PainnLayerFreezer(LayerFreezer):
 class PainnDiabatLayerFreezer(PainnLayerFreezer):
     """Class to handle freezing layers in PaiNN models with diabatic readout."""
 
-    def unfreeze_diabat_readout(
-        self, model: torch.nn.Module, freeze_gap_embedding: bool
-    ) -> None:
+    def unfreeze_diabat_readout(self, model: torch.nn.Module, freeze_gap_embedding: bool) -> None:
         """Unfreeze the diabatic readout layers in a PaiNN model.
 
         Args:
@@ -170,9 +167,7 @@ class PainnDiabatLayerFreezer(PainnLayerFreezer):
         """
         self.freeze_parameters(model)
         self.unfreeze_painn_readout(model=model, freeze_skip=freeze_skip)
-        self.unfreeze_diabat_readout(
-            model=model, freeze_gap_embedding=freeze_gap_embedding
-        )
+        self.unfreeze_diabat_readout(model=model, freeze_gap_embedding=freeze_gap_embedding)
 
         unfreeze_pool = not freeze_pooling
         if unfreeze_pool:
@@ -182,30 +177,53 @@ class PainnDiabatLayerFreezer(PainnLayerFreezer):
 class MaceLayerFreezer(LayerFreezer):
     """Class to handle freezing layers in MACE models."""
 
-    def unfreeze_mace_interaction_linears(self, model: torch.nn.Module) -> None:
+    def unfreeze_mace_node_embedding(self, model: torch.nn.Module) -> None:
+        """Unfreeze the node embedding layer in a MACE model.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+        """
+        self.unfreeze_parameters(model.node_embedding)
+        print("Unfreezing node embedding")
+
+    def unfreeze_mace_radial_embedding(self, model: torch.nn.Module) -> None:
+        """Unfreeze the radial embedding layer in a MACE model.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+        """
+        self.unfreeze_parameters(model.radial_embedding)
+        print("Unfreezing radial embedding")
+
+    def unfreeze_mace_interaction_linears(self, model: torch.nn.Module, num_layers: int = 1) -> None:
         """Unfreeze the linear readout layer from the interaction blocks in
         a MACE model.
 
         Args:
             model (torch.nn.Module): model to be transfer learned
         """
-        interaction_linears = [
-            f"interactions.{i}.linear.weight"
-            for i in range(model.num_interactions.item())
-        ]
-        self.custom_unfreeze(model, interaction_linears)
+        for i in reversed(range(model.num_interactions.item() - num_layers, model.num_interactions.item())):
+            print(f"Unfreezing # {i} interaction linear layers from last")
+            self.custom_unfreeze(model, [f"interactions.{i}.linear.weight"])
 
-    def unfreeze_mace_produce_linears(self, model: torch.nn.Module) -> None:
+    def unfreeze_mace_interactions(self, model: torch.nn.Module, num_layers: int = 1) -> None:
+        """Unfreeze the interaction layers in a MACE model.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+        """
+        for i in reversed(range(model.num_interactions.item() - num_layers, model.num_interactions.item())):
+            print(f"Unfreezing # {i} interaction linear layers from last")
+            self.unfreeze_parameters(model.interactions[i])
+
+    def unfreeze_mace_product_linears(self, model: torch.nn.Module) -> None:
         """Unfreeze the linear readout layer from the interaction blocks in
         a MACE model.
 
         Args:
             model (torch.nn.Module): model to be transfer learned
         """
-        product_linears = [
-            f"products.{i}.linear.weight"
-            for i in range(model.num_interactions.item())
-        ]
+        product_linears = [f"products.{i}.linear.weight" for i in range(model.num_interactions.item())]
         self.custom_unfreeze(model, product_linears)
 
     def unfreeze_mace_pooling(self, model: torch.nn.Module) -> None:
@@ -216,6 +234,7 @@ class MaceLayerFreezer(LayerFreezer):
         """
         for module in model.products:
             self.unfreeze_parameters(module)
+        print("Unfreezing products")
 
     def unfreeze_mace_readout(self, model: torch.nn.Module, freeze_skip: bool = False):
         """Unfreeze the readout layers in a MACE model.
@@ -229,10 +248,9 @@ class MaceLayerFreezer(LayerFreezer):
         unfreeze_skip = not freeze_skip
 
         for i, block in enumerate(model.readouts):
-            if unfreeze_skip:
+            if unfreeze_skip or i == num_readouts - 1:
                 self.unfreeze_parameters(block)
-            elif i == num_readouts - 1:
-                self.unfreeze_parameters(block)
+            print(f"Unfreezing {block.__class__.__name__}")
 
     def model_tl(
         self,
@@ -251,6 +269,11 @@ class MaceLayerFreezer(LayerFreezer):
             model (torch.nn.Module): MACE model
             freeze_gap_embedding (bool, optional): Unused for MACE, inherited from
                 parent class for consistency with the diabatic models.
+                Defaults to False.
+            freeze_interactions (bool, optional): If true, keep all product layers frozen.
+                Defaults to True.
+            freeze_products (bool, optional): If true, keep product linear layers frozen.
+                Defaults to False.
             freeze_pooling (bool, optional): If true, keep all pooling layers frozen.
                 Defaults to True.
             freeze_skip (bool, optional): If true, keep all but the last readout layer
@@ -265,12 +288,20 @@ class MaceLayerFreezer(LayerFreezer):
         else:
             self.unfreeze_mace_readout(model, freeze_skip=freeze_skip)
             unfreeze_pool = not freeze_pooling
+            unfreeze_interactions = not freeze_interactions
             if unfreeze_pool:
                 self.unfreeze_mace_pooling(model)
-            if not freeze_interactions:
-                self.unfreeze_mace_interaction_linears(model)
+            num_layers = kwargs.get("unfreeze_conv_layers", 0)
+            if num_layers > 0:
+                if unfreeze_interactions:
+                    self.unfreeze_mace_interactions(model, num_layers=num_layers)
+                else:
+                    self.unfreeze_mace_interaction_linears(model, num_layers=num_layers)
             if not freeze_products:
-                self.unfreeze_mace_produce_linears(model)
+                self.unfreeze_mace_product_linears(model)
+            if kwargs.get("unfreeze_embeddings", False):
+                self.unfreeze_mace_node_embedding(model)
+                self.unfreeze_mace_radial_embedding(model)
 
 
 class ChgnetLayerFreezer(LayerFreezer):
@@ -282,14 +313,68 @@ class ChgnetLayerFreezer(LayerFreezer):
     (accessed 2024-03-09)
     """
 
-    def unfreeze_chgnet_last_atom_conv_layer(self, model: torch.nn.Module) -> None:
-        """Unfreeze the pooling layers in a CHGNet model.
+    def unfreeze_chgnet_atom_embedding(self, model: torch.nn.Module) -> None:
+        """Unfreeze the atom embedding layer in a CHGNet model.
 
         Args:
             model (torch.nn.Module): model to be transfer learned
         """
-        module = model.atom_conv_layers[-1]
-        self.unfreeze_parameters(module)
+        self.unfreeze_parameters(model.atom_embedding)
+
+    def unfreeze_chgnet_bond_embedding(self, model: torch.nn.Module) -> None:
+        """Unfreeze the bond embedding and weights layers in a CHGNet model.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+        """
+        self.unfreeze_parameters(model.bond_embedding)
+        self.unfreeze_parameters(model.bond_weights_ag)
+        self.unfreeze_parameters(model.bond_weights_bg)
+
+    def unfreeze_chgnet_angle_embedding(self, model: torch.nn.Module) -> None:
+        """Unfreeze the angle embedding and basis expansion layers in a CHGNet model.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+        """
+        self.unfreeze_parameters(model.angle_embedding)
+        self.unfreeze_parameters(model.angle_basis_expansion)
+
+    def unfreeze_chgnet_atom_layers(self, model: torch.nn.Module, num_layers: int = 1) -> None:
+        """Unfreeze the atom layers in a CHGNet model starting from the
+        last layer.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+            num_layers (int, optional): number of layers to unfreeze. Defaults to 1.
+        """
+        for i, module in enumerate(reversed(model.atom_conv_layers[-num_layers:]), start=1):
+            print(f"Unfreezing # {i} {module.__class__.__name__} module from last")
+            self.unfreeze_parameters(module)
+
+    def unfreeze_chgnet_bond_layers(self, model: torch.nn.Module, num_layers: int = 1) -> None:
+        """Unfreeze the bond layers in a CHGNet model starting from the
+        last layer.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+            num_layers (int, optional): number of layers to unfreeze. Defaults to 1.
+        """
+        for i, module in enumerate(reversed(model.bond_conv_layers[-num_layers:]), start=1):
+            print(f"Unfreezing # {i} {module.__class__.__name__} module from last")
+            self.unfreeze_parameters(module)
+
+    def unfreeze_chgnet_angle_layers(self, model: torch.nn.Module, num_layers: int = 1) -> None:
+        """Unfreeze the angle layers in a CHGNet model starting from the
+        last layer.
+
+        Args:
+            model (torch.nn.Module): model to be transfer learned
+            num_layers (int, optional): number of layers to unfreeze. Defaults to 1.
+        """
+        for i, module in enumerate(reversed(model.angle_layers[-num_layers:]), start=1):
+            print(f"Unfreezing # {i} {module.__class__.__name__} module from last")
+            self.unfreeze_parameters(module)
 
     def unfreeze_chgnet_pooling(self, model: torch.nn.Module) -> None:
         """Unfreeze the "pooling" layers after the representation layers
@@ -300,9 +385,7 @@ class ChgnetLayerFreezer(LayerFreezer):
         """
         self.unfreeze_parameters(model.pooling)
 
-    def unfreeze_chgnet_readout(
-        self, model: torch.nn.Module, freeze_skip: bool = False
-    ) -> None:
+    def unfreeze_chgnet_readout(self, model: torch.nn.Module, freeze_skip: bool = False) -> None:
         """Unfreeze the "site_wise", "readout_norm", and last MLP layers
         in a CHGNet model. Similar to readout layers in other models.
 
@@ -318,9 +401,7 @@ class ChgnetLayerFreezer(LayerFreezer):
         unfreeze_skip = not freeze_skip
 
         for i, block in enumerate(model.mlp.layers):
-            if unfreeze_skip:
-                self.unfreeze_parameters(block)
-            elif i == num_readouts - 1:
+            if unfreeze_skip or i == num_readouts - 1:
                 self.unfreeze_parameters(block)
 
     def model_tl(
@@ -347,10 +428,23 @@ class ChgnetLayerFreezer(LayerFreezer):
         """
         self.freeze_parameters(model)
         if custom_layers:
+            print("Custom layers provided. Unfreezing custom layers.")
             self.custom_unfreeze(model, custom_layers)
         else:
             self.unfreeze_chgnet_readout(model, freeze_skip=freeze_skip)
             unfreeze_pool = not freeze_pooling
             if unfreeze_pool:
-                self.unfreeze_chgnet_last_atom_conv_layer(model)
                 self.unfreeze_chgnet_pooling(model)
+            if "unfreeze_conv_layers" in kwargs:
+                num_layers = kwargs.get("unfreeze_conv_layers", 1)
+                self.unfreeze_chgnet_atom_layers(
+                    model, num_layers=num_layers + 1
+                )  # additional layer for the last layer
+                self.unfreeze_chgnet_bond_layers(model, num_layers=num_layers)
+                self.unfreeze_chgnet_angle_layers(model, num_layers=num_layers)
+            else:
+                self.unfreeze_chgnet_atom_layers(model)
+            if kwargs.get("unfreeze_embeddings", False):
+                self.unfreeze_chgnet_atom_embedding(model)
+                self.unfreeze_chgnet_bond_embedding(model)
+                self.unfreeze_chgnet_angle_embedding(model)

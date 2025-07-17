@@ -5,8 +5,8 @@ import torch
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 
-from nff.data import Dataset, split_train_validation_test, collate_dicts, to_tensor
-from nff.train import Trainer, get_model, loss, hooks, metrics, evaluate
+from nff.data import Dataset, collate_dicts, split_train_validation_test
+from nff.train import Trainer, evaluate, get_model, hooks, loss, metrics
 
 
 def test_training(device, tmpdir):
@@ -20,16 +20,15 @@ def test_training(device, tmpdir):
 
     # define model
     params = {
-         "n_atom_basis": 256,
-         "n_filters": 256,
-         "n_gaussians": 32,
-         "n_convolutions": 4,
-         "cutoff": 5.0,
-         "trainable_gauss": True,
-         "dropout_rate": 0.2,
+        "n_atom_basis": 256,
+        "n_filters": 256,
+        "n_gaussians": 32,
+        "n_convolutions": 4,
+        "cutoff": 5.0,
+        "trainable_gauss": True,
+        "dropout_rate": 0.2,
     }
     model = get_model(params)
-
 
     # define training
     loss_fn = loss.build_mse_loss(loss_coef={"energy": 0.01, "energy_grad": 1})

@@ -1,19 +1,19 @@
 import os
 import warnings
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import torch
 
-from ..io.gmm import GaussianMixture
+from nff.io.gmm import GaussianMixture
 
 __all__ = [
-    "Uncertainty",
+    "ConformalPrediction",
     "EnsembleUncertainty",
     "EvidentialUncertainty",
-    "MVEUncertainty",
     "GMMUncertainty",
-    "ConformalPrediction",
+    "MVEUncertainty",
+    "Uncertainty",
 ]
 
 
@@ -23,7 +23,7 @@ class Uncertainty:
         order: str,
         calibrate: bool,
         cp_alpha: Union[None, float] = None,
-        min_uncertainty: float = None,
+        min_uncertainty: Optional[float] = None,
         *args,
         **kwargs,
     ):
@@ -52,23 +52,19 @@ class Uncertainty:
         """
         Set the minimum uncertainty value to be used for scaling the uncertainty.
         """
-        if getattr(self, "umin") is None:
+        if self.umin is None:
             self.umin = min_uncertainty
         elif force:
-            warnings.warn(
-                f"Uncertainty: min_uncertainty already set to {self.umin}. Overwriting."
-            )
+            warnings.warn(f"Uncertainty: min_uncertainty already set to {self.umin}. Overwriting.", stacklevel=2)
             self.umin = min_uncertainty
         else:
             raise Exception(f"Uncertainty: min_uncertainty already set to {self.umin}")
 
-    def scale_to_min_uncertainty(
-        self, uncertainty: Union[np.ndarray, torch.Tensor]
-    ) -> Union[np.ndarray, torch.Tensor]:
+    def scale_to_min_uncertainty(self, uncertainty: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         """
         Scale the uncertainty to the minimum value.
         """
-        if getattr(self, "umin") is not None:
+        if self.umin is not None:
             if self.order not in ["system_mean_squared"]:
                 uncertainty = uncertainty - self.umin
             else:
@@ -92,16 +88,14 @@ class Uncertainty:
         """
         Calibrate the uncertainty using Conformal Prediction.
         """
-        if getattr(self.CP, "qhat") is None:
+        if self.CP.qhat is None:
             raise Exception("Uncertainty: ConformalPrediction not fitted.")
 
         cp_uncertainty, qhat = self.CP.predict(uncertainty)
 
         return cp_uncertainty
 
-    def get_system_uncertainty(
-        self, uncertainty: torch.Tensor, num_atoms: List[int]
-    ) -> torch.Tensor:
+    def get_system_uncertainty(self, uncertainty: torch.Tensor, num_atoms: List[int]) -> torch.Tensor:
         """
         Get the uncertainty for the entire system.
         """
@@ -109,9 +103,7 @@ class Uncertainty:
 
         assert len(uncertainty) == len(num_atoms), "Number of systems do not match"
 
-        assert all(
-            [len(u) == n for u, n in zip(uncertainty, num_atoms)]
-        ), "Number of atoms in each system do not match"
+        assert all(len(u) == n for u, n in zip(uncertainty, num_atoms)), "Number of atoms in each system do not match"
 
         if self.order == "system_sum":
             uncertainty = uncertainty.sum(dim=-1)
@@ -155,9 +147,7 @@ class ConformalPrediction:
         scores = np.array(scores)
 
         n = len(residuals_calib)
-        qhat = torch.quantile(
-            torch.from_numpy(scores), np.ceil((n + 1) * (1 - self.alpha)) / n
-        )
+        qhat = torch.quantile(torch.from_numpy(scores), np.ceil((n + 1) * (1 - self.alpha)) / n)
         qhat_value = np.float64(qhat.numpy()).item()
         self.qhat = qhat_value
 
@@ -198,9 +188,7 @@ class EnsembleUncertainty(Uncertainty):
         self.targ_unit = targ_unit
         self.std_or_var = std_or_var
 
-    def convert_units(
-        self, value: Union[float, np.ndarray], orig_unit: str, targ_unit: str
-    ):
+    def convert_units(self, value: Union[float, np.ndarray], orig_unit: str, targ_unit: str):
         """
         Convert the energy/forces units of the value from orig_unit to targ_unit.
         """
@@ -224,9 +212,7 @@ class EnsembleUncertainty(Uncertainty):
         Get the uncertainty for the energy.
         """
         if self.orig_unit is not None and self.targ_unit is not None:
-            results[self.q] = self.convert_units(
-                results[self.q], orig_unit=self.orig_unit, targ_unit=self.targ_unit
-            )
+            results[self.q] = self.convert_units(results[self.q], orig_unit=self.orig_unit, targ_unit=self.targ_unit)
 
         if self.std_or_var == "std":
             val = results[self.q].std(-1)
@@ -244,9 +230,7 @@ class EnsembleUncertainty(Uncertainty):
         Get the uncertainty for the forces.
         """
         if self.orig_unit is not None and self.targ_unit is not None:
-            results[self.q] = self.convert_units(
-                results[self.q], orig_unit=self.orig_unit, targ_unit=self.targ_unit
-            )
+            results[self.q] = self.convert_units(results[self.q], orig_unit=self.orig_unit, targ_unit=self.targ_unit)
 
         splits = torch.split(results[self.q], list(num_atoms))
         stack_split = torch.stack(splits, dim=0)
@@ -263,9 +247,7 @@ class EnsembleUncertainty(Uncertainty):
 
         return val
 
-    def get_uncertainty(
-        self, results: dict, num_atoms: Union[List[int], None] = None, *args, **kwargs
-    ):
+    def get_uncertainty(self, results: dict, num_atoms: Union[List[int], None] = None, *args, **kwargs):
         if self.q == "energy":
             val = self.get_energy_uncertainty(results=results)
         elif self.q in ["energy_grad", "forces"]:
@@ -293,7 +275,7 @@ class EvidentialUncertainty(Uncertainty):
         source: str = "epistemic",
         calibrate: bool = False,
         cp_alpha: Union[float, None] = None,
-        min_uncertainty: float = None,
+        min_uncertainty: Optional[float] = None,
         *args,
         **kwargs,
     ):
@@ -308,9 +290,7 @@ class EvidentialUncertainty(Uncertainty):
         self.shared_v = shared_v
         self.source = source
 
-    def check_params(
-        self, results: dict, num_atoms=None
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def check_params(self, results: dict, num_atoms=None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Check if the parameters are present in the results, if the shapes are
         correct. If the order is "atomic" and shared_v is True, then the v
@@ -324,7 +304,8 @@ class EvidentialUncertainty(Uncertainty):
         num_systems = len(num_atoms)
         total_atoms = torch.sum(num_atoms)
         if self.order == "atomic" and self.shared_v:
-            assert v.shape[0] == num_systems and alpha.shape[0] == total_atoms
+            assert v.shape[0] == num_systems
+            assert alpha.shape[0] == total_atoms
             v = torch.split(v, list(num_atoms))
             v = torch.stack(v, dim=0)
             v = v.mean(-1, keepdims=True)
@@ -332,9 +313,7 @@ class EvidentialUncertainty(Uncertainty):
 
         return v, alpha, beta
 
-    def get_uncertainty(
-        self, results: dict, num_atoms: Union[List[int], None] = None, *args, **kwargs
-    ) -> torch.Tensor:
+    def get_uncertainty(self, results: dict, num_atoms: Union[List[int], None] = None, *args, **kwargs) -> torch.Tensor:
         v, alpha, beta = self.check_params(results=results, num_atoms=num_atoms)
 
         if self.source == "aleatoric":
@@ -348,9 +327,7 @@ class EvidentialUncertainty(Uncertainty):
             splits = torch.split(uncertainty, list(num_atoms))
             stack_split = torch.stack(splits, dim=0)
 
-            uncertainty = self.get_system_uncertainty(
-                uncertainty=stack_split, num_atoms=num_atoms
-            )
+            uncertainty = self.get_system_uncertainty(uncertainty=stack_split, num_atoms=num_atoms)
 
         uncertainty = self.scale_to_min_uncertainty(uncertainty)
 
@@ -370,7 +347,7 @@ class MVEUncertainty(Uncertainty):
         variance_key: str = "var",
         quantity: str = "forces",
         order: str = "atomic",
-        min_uncertainty: float = None,
+        min_uncertainty: Optional[float] = None,
         *args,
         **kwargs,
     ):
@@ -378,9 +355,7 @@ class MVEUncertainty(Uncertainty):
         self.vkey = variance_key
         self.q = quantity
 
-    def get_uncertainty(
-        self, results: dict, num_atoms: Union[List[int], None] = None, *args, **kwargs
-    ) -> torch.Tensor:
+    def get_uncertainty(self, results: dict, num_atoms: Union[List[int], None] = None, *args, **kwargs) -> torch.Tensor:
         var = results[self.vkey].squeeze()
         assert results[self.q].shape[0] == var.shape[0]
 
@@ -388,9 +363,7 @@ class MVEUncertainty(Uncertainty):
             splits = torch.split(var, list(num_atoms))
             stack_split = torch.stack(splits, dim=0)
 
-            var = self.get_system_uncertainty(
-                uncertainty=stack_split, num_atoms=num_atoms
-            )
+            var = self.get_system_uncertainty(uncertainty=stack_split, num_atoms=num_atoms)
 
         var = self.scale_to_min_uncertainty(var)
 
@@ -468,7 +441,7 @@ class GMMUncertainty(Uncertainty):
         self.gm_model.fit(self.Xtrain.squeeze().cpu().numpy())
 
         # Save the fitted GMM model if gmm_path is specified
-        if hasattr(self, "gmm_path") and not os.path.exists(getattr(self, "gmm_path")):
+        if hasattr(self, "gmm_path") and not os.path.exists(self.gmm_path):
             self.gm_model.save(self.gmm_path)
             print(f"Saved fitted GMM model to {self.gmm_path}")
 
@@ -503,9 +476,7 @@ class GMMUncertainty(Uncertainty):
             raise Exception("GMMUncertainty: GMM does not exist/is not fitted")
 
         self.means = self._check_tensor(self.gm_model.means_)
-        self.precisions_cholesky = self._check_tensor(
-            self.gm_model.precisions_cholesky_
-        )
+        self.precisions_cholesky = self._check_tensor(self.gm_model.precisions_cholesky_)
         self.weights = self._check_tensor(self.gm_model.weights_)
 
     def estimate_log_prob(self, X: torch.Tensor) -> torch.Tensor:
@@ -518,9 +489,7 @@ class GMMUncertainty(Uncertainty):
         n_clusters, _ = self.means.shape
 
         log_det = torch.sum(
-            torch.log(
-                self.precisions_cholesky.reshape(n_clusters, -1)[:, :: n_features + 1]
-            ),
+            torch.log(self.precisions_cholesky.reshape(n_clusters, -1)[:, :: n_features + 1]),
             dim=1,
         )
 
@@ -552,9 +521,7 @@ class GMMUncertainty(Uncertainty):
         # below, the calculation below makes it stable
         # log(sum_i(a_i)) = log(exp(a_max) * sum_i(exp(a_i - a_max))) = a_max + log(sum_i(exp(a_i - a_max)))
         wlp_stable = weighted_log_prob - weighted_log_prob_max.reshape(-1, 1)
-        logsumexp = weighted_log_prob_max + torch.log(
-            torch.sum(torch.exp(wlp_stable), dim=1)
-        )
+        logsumexp = weighted_log_prob_max + torch.log(torch.sum(torch.exp(wlp_stable), dim=1))
 
         return logsumexp
 
@@ -599,9 +566,7 @@ class GMMUncertainty(Uncertainty):
             splits = torch.split(uncertainty, list(num_atoms))
             stack_split = torch.stack(splits, dim=0)
 
-            uncertainty = self.get_system_uncertainty(
-                uncertainty=stack_split, num_atoms=num_atoms
-            ).squeeze()
+            uncertainty = self.get_system_uncertainty(uncertainty=stack_split, num_atoms=num_atoms).squeeze()
 
         uncertainty = self.scale_to_min_uncertainty(uncertainty)
 

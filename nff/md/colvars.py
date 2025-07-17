@@ -30,7 +30,7 @@ class ColVar(torch.nn.Module):
     computes cv and its Cartesian gradient
     """
 
-    implemented_cvs = [  # noqa: RUF012
+    implemented_cvs = [
         "distance",
         "angle",
         "dihedral",
@@ -638,10 +638,10 @@ class GraphDataset(torch.utils.data.Dataset):
         self.Natom_list = Natom_list  # Number of atoms
         self.Adjacency_matrix_list = Adjacency_matrix_list
 
-    def __len__(self):  # noqa: D105
+    def __len__(self):
         return len(self.Natom_list)
 
-    def __getitem__(self, idx):  # noqa: D105
+    def __getitem__(self, idx):
         AtomicNum = torch.LongTensor(self.AtomicNum_list[idx])
         Edge = torch.LongTensor(self.Edge_list[idx])
         Natom = self.Natom_list[idx]
@@ -702,7 +702,7 @@ def scatter_add(src, index: torch.Tensor, dim_size: int, dim: int = -1, fill_val
 class GNN(torch.nn.Module):
     """A GNN model"""
 
-    def __init__(self, n_convs=3, n_embed=64):  # noqa: D107
+    def __init__(self, n_convs=3, n_embed=64):
         super().__init__()
         self.atom_embed = nn.Embedding(100, n_embed)
         # Declare MLPs in a ModuleList
@@ -724,7 +724,7 @@ class GNN(torch.nn.Module):
         # Declare readout layers
         # self.readout = nn.Sequential(nn.Linear(n_embed, n_embed), nn.ReLU(), nn.Linear(n_embed, 1))
 
-    def forward(self, AtomicNum, Edge, Natom, adjacency_matrix):  # noqa: D102
+    def forward(self, AtomicNum, Edge, Natom, adjacency_matrix):
         ################ Code #################
 
         # Parametrize embedding
@@ -742,11 +742,11 @@ class GNN(torch.nn.Module):
         return output
 
 
-def adjfunc(x, m, s):  # noqa: D103
+def adjfunc(x, m, s):
     return 4 / ((torch.exp(s * (x - m)) + 1) * (torch.exp((-s) * (x - m)) + 1))
 
 
-def gauss(x, m, s, a, b):  # noqa: D103
+def gauss(x, m, s, a, b):
     # return torch.exp(-abs((x-m)/2*s)**p)
     G = (1 + (2 ** (a / b) - 1) * abs((x - m) / s) ** a) ** (-b / a)
     G[torch.where(x < m)] = 1

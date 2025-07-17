@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import TYPE_CHECKING, Dict, List
 
+import chgnet
 import torch
 from chgnet.data.dataset import collate_graphs
 from chgnet.graph import CrystalGraph
@@ -20,6 +20,10 @@ from torch import Tensor, nn
 from nff.io.chgnet import convert_data_batch
 from nff.utils.misc import cat_props
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -32,7 +36,7 @@ class CHGNetNFF(CHGNet):
         units: str = "eV/atom",
         is_intensive: bool = True,
         cutoff: float = 5.0,
-        key_mappings: Dict[str, str] = None,
+        key_mappings: Dict[str, str] | None = None,
         device: str = "cpu",
         requires_embedding: bool = False,
         **kwargs,
@@ -72,7 +76,7 @@ class CHGNetNFF(CHGNet):
             for param in self.composition_model.parameters():
                 param.requires_grad = True
 
-    def forward(self, data_batch: Dict[str, List], **kwargs) -> Dict[str, Union[Tensor, List]]:
+    def forward(self, data_batch: Dict[str, List], **kwargs) -> Dict[str, Tensor | List]:
         """Convert data_batch to CHGNet format and run forward pass.
 
         Args:
@@ -111,7 +115,7 @@ class CHGNetNFF(CHGNet):
         # convert to NFF keys and negate energy_grad
         return cat_props({self.key_mappings[k]: self.negate_value(k, v) for k, v in output.items()})
 
-    def negate_value(self, key: str, value: Union[list, Tensor]) -> Union[list, Tensor]:
+    def negate_value(self, key: str, value: list | Tensor) -> list | Tensor:
         """Negate the value if key is in negate_keys.
 
         Args:
@@ -179,17 +183,19 @@ class CHGNetNFF(CHGNet):
         Returns:
             CHGNetNFF: CHGNetNFF foundational model.
         """
+        chgnet_path = Path(chgnet.__file__).parent
+
         try:
             checkpoint_path = {
-                "0.3.0": "../../../models/foundation_models/chgnet/0.3.0/chgnet_0.3.0_e29f68s314m37.pth.tar",
-                "0.2.0": "../../..models/foundation_models/chgnet/0.2.0/chgnet_0.2.0_e30f77s348m32.pth.tar",
+                "0.3.0": chgnet_path / "pretrained/0.3.0/chgnet_0.3.0_e29f68s314m37.pth.tar",
+                "0.2.0": chgnet_path / "pretrained/0.2.0/chgnet_0.2.0_e30f77s348m32.pth.tar",
             }[model_name]
 
-        except KeyError:
+        except KeyError as e:
             if Path(checkpoint_path).is_file():
                 checkpoint_path = model_name
             elif checkpoint_path is None:
-                raise ValueError(f"Unknown {model_name=}")
+                raise ValueError(f"Unknown model name {model_name}") from e
 
         return cls.from_file(
             os.path.join(module_dir, checkpoint_path),
@@ -199,8 +205,7 @@ class CHGNetNFF(CHGNet):
         )
 
     def to(self, device: str, **kwargs) -> CHGNetNFF:
-        """
-        Move the model to the specified device.
+        """Move the model to the specified device.
 
         Args:
             device (str): Device to move the model to.
@@ -208,7 +213,7 @@ class CHGNetNFF(CHGNet):
         Returns:
             CHGNetNFF: Model moved to the specified device.
         """
-        self = super().to(device, **kwargs)
+        super().to(device, **kwargs)
         self.device = device
         if hasattr(self, "composition_model"):
             self.composition_model = self.composition_model.to(device, **kwargs)

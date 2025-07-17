@@ -4,11 +4,10 @@ Tools for generating xyz-baed features
 
 import logging
 
-from rdkit import Chem
-from rdkit.Chem import rdMolDescriptors as rdMD
 import torch
 from e3fp.pipeline import fprints_from_mol
-
+from rdkit import Chem
+from rdkit.Chem import rdMolDescriptors as rdMD
 from tqdm import tqdm
 
 
@@ -66,11 +65,11 @@ def get_3d_representation(xyz, smiles, method, mol=None):
     """
 
     representation_fn = {
-        'autocorrelation_3d': rdMD.CalcAUTOCORR3D,
-        'rdf': rdMD.CalcRDF,
-        'morse': rdMD.CalcMORSE,
-        'whim': rdMD.CalcWHIM,
-        'getaway': lambda x: rdMD.CalcWHIM(x, precision=0.001)
+        "autocorrelation_3d": rdMD.CalcAUTOCORR3D,
+        "rdf": rdMD.CalcRDF,
+        "morse": rdMD.CalcMORSE,
+        "whim": rdMD.CalcWHIM,
+        "getaway": lambda x: rdMD.CalcWHIM(x, precision=0.001),
     }
 
     # if a `mol` is not given, generate it from the xyz and smiles
@@ -95,23 +94,19 @@ def featurize_rdkit(dataset, method):
     props = dataset.props
 
     # go through each geometry
-    for i in range(len(props['nxyz'])):
-
-        smiles = props['smiles'][i]
-        nxyz = props['nxyz'][i]
+    for i in range(len(props["nxyz"])):
+        smiles = props["smiles"][i]
+        nxyz = props["nxyz"][i]
 
         reps = []
 
         # if there are RDKit mols in the dataset, you can
         # get the 3D representation from the mol itself
 
-        if 'rd_mols' in props:
-            rd_mols = props['rd_mols'][i]
+        if "rd_mols" in props:
+            rd_mols = props["rd_mols"][i]
             for rd_mol in rd_mols:
-                rep = torch.Tensor(get_3d_representation(xyz=None,
-                                                         smiles=None,
-                                                         method=method,
-                                                         mol=rd_mol))
+                rep = torch.Tensor(get_3d_representation(xyz=None, smiles=None, method=method, mol=rd_mol))
                 reps.append(rep)
 
         # otherwise you can get the mols from the nxyz, but this
@@ -123,23 +118,22 @@ def featurize_rdkit(dataset, method):
 
             # if `mol_size` is there then split the nxyz into conformer
             # geomtries
-            if 'mol_size' in props:
-                mol_size = props['mol_size'][i].item()
+            if "mol_size" in props:
+                mol_size = props["mol_size"][i].item()
                 n_confs = nxyz.shape[0] // mol_size
                 nxyz_list = torch.split(nxyz, [mol_size] * n_confs)
 
             for sub_nxyz in nxyz_list:
-
-                msg = ("Warning: no RDKit mols found in dataset. "
-                       "Using nxyz and SMILES and assuming that the "
-                       "nxyz atom ordering is the same as in the RDKit "
-                       "mol. Make sure to check this!")
+                msg = (
+                    "Warning: no RDKit mols found in dataset. "
+                    "Using nxyz and SMILES and assuming that the "
+                    "nxyz atom ordering is the same as in the RDKit "
+                    "mol. Make sure to check this!"
+                )
                 print(msg)
 
                 xyz = sub_nxyz.detach().cpu().numpy().tolist()
-                rep = torch.Tensor(get_3d_representation(xyz=xyz,
-                                                         smiles=smiles,
-                                                         method=method))
+                rep = torch.Tensor(get_3d_representation(xyz=xyz, smiles=smiles, method=method))
                 reps.append(rep)
 
         reps = torch.stack(reps)
@@ -159,16 +153,11 @@ def get_e3fp(mol, bits, smiles=None):
         smiles = Chem.MolToSmiles(mol)
     mol.SetProp("_Name", smiles)
     fprint_params = {"bits": bits}
-    fp = (fprints_from_mol(mol, fprint_params=fprint_params)[0]
-          .to_vector().toarray().astype(int)
-          ).reshape(-1)
+    fp = (fprints_from_mol(mol, fprint_params=fprint_params)[0].to_vector().toarray().astype(int)).reshape(-1)
     return fp
 
 
-def add_e3fp(rd_dataset,
-             fp_length,
-             verbose=False,
-             track=True):
+def add_e3fp(rd_dataset, fp_length, verbose=False, track=True):
     """
     Add E3FP fingerprints to each conformer in the dataset.
     Args:
@@ -194,12 +183,11 @@ def add_e3fp(rd_dataset,
         smiles = batch["smiles"]
         fps = []
         for mol in mols:
-
             fp_array = get_e3fp(mol, fp_length, smiles)
             fps.append(torch.Tensor(fp_array))
 
         e3fp_list.append(torch.stack(fps))
 
-    rd_dataset.props['e3fp'] = e3fp_list
+    rd_dataset.props["e3fp"] = e3fp_list
 
     return rd_dataset

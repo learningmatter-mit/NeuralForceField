@@ -1,5 +1,7 @@
 """ASE wrapper for the Neural Force Field."""
 
+import copy
+
 import numpy as np
 import torch
 from ase import Atoms, units
@@ -91,7 +93,6 @@ class AtomsBatch(Atoms):
         """
         # periodic systems
         if np.array([atoms.pbc.any() for atoms in self.get_list_atoms()]).any():
-            nbrs = []
             nbrs_T = []
             nbrs = []
             z = []
@@ -416,25 +417,6 @@ class AtomsBatch(Atoms):
         """
         return self.get_batch_kinetic_energy() / (1.5 * units.kB * self.props["num_atoms"].detach().cpu().numpy())
 
-    def batch_properties():
-        """This function is used to batch process properties.
-        It takes in a list of properties and performs some operations on them.
-        """
-
-    def batch_virial():
-        """Calculate the virial for a batch of systems.
-
-        This function calculates the virial for a batch of systems using a specific algorithm.
-        The virial is a measure of the internal forces within a system
-        and is commonly used in molecular dynamics simulations.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
-
     @classmethod
     def from_atoms(cls, atoms, **kwargs):
         """Create an instance of the class from an ASE Atoms object.
@@ -447,11 +429,14 @@ class AtomsBatch(Atoms):
             An instance of the class initialized with the properties of the ASE Atoms object.
         """
         props = kwargs.pop("props", {})
-        return cls(
+        atoms_batch = cls(
             atoms,
             props=props,
             **kwargs,
         )
+        atoms_batch.arrays = copy.deepcopy(atoms.arrays)
+        atoms_batch.constraints = copy.deepcopy(atoms.constraints)
+        return atoms_batch
 
     def copy(self) -> Self:
         """Copy the current object.
@@ -459,7 +444,7 @@ class AtomsBatch(Atoms):
         Returns:
             AtomsBatch: A copy of the current object.
         """
-        return self.__class__.from_atoms(
+        atoms_batch = self.__class__.from_atoms(
             self,
             props=self.props,
             cutoff=self.cutoff,
@@ -469,6 +454,9 @@ class AtomsBatch(Atoms):
             dense_nbrs=self.mol_nbrs is not None and self.mol_idx is not None,
             device=self.device,
         )
+        atoms_batch.arrays = copy.deepcopy(self.arrays)
+        atoms_batch.constraints = copy.deepcopy(self.constraints)
+        return atoms_batch
 
     def todict(self, update_props=True) -> dict:
         """Serialize the object to a dictionary. Calls the parent class todict method.

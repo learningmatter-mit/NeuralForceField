@@ -1,13 +1,12 @@
 import math
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from ..functional import softplus_inverse
 
 # backwards compatibility with older versions of torch
 try:
     from torch import sinc
-except:
+except BaseException:
 
     def sinc(x):
         x = x * math.pi
@@ -28,20 +27,16 @@ class SincFunctions(nn.Module):
     """
 
     def __init__(self, num_basis_functions: int, cutoff: float) -> None:
-        """ Initializes the SincFunctions class. """
-        super(SincFunctions, self).__init__()
+        """Initializes the SincFunctions class."""
+        super().__init__()
         self.register_buffer(
             "factor",
-            torch.linspace(
-                1, num_basis_functions, num_basis_functions, dtype=torch.float64
-            )
-            / cutoff,
+            torch.linspace(1, num_basis_functions, num_basis_functions, dtype=torch.float64) / cutoff,
         )
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ For compatibility with other modules. """
-        pass
+        """For compatibility with other modules."""
 
     def forward(self, r: torch.Tensor, cutoff_values: torch.Tensor) -> torch.Tensor:
         """

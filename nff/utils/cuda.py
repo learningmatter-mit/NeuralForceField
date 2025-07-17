@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Union
+from typing import Dict, List
 
 import numpy as np
 import nvidia_smi
@@ -25,7 +25,7 @@ def batch_to(batch: Dict[str, list | torch.Tensor], device: str) -> Dict[str, Li
     return gpu_batch
 
 
-def detach(val: torch.Tensor, to_numpy: bool = False) -> Union[torch.Tensor, np.ndarray]:
+def detach(val: torch.Tensor, to_numpy: bool = False) -> torch.Tensor | np.ndarray:
     """Detach GPU tensor
 
     Args:
@@ -40,9 +40,7 @@ def detach(val: torch.Tensor, to_numpy: bool = False) -> Union[torch.Tensor, np.
     return val.detach().cpu() if hasattr(val, "detach") else val
 
 
-def batch_detach(
-    batch: Dict[str, Union[List, torch.Tensor]], to_numpy: bool = False
-) -> Dict[str, Union[List, torch.Tensor]]:
+def batch_detach(batch: Dict[str, List | torch.Tensor], to_numpy: bool = False) -> Dict[str, List | torch.Tensor]:
     """Detach batch of GPU tensors
 
     Args:
@@ -66,8 +64,8 @@ def batch_detach(
 
 
 def to_cpu(
-    batch: Dict[str, Union[List, torch.Tensor]],
-) -> Dict[str, Union[List, torch.Tensor]]:
+    batch: Dict[str, List | torch.Tensor],
+) -> Dict[str, List | torch.Tensor]:
     """Send batch to CPU
 
     Args:
@@ -114,5 +112,8 @@ def get_final_device(device: str) -> str:
         str: final device to use
     """
     if "cuda" in device and torch.cuda.is_available():
-        return f"cuda:{cuda_devices_sorted_by_free_mem()[-1]}"
+        try:
+            return f"cuda:{cuda_devices_sorted_by_free_mem()[-1]}"
+        except nvidia_smi.NVMLError:
+            return "cuda:0"
     return "cpu"
