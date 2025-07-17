@@ -43,8 +43,10 @@ class ColVar(torch.nn.Module):
         "projection_channelnormal",
         "Sp",
         "Sd",
-        "adjecencey_matrix",
+        "adjecencey_matrix",  # for backwards compatibility
+        "adjacency_matrix",
         "energy_gap",
+        "neural_cv"
     ]
 
     def __init__(self, info_dict: dict):
@@ -76,7 +78,7 @@ class ColVar(torch.nn.Module):
             self.ro = self.info_dict["acidhyd"]
             self.r1 = self.info_dict["waterhyd"]
 
-        elif self.info_dict["name"] == "adjecencey_matrix":
+        elif self.info_dict["name"] in ["adjecencey_matrix", "adjacency_matrix"]:
             self.model = self.info_dict["model"]
             self.device = self.info_dict["device"]
             self.bond_length = self.info_dict["bond_length"]
@@ -105,6 +107,18 @@ class ColVar(torch.nn.Module):
             path = self.info_dict["path"]
             model_type = self.info_dict["model_type"]
             self.model = load_model(path, model_type=model_type, device=self.device)
+            self.model = self.model.to(self.device)
+            self.model.eval()
+
+        elif self.info_dict["name"] == "neural_cv":
+            # expects a 'model' entry that behaves like a nn.Module and outputs a CV tensor
+            # a device for the model must be specified
+            # a 'descriptor_generation' entry should be specified that is a Callable[[torch.Tensor], torch.Tensor]
+            # where the input tensor are the Cartesian coordinates of the atoms
+            # and the output tensor is the input tensor for the model
+            self.device = self.info_dict["device"]
+            self.descriptor_generation = self.info_dict["descriptor_generation"]
+            self.model = self.info_dict["model"]
             self.model = self.model.to(self.device)
             self.model.eval()
 
@@ -285,7 +299,7 @@ class ColVar(torch.nn.Module):
 
     def projecting_centroidvec(self) -> torch.Tensor:
         """Projection of a position vector onto a reference vector
-        Atomic indices are used to determine the coordiantes of the vectors.
+        Atomic indices are used to determine the coordinates of the vectors.
         """
         vector_pos = self.xyz[self.vector_inds]
         vector = vector_pos[1] - vector_pos[0]
@@ -572,6 +586,14 @@ class ColVar(torch.nn.Module):
 
         elif self.info_dict["name"] == "energy_gap":
             cv, cv_grad = self.energy_gap(self.info_dict["enkey_1"], self.info_dict["enkey_2"])
+
+        elif self.info_dict["name"] == "neural_cv":
+            desc = self.descriptor_generation(self.xyz)
+            cv = self.model(desc)
+            cv_grad, = torch.autograd.grad(cv.sum(), self.xyz, create_graph=False, retain_graph=False)
+
+        else:
+            raise RuntimeError(f"CV {self.info_dict['name']} not implemented!")
 
         return cv.detach().cpu().numpy(), cv_grad.detach().cpu().numpy()
 
