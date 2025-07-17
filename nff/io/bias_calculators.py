@@ -25,7 +25,7 @@ class BiasBase(NeuralFF):
     """Basic Calculator class with neural force field
 
     Args:
-        model: the deural force field model
+        model: the neural force field model
         cv_def: list of Collective Variable (CV) definitions
             [["cv_type", [atom_indices], np.array([minimum, maximum]), bin_width], [possible second dimension]]
         equil_temp: float temperature of the simulation (important for extended system dynamics)
@@ -857,7 +857,7 @@ class WTMeABF(eABF):
             [["cv_type", [atom_indices], np.array([minimum, maximum]), bin_width], [possible second dimension]]
         equil_temp: float temperature of the simulation (important for extended system dynamics)
         dt: time step of the extended dynamics (has to be equal to that of the real system dyn!)
-        friction_per_ps: friction for the Lagevin dyn of extended system (has to be equal to that of the real system dyn!)
+        friction_per_ps: friction for the Langevin dyn of extended system (has to be equal to that of the real system dyn!)
         nfull: numer of samples need for full application of bias force
         hill_height: unscaled height of the MetaD Gaussian hills in eV
         hill_drop_freq: #steps between depositing Gaussians
@@ -1045,7 +1045,7 @@ class AttractiveBias(NeuralFF):
        Designed to be used with UQ as CV
 
     Args:
-        model: the deural force field model
+        model: the neural force field model
         cv_def: list of Collective Variable (CV) definitions
             [["cv_type", [atom_indices], np.array([minimum, maximum]), bin_width], [possible second dimension]]
         gamma: coupling strength, regulates strength of attraction
