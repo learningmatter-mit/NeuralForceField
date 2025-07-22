@@ -1,5 +1,6 @@
 """ASE wrapper for the Neural Force Field."""
 
+from typing import List
 import copy
 
 import numpy as np
@@ -85,7 +86,6 @@ class AtomsBatch(Atoms):
 
         self.props = const.convert_units(self.props, conversion_factor)
         self.props.update({"units": target_unit})
-        return
 
     def get_mol_nbrs(self, r_cut=95):
         """Dense directed neighbor list for each molecule, in case that's needed
@@ -248,6 +248,7 @@ class AtomsBatch(Atoms):
         if self.pbc.any():
             self.props["cell"] = torch.Tensor(np.array(self.cell))
             self.props["lattice"] = self.cell.tolist()
+            self.props["pbc"] = self.pbc.tolist()
 
         self.props["nxyz"] = torch.Tensor(self.get_nxyz())
         if self.props.get("num_atoms") is None:
@@ -259,9 +260,11 @@ class AtomsBatch(Atoms):
         if self.mol_idx is not None:
             self.props["mol_idx"] = self.mol_idx
 
+        self.props["device"] = self.device
+
         return self.props
 
-    def get_list_atoms(self):
+    def get_list_atoms(self) -> List[Atoms]:
         """Returns a list of ASE Atoms objects, each representing a molecule in the system.
 
         Returns:
@@ -285,7 +288,7 @@ class AtomsBatch(Atoms):
                 cells = torch.split(torch.Tensor(self.props["lattice"]), 3)
             else:
                 cells = torch.unsqueeze(torch.Tensor(np.array(self.cell)), 0).repeat(len(mol_split_idx), 1, 1)
-        Atoms_list = []
+        atoms_list = []
 
         for i, molecule_xyz in enumerate(positions):
             atoms = Atoms(
@@ -299,9 +302,9 @@ class AtomsBatch(Atoms):
             # of any of the atoms
             atoms.set_masses(masses[i])
 
-            Atoms_list.append(atoms)
+            atoms_list.append(atoms)
 
-        return Atoms_list
+        return atoms_list
 
     def update_num_atoms(self):
         """Update the number of atoms in the system.
