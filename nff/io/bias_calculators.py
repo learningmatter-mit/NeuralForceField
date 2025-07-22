@@ -47,7 +47,7 @@ class BiasBase(NeuralFF):
     def __init__(
         self,
         model,
-        cv_defs: list[dict],
+        cv_defs: List[dict],
         equil_temp: float = 300.0,
         device="cpu",
         en_key="energy",
@@ -290,6 +290,8 @@ class BiasBase(NeuralFF):
         requires_stress = "stress" in self.properties
         if requires_stress:
             kwargs["requires_stress"] = True
+        if "forces" in self.properties:
+            kwargs["requires_forces"] = True
         if getattr(self, "model_kwargs", None) is not None:
             kwargs.update(self.model_kwargs)
 
@@ -298,8 +300,12 @@ class BiasBase(NeuralFF):
         # change energy and force to numpy array and eV
         model_energy = prediction[self.en_key].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
 
-        if grad_key in prediction:
-            model_grad = prediction[grad_key].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+        gradient = prediction.get(grad_key)
+        forces = prediction.get("forces")
+        if gradient is not None:
+            model_grad = gradient.detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+        elif forces is not None:
+            model_grad = - forces.detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
         else:
             raise KeyError(grad_key)
 
@@ -389,7 +395,7 @@ class eABF(BiasBase):
     def __init__(
         self,
         model,
-        cv_defs: list[dict],
+        cv_defs: List[dict],
         dt: float,
         friction_per_ps: float,
         equil_temp: float = 300.0,
@@ -570,7 +576,7 @@ class aMDeABF(eABF):
     def __init__(
         self,
         model,
-        cv_defs: list[dict],
+        cv_defs: List[dict],
         dt: float,
         friction_per_ps: float,
         amd_parameter: float,
@@ -801,7 +807,7 @@ class WTMeABF(eABF):
     def __init__(
         self,
         model,
-        cv_defs: list[dict],
+        cv_defs: List[dict],
         dt: float,
         friction_per_ps: float,
         equil_temp: float = 300.0,
@@ -982,7 +988,7 @@ class AttractiveBias(NeuralFF):
     def __init__(
         self,
         model,
-        cv_defs: list[dict],
+        cv_defs: List[dict],
         gamma=1.0,
         device="cpu",
         en_key="energy",
