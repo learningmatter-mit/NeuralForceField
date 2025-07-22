@@ -7,11 +7,12 @@ an ensemble of NeuralFF models to predict the energy, forces, and stress of a
 given geometry. Both calculators are used to perform molecular dynamics simulations
 and geometry optimizations using NFF AtomsBatch objects.
 """
+from __future__ import annotations
 
 import os
 import sys
 from collections import Counter
-from typing import List, Union
+from typing import List, Union, TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -33,6 +34,8 @@ from nff.utils.constants import EV_TO_KCAL_MOL, HARTREE_TO_KCAL_MOL
 from nff.utils.cuda import batch_detach, batch_to
 from nff.utils.geom import batch_compute_distance, compute_distances
 from nff.utils.scatter import compute_grad
+if TYPE_CHECKING:
+    from nff.io.potential import Potential
 
 HARTREE_TO_EV = HARTREE_TO_KCAL_MOL / EV_TO_KCAL_MOL
 
@@ -53,7 +56,7 @@ class NeuralFF(Calculator):
 
     def __init__(
         self,
-        model,
+        model: Potential,
         device="cpu",
         jobdir=None,
         en_key="energy",
@@ -134,15 +137,10 @@ class NeuralFF(Calculator):
         Calculator.calculate(self, atoms, self.properties, system_changes)
 
         # run model
-        # atomsbatch = AtomsBatch(atoms)
-        # batch_to(atomsbatch.get_batch(), self.device)
         batch = batch_to(atoms.get_batch(), self.device)
 
         # add keys so that the readout function can calculate these properties
-        # print("Properties: ", self.properties, "\n\n")
-        # print("en_key:", self.en_key)
         grad_key = self.en_key + "_grad"
-        # print("grad_key:", grad_key)
         batch[self.en_key] = []
         batch[grad_key] = []
 
@@ -158,7 +156,6 @@ class NeuralFF(Calculator):
             kwargs.update(self.model_kwargs)
 
         prediction = self.model(batch, **kwargs)
-        # print(prediction.keys())
 
         # change energy and force to numpy array
         conversion_factor: dict = const.conversion_factors.get((self.model_units, self.prediction_units), const.DEFAULT)
@@ -1159,9 +1156,7 @@ class NeuralRestraint(Calculator):
             system_changes (default from ase)
         """
 
-        # print("calculating ...")
         self.step += 1
-        # print("step ", self.step, self.step*0.0005)
         if not any(isinstance(self.model, i) for i in UNDIRECTED):
             check_directed(self.model, atoms)
 
