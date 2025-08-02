@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ..functional import softplus_inverse
+
+from nff.nn.models.spooky_net_source.functional import softplus_inverse
 
 
 class ExponentialGaussianFunctions(nn.Module):
@@ -32,8 +33,8 @@ class ExponentialGaussianFunctions(nn.Module):
         ini_alpha: float = 0.9448630629184640,
         exp_weighting: bool = False,
     ) -> None:
-        """ Initializes the ExponentialGaussianFunctions class. """
-        super(ExponentialGaussianFunctions, self).__init__()
+        """Initializes the ExponentialGaussianFunctions class."""
+        super().__init__()
         self.ini_alpha = ini_alpha
         self.exp_weighting = exp_weighting
         if no_basis_function_at_infinity:
@@ -46,19 +47,13 @@ class ExponentialGaussianFunctions(nn.Module):
                 torch.tensor(1.0 * (num_basis_functions + 1), dtype=torch.float64),
             )
         else:
-            self.register_buffer(
-                "center", torch.linspace(1, 0, num_basis_functions, dtype=torch.float64)
-            )
-            self.register_buffer(
-                "width", torch.tensor(1.0 * num_basis_functions, dtype=torch.float64)
-            )
-        self.register_parameter(
-            "_alpha", nn.Parameter(torch.tensor(1.0, dtype=torch.float64))
-        )
+            self.register_buffer("center", torch.linspace(1, 0, num_basis_functions, dtype=torch.float64))
+            self.register_buffer("width", torch.tensor(1.0 * num_basis_functions, dtype=torch.float64))
+        self.register_parameter("_alpha", nn.Parameter(torch.tensor(1.0, dtype=torch.float64)))
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ Initialize exponential scaling parameter alpha. """
+        """Initialize exponential scaling parameter alpha."""
         nn.init.constant_(self._alpha, softplus_inverse(self.ini_alpha))
 
     def forward(self, r: torch.Tensor, cutoff_values: torch.Tensor) -> torch.Tensor:
@@ -79,10 +74,7 @@ class ExponentialGaussianFunctions(nn.Module):
                 Values of the radial basis functions for the distances r.
         """
         expalphar = torch.exp(-F.softplus(self._alpha) * r.view(-1, 1))
-        rbf = cutoff_values.view(-1, 1) * torch.exp(
-            -self.width * (expalphar - self.center) ** 2
-        )
+        rbf = cutoff_values.view(-1, 1) * torch.exp(-self.width * (expalphar - self.center) ** 2)
         if self.exp_weighting:
             return rbf * expalphar
-        else:
-            return rbf
+        return rbf

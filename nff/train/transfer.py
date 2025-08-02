@@ -71,7 +71,6 @@ class LayerFreezer:
         """
         Function to transfer learn a model. Defined in the subclasses.
         """
-        pass
 
 
 class PainnLayerFreezer(LayerFreezer):
@@ -88,9 +87,7 @@ class PainnLayerFreezer(LayerFreezer):
         unfreeze_skip = not freeze_skip
 
         for i, block in enumerate(model.readout_blocks):
-            if unfreeze_skip:
-                self.unfreeze_parameters(block)
-            elif i == num_readouts - 1:
+            if unfreeze_skip or i == num_readouts - 1:
                 self.unfreeze_parameters(block)
 
     def unfreeze_painn_pooling(self, model: torch.nn.Module) -> None:
@@ -251,9 +248,7 @@ class MaceLayerFreezer(LayerFreezer):
         unfreeze_skip = not freeze_skip
 
         for i, block in enumerate(model.readouts):
-            if unfreeze_skip:
-                self.unfreeze_parameters(block)
-            elif i == num_readouts - 1:
+            if unfreeze_skip or i == num_readouts - 1:
                 self.unfreeze_parameters(block)
             print(f"Unfreezing {block.__class__.__name__}")
 
@@ -406,9 +401,7 @@ class ChgnetLayerFreezer(LayerFreezer):
         unfreeze_skip = not freeze_skip
 
         for i, block in enumerate(model.mlp.layers):
-            if unfreeze_skip:
-                self.unfreeze_parameters(block)
-            elif i == num_readouts - 1:
+            if unfreeze_skip or i == num_readouts - 1:
                 self.unfreeze_parameters(block)
 
     def model_tl(

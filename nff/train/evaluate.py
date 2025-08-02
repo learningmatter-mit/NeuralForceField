@@ -114,9 +114,8 @@ def evaluate(
     if not return_results:
         return {}, {}, eval_loss
 
-    else:
-        # this step can be slow,
-        all_results = concatenate_dict(*all_results)
-        all_batches = concatenate_dict(*all_batches)
+    # this step can be slow,
+    all_results = concatenate_dict(*all_results)
+    all_batches = concatenate_dict(*all_batches)
 
-        return all_results, all_batches, eval_loss
+    return all_results, all_batches, eval_loss

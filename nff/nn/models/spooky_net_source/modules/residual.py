@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+
 from .shifted_softplus import ShiftedSoftplus
 from .swish import Swish
 
@@ -26,8 +26,8 @@ class Residual(nn.Module):
         bias: bool = True,
         zero_init: bool = True,
     ) -> None:
-        """ Initializes the Residual class. """
-        super(Residual, self).__init__()
+        """Initializes the Residual class."""
+        super().__init__()
         # initialize attributes
         if activation == "ssp":
             Activation = ShiftedSoftplus
@@ -45,7 +45,7 @@ class Residual(nn.Module):
         self.reset_parameters(bias, zero_init)
 
     def reset_parameters(self, bias: bool = True, zero_init: bool = True) -> None:
-        """ Initialize parameters to compute an identity mapping. """
+        """Initialize parameters to compute an identity mapping."""
         nn.init.orthogonal_(self.linear1.weight)
         if zero_init:
             nn.init.zeros_(self.linear2.weight)

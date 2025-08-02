@@ -1,13 +1,16 @@
-from typing import Dict, Literal, Union
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Dict, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import torch
 from matplotlib.lines import Line2D
 from scipy import stats
 from scipy.stats import gaussian_kde
 
+if TYPE_CHECKING:
+    from torch import Tensor
 from nff.data import to_tensor
 from nff.utils import cuda
 
@@ -18,8 +21,8 @@ mpl_settings.update_custom_settings()
 
 
 def plot_parity(
-    results: Dict[str, Union[list, torch.Tensor]],
-    targets: Dict[str, Union[list, torch.Tensor]],
+    results: Dict[str, list | Tensor],
+    targets: Dict[str, list | Tensor],
     figname: str,
     plot_type: Literal["hexbin", "scatter"] = "hexbin",
     energy_key: str = "energy",
@@ -29,13 +32,13 @@ def plot_parity(
     """Perform a parity plot between the results and the targets.
 
     Args:
-        results (dict): dictionary containing the results
-        targets (dict): dictionary containing the targets
-        figname (str): name of the figure
-        plot_type (str): type of plot to use, either "hexbin" or "scatter"
-        energy_key (str): key for the energy
-        force_key (str): key for the forces
-        units (dict): dictionary containing the units of the keys
+        results: dictionary containing the results
+        targets: dictionary containing the targets
+        figname: name of the figure
+        plot_type: type of plot to use, either "hexbin" or "scatter"
+        energy_key: key for the energy
+        force_key: key for the forces
+        units: dictionary containing the units of the keys
 
     Returns:
         float: MAE of the energy
@@ -94,13 +97,13 @@ def plot_parity(
 
         label = key
         ax.set_title(label.upper())
-        ax.set_xlabel("Predicted %s [%s]" % (label, units[key]))
-        ax.set_ylabel("Target %s [%s]" % (label, units[key]))
+        ax.set_xlabel(f"Predicted {label} [{units[key]}]")
+        ax.set_ylabel(f"Target {label} [{units[key]}]")
 
         ax.text(
             0.1,
             0.9,
-            "MAE: %.3f %s" % (mae, units[key]),
+            f"MAE: {mae:.2f} {units[key]}",
             transform=ax.transAxes,
         )
 
@@ -113,8 +116,8 @@ def plot_parity(
 
 
 def plot_err_var(
-    err: Union[torch.Tensor, np.ndarray],
-    var: Union[torch.Tensor, np.ndarray],
+    err: Tensor | np.ndarray,
+    var: Tensor | np.ndarray,
     figname: str,
     units: str = "eV/Å",
     x_min: float = 0.0,
@@ -128,27 +131,24 @@ def plot_err_var(
     """Plot the error vs variance of the forces.
 
     Args:
-        err (torch.Tensor): error of the forces
-        var (torch.Tensor): variance of the forces
-        figname (str): name of the figure
-        units (str): units of the error and variance
-        x_min (float): minimum value of the x-axis
-        x_max (float): maximum value of the x-axis
-        y_min (float): minimum value of the y-axis
-        y_max (float): maximum value of the y-axis
-        sample_frac (float): fraction of the data to sample for the plot
-        num_bins (int): number of bins to use for binning
-        cb_format (str): format of the colorbar
-
-    Returns:
-        None
+        err: error of the forces
+        var: variance of the forces
+        figname: name of the figure
+        units: units of the error and variance
+        x_min: minimum value of the x-axis
+        x_max: maximum value of the x-axis
+        y_min: minimum value of the y-axis
+        y_max: maximum value of the y-axis
+        sample_frac: fraction of the data to sample for the plot
+        num_bins: number of bins to use for binning
+        cb_format: format of the colorbar
     """
     fig, ax = plt.subplots(1, 1, figsize=(6, 6), dpi=mpl_settings.DPI)
 
     idx = np.arange(len(var))
     np.random.seed(2)
     sample_idx = np.random.choice(idx, size=int(len(idx) * sample_frac), replace=False)
-    n_samples = len(sample_idx)
+    len(sample_idx)
 
     var = var.flatten()[sample_idx]
     err = err.flatten()[sample_idx]
@@ -194,10 +194,10 @@ def plot_err_var(
         label="Avg. best fit",
         zorder=1,
     )
-    min_text = ax.text(
+    ax.text(
         0.6,
         0.9,
-        r"$R^2$: {:.3f}".format(res.rvalue**2),
+        rf"$R^2$: {res.rvalue**2:.3f}",
         transform=ax.transAxes,
     )
 

@@ -137,7 +137,7 @@ class NeuralTully:
 
     def init_decoherence(self, params):
         if not params:
-            return
+            return None
 
         name = params["name"]
         kwargs = params.get("kwargs", {})
@@ -163,10 +163,7 @@ class NeuralTully:
         return vel
 
     def init_c(self):
-        if self.explicit_diabat:
-            num_states = self.num_diabat
-        else:
-            num_states = self.num_states
+        num_states = self.num_diabat if self.explicit_diabat else self.num_states
 
         c = np.zeros((self.num_samples, num_states), dtype="complex128")
         c[:, self.surfs[0]] = 1
@@ -191,9 +188,9 @@ class NeuralTully:
     @property
     def U(self):
         if not self.props:
-            return
+            return None
         if "U" not in self.props:
-            return
+            return None
         return self.props["U"]
 
     @U.setter
@@ -238,7 +235,7 @@ class NeuralTully:
                     continue
                 key = f"nacv_{i}{j}"
                 if key not in self.props:
-                    return
+                    return None
                 _nacv[:, i, j, :] = self.props[key]
 
         return _nacv
@@ -273,7 +270,7 @@ class NeuralTully:
 
         nacv = self.nacv
         if nacv is None:
-            return
+            return None
 
         gap = self.gap.reshape(self.num_samples, self.num_states, self.num_states, 1, 1)
 
@@ -338,7 +335,7 @@ class NeuralTully:
     @property
     def H_plus_nacv(self):
         if self.nacv is None:
-            return
+            return None
         pot_V = self.pot_V
         nac_term = -1j * (self.nacv * self.vel.reshape(self.num_samples, 1, 1, self.num_atoms, 3)).sum((-1, -2))
 
@@ -348,8 +345,8 @@ class NeuralTully:
     def H_d(self):
         diabat_keys = getattr(self, "diabat_keys", [None])
         reshaped = np.array(diabat_keys).reshape(-1).tolist()
-        if not all([i in self.props for i in reshaped]):
-            return
+        if not all(i in self.props for i in reshaped):
+            return None
 
         _H_d = np.zeros((self.num_samples, self.num_diabat, self.num_diabat))
 
@@ -448,7 +445,7 @@ class NeuralTully:
                 f.write(hdr)
 
         template = "%-10.1f "
-        for i, state in enumerate(states):
+        for _ in states:
             template += "%15.4f%%"
         template += "%15.4f"
         template += "%15.4f"
@@ -508,7 +505,7 @@ class NeuralTully:
             nxyz = state_dict["nxyz"]
             if single:
                 nxyz = [nxyz]
-            for i, nxyz in enumerate(nxyz):
+            for i, nxyz in enumerate(nxyz):  # noqa
                 if nxyz is None:
                     trjs[i].append(None)
                     continue

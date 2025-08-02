@@ -1,9 +1,10 @@
 import math
+from typing import Optional
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from ..functional import switch_function
-from typing import Optional
+
+from nff.nn.models.spooky_net_source.functional import switch_function
 
 """
 computes electrostatic energy, switches between a constant value
@@ -19,7 +20,7 @@ class ElectrostaticEnergy(nn.Module):
         cutoff: float = 1.0,
         lr_cutoff: Optional[float] = None,
     ) -> None:
-        super(ElectrostaticEnergy, self).__init__()
+        super().__init__()
         self.ke = ke
         self.kehalf = ke / 2
         self.cuton = cuton
@@ -32,25 +33,20 @@ class ElectrostaticEnergy(nn.Module):
         self.alpha2 = 0.0
         self.two_pi = 2.0 * math.pi
         self.one_over_sqrtpi = 1 / math.sqrt(math.pi)
-        self.register_buffer(
-            "kmul", torch.Tensor(), persistent=False
-        )
+        self.register_buffer("kmul", torch.Tensor(), persistent=False)
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """ For compatibility with other modules. """
-        pass
+        """For compatibility with other modules."""
 
     def set_lr_cutoff(self, lr_cutoff: Optional[float] = None) -> None:
-        """ Change the long range cutoff. """
+        """Change the long range cutoff."""
         self.lr_cutoff = lr_cutoff
         if self.lr_cutoff is not None:
-            self.lr_cutoff2 = lr_cutoff ** 2
+            self.lr_cutoff2 = lr_cutoff**2
             self.two_div_cut = 2.0 / lr_cutoff
-            self.rcutconstant = lr_cutoff / (lr_cutoff ** 2 + 1.0) ** (3.0 / 2.0)
-            self.cutconstant = (2 * lr_cutoff ** 2 + 1.0) / (lr_cutoff ** 2 + 1.0) ** (
-                3.0 / 2.0
-            )
+            self.rcutconstant = lr_cutoff / (lr_cutoff**2 + 1.0) ** (3.0 / 2.0)
+            self.cutconstant = (2 * lr_cutoff**2 + 1.0) / (lr_cutoff**2 + 1.0) ** (3.0 / 2.0)
         else:
             self.lr_cutoff2 = None
             self.two_div_cut = None
@@ -58,7 +54,7 @@ class ElectrostaticEnergy(nn.Module):
             self.cutconstant = None
 
     def set_kmax(self, Nxmax: int, Nymax: int, Nzmax: int) -> None:
-        """ Set integer reciprocal space cutoff for Ewald summation """
+        """Set integer reciprocal space cutoff for Ewald summation"""
         kx = torch.arange(0, Nxmax + 1)
         kx = torch.cat([kx, -kx[1:]])
         ky = torch.arange(0, Nymax + 1)
@@ -66,17 +62,15 @@ class ElectrostaticEnergy(nn.Module):
         kz = torch.arange(0, Nzmax + 1)
         kz = torch.cat([kz, -kz[1:]])
         kmul = torch.cartesian_prod(kx, ky, kz)[1:]  # 0th entry is 0 0 0
-        kmax = max(max(Nxmax, Nymax), Nzmax)
-        self.register_buffer(
-            "kmul", kmul[torch.sum(kmul ** 2, dim=-1) <= kmax ** 2], persistent=False
-        )
+        kmax = max(Nxmax, Nymax, Nzmax)
+        self.register_buffer("kmul", kmul[torch.sum(kmul**2, dim=-1) <= kmax**2], persistent=False)
 
     def set_alpha(self, alpha: Optional[float] = None) -> None:
-        """ Set real space damping parameter for Ewald summation """
+        """Set real space damping parameter for Ewald summation"""
         if alpha is None:  # automatically determine alpha
             alpha = 4.0 / self.cutoff + 1e-3
         self.alpha = alpha
-        self.alpha2 = alpha ** 2
+        self.alpha2 = alpha**2
         self.two_pi = 2.0 * math.pi
         self.one_over_sqrtpi = 1 / math.sqrt(math.pi)
         # print a warning if alpha is so small that the reciprocal space sum
@@ -103,7 +97,7 @@ class ElectrostaticEnergy(nn.Module):
             fac = self.kehalf * torch.gather(q, 0, idx_i) * torch.gather(q, 0, idx_j)
         f = switch_function(rij, self.cuton, self.cutoff)
         coulomb = 1.0 / rij
-        damped = 1.0 / (rij ** 2 + 1.0) ** (1.0 / 2.0)
+        damped = 1.0 / (rij**2 + 1.0) ** (1.0 / 2.0)
         pairwise = fac * (f * damped + (1 - f) * coulomb) * torch.erfc(self.alpha * rij)
         return q.new_zeros(N).index_add_(0, idx_i, pairwise)
 
@@ -128,17 +122,11 @@ class ElectrostaticEnergy(nn.Module):
         else:  # gathering is faster on GPUs
             b = batch_seg.view(-1, 1, 1).expand(-1, k.shape[-2], k.shape[-1])
             dot = torch.sum(torch.gather(k, 0, b) * R.unsqueeze(-2), dim=-1)
-        q_real = q.new_zeros(num_batch, dot.shape[-1]).index_add_(
-            0, batch_seg, q.unsqueeze(-1) * torch.cos(dot)
-        )
-        q_imag = q.new_zeros(num_batch, dot.shape[-1]).index_add_(
-            0, batch_seg, q.unsqueeze(-1) * torch.sin(dot)
-        )
-        qf = q_real ** 2 + q_imag ** 2
+        q_real = q.new_zeros(num_batch, dot.shape[-1]).index_add_(0, batch_seg, q.unsqueeze(-1) * torch.cos(dot))
+        q_imag = q.new_zeros(num_batch, dot.shape[-1]).index_add_(0, batch_seg, q.unsqueeze(-1) * torch.sin(dot))
+        qf = q_real**2 + q_imag**2
         # reciprocal energy
-        e_reciprocal = (
-            self.two_pi / torch.prod(box_length, dim=1) * torch.sum(qf * qg, dim=-1)
-        )
+        e_reciprocal = self.two_pi / torch.prod(box_length, dim=1) * torch.sum(qf * qg, dim=-1)
         # self interaction correction
         q2 = q * q
         e_self = self.alpha * self.one_over_sqrtpi * q2
@@ -184,7 +172,7 @@ class ElectrostaticEnergy(nn.Module):
         f = switch_function(rij, self.cuton, self.cutoff)
         if self.lr_cutoff is None:
             coulomb = 1.0 / rij
-            damped = 1.0 / (rij ** 2 + 1.0) ** (1.0 / 2.0)
+            damped = 1.0 / (rij**2 + 1.0) ** (1.0 / 2.0)
         else:
             coulomb = torch.where(
                 rij < self.lr_cutoff,
@@ -193,9 +181,7 @@ class ElectrostaticEnergy(nn.Module):
             )
             damped = torch.where(
                 rij < self.lr_cutoff,
-                1.0 / (rij ** 2 + 1.0) ** (1.0 / 2.0)
-                + rij * self.rcutconstant
-                - self.cutconstant,
+                1.0 / (rij**2 + 1.0) ** (1.0 / 2.0) + rij * self.rcutconstant - self.cutconstant,
                 torch.zeros_like(rij),
             )
         pairwise = fac * (f * damped + (1 - f) * coulomb)
@@ -218,5 +204,4 @@ class ElectrostaticEnergy(nn.Module):
             assert cell is not None
             assert batch_seg is not None
             return self._ewald(N, q, R, rij, idx_i, idx_j, cell, num_batch, batch_seg)
-        else:
-            return self._coulomb(N, q, rij, idx_i, idx_j)
+        return self._coulomb(N, q, rij, idx_i, idx_j)

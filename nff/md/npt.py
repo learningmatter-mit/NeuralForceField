@@ -1,6 +1,7 @@
 import copy
 import math
 import os
+from typing import Optional
 
 import numpy as np
 from ase import units
@@ -57,12 +58,8 @@ class NoseHoovernpt(NPT):
 
         self.T = temperature * units.kB
 
-        # initial Maxwell-Boltmann temperature for atoms
-        if T_init is not None:
-            # convert units
-            T_init = T_init * units.kB
-        else:
-            T_init = 2 * self.T
+        # initial Maxwell-Boltzmann temperature for atoms
+        T_init = T_init * units.kB if T_init is not None else 2 * self.T
 
         MaxwellBoltzmannDistribution(self.atoms, T_init)
         Stationary(self.atoms)
@@ -133,12 +130,8 @@ class Berendsennpt(Inhomogeneous_NPTBerendsen):
 
         self.T = temperature * units.kB
 
-        # initial Maxwell-Boltmann temperature for atoms
-        if T_init is not None:
-            # convert units
-            T_init = T_init * units.kB
-        else:
-            T_init = 2 * self.T
+        # initial Maxwell-Boltzmann temperature for atoms
+        T_init = T_init * units.kB if T_init is not None else 2 * self.T
 
         MaxwellBoltzmannDistribution(self.atoms, T_init)
         Stationary(self.atoms)
@@ -222,12 +215,8 @@ class NoseHooverNPT(MolecularDynamics):
 
         self.nbr_update_period = nbr_update_period
 
-        # initial Maxwell-Boltmann temperature for atoms
-        if maxwell_temp is not None:
-            # convert units
-            maxwell_temp = maxwell_temp * units.kB
-        else:
-            maxwell_temp = 2 * self.T
+        # initial Maxwell-Boltzmann temperature for atoms
+        maxwell_temp = maxwell_temp * units.kB if maxwell_temp is not None else 2 * self.T
 
         MaxwellBoltzmannDistribution(self.atoms, maxwell_temp)
         Stationary(self.atoms)
@@ -306,11 +295,11 @@ class NoseHooverChainsNPT_Hydrostatic(MolecularDynamics):
         freq_thermostat_per_fs: float = 0.01,
         freq_barostat_per_fs: float = 0.0005,
         num_chains: int = 10,
-        maxwell_temp: float = None,
-        trajectory: str = None,
-        logfile: str = None,
+        maxwell_temp: Optional[float] = None,
+        trajectory: Optional[str] = None,
+        logfile: Optional[str] = None,
         loginterval: int = 1,
-        max_steps: int = None,
+        max_steps: Optional[int] = None,
         nbr_update_period: int = 10,
         append_trajectory: bool = True,
         **kwargs,
@@ -412,7 +401,7 @@ class NoseHooverChainsNPT_Hydrostatic(MolecularDynamics):
         scale_coords = np.exp(delta_eps)
         scale_volume = np.exp(self.d * delta_eps)
 
-        V_t = V * scale_volume
+        V * scale_volume
         h_t = h * scale_coords
 
         # half time for all velocities
@@ -532,11 +521,11 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
         freq_thermostat_per_fs: float = 0.01,
         freq_barostat_per_fs: float = 0.0005,
         num_chains: int = 10,
-        maxwell_temp: float = None,
-        trajectory: str = None,
-        logfile: str = None,
+        maxwell_temp: Optional[float] = None,
+        trajectory: Optional[str] = None,
+        logfile: Optional[str] = None,
         loginterval: int = 1,
-        max_steps: int = None,
+        max_steps: Optional[int] = None,
         nbr_update_period: int = 10,
         append_trajectory: bool = True,
         **kwargs,
@@ -666,7 +655,7 @@ class NoseHooverChainsNPT_Flexible(MolecularDynamics):
             h0,
         )  # not sure if they matrix multiplication or not
         # eqs (E1, E2)
-        while np.isclose(1.0, np.linalg.det(h0_t), atol=1e-6) == False:
+        while np.isclose(1.0, np.linalg.det(h0_t), atol=1e-6) is False:
             # print(np.linalg.det(h0_t), h0_t)
             if np.linalg.det(h0_t) is np.nan:
                 print("Failed to enforce det=1 of unit lattice vectors!")

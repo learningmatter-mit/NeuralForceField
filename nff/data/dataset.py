@@ -9,7 +9,7 @@ import copy
 import numbers
 from collections import Counter
 from copy import deepcopy
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Dict, List, Literal
 
 import numpy as np
 import torch
@@ -18,6 +18,7 @@ from ase.neighborlist import neighbor_list
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle as skshuffle
 from torch.utils.data import Dataset as TorchDataset
+from tqdm import trange
 
 import nff.utils.constants as const
 from nff.data.features import ATOM_FEAT_TYPES, BOND_FEAT_TYPES
@@ -82,10 +83,11 @@ class Dataset(TorchDataset):
 
     def __init__(
         self,
-        props: dict,
+        props: Dict[str, List[Any]],
         units: str = "kcal/mol",
         check_props: bool = True,
         do_copy: bool = True,
+        device: str = "cuda",
     ) -> None:
         """Constructor for Dataset class.
 
@@ -98,6 +100,7 @@ class Dataset(TorchDataset):
                 to see if they are in the right format.
             do_copy (bool): whether to copy the properties or
                 use the same dictionary.
+            device (str): The device to execute computations on ('cpu', 'cuda' etc.)
         """
         if check_props:
             if do_copy:
@@ -108,6 +111,7 @@ class Dataset(TorchDataset):
             self.props = props
         self.units = units
         self.to_units(units)
+        self.device = device
 
     def __len__(self) -> int:
         """Length of the dataset.
@@ -203,7 +207,7 @@ class Dataset(TorchDataset):
         undirected: bool = True,
         key: str = "nbr_list",
         offset_key: str = "offsets",
-    ) -> list:
+    ) -> list | tuple[list, list]:
         """Generates a neighbor list for each one of the atoms in the dataset.
         By default, does not consider periodic boundary conditions.
 
@@ -224,11 +228,6 @@ class Dataset(TorchDataset):
             return self.props[key], self.props[offset_key]
 
         return self.props[key]
-
-    # def make_nbr_to_mol(self):
-    #     nbr_to_mol = []
-    #     for nbrs in self.props['nbr_list']:
-    #         nbrs_to_mol.append(torch.zeros(len(nbrs)))
 
     def make_all_directed(self):
         """Make everything in the dataset directed."""
@@ -289,6 +288,7 @@ class Dataset(TorchDataset):
                 pbc=True,
                 cutoff=cutoff,
                 directed=(not undirected),
+                device=self.device,
             )
             nbrs, offs = atoms.update_nbr_list()
             nbrlist.append(nbrs)
@@ -300,7 +300,7 @@ class Dataset(TorchDataset):
 
     def generate_bond_idx(self, num_procs: int = 1) -> None:
         """For each index in the bond list, get the
-        index in the neighbour list that corresponds to the
+        index in the neighbor list that corresponds to the
         same directed pair of atoms.
 
         Args:
@@ -444,6 +444,7 @@ class Dataset(TorchDataset):
                 numbers=self.props["nxyz"][i][:, 0],
                 cell=self.props["cell"][i],
                 pbc=True,
+                device=self.device,
             )
 
             # recontruct coordinates based on subgraphs index
@@ -577,6 +578,7 @@ class Dataset(TorchDataset):
                 "cutoff": cutoff,
                 "cell": cell,
                 "nbr_torch": False,
+                "device": self.device,
             }
 
             # the coordinates have been unwrapped and try to results offsets
@@ -615,7 +617,7 @@ class Dataset(TorchDataset):
 
         atoms_batches = []
         num_batches = len(self.props["nxyz"])
-        for i in range(num_batches):
+        for i in trange(num_batches):
             nxyz = self.props["nxyz"][i]
             atoms = AtomsBatch(
                 nxyz[:, 0].long(),
