@@ -37,13 +37,14 @@ def _check_non_zero(std):
     return std
 
 
-def get_mace_mp_model_path(model: Optional[str] = None) -> str:
+def get_mace_mp_model_path(model: Optional[str] = None, supress_print=True) -> str:
     """Get the default MACE MP model. Replicated from the MACE codebase,
     Copyright (c) 2022 ACEsuit/mace and licensed under the MIT license.
 
     Args:
         model (str, optional): MACE_MP model that you want to get.
             Defaults to None. Can be "small", "medium", "large", or a URL.
+        supress_print (bool, optional): Whether to suppress print statements. Defaults to True.
 
     Raises:
         RuntimeError: raised if the model download fails and no local model is found
@@ -53,7 +54,8 @@ def get_mace_mp_model_path(model: Optional[str] = None) -> str:
     """
     if model in (None, "medium") and os.path.isfile(LOCAL_MODEL_PATH):
         model_path = LOCAL_MODEL_PATH
-        print(f"Using local medium Materials Project MACE model for MACECalculator {model}")
+        if not supress_print:
+            print(f"Using local medium Materials Project MACE model for MACECalculator {model}")
     elif model in (None, "small", "medium", "large") or str(model).startswith("https:"):
         try:
             checkpoint_url = (
@@ -65,11 +67,13 @@ def get_mace_mp_model_path(model: Optional[str] = None) -> str:
             if not os.path.isfile(model_path):
                 os.makedirs(cache_dir, exist_ok=True)
                 # download and save to disk
-                print(f"Downloading MACE model from {checkpoint_url!r}")
                 urllib.request.urlretrieve(checkpoint_url, model_path)
-                print(f"Cached MACE model to {model_path}")
-            msg = f"Loading Materials Project MACE with {model_path}"
-            print(msg)
+                if not supress_print:
+                    print(f"Downloading MACE model from {checkpoint_url!r}")
+                    print(f"Cached MACE model to {model_path}")
+            if not supress_print:
+                msg = f"Loading Materials Project MACE with {model_path}"
+                print(msg)
         except Exception as exc:
             raise RuntimeError("Model download failed and no local model found") from exc
     else:

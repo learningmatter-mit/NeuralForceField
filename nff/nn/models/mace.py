@@ -280,6 +280,7 @@ class NffScaleMACE(ScaleShiftMACE):
         model: Literal["small", "medium", "large"] = "medium",
         map_location: str = "cpu",
         default_dtype: Literal["", "float32", "float64"] = "float32",
+        suppress_warnings: bool = True,
     ) -> NffScaleMACE:
         """Load MACE foundational model.
 
@@ -287,6 +288,7 @@ class NffScaleMACE(ScaleShiftMACE):
             model (Literal["small", "medium", "large"], optional): model size. Defaults to "medium".
             map_location (str, optional): The device to load the model on. Defaults to "cpu".
             default_dtype (Literal["", "float32", "float64"], optional): float type of the model. Defaults to "float32".
+            suppress_warnings (bool, optional): Whether to suppress warnings. Defaults to False.
 
         Returns:
             NffScaleMACE: NffScaleMACE foundational model.
@@ -296,13 +298,15 @@ class NffScaleMACE(ScaleShiftMACE):
         init_params = get_init_kwargs_from_model(mace_model)
         model_dtype = get_model_dtype(mace_model)
         if default_dtype == "":
-            print(f"No dtype selected, switching to {model_dtype} to match model dtype.")
+            if not suppress_warnings:
+                print(f"No dtype selected, switching to {model_dtype} to match model dtype.")
             default_dtype = model_dtype
         if model_dtype != default_dtype:
-            print(
-                f"Default dtype {default_dtype} does not match model dtype {model_dtype}, "
-                f"converting models to {default_dtype}."
-            )
+            if not suppress_warnings:
+                print(
+                    f"Default dtype {default_dtype} does not match model dtype {model_dtype}, "
+                    f"converting models to {default_dtype}."
+                )
             if default_dtype == "float64":
                 mace_model.double()
             elif default_dtype == "float32":
