@@ -113,11 +113,15 @@ class ColVar(torch.nn.Module):
         elif self.info_dict["name"] == "neural_cv":
             # expects a 'model' entry that behaves like a nn.Module and outputs a CV tensor
             # a device for the model must be specified
-            # a 'descriptor_generation' entry should be specified that is a Callable[[torch.Tensor], torch.Tensor]
+            # a 'descriptor_generation' entry can be specified for coordinate transformations / featurizations
+            # independent of the model by giving a Callable[[torch.Tensor], torch.Tensor]
             # where the input tensor are the Cartesian coordinates of the atoms
             # and the output tensor is the input tensor for the model
+            # if none is specified, the Cartesian coordinates are fed directly to the model
             self.device = self.info_dict["device"]
-            self.descriptor_generation = self.info_dict["descriptor_generation"]
+            self.descriptor_generation = self.info_dict.get("descriptor_generation")
+            if self.descriptor_generation is None:
+                self.descriptor_generation = lambda xyz_tensor: xyz_tensor
             self.model = self.info_dict["model"]
             self.model = self.model.to(self.device)
             self.model.eval()
