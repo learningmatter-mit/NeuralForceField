@@ -569,7 +569,7 @@ def load_model(path: str, params=None, model_type=None, **kwargs) -> torch.nn.Mo
         # If path is not None, we load the model from the path (usually a
         # fine-tuned model that we want to test or use for calculations)
         if path:
-            print("loading CHGNetNFF or NffScaleMACE model from path")
+            # print("loading CHGNetNFF or NffScaleMACE model from path")
             try:
                 return MODEL_DICT[model_type].from_file(path, **kwargs)
             except IsADirectoryError:
