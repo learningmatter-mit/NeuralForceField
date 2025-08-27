@@ -19,6 +19,7 @@ dependencies = [
     "scipy",
     "tqdm",
     "chgnet==0.3.5",
+    "mace-torch==0.3.7",
     "e3fp",
     "nglview",
     "ipykernel",
