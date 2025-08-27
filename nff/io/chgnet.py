@@ -1,15 +1,131 @@
 """Convert NFF Dataset to CHGNet StructureData"""
 
-from typing import Dict, List
-
+from typing import Dict, List, TYPE_CHECKING
+import functools
+import random
 import torch
-from chgnet.data.dataset import StructureData
+import numpy as np
 from pymatgen.core.structure import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
 
 from nff.data import Dataset
 from nff.io import AtomsBatch
 from nff.utils.cuda import batch_detach, detach
+from chgnet.graph import CrystalGraph, CrystalGraphConverter
+from collections.abc import Sequence
+
+datatype = torch.float32
+
+class StructureData(Dataset):
+    """A simple torch Dataset of structures."""
+
+    def __init__(
+        self,
+        structures: list[Structure],
+        energies: list[float],
+        forces: list[Sequence[Sequence[float]]],
+        stresses: list[Sequence[Sequence[float]]] | None = None,
+        magmoms: list[Sequence[Sequence[float]]] | None = None,
+        structure_ids: list[str] | None = None,
+        graph_converter: CrystalGraphConverter | None = None,
+    ) -> None:
+        """Initialize the dataset.
+
+        Args:
+            structures (list[dict]): pymatgen Structure objects.
+            energies (list[float]): [data_size, 1]
+            forces (list[list[float]]): [data_size, n_atoms, 3]
+            stresses (list[list[float]], optional): [data_size, 3, 3]
+            magmoms (list[list[float]], optional): [data_size, n_atoms, 1]
+            structure_ids (list[str], optional): a list of ids to track the structures
+            graph_converter (CrystalGraphConverter, optional): Converts the structures
+                to graphs. If None, it will be set to CHGNet 0.3.0 converter
+                with AtomGraph cutoff = 6A.
+
+        Raises:
+            RuntimeError: if the length of structures and labels (energies, forces,
+                stresses, magmoms) are not equal.
+        """
+        for idx, struct in enumerate(structures):
+            if not isinstance(struct, Structure):
+                raise ValueError(f"{idx} is not a pymatgen Structure object: {struct}")
+        for name in "energies forces stresses magmoms structure_ids".split():
+            labels = locals()[name]
+            if labels is not None and len(labels) != len(structures):
+                raise RuntimeError(
+                    f"Inconsistent number of structures and labels: "
+                    f"{len(structures)=}, len({name})={len(labels)}"
+                )
+        self.structures = structures
+        self.energies = energies
+        self.forces = forces
+        self.stresses = stresses
+        self.magmoms = magmoms
+        self.structure_ids = structure_ids
+        self.keys = np.arange(len(structures))
+        random.shuffle(self.keys)
+        self.graph_converter = graph_converter or CrystalGraphConverter(
+            atom_graph_cutoff=6, bond_graph_cutoff=3
+        )
+        self.failed_idx: list[int] = []
+        self.failed_graph_id: dict[str, str] = {}
+
+    def __len__(self) -> int:
+        """Get the number of structures in this dataset."""
+        return len(self.keys)
+
+    @functools.cache  # Cache loaded structures
+    def __getitem__(self, idx: int) -> tuple[CrystalGraph, dict]:
+        """Get one graph for a structure in this dataset.
+
+        Args:
+            idx (int): Index of the structure
+
+        Returns:
+            crystal_graph (CrystalGraph): graph of the crystal structure
+            targets (dict): list of targets. i.e. energy, force, stress
+        """
+        if idx not in self.failed_idx:
+            graph_id = self.keys[idx]
+            try:
+                struct = self.structures[graph_id]
+                if self.structure_ids is not None:
+                    mp_id = self.structure_ids[graph_id]
+                else:
+                    mp_id = graph_id
+                crystal_graph = self.graph_converter(
+                    struct, graph_id=graph_id, mp_id=mp_id
+                )
+                targets = {
+                    "e": torch.tensor(self.energies[graph_id], dtype=datatype),
+                    "f": torch.tensor(self.forces[graph_id], dtype=datatype),
+                }
+                if self.stresses is not None:
+                    # Convert VASP stress
+                    targets["s"] = torch.tensor(
+                        self.stresses[graph_id], dtype=datatype
+                    ) * (-0.1)
+                if self.magmoms is not None:
+                    mag = self.magmoms[graph_id]
+                    # use absolute value for magnetic moments
+                    if mag is None:
+                        targets["m"] = None
+                    else:
+                        targets["m"] = torch.abs(torch.tensor(mag, dtype=datatype))
+
+                return crystal_graph, targets
+
+            # Omit structures with isolated atoms. Return another randomly selected
+            # structure
+            except Exception:
+                struct = self.structures[graph_id]
+                self.failed_graph_id[graph_id] = struct.composition.formula
+                self.failed_idx.append(idx)
+                idx = random.randint(0, len(self) - 1)
+                return self.__getitem__(idx)
+        else:
+            idx = random.randint(0, len(self) - 1)
+            return self.__getitem__(idx)
 
 
 def convert_nff_to_chgnet_structure_data(

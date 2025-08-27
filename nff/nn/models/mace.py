@@ -25,7 +25,7 @@ from nff.io.mace import (
     NffBatch,
     get_atomic_number_table_from_zs,
     get_init_kwargs_from_model,
-    get_mace_mp_model_path,
+    get_mace_foundtion_model_path,
 )
 
 
@@ -293,8 +293,8 @@ class NffScaleMACE(ScaleShiftMACE):
         Returns:
             NffScaleMACE: NffScaleMACE foundational model.
         """
-        mace_model_path = get_mace_mp_model_path(model)
-        mace_model = torch.load(mace_model_path, map_location=map_location)
+        mace_model_path = get_mace_foundtion_model_path(model)
+        mace_model = torch.load(mace_model_path, map_location=map_location, weights_only=False)
         init_params = get_init_kwargs_from_model(mace_model)
         model_dtype = get_model_dtype(mace_model)
         if default_dtype == "":

@@ -1,6 +1,7 @@
 import logging
 import os
 import urllib
+from pathlib import Path
 from collections.abc import Iterable
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -17,6 +18,7 @@ from torch import Tensor
 from e3nn import o3
 from nff.data import Dataset
 from nff.utils.cuda import detach
+from mace.calculators.foundations_models import download_mace_mp_checkpoint, mace_mp_names
 
 # get the path to NFF models dir, which is the parent directory of this file
 module_dir = os.path.abspath(os.path.join(os.path.abspath(__file__), "..", "..", "..", "models"))
@@ -37,7 +39,7 @@ def _check_non_zero(std):
     return std
 
 
-def get_mace_mp_model_path(model: Optional[str] = None, supress_print=True) -> str:
+def get_mace_foundtion_model_path(model: Optional[str] = None, supress_print=True) -> str:
     """Get the default MACE MP model. Replicated from the MACE codebase,
     Copyright (c) 2022 ACEsuit/mace and licensed under the MIT license.
 
@@ -52,32 +54,17 @@ def get_mace_mp_model_path(model: Optional[str] = None, supress_print=True) -> s
     Returns:
         str: path to the model
     """
-    if model in (None, "medium") and os.path.isfile(LOCAL_MODEL_PATH):
-        model_path = LOCAL_MODEL_PATH
+    try:
+        if model in mace_mp_names or str(model).startswith("https:"):
+            model_path = download_mace_mp_checkpoint(model)
+        else:
+            if not Path(model).exists():
+                raise FileNotFoundError(f"{model} not found locally")
+            model_path = model
         if not supress_print:
-            print(f"Using local medium Materials Project MACE model for MACECalculator {model}")
-    elif model in (None, "small", "medium", "large") or str(model).startswith("https:"):
-        try:
-            checkpoint_url = (
-                MACE_URLS.get(model, MACE_URLS["medium"]) if model in (None, "small", "medium", "large") else model
-            )
-            cache_dir = os.path.expanduser("~/.cache/mace")
-            checkpoint_url_name = "".join(c for c in os.path.basename(checkpoint_url) if c.isalnum() or c in "_")
-            model_path = f"{cache_dir}/{checkpoint_url_name}"
-            if not os.path.isfile(model_path):
-                os.makedirs(cache_dir, exist_ok=True)
-                # download and save to disk
-                urllib.request.urlretrieve(checkpoint_url, model_path)
-                if not supress_print:
-                    print(f"Downloading MACE model from {checkpoint_url!r}")
-                    print(f"Cached MACE model to {model_path}")
-            if not supress_print:
-                msg = f"Loading Materials Project MACE with {model_path}"
-                print(msg)
-        except Exception as exc:
-            raise RuntimeError("Model download failed and no local model found") from exc
-    else:
-        raise RuntimeError("Model download failed and no local model found")
+            print(f"Using MACE mdoel with {model_path}")
+    except Exception as exc:
+        raise RuntimeError("Model download failed or no local model found") from exc
 
     return model_path
 
