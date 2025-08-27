@@ -12,14 +12,12 @@ readme = "README.md"
 license = { text = "MIT" }
 dependencies = [
     "ase>=3.23.0",
-    "numpy >=1.26.4, <2",
+    "numpy >=1.26.4",
     "pymatgen>=2023.3.10",
     "rdkit",
     "scikit-learn",
     "scipy",
-    "torch >= 2.2.0, < 2.6.0",
     "tqdm",
-    "mace-torch >=0.3.4, <=0.3.7",
     "chgnet==0.3.5",
     "e3fp",
     "nglview",

@@ -17,6 +17,12 @@ python -m ipykernel install --user --name nff --display-name "Python [conda env:
 ```
 
 ## Installation
+Install Pytorch separately.
+```bash
+# Torch 2.4.0 with CUDA 12.1
+pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu121
+```
+
 If you would like to use NFF as a package (no development), you can do so by running the following command in the root directory of the repository:
 ```bash
 pip install .
@@ -25,6 +31,7 @@ pip install .
 Use the `-e` flag if you want to develop NFF:
 ```bash
 pip install -e '.[dev]'
+pip install mace-torch=0.3.7 # install mace-torch with the right version this is temporary work around due to the UMA compatibility
 ```
 
 ## Usage
