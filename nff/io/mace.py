@@ -18,18 +18,89 @@ from torch import Tensor
 from e3nn import o3
 from nff.data import Dataset
 from nff.utils.cuda import detach
-from mace.calculators.foundations_models import download_mace_mp_checkpoint, mace_mp_names
 
 # get the path to NFF models dir, which is the parent directory of this file
 module_dir = os.path.abspath(os.path.join(os.path.abspath(__file__), "..", "..", "..", "models"))
-print(module_dir)
 LOCAL_MODEL_PATH = os.path.join(module_dir, "foundation_models/mace/2023-12-03-mace-mp.model")
 
-MACE_URLS = dict(
-    small="http://tinyurl.com/46jrkm3v",  # 2023-12-10-mace-128-L0_energy_epoch-249.model
-    medium="http://tinyurl.com/5yyxdm76",  # 2023-12-03-mace-128-L1_epoch-199.model
-    large="http://tinyurl.com/5f5yavf3",  # MACE_MPtrj_2022.9.model
-)
+
+mace_mp_urls = {
+    "small": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0/2023-12-10-mace-128-L0_energy_epoch-249.model",
+    "medium": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0/2023-12-03-mace-128-L1_epoch-199.model",
+    "large": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0/MACE_MPtrj_2022.9.model",
+    "small-0b": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b/mace_agnesi_small.model",
+    "medium-0b": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b/mace_agnesi_medium.model",
+    "small-0b2": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b2/mace-small-density-agnesi-stress.model",
+    "medium-0b2": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b2/mace-medium-density-agnesi-stress.model",
+    "large-0b2": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b2/mace-large-density-agnesi-stress.model",
+    "medium-0b3": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mp_0b3/mace-mp-0b3-medium.model",
+    "medium-mpa-0": "https://github.com/ACEsuit/mace-mp/releases/download/mace_mpa_0/mace-mpa-0-medium.model",
+    "small-omat-0": "https://github.com/ACEsuit/mace-mp/releases/download/mace_omat_0/mace-omat-0-small.model",
+    "medium-omat-0": "https://github.com/ACEsuit/mace-mp/releases/download/mace_omat_0/mace-omat-0-medium.model",
+    "mace-matpes-pbe-0": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_matpes_0/MACE-matpes-pbe-omat-ft.model",
+    "mace-matpes-r2scan-0": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_matpes_0/MACE-matpes-r2scan-omat-ft.model",
+}
+mace_mp_names = [None] + list(mace_mp_urls.keys())
+
+def get_cache_dir() -> Path:
+    # get cache dir from XDG_CACHE_HOME if set, otherwise appropriate default
+    return Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "mace"
+
+
+
+def download_mace_mp_checkpoint(model: Union[str, Path] = None) -> str:
+    """
+    Downloads or locates the MACE-MP checkpoint file.
+
+    Args:
+        model (str, optional): Path to the model or size specification.
+            Defaults to None which uses the medium model.
+
+    Returns:
+        str: Path to the downloaded (or cached, if previously loaded) checkpoint file.
+    """
+    if model in (None, "medium-mpa-0") and os.path.isfile(LOCAL_MODEL_PATH):
+        return LOCAL_MODEL_PATH
+
+    checkpoint_url = (
+        mace_mp_urls.get(model, mace_mp_urls["medium-mpa-0"])
+        if model in mace_mp_names
+        else model
+    )
+
+    if checkpoint_url == mace_mp_urls["medium-mpa-0"]:
+        print(
+            "Using medium MPA-0 model as default MACE-MP model, to use previous (before 3.10) default model please specify 'medium' as model argument"
+        )
+    ASL_checkpoint_urls = {
+        mace_mp_urls["small-omat-0"],
+        mace_mp_urls["medium-omat-0"],
+        mace_mp_urls["mace-matpes-pbe-0"],
+        mace_mp_urls["mace-matpes-r2scan-0"],
+    }
+    if checkpoint_url in ASL_checkpoint_urls:
+        print(
+            "Using model under Academic Software License (ASL) license, see https://github.com/gabor1/ASL \n To use this model you accept the terms of the license."
+        )
+
+    cache_dir = get_cache_dir()
+    checkpoint_url_name = "".join(
+        c for c in os.path.basename(checkpoint_url) if c.isalnum() or c in "_"
+    )
+    cached_model_path = f"{cache_dir}/{checkpoint_url_name}"
+
+    if not os.path.isfile(cached_model_path):
+        os.makedirs(cache_dir, exist_ok=True)
+        print(f"Downloading MACE model from {checkpoint_url!r}")
+        _, http_msg = urllib.request.urlretrieve(checkpoint_url, cached_model_path)
+        if "Content-Type: text/html" in http_msg:
+            raise RuntimeError(
+                f"Model download failed, please check the URL {checkpoint_url}"
+            )
+        print(f"Cached MACE model to {cached_model_path}")
+
+    return cached_model_path
+
 
 
 def _check_non_zero(std):

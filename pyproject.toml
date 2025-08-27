@@ -19,7 +19,7 @@ dependencies = [
     "scipy",
     "torch >= 2.2.0, < 2.6.0",
     "tqdm",
-    "mace-torch >=0.3.4, <=0.3.14",
+    "mace-torch >=0.3.4, <=0.3.7",
     "chgnet==0.3.5",
     "e3fp",
     "nglview",

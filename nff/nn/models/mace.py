@@ -294,8 +294,10 @@ class NffScaleMACE(ScaleShiftMACE):
             NffScaleMACE: NffScaleMACE foundational model.
         """
         mace_model_path = get_mace_foundtion_model_path(model)
+        print(mace_model_path)
         mace_model = torch.load(mace_model_path, map_location=map_location, weights_only=False)
         init_params = get_init_kwargs_from_model(mace_model)
+        print(init_params)
         model_dtype = get_model_dtype(mace_model)
         if default_dtype == "":
             if not suppress_warnings:
