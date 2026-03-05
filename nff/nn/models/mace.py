@@ -265,6 +265,15 @@ class NffScaleMACE(ScaleShiftMACE):
             NffScaleMACE: NffScaleMACE foundational model.
         """
         mace_model_path = get_mace_mp_model_path(model)
+        return cls.load_foundations_path(mace_model_path, map_location, default_dtype)
+
+    @classmethod
+    def load_foundations_path(
+        cls,
+        mace_model_path: str,
+        map_location: str = "cpu",
+        default_dtype: Literal["", "float32", "float64"] = "float32",
+    ) -> NffScaleMACE:
         mace_model = torch.load(mace_model_path, map_location=map_location)
         init_params = get_init_kwargs_from_model(mace_model)
         model_dtype = get_model_dtype(mace_model)
