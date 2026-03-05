@@ -297,15 +297,22 @@ class BiasBase(NeuralFF):
 
         prediction = self.model(batch, **kwargs)
 
-        # change energy and force to numpy array and eV
-        model_energy = prediction[self.en_key].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+        # change energy and force to numpy array and eV (use model_units -> prediction_units like NeuralFF)
+        conv_dict = const.conversion_factors.get(
+            (getattr(self, "model_units", "kcal/mol"), getattr(self, "prediction_units", "eV")),
+            const.DEFAULT,
+        )
+        energy_factor = conv_dict["energy"]
+        grad_factor = conv_dict["_grad"]
+
+        model_energy = prediction[self.en_key].detach().cpu().numpy() * energy_factor
 
         gradient = prediction.get(grad_key)
         forces = prediction.get("forces")
         if gradient is not None:
-            model_grad = gradient.detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+            model_grad = gradient.detach().cpu().numpy() * grad_factor
         elif forces is not None:
-            model_grad = - forces.detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+            model_grad = - forces.detach().cpu().numpy() * grad_factor
         else:
             raise KeyError(grad_key)
 
@@ -373,7 +380,8 @@ class BiasBase(NeuralFF):
             self.results["const_vals"] = consts
 
         if requires_stress:
-            stress = prediction["stress_volume"].detach().cpu().numpy() * (1 / const.EV_TO_KCAL_MOL)
+            stress_factor = conv_dict.get("stress", 1.0)
+            stress = prediction["stress_volume"].detach().cpu().numpy() * stress_factor
             self.results["stress"] = stress * (1 / atoms.get_volume())
 
 
