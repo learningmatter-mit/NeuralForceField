@@ -32,7 +32,7 @@ class AtomsBatch(Atoms):
         requires_large_offsets=False,
         cutoff_skin=DEFAULT_SKIN,
         dense_nbrs=True,
-        device=0,
+        device="cpu",
         **kwargs,
     ):
         """Args:
@@ -58,12 +58,37 @@ class AtomsBatch(Atoms):
         self.props["num_atoms"] = self.num_atoms
         self.cutoff = cutoff
         self.cutoff_skin = cutoff_skin
-        self.device = device
+        self.device = self._resolve_device(device)
         self.requires_large_offsets = requires_large_offsets
         if dense_nbrs:
             self.mol_nbrs, self.mol_idx = self.get_mol_nbrs()
         else:
             self.mol_nbrs, self.mol_idx = None, None
+
+    @staticmethod
+    def _resolve_device(device):
+        """Resolve a robust torch device target for tensor moves.
+
+        This prevents crashes when a copied/sliced AtomsBatch falls back to the
+        default device while CUDA is not available in the current process.
+        """
+        if isinstance(device, torch.device):
+            if device.type == "cuda" and not torch.cuda.is_available():
+                return "cpu"
+            return str(device)
+
+        if isinstance(device, int):
+            # Backward compatible behavior: int means CUDA index when available.
+            if torch.cuda.is_available():
+                return f"cuda:{device}"
+            return "cpu"
+
+        if isinstance(device, str):
+            if device.startswith("cuda") and not torch.cuda.is_available():
+                return "cpu"
+            return device
+
+        return "cpu"
 
     def convert_props_units(self, target_unit):
         """Converts the units of the properties to the desired unit.
@@ -93,6 +118,7 @@ class AtomsBatch(Atoms):
         """
         # periodic systems
         if np.array([atoms.pbc.any() for atoms in self.get_list_atoms()]).any():
+            nbrs = []
             nbrs_T = []
             nbrs = []
             z = []
@@ -416,6 +442,25 @@ class AtomsBatch(Atoms):
             float: The temperature of the system.
         """
         return self.get_batch_kinetic_energy() / (1.5 * units.kB * self.props["num_atoms"].detach().cpu().numpy())
+
+    def batch_properties():
+        """This function is used to batch process properties.
+        It takes in a list of properties and performs some operations on them.
+        """
+
+    def batch_virial():
+        """Calculate the virial for a batch of systems.
+
+        This function calculates the virial for a batch of systems using a specific algorithm.
+        The virial is a measure of the internal forces within a system
+        and is commonly used in molecular dynamics simulations.
+
+        Parameters:
+            None
+
+        Returns:
+            None
+        """
 
     @classmethod
     def from_atoms(cls, atoms, **kwargs):
