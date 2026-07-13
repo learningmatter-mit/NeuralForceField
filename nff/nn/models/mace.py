@@ -180,10 +180,12 @@ class NffScaleMACE(ScaleShiftMACE):
             radial_type = "bessel"
         elif isinstance(self.radial_embedding.bessel_fn, GaussianBasis):
             radial_type = "gaussian"
-        if isinstance(self.radial_embedding.distance_transform, AgnesiTransform):
+        if hasattr(self.radial_embedding, "distance_transform") and isinstance(self.radial_embedding.distance_transform, AgnesiTransform):
             distance_transform = "Agnesi"
-        elif isinstance(self.radial_embedding.distance_transform, SoftTransform):
+        elif hasattr(self.radial_embedding, "distance_transform") and isinstance(self.radial_embedding.distance_transform, SoftTransform):
             distance_transform = "Soft"
+        else:
+            distance_transform = "None"
         heads = self.heads
         num_interactions = self.num_interactions.item()
         MLP_irreps = []
@@ -217,7 +219,7 @@ class NffScaleMACE(ScaleShiftMACE):
             "atomic_numbers": self.atomic_numbers.tolist(),
             "correlation": self.products[0].symmetric_contractions.contractions[0].correlation,
             "gate": self.readouts[-1].non_linearity.acts[0].f,
-            "pair_repulsion": self.pair_repulsion,
+            "pair_repulsion": getattr(self, "pair_repulsion", False),
             "distance_transform": distance_transform,
             "radial_MLP": self.interactions[0].conv_tp_weights.hs[1:-1],
             "radial_type": radial_type,
